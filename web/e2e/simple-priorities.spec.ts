@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type BrowserContext, type Locator, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type BrowserContext, type Locator, type Page } from './test';
 
 /**
  * Simple S6 priorities (#723, D9; the owner's pick "A · Ladder with B's compare as a
@@ -16,9 +16,28 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
 // P-1: the Goal map's features (gm-f1 ...) are roadmap items from the first load, ranked among the rest;
 // P-6: each serves its goal on the map, so they rank with the goal rows, before the rows with no goal.
 const ORACLE = [
-  "setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso",
-  "gm-f10", "gm-f4", "gm-f9", "gm-f3", "gm-f1", "gm-f7", "gm-f8", "gm-f5", "gm-f2", "gm-f12", "gm-f11", "gm-f6",
-  "price-tiers", "setup-video", "setup-health-log",
+  'setup-checklist',
+  'alert-rules',
+  'alert-digest',
+  'alert-mobile',
+  'setup-import',
+  'alert-export',
+  'alert-sso',
+  'gm-f10',
+  'gm-f4',
+  'gm-f9',
+  'gm-f3',
+  'gm-f1',
+  'gm-f7',
+  'gm-f8',
+  'gm-f5',
+  'gm-f2',
+  'gm-f12',
+  'gm-f11',
+  'gm-f6',
+  'price-tiers',
+  'setup-video',
+  'setup-health-log',
 ];
 const PHONE = { width: 390, height: 844 };
 
@@ -29,46 +48,55 @@ async function as(page: Page, email: string): Promise<Page> {
   const context = page.context();
   const tab = await context.newPage();
   if (signedIn.has(context)) {
-    await tab.goto("/home");
+    await tab.goto('/home');
     await signOut(tab);
   }
   await login(tab, email);
   signedIn.add(context);
-  await tab.goto("/simple/priorities");
-  await expect(tab.getByTestId("prio-row").first()).toBeVisible();
+  await tab.goto('/simple/priorities');
+  await expect(tab.getByTestId('prio-row').first()).toBeVisible();
   return tab;
 }
 
 async function dark(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => localStorage.setItem("oracle-theme", "dark"));
+  await context.addInitScript(() => localStorage.setItem('oracle-theme', 'dark'));
 }
 
-const codes = (tab: Page, id = "prio-row") => tab.getByTestId(id).evaluateAll((els) => els.map((e) => e.getAttribute("data-code")));
-const row = (tab: Page, code: string): Locator => tab.locator(`[data-testid="prio-row"][data-code="${code}"]`);
+const codes = (tab: Page, id = 'prio-row') =>
+  tab.getByTestId(id).evaluateAll((els) => els.map((e) => e.getAttribute('data-code')));
+const row = (tab: Page, code: string): Locator =>
+  tab.locator(`[data-testid="prio-row"][data-code="${code}"]`);
 
 /** Drags a row's handle onto the row now at `to` (0-based), as a person does with a mouse or a finger. */
 async function dragRow(tab: Page, code: string, to: number): Promise<void> {
   // The handle is named by the feature's title and code (never its key).
-  const handle = row(tab, code).getByRole("button", { name: /^Drag .* to reorder$/ });
+  const handle = row(tab, code).getByRole('button', { name: /^Drag .* to reorder$/ });
   // Both rows on screen (a phone's rail sits at the bottom).
-  await handle.evaluate((e) => e.scrollIntoView({ block: "center" }));
+  await handle.evaluate((e) => e.scrollIntoView({ block: 'center' }));
   const from = await handle.boundingBox();
-  const target = await tab.getByTestId("prio-row").nth(to).boundingBox();
+  const target = await tab.getByTestId('prio-row').nth(to).boundingBox();
   await tab.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
   await tab.mouse.down();
-  await tab.mouse.move(from!.x + from!.width / 2, target!.y + target!.height / 2 + 2, { steps: 10 });
+  await tab.mouse.move(from!.x + from!.width / 2, target!.y + target!.height / 2 + 2, {
+    steps: 10,
+  });
   await tab.mouse.up();
 }
 
-async function giveReason(tab: Page, code: string, reason: string, button: "Move" | "Propose"): Promise<void> {
-  const dialog = tab.getByRole("dialog", { name: /^Why move / });
+async function giveReason(
+  tab: Page,
+  code: string,
+  reason: string,
+  button: 'Move' | 'Propose',
+): Promise<void> {
+  const dialog = tab.getByRole('dialog', { name: /^Why move / });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Reason").fill(reason);
-  await dialog.getByRole("button", { name: button, exact: true }).click();
+  await dialog.getByLabel('Reason').fill(reason);
+  await dialog.getByRole('button', { name: button, exact: true }).click();
   await expect(dialog).toBeHidden();
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   /**
    * Card simple-priorities-ranked: protects = the ranked list is ordered by score in
    * dependency order with the subtitle saying so, a row whose score beats a row above says
@@ -81,35 +109,45 @@ test.describe("desktop", () => {
    * pushback on a move (the API's oracle.priorities rules, api/tests/test_simple_priorities_api.py),
    * the real API's scoring.
    */
-  test("an owner drags a row with a reason, sees the ghost and the override, compares and undoes", async ({ page }) => {
-    const admin = await as(page, "admin@example.com");
-    await expect(admin.locator("#prio-about-text")).toContainText("a feature never ranks above one it depends on");
+  test('an owner drags a row with a reason, sees the ghost and the override, compares and undoes', async ({
+    page,
+  }) => {
+    const admin = await as(page, 'admin@example.com');
+    await expect(admin.locator('#prio-about-text')).toContainText(
+      'a feature never ranks above one it depends on',
+    );
     expect(await codes(admin)).toEqual(ORACLE);
-    await expect(row(admin, "alert-digest").getByTestId("prio-after")).toHaveText("After Alert rules engine, which it needs.");
-    await expect(row(admin, "alert-sso").getByTestId("prio-after")).toHaveText("After Alert history export, which it needs.");
-    await expect(row(admin, "setup-checklist").getByTestId("prio-after")).toHaveCount(0);
-    await expect(admin.getByTestId("prio-ghost")).toHaveCount(0);
+    await expect(row(admin, 'alert-digest').getByTestId('prio-after')).toHaveText(
+      'After Alert rules engine, which it needs.',
+    );
+    await expect(row(admin, 'alert-sso').getByTestId('prio-after')).toHaveText(
+      'After Alert history export, which it needs.',
+    );
+    await expect(row(admin, 'setup-checklist').getByTestId('prio-after')).toHaveCount(0);
+    await expect(admin.getByTestId('prio-ghost')).toHaveCount(0);
 
-    await dragRow(admin, "alert-export", 0);
-    await giveReason(admin, "alert-export", "Two large customers asked for it this month", "Move");
-    await expect(admin.getByText("Moved Alert history export to rank 1")).toBeVisible();
-    expect((await codes(admin))[0]).toBe("alert-export");
-    await expect(row(admin, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
-    await expect(row(admin, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it this month”");
-
-    await admin.getByRole("switch", { name: "Compare with Oracle" }).click();
-    const oracle = admin.getByRole("region", { name: "Oracle's order" });
-    await expect(oracle).toBeVisible();
-    await expect(admin.getByRole("region", { name: "Your order" })).toBeVisible();
-    expect(await codes(admin, "oracle-row")).toEqual(ORACLE);
-    await expect(oracle.locator('[data-code="alert-export"]').getByTestId("oracle-why")).toHaveText(
-      "Yours: #1. Avery Stone moved it: “Two large customers asked for it this month”",
+    await dragRow(admin, 'alert-export', 0);
+    await giveReason(admin, 'alert-export', 'Two large customers asked for it this month', 'Move');
+    await expect(admin.getByText('Moved Alert history export to rank 1')).toBeVisible();
+    expect((await codes(admin))[0]).toBe('alert-export');
+    await expect(row(admin, 'alert-export').getByTestId('prio-ghost')).toHaveText('Oracle #6');
+    await expect(row(admin, 'alert-export').getByTestId('prio-override')).toContainText(
+      'Moved by Avery Stone: “Two large customers asked for it this month”',
     );
 
-    await admin.getByRole("button", { name: "Undo" }).click();
-    await expect(admin.getByText("Undone")).toBeVisible();
+    await admin.getByRole('switch', { name: 'Compare with Oracle' }).click();
+    const oracle = admin.getByRole('region', { name: "Oracle's order" });
+    await expect(oracle).toBeVisible();
+    await expect(admin.getByRole('region', { name: 'Your order' })).toBeVisible();
+    expect(await codes(admin, 'oracle-row')).toEqual(ORACLE);
+    await expect(oracle.locator('[data-code="alert-export"]').getByTestId('oracle-why')).toHaveText(
+      'Yours: #1. Avery Stone moved it: “Two large customers asked for it this month”',
+    );
+
+    await admin.getByRole('button', { name: 'Undo' }).click();
+    await expect(admin.getByText('Undone')).toBeVisible();
     await expect.poll(() => codes(admin)).toEqual(ORACLE);
-    await expect(admin.getByTestId("prio-ghost")).toHaveCount(0);
+    await expect(admin.getByTestId('prio-ghost')).toHaveCount(0);
   });
 
   /**
@@ -121,45 +159,55 @@ test.describe("desktop", () => {
    * names nobody, has no thumbnail or does not widen, or the owner cannot accept it;
    * no_claim = S10's flow bundles (the mock invents one), the decider rules (simple-deciders).
    */
-  test("a commenter proposes inline with its flow thumbnail; the owner accepts", async ({ page }) => {
+  test('a commenter proposes inline with its flow thumbnail; the owner accepts', async ({
+    page,
+  }) => {
     await dark(page.context());
-    const cory = await as(page, "commenter@example.com");
-    await row(cory, "alert-mobile").getByRole("button", { name: /^Drag / }).focus();
-    await cory.keyboard.press("ArrowUp");
-    await giveReason(cory, "alert-mobile", "Push is what the beta users asked for", "Propose");
+    const cory = await as(page, 'commenter@example.com');
+    await row(cory, 'alert-mobile')
+      .getByRole('button', { name: /^Drag / })
+      .focus();
+    await cory.keyboard.press('ArrowUp');
+    await giveReason(cory, 'alert-mobile', 'Push is what the beta users asked for', 'Propose');
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     expect(await codes(cory)).toEqual(ORACLE);
     // The pricing roadmap is for approvers and owners: its feature ranks, with no item to move.
-    await expect(row(cory, "price-tiers").getByRole("button", { name: /^Drag / })).toHaveCount(0);
-    await expect(row(cory, "alert-sso").getByRole("button", { name: /^Drag / })).toBeVisible();
-    const card = row(cory, "alert-mobile").getByTestId("prio-proposal");
-    await expect(card).toContainText("Theo Brandt proposes rank 3: “Push is what the beta users asked for” · waiting for Avery Stone");
-    await expect(card.getByRole("button", { name: "Accept" })).toHaveCount(0);
-    await expect(card).toHaveAttribute("data-wide", "false");
-    await card.getByRole("button", { name: "Open the flow for Mobile alert push" }).click();
-    await expect(card).toHaveAttribute("data-wide", "true");
-    await expect(card.getByTestId("flow-detail")).toContainText("User flow: Act on a pushed alert");
+    await expect(row(cory, 'price-tiers').getByRole('button', { name: /^Drag / })).toHaveCount(0);
+    await expect(row(cory, 'alert-sso').getByRole('button', { name: /^Drag / })).toBeVisible();
+    const card = row(cory, 'alert-mobile').getByTestId('prio-proposal');
+    await expect(card).toContainText(
+      'Theo Brandt proposes rank 3: “Push is what the beta users asked for” · waiting for Avery Stone',
+    );
+    await expect(card.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+    await expect(card).toHaveAttribute('data-wide', 'false');
+    await card.getByRole('button', { name: 'Open the flow for Mobile alert push' }).click();
+    await expect(card).toHaveAttribute('data-wide', 'true');
+    await expect(card.getByTestId('flow-detail')).toContainText('User flow: Act on a pushed alert');
     // S10, drawn to the owner's flow pick A: the screen as a wireframe of its numbered regions.
-    await expect(card.getByRole("img", { name: /^Wireframe of Alert on a phone/ })).toBeVisible();
-    await expect(card.getByTestId("flow-regions")).toContainText("Snooze and Assign buttons");
+    await expect(card.getByRole('img', { name: /^Wireframe of Alert on a phone/ })).toBeVisible();
+    await expect(card.getByTestId('flow-regions')).toContainText('Snooze and Assign buttons');
 
     // QA pass 3 (qa-simple-plan-30): no 'No flow yet' chip on a proposal.
-    await cory.getByRole("tab", { name: "Value / effort" }).click();
+    await cory.getByRole('tab', { name: 'Value / effort' }).click();
     await cory.locator('[data-testid="vxe-point"][data-code="setup-import"]').focus();
-    await cory.keyboard.press("ArrowUp");
+    await cory.keyboard.press('ArrowUp');
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
-    await cory.getByRole("tab", { name: "Ranked list" }).click();
-    await expect(row(cory, "setup-import").getByTestId("prio-proposal")).toContainText("Theo Brandt proposes goal value 6.5");
-    await expect(row(cory, "setup-import").getByTestId("flow-none")).toHaveCount(0);
+    await cory.getByRole('tab', { name: 'Ranked list' }).click();
+    await expect(row(cory, 'setup-import').getByTestId('prio-proposal')).toContainText(
+      'Theo Brandt proposes goal value 6.5',
+    );
+    await expect(row(cory, 'setup-import').getByTestId('flow-none')).toHaveCount(0);
 
-    const admin = await as(page, "admin@example.com");
-    const waiting = row(admin, "alert-mobile").getByTestId("prio-proposal");
-    await expect(waiting).toContainText("waiting for you");
-    await waiting.getByRole("button", { name: "Accept" }).click();
-    await expect(admin.getByText("Accepted the proposal for Mobile alert push")).toBeVisible();
-    await expect.poll(async () => (await codes(admin)).indexOf("alert-mobile")).toBe(2);
-    await expect(row(admin, "alert-mobile").getByTestId("prio-override")).toContainText("“Push is what the beta users asked for”");
-    await expect(row(admin, "alert-mobile").getByTestId("prio-ghost")).toHaveText("Oracle #4");
+    const admin = await as(page, 'admin@example.com');
+    const waiting = row(admin, 'alert-mobile').getByTestId('prio-proposal');
+    await expect(waiting).toContainText('waiting for you');
+    await waiting.getByRole('button', { name: 'Accept' }).click();
+    await expect(admin.getByText('Accepted the proposal for Mobile alert push')).toBeVisible();
+    await expect.poll(async () => (await codes(admin)).indexOf('alert-mobile')).toBe(2);
+    await expect(row(admin, 'alert-mobile').getByTestId('prio-override')).toContainText(
+      '“Push is what the beta users asked for”',
+    );
+    await expect(row(admin, 'alert-mobile').getByTestId('prio-ghost')).toHaveText('Oracle #4');
   });
 
   /**
@@ -170,26 +218,42 @@ test.describe("desktop", () => {
    * state, a sideways drag changes goal value instead of effort, the rank does not move, or
    * Undo does nothing; no_claim = the real API's scoring of a person's estimate (pytest).
    */
-  test("value / effort: a sideways drag re-estimates effort and the rank moves at once", async ({ page }) => {
-    const admin = await as(page, "admin@example.com");
-    await admin.getByRole("tab", { name: "Value / effort" }).click();
-    await expect(admin.getByRole("button", { name: "#7 Alert routing by team: goal value 3, effort 2 weeks, below the line" })).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#5 Sample data import: goal value 6, effort 3 weeks" })).toBeVisible();
-    expect(await codes(admin, "side-row")).toEqual(ORACLE);
+  test('value / effort: a sideways drag re-estimates effort and the rank moves at once', async ({
+    page,
+  }) => {
+    const admin = await as(page, 'admin@example.com');
+    await admin.getByRole('tab', { name: 'Value / effort' }).click();
+    await expect(
+      admin.getByRole('button', {
+        name: '#7 Alert routing by team: goal value 3, effort 2 weeks, below the line',
+      }),
+    ).toBeVisible();
+    await expect(
+      admin.getByRole('button', { name: '#5 Sample data import: goal value 6, effort 3 weeks' }),
+    ).toBeVisible();
+    expect(await codes(admin, 'side-row')).toEqual(ORACLE);
     const point = admin.locator('[data-testid="vxe-point"][data-code="setup-import"]');
-    const plot = (await admin.getByTestId("vxe-plot").boundingBox())!;
+    const plot = (await admin.getByTestId('vxe-plot').boundingBox())!;
     const at = (await point.boundingBox())!;
     // The log effort axis spans 3.8 doublings (0.38 to 6.6 weeks) across the plot's inner 92%:
     // this distance (1.52 doublings) takes 3 weeks to 1.
     await admin.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
     await admin.mouse.down();
-    await admin.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5, at.y + at.height / 2 + 3, { steps: 10 });
+    await admin.mouse.move(
+      at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5,
+      at.y + at.height / 2 + 3,
+      { steps: 10 },
+    );
     await admin.mouse.up();
-    await expect(admin.getByText("Re-estimated Sample data import: effort 1 week")).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#2 Sample data import: goal value 6, effort 1 week" })).toBeVisible();
-    expect((await codes(admin, "side-row"))[1]).toBe("setup-import");
-    await admin.getByRole("button", { name: "Undo" }).click();
-    await expect(admin.getByRole("button", { name: "#5 Sample data import: goal value 6, effort 3 weeks" })).toBeVisible();
+    await expect(admin.getByText('Re-estimated Sample data import: effort 1 week')).toBeVisible();
+    await expect(
+      admin.getByRole('button', { name: '#2 Sample data import: goal value 6, effort 1 week' }),
+    ).toBeVisible();
+    expect((await codes(admin, 'side-row'))[1]).toBe('setup-import');
+    await admin.getByRole('button', { name: 'Undo' }).click();
+    await expect(
+      admin.getByRole('button', { name: '#5 Sample data import: goal value 6, effort 3 weeks' }),
+    ).toBeVisible();
   });
 
   /**
@@ -199,22 +263,22 @@ test.describe("desktop", () => {
    * Confirm write nothing, or Undo of a merge does not return the draft; no_claim = Oracle's
    * duplicate reconciliation (S5), the real API (test_confirm_item_into_the_working_draft).
    */
-  test("a draft at the bottom merges, comes back with Undo, and is confirmed", async ({ page }) => {
-    const admin = await as(page, "admin@example.com");
-    const drafts = admin.getByRole("region", { name: "Not ranked yet" });
+  test('a draft at the bottom merges, comes back with Undo, and is confirmed', async ({ page }) => {
+    const admin = await as(page, 'admin@example.com');
+    const drafts = admin.getByRole('region', { name: 'Not ranked yet' });
     const draft = drafts.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
-    await expect(draft).toContainText("Team invite nudges");
-    await draft.getByRole("button", { name: "Merge into…" }).click();
-    await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
-    await draft.getByRole("button", { name: "Merge", exact: true }).click();
-    await expect(admin.getByText("Merged Team invite nudges into Setup checklist")).toBeVisible();
+    await expect(draft).toContainText('Team invite nudges');
+    await draft.getByRole('button', { name: 'Merge into…' }).click();
+    await draft.getByLabel('Merge into').selectOption({ label: 'Setup checklist' });
+    await draft.getByRole('button', { name: 'Merge', exact: true }).click();
+    await expect(admin.getByText('Merged Team invite nudges into Setup checklist')).toBeVisible();
     await expect(drafts).toHaveCount(0);
-    await admin.getByRole("button", { name: "Undo" }).click();
+    await admin.getByRole('button', { name: 'Undo' }).click();
     await expect(draft).toBeVisible();
-    await draft.getByRole("button", { name: "Add to the ranking" }).click();
-    await expect(admin.getByText("Added Team invite nudges to the ranking")).toBeVisible();
+    await draft.getByRole('button', { name: 'Add to the ranking' }).click();
+    await expect(admin.getByText('Added Team invite nudges to the ranking')).toBeVisible();
     await expect(drafts).toHaveCount(0);
-    await expect(row(admin, "setup-ideas")).toContainText("Team invite nudges");
+    await expect(row(admin, 'setup-ideas')).toContainText('Team invite nudges');
   });
 
   /**
@@ -223,24 +287,30 @@ test.describe("desktop", () => {
    * decider, and the decider accepts from there; fails_when = the draft's proposals are
    * nowhere on the page; no_claim = the real API's routing (pytest).
    */
-  test("a commenter's Confirm and Merge on a draft wait inline for the decider", async ({ page }) => {
-    const cory = await as(page, "commenter@example.com");
+  test("a commenter's Confirm and Merge on a draft wait inline for the decider", async ({
+    page,
+  }) => {
+    const cory = await as(page, 'commenter@example.com');
     const draft = cory.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
-    await draft.getByRole("button", { name: "Propose adding" }).click();
+    await draft.getByRole('button', { name: 'Propose adding' }).click();
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     // QA pass 3 (qa-simple-plan-29): no second proposal while one waits.
-    await expect(draft.getByRole("button", { name: "Propose adding" })).toBeDisabled();
-    await expect(draft.getByRole("button", { name: "Propose a merge…" })).toBeDisabled();
-    const cards = draft.getByTestId("prio-proposal");
+    await expect(draft.getByRole('button', { name: 'Propose adding' })).toBeDisabled();
+    await expect(draft.getByRole('button', { name: 'Propose a merge…' })).toBeDisabled();
+    const cards = draft.getByTestId('prio-proposal');
     await expect(cards).toHaveCount(1);
-    await expect(cards.nth(0)).toContainText("Theo Brandt proposes confirming it · waiting for Avery Stone");
-    await expect(cards.nth(0).getByRole("button", { name: "Accept" })).toHaveCount(0);
+    await expect(cards.nth(0)).toContainText(
+      'Theo Brandt proposes confirming it · waiting for Avery Stone',
+    );
+    await expect(cards.nth(0).getByRole('button', { name: 'Accept' })).toHaveCount(0);
 
-    const admin = await as(page, "admin@example.com");
-    const theirs = admin.locator('[data-testid="prio-draft"][data-code="setup-ideas"]').getByTestId("prio-proposal");
-    await theirs.nth(0).getByRole("button", { name: "Accept" }).click();
-    await expect(admin.getByText("Accepted the proposal for Team invite nudges")).toBeVisible();
-    await expect(row(admin, "setup-ideas")).toContainText("Team invite nudges");
+    const admin = await as(page, 'admin@example.com');
+    const theirs = admin
+      .locator('[data-testid="prio-draft"][data-code="setup-ideas"]')
+      .getByTestId('prio-proposal');
+    await theirs.nth(0).getByRole('button', { name: 'Accept' }).click();
+    await expect(admin.getByText('Accepted the proposal for Team invite nudges')).toBeVisible();
+    await expect(row(admin, 'setup-ideas')).toContainText('Team invite nudges');
   });
 
   /**
@@ -248,19 +318,27 @@ test.describe("desktop", () => {
    * (here the proposal was declined in another tab) says the API's reason, not a bare "Could
    * not decide"; fails_when = the reason is dropped; no_claim = the API's wording (its own).
    */
-  test("accepting a proposal another tab already declined says why", async ({ page }) => {
-    const cory = await as(page, "commenter@example.com");
-    await row(cory, "alert-mobile").getByRole("button", { name: /^Drag / }).focus();
-    await cory.keyboard.press("ArrowUp");
-    await giveReason(cory, "alert-mobile", "Push is what the beta users asked for", "Propose");
+  test('accepting a proposal another tab already declined says why', async ({ page }) => {
+    const cory = await as(page, 'commenter@example.com');
+    await row(cory, 'alert-mobile')
+      .getByRole('button', { name: /^Drag / })
+      .focus();
+    await cory.keyboard.press('ArrowUp');
+    await giveReason(cory, 'alert-mobile', 'Push is what the beta users asked for', 'Propose');
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
-    const stale = await as(page, "admin@example.com");
+    const stale = await as(page, 'admin@example.com');
     const fresh = await page.context().newPage();
-    await fresh.goto("/simple/priorities");
-    await row(fresh, "alert-mobile").getByTestId("prio-proposal").getByRole("button", { name: "Decline" }).click();
-    await expect(fresh.getByText("Declined the proposal for Mobile alert push")).toBeVisible();
-    await row(stale, "alert-mobile").getByTestId("prio-proposal").getByRole("button", { name: "Accept" }).click();
-    await expect(stale.getByText("This change is declined already")).toBeVisible();
+    await fresh.goto('/simple/priorities');
+    await row(fresh, 'alert-mobile')
+      .getByTestId('prio-proposal')
+      .getByRole('button', { name: 'Decline' })
+      .click();
+    await expect(fresh.getByText('Declined the proposal for Mobile alert push')).toBeVisible();
+    await row(stale, 'alert-mobile')
+      .getByTestId('prio-proposal')
+      .getByRole('button', { name: 'Accept' })
+      .click();
+    await expect(stale.getByText('This change is declined already')).toBeVisible();
   });
 
   /**
@@ -270,18 +348,26 @@ test.describe("desktop", () => {
    * no_claim = S1's values (S1's own spec).
    */
   test("the screen's type follows the shared --simple-* tokens", async ({ page }) => {
-    const admin = await as(page, "admin@example.com");
-    const sizes = await admin.getByTestId("simple-priorities").evaluate((root) => {
+    const admin = await as(page, 'admin@example.com');
+    const sizes = await admin.getByTestId('simple-priorities').evaluate((root) => {
       const v = (n: string) => getComputedStyle(root).getPropertyValue(n).trim();
-      const px = (e: Element | null) => (e ? getComputedStyle(e).fontSize : "missing");
+      const px = (e: Element | null) => (e ? getComputedStyle(e).fontSize : 'missing');
       return {
-        text: [v("--simple-text"), getComputedStyle(root).fontSize],
-        h1: [v("--simple-h1"), px(root.querySelector("h1"))],
-        small: [v("--simple-small"), px(root.querySelector('[data-testid="prio-after"]'))],
-        radius: [v("--simple-card-radius"), getComputedStyle(root.querySelector('[data-testid="prio-row"]')!).borderTopLeftRadius],
+        text: [v('--simple-text'), getComputedStyle(root).fontSize],
+        h1: [v('--simple-h1'), px(root.querySelector('h1'))],
+        small: [v('--simple-small'), px(root.querySelector('[data-testid="prio-after"]'))],
+        radius: [
+          v('--simple-card-radius'),
+          getComputedStyle(root.querySelector('[data-testid="prio-row"]')!).borderTopLeftRadius,
+        ],
       };
     });
-    expect(sizes).toEqual({ text: ["18px", "18px"], h1: ["34px", "34px"], small: ["15px", "15px"], radius: ["18px", "18px"] });
+    expect(sizes).toEqual({
+      text: ['18px', '18px'],
+      h1: ['34px', '34px'],
+      small: ['15px', '15px'],
+      radius: ['18px', '18px'],
+    });
   });
 
   /**
@@ -289,19 +375,21 @@ test.describe("desktop", () => {
    * engineer-weeks with its share, an empty "No goal" left out (it warns about nothing, qa-simple-plan-16);
    * fails_when = weeks or shares are wrong or an empty No goal still warns; no_claim = capacity (the API serves effort, not headcount).
    */
-  test("goal buckets size each goal by this quarter's weeks; an empty No goal is left out", async ({ page }) => {
-    const admin = await as(page, "admin@example.com");
-    await admin.getByRole("tab", { name: "Goal buckets" }).click();
-    await expect(admin.getByTestId("bucket-bar")).toBeVisible();
+  test("goal buckets size each goal by this quarter's weeks; an empty No goal is left out", async ({
+    page,
+  }) => {
+    const admin = await as(page, 'admin@example.com');
+    await admin.getByRole('tab', { name: 'Goal buckets' }).click();
+    await expect(admin.getByTestId('bucket-bar')).toBeVisible();
     const b = (key: string) => admin.locator(`[data-testid="goal-bucket"][data-key="${key}"]`);
-    await expect(b("grow-retention")).toContainText("9 weeks · 64%");
-    await expect(b("faster-activation")).toContainText("5 weeks · 36%");
+    await expect(b('grow-retention')).toContainText('9 weeks · 64%');
+    await expect(b('faster-activation')).toContainText('5 weeks · 36%');
     // Nothing this quarter serves no goal: no warning card.
-    await expect(b("none")).toHaveCount(0);
+    await expect(b('none')).toHaveCount(0);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
   /**
@@ -311,24 +399,26 @@ test.describe("phone", () => {
    * reorder, compare squeezes both lists side by side, or the bar replaces the cards;
    * no_claim = touch hardware gestures (Playwright drives pointer events).
    */
-  test("drag, compare toggle and goal cards on a phone, dark", async ({ page }) => {
+  test('drag, compare toggle and goal cards on a phone, dark', async ({ page }) => {
     await dark(page.context());
-    const admin = await as(page, "admin@example.com");
-    await dragRow(admin, "alert-mobile", 2);
-    await giveReason(admin, "alert-mobile", "Needed for the audit in November", "Move");
-    await expect.poll(async () => (await codes(admin))[2]).toBe("alert-mobile");
-    await admin.getByRole("switch", { name: "Compare with Oracle" }).click();
-    await expect(admin.getByRole("region", { name: "Oracle's order" })).toHaveCount(0);
-    await admin.getByRole("radio", { name: "Oracle's" }).click();
-    const oracle = admin.getByRole("region", { name: "Oracle's order" });
-    await expect(oracle.locator('[data-code="alert-mobile"]').getByTestId("oracle-why")).toHaveText("Yours: #3. Avery Stone moved it: “Needed for the audit in November”");
-    await admin.getByRole("radio", { name: "Yours" }).click();
-    await expect(admin.getByRole("list", { name: "Ranked list" })).toBeVisible();
+    const admin = await as(page, 'admin@example.com');
+    await dragRow(admin, 'alert-mobile', 2);
+    await giveReason(admin, 'alert-mobile', 'Needed for the audit in November', 'Move');
+    await expect.poll(async () => (await codes(admin))[2]).toBe('alert-mobile');
+    await admin.getByRole('switch', { name: 'Compare with Oracle' }).click();
+    await expect(admin.getByRole('region', { name: "Oracle's order" })).toHaveCount(0);
+    await admin.getByRole('radio', { name: "Oracle's" }).click();
+    const oracle = admin.getByRole('region', { name: "Oracle's order" });
+    await expect(oracle.locator('[data-code="alert-mobile"]').getByTestId('oracle-why')).toHaveText(
+      'Yours: #3. Avery Stone moved it: “Needed for the audit in November”',
+    );
+    await admin.getByRole('radio', { name: 'Yours' }).click();
+    await expect(admin.getByRole('list', { name: 'Ranked list' })).toBeVisible();
 
-    await admin.getByRole("tab", { name: "Goal buckets" }).click();
-    await expect(admin.getByTestId("bucket-bar")).toBeHidden();
+    await admin.getByRole('tab', { name: 'Goal buckets' }).click();
+    await expect(admin.getByTestId('bucket-bar')).toBeHidden();
     // The two roadmap goals and the three the Goal map's features serve (P-1, P-6); the empty No goal is left out.
-    await expect(admin.getByTestId("goal-bucket")).toHaveCount(5);
+    await expect(admin.getByTestId('goal-bucket')).toHaveCount(5);
     await expect(admin.locator('[data-testid="goal-bucket"][data-key="none"]')).toHaveCount(0);
   });
 
@@ -338,14 +428,16 @@ test.describe("phone", () => {
    * the card widens off-screen; no_claim = S10's bundles.
    */
   test("a proposal's flow opens a full-height sheet on a phone", async ({ page }) => {
-    const cory = await as(page, "commenter@example.com");
-    await row(cory, "alert-mobile").getByRole("button", { name: /^Drag / }).focus();
-    await cory.keyboard.press("ArrowUp");
-    await giveReason(cory, "alert-mobile", "Push first", "Propose");
-    const card = row(cory, "alert-mobile").getByTestId("prio-proposal");
-    await card.getByRole("button", { name: "Open the flow for Mobile alert push" }).click();
-    await expect(card).toHaveAttribute("data-wide", "false");
-    await expect(cory.getByTestId("flow-sheet")).toContainText("Snooze and Assign buttons");
+    const cory = await as(page, 'commenter@example.com');
+    await row(cory, 'alert-mobile')
+      .getByRole('button', { name: /^Drag / })
+      .focus();
+    await cory.keyboard.press('ArrowUp');
+    await giveReason(cory, 'alert-mobile', 'Push first', 'Propose');
+    const card = row(cory, 'alert-mobile').getByTestId('prio-proposal');
+    await card.getByRole('button', { name: 'Open the flow for Mobile alert push' }).click();
+    await expect(card).toHaveAttribute('data-wide', 'false');
+    await expect(cory.getByTestId('flow-sheet')).toContainText('Snooze and Assign buttons');
   });
 
   /**
@@ -353,11 +445,11 @@ test.describe("phone", () => {
    * gets no drag handles, no Confirm or Merge; fails_when = a viewer is offered a change;
    * no_claim = the API's 403 (pytest test_viewer_reads_and_runs_are_refused).
    */
-  test("a viewer reads and is offered no change", async ({ page }) => {
-    const viewer = await as(page, "viewer@example.com");
-    await expect(viewer.getByRole("button", { name: /^Drag / })).toHaveCount(0);
-    await expect(viewer.getByRole("button", { name: "Confirm" })).toHaveCount(0);
-    await expect(viewer.getByRole("button", { name: /^Merge/ })).toHaveCount(0);
+  test('a viewer reads and is offered no change', async ({ page }) => {
+    const viewer = await as(page, 'viewer@example.com');
+    await expect(viewer.getByRole('button', { name: /^Drag / })).toHaveCount(0);
+    await expect(viewer.getByRole('button', { name: 'Confirm' })).toHaveCount(0);
+    await expect(viewer.getByRole('button', { name: /^Merge/ })).toHaveCount(0);
     expect(await codes(viewer)).toEqual(ORACLE);
   });
 });

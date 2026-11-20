@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useId } from "react";
+import { useId } from 'react';
 
-import { Icon, InfoTip } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
-import { useCompanyZone } from "@/lib/dates";
-import { zoneName } from "@/lib/format";
+import { Icon, InfoTip } from '@/components/ds';
+import { api, unwrap } from '@/lib/api/client';
+import { useCompanyZone } from '@/lib/dates';
+import { zoneName } from '@/lib/format';
 
-import { INPUT } from "../_components/fields";
-import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
+import { INPUT } from '../_components/fields';
+import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from './_browse-list';
 
-const LABEL = "text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
+const LABEL = 'text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
 
 /** As oracle.sources.connectors.slack MAX_CHANNELS: a source allowlists at most this many. */
 export const MAX_CHANNELS = 100;
@@ -29,15 +29,18 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const untilId = useId();
   const hintId = useId();
   const zone = useCompanyZone();
-  const since = typeof config.since === "string" ? config.since : "";
-  const until = typeof config.until === "string" ? config.until : "";
-  const backwards = since !== "" && until !== "" && until < since;
-  const over = listOf(config, "channels").length - MAX_CHANNELS;
+  const since = typeof config.since === 'string' ? config.since : '';
+  const until = typeof config.until === 'string' ? config.until : '';
+  const backwards = since !== '' && until !== '' && until < since;
+  const over = listOf(config, 'channels').length - MAX_CHANNELS;
 
   async function load(search: string, cursor: string | null): Promise<BrowsePage> {
     const page = await unwrap(
-      api.GET("/v1/connections/{connection_id}/slack/channels", {
-        params: { path: { connection_id: connectionId! }, query: { search, ...(cursor ? { cursor } : {}) } },
+      api.GET('/v1/connections/{connection_id}/slack/channels', {
+        params: {
+          path: { connection_id: connectionId! },
+          query: { search, ...(cursor ? { cursor } : {}) },
+        },
       }),
     );
     return {
@@ -66,7 +69,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       pasteExample="https://example.slack.com/archives/C0123PRODUCT"
       unknownLabel="Unknown channel"
       connectionId={connectionId}
-      picked={listOf(config, "channels")}
+      picked={listOf(config, 'channels')}
       onPicked={(channels) => onChange({ ...config, channels })}
       labels={labelsOf(config)}
       onLabels={(labels) => onChange({ ...config, labels })}
@@ -74,7 +77,11 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       extra={
         <div className="flex min-w-0 flex-col gap-1.5">
           {over > 0 && (
-            <p role="alert" data-testid="too-many-channels" className="text-sm font-medium text-crit">
+            <p
+              role="alert"
+              data-testid="too-many-channels"
+              className="text-sm font-medium text-crit"
+            >
               A source takes at most {MAX_CHANNELS} channels: untick {over} to save it.
             </p>
           )}
@@ -89,7 +96,9 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
                 value={since}
                 max={until || undefined}
                 aria-describedby={hintId}
-                onChange={(e) => onChange({ ...config, since: e.target.value || undefined, timezone: zone })}
+                onChange={(e) =>
+                  onChange({ ...config, since: e.target.value || undefined, timezone: zone })
+                }
                 className={INPUT}
               />
             </span>
@@ -104,7 +113,9 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
                 min={since || undefined}
                 aria-invalid={backwards || undefined}
                 aria-describedby={hintId}
-                onChange={(e) => onChange({ ...config, until: e.target.value || undefined, timezone: zone })}
+                onChange={(e) =>
+                  onChange({ ...config, until: e.target.value || undefined, timezone: zone })
+                }
                 className={`${INPUT} aria-invalid:border-crit`}
               />
             </span>
@@ -118,8 +129,8 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
               Optional · {zoneName(zone)}
               {/* Pass F F-56: the range's rules behind an (i). */}
               <InfoTip label="the date range" align="start">
-                Whole days in the Company time zone. Nothing posted after Until is read, thread replies included. Narrowing the range
-                removes messages outside it when you save.
+                Whole days in the Company time zone. Nothing posted after Until is read, thread
+                replies included. Narrowing the range removes messages outside it when you save.
               </InfoTip>
             </p>
           )}

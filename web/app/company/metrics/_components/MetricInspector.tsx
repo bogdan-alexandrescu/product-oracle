@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import Link from 'next/link';
+import { useState } from 'react';
 
-import { Button, Chip, Inspector, InspectorRow, InspectorSection, toast } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { assess, goalViews } from "@/app/home/_goals";
-import { api, unwrap } from "@/lib/api/client";
-import { useCompanyZone, zoneDateTime } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, Inspector, InspectorRow, InspectorSection, toast } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { assess, goalViews } from '@/app/home/_goals';
+import { api, unwrap } from '@/lib/api/client';
+import { useCompanyZone, zoneDateTime } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
 import {
   DEFAULT_THRESHOLD_PCT,
@@ -27,9 +27,9 @@ import {
   weekText,
   type Metric,
   type MetricDetail,
-} from "./lib";
-import { MetricChart } from "./MetricChart";
-import type { Goal } from "./MetricForm";
+} from './lib';
+import { MetricChart } from './MetricChart';
+import type { Goal } from './MetricForm';
 
 /** The goal's distance to go in Home's words ("7 pts to go", "Target met", "Not below"); null when Home gives none. */
 function distanceText(goals: Goal[], id: string): string | null {
@@ -69,16 +69,16 @@ export function MetricInspector({
   const [week, setWeek] = useState(weeks[0]);
   // A week from the list below that is older than the 13 the select offers is offered too.
   const weekChoices = weeks.includes(week) ? weeks : [...weeks, week];
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = { params: { path: { metric_id: metric.id } } };
   const goal = goals.find((g) => g.id === metric.goal_id);
   const drives = metrics.find((m) => m.id === metric.drives_metric_id);
   const inputs = metrics.filter((m) => m.drives_metric_id === metric.id);
-  const typed = metric.source !== "posthog";
-  const canRecord = typed && metric.status !== "archived" && can("record_metric_value", mine);
-  const notNumber = value.trim() !== "" && Number.isNaN(Number(value));
+  const typed = metric.source !== 'posthog';
+  const canRecord = typed && metric.status !== 'archived' && can('record_metric_value', mine);
+  const notNumber = value.trim() !== '' && Number.isNaN(Number(value));
   const recent = [...metric.values].reverse().slice(0, 13);
 
   async function run(call: () => Promise<unknown>) {
@@ -96,33 +96,39 @@ export function MetricInspector({
 
   const actions = (
     <div className="flex flex-wrap gap-2">
-      {can("update_metric") && metric.status !== "archived" && (
+      {can('update_metric') && metric.status !== 'archived' && (
         <Button disabled={busy} onClick={onEdit}>
           Edit
         </Button>
       )}
-      {can("pull_metric") && metric.source === "posthog" && metric.status !== "archived" && (
-        <Button disabled={busy} onClick={() => run(() => unwrap(api.POST("/v1/metrics/{metric_id}/pull", path)))}>
+      {can('pull_metric') && metric.source === 'posthog' && metric.status !== 'archived' && (
+        <Button
+          disabled={busy}
+          onClick={() => run(() => unwrap(api.POST('/v1/metrics/{metric_id}/pull', path)))}
+        >
           Pull now
         </Button>
       )}
-      {metric.status === "archived"
-        ? can("restore_metric") && (
-            <Button disabled={busy} onClick={() => run(() => unwrap(api.POST("/v1/metrics/{metric_id}/restore", path)))}>
+      {metric.status === 'archived'
+        ? can('restore_metric') && (
+            <Button
+              disabled={busy}
+              onClick={() => run(() => unwrap(api.POST('/v1/metrics/{metric_id}/restore', path)))}
+            >
               Restore
             </Button>
           )
-        : can("archive_metric") && (
+        : can('archive_metric') && (
             <Button
               disabled={busy}
               onClick={() =>
                 run(async () => {
-                  await unwrap(api.POST("/v1/metrics/{metric_id}/archive", path));
+                  await unwrap(api.POST('/v1/metrics/{metric_id}/archive', path));
                   // pass F F-46: Archive acts at once, so the toast offers the way back.
                   // A restore that fails says so, with Undo again (the toast is gone from the panel).
-                  const undo = { label: "Undo", onClick: () => void restore() };
+                  const undo = { label: 'Undo', onClick: () => void restore() };
                   const restore = () =>
-                    unwrap(api.POST("/v1/metrics/{metric_id}/restore", path)).then(onChanged, () =>
+                    unwrap(api.POST('/v1/metrics/{metric_id}/restore', path)).then(onChanged, () =>
                       toast({ message: `Could not restore ${metric.title}`, action: undo }),
                     );
                   toast({ message: `Archived ${metric.title}`, action: undo });
@@ -153,18 +159,40 @@ export function MetricInspector({
         </>
       }
       stats={[
-        { label: "Last week", figure: <span className="tnum text-[22px] font-bold">{valueText(metric.last_week?.value, metric.unit)}</span> },
-        { label: "Change", figure: <span className="tnum text-[22px] font-bold">{metric.change ? changeText(metric.change.value, metric.change.pct) : "—"}</span> },
+        {
+          label: 'Last week',
+          figure: (
+            <span className="tnum text-[22px] font-bold">
+              {valueText(metric.last_week?.value, metric.unit)}
+            </span>
+          ),
+        },
+        {
+          label: 'Change',
+          figure: (
+            <span className="tnum text-[22px] font-bold">
+              {metric.change ? changeText(metric.change.value, metric.change.pct) : '—'}
+            </span>
+          ),
+        },
       ]}
     >
       <InspectorSection label="Weekly values">
-        <MetricChart metric={metric} target={metric.kind === "output" ? targetOf(goals, metric.goal_id) : null} />
+        <MetricChart
+          metric={metric}
+          target={metric.kind === 'output' ? targetOf(goals, metric.goal_id) : null}
+        />
         {/* pass F F-14: each week's number, newest first, with Edit for whoever records them. */}
         {recent.length > 0 && (
           <ul data-testid="metric-weeks" className="mt-2 flex flex-col text-[15px]">
             {recent.map((v) => (
-              <li key={v.week_start} className="flex min-h-8 items-center gap-2 border-t border-line first:border-t-0">
-                <span className="tnum min-w-0 flex-1 text-text2">Week of {weekText(v.week_start)}</span>
+              <li
+                key={v.week_start}
+                className="flex min-h-8 items-center gap-2 border-t border-line first:border-t-0"
+              >
+                <span className="tnum min-w-0 flex-1 text-text2">
+                  Week of {weekText(v.week_start)}
+                </span>
                 <span className="tnum font-semibold">{valueText(v.value, metric.unit)}</span>
                 {canRecord && (
                   <Button
@@ -186,23 +214,38 @@ export function MetricInspector({
       <InspectorSection label="Definition">
         <p className="text-[15px]">{metric.description}</p>
         {metric.query ? (
-          <pre className="mt-1 overflow-x-auto rounded-lg bg-surface2 px-2 py-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">{metric.query}</pre>
+          <pre className="mt-1 overflow-x-auto rounded-lg bg-surface2 px-2 py-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">
+            {metric.query}
+          </pre>
         ) : (
-          <p className="text-sm text-text2">{metric.source === "manual" ? "Entered by hand" : "Written through the API"}</p>
+          <p className="text-sm text-text2">
+            {metric.source === 'manual' ? 'Entered by hand' : 'Written through the API'}
+          </p>
         )}
         <InspectorRow value={metric.unit}>Unit</InspectorRow>
         <InspectorRow value={DIRECTION_LABEL[metric.direction]}>Good direction</InspectorRow>
-        <InspectorRow value={metric.threshold_pct != null ? `${metric.threshold_pct}%` : `Default (${DEFAULT_THRESHOLD_PCT}%)`}>Alert size</InspectorRow>
-        <InspectorRow value={metric.owner_name ?? "—"}>Owner</InspectorRow>
+        <InspectorRow
+          value={
+            metric.threshold_pct != null
+              ? `${metric.threshold_pct}%`
+              : `Default (${DEFAULT_THRESHOLD_PCT}%)`
+          }
+        >
+          Alert size
+        </InspectorRow>
+        <InspectorRow value={metric.owner_name ?? '—'}>Owner</InspectorRow>
         {metric.definitions.length > 1 && (
           <p className="text-sm text-text2">
-            Definition {metric.definition_version}, changed {zoneDateTime(metric.definitions[metric.definitions.length - 1].at, zone)}
+            Definition {metric.definition_version}, changed{' '}
+            {zoneDateTime(metric.definitions[metric.definitions.length - 1].at, zone)}
           </p>
         )}
         {metric.last_error && <ErrorNote>{metric.last_error}</ErrorNote>}
       </InspectorSection>
       {(goal || drives || inputs.length > 0) && (
-        <InspectorSection label={metric.kind === "input" ? "Drives" : goal ? "Goal and drivers" : "Drivers"}>
+        <InspectorSection
+          label={metric.kind === 'input' ? 'Drives' : goal ? 'Goal and drivers' : 'Drivers'}
+        >
           {goal && (
             <InspectorRow value={distanceText(goals, goal.id)}>
               <Link href={`/ground-truth?entity=${goal.id}`} className="hover:underline">
@@ -236,7 +279,11 @@ export function MetricInspector({
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Week
-              <select className={`${INPUT} w-auto`} value={week} onChange={(e) => setWeek(e.target.value)}>
+              <select
+                className={`${INPUT} w-auto`}
+                value={week}
+                onChange={(e) => setWeek(e.target.value)}
+              >
                 {weekChoices.map((w) => (
                   <option key={w} value={w}>
                     Week of {weekText(w)}
@@ -251,18 +298,25 @@ export function MetricInspector({
                 inputMode="decimal"
                 value={value}
                 aria-invalid={notNumber}
-                aria-describedby={notNumber ? "metric-value-error" : undefined}
+                aria-describedby={notNumber ? 'metric-value-error' : undefined}
                 onChange={(e) => setValue(e.target.value)}
               />
             </label>
             <Button
-              disabled={busy || value.trim() === "" || notNumber}
+              disabled={busy || value.trim() === '' || notNumber}
               onClick={() =>
                 run(async () => {
-                  await unwrap(api.PUT("/v1/metrics/{metric_id}/values/{week_start}", { params: { path: { metric_id: metric.id, week_start: week } }, body: { value: Number(value) } }));
-                  setValue("");
+                  await unwrap(
+                    api.PUT('/v1/metrics/{metric_id}/values/{week_start}', {
+                      params: { path: { metric_id: metric.id, week_start: week } },
+                      body: { value: Number(value) },
+                    }),
+                  );
+                  setValue('');
                   // pass F F-46: say what was saved.
-                  toast({ message: `Saved week of ${weekText(week)}: ${valueText(Number(value), metric.unit)}` });
+                  toast({
+                    message: `Saved week of ${weekText(week)}: ${valueText(Number(value), metric.unit)}`,
+                  });
                 })
               }
             >

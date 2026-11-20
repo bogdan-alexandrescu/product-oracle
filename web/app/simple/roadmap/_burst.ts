@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** A pause this long in a bar's arrow presses ends the burst and sends its change (ms). */
 export const BURST_MS = 600;
@@ -25,7 +25,10 @@ type Open<T> = {
  * applied, its `before` when it is a proposal, what the reload after it shows when it
  * failed), or null when that is unknown.
  */
-export function useKeyBurst<T>(send: (id: string, before: T, after: T) => Promise<T | null>, same: (a: T, b: T) => boolean) {
+export function useKeyBurst<T>(
+  send: (id: string, before: T, after: T) => Promise<T | null>,
+  same: (a: T, b: T) => boolean,
+) {
   const open = useRef(new Map<string, Open<T>>());
   const inflight = useRef(new Map<string, Promise<T | null>>());
   const [pending, setPending] = useState<Record<string, T>>({});

@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { NewRunDialog } from "@/app/runs/_new-run-dialog";
-import { Button, Icon } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { NewRunDialog } from '@/app/runs/_new-run-dialog';
+import { Button, Icon } from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
 /**
  * S4 Freshness: "N new items since draft k, refresh?" on a PRD's latest draft. Only the
@@ -19,10 +19,11 @@ export function DraftNewItems({ doc, slug, n }: { doc: string; slug: string; n: 
   const { can } = useMe();
   const [open, setOpen] = useState(false);
   const q = useQuery(`draft-new-items|${doc}|${n}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/new-items", { params: { path: { doc, n } } })),
+    unwrap(api.GET('/v1/documents/{doc}/versions/{n}/new-items', { params: { path: { doc, n } } })),
   );
   // #1586: a count that could not be read says so, never "no new items".
-  if (q.error) return <LoadError what="the new items" error={q.error} onRetry={() => void q.reload()} />;
+  if (q.error)
+    return <LoadError what="the new items" error={q.error} onRetry={() => void q.reload()} />;
   const count = q.data?.visible ? (q.data.count ?? 0) : 0;
   // The count is of items new, changed or deleted since the sources the draft read (its run's
   // pin, which can be well before the draft was written), so the line names that moment.
@@ -36,16 +37,22 @@ export function DraftNewItems({ doc, slug, n }: { doc: string; slug: string; n: 
     >
       <Icon name="sources" size={16} />
       <p className="min-w-0 flex-1">
-        {count} new or changed item{count === 1 ? "" : "s"} in your sources since draft v{n} read them
-        {asOf ? ` (${formatDateTime(asOf)})` : ""}
+        {count} new or changed item{count === 1 ? '' : 's'} in your sources since draft v{n} read
+        them
+        {asOf ? ` (${formatDateTime(asOf)})` : ''}
       </p>
       {/* create_run's handler wants an owner only to update a draft run; a new run lets approvers in. */}
-      {can("create_run", true) && (
+      {can('create_run', true) && (
         <Button aria-haspopup="dialog" onClick={() => setOpen(true)}>
           Refresh
         </Button>
       )}
-      {open && <NewRunDialog onClose={() => setOpen(false)} start={{ flow: "baseline_to_prd", document: slug, title: "Refresh draft" }} />}
+      {open && (
+        <NewRunDialog
+          onClose={() => setOpen(false)}
+          start={{ flow: 'baseline_to_prd', document: slug, title: 'Refresh draft' }}
+        />
+      )}
     </div>
   );
 }

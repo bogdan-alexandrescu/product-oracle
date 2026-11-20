@@ -1,50 +1,66 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import Link from 'next/link';
+import { useState } from 'react';
 
-import { Button, Chip, Dialog, InfoTip } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { docLabel } from "@/lib/labels";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, Chip, Dialog, InfoTip } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { docLabel } from '@/lib/labels';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Track = Schemas["TrackSummary"];
-type Item = Schemas["RoadmapItemOut"];
+type Track = Schemas['TrackSummary'];
+type Item = Schemas['RoadmapItemOut'];
 
-const HORIZON: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+const HORIZON: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' };
 
 /**
  * The track's approved roadmap, the one launches are planned from (null until one is approved).
  * As the API (oracle.roadmap.views.track_out): a track's roadmap is its latest approved version
  * with items, else its latest; a later version in review keeps the approved one here.
  */
-export const approvedRoadmap = (t: Track | undefined) => (t?.roadmap?.approved && t.roadmap.version ? t.roadmap : null);
-const roadmapName = (r: { title: string }) => docLabel({ title: r.title, kind: "roadmap" });
+export const approvedRoadmap = (t: Track | undefined) =>
+  t?.roadmap?.approved && t.roadmap.version ? t.roadmap : null;
+const roadmapName = (r: { title: string }) => docLabel({ title: r.title, kind: 'roadmap' });
 
 /**
  * New launch (#344): plan a launch by hand that groups one or more items of a track's latest
  * approved roadmap. The name starts as the first item's title until a person writes their own.
  */
-export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (launch: Schemas["LaunchOut"]) => Promise<void> }) {
-  const tracksQ = useQuery("new-launch-tracks", () => unwrap(api.GET("/v1/tracks")));
+export function NewLaunchDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (launch: Schemas['LaunchOut']) => Promise<void>;
+}) {
+  const tracksQ = useQuery('new-launch-tracks', () => unwrap(api.GET('/v1/tracks')));
   const tracks = tracksQ.data ?? [];
   const [trackId, setTrackId] = useState<string | null>(null);
-  const track = tracks.find((t) => t.id === trackId) ?? tracks.find((t) => approvedRoadmap(t)) ?? tracks[0];
+  const track =
+    tracks.find((t) => t.id === trackId) ?? tracks.find((t) => approvedRoadmap(t)) ?? tracks[0];
   const roadmap = approvedRoadmap(track);
-  const itemsQ = useQuery(`new-launch-items|${roadmap?.slug ?? ""}|${roadmap?.version ?? ""}`, async (): Promise<Item[]> => {
-    if (!roadmap) return [];
-    const out = await unwrap(
-      api.GET("/v1/roadmaps/{doc}/items", { params: { path: { doc: roadmap.slug }, query: { version: roadmap.version!, view: "brief" } } }),
-    );
-    return out.items;
-  });
+  const itemsQ = useQuery(
+    `new-launch-items|${roadmap?.slug ?? ''}|${roadmap?.version ?? ''}`,
+    async (): Promise<Item[]> => {
+      if (!roadmap) return [];
+      const out = await unwrap(
+        api.GET('/v1/roadmaps/{doc}/items', {
+          params: {
+            path: { doc: roadmap.slug },
+            query: { version: roadmap.version!, view: 'brief' },
+          },
+        }),
+      );
+      return out.items;
+    },
+  );
   const [picked, setPicked] = useState<string[]>([]);
   const [customName, setCustomName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const items = itemsQ.data ?? [];
-  const firstTitle = items.find((i) => i.item_key === picked[0])?.title ?? "";
+  const firstTitle = items.find((i) => i.item_key === picked[0])?.title ?? '';
   const name = customName ?? firstTitle;
 
   function toggle(key: string, on: boolean) {
@@ -57,7 +73,11 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
     setBusy(true);
     setError(null);
     try {
-      const launch = await unwrap(api.POST("/v1/launches", { body: { title: name.trim(), track_id: track.id, item_keys: picked } }));
+      const launch = await unwrap(
+        api.POST('/v1/launches', {
+          body: { title: name.trim(), track_id: track.id, item_keys: picked },
+        }),
+      );
       await onCreated(launch);
     } catch (e) {
       setError(errorMessage(e));
@@ -80,11 +100,11 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
       onSubmit={() => {
         if (canSubmit && !busy) void create();
       }}
-      cancelLabel={blocked ? "Close" : "Cancel"}
+      cancelLabel={blocked ? 'Close' : 'Cancel'}
       actions={
         blocked ? null : (
           <Button type="submit" variant="primary" disabled={busy || !canSubmit}>
-            {busy ? "Creating…" : "Create launch"}
+            {busy ? 'Creating…' : 'Create launch'}
           </Button>
         )
       }
@@ -99,7 +119,7 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
           Track
           <select
             className={INPUT}
-            value={track?.id ?? ""}
+            value={track?.id ?? ''}
             onChange={(e) => {
               setTrackId(e.target.value);
               setPicked([]);
@@ -115,21 +135,33 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
       )}
       <fieldset className="flex min-w-0 flex-col gap-1.5">
         <legend className="mb-1 text-sm font-semibold text-text2">
-          Items{roadmap ? ` · ${roadmapName(roadmap)}, version ${roadmap.version}` : ""}
+          Items{roadmap ? ` · ${roadmapName(roadmap)}, version ${roadmap.version}` : ''}
         </legend>
         {tracksQ.data && !roadmap && <NoRoadmapReason track={track} />}
-        {roadmap && itemsQ.data && items.length === 0 && <p className="text-sm text-text2">The approved roadmap has no items.</p>}
+        {roadmap && itemsQ.data && items.length === 0 && (
+          <p className="text-sm text-text2">The approved roadmap has no items.</p>
+        )}
         <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
           {items.map((i) => (
             <li key={i.item_key}>
               <label
                 data-testid="launch-item-option"
                 className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
-                  picked.includes(i.item_key) ? "border-accent bg-accent-soft" : "border-line bg-surface hover:border-line-strong"
+                  picked.includes(i.item_key)
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-line bg-surface hover:border-line-strong'
                 }`}
               >
-                <input type="checkbox" checked={picked.includes(i.item_key)} onChange={(e) => toggle(i.item_key, e.target.checked)} />
-                <span className="min-w-0 flex-1 truncate font-medium" data-testid="launch-item-title" title={i.title}>
+                <input
+                  type="checkbox"
+                  checked={picked.includes(i.item_key)}
+                  onChange={(e) => toggle(i.item_key, e.target.checked)}
+                />
+                <span
+                  className="min-w-0 flex-1 truncate font-medium"
+                  data-testid="launch-item-title"
+                  title={i.title}
+                >
                   {i.title}
                 </span>
                 <Chip kind="line">{HORIZON[i.horizon] ?? i.horizon}</Chip>
@@ -142,11 +174,16 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
         <>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Name
-            <input className={INPUT} value={name} maxLength={300} onChange={(e) => setCustomName(e.target.value)} />
+            <input
+              className={INPUT}
+              value={name}
+              maxLength={300}
+              onChange={(e) => setCustomName(e.target.value)}
+            />
           </label>
           <p className="text-sm text-text2">
-            The launch starts Planned with Oracle&apos;s suggested tier and its checklist. It is ready when the items&apos; tracker issues
-            or milestones are done.
+            The launch starts Planned with Oracle&apos;s suggested tier and its checklist. It is
+            ready when the items&apos; tracker issues or milestones are done.
           </p>
         </>
       )}
@@ -159,12 +196,19 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
  * Why no launch can be planned yet, and the way forward (fix4 qa-plan-13: Launches says it by
  * its disabled New launch too): no track, or the track's roadmap not approved yet.
  */
-export function NoRoadmapReason({ track, testId = "new-launch-blocked" }: { track: Track | undefined; testId?: string }) {
-  const link = "font-medium text-accent-ink underline-offset-2 hover:underline";
+export function NoRoadmapReason({
+  track,
+  testId = 'new-launch-blocked',
+}: {
+  track: Track | undefined;
+  testId?: string;
+}) {
+  const link = 'font-medium text-accent-ink underline-offset-2 hover:underline';
   if (!track)
     return (
       <p className="text-sm text-text2" data-testid={testId}>
-        No product track yet. A track starts when a PRD is approved; then build and approve its roadmap in{" "}
+        No product track yet. A track starts when a PRD is approved; then build and approve its
+        roadmap in{' '}
         <Link href="/plan/documents" className={link}>
           Roadmap documents
         </Link>
@@ -176,21 +220,21 @@ export function NoRoadmapReason({ track, testId = "new-launch-blocked" }: { trac
       {/* #1590: why there's no roadmap to launch from sits behind the (i); the way forward stays visible. */}
       <InfoTip label="why there's no roadmap yet" align="start" testId="launches-empty-tip">
         {track.title} has no approved roadmap yet, and a launch groups items of an approved roadmap.
-      </InfoTip>{" "}
+      </InfoTip>{' '}
       {track.roadmap ? (
         <>
-          Approve{" "}
+          Approve{' '}
           <Link href={`/documents/${track.roadmap.slug}`} className={link}>
             {roadmapName(track.roadmap)}
-          </Link>{" "}
+          </Link>{' '}
           first.
         </>
       ) : (
         <>
-          Build its roadmap in{" "}
+          Build its roadmap in{' '}
           <Link href="/plan/documents" className={link}>
             Roadmap documents
-          </Link>{" "}
+          </Link>{' '}
           and approve it first.
         </>
       )}

@@ -1,43 +1,43 @@
-"use client";
+'use client';
 // ec1 'Edit each row in place' (owner's pick, Nov 5): the feature panel's Tasks. Each part of a
 // row is a control where it sits, as the panel's other fields are: the title retitles it, the
 // owner picks a person, the date picks a day; the status pill opens To do, Doing, Done and, last,
 // Drop this task (to Settings › Trash, restored from there). '+ Add a task' ends the list. Each save is one Simple change (Undo; a
 // commenter's or a non-deciding approver's waits under Proposals on it). A viewer reads.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 
-import { api, unwrap } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
-import { useQuery } from "@/lib/use-query";
+import { api, unwrap } from '@/lib/api/client';
+import { formatDay } from '@/lib/format';
+import { useQuery } from '@/lib/use-query';
 
-import type { Act } from "./_card";
-import type { ChangeWords, Item } from "./_lib";
+import type { Act } from './_card';
+import type { ChangeWords, Item } from './_lib';
 
-type Task = Item["tasks"][number];
-type Status = Task["status"];
+type Task = Item['tasks'][number];
+type Status = Task['status'];
 
 const STATUS_WORDS: Record<Status, string> = {
-  todo: "To do",
-  doing: "Doing",
-  done: "Done",
-  dropped: "Dropped",
+  todo: 'To do',
+  doing: 'Doing',
+  done: 'Done',
+  dropped: 'Dropped',
 };
 const PILL: Record<Status, string> = {
-  todo: "bg-surface2 text-text2",
-  doing: "bg-accent-soft text-accent-ink",
-  done: "bg-pass-bg text-pass",
-  dropped: "bg-surface2 text-text2",
+  todo: 'bg-surface2 text-text2',
+  doing: 'bg-accent-soft text-accent-ink',
+  done: 'bg-pass-bg text-pass',
+  dropped: 'bg-surface2 text-text2',
 };
-const BIT = "rounded px-0.5 text-left hover:bg-surface2 hover:underline";
-const INPUT = "rounded-md border border-line bg-surface px-2 py-1 text-[15px]";
+const BIT = 'rounded px-0.5 text-left hover:bg-surface2 hover:underline';
+const INPUT = 'rounded-md border border-line bg-surface px-2 py-1 text-[15px]';
 
 /** A small menu under its control; a click away or Escape closes it. */
 function Pop({
   label,
   onClose,
   children,
-  className = "",
+  className = '',
 }: {
   label: string;
   onClose: () => void;
@@ -50,18 +50,17 @@ function Pop({
     close.current = onClose;
   });
   useEffect(() => {
-    const away = (e: MouseEvent) =>
-      !ref.current?.contains(e.target as Node) && close.current();
+    const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && close.current();
     const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.stopPropagation();
       close.current();
     };
-    document.addEventListener("mousedown", away);
-    window.addEventListener("keydown", esc, true);
+    document.addEventListener('mousedown', away);
+    window.addEventListener('keydown', esc, true);
     return () => {
-      document.removeEventListener("mousedown", away);
-      window.removeEventListener("keydown", esc, true);
+      document.removeEventListener('mousedown', away);
+      window.removeEventListener('keydown', esc, true);
     };
   }, []);
   return (
@@ -91,7 +90,7 @@ function Choice({
     <button
       type="button"
       role="menuitem"
-      className={`block w-full rounded-md px-2 py-1.5 text-left text-[15px] hover:bg-surface2 ${warn ? "text-warn" : ""} ${current ? "font-semibold" : ""}`}
+      className={`block w-full rounded-md px-2 py-1.5 text-left text-[15px] hover:bg-surface2 ${warn ? 'text-warn' : ''} ${current ? 'font-semibold' : ''}`}
       onClick={onPick}
     >
       {label}
@@ -120,14 +119,14 @@ function DueInput({ task, save, done }: { task: Task; save: Save; done: () => vo
       type="date"
       aria-label={`Due date of ${task.title}`}
       className={INPUT}
-      defaultValue={task.due_date ?? ""}
+      defaultValue={task.due_date ?? ''}
       autoFocus
       onMouseDown={() => (typed.current = false)}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
+        if (e.key === 'Enter') {
           e.preventDefault();
           finish(e.currentTarget);
-        } else if (e.key === "Escape") {
+        } else if (e.key === 'Escape') {
           // Only the input closes, not the panel.
           e.stopPropagation();
           finish(null);
@@ -150,19 +149,14 @@ function TaskRow({
   people: { user_id: string; name: string }[];
   save: Save;
 }) {
-  const [open, setOpen] = useState<"title" | "owner" | "due" | "status" | null>(
-    null,
-  );
+  const [open, setOpen] = useState<'title' | 'owner' | 'due' | 'status' | null>(null);
   const [title, setTitle] = useState(task.title);
-  const owner = task.owner ? task.owner.name : "No owner";
-  const due = task.due_date ? `due ${formatDay(task.due_date)}` : "No due date";
+  const owner = task.owner ? task.owner.name : 'No owner';
+  const due = task.due_date ? `due ${formatDay(task.due_date)}` : 'No due date';
   const done = () => setOpen(null);
   if (!canChange)
     return (
-      <li
-        data-testid="card-task"
-        className="border-b border-line py-1.5 last:border-b-0"
-      >
+      <li data-testid="card-task" className="border-b border-line py-1.5 last:border-b-0">
         <div className="[overflow-wrap:anywhere]">{task.title}</div>
         <div className="flex items-center gap-2 text-[14px] text-text2">
           <span className="min-w-0 flex-1">
@@ -173,11 +167,8 @@ function TaskRow({
       </li>
     );
   return (
-    <li
-      data-testid="card-task"
-      className="border-b border-line py-1.5 last:border-b-0"
-    >
-      {open === "title" ? (
+    <li data-testid="card-task" className="border-b border-line py-1.5 last:border-b-0">
+      {open === 'title' ? (
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -215,7 +206,7 @@ function TaskRow({
           type="button"
           aria-label={`Retitle ${task.title}`}
           className={`${BIT} [overflow-wrap:anywhere]`}
-          onClick={() => (setTitle(task.title), setOpen("title"))}
+          onClick={() => (setTitle(task.title), setOpen('title'))}
         >
           {task.title}
         </button>
@@ -226,40 +217,32 @@ function TaskRow({
             type="button"
             aria-label={`Owner of ${task.title}`}
             className={BIT}
-            onClick={() => setOpen(open === "owner" ? null : "owner")}
+            onClick={() => setOpen(open === 'owner' ? null : 'owner')}
           >
             {owner}
           </button>
-          {" · "}
-          {open === "due" ? (
+          {' · '}
+          {open === 'due' ? (
             <DueInput task={task} save={save} done={done} />
           ) : (
             <button
               type="button"
               aria-label={`Due date of ${task.title}`}
               className={BIT}
-              onClick={() => setOpen("due")}
+              onClick={() => setOpen('due')}
             >
               {due}
             </button>
           )}
-          {open === "owner" && (
-            <Pop
-              label={`Owner of ${task.title}`}
-              onClose={done}
-              className="left-0"
-            >
+          {open === 'owner' && (
+            <Pop label={`Owner of ${task.title}`} onClose={done} className="left-0">
               <Choice
                 label="No owner"
                 current={!task.owner}
                 onPick={() => (
                   done(),
                   task.owner &&
-                    void save.edit(
-                      task,
-                      { owner_id: null },
-                      `Owner of “${task.title}” changed`,
-                    )
+                    void save.edit(task, { owner_id: null }, `Owner of “${task.title}” changed`)
                 )}
               />
               {people.map((p) => (
@@ -286,20 +269,16 @@ function TaskRow({
             type="button"
             aria-label={`Status of ${task.title}`}
             aria-haspopup="menu"
-            aria-expanded={open === "status"}
+            aria-expanded={open === 'status'}
             data-testid="task-status"
             className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${PILL[task.status]}`}
-            onClick={() => setOpen(open === "status" ? null : "status")}
+            onClick={() => setOpen(open === 'status' ? null : 'status')}
           >
             {STATUS_WORDS[task.status]} ▾
           </button>
-          {open === "status" && (
-            <Pop
-              label={`Status of ${task.title}`}
-              onClose={done}
-              className="right-0"
-            >
-              {(["todo", "doing", "done"] as const).map((s) => (
+          {open === 'status' && (
+            <Pop label={`Status of ${task.title}`} onClose={done} className="right-0">
+              {(['todo', 'doing', 'done'] as const).map((s) => (
                 <Choice
                   key={s}
                   label={STATUS_WORDS[s]}
@@ -307,11 +286,7 @@ function TaskRow({
                   onPick={() => (
                     done(),
                     s !== task.status &&
-                      void save.status(
-                        task,
-                        s,
-                        `“${task.title}” marked ${STATUS_WORDS[s]}`,
-                      )
+                      void save.status(task, s, `“${task.title}” marked ${STATUS_WORDS[s]}`)
                   )}
                 />
               ))}
@@ -321,7 +296,10 @@ function TaskRow({
                 warn
                 onPick={() => (
                   done(),
-                  void save.status(task, "dropped", { applied: `Moved the task “${task.title}” to Trash`, proposed: `drop the task “${task.title}”` })
+                  void save.status(task, 'dropped', {
+                    applied: `Moved the task “${task.title}” to Trash`,
+                    proposed: `drop the task “${task.title}”`,
+                  })
                 )}
               />
             </Pop>
@@ -358,10 +336,10 @@ export function TasksPart({
   title: (words: string) => React.ReactNode;
 }) {
   const [adding, setAdding] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const people = useQuery(`people:tasks:${canChange}`, () =>
     canChange
-      ? unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } }))
+      ? unwrap(api.GET('/v1/people', { params: { query: { limit: 200 } } }))
       : Promise.resolve([]),
   );
   const tasks = item.tasks;
@@ -379,7 +357,7 @@ export function TasksPart({
         Object.keys(after).map((k) => [k, was[k as keyof typeof was]]),
       );
       return act(what, {
-        op: "edit_item_task",
+        op: 'edit_item_task',
         target: { ...target, task_id: t.id },
         before,
         after,
@@ -387,19 +365,19 @@ export function TasksPart({
     },
     status: (t, status, what) =>
       act(what, {
-        op: "set_item_task_status",
+        op: 'set_item_task_status',
         target: { ...target, task_id: t.id },
         before: { status: t.status },
         after: { status },
       }),
   };
-  const done = tasks.filter((t) => t.status === "done").length;
+  const done = tasks.filter((t) => t.status === 'done').length;
   const add = () => {
     const t = text.trim();
     if (!t) return;
-    setText("");
+    setText('');
     void act(`Added the task “${t}”`, {
-      op: "add_item_task",
+      op: 'add_item_task',
       target,
       before: {},
       after: { title: t },
@@ -407,9 +385,7 @@ export function TasksPart({
   };
   return (
     <>
-      {title(
-        tasks.length ? `Tasks · ${done} of ${tasks.length} done` : "Tasks",
-      )}
+      {title(tasks.length ? `Tasks · ${done} of ${tasks.length} done` : 'Tasks')}
       <ul className="mt-1">
         {tasks.map((t) => (
           <TaskRow

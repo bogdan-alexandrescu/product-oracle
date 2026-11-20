@@ -1,9 +1,9 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { DATE_BASES_SCENARIO } from "../lib/api/mock/roadmap";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
+import { DATE_BASES_SCENARIO } from '../lib/api/mock/roadmap';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { login } from './helpers';
 
 /*
  * Fix round 4 for the Plan's tab strip and its Dates, Documents and Outcomes tabs (qa-plan-15,
@@ -14,248 +14,357 @@ import { login } from "./helpers";
 
 const PHONE = { width: 390, height: 844 };
 const visible = (page: Page, id: string) => page.getByTestId(id).filter({ visible: true });
-const strip = (page: Page) => visible(page, "plan-tabs");
-const links = (page: Page) => visible(page, "plan-links");
-const header = (page: Page) => page.locator("header[data-page-header]").filter({ visible: true });
+const strip = (page: Page) => visible(page, 'plan-tabs');
+const links = (page: Page) => visible(page, 'plan-links');
+const header = (page: Page) => page.locator('header[data-page-header]').filter({ visible: true });
 
-async function start(page: Page, opts: { scenario?: string; theme?: "light" | "dark" } = {}) {
-  if (opts.scenario) await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, opts.scenario] as const);
-  if (opts.theme) await page.addInitScript(([k, t]) => localStorage.setItem(k, t), [THEME_KEY, opts.theme] as const);
+async function start(page: Page, opts: { scenario?: string; theme?: 'light' | 'dark' } = {}) {
+  if (opts.scenario)
+    await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [
+      MOCK_SCENARIO_KEY,
+      opts.scenario,
+    ] as const);
+  if (opts.theme)
+    await page.addInitScript(([k, t]) => localStorage.setItem(k, t), [
+      THEME_KEY,
+      opts.theme,
+    ] as const);
   await login(page);
 }
 
 /* ------------------------------------------ The strip ------------------------------------------ */
 
-test("qa-plan-16: Launches and Changelog keep the Plan tab strip, their own link selected", async ({ page }) => {
+test('qa-plan-16: Launches and Changelog keep the Plan tab strip, their own link selected', async ({
+  page,
+}) => {
   await start(page);
-  await page.goto("/plan");
-  await links(page).getByRole("link", { name: "Launches" }).click();
+  await page.goto('/plan');
+  await links(page).getByRole('link', { name: 'Launches' }).click();
   await expect(page).toHaveURL(/\/roadmap\/launches$/);
   await expect(strip(page)).toBeVisible();
-  await expect(links(page).getByRole("link", { name: "Launches" })).toHaveAttribute("aria-current", "page");
-  await links(page).getByRole("link", { name: "Changelog" }).click();
+  await expect(links(page).getByRole('link', { name: 'Launches' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await links(page).getByRole('link', { name: 'Changelog' }).click();
   await expect(page).toHaveURL(/\/roadmap\/changelog$/);
-  await expect(links(page).getByRole("link", { name: "Changelog" })).toHaveAttribute("aria-current", "page");
-  await expect(links(page).getByRole("link", { name: "Launches" })).not.toHaveAttribute("aria-current", "page");
+  await expect(links(page).getByRole('link', { name: 'Changelog' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(links(page).getByRole('link', { name: 'Launches' })).not.toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   // The strip's Plan tab leads back.
-  await strip(page).getByTestId("plan-tab-plan").click();
+  await strip(page).getByTestId('plan-tab-plan').click();
   await expect(page).toHaveURL(/\/plan$/);
 });
 
-test("qa-plan-17: the newest report and the list are two entries with two names", async ({ page }) => {
-  await start(page, { scenario: "alignment-report" });
-  await page.goto("/plan");
-  await expect(links(page).getByRole("link")).toHaveText(["Latest report", "Launches", "Changelog"]);
-  await expect(page.getByRole("link", { name: "Alignment report" })).toHaveCount(0);
-  await links(page).getByRole("link", { name: "Latest report" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
-  await strip(page).getByTestId("plan-tab-reports").click();
+test('qa-plan-17: the newest report and the list are two entries with two names', async ({
+  page,
+}) => {
+  await start(page, { scenario: 'alignment-report' });
+  await page.goto('/plan');
+  await expect(links(page).getByRole('link')).toHaveText([
+    'Latest report',
+    'Launches',
+    'Changelog',
+  ]);
+  await expect(page.getByRole('link', { name: 'Alignment report' })).toHaveCount(0);
+  await links(page).getByRole('link', { name: 'Latest report' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Weekly alignment · week of Oct 12',
+  );
+  await strip(page).getByTestId('plan-tab-reports').click();
   await expect(page).toHaveURL(/\/plan\/reports$/);
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
-  test("qa-plan-18: the Plan tabs are one row that scrolls, Reports never alone on a second row", async ({ page }) => {
+  test('qa-plan-18: the Plan tabs are one row that scrolls, Reports never alone on a second row', async ({
+    page,
+  }) => {
     await start(page);
-    await page.goto("/plan");
+    await page.goto('/plan');
     // One row that scrolls sideways, whatever width the text draws at (another system's font
     // runs a few percent wider or narrower): every tab on Plan's line, the strip never wrapping
     // or scrolling up and down, and the open tab in full view in it.
     const row = (current: string) =>
-      strip(page).locator('[data-testid^="plan-tab-"]').first().evaluate((first, open) => {
-        const s = first.parentElement!;
-        const cs = getComputedStyle(s);
-        const box = s.getBoundingClientRect();
-        const on = s.querySelector<HTMLElement>(`[data-testid="${open}"]`)!.getBoundingClientRect();
-        return {
-          wrap: cs.flexWrap,
-          overflowX: cs.overflowX,
-          tall: s.scrollHeight > s.clientHeight + 1,
-          rows: new Set([...s.querySelectorAll("[data-testid^='plan-tab-']")].map((t) => Math.round(t.getBoundingClientRect().top))).size,
-          openInView: on.left >= box.left - 0.5 && on.right <= box.right + 0.5,
-        };
-      }, current);
-    const ONE_ROW = { wrap: "nowrap", overflowX: "auto", tall: false, rows: 1, openInView: true };
-    await expect(strip(page).getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
-    await expect.poll(() => row("plan-tab-plan")).toEqual(ONE_ROW);
-    const reports = strip(page).getByTestId("plan-tab-reports");
+      strip(page)
+        .locator('[data-testid^="plan-tab-"]')
+        .first()
+        .evaluate((first, open) => {
+          const s = first.parentElement!;
+          const cs = getComputedStyle(s);
+          const box = s.getBoundingClientRect();
+          const on = s
+            .querySelector<HTMLElement>(`[data-testid="${open}"]`)!
+            .getBoundingClientRect();
+          return {
+            wrap: cs.flexWrap,
+            overflowX: cs.overflowX,
+            tall: s.scrollHeight > s.clientHeight + 1,
+            rows: new Set(
+              [...s.querySelectorAll("[data-testid^='plan-tab-']")].map((t) =>
+                Math.round(t.getBoundingClientRect().top),
+              ),
+            ).size,
+            openInView: on.left >= box.left - 0.5 && on.right <= box.right + 0.5,
+          };
+        }, current);
+    const ONE_ROW = { wrap: 'nowrap', overflowX: 'auto', tall: false, rows: 1, openInView: true };
+    await expect(strip(page).getByTestId('plan-tab-plan')).toHaveAttribute('aria-current', 'page');
+    await expect.poll(() => row('plan-tab-plan')).toEqual(ONE_ROW);
+    const reports = strip(page).getByTestId('plan-tab-reports');
     await reports.scrollIntoViewIfNeeded();
     // Both measured after the scroll, so a page that scrolled to bring Reports in moves both alike.
-    const plan = (await strip(page).getByTestId("plan-tab-plan").boundingBox())!;
+    const plan = (await strip(page).getByTestId('plan-tab-plan').boundingBox())!;
     const r = (await reports.boundingBox())!;
     expect(Math.abs(r.y - plan.y)).toBeLessThanOrEqual(1);
     await reports.click();
     await expect(page).toHaveURL(/\/plan\/reports$/);
-    await expect(strip(page).getByTestId("plan-tab-reports")).toHaveAttribute("aria-current", "page");
-    await expect.poll(() => row("plan-tab-reports")).toEqual(ONE_ROW);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
+    await expect(strip(page).getByTestId('plan-tab-reports')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect.poll(() => row('plan-tab-reports')).toEqual(ONE_ROW);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      PHONE.width,
+    );
   });
 
   // qa-plan-18 at text far wider than any system draws (the macOS wrap, brought about here by
   // a big step in letter-spacing or in the tabs' type size, as Inter Tight's wider metrics there
   // do) and on narrower phones: still one row, scrolling sideways, Reports on Plan's line.
   for (const step of [
-    { name: "letter-spacing 1px", css: "*, *::before, *::after { letter-spacing: 1px !important; }" },
-    { name: "tabs at 18px", css: '[data-testid="plan-tabs"] a { font-size: 18px !important; }' },
-    { name: "tabs at 20px, spaced 0.6px", css: '[data-testid="plan-tabs"] a { font-size: 20px !important; letter-spacing: 0.6px !important; }' },
+    {
+      name: 'letter-spacing 1px',
+      css: '*, *::before, *::after { letter-spacing: 1px !important; }',
+    },
+    { name: 'tabs at 18px', css: '[data-testid="plan-tabs"] a { font-size: 18px !important; }' },
+    {
+      name: 'tabs at 20px, spaced 0.6px',
+      css: '[data-testid="plan-tabs"] a { font-size: 20px !important; letter-spacing: 0.6px !important; }',
+    },
   ]) {
     for (const width of [390, 375]) {
-      test(`qa-plan-18: the Plan tabs hold one row with ${step.name} at ${width} px`, async ({ page }) => {
+      test(`qa-plan-18: the Plan tabs hold one row with ${step.name} at ${width} px`, async ({
+        page,
+      }) => {
         await page.setViewportSize({ width, height: 800 });
         await start(page);
-        await page.goto("/plan");
+        await page.goto('/plan');
         await page.addStyleTag({ content: step.css });
-        await expect(strip(page).getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
+        await expect(strip(page).getByTestId('plan-tab-plan')).toHaveAttribute(
+          'aria-current',
+          'page',
+        );
         const tabs = strip(page).locator('[data-testid^="plan-tab-"]');
         const look = () =>
           tabs.first().evaluate((first) => {
             const s = first.parentElement!;
             const box = s.getBoundingClientRect();
-            const all = [...s.querySelectorAll<HTMLElement>("[data-testid^='plan-tab-']")].map((t) => t.getBoundingClientRect());
+            const all = [...s.querySelectorAll<HTMLElement>("[data-testid^='plan-tab-']")].map(
+              (t) => t.getBoundingClientRect(),
+            );
             return {
               rows: new Set(all.map((t) => Math.round(t.top))).size,
               // The strip is no taller than one tab and its padding: no second line, no scroll up and down.
-              tall: s.scrollHeight > s.clientHeight + 1 || box.height > Math.max(...all.map((t) => t.height)) + 12,
+              tall:
+                s.scrollHeight > s.clientHeight + 1 ||
+                box.height > Math.max(...all.map((t) => t.height)) + 12,
               scrolls: s.scrollWidth > s.clientWidth,
             };
           });
         await expect.poll(look).toEqual({ rows: 1, tall: false, scrolls: true });
-        const reports = strip(page).getByTestId("plan-tab-reports");
+        const reports = strip(page).getByTestId('plan-tab-reports');
         // The chevron pages the strip, as a person would, until Reports is in full view.
-        for (let i = 0; i < 6 && !(await reports.evaluate((r) => {
-          const [a, b] = [r.getBoundingClientRect(), r.parentElement!.getBoundingClientRect()];
-          return a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
-        })); i++) {
-          await strip(page).getByRole("button", { name: "Scroll tabs right" }).click();
+        for (
+          let i = 0;
+          i < 6 &&
+          !(await reports.evaluate((r) => {
+            const [a, b] = [r.getBoundingClientRect(), r.parentElement!.getBoundingClientRect()];
+            return a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
+          }));
+          i++
+        ) {
+          await strip(page).getByRole('button', { name: 'Scroll tabs right' }).click();
           await page.waitForTimeout(400);
         }
         await expect(reports).toBeInViewport({ ratio: 1 });
         const plan = (await tabs.first().boundingBox())!;
         expect(Math.abs((await reports.boundingBox())!.y - plan.y)).toBeLessThanOrEqual(1);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          width,
+        );
       });
     }
   }
 
-  test("qa-plan-19: the Dates filters are one row, and a filter reading 0 is an ordinary chip", async ({ page }) => {
+  test('qa-plan-19: the Dates filters are one row, and a filter reading 0 is an ordinary chip', async ({
+    page,
+  }) => {
     await start(page, { scenario: DATE_BASES_SCENARIO });
-    await page.goto("/plan/dates");
-    const filter = visible(page, "dates-filter");
-    const chips = filter.getByRole("button");
+    await page.goto('/plan/dates');
+    const filter = visible(page, 'dates-filter');
+    const chips = filter.getByRole('button');
     await expect(chips).toHaveCount(4);
     const first = (await chips.first().boundingBox())!;
     for (const chip of await chips.all()) {
       await chip.scrollIntoViewIfNeeded();
       expect(Math.abs((await chip.boundingBox())!.y - first.y)).toBeLessThanOrEqual(1);
     }
-    const withdrawn = filter.getByRole("button", { name: /^Withdrawn/ });
+    const withdrawn = filter.getByRole('button', { name: /^Withdrawn/ });
     await expect(withdrawn).toHaveText(/^Withdrawn\s*0$/);
     await expect(withdrawn).toBeEnabled();
     expect(Number(await withdrawn.evaluate((el) => getComputedStyle(el).opacity))).toBe(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      PHONE.width,
+    );
   });
 });
 
 /* ------------------------------------------ Dates ------------------------------------------ */
 
-test("qa-plan-20: Withdraw is an outlined row button, not plain grey text", async ({ page }) => {
+test('qa-plan-20: Withdraw is an outlined row button, not plain grey text', async ({ page }) => {
   await start(page, { scenario: DATE_BASES_SCENARIO });
-  await page.goto("/plan/dates");
-  await visible(page, "dates-filter").getByRole("button", { name: /^Verified/ }).click();
-  const withdraw = visible(page, "dates-table").locator('[data-basis="ENG-412"]').filter({ visible: true }).getByRole("button", { name: "Withdraw" });
+  await page.goto('/plan/dates');
+  await visible(page, 'dates-filter')
+    .getByRole('button', { name: /^Verified/ })
+    .click();
+  const withdraw = visible(page, 'dates-table')
+    .locator('[data-basis="ENG-412"]')
+    .filter({ visible: true })
+    .getByRole('button', { name: 'Withdraw' });
   await expect(withdraw).toBeVisible();
-  const border = await withdraw.evaluate((el) => ({ width: getComputedStyle(el).borderTopWidth, color: getComputedStyle(el).borderTopColor }));
-  expect(border.width).not.toBe("0px");
-  expect(border.color).not.toBe("rgba(0, 0, 0, 0)");
+  const border = await withdraw.evaluate((el) => ({
+    width: getComputedStyle(el).borderTopWidth,
+    color: getComputedStyle(el).borderTopColor,
+  }));
+  expect(border.width).not.toBe('0px');
+  expect(border.color).not.toBe('rgba(0, 0, 0, 0)');
 });
 
-test("qa-plan-21: Dates says Add a date source, not Record basis", async ({ page }) => {
+test('qa-plan-21: Dates says Add a date source, not Record basis', async ({ page }) => {
   await start(page, { scenario: DATE_BASES_SCENARIO });
-  await page.goto("/plan/dates");
-  await expect(page.getByRole("button", { name: "Record basis" })).toHaveCount(0);
-  await header(page).getByRole("button", { name: "Add a date source" }).click();
-  await expect(page.getByRole("dialog", { name: "Add a date source" })).toBeVisible();
+  await page.goto('/plan/dates');
+  await expect(page.getByRole('button', { name: 'Record basis' })).toHaveCount(0);
+  await header(page).getByRole('button', { name: 'Add a date source' }).click();
+  await expect(page.getByRole('dialog', { name: 'Add a date source' })).toBeVisible();
 });
 
-test("qa-plan-59: Dates has summary chips by its title, as the other tabs do", async ({ page }) => {
+test('qa-plan-59: Dates has summary chips by its title, as the other tabs do', async ({ page }) => {
   await start(page, { scenario: DATE_BASES_SCENARIO });
-  await page.goto("/plan/dates");
-  const summary = header(page).getByTestId("dates-summary");
-  await expect(summary).toContainText("1 proposed");
+  await page.goto('/plan/dates');
+  const summary = header(page).getByTestId('dates-summary');
+  await expect(summary).toContainText('1 proposed');
   // ENG-412 for the PRD, and ENG-402 for Threshold alerts on spend (qa4-plan-31).
-  await expect(summary).toContainText("2 verified");
-  await expect(summary).not.toContainText("withdrawn");
+  await expect(summary).toContainText('2 verified');
+  await expect(summary).not.toContainText('withdrawn');
 });
 
 /* ------------------------------------------ Documents ------------------------------------------ */
 
-test("qa-plan-22: the roadmap inspector puts each label before its value", async ({ page }) => {
+test('qa-plan-22: the roadmap inspector puts each label before its value', async ({ page }) => {
   await start(page);
-  await page.goto("/plan/documents");
-  const inspector = visible(page, "roadmap-inspector");
-  const chip = inspector.getByTestId("roadmap-not-approved");
-  await expect(chip).toHaveText("Not approved yet");
-  const label = (await inspector.getByTestId("roadmap-versions").getByText("Approved", { exact: true }).boundingBox())!;
+  await page.goto('/plan/documents');
+  const inspector = visible(page, 'roadmap-inspector');
+  const chip = inspector.getByTestId('roadmap-not-approved');
+  await expect(chip).toHaveText('Not approved yet');
+  const label = (await inspector
+    .getByTestId('roadmap-versions')
+    .getByText('Approved', { exact: true })
+    .boundingBox())!;
   const value = (await chip.boundingBox())!;
   // The label comes first: left of its value on its line, never under it.
   expect(label.x + label.width).toBeLessThanOrEqual(value.x);
   expect(label.y).toBeLessThan(value.y + value.height);
 });
 
-test("qa-plan-23: in the light theme the Documents inspector head is white like the Plan's", async ({ page }) => {
-  await start(page, { theme: "light" });
-  await page.goto("/plan/documents");
-  const inspector = visible(page, "roadmap-inspector");
+test("qa-plan-23: in the light theme the Documents inspector head is white like the Plan's", async ({
+  page,
+}) => {
+  await start(page, { theme: 'light' });
+  await page.goto('/plan/documents');
+  const inspector = visible(page, 'roadmap-inspector');
   await expect(inspector).toBeVisible();
-  const head = inspector.locator("[data-inspector-head]");
-  await expect(head).toHaveAttribute("data-inspector-head", "card");
-  expect(await head.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgb(255, 255, 255)");
+  const head = inspector.locator('[data-inspector-head]');
+  await expect(head).toHaveAttribute('data-inspector-head', 'card');
+  expect(await head.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(
+    'rgb(255, 255, 255)',
+  );
 });
 
-test("qa-plan-24, qa-plan-25: Build roadmap fits a 900 px window with its footer in view, and says Estimate cost", async ({ page }) => {
+test('qa-plan-24, qa-plan-25: Build roadmap fits a 900 px window with its footer in view, and says Estimate cost', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await start(page);
-  await page.goto("/plan/documents");
-  await visible(page, "approved-prd").filter({ hasText: "Usage alerts PRD" }).getByRole("button", { name: "Build roadmap" }).click();
-  const dialog = page.getByRole("dialog", { name: "Build roadmap" });
+  await page.goto('/plan/documents');
+  await visible(page, 'approved-prd')
+    .filter({ hasText: 'Usage alerts PRD' })
+    .getByRole('button', { name: 'Build roadmap' })
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Build roadmap' });
   const box = (await dialog.boundingBox())!;
   expect(box.y + box.height).toBeLessThanOrEqual(900);
-  const estimate = dialog.getByTestId("dialog-footer").getByRole("button", { name: "Estimate cost", exact: true });
+  const estimate = dialog
+    .getByTestId('dialog-footer')
+    .getByRole('button', { name: 'Estimate cost', exact: true });
   await expect(estimate).toBeInViewport();
-  await expect(dialog.getByRole("button", { name: "Estimate", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Estimate', exact: true })).toHaveCount(0);
 });
 
 /* ------------------------------------------ Outcomes ------------------------------------------ */
 
-test("qa-plan-15: with no outcome, Track outcome is offered once, in the empty state", async ({ page }) => {
+test('qa-plan-15: with no outcome, Track outcome is offered once, in the empty state', async ({
+  page,
+}) => {
   await start(page);
-  await page.goto("/plan/outcomes");
-  await expect(visible(page, "outcomes-empty").getByRole("button", { name: "Track outcome" })).toBeVisible();
-  await expect(header(page).getByRole("button", { name: "Track outcome" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Track outcome" }).filter({ visible: true })).toHaveCount(1);
+  await page.goto('/plan/outcomes');
+  await expect(
+    visible(page, 'outcomes-empty').getByRole('button', { name: 'Track outcome' }),
+  ).toBeVisible();
+  await expect(header(page).getByRole('button', { name: 'Track outcome' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Track outcome' }).filter({ visible: true }),
+  ).toHaveCount(1);
 });
 
-test("qa-plan-26: Add learning names what a learning is about and what Oracle does with it", async ({ page }) => {
+test('qa-plan-26: Add learning names what a learning is about and what Oracle does with it', async ({
+  page,
+}) => {
   await start(page);
-  await page.goto("/plan/outcomes");
-  await visible(page, "learnings-panel").getByRole("button", { name: "Add learning" }).click();
-  const form = visible(page, "learning-form");
-  await expect(form).not.toContainText("Applies to");
-  await expect(form).not.toContainText("Direction");
-  await expect(form.getByLabel("What it is about").locator("option")).toHaveText(["A part of Oracle", "A kind of interview question", "A quality check"]);
-  await expect(form.getByLabel("Which kind of question").locator("option").first()).toHaveText("Pick one");
-  await expect(form.getByLabel("What Oracle should do").locator("option")).toHaveText(["Suggest it more often", "Suggest it less often", "Just keep it in mind"]);
+  await page.goto('/plan/outcomes');
+  await visible(page, 'learnings-panel').getByRole('button', { name: 'Add learning' }).click();
+  const form = visible(page, 'learning-form');
+  await expect(form).not.toContainText('Applies to');
+  await expect(form).not.toContainText('Direction');
+  await expect(form.getByLabel('What it is about').locator('option')).toHaveText([
+    'A part of Oracle',
+    'A kind of interview question',
+    'A quality check',
+  ]);
+  await expect(form.getByLabel('Which kind of question').locator('option').first()).toHaveText(
+    'Pick one',
+  );
+  await expect(form.getByLabel('What Oracle should do').locator('option')).toHaveText([
+    'Suggest it more often',
+    'Suggest it less often',
+    'Just keep it in mind',
+  ]);
 });
 
-test("qa-plan-27: the Learnings count is neutral text, not an accent figure", async ({ page }) => {
+test('qa-plan-27: the Learnings count is neutral text, not an accent figure', async ({ page }) => {
   await start(page);
-  await page.goto("/plan/outcomes");
-  const count = visible(page, "learnings-panel").getByTestId("panel-count");
-  await expect(count).toHaveText("0");
+  await page.goto('/plan/outcomes');
+  const count = visible(page, 'learnings-panel').getByTestId('panel-count');
+  await expect(count).toHaveText('0');
   const [color, text2] = await Promise.all([
-    count.locator("span").evaluate((e) => getComputedStyle(e).color),
-    visible(page, "learnings-empty").evaluate((e) => getComputedStyle(e).color),
+    count.locator('span').evaluate((e) => getComputedStyle(e).color),
+    visible(page, 'learnings-empty').evaluate((e) => getComputedStyle(e).color),
   ]);
   expect(color).toBe(text2);
 });

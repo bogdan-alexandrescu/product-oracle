@@ -1,22 +1,22 @@
-"use client";
+'use client';
 
-import { useId, useState } from "react";
+import { useId, useState } from 'react';
 
-import { InfoTip, Notice, Panel } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { InfoTip, Notice, Panel } from '@/components/ds';
+import { api, unwrap } from '@/lib/api/client';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { Field, SELECT_FIELD } from "../_components/fields";
+import { Field, SELECT_FIELD } from '../_components/fields';
 
-const KEY = "code_map_refresh";
+const KEY = 'code_map_refresh';
 
 /** The choices, as oracle.engineering.codemaps.REFRESH_EVERY names them. */
 export const REFRESH_CHOICES = [
-  { value: "hourly", label: "Hourly" },
-  { value: "every_6_hours", label: "Every 6 hours" },
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "on_demand", label: "Only on demand" },
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'every_6_hours', label: 'Every 6 hours' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'on_demand', label: 'Only on demand' },
 ] as const;
 
 /**
@@ -27,7 +27,9 @@ export const REFRESH_CHOICES = [
 export function CodeMapRefreshSetting() {
   const id = useId();
   const q = useQuery(`setting|${KEY}`, () =>
-    unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: KEY } } })).then((s) => String(s.value)),
+    unwrap(api.GET('/v1/settings/{key}', { params: { path: { key: KEY } } })).then((s) =>
+      String(s.value),
+    ),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,9 @@ export function CodeMapRefreshSetting() {
     setError(null);
     setSaved(false);
     try {
-      const s = await unwrap(api.PUT("/v1/settings/{key}", { params: { path: { key: KEY } }, body: { value } }));
+      const s = await unwrap(
+        api.PUT('/v1/settings/{key}', { params: { path: { key: KEY } }, body: { value } }),
+      );
       q.setData(() => String(s.value));
       setSaved(true);
     } catch (e) {
@@ -57,7 +61,10 @@ export function CodeMapRefreshSetting() {
           tip={
             // Pass F F-36: the cost behind an (i), not a sentence on the page.
             <InfoTip label="what a refresh costs" align="start">
-              <span data-testid="code-map-refresh-cost">Each refresh costs like Map the code. Less often costs less; only on demand costs nothing.</span>
+              <span data-testid="code-map-refresh-cost">
+                Each refresh costs like Map the code. Less often costs less; only on demand costs
+                nothing.
+              </span>
             </InfoTip>
           }
         >
@@ -65,7 +72,7 @@ export function CodeMapRefreshSetting() {
             id={id}
             className={`${SELECT_FIELD} sm:max-w-[260px]`}
             disabled={busy || !q.data}
-            value={q.data ?? "daily"}
+            value={q.data ?? 'daily'}
             onChange={(e) => void change(e.target.value)}
           >
             {REFRESH_CHOICES.map((c) => (

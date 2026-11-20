@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { GOAL_ATTRS_SCENARIO } from "../lib/api/mock/baseline";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
-import { login } from "./helpers";
+import { GOAL_ATTRS_SCENARIO } from '../lib/api/mock/baseline';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
+import { login } from './helpers';
 
 /*
  * gt-goal-edit-minors, driven through the UI on the mock API as a person would. "goal-attr-shapes" (see
@@ -21,112 +21,134 @@ import { login } from "./helpers";
  *   numbers is text unless a number is typed; fails_when=the list is sent again, or words are refused.
  */
 
-const NAME = "KR 1.1 live helpers averaging 50 replied threads a day in March 2027";
+const NAME = 'KR 1.1 live helpers averaging 50 replied threads a day in March 2027';
 
 async function editGoal(page: Page) {
-  await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, GOAL_ATTRS_SCENARIO] as const);
+  await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [
+    MOCK_SCENARIO_KEY,
+    GOAL_ATTRS_SCENARIO,
+  ] as const);
   await login(page);
-  await page.goto("/ground-truth");
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  await page.getByTestId("goal-kr-1-1").getByRole("button", { name: NAME }).click();
-  const panel = page.getByTestId("entity-drawer");
-  await expect(panel.getByRole("heading", { name: NAME })).toBeVisible();
-  await panel.getByRole("button", { name: "Edit", exact: true }).click();
-  return { panel, form: panel.getByRole("form", { name: "Edit" }) };
+  await page.goto('/ground-truth');
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth' })).toBeVisible();
+  await page.getByTestId('goal-kr-1-1').getByRole('button', { name: NAME }).click();
+  const panel = page.getByTestId('entity-drawer');
+  await expect(panel.getByRole('heading', { name: NAME })).toBeVisible();
+  await panel.getByRole('button', { name: 'Edit', exact: true }).click();
+  return { panel, form: panel.getByRole('form', { name: 'Edit' }) };
 }
 
 /** The + under a list or an object (a fieldset), or under a list of words by its key, found by where it sits. */
 const addTo = (scope: Locator, key?: string) =>
-  key ? scope.locator(`[data-attr-part="${key}"] > button`) : scope.locator(":scope > button");
+  key ? scope.locator(`[data-attr-part="${key}"] > button`) : scope.locator(':scope > button');
 
 /** The goal's attributes as the mock saved them, as the API keeps them. */
 async function stored(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
-    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
-    return db.baseline.entities.find((e: { key: string }) => e.key === "kr-1-1").attrs;
+    const db = JSON.parse(localStorage.getItem('po-mock-db-v2')!);
+    return db.baseline.entities.find((e: { key: string }) => e.key === 'kr-1-1').attrs;
   });
 }
 
-test("emptied entry: an existing list entry the person empties is left out, as the (i) says", async ({ page }) => {
+test('emptied entry: an existing list entry the person empties is left out, as the (i) says', async ({
+  page,
+}) => {
   const { panel, form } = await editGoal(page);
   const before = await stored(page);
 
-  await form.getByRole("button", { name: "About saving" }).click();
-  await expect(page.getByText("Empty entries are left out.")).toBeVisible();
-  await form.getByRole("button", { name: "About saving" }).click();
+  await form.getByRole('button', { name: 'About saving' }).click();
+  await expect(page.getByText('Empty entries are left out.')).toBeVisible();
+  await form.getByRole('button', { name: 'About saving' }).click();
 
-  const handoffs = form.getByRole("group", { name: "Handoffs" });
-  await handoffs.getByRole("group", { name: "1", exact: true }).getByLabel("Team", { exact: true }).fill("");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
+  const handoffs = form.getByRole('group', { name: 'Handoffs' });
+  await handoffs
+    .getByRole('group', { name: '1', exact: true })
+    .getByLabel('Team', { exact: true })
+    .fill('');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
 
-  await expect(panel.locator('[data-attr="handoffs"]').getByRole("listitem")).toHaveText(["Team: Night shift"]);
+  await expect(panel.locator('[data-attr="handoffs"]').getByRole('listitem')).toHaveText([
+    'Team: Night shift',
+  ]);
   const after = await stored(page);
-  expect(after.handoffs).toEqual([{ team: "Night shift" }]);
-  for (const k of ["review_steps", "reply_targets", "saved_replies", "open_values"]) expect(after[k], k).toEqual(before[k]);
+  expect(after.handoffs).toEqual([{ team: 'Night shift' }]);
+  for (const k of ['review_steps', 'reply_targets', 'saved_replies', 'open_values'])
+    expect(after[k], k).toEqual(before[k]);
 });
 
-test("built-in name: a new field named Constructor is saved under its name", async ({ page }) => {
+test('built-in name: a new field named Constructor is saved under its name', async ({ page }) => {
   const { panel, form } = await editGoal(page);
-  const targets = form.getByRole("group", { name: "Reply targets" });
+  const targets = form.getByRole('group', { name: 'Reply targets' });
   await addTo(targets).click();
-  await targets.getByLabel("Field name").fill("Constructor");
-  await targets.getByLabel("Field value").fill("Front desk lead");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
+  await targets.getByLabel('Field name').fill('Constructor');
+  await targets.getByLabel('Field value').fill('Front desk lead');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
   await expect(form).toHaveCount(0);
-  await expect(panel.locator('[data-attr="reply_targets"]')).toContainText("Constructor: Front desk lead");
-  expect((await stored(page)).reply_targets).toMatchObject({ constructor: "Front desk lead", hours: 4 });
+  await expect(panel.locator('[data-attr="reply_targets"]')).toContainText(
+    'Constructor: Front desk lead',
+  );
+  expect((await stored(page)).reply_targets).toMatchObject({
+    constructor: 'Front desk lead',
+    hours: 4,
+  });
 });
 
-test("focus: Add field and Add entry put the cursor in the new input; a new multi-line entry is multi-line", async ({ page }) => {
+test('focus: Add field and Add entry put the cursor in the new input; a new multi-line entry is multi-line', async ({
+  page,
+}) => {
   const { form } = await editGoal(page);
 
-  const targets = form.getByRole("group", { name: "Reply targets" });
+  const targets = form.getByRole('group', { name: 'Reply targets' });
   await addTo(targets).click();
-  await expect(targets.getByLabel("Field name")).toBeFocused();
-  await page.keyboard.type("Night team");
-  await expect(targets.getByLabel("Field name")).toHaveValue("Night team");
+  await expect(targets.getByLabel('Field name')).toBeFocused();
+  await page.keyboard.type('Night team');
+  await expect(targets.getByLabel('Field name')).toHaveValue('Night team');
 
-  const steps = form.getByRole("group", { name: "Review steps" });
+  const steps = form.getByRole('group', { name: 'Review steps' });
   await addTo(steps).click();
-  await expect(steps.getByRole("group", { name: "3", exact: true }).getByLabel("Step", { exact: true })).toBeFocused();
+  await expect(
+    steps.getByRole('group', { name: '3', exact: true }).getByLabel('Step', { exact: true }),
+  ).toBeFocused();
 
-  const replies = form.getByRole("group", { name: "Saved replies" });
+  const replies = form.getByRole('group', { name: 'Saved replies' });
   await addTo(replies).click();
-  const third = replies.locator('[data-attr-part="3"]').getByRole("textbox");
+  const third = replies.locator('[data-attr-part="3"]').getByRole('textbox');
   await expect(third).toBeFocused();
-  await expect(third).toHaveJSProperty("tagName", "TEXTAREA");
-  await page.keyboard.type("Thanks.\nWe are on it.");
-  await expect(third).toHaveValue("Thanks.\nWe are on it.");
+  await expect(third).toHaveJSProperty('tagName', 'TEXTAREA');
+  await page.keyboard.type('Thanks.\nWe are on it.');
+  await expect(third).toHaveValue('Thanks.\nWe are on it.');
 });
 
-test("named buttons: each + and x names its group and entry", async ({ page }) => {
+test('named buttons: each + and x names its group and entry', async ({ page }) => {
   const { panel, form } = await editGoal(page);
   const before = await stored(page);
 
   for (const name of [
-    "Remove Review steps entry 1",
-    "Remove Review steps entry 2",
-    "Add entry to Review steps",
-    "Remove Reply targets field Hours",
-    "Remove Reply targets field Chat",
-    "Add field to Reply targets field Chat",
-    "Remove Reply split",
-    "Add entry to Open values",
+    'Remove Review steps entry 1',
+    'Remove Review steps entry 2',
+    'Add entry to Review steps',
+    'Remove Reply targets field Hours',
+    'Remove Reply targets field Chat',
+    'Add field to Reply targets field Chat',
+    'Remove Reply split',
+    'Add entry to Open values',
   ])
-    await expect(form.getByRole("button", { name, exact: true }), name).toHaveCount(1);
+    await expect(form.getByRole('button', { name, exact: true }), name).toHaveCount(1);
 
-  await form.getByRole("button", { name: "Remove Review steps entry 2", exact: true }).click();
-  await expect(form.getByRole("button", { name: "Remove Review steps entry 2", exact: true })).toHaveCount(0);
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
+  await form.getByRole('button', { name: 'Remove Review steps entry 2', exact: true }).click();
+  await expect(
+    form.getByRole('button', { name: 'Remove Review steps entry 2', exact: true }),
+  ).toHaveCount(0);
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
   const after = await stored(page);
-  expect(after.review_steps).toEqual([{ step: "Read the thread", hours: 1 }]);
+  expect(after.review_steps).toEqual([{ step: 'Read the thread', hours: 1 }]);
   expect(after.reply_targets).toEqual(before.reply_targets);
 });
 
-test("no-op: a + under a list of words with nothing typed saves no change to it; a new field among numbers may be words", async ({
+test('no-op: a + under a list of words with nothing typed saves no change to it; a new field among numbers may be words', async ({
   page,
 }) => {
   // What Save sends: each PATCH body the mock API reads.
@@ -135,32 +157,39 @@ test("no-op: a + under a list of words with nothing typed saves no change to it;
     const text = Request.prototype.text;
     Request.prototype.text = async function (this: Request) {
       const raw = await text.call(this);
-      if (this.method === "PATCH" && this.url.includes("/baseline/entities/")) sent.push(JSON.parse(raw));
+      if (this.method === 'PATCH' && this.url.includes('/baseline/entities/'))
+        sent.push(JSON.parse(raw));
       return raw;
     };
   });
   const { panel, form } = await editGoal(page);
   const before = await stored(page);
 
-  await addTo(form, "open_values").click();
-  await expect(form.getByRole("textbox", { name: "Open values" })).toBeFocused();
+  await addTo(form, 'open_values').click();
+  await expect(form.getByRole('textbox', { name: 'Open values' })).toBeFocused();
 
-  const chat = form.getByRole("group", { name: "Reply targets" }).getByRole("group", { name: "Chat", exact: true });
+  const chat = form
+    .getByRole('group', { name: 'Reply targets' })
+    .getByRole('group', { name: 'Chat', exact: true });
   await addTo(chat).click();
-  await chat.getByLabel("Field name").fill("Note");
-  await chat.getByLabel("Field value").fill("busy on Mondays");
+  await chat.getByLabel('Field name').fill('Note');
+  await chat.getByLabel('Field value').fill('busy on Mondays');
   await addTo(chat).click();
-  await chat.getByLabel("Field name").last().fill("Middle");
-  await chat.getByLabel("Field value").last().fill("1.5");
+  await chat.getByLabel('Field name').last().fill('Middle');
+  await chat.getByLabel('Field value').last().fill('1.5');
 
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
 
-  const patches = await page.evaluate(() => (window as unknown as { __patches: { attrs?: Record<string, unknown> }[] }).__patches);
+  const patches = await page.evaluate(
+    () => (window as unknown as { __patches: { attrs?: Record<string, unknown> }[] }).__patches,
+  );
   expect(patches.length).toBeGreaterThan(0);
   const attrs = patches[patches.length - 1].attrs ?? {};
-  expect(attrs).not.toHaveProperty("open_values");
-  expect(attrs.reply_targets).toMatchObject({ chat: { low: 1, high: 2, note: "busy on Mondays", middle: 1.5 } });
+  expect(attrs).not.toHaveProperty('open_values');
+  expect(attrs.reply_targets).toMatchObject({
+    chat: { low: 1, high: 2, note: 'busy on Mondays', middle: 1.5 },
+  });
   const after = await stored(page);
   expect(after.open_values).toEqual(before.open_values);
 });

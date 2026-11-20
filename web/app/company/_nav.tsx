@@ -1,16 +1,23 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { cloneElement, isValidElement, Suspense, type ReactElement, type ReactNode } from "react";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cloneElement, isValidElement, Suspense, type ReactElement, type ReactNode } from 'react';
 
-import { Chip, InfoTip, PageHeader, PageTabsProvider, ScrollStrip, ViewOnly } from "@/components/ds";
-import { useMe } from "@/lib/me";
+import {
+  Chip,
+  InfoTip,
+  PageHeader,
+  PageTabsProvider,
+  ScrollStrip,
+  ViewOnly,
+} from '@/components/ds';
+import { useMe } from '@/lib/me';
 
-import { COMPANY_TABS, type CompanyTab } from "./_tabs";
+import { COMPANY_TABS, type CompanyTab } from './_tabs';
 
 /** The tabs the signed-in member may see, in registry order. */
-export function visibleTabs(can: ReturnType<typeof useMe>["can"]): CompanyTab[] {
+export function visibleTabs(can: ReturnType<typeof useMe>['can']): CompanyTab[] {
   return COMPANY_TABS.filter((t) => !t.read || can(t.read, true));
 }
 
@@ -31,7 +38,11 @@ export function CompanyNav({ action }: { action?: ReactNode }) {
   const pathname = usePathname();
   const { can } = useMe();
   return (
-    <nav aria-label="Company" data-testid="company-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
+    <nav
+      aria-label="Company"
+      data-testid="company-nav"
+      className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
+    >
       {/* qa-company-33: the strip's edge stops at the last whole tab: no 12 px fade over the
           current tab when it ends at the edge, and no sliver of the next tab beside the
           chevron (the chevrons say there is more). */}
@@ -48,9 +59,9 @@ export function CompanyNav({ action }: { action?: ReactNode }) {
               key={t.key}
               href={t.href}
               data-testid={t.testId}
-              aria-current={on ? "page" : undefined}
+              aria-current={on ? 'page' : undefined}
               className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap max-[600px]:px-2.5 ${
-                on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+                on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
               }`}
             >
               {t.label}
@@ -58,7 +69,10 @@ export function CompanyNav({ action }: { action?: ReactNode }) {
           );
         })}
         {action && (
-          <div data-testid="company-action" className="ml-auto hidden flex-none max-[600px]:flex [&>button]:h-8 [&>button]:px-3">
+          <div
+            data-testid="company-action"
+            className="ml-auto hidden flex-none max-[600px]:flex [&>button]:h-8 [&>button]:px-3"
+          >
             {action}
           </div>
         )}
@@ -70,8 +84,8 @@ export function CompanyNav({ action }: { action?: ReactNode }) {
 /** The one (i) beside "Company", the same on every tab (qa-company-33). */
 const COMPANY_INFO = (
   <InfoTip label="Company" align="start" side="bottom">
-    What the whole company works from: the vision and product strategy, the decision log, the rituals and their pre-reads, the board and
-    investor updates, the weekly metrics and the market.
+    What the whole company works from: the vision and product strategy, the decision log, the
+    rituals and their pre-reads, the board and investor updates, the weekly metrics and the market.
   </InfoTip>
 );
 
@@ -82,12 +96,16 @@ const COMPANY_INFO = (
  */
 function compact(action: ReactNode): ReactNode {
   if (!isValidElement(action)) return action;
-  const el = action as ReactElement<{ children?: ReactNode; title?: string; "aria-label"?: string }>;
-  const words = typeof el.props.children === "string" ? el.props.children : undefined;
+  const el = action as ReactElement<{
+    children?: ReactNode;
+    title?: string;
+    'aria-label'?: string;
+  }>;
+  const words = typeof el.props.children === 'string' ? el.props.children : undefined;
   if (!words) return el;
-  const rest = words.split(" ").slice(1).join(" ");
+  const rest = words.split(' ').slice(1).join(' ');
   const short = rest ? rest[0].toUpperCase() + rest.slice(1) : words;
-  return cloneElement(el, { title: words, "aria-label": words, children: short });
+  return cloneElement(el, { title: words, 'aria-label': words, children: short });
 }
 
 /**
@@ -111,11 +129,20 @@ function tabStatus(status: ReactNode, tab: CompanyTab | undefined): ReactNode {
  * on a row of its own above the tabs (qa-company-34, -44). Which of the two shows is CSS's
  * choice, not a phone check after loading, so the page never shifts once drawn.
  */
-export function CompanyHeader({ status, action, testId }: { status?: ReactNode; action?: ReactNode; testId?: string }) {
+export function CompanyHeader({
+  status,
+  action,
+  testId,
+}: {
+  status?: ReactNode;
+  action?: ReactNode;
+  testId?: string;
+}) {
   const tab = useCurrentTab();
   const title = <span className="inline-flex min-h-10 items-center">Company</span>;
   const shown = tabStatus(status, tab);
-  if (!action) return <PageHeader title={title} info={COMPANY_INFO} status={shown} testId={testId} />;
+  if (!action)
+    return <PageHeader title={title} info={COMPANY_INFO} status={shown} testId={testId} />;
   return (
     <PageTabsProvider
       tabs={
@@ -124,7 +151,13 @@ export function CompanyHeader({ status, action, testId }: { status?: ReactNode; 
         </Suspense>
       }
     >
-      <PageHeader title={title} info={COMPANY_INFO} status={shown} action={<div className="contents max-[600px]:hidden">{action}</div>} testId={testId} />
+      <PageHeader
+        title={title}
+        info={COMPANY_INFO}
+        status={shown}
+        action={<div className="contents max-[600px]:hidden">{action}</div>}
+        testId={testId}
+      />
     </PageTabsProvider>
   );
 }

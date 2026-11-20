@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from '@playwright/test';
 
-import { login, signOut } from "./helpers";
+import { login, signOut } from './helpers';
 
 /*
  * A5 Members and access, part 3 (#203): AC 24, on the mock layer (the API's Inbox group
@@ -15,67 +15,81 @@ import { login, signOut } from "./helpers";
  *   members-access.spec.ts.
  */
 
-const NEW = "new.person@example.com";
-const badge = (page: Page) => page.getByTestId("nav-inbox-badge");
-const badgeCount = async (page: Page) => Number((await badge(page).innerText()).replace(/\D+/g, "") || "0");
-const requestRow = (page: Page) => page.getByTestId("inbox-access-requests").locator("tr[data-row]").filter({ hasText: NEW });
+const NEW = 'new.person@example.com';
+const badge = (page: Page) => page.getByTestId('nav-inbox-badge');
+const badgeCount = async (page: Page) =>
+  Number((await badge(page).innerText()).replace(/\D+/g, '') || '0');
+const requestRow = (page: Page) =>
+  page.getByTestId('inbox-access-requests').locator('tr[data-row]').filter({ hasText: NEW });
 
-test("inbox: an owner approves an access request, it moves to Done and the badge drops by one", async ({ page }) => {
+test('inbox: an owner approves an access request, it moves to Done and the badge drops by one', async ({
+  page,
+}) => {
   // AC 24
   await login(page);
-  await page.goto("/inbox");
+  await page.goto('/inbox');
   const row = requestRow(page);
-  await expect(row).toContainText("Access request");
+  await expect(row).toContainText('Access request');
   await expect(row).toContainText(`${NEW} asks to join`);
-  await expect(row).toContainText("I lead support and need to read the PRD.");
+  await expect(row).toContainText('I lead support and need to read the PRD.');
   // Preset to the company's default role (commenter); an owner may choose any role.
   const role = row.getByLabel(`Role for ${NEW}`);
-  await expect(role).toHaveValue("commenter");
-  await expect(role.locator("option")).toHaveText(["Viewer", "Commenter", "Approver", "Owner"]);
+  await expect(role).toHaveValue('commenter');
+  await expect(role.locator('option')).toHaveText(['Viewer', 'Commenter', 'Approver', 'Owner']);
   const before = await badgeCount(page);
 
-  await row.getByRole("button", { name: "Approve", exact: true }).click();
+  await row.getByRole('button', { name: 'Approve', exact: true }).click();
   // qa-company-7: it leaves Needs you at once for Done, the banner says so.
-  await expect(page.getByTestId("inbox-acted")).toContainText(`Approved ${NEW} as Commenter`);
+  await expect(page.getByTestId('inbox-acted')).toContainText(`Approved ${NEW} as Commenter`);
   await expect(badge(page)).toHaveText(String(before - 1));
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Done/ }).click();
-  await expect(row).toContainText("Approved as Commenter");
+  await page.getByTestId('inbox-state-tabs').getByRole('tab', { name: /^Done/ }).click();
+  await expect(row).toContainText('Approved as Commenter');
   // The app's check icon, not the ✓ character (detailed-b 4).
-  await expect(row).not.toContainText("✓");
-  await expect(row.getByTestId("access-settled").locator("svg")).toHaveCount(1);
-  await expect(row.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(row).not.toContainText('✓');
+  await expect(row.getByTestId('access-settled').locator('svg')).toHaveCount(1);
+  await expect(row.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 
   // Approved: the request became an open invite.
-  await page.goto("/settings/members");
-  await expect(page.getByTestId("invite-row").filter({ hasText: NEW })).toContainText("Commenter");
-  await page.goto("/inbox");
-  await expect(page.getByTestId("inbox-access-requests")).toHaveCount(0);
+  await page.goto('/settings/members');
+  await expect(page.getByTestId('invite-row').filter({ hasText: NEW })).toContainText('Commenter');
+  await page.goto('/inbox');
+  await expect(page.getByTestId('inbox-access-requests')).toHaveCount(0);
 });
 
-test("inbox: declining an access request moves it to Declined, and Home counts the request too", async ({ page }) => {
+test('inbox: declining an access request moves it to Declined, and Home counts the request too', async ({
+  page,
+}) => {
   await login(page);
-  const home = page.getByTestId("home-needs");
+  const home = page.getByTestId('home-needs');
   // Home counts it under Access, with the rest of Needs you.
-  await expect(home.getByText("Access 1")).toBeVisible();
-  await page.goto("/inbox");
+  await expect(home.getByText('Access 1')).toBeVisible();
+  await page.goto('/inbox');
   const row = requestRow(page);
   const before = await badgeCount(page);
-  await row.getByRole("button", { name: "Decline", exact: true }).click();
+  await row.getByRole('button', { name: 'Decline', exact: true }).click();
   // qa-company-7: it leaves Needs you at once, for the Declined tab.
-  await expect(page.getByTestId("inbox-acted")).toContainText(`Declined ${NEW}`);
+  await expect(page.getByTestId('inbox-acted')).toContainText(`Declined ${NEW}`);
   await expect(badge(page)).toHaveText(String(before - 1));
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Declined/ }).click();
-  await expect(row).toContainText("Declined");
+  await page
+    .getByTestId('inbox-state-tabs')
+    .getByRole('tab', { name: /^Declined/ })
+    .click();
+  await expect(row).toContainText('Declined');
 });
 
-test("inbox: an approver approves as viewer or commenter; a commenter sees no access request", async ({ page }) => {
-  await login(page, "approver@example.com");
-  await page.goto("/inbox");
-  await expect(requestRow(page).getByLabel(`Role for ${NEW}`).locator("option")).toHaveText(["Viewer", "Commenter"]);
+test('inbox: an approver approves as viewer or commenter; a commenter sees no access request', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
+  await page.goto('/inbox');
+  await expect(requestRow(page).getByLabel(`Role for ${NEW}`).locator('option')).toHaveText([
+    'Viewer',
+    'Commenter',
+  ]);
 
   await signOut(page);
-  await login(page, "commenter@example.com");
-  await page.goto("/inbox");
-  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
-  await expect(page.getByTestId("inbox-access-requests")).toHaveCount(0);
+  await login(page, 'commenter@example.com');
+  await page.goto('/inbox');
+  await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
+  await expect(page.getByTestId('inbox-access-requests')).toHaveCount(0);
 });

@@ -1,20 +1,25 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
-import { SELECT } from "@/app/settings/_components/fields";
-import { Avatar, Button, Notice, Panel } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import type { Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
-import { useMe, type Role } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { ActedCell, SETTLING, useActed } from '@/components/account/acted';
+import { SELECT } from '@/app/settings/_components/fields';
+import { Avatar, Button, Notice, Panel } from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import type { Schemas } from '@/lib/api/client';
+import { formatDateTime } from '@/lib/format';
+import { useMe, type Role } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type AccessRequest = Schemas["AccessRequestOut"];
+type AccessRequest = Schemas['AccessRequestOut'];
 
-const LABEL: Record<Role, string> = { viewer: "Viewer", commenter: "Commenter", approver: "Approver", owner: "Owner" };
+const LABEL: Record<Role, string> = {
+  viewer: 'Viewer',
+  commenter: 'Commenter',
+  approver: 'Approver',
+  owner: 'Owner',
+};
 
 /**
  * A5: people from the company's email domains who signed in with Google without an invite
@@ -27,14 +32,14 @@ const LABEL: Record<Role, string> = { viewer: "Viewer", commenter: "Commenter", 
  */
 export function AccessRequests(props: { roles: Role[]; onInvited: () => void }) {
   const { can } = useMe();
-  return can("list_access_requests") ? <Requests {...props} /> : null;
+  return can('list_access_requests') ? <Requests {...props} /> : null;
 }
 
 function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }) {
   const { can } = useMe();
-  const canApprove = can("approve_access_request");
-  const canDecline = can("decline_access_request");
-  const q = useQuery("access-requests", () => unwrap(api.GET("/v1/access-requests")));
+  const canApprove = can('approve_access_request');
+  const canDecline = can('decline_access_request');
+  const q = useQuery('access-requests', () => unwrap(api.GET('/v1/access-requests')));
   const acts = useActed();
   const [chosen, setChosen] = useState<Record<string, Role>>({});
   const [error, setError] = useState<string | null>(null);
@@ -50,12 +55,17 @@ function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }
       </Panel>
     );
   if (!rows?.length || !roles.length || !(canApprove || canDecline)) return null;
-  const preset = (r: AccessRequest): Role => (r.default_role && roles.includes(r.default_role) ? r.default_role : roles[0]);
+  const preset = (r: AccessRequest): Role =>
+    r.default_role && roles.includes(r.default_role) ? r.default_role : roles[0];
 
   async function reopen(r: AccessRequest) {
     setError(null);
     try {
-      const back = await unwrap(api.POST("/v1/access-requests/{request_id}/reopen", { params: { path: { request_id: r.id } } }));
+      const back = await unwrap(
+        api.POST('/v1/access-requests/{request_id}/reopen', {
+          params: { path: { request_id: r.id } },
+        }),
+      );
       q.setData((prev) => prev?.map((x) => (x.id === r.id ? back : x)));
       onInvited();
     } catch (e) {
@@ -63,17 +73,30 @@ function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }
     }
   }
 
-  async function decide(r: AccessRequest, action: "approve" | "decline") {
+  async function decide(r: AccessRequest, action: 'approve' | 'decline') {
     setError(null);
     const role = chosen[r.id] ?? preset(r);
     try {
       const done =
-        action === "approve"
-          ? await unwrap(api.POST("/v1/access-requests/{request_id}/approve", { params: { path: { request_id: r.id } }, body: { role } }))
-          : await unwrap(api.POST("/v1/access-requests/{request_id}/decline", { params: { path: { request_id: r.id } } }));
-      if (action === "approve") onInvited();
+        action === 'approve'
+          ? await unwrap(
+              api.POST('/v1/access-requests/{request_id}/approve', {
+                params: { path: { request_id: r.id } },
+                body: { role },
+              }),
+            )
+          : await unwrap(
+              api.POST('/v1/access-requests/{request_id}/decline', {
+                params: { path: { request_id: r.id } },
+              }),
+            );
+      if (action === 'approve') onInvited();
       acts.mark(
-        { key: r.id, outcome: action === "approve" ? `Approved as ${LABEL[role]}` : "Declined", undo: can("reopen_access_request") ? () => void reopen(done) : undefined },
+        {
+          key: r.id,
+          outcome: action === 'approve' ? `Approved as ${LABEL[role]}` : 'Declined',
+          undo: can('reopen_access_request') ? () => void reopen(done) : undefined,
+        },
         () => q.setData((prev) => prev?.filter((x) => x.id !== r.id)),
       );
     } catch (e) {
@@ -114,7 +137,9 @@ function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }
                       <select
                         aria-label={`Role for ${r.email}`}
                         value={chosen[r.id] ?? preset(r)}
-                        onChange={(e) => setChosen((c) => ({ ...c, [r.id]: e.target.value as Role }))}
+                        onChange={(e) =>
+                          setChosen((c) => ({ ...c, [r.id]: e.target.value as Role }))
+                        }
                         className={SELECT}
                       >
                         {roles.map((role) => (
@@ -123,13 +148,11 @@ function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }
                           </option>
                         ))}
                       </select>
-                      <Button onClick={() => decide(r, "approve")}>
-                        Approve
-                      </Button>
+                      <Button onClick={() => decide(r, 'approve')}>Approve</Button>
                     </>
                   )}
                   {canDecline && (
-                    <Button variant="ghost" onClick={() => decide(r, "decline")}>
+                    <Button variant="ghost" onClick={() => decide(r, 'decline')}>
                       Decline
                     </Button>
                   )}

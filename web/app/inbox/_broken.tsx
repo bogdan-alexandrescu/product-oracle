@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Panel } from "@/components/ds";
-import { foldWaiting, useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
+import { Panel } from '@/components/ds';
+import { foldWaiting, useWaitingList, WaitingRow } from '@/components/simple/WaitingItems';
 
 /**
  * simple-home-qa-nov14 (missing feature a): the broken links Home counts and sends to the Inbox,
@@ -12,7 +12,7 @@ export function BrokenLinks() {
   // simple-call-budget: the rail's Decisions count reads the same list a moment before; this
   // takes that answer (stale-ok), so moving to the Inbox reads it no more.
   const { data } = useWaitingList({ staleOk: true });
-  const links = (data?.items ?? []).filter((i) => i.kind === "broken_link");
+  const links = (data?.items ?? []).filter((i) => i.kind === 'broken_link');
   if (!links.length) return null;
   const rows = foldWaiting(links);
   return (

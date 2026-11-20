@@ -1,15 +1,22 @@
-"use client";
+'use client';
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from 'react';
 
-import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { SELECT } from "@/app/settings/_components/fields";
-import { Chip } from "@/components/ds";
-import { MemberApprovals } from "@/components/members/MemberApprovals";
-import type { Member } from "@/lib/api/client";
-import { hasRole, membersApi, type HandOver, type Impact, type Responsibility, type Role } from "@/lib/api/members-types";
-import { displayName } from "@/lib/names";
-import { errorMessage } from "@/lib/use-query";
+import { ConfirmDialog } from '@/components/account/ConfirmDialog';
+import { SELECT } from '@/app/settings/_components/fields';
+import { Chip } from '@/components/ds';
+import { MemberApprovals } from '@/components/members/MemberApprovals';
+import type { Member } from '@/lib/api/client';
+import {
+  hasRole,
+  membersApi,
+  type HandOver,
+  type Impact,
+  type Responsibility,
+  type Role,
+} from '@/lib/api/members-types';
+import { displayName } from '@/lib/names';
+import { errorMessage } from '@/lib/use-query';
 
 /*
  * A5 (#203 part 2): what removing or demoting a member ends, voids and lapses, read from
@@ -17,22 +24,28 @@ import { errorMessage } from "@/lib/use-query";
  * Each group shows only when it is not empty.
  */
 
-const ROLE_WORD: Record<Role, string> = { owner: "Owner", approver: "Approver", commenter: "Commenter", viewer: "Viewer" };
+const ROLE_WORD: Record<Role, string> = {
+  owner: 'Owner',
+  approver: 'Approver',
+  commenter: 'Commenter',
+  viewer: 'Viewer',
+};
 const PROVIDER: Record<string, string> = {
-  slack: "Slack",
-  github: "GitHub",
-  google_drive: "Google Drive",
-  drive: "Google Drive",
-  notion: "Notion",
-  fireflies: "Fireflies",
-  jira: "Jira",
-  linear: "Linear",
+  slack: 'Slack',
+  github: 'GitHub',
+  google_drive: 'Google Drive',
+  drive: 'Google Drive',
+  notion: 'Notion',
+  fireflies: 'Fireflies',
+  jira: 'Jira',
+  linear: 'Linear',
 };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const andList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const andList = (xs: string[]) =>
+  xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
 /** "feature_set" reads "Feature set". */
 const kindWord = (kind: string) => {
-  const w = kind.replace(/_/g, " ");
+  const w = kind.replace(/_/g, ' ');
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
@@ -40,9 +53,17 @@ const kindWord = (kind: string) => {
  * "Admin", or "Viewer" for viewer@example.com with no name: the one name rule (lib/names, the
  * API's), as GET /v1/people names everyone for every role (qa-settings-5).
  */
-export const personName = (m: Pick<Member, "email" | "name">) => displayName(m.email, m.name);
+export const personName = (m: Pick<Member, 'email' | 'name'>) => displayName(m.email, m.name);
 
-function Group({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
+function Group({
+  title,
+  testId,
+  children,
+}: {
+  title: string;
+  testId: string;
+  children: ReactNode;
+}) {
   return (
     <section data-testid={testId} aria-label={title} className="flex flex-col gap-1.5">
       <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{title}</h3>
@@ -51,27 +72,33 @@ function Group({ title, testId, children }: { title: string; testId: string; chi
   );
 }
 
-const LINES = "flex list-disc flex-col gap-1 pl-5 text-[15px] leading-[22px]";
+const LINES = 'flex list-disc flex-col gap-1 pl-5 text-[15px] leading-[22px]';
 
 /** "Ends now": only for a removal. */
-function EndsNow({ ends }: { ends: NonNullable<Impact["ends"]> }) {
+function EndsNow({ ends }: { ends: NonNullable<Impact['ends']> }) {
   const lines: string[] = [];
   if (ends.sign_in) lines.push("Signs them out everywhere; they can't sign in.");
   const creds = [
-    ends.api_tokens ? plural(ends.api_tokens, "personal API token") : null,
-    ends.mcp_clients ? plural(ends.mcp_clients, "MCP client") : null,
+    ends.api_tokens ? plural(ends.api_tokens, 'personal API token') : null,
+    ends.mcp_clients ? plural(ends.mcp_clients, 'MCP client') : null,
   ].filter((x): x is string => !!x);
   if (creds.length) lines.push(`Revokes ${andList(creds)}.`);
   const providers = Object.entries(ends.connections)
     .filter(([, n]) => n > 0)
     .map(([p]) => PROVIDER[p] ?? kindWord(p));
-  const sources = ends.sources ? `their ${plural(ends.sources, "source")}; documents citing them can't publish until those sources are replaced` : "";
-  if (providers.length && sources) lines.push(`Disconnects ${andList(providers)} and pauses ${sources}.`);
+  const sources = ends.sources
+    ? `their ${plural(ends.sources, 'source')}; documents citing them can't publish until those sources are replaced`
+    : '';
+  if (providers.length && sources)
+    lines.push(`Disconnects ${andList(providers)} and pauses ${sources}.`);
   else if (providers.length) lines.push(`Disconnects ${andList(providers)}.`);
   else if (sources) lines.push(`Pauses ${sources}.`);
-  if (ends.runs.length) lines.push(`Cancels ${plural(ends.runs.length, "unfinished run")}: ${ends.runs.map((r) => r.title).join(", ")}.`);
-  if (ends.llm_jobs) lines.push(`Cancels ${plural(ends.llm_jobs, "queued built-in job")}.`);
-  if (ends.invites) lines.push(`Revokes ${plural(ends.invites, "invite")} they sent.`);
+  if (ends.runs.length)
+    lines.push(
+      `Cancels ${plural(ends.runs.length, 'unfinished run')}: ${ends.runs.map((r) => r.title).join(', ')}.`,
+    );
+  if (ends.llm_jobs) lines.push(`Cancels ${plural(ends.llm_jobs, 'queued built-in job')}.`);
+  if (ends.invites) lines.push(`Revokes ${plural(ends.invites, 'invite')} they sent.`);
   if (!lines.length) return null;
   return (
     <Group title="Ends now" testId="preview-ends">
@@ -84,15 +111,21 @@ function EndsNow({ ends }: { ends: NonNullable<Impact["ends"]> }) {
   );
 }
 
-function BackToInbox({ voids }: { voids: Impact["voids"] }) {
+function BackToInbox({ voids }: { voids: Impact['voids'] }) {
   const lines: string[] = [];
-  if (voids.spend_approvals.length) lines.push(`${plural(voids.spend_approvals.length, "spend approval")}: ${voids.spend_approvals.map((x) => x.title).join(", ")}`);
-  if (voids.resumes.length) lines.push(`${plural(voids.resumes.length, "resume approval")}: ${voids.resumes.map((x) => x.title).join(", ")}`);
+  if (voids.spend_approvals.length)
+    lines.push(
+      `${plural(voids.spend_approvals.length, 'spend approval')}: ${voids.spend_approvals.map((x) => x.title).join(', ')}`,
+    );
+  if (voids.resumes.length)
+    lines.push(
+      `${plural(voids.resumes.length, 'resume approval')}: ${voids.resumes.map((x) => x.title).join(', ')}`,
+    );
   if (voids.checkpoint_decisions.length) {
     lines.push(
-      `${plural(voids.checkpoint_decisions.length, "checkpoint decision")} not yet delivered: ${voids.checkpoint_decisions
+      `${plural(voids.checkpoint_decisions.length, 'checkpoint decision')} not yet delivered: ${voids.checkpoint_decisions
         .map((x) => `${kindWord(x.kind)} · ${x.title}`)
-        .join(", ")}`,
+        .join(', ')}`,
     );
   }
   if (!lines.length) return null;
@@ -107,20 +140,25 @@ function BackToInbox({ voids }: { voids: Impact["voids"] }) {
   );
 }
 
-function Lapses({ lapses, memberId }: { lapses: Impact["lapses"]; memberId: string }) {
+function Lapses({ lapses, memberId }: { lapses: Impact['lapses']; memberId: string }) {
   const [seeing, setSeeing] = useState(false);
   const parts = [
-    lapses.section_approvals ? plural(lapses.section_approvals, "section approval") : null,
+    lapses.section_approvals ? plural(lapses.section_approvals, 'section approval') : null,
     lapses.version_approvals.length
-      ? `${plural(lapses.version_approvals.length, "version approval")} (${lapses.version_approvals.map((v) => `${v.title} v${v.version}`).join(", ")})`
+      ? `${plural(lapses.version_approvals.length, 'version approval')} (${lapses.version_approvals.map((v) => `${v.title} v${v.version}`).join(', ')})`
       : null,
   ].filter((x): x is string => !!x);
   if (!parts.length) return null;
   return (
     <Group title="Lapses for good" testId="preview-lapses">
       <p className="text-[15px] leading-[22px]">
-        {parts.join(" and ")}{" "}
-        <button type="button" aria-expanded={seeing} onClick={() => setSeeing((v) => !v)} className="font-semibold text-accent-ink hover:underline">
+        {parts.join(' and ')}{' '}
+        <button
+          type="button"
+          aria-expanded={seeing}
+          onClick={() => setSeeing((v) => !v)}
+          className="font-semibold text-accent-ink hover:underline"
+        >
           See them
         </button>
       </p>
@@ -135,30 +173,32 @@ function Lapses({ lapses, memberId }: { lapses: Impact["lapses"]; memberId: stri
  * reads by its label.
  */
 const CAN_NO_LONGER: Record<string, (n: number) => string> = {
-  review_decider: (n) => `decide ${plural(n, "document review")}`,
-  mandatory_reviewer: (n) => `approve ${plural(n, "document review")}`,
-  section_owner: (n) => `own ${plural(n, "document section")}`,
-  section_reviewer: (n) => `review ${plural(n, "document section")}`,
-  questions: (n) => `answer ${plural(n, "open question")}`,
-  open_items: (n) => `own ${plural(n, "open item")}`,
-  engineering_lead: () => "be the engineering lead",
+  review_decider: (n) => `decide ${plural(n, 'document review')}`,
+  mandatory_reviewer: (n) => `approve ${plural(n, 'document review')}`,
+  section_owner: (n) => `own ${plural(n, 'document section')}`,
+  section_reviewer: (n) => `review ${plural(n, 'document section')}`,
+  questions: (n) => `answer ${plural(n, 'open question')}`,
+  open_items: (n) => `own ${plural(n, 'open item')}`,
+  engineering_lead: () => 'be the engineering lead',
 };
 const canNoLonger = (name: string, r: Responsibility) =>
-  CAN_NO_LONGER[r.kind] ? `${name} can no longer ${CAN_NO_LONGER[r.kind](r.count)}.` : `${name} can no longer hold this: ${r.label} (${r.count}).`;
+  CAN_NO_LONGER[r.kind]
+    ? `${name} can no longer ${CAN_NO_LONGER[r.kind](r.count)}.`
+    : `${name} can no longer hold this: ${r.label} (${r.count}).`;
 
 /** "keep" leaves a kind as it is; "clear" hands it to nobody; otherwise a member's id. */
-type Choice = "keep" | "clear" | string;
+type Choice = 'keep' | 'clear' | string;
 export type Choices = Record<string, Choice>;
 
 /** The moves to send: every row not left as it is. */
 export const movesOf = (choices: Choices): HandOver[] =>
   Object.entries(choices)
-    .filter(([, c]) => c !== "keep")
-    .map(([kind, c]) => ({ kind, to: c === "clear" ? null : c }));
+    .filter(([, c]) => c !== 'keep')
+    .map(([kind, c]) => ({ kind, to: c === 'clear' ? null : c }));
 
 /** Who may hold a kind: active members other than the subject, with at least its role. */
 const holders = (people: Member[], subjectId: string, need: Role) =>
-  people.filter((p) => p.status !== "disabled" && p.id !== subjectId && hasRole(p.role, need));
+  people.filter((p) => p.status !== 'disabled' && p.id !== subjectId && hasRole(p.role, need));
 
 /** One select per responsibility: Leave as is, Clear, or a member who may hold it. */
 export function HandOverSelect({
@@ -177,7 +217,12 @@ export function HandOverSelect({
   withKeep?: boolean;
 }) {
   return (
-    <select aria-label={`Hand over ${r.label}`} value={value} onChange={(e) => onChange(e.target.value)} className={`${SELECT} max-w-full`}>
+    <select
+      aria-label={`Hand over ${r.label}`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${SELECT} max-w-full`}
+    >
       {withKeep && <option value="keep">Leave as is</option>}
       <option value="clear">Clear</option>
       {holders(people, subjectId, r.needs_role).map((p) => (
@@ -212,9 +257,9 @@ function HandOverRows({
   /** The row's label already says how many (the role dialog's sentence). */
   countInLabel?: boolean;
 }) {
-  const [all, setAll] = useState("");
+  const [all, setAll] = useState('');
   if (!rows.length) return null;
-  const everyone = people.filter((p) => p.status !== "disabled" && p.id !== subjectId);
+  const everyone = people.filter((p) => p.status !== 'disabled' && p.id !== subjectId);
   return (
     <Group title={title} testId={testId}>
       <label className="flex flex-wrap items-center gap-2 text-[15px]">
@@ -244,11 +289,21 @@ function HandOverRows({
       </label>
       <ul className="flex flex-col">
         {rows.map((r) => (
-          <li key={r.kind} data-testid="handover-row" className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-2 first:border-t-0">
+          <li
+            key={r.kind}
+            data-testid="handover-row"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-2 first:border-t-0"
+          >
             <span className="min-w-0 flex-1 text-[15px]">
               {rowLabel(r)} {!countInLabel && <span className="tnum text-text2">· {r.count}</span>}
             </span>
-            <HandOverSelect r={r} people={people} subjectId={subjectId} value={choices[r.kind] ?? "keep"} onChange={(c) => setChoices({ ...choices, [r.kind]: c })} />
+            <HandOverSelect
+              r={r}
+              people={people}
+              subjectId={subjectId}
+              value={choices[r.kind] ?? 'keep'}
+              onChange={(c) => setChoices({ ...choices, [r.kind]: c })}
+            />
             {r.blocks && (
               <Chip kind="warn" wrap className="basis-full">
                 {r.blocks}
@@ -262,9 +317,14 @@ function HandOverRows({
 }
 
 /** Reads the preview for a change; null while it loads. */
-function useImpact(member: Member | null, change: "remove" | { role: Role } | null) {
-  const [read, setRead] = useState<{ key: string; impact: Impact | null; error: string | null } | null>(null);
-  const key = member && change ? `${member.id}:${change === "remove" ? "remove" : change.role}` : null;
+function useImpact(member: Member | null, change: 'remove' | { role: Role } | null) {
+  const [read, setRead] = useState<{
+    key: string;
+    impact: Impact | null;
+    error: string | null;
+  } | null>(null);
+  const key =
+    member && change ? `${member.id}:${change === 'remove' ? 'remove' : change.role}` : null;
   useEffect(() => {
     if (!member || !change || !key) return;
     let live = true;
@@ -299,22 +359,25 @@ export function RemoveDialog({
   onConfirm: (moves: HandOver[]) => void;
   onClose: () => void;
 }) {
-  const { impact, error: readError } = useImpact(member, member ? "remove" : null);
+  const { impact, error: readError } = useImpact(member, member ? 'remove' : null);
   // The choices are per member: a new one starts from "Leave as is".
-  const [chosen, setChosen] = useState<{ id: string | null; choices: Choices }>({ id: null, choices: {} });
+  const [chosen, setChosen] = useState<{ id: string | null; choices: Choices }>({
+    id: null,
+    choices: {},
+  });
   const choices = chosen.id === (member?.id ?? null) ? chosen.choices : {};
   const setChoices = (c: Choices) => setChosen({ id: member?.id ?? null, choices: c });
   return (
     <ConfirmDialog
       open={!!member}
-      title={member ? `Remove ${personName(member)}?` : ""}
+      title={member ? `Remove ${personName(member)}?` : ''}
       subject={member ? `${member.email} · ${ROLE_WORD[member.role]}` : undefined}
       testId="remove-dialog"
       confirmLabel="Remove member"
       pendingLabel="Removing…"
       pending={pending}
       // qa-settings-10: the button keeps its label while the preview loads; a note says so.
-      waiting={!impact && !readError ? "Remove member" : null}
+      waiting={!impact && !readError ? 'Remove member' : null}
       error={error ?? readError}
       onClose={onClose}
       onConfirm={() => onConfirm(movesOf(choices))}
@@ -322,8 +385,15 @@ export function RemoveDialog({
       note="History keeps their name. An owner can restore them; revoked tokens and connections stay revoked."
     >
       {!impact && !readError && member && (
-        <p role="status" data-testid="preview-checking" className="flex items-center gap-2 text-[13px] text-text2">
-          <span aria-hidden className="size-3.5 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
+        <p
+          role="status"
+          data-testid="preview-checking"
+          className="flex items-center gap-2 text-[13px] text-text2"
+        >
+          <span
+            aria-hidden
+            className="size-3.5 animate-spin rounded-full border-2 border-line-strong border-t-accent"
+          />
           Checking what this ends…
         </p>
       )}
@@ -372,14 +442,17 @@ export function RoleDialog({
   onClose: () => void;
 }) {
   const at = member && role ? `${member.id}:${role}` : null;
-  const [chosen, setChosen] = useState<{ at: string | null; choices: Choices }>({ at: null, choices: {} });
+  const [chosen, setChosen] = useState<{ at: string | null; choices: Choices }>({
+    at: null,
+    choices: {},
+  });
   const choices = chosen.at === at ? chosen.choices : {};
   const setChoices = (c: Choices) => setChosen({ at, choices: c });
   const needs = impact?.responsibilities.filter((r) => r.holder_ok === false) ?? [];
   return (
     <ConfirmDialog
       open={!!member && !!role && !!impact}
-      title={member && role ? `Change ${personName(member)} to ${ROLE_WORD[role]}?` : ""}
+      title={member && role ? `Change ${personName(member)} to ${ROLE_WORD[role]}?` : ''}
       subject={member ? `${member.email} · ${ROLE_WORD[member.role]}` : undefined}
       testId="role-dialog"
       confirmLabel="Change role"

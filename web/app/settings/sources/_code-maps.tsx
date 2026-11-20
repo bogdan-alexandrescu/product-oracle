@@ -1,27 +1,35 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
-import { Button, Chip, confirmInPage, Dialog, InfoTip, Notice, type ChipKind } from "@/components/ds";
-import { DOCS_ONLY } from "@/components/tech-brief";
-import { LoadError } from "@/components/ui";
-import { api, type Schemas, unwrap } from "@/lib/api/client";
-import { failedAt, formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  confirmInPage,
+  Dialog,
+  InfoTip,
+  Notice,
+  type ChipKind,
+} from '@/components/ds';
+import { DOCS_ONLY } from '@/components/tech-brief';
+import { LoadError } from '@/components/ui';
+import { api, type Schemas, unwrap } from '@/lib/api/client';
+import { failedAt, formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Source = Schemas["SourceOut"];
-type CodeMap = Schemas["CodeMapOut"];
+type Source = Schemas['SourceOut'];
+type CodeMap = Schemas['CodeMapOut'];
 
 /** How often the row checks a map that is being built. */
 const BUILDING_POLL_MS = 1500;
 
-const STATE: Record<CodeMap["status"], { label: string; kind: ChipKind }> = {
-  building: { label: "building", kind: "warn" },
-  ready: { label: "ready", kind: "pass" },
-  stale: { label: "stale, a refresh is due", kind: "warn" },
-  failed: { label: "failed", kind: "crit" },
+const STATE: Record<CodeMap['status'], { label: string; kind: ChipKind }> = {
+  building: { label: 'building', kind: 'warn' },
+  ready: { label: 'ready', kind: 'pass' },
+  stale: { label: 'stale, a refresh is due', kind: 'warn' },
+  failed: { label: 'failed', kind: 'crit' },
 };
 
 function reposOf(source: Source): string[] {
@@ -31,10 +39,17 @@ function reposOf(source: Source): string[] {
 
 /** Pass F F-5: a run that waits for an owner holds the map building; the line says so and leads to the run. */
 const WAITING: Record<string, { label: string; tip: string }> = {
-  awaiting_approval: { label: "Waiting for an owner to approve its cost", tip: "Its cost is over the limit. An owner approves it on the run's page." },
-  paused_overrun: { label: "Paused: over budget", tip: "It spent past its limit. An owner resumes it on the run's page." },
+  awaiting_approval: {
+    label: 'Waiting for an owner to approve its cost',
+    tip: "Its cost is over the limit. An owner approves it on the run's page.",
+  },
+  paused_overrun: {
+    label: 'Paused: over budget',
+    tip: "It spent past its limit. An owner resumes it on the run's page.",
+  },
 };
-const waitsForOwner = (m: CodeMap) => m.status === "building" && !!m.run_status && m.run_status in WAITING;
+const waitsForOwner = (m: CodeMap) =>
+  m.status === 'building' && !!m.run_status && m.run_status in WAITING;
 
 /**
  * Pass F F-37: why a map failed, in plain words: no "The code map run failed: index:" lead-in
@@ -42,23 +57,40 @@ const waitsForOwner = (m: CodeMap) => m.status === "building" && !!m.run_status 
  */
 export function codeMapFailure(error: string): string {
   if (/Claude account (could|can) take this call/.test(error)) {
-    return /spent/.test(error) ? "Every Claude account is out of quota. Try again later." : "No Claude account could take it. Try again later.";
+    return /spent/.test(error)
+      ? 'Every Claude account is out of quota. Try again later.'
+      : 'No Claude account could take it. Try again later.';
   }
-  return error.replace(/^The code map run failed:\s*/, "").replace(/^[a-z_]+:\s+/, "");
+  return error.replace(/^The code map run failed:\s*/, '').replace(/^[a-z_]+:\s+/, '');
 }
 
 type Entry = Record<string, unknown>;
-const text = (v: unknown) => (typeof v === "string" ? v : "");
+const text = (v: unknown) => (typeof v === 'string' ? v : '');
 
 /** Pass F F-38: the map's lists as people read them, each entry by its name. */
-const GROUPS: { key: string; label: string; name: (x: Entry) => string; about: (x: Entry) => string }[] = [
-  { key: "modules", label: "Parts", name: (x) => text(x.path) || text(x.id), about: (x) => text(x.summary) },
-  { key: "apis", label: "API routes", name: (x) => [text(x.method), text(x.path)].filter(Boolean).join(" ") || text(x.id), about: () => "" },
+const GROUPS: {
+  key: string;
+  label: string;
+  name: (x: Entry) => string;
+  about: (x: Entry) => string;
+}[] = [
   {
-    key: "data_models",
-    label: "Data models",
+    key: 'modules',
+    label: 'Parts',
+    name: (x) => text(x.path) || text(x.id),
+    about: (x) => text(x.summary),
+  },
+  {
+    key: 'apis',
+    label: 'API routes',
+    name: (x) => [text(x.method), text(x.path)].filter(Boolean).join(' ') || text(x.id),
+    about: () => '',
+  },
+  {
+    key: 'data_models',
+    label: 'Data models',
     name: (x) => text(x.name) || text(x.id),
-    about: (x) => (Array.isArray(x.fields) ? x.fields.map(String).join(", ") : ""),
+    about: (x) => (Array.isArray(x.fields) ? x.fields.map(String).join(', ') : ''),
   },
 ];
 
@@ -68,16 +100,24 @@ const GROUPS: { key: string; label: string; name: (x: Entry) => string; about: (
  * reads the map opens it; nothing in it changes the map.
  */
 function CodeMapView({ id, repo, onClose }: { id: string; repo: string; onClose: () => void }) {
-  const q = useQuery(`code-map|${id}`, () => unwrap(api.GET("/v1/code-maps/{code_map_id}", { params: { path: { code_map_id: id } } })));
+  const q = useQuery(`code-map|${id}`, () =>
+    unwrap(api.GET('/v1/code-maps/{code_map_id}', { params: { path: { code_map_id: id } } })),
+  );
   const content = q.data?.content ?? null;
   const list = (key: string): Entry[] => {
     const v = content?.[key];
-    return Array.isArray(v) ? v.filter((x): x is Entry => !!x && typeof x === "object") : [];
+    return Array.isArray(v) ? v.filter((x): x is Entry => !!x && typeof x === 'object') : [];
   };
   const groups = GROUPS.map((g) => ({ ...g, items: list(g.key) }));
   const empty = groups.every((g) => g.items.length === 0);
   return (
-    <Dialog title={`Code map of ${repo}`} onClose={onClose} phoneSheet scrollBody testId="code-map-view">
+    <Dialog
+      title={`Code map of ${repo}`}
+      onClose={onClose}
+      phoneSheet
+      scrollBody
+      testId="code-map-view"
+    >
       {q.error ? (
         <div className="flex flex-col items-start gap-2">
           <Notice tone="error">{q.error}</Notice>
@@ -117,7 +157,17 @@ function CodeMapView({ id, repo, onClose }: { id: string; repo: string; onClose:
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: CodeMap; sourceId: string; onChange: (m: CodeMap) => void }) {
+function CodeMapLine({
+  repo,
+  map,
+  onChange,
+  sourceId,
+}: {
+  repo: string;
+  map?: CodeMap;
+  sourceId: string;
+  onChange: (m: CodeMap) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -135,58 +185,87 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
     }
   }
 
-  const start = () => act(() => unwrap(api.POST("/v1/code-maps", { body: { source_id: sourceId, repo } })));
+  const start = () =>
+    act(() => unwrap(api.POST('/v1/code-maps', { body: { source_id: sourceId, repo } })));
 
-  async function share(sharing: CodeMap["sharing"]) {
+  async function share(sharing: CodeMap['sharing']) {
     if (!map) return;
     if (
-      sharing === "full" &&
+      sharing === 'full' &&
       !(await confirmInPage({
-        action: "Share",
+        action: 'Share',
         message: `Share the code map of ${repo} with the company: everyone in the company can read it and runs use it. You can make it private again later.`,
       }))
     )
       return;
-    await act(() => unwrap(api.POST("/v1/code-maps/{code_map_id}/sharing", { params: { path: { code_map_id: map.id } }, body: { sharing } })));
+    await act(() =>
+      unwrap(
+        api.POST('/v1/code-maps/{code_map_id}/sharing', {
+          params: { path: { code_map_id: map.id } },
+          body: { sharing },
+        }),
+      ),
+    );
   }
 
   const waiting = map && waitsForOwner(map) ? WAITING[map.run_status!] : null;
-  const state = map ? (waiting ? { label: waiting.label, kind: "warn" as const } : STATE[map.status]) : null;
-  const usable = map && (map.status === "ready" || map.status === "stale");
+  const state = map
+    ? waiting
+      ? { label: waiting.label, kind: 'warn' as const }
+      : STATE[map.status]
+    : null;
+  const usable = map && (map.status === 'ready' || map.status === 'stale');
   return (
     <li className="flex min-w-0 flex-col gap-1" data-testid={`code-map-${repo}`}>
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         {/* Visual QA ST-7: what a code map is, beside the repository it maps (whatever buttons the role has). */}
         <span className="flex min-w-0 max-w-full items-center gap-1">
-          <span className="min-w-0 truncate font-mono text-[13px] text-text" title={repo} data-testid="code-map-repo">
+          <span
+            className="min-w-0 truncate font-mono text-[13px] text-text"
+            title={repo}
+            data-testid="code-map-repo"
+          >
             {repo}
           </span>
           <InfoTip label="code maps" align="start">
-            Oracle&apos;s short guide to a repository: its parts and where things live. Oracle reads it before changing the code.
+            Oracle&apos;s short guide to a repository: its parts and where things live. Oracle reads
+            it before changing the code.
           </InfoTip>
         </span>
         {!map && <span className="text-text2">No code map yet</span>}
         {map && state && (
           <Chip kind={state.kind} dot>
             {waiting ? state.label : `Code map: ${state.label}`}
-            {usable && ` · ${map.sharing === "full" ? "Shared with the company" : "Private"}`}
+            {usable && ` · ${map.sharing === 'full' ? 'Shared with the company' : 'Private'}`}
           </Chip>
         )}
         {map?.partial && usable && (
-          <Chip kind="warn" title="Built from what Oracle synced of the repository (README, docs, issues, pull requests): the code itself was not read.">
+          <Chip
+            kind="warn"
+            title="Built from what Oracle synced of the repository (README, docs, issues, pull requests): the code itself was not read."
+          >
             {DOCS_ONLY}
           </Chip>
         )}
         {waiting && <InfoTip label={waiting.label}>{waiting.tip}</InfoTip>}
-        {waiting && map?.run_id && can(map.run_status === "awaiting_approval" ? "approve_run" : "resume_run") && (
-          <Link href={`/runs/${map.run_id}`} className="text-sm font-semibold text-accent-ink hover:underline">
-            {map.run_status === "awaiting_approval" ? "Open the run to approve" : "Open the run to resume"}
-          </Link>
+        {waiting &&
+          map?.run_id &&
+          can(map.run_status === 'awaiting_approval' ? 'approve_run' : 'resume_run') && (
+            <Link
+              href={`/runs/${map.run_id}`}
+              className="text-sm font-semibold text-accent-ink hover:underline"
+            >
+              {map.run_status === 'awaiting_approval'
+                ? 'Open the run to approve'
+                : 'Open the run to resume'}
+            </Link>
+          )}
+        {usable && map.as_of && (
+          <span className="text-text2">as of {formatDateTime(map.as_of)}</span>
         )}
-        {usable && map.as_of && <span className="text-text2">as of {formatDateTime(map.as_of)}</span>}
         <span className="ml-auto flex flex-none flex-wrap items-center gap-1">
           {/* A stale map refreshes at once on Map the code, whatever the refresh setting. */}
-          {(!map || map.status === "failed" || map.status === "stale") && can("start_code_map") && (
+          {(!map || map.status === 'failed' || map.status === 'stale') && can('start_code_map') && (
             <Button disabled={busy} onClick={start}>
               Map the code
             </Button>
@@ -196,19 +275,19 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
               See the map
             </Button>
           )}
-          {usable && map.mine && map.sharing === "private" && can("share_code_map") && (
-            <Button disabled={busy} onClick={() => void share("full")}>
+          {usable && map.mine && map.sharing === 'private' && can('share_code_map') && (
+            <Button disabled={busy} onClick={() => void share('full')}>
               Share with the company
             </Button>
           )}
-          {usable && map.mine && map.sharing === "full" && can("share_code_map") && (
-            <Button disabled={busy} onClick={() => void share("private")}>
+          {usable && map.mine && map.sharing === 'full' && can('share_code_map') && (
+            <Button disabled={busy} onClick={() => void share('private')}>
               Make private
             </Button>
           )}
         </span>
       </div>
-      {map?.status === "failed" && map.error && (
+      {map?.status === 'failed' && map.error && (
         <p className="break-words text-sm text-crit">
           {map.failed_at && <span data-testid="failed-at">{failedAt(map.failed_at)}. </span>}
           {codeMapFailure(map.error)}
@@ -228,11 +307,11 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
 export function CodeMaps({ source }: { source: Source }) {
   const repos = reposOf(source);
   const q = useQuery(`code-maps|${source.id}`, () =>
-    unwrap(api.GET("/v1/code-maps")).then((all) => all.filter((m) => m.source_id === source.id)),
+    unwrap(api.GET('/v1/code-maps')).then((all) => all.filter((m) => m.source_id === source.id)),
   );
   const maps = q.data;
   // A map whose run waits for an owner changes only when they act: no polling meanwhile (F-5).
-  const building = maps?.some((m) => m.status === "building" && !waitsForOwner(m)) ?? false;
+  const building = maps?.some((m) => m.status === 'building' && !waitsForOwner(m)) ?? false;
   const { reload } = q;
   useEffect(() => {
     if (!building) return;
@@ -243,7 +322,13 @@ export function CodeMaps({ source }: { source: Source }) {
   return (
     <div className="mt-2 flex flex-col gap-1.5">
       {/* F-1: a list that did not load says so, with Try again, and offers no Map the code under it. */}
-      {q.error && <LoadError what={`the code maps of ${source.name}`} error={q.error} onRetry={() => void q.reload()} />}
+      {q.error && (
+        <LoadError
+          what={`the code maps of ${source.name}`}
+          error={q.error}
+          onRetry={() => void q.reload()}
+        />
+      )}
       {!q.error && (
         <ul aria-label={`Code maps of ${source.name}`} className="flex flex-col gap-1.5">
           {repos.map((repo) => (
@@ -253,7 +338,9 @@ export function CodeMaps({ source }: { source: Source }) {
               sourceId={source.id}
               // Newest first: the repo's latest map.
               map={maps?.find((m) => same(m.repo, repo))}
-              onChange={(m) => q.setData((prev) => [m, ...(prev ?? []).filter((x) => x.id !== m.id)])}
+              onChange={(m) =>
+                q.setData((prev) => [m, ...(prev ?? []).filter((x) => x.id !== m.id)])
+              }
             />
           ))}
         </ul>

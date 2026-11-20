@@ -1,10 +1,10 @@
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-type Inbox = Schemas["InboxOut"];
-export type InboxCounts = Schemas["InboxCountsOut"];
+type Inbox = Schemas['InboxOut'];
+export type InboxCounts = Schemas['InboxCountsOut'];
 
 /** Proposals on a PRD question or a one-pager line or number: not the roadmap's (PR 1320 re-review). */
-const NOT_ROADMAP_OPS = ["decide_question", "name_decider", "edit_line", "set_section_number"];
+const NOT_ROADMAP_OPS = ['decide_question', 'name_decider', 'edit_line', 'set_section_number'];
 
 /**
  * inbox-reads: the Inbox's counts as GET /v1/inbox/counts gives them, from a whole Inbox read

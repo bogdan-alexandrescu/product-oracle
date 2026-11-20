@@ -1,29 +1,35 @@
-"use client";
+'use client';
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from 'react';
 
-import { Button, Chip, type ChipKind } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, Chip, type ChipKind } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { calendarDay, todayIn, useCompanyZone } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { CHANNEL_LABEL } from "./RequestList";
+import { CHANNEL_LABEL } from './RequestList';
 
-type Request = Schemas["RequestOut"];
-type Reply = Schemas["ReplyOut"];
-type SentChannel = NonNullable<Reply["channel"]>;
+type Request = Schemas['RequestOut'];
+type Reply = Schemas['ReplyOut'];
+type SentChannel = NonNullable<Reply['channel']>;
 
-const STATUS: Record<Reply["status"], { label: string; kind: ChipKind }> = {
-  drafted: { label: "Drafted", kind: "warn" },
-  sent: { label: "Sent", kind: "pass" },
-  notified: { label: "Told in Oracle", kind: "pass" },
-  skipped: { label: "Skipped", kind: "na" },
-  withdrawn: { label: "Withdrawn", kind: "na" },
+const STATUS: Record<Reply['status'], { label: string; kind: ChipKind }> = {
+  drafted: { label: 'Drafted', kind: 'warn' },
+  sent: { label: 'Sent', kind: 'pass' },
+  notified: { label: 'Told in Oracle', kind: 'pass' },
+  skipped: { label: 'Skipped', kind: 'na' },
+  withdrawn: { label: 'Withdrawn', kind: 'na' },
 };
-const SENT_CHANNEL: Record<SentChannel, string> = { email: "Email", slack: "Slack", call: "Call", in_app: "In the app", other: "Other" };
-const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
+const SENT_CHANNEL: Record<SentChannel, string> = {
+  email: 'Email',
+  slack: 'Slack',
+  call: 'Call',
+  in_app: 'In the app',
+  other: 'Other',
+};
+const LABEL = 'flex flex-col gap-1 text-sm font-semibold text-text2';
 /** How often the panel asks again while Oracle drafts. */
 const POLL_MS = 1_000;
 
@@ -36,17 +42,27 @@ const POLL_MS = 1_000;
  * Reopen, approvers may Tell the people who asked (those already sent or told). Every action
  * hands the request, read again, to `onRequest` (its counts and Loop closed).
  */
-export function WhyNot({ request, onRequest }: { request: Request; onRequest: (request: Request) => void }) {
+export function WhyNot({
+  request,
+  onRequest,
+}: {
+  request: Request;
+  onRequest: (request: Request) => void;
+}) {
   const { me, can } = useMe();
   const zone = useCompanyZone();
   const mine = !!me?.user_id && request.filed_by === me.user_id;
-  const canAct = can("update_request_reply", mine);
-  const canDraft = can("draft_request_replies", mine);
-  const canTell = can("tell_reopened");
+  const canAct = can('update_request_reply', mine);
+  const canDraft = can('draft_request_replies', mine);
+  const canTell = can('tell_reopened');
   const path = { params: { path: { request_id: request.id } } };
-  const list = useQuery(`request-replies:${request.id}:${request.lock_version}`, () => unwrap(api.GET("/v1/requests/{request_id}/replies", path)), {
-    keepPrevious: true,
-  });
+  const list = useQuery(
+    `request-replies:${request.id}:${request.lock_version}`,
+    () => unwrap(api.GET('/v1/requests/{request_id}/replies', path)),
+    {
+      keepPrevious: true,
+    },
+  );
   const replies = list.data ?? [];
   const drafting = replies.some((r) => r.drafting);
   const [busy, setBusy] = useState(false);
@@ -64,7 +80,7 @@ export function WhyNot({ request, onRequest }: { request: Request; onRequest: (r
     setError(null);
     try {
       await call();
-      onRequest(await unwrap(api.GET("/v1/requests/{request_id}", path)));
+      onRequest(await unwrap(api.GET('/v1/requests/{request_id}', path)));
       list.reload();
       return true;
     } catch (err) {
@@ -75,10 +91,12 @@ export function WhyNot({ request, onRequest }: { request: Request; onRequest: (r
     }
   }
 
-  const live = request.state === "disqualified";
-  const told = replies.some((r) => r.kind === "no" && (r.status === "sent" || r.status === "notified"));
-  const reopenedSent = replies.some((r) => r.kind === "reopened");
-  const open = replies.filter((r) => r.status === "drafted");
+  const live = request.state === 'disqualified';
+  const told = replies.some(
+    (r) => r.kind === 'no' && (r.status === 'sent' || r.status === 'notified'),
+  );
+  const reopenedSent = replies.some((r) => r.kind === 'reopened');
+  const open = replies.filter((r) => r.status === 'drafted');
   return (
     <div data-testid="why-not" className="flex min-w-0 flex-col gap-3 text-[15px]">
       {request.loop_closed_on && (
@@ -91,18 +109,35 @@ export function WhyNot({ request, onRequest }: { request: Request; onRequest: (r
       {list.data && replies.length === 0 && <p className="text-sm text-text2">No replies</p>}
       <ul className="flex min-w-0 flex-col gap-3">
         {replies.map((r) => (
-          <ReplyRow key={`${r.id}:${r.lock_version}`} reply={r} canAct={canAct && r.status === "drafted"} busy={busy} today={todayIn(zone)} act={act} />
+          <ReplyRow
+            key={`${r.id}:${r.lock_version}`}
+            reply={r}
+            canAct={canAct && r.status === 'drafted'}
+            busy={busy}
+            today={todayIn(zone)}
+            act={act}
+          />
         ))}
       </ul>
       {(canDraft && live && open.length > 0) || (canTell && !live && told && !reopenedSent) ? (
         <div className="flex flex-wrap gap-2">
           {canDraft && live && open.length > 0 && (
-            <Button disabled={busy || drafting} onClick={() => act(() => unwrap(api.POST("/v1/requests/{request_id}/replies/draft", path)))}>
+            <Button
+              disabled={busy || drafting}
+              onClick={() =>
+                act(() => unwrap(api.POST('/v1/requests/{request_id}/replies/draft', path)))
+              }
+            >
               Draft again with Oracle
             </Button>
           )}
           {canTell && !live && told && !reopenedSent && (
-            <Button disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/requests/{request_id}/replies/reopened", path)))}>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                act(() => unwrap(api.POST('/v1/requests/{request_id}/replies/reopened', path)))
+              }
+            >
               Tell the people who asked
             </Button>
           )}
@@ -113,7 +148,7 @@ export function WhyNot({ request, onRequest }: { request: Request; onRequest: (r
   );
 }
 
-type Mode = null | "edit" | "sent" | "skip";
+type Mode = null | 'edit' | 'sent' | 'skip';
 
 function ReplyRow({
   reply,
@@ -129,10 +164,10 @@ function ReplyRow({
   act: (call: () => Promise<unknown>) => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<Mode>(null);
-  const [body, setBody] = useState(reply.body ?? "");
-  const [channel, setChannel] = useState<SentChannel>("email");
+  const [body, setBody] = useState(reply.body ?? '');
+  const [channel, setChannel] = useState<SentChannel>('email');
   const [day, setDay] = useState(today);
-  const [why, setWhy] = useState("");
+  const [why, setWhy] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
   const path = { params: { path: { reply_id: reply.id } } };
   const submit = (call: () => Promise<unknown>) => async (e: FormEvent) => {
@@ -141,35 +176,56 @@ function ReplyRow({
   };
   const status = STATUS[reply.status];
   const done =
-    reply.status === "sent"
-      ? `Sent · ${reply.channel ? SENT_CHANNEL[reply.channel] : ""}${reply.sent_on ? ` · ${calendarDay(reply.sent_on)}` : ""}${reply.sent_by_name ? ` · by ${reply.sent_by_name}` : ""}`
-      : reply.status === "skipped"
-        ? `Skipped · ${reply.skip_reason ?? ""}`
+    reply.status === 'sent'
+      ? `Sent · ${reply.channel ? SENT_CHANNEL[reply.channel] : ''}${reply.sent_on ? ` · ${calendarDay(reply.sent_on)}` : ''}${reply.sent_by_name ? ` · by ${reply.sent_by_name}` : ''}`
+      : reply.status === 'skipped'
+        ? `Skipped · ${reply.skip_reason ?? ''}`
         : null;
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(reply.body ?? "");
-      setCopied("Copied");
+      await navigator.clipboard.writeText(reply.body ?? '');
+      setCopied('Copied');
     } catch {
-      setCopied("Could not copy; select the text instead");
+      setCopied('Could not copy; select the text instead');
     }
   };
 
   return (
-    <li data-testid="reply" className="flex min-w-0 flex-col gap-2 rounded-lg border border-line p-3">
+    <li
+      data-testid="reply"
+      className="flex min-w-0 flex-col gap-2 rounded-lg border border-line p-3"
+    >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="min-w-0 break-words font-semibold">{reply.asker}</span>
         {reply.channel_asked && <Chip kind="line">{CHANNEL_LABEL[reply.channel_asked]}</Chip>}
         <Chip kind={status.kind}>{status.label}</Chip>
-        {reply.kind === "reopened" && <Chip kind="line">Looking again</Chip>}
-        {reply.draft_source === "template" && <Chip kind="line">Template</Chip>}
+        {reply.kind === 'reopened' && <Chip kind="line">Looking again</Chip>}
+        {reply.draft_source === 'template' && <Chip kind="line">Template</Chip>}
       </div>
-      {reply.asked && <p className="min-w-0 break-words text-sm text-text2">Asked: {reply.asked}</p>}
-      {mode === "edit" ? (
-        <form className="flex flex-col gap-2" onSubmit={submit(() => unwrap(api.PATCH("/v1/request-replies/{reply_id}", { ...path, body: { lock_version: reply.lock_version, body } })))}>
+      {reply.asked && (
+        <p className="min-w-0 break-words text-sm text-text2">Asked: {reply.asked}</p>
+      )}
+      {mode === 'edit' ? (
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={submit(() =>
+            unwrap(
+              api.PATCH('/v1/request-replies/{reply_id}', {
+                ...path,
+                body: { lock_version: reply.lock_version, body },
+              }),
+            ),
+          )}
+        >
           <label className={LABEL}>
             Reply to {reply.asker}
-            <textarea className={INPUT} rows={5} value={body} maxLength={2000} onChange={(e) => setBody(e.target.value)} />
+            <textarea
+              className={INPUT}
+              rows={5}
+              value={body}
+              maxLength={2000}
+              onChange={(e) => setBody(e.target.value)}
+            />
           </label>
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setMode(null)}>
@@ -183,22 +239,35 @@ function ReplyRow({
       ) : reply.body ? (
         <p className="min-w-0 whitespace-pre-wrap break-words">{reply.body}</p>
       ) : (
-        !reply.drafting && <p className="text-sm text-text2">{canAct ? "Write a reply" : "No reply written yet"}</p>
+        !reply.drafting && (
+          <p className="text-sm text-text2">{canAct ? 'Write a reply' : 'No reply written yet'}</p>
+        )
       )}
-      {reply.warnings.includes("sounds_like_a_promise") && (
+      {reply.warnings.includes('sounds_like_a_promise') && (
         <p data-testid="promise-warning" className="text-sm font-semibold text-warn">
           Sounds like a promise
         </p>
       )}
       {done && <p className="min-w-0 break-words text-sm text-text2">{done}</p>}
-      {mode === "sent" && (
+      {mode === 'sent' && (
         <form
           className="flex flex-wrap items-end gap-2"
-          onSubmit={submit(() => unwrap(api.POST("/v1/request-replies/{reply_id}/sent", { ...path, body: { channel, sent_on: day || null } })))}
+          onSubmit={submit(() =>
+            unwrap(
+              api.POST('/v1/request-replies/{reply_id}/sent', {
+                ...path,
+                body: { channel, sent_on: day || null },
+              }),
+            ),
+          )}
         >
           <label className={`${LABEL} min-w-0 flex-1 basis-32`}>
             Channel
-            <select className={INPUT} value={channel} onChange={(e) => setChannel(e.target.value as SentChannel)}>
+            <select
+              className={INPUT}
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as SentChannel)}
+            >
               {(Object.keys(SENT_CHANNEL) as SentChannel[]).map((c) => (
                 <option key={c} value={c}>
                   {SENT_CHANNEL[c]}
@@ -208,7 +277,13 @@ function ReplyRow({
           </label>
           <label className={`${LABEL} min-w-0 flex-1 basis-32`}>
             Day
-            <input type="date" className={INPUT} value={day} max={today} onChange={(e) => setDay(e.target.value)} />
+            <input
+              type="date"
+              className={INPUT}
+              value={day}
+              max={today}
+              onChange={(e) => setDay(e.target.value)}
+            />
           </label>
           <Button variant="ghost" onClick={() => setMode(null)}>
             Cancel
@@ -218,11 +293,27 @@ function ReplyRow({
           </Button>
         </form>
       )}
-      {mode === "skip" && (
-        <form className="flex flex-wrap items-end gap-2" onSubmit={submit(() => unwrap(api.POST("/v1/request-replies/{reply_id}/skip", { ...path, body: { reason: why.trim() } })))}>
+      {mode === 'skip' && (
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={submit(() =>
+            unwrap(
+              api.POST('/v1/request-replies/{reply_id}/skip', {
+                ...path,
+                body: { reason: why.trim() },
+              }),
+            ),
+          )}
+        >
           <label className={`${LABEL} min-w-0 flex-1 basis-48`}>
             Why skip it
-            <input className={INPUT} value={why} maxLength={500} placeholder="Asked anonymously" onChange={(e) => setWhy(e.target.value)} />
+            <input
+              className={INPUT}
+              value={why}
+              maxLength={500}
+              placeholder="Asked anonymously"
+              onChange={(e) => setWhy(e.target.value)}
+            />
           </label>
           <Button variant="ghost" onClick={() => setMode(null)}>
             Cancel
@@ -236,11 +327,16 @@ function ReplyRow({
         // Phone: the actions wrap under the draft, Copy and Mark sent first.
         <div className="flex flex-wrap items-center gap-2">
           {reply.body && <Button onClick={copy}>Copy</Button>}
-          <Button disabled={busy} onClick={() => setMode("sent")}>
+          <Button disabled={busy} onClick={() => setMode('sent')}>
             Mark sent
           </Button>
           {reply.member_id && (
-            <Button disabled={busy || !reply.body} onClick={() => act(() => unwrap(api.POST("/v1/request-replies/{reply_id}/notify", path)))}>
+            <Button
+              disabled={busy || !reply.body}
+              onClick={() =>
+                act(() => unwrap(api.POST('/v1/request-replies/{reply_id}/notify', path)))
+              }
+            >
               Tell them in Oracle
             </Button>
           )}
@@ -248,13 +344,13 @@ function ReplyRow({
             variant="ghost"
             disabled={busy || reply.drafting}
             onClick={() => {
-              setBody(reply.body ?? "");
-              setMode("edit");
+              setBody(reply.body ?? '');
+              setMode('edit');
             }}
           >
-            {reply.body ? "Edit" : "Write a reply"}
+            {reply.body ? 'Edit' : 'Write a reply'}
           </Button>
-          <Button variant="ghost" disabled={busy} onClick={() => setMode("skip")}>
+          <Button variant="ghost" disabled={busy} onClick={() => setMode('skip')}>
             Skip
           </Button>
           {copied && (

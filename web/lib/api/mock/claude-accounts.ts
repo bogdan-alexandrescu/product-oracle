@@ -14,43 +14,43 @@
  * reading counted at half; with none, a fallback credential covers no account at all or every one
  * spent (fallback.py covers). The "pool-spent" scenario has one account at 100% of its weekly limit.
  */
-import type { Schemas } from "@/lib/api/client";
-import { inWords } from "@/lib/format";
+import type { Schemas } from '@/lib/api/client';
+import { inWords } from '@/lib/format';
 
-import { mockSettingValue } from "./connections";
-import { reply } from "./typed";
+import { mockSettingValue } from './connections';
+import { reply } from './typed';
 
-type Account = Schemas["AccountOut"];
-type Stored = Omit<Account, "stale" | "takes_calls" | "spent_by" | "spent_until">;
-type Hold = Schemas["HolderOut"] & { account_id: string };
-type Span = Schemas["SpanOut"] & { account_id: string };
+type Account = Schemas['AccountOut'];
+type Stored = Omit<Account, 'stale' | 'takes_calls' | 'spent_by' | 'spent_until'>;
+type Hold = Schemas['HolderOut'] & { account_id: string };
+type Span = Schemas['SpanOut'] & { account_id: string };
 
 interface PoolDb {
   accounts: Stored[];
   holds: Hold[];
   spans: Span[];
   pending: { state: string; label: string }[];
-  fallback: Schemas["FallbackOut"] | null;
-  sweep: Schemas["RefreshSweepOut"];
+  fallback: Schemas['FallbackOut'] | null;
+  sweep: Schemas['RefreshSweepOut'];
 }
 
-const STORAGE_KEY = "po-mock-claude-accounts-v1";
+const STORAGE_KEY = 'po-mock-claude-accounts-v1';
 // Built from parts so the source holds no credential-shaped literal.
-export const SETUP_TOKEN_PREFIX = ["sk", "ant", "oat"].join("-");
-export const API_KEY_PREFIX = ["sk", "ant", "api"].join("-");
+export const SETUP_TOKEN_PREFIX = ['sk', 'ant', 'oat'].join('-');
+export const API_KEY_PREFIX = ['sk', 'ant', 'api'].join('-');
 // What the screen calls each fallback kind, built from parts.
-const KEY_KIND = ["api", "key"].join("_");
+const KEY_KIND = ['api', 'key'].join('_');
 const KIND_NAME: Record<string, string> = {
-  plan: ["Claude", "setup-token"].join(" "),
-  [KEY_KIND]: ["Anthropic", "API", "key"].join(" "),
+  plan: ['Claude', 'setup-token'].join(' '),
+  [KEY_KIND]: ['Anthropic', 'API', 'key'].join(' '),
 };
 const STALE_AFTER_MS = 30 * 60_000;
 const ASSIGN_FLOOR = 0.15;
 
 /** The scenario whose only account is over its weekly limit, so no call can run (#403). */
-export const POOL_SPENT_SCENARIO = "pool-spent";
+export const POOL_SPENT_SCENARIO = 'pool-spent';
 /** "simple-chat" on the spent pool: a line Simple's Ask Oracle reads fails until the window clears. */
-export const SIMPLE_CHAT_POOL_SPENT_SCENARIO = "simple-chat-pool-spent";
+export const SIMPLE_CHAT_POOL_SPENT_SCENARIO = 'simple-chat-pool-spent';
 
 const at = (ms: number) => new Date(Date.now() + ms).toISOString();
 const MIN = 60_000;
@@ -58,22 +58,22 @@ const HOUR = 60 * MIN;
 
 function seed(scenario: string | null): PoolDb {
   const base = {
-    provider: "anthropic",
-    reason: "",
+    provider: 'anthropic',
+    reason: '',
     unreadable_now: false,
-    last_refresh_reason: "still_valid",
+    last_refresh_reason: 'still_valid',
     claude_email: null,
     claude_organization: null,
   };
-  const personal = "a1111111-0000-4000-8000-000000000001";
+  const personal = 'a1111111-0000-4000-8000-000000000001';
   if (scenario === POOL_SPENT_SCENARIO || scenario === SIMPLE_CHAT_POOL_SPENT_SCENARIO)
     return {
       accounts: [
         {
           ...base,
           account_id: personal,
-          label: "weekly",
-          state: "AVAILABLE",
+          label: 'weekly',
+          state: 'AVAILABLE',
           assigned: 0,
           windows: {
             five_hour: { utilization: 0.09, resets_at: at(3 * HOUR), reset: false },
@@ -89,17 +89,17 @@ function seed(scenario: string | null): PoolDb {
       spans: [],
       pending: [],
       fallback: null,
-      sweep: { last_completed_at: at(-4 * MIN), last_outcome: "ok", readable: true },
+      sweep: { last_completed_at: at(-4 * MIN), last_outcome: 'ok', readable: true },
     };
   return {
     accounts: [
       {
         ...base,
         account_id: personal,
-        label: "personal",
-        claude_email: "ada@example.com",
-        claude_organization: "Example Studio",
-        state: "AVAILABLE",
+        label: 'personal',
+        claude_email: 'ada@example.com',
+        claude_organization: 'Example Studio',
+        state: 'AVAILABLE',
         assigned: 1,
         windows: {
           five_hour: { utilization: 0.34, resets_at: at(80 * MIN), reset: false },
@@ -112,9 +112,9 @@ function seed(scenario: string | null): PoolDb {
       },
       {
         ...base,
-        account_id: "a1111111-0000-4000-8000-000000000002",
-        label: "work",
-        state: "AVAILABLE",
+        account_id: 'a1111111-0000-4000-8000-000000000002',
+        label: 'work',
+        state: 'AVAILABLE',
         assigned: 0,
         windows: {
           five_hour: { utilization: 0.61, resets_at: at(2 * HOUR), reset: false },
@@ -127,9 +127,9 @@ function seed(scenario: string | null): PoolDb {
       },
       {
         ...base,
-        account_id: "a1111111-0000-4000-8000-000000000003",
-        label: "spare",
-        state: "AVAILABLE",
+        account_id: 'a1111111-0000-4000-8000-000000000003',
+        label: 'spare',
+        state: 'AVAILABLE',
         assigned: 0,
         windows: {},
         observed_at: null,
@@ -140,24 +140,24 @@ function seed(scenario: string | null): PoolDb {
       },
       {
         ...base,
-        account_id: "a1111111-0000-4000-8000-000000000004",
-        label: "old-laptop",
-        state: "REAUTH_REQUIRED",
-        reason: "refresh failed: reauth_required",
+        account_id: 'a1111111-0000-4000-8000-000000000004',
+        label: 'old-laptop',
+        state: 'REAUTH_REQUIRED',
+        reason: 'refresh failed: reauth_required',
         assigned: 0,
         windows: {},
         observed_at: null,
         last_refresh_at: at(-4 * MIN),
         token_expires_at: at(-3 * HOUR),
-        last_refresh_reason: "reauth_required",
+        last_refresh_reason: 'reauth_required',
         last_assigned_at: at(-9 * 24 * HOUR),
       },
     ],
     holds: [
       {
         account_id: personal,
-        task_id: "reporting",
-        attempt_id: "att-1",
+        task_id: 'reporting',
+        attempt_id: 'att-1',
         since: at(-6 * MIN),
         expires_at: at(3 * HOUR),
         swapped_from: null,
@@ -166,17 +166,23 @@ function seed(scenario: string | null): PoolDb {
       },
     ],
     spans: [
-      span(personal, "reporting", -6 * MIN, null, null),
-      span(personal, "review_comments", -3 * HOUR, -170 * MIN, "released"),
-      span(personal, "refinement", -26 * HOUR, -25 * HOUR, "released"),
+      span(personal, 'reporting', -6 * MIN, null, null),
+      span(personal, 'review_comments', -3 * HOUR, -170 * MIN, 'released'),
+      span(personal, 'refinement', -26 * HOUR, -25 * HOUR, 'released'),
     ],
     pending: [],
     fallback: null,
-    sweep: { last_completed_at: at(-4 * MIN), last_outcome: "ok", readable: true },
+    sweep: { last_completed_at: at(-4 * MIN), last_outcome: 'ok', readable: true },
   };
 }
 
-function span(account_id: string, task: string, from: number, to: number | null, end: string | null): Span {
+function span(
+  account_id: string,
+  task: string,
+  from: number,
+  to: number | null,
+  end: string | null,
+): Span {
   return {
     account_id,
     task_id: task,
@@ -205,7 +211,7 @@ function load(scenario: string | null): PoolDb {
 function json(status: number, body: unknown): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { 'content-type': 'application/json' },
   });
 }
 
@@ -213,7 +219,9 @@ function json(status: number, body: unknown): Response {
 function headroom(a: Stored, now: number): number {
   const ws = Object.values(a.windows);
   if (ws.length === 0 || a.observed_at === null) return 1;
-  const left = Math.min(...ws.map((w) => (Date.parse(w.resets_at) <= now ? 1 : Math.max(0, 1 - w.utilization))));
+  const left = Math.min(
+    ...ws.map((w) => (Date.parse(w.resets_at) <= now ? 1 : Math.max(0, 1 - w.utilization))),
+  );
   return now - Date.parse(a.observed_at) > STALE_AFTER_MS ? left * 0.5 : left;
 }
 
@@ -226,15 +234,18 @@ function spentBy(a: Stored, now: number): [string, string] | null {
   return blocking[0] ? [blocking[0][0], blocking[0][1].resets_at] : null;
 }
 
-const takesCalls = (a: Stored, now: number) => a.state === "AVAILABLE" && !a.unreadable_now && headroom(a, now) >= ASSIGN_FLOOR;
+const takesCalls = (a: Stored, now: number) =>
+  a.state === 'AVAILABLE' && !a.unreadable_now && headroom(a, now) >= ASSIGN_FLOOR;
 
 /** `stale` is the server's verdict: no reading, or one older than thirty minutes. */
 function out(a: Stored): Account {
   const now = Date.now();
   const observed = a.observed_at ? Date.parse(a.observed_at) : null;
-  const windows = Object.fromEntries(Object.entries(a.windows).map(([k, w]) => [k, { ...w, reset: Date.parse(w.resets_at) <= now }]));
+  const windows = Object.fromEntries(
+    Object.entries(a.windows).map(([k, w]) => [k, { ...w, reset: Date.parse(w.resets_at) <= now }]),
+  );
   const takes = takesCalls(a, now);
-  const spent = takes || a.state !== "AVAILABLE" || a.unreadable_now ? null : spentBy(a, now);
+  const spent = takes || a.state !== 'AVAILABLE' || a.unreadable_now ? null : spentBy(a, now);
   return {
     ...a,
     windows,
@@ -247,31 +258,39 @@ function out(a: Stored): Account {
 
 /** Why no account takes a call (accounts.py eligibility), and when the earliest spent window clears. */
 function whyNone(db: PoolDb, now: number): { reason: string; until: string | null } {
-  if (db.accounts.length === 0) return { reason: "no_accounts_registered", until: null };
+  if (db.accounts.length === 0) return { reason: 'no_accounts_registered', until: null };
   const mine = db.accounts.filter((a) => !a.unreadable_now);
-  if (mine.length === 0) return { reason: "no_account_available", until: null };
-  const assignable = mine.filter((a) => a.state === "AVAILABLE");
-  if (assignable.length === 0) return { reason: "pool_paused", until: null };
-  const resets = assignable.map((a) => spentBy(a, now)?.[1]).filter((r): r is string => !!r).sort((x, y) => Date.parse(x) - Date.parse(y));
-  if (resets[0]) return { reason: "no_account_available", until: resets[0] };
-  const old = assignable.some((a) => a.observed_at !== null && now - Date.parse(a.observed_at) > STALE_AFTER_MS);
-  return { reason: old ? "no_recent_reading" : "no_account_available", until: null };
+  if (mine.length === 0) return { reason: 'no_account_available', until: null };
+  const assignable = mine.filter((a) => a.state === 'AVAILABLE');
+  if (assignable.length === 0) return { reason: 'pool_paused', until: null };
+  const resets = assignable
+    .map((a) => spentBy(a, now)?.[1])
+    .filter((r): r is string => !!r)
+    .sort((x, y) => Date.parse(x) - Date.parse(y));
+  if (resets[0]) return { reason: 'no_account_available', until: resets[0] };
+  const old = assignable.some(
+    (a) => a.observed_at !== null && now - Date.parse(a.observed_at) > STALE_AFTER_MS,
+  );
+  return { reason: old ? 'no_recent_reading' : 'no_account_available', until: null };
 }
 
 /** The reasons a call runs on the fallback credential when one is set (fallback.covers). */
-const FALLBACK_COVERS = ["no_accounts_registered", "no_account_available"];
+const FALLBACK_COVERS = ['no_accounts_registered', 'no_account_available'];
 
 /** The pool's answer (router.pool_out: choose, then eligibility, then fallback.covers). */
-function poolOf(db: PoolDb): Schemas["PoolOut"] {
+function poolOf(db: PoolDb): Schemas['PoolOut'] {
   const now = Date.now();
-  if (db.accounts.some((a) => takesCalls(a, now))) return { takes_calls: true, on_fallback: false, reason: null, until: null };
+  if (db.accounts.some((a) => takesCalls(a, now)))
+    return { takes_calls: true, on_fallback: false, reason: null, until: null };
   const { reason, until } = whyNone(db, now);
   const onFallback = !!db.fallback && FALLBACK_COVERS.includes(reason);
   return { takes_calls: onFallback, on_fallback: onFallback, reason, until };
 }
 
 /** The company's time zone: the alignment report's, as the API reads it (company_time.py). */
-const timeZone = () => ((mockSettingValue("alignment_report") as { timezone?: string } | undefined)?.timezone ?? "America/Los_Angeles");
+const timeZone = () =>
+  (mockSettingValue('alignment_report') as { timezone?: string } | undefined)?.timezone ??
+  'America/Los_Angeles';
 
 /**
  * The gateway's refusal when the pool is spent and says when it clears, worded in the
@@ -280,7 +299,7 @@ const timeZone = () => ((mockSettingValue("alignment_report") as { timezone?: st
  */
 export function poolRefusal(scenario: string | null): string | null {
   const pool = poolOf(load(scenario));
-  if (pool.takes_calls || pool.reason !== "no_account_available" || !pool.until) return null;
+  if (pool.takes_calls || pool.reason !== 'no_account_available' || !pool.until) return null;
   return `No Claude account can take this call: every Claude account is spent; the earliest window clears ${inWords(pool.until, timeZone())}`;
 }
 
@@ -291,18 +310,25 @@ export function poolRefusal(scenario: string | null): string | null {
  */
 export function poolSpentUntil(scenario: string | null): { until: string; words: string } | null {
   const pool = poolOf(load(scenario));
-  if (pool.takes_calls || pool.reason !== "no_account_available" || !pool.until) return null;
+  if (pool.takes_calls || pool.reason !== 'no_account_available' || !pool.until) return null;
   return { until: pool.until, words: untilInWords(pool.until, timeZone()) };
 }
 
 function untilInWords(iso: string, zone: string): string {
   const parts = (d: Date, opts: Intl.DateTimeFormatOptions) => {
-    const got = new Intl.DateTimeFormat("en-US", { timeZone: zone, ...opts }).formatToParts(d);
-    return (t: Intl.DateTimeFormatPartTypes) => got.find((x) => x.type === t)?.value ?? "";
+    const got = new Intl.DateTimeFormat('en-US', { timeZone: zone, ...opts }).formatToParts(d);
+    return (t: Intl.DateTimeFormatPartTypes) => got.find((x) => x.type === t)?.value ?? '';
   };
-  const v = parts(new Date(iso), { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-  const year = v("year") === parts(new Date(), { year: "numeric" })("year") ? "" : `, ${v("year")}`;
-  return `${v("weekday")} ${v("month")} ${v("day")}${year}, ${v("hour")}:${v("minute")} ${v("dayPeriod")}`;
+  const v = parts(new Date(iso), {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const year = v('year') === parts(new Date(), { year: 'numeric' })('year') ? '' : `, ${v('year')}`;
+  return `${v('weekday')} ${v('month')} ${v('day')}${year}, ${v('hour')}:${v('minute')} ${v('dayPeriod')}`;
 }
 
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -310,7 +336,10 @@ const LABEL = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
 function newState(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 /** Who a sign-in was for, as Claude reports it; null for a pasted login. */
@@ -322,9 +351,9 @@ function register(db: PoolDb, label: string, who: Identity): Account {
     row = {
       account_id: crypto.randomUUID(),
       label,
-      provider: "anthropic",
-      state: "AVAILABLE",
-      reason: "",
+      provider: 'anthropic',
+      state: 'AVAILABLE',
+      reason: '',
       assigned: 0,
       windows: {},
       observed_at: null,
@@ -339,30 +368,49 @@ function register(db: PoolDb, label: string, who: Identity): Account {
     db.accounts.push(row);
   }
   // A new pair may be a different Claude account: its name is replaced, null included.
-  Object.assign(row, { claude_email: who?.email ?? null, claude_organization: who?.organization ?? null });
-  if (row.state === "REAUTH_REQUIRED") {
-    Object.assign(row, { state: "AVAILABLE", reason: "", token_expires_at: at(8 * HOUR) });
+  Object.assign(row, {
+    claude_email: who?.email ?? null,
+    claude_organization: who?.organization ?? null,
+  });
+  if (row.state === 'REAUTH_REQUIRED') {
+    Object.assign(row, { state: 'AVAILABLE', reason: '', token_expires_at: at(8 * HOUR) });
   }
   return out(row);
 }
 
 /** Handles /v1/claude-accounts…; null for any other route. */
-export async function claudeAccountsRoute(req: Request, p: string[], q: URLSearchParams, role: string, scenario: string | null): Promise<Response | null> {
-  if (p[1] !== "claude-accounts") return null;
+export async function claudeAccountsRoute(
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+  role: string,
+  scenario: string | null,
+): Promise<Response | null> {
+  if (p[1] !== 'claude-accounts') return null;
   const db = load(scenario);
   const res = await handle(db, req, p, q, role);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   return res;
 }
 
-async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams, role: string): Promise<Response> {
+async function handle(
+  db: PoolDb,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+  role: string,
+): Promise<Response> {
   const m = req.method;
-  const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
-  if (m !== "GET" && role !== "owner") return json(403, { detail: "Requires the owner role" });
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
+  if (m !== 'GET' && role !== 'owner') return json(403, { detail: 'Requires the owner role' });
 
-  if (!p[2] && m === "GET") {
-    const page: Schemas["AccountsPage"] = {
-      accounts: db.accounts.map(out).map((a) => (role === "owner" ? a : { ...a, claude_email: null, claude_organization: null })),
+  if (!p[2] && m === 'GET') {
+    const page: Schemas['AccountsPage'] = {
+      accounts: db.accounts
+        .map(out)
+        .map((a) =>
+          role === 'owner' ? a : { ...a, claude_email: null, claude_organization: null },
+        ),
       unreadable_documents: [],
       unreadable_document_count: 0,
       refresh_sweep: db.sweep,
@@ -370,81 +418,134 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       pool: poolOf(db),
       time_zone: timeZone(),
     };
-    return reply("/v1/claude-accounts", "get", page);
+    return reply('/v1/claude-accounts', 'get', page);
   }
-  if (!p[2] && m === "POST") {
-    const { label, credential } = await body<Schemas["RegisterIn"]>();
-    if (!LABEL.test(label)) return json(422, { detail: `account label '${label}' must be lowercase letters, digits and dashes` });
+  if (!p[2] && m === 'POST') {
+    const { label, credential } = await body<Schemas['RegisterIn']>();
+    if (!LABEL.test(label))
+      return json(422, {
+        detail: `account label '${label}' must be lowercase letters, digits and dashes`,
+      });
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(credential) as Record<string, unknown>;
     } catch {
-      return json(422, { detail: "the credential is not JSON; a subscription credential needs accessToken, refreshToken and expiresAt" });
+      return json(422, {
+        detail:
+          'the credential is not JSON; a subscription credential needs accessToken, refreshToken and expiresAt',
+      });
     }
     const inner = (parsed.claudeAiOauth ?? parsed) as Record<string, unknown>;
-    if (!inner.refreshToken && !inner.refresh_token) return json(422, { detail: "the credential has no refresh token" });
-    return reply("/v1/claude-accounts", "post", { account: register(db, label, null), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" }, 201);
+    if (!inner.refreshToken && !inner.refresh_token)
+      return json(422, { detail: 'the credential has no refresh token' });
+    return reply(
+      '/v1/claude-accounts',
+      'post',
+      {
+        account: register(db, label, null),
+        expires_at: at(8 * HOUR),
+        note: 'stored encrypted and write-only',
+      },
+      201,
+    );
   }
-  if (p[2] === "authorize" && m === "POST") {
-    const { label } = await body<Schemas["AuthorizeIn"]>();
-    if (!LABEL.test(label)) return json(422, { detail: `account label '${label}' must be lowercase letters, digits and dashes` });
+  if (p[2] === 'authorize' && m === 'POST') {
+    const { label } = await body<Schemas['AuthorizeIn']>();
+    if (!LABEL.test(label))
+      return json(422, {
+        detail: `account label '${label}' must be lowercase letters, digits and dashes`,
+      });
     const state = newState();
     db.pending.push({ state, label });
-    return reply("/v1/claude-accounts/authorize", "post", {
+    return reply('/v1/claude-accounts/authorize', 'post', {
       authorize_url: `https://claude.com/cai/oauth/authorize?code=true&response_type=code&state=${state}`,
       state,
       expires_in_seconds: 900,
     });
   }
-  if (p[2] === "exchange" && m === "POST") {
-    const { state, code } = await body<Schemas["ExchangeIn"]>();
-    const [bare, pastedState] = code.trim().split("#");
+  if (p[2] === 'exchange' && m === 'POST') {
+    const { state, code } = await body<Schemas['ExchangeIn']>();
+    const [bare, pastedState] = code.trim().split('#');
     if (pastedState && pastedState !== state) {
-      return json(422, { detail: "The pasted code belongs to a different sign-in than the one this page started. Press Add account and sign in again." });
+      return json(422, {
+        detail:
+          'The pasted code belongs to a different sign-in than the one this page started. Press Add account and sign in again.',
+      });
     }
     const pending = db.pending.find((x) => x.state === state);
-    if (!pending) return json(422, { detail: "This sign-in has expired or was already completed. Codes are single-use; press Add account to start again." });
-    if (bare === "bad-code") {
-      return json(422, { detail: "the sign-in code was not accepted. Codes are single-use and expire quickly. Try Add account once more." });
+    if (!pending)
+      return json(422, {
+        detail:
+          'This sign-in has expired or was already completed. Codes are single-use; press Add account to start again.',
+      });
+    if (bare === 'bad-code') {
+      return json(422, {
+        detail:
+          'the sign-in code was not accepted. Codes are single-use and expire quickly. Try Add account once more.',
+      });
     }
     db.pending = db.pending.filter((x) => x.state !== state);
-    return reply("/v1/claude-accounts/exchange", "post", { account: register(db, pending.label, { email: `${pending.label}@example.com`, organization: "Example Studio" }), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" }, 201);
+    return reply(
+      '/v1/claude-accounts/exchange',
+      'post',
+      {
+        account: register(db, pending.label, {
+          email: `${pending.label}@example.com`,
+          organization: 'Example Studio',
+        }),
+        expires_at: at(8 * HOUR),
+        note: 'stored encrypted and write-only',
+      },
+      201,
+    );
   }
-  if (p[2] === "fallback") {
-    if (m === "PUT") {
-      const { token } = await body<Schemas["FallbackIn"]>();
+  if (p[2] === 'fallback') {
+    if (m === 'PUT') {
+      const { token } = await body<Schemas['FallbackIn']>();
       const t = token.trim();
-      const kind = t.startsWith(SETUP_TOKEN_PREFIX) ? "plan" : t.startsWith(API_KEY_PREFIX) ? "api_key" : null;
-      if (!kind) return json(422, { detail: "Not a Claude credential: paste the value printed by `claude setup-token` or an Anthropic API key" });
+      const kind = t.startsWith(SETUP_TOKEN_PREFIX)
+        ? 'plan'
+        : t.startsWith(API_KEY_PREFIX)
+          ? 'api_key'
+          : null;
+      if (!kind)
+        return json(422, {
+          detail:
+            'Not a Claude credential: paste the value printed by `claude setup-token` or an Anthropic API key',
+        });
       db.fallback = {
         kind,
         label: `${KIND_NAME[kind]} …${t.slice(-4)}`,
         updated_at: new Date().toISOString(),
       };
-      return reply("/v1/claude-accounts/fallback", "put", db.fallback);
+      return reply('/v1/claude-accounts/fallback', 'put', db.fallback);
     }
-    if (m === "DELETE") {
+    if (m === 'DELETE') {
       db.fallback = null;
-      return reply("/v1/claude-accounts/fallback", "delete", undefined, 204);
+      return reply('/v1/claude-accounts/fallback', 'delete', undefined, 204);
     }
   }
-  if (p[2] === "sweep" && m === "POST") {
-    db.sweep = { last_completed_at: new Date().toISOString(), last_outcome: "ok", readable: true };
-    return reply("/v1/claude-accounts/sweep", "post", { result: {} });
+  if (p[2] === 'sweep' && m === 'POST') {
+    db.sweep = { last_completed_at: new Date().toISOString(), last_outcome: 'ok', readable: true };
+    return reply('/v1/claude-accounts/sweep', 'post', { result: {} });
   }
 
   const row = db.accounts.find((a) => a.account_id === p[2]);
   if (!row) return json(404, { detail: `No Claude account '${p[2]}'` });
-  if (p[3] === "holders" && m === "GET") {
+  if (p[3] === 'holders' && m === 'GET') {
     const live = db.holds.filter((h) => h.account_id === row.account_id);
-    return reply("/v1/claude-accounts/{account_id}/holders", "get", { account_id: row.account_id, total: live.length, holders: live });
+    return reply('/v1/claude-accounts/{account_id}/holders', 'get', {
+      account_id: row.account_id,
+      total: live.length,
+      holders: live,
+    });
   }
-  if (p[3] === "history" && m === "GET") {
+  if (p[3] === 'history' && m === 'GET') {
     const spans = db.spans
       .filter((s) => s.account_id === row.account_id)
-      .sort((a, b) => (b.since ?? "").localeCompare(a.since ?? ""));
-    const limit = Number(q.get("limit") ?? 100);
-    return reply("/v1/claude-accounts/{account_id}/history", "get", {
+      .sort((a, b) => (b.since ?? '').localeCompare(a.since ?? ''));
+    const limit = Number(q.get('limit') ?? 100);
+    return reply('/v1/claude-accounts/{account_id}/history', 'get', {
       account_id: row.account_id,
       from: at(-7 * 24 * HOUR),
       to: new Date().toISOString(),
@@ -452,35 +553,49 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       next_cursor: null,
     });
   }
-  if (p[3] === "state" && m === "PUT") {
-    const { state, reason } = await body<Schemas["StateIn"]>();
+  if (p[3] === 'state' && m === 'PUT') {
+    const { state, reason } = await body<Schemas['StateIn']>();
     const to = state.trim().toUpperCase();
-    if (!["AVAILABLE", "PAUSED", "DRAINING", "REAUTH_REQUIRED"].includes(to)) {
-      return json(422, { detail: `unknown account state '${state}'; known: AVAILABLE, PAUSED, DRAINING, REAUTH_REQUIRED` });
+    if (!['AVAILABLE', 'PAUSED', 'DRAINING', 'REAUTH_REQUIRED'].includes(to)) {
+      return json(422, {
+        detail: `unknown account state '${state}'; known: AVAILABLE, PAUSED, DRAINING, REAUTH_REQUIRED`,
+      });
     }
-    Object.assign(row, { state: to, reason: reason ?? "" });
-    const moving = to === "DRAINING" ? db.holds.filter((h) => h.account_id === row.account_id).length : 0;
-    for (const h of db.holds) if (h.account_id === row.account_id) h.move = to === "DRAINING" ? "drain" : null;
-    return reply("/v1/claude-accounts/{account_id}/state", "put", { account: out(row), moving });
+    Object.assign(row, { state: to, reason: reason ?? '' });
+    const moving =
+      to === 'DRAINING' ? db.holds.filter((h) => h.account_id === row.account_id).length : 0;
+    for (const h of db.holds)
+      if (h.account_id === row.account_id) h.move = to === 'DRAINING' ? 'drain' : null;
+    return reply('/v1/claude-accounts/{account_id}/state', 'put', { account: out(row), moving });
   }
-  if (p[3] === "refresh" && m === "POST") {
-    const dead = row.state === "REAUTH_REQUIRED";
-    const reason = dead ? "reauth_required" : "refreshed";
+  if (p[3] === 'refresh' && m === 'POST') {
+    const dead = row.state === 'REAUTH_REQUIRED';
+    const reason = dead ? 'reauth_required' : 'refreshed';
     Object.assign(row, {
       last_refresh_at: new Date().toISOString(),
       last_refresh_reason: reason,
       ...(dead ? {} : { token_expires_at: at(8 * HOUR) }),
     });
-    return reply("/v1/claude-accounts/{account_id}/refresh", "post", {
-      refresh: { account_id: row.account_id, refreshed: !dead, reason, expires_at: dead ? null : row.token_expires_at },
+    return reply('/v1/claude-accounts/{account_id}/refresh', 'post', {
+      refresh: {
+        account_id: row.account_id,
+        refreshed: !dead,
+        reason,
+        expires_at: dead ? null : row.token_expires_at,
+      },
       account: out(row),
     });
   }
-  if (!p[3] && m === "DELETE") {
+  if (!p[3] && m === 'DELETE') {
     const closed = db.holds.filter((h) => h.account_id === row.account_id).length;
     db.accounts = db.accounts.filter((a) => a.account_id !== row.account_id);
     db.holds = db.holds.filter((h) => h.account_id !== row.account_id);
-    return reply("/v1/claude-accounts/{account_id}", "delete", { removed: row.account_id, label: row.label, closed_holds: closed, credential: "deleted" });
+    return reply('/v1/claude-accounts/{account_id}', 'delete', {
+      removed: row.account_id,
+      label: row.label,
+      closed_holds: closed,
+      credential: 'deleted',
+    });
   }
-  return json(404, { detail: "Route" });
+  return json(404, { detail: 'Route' });
 }

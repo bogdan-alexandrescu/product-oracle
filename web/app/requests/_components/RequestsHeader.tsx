@@ -1,28 +1,29 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { Button, PageHeader, ViewOnly } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import type { Query } from "@/lib/use-query";
+import { Button, PageHeader, ViewOnly } from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import type { Query } from '@/lib/use-query';
 
-import { InterviewDialog } from "./InterviewDialog";
-import { NewRequestButton } from "./NewRequest";
-import { TriageMenu, TriageStatusLine } from "./Triage";
+import { InterviewDialog } from './InterviewDialog';
+import { NewRequestButton } from './NewRequest';
+import { TriageMenu, TriageStatusLine } from './Triage';
 
 /** On a phone the actions take the screen's width (the Page's 10 px sides off it): New request, then More (qa-work-41). */
-const ACTIONS = "flex flex-wrap items-center justify-end gap-2 max-[600px]:w-[calc(100vw-1.25rem)] max-[600px]:flex-nowrap";
+const ACTIONS =
+  'flex flex-wrap items-center justify-end gap-2 max-[600px]:w-[calc(100vw-1.25rem)] max-[600px]:flex-nowrap';
 
 /** The phone's width, as the app's max-[600px] styles read it. */
 function usePhoneWidth(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const q = window.matchMedia("(max-width: 600px)");
+    const q = window.matchMedia('(max-width: 600px)');
     const on = () => setPhone(q.matches);
     on();
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
   }, []);
   return phone;
 }
@@ -35,18 +36,19 @@ function MoreMenu({ children }: { children: ReactNode }) {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       // The Auto-sort panel inside closes first on its own Escape.
-      if (e.key !== "Escape" || root.current?.querySelector("[data-testid=triage-menu-panel]")) return;
+      if (e.key !== 'Escape' || root.current?.querySelector('[data-testid=triage-menu-panel]'))
+        return;
       setOpen(false);
-      root.current?.querySelector<HTMLElement>("[data-more-button]")?.focus();
+      root.current?.querySelector<HTMLElement>('[data-more-button]')?.focus();
     };
     const onDown = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
     };
   }, [open]);
   return (
@@ -72,7 +74,7 @@ function MoreMenu({ children }: { children: ReactNode }) {
           className="absolute top-full right-0 z-30 mt-2 flex w-[calc(100vw-1.25rem)] flex-col items-stretch gap-2 rounded-panel border border-line bg-surface p-3 shadow-tip"
           onClick={(e) => {
             // A chosen action (Interview a customer) closes the menu; the Auto-sort control keeps it open.
-            if ((e.target as HTMLElement).closest("[data-closes-more]")) setOpen(false);
+            if ((e.target as HTMLElement).closest('[data-closes-more]')) setOpen(false);
           }}
         >
           {children}
@@ -97,18 +99,18 @@ export function RequestsHeader({
   onFiled,
   onInterviewed,
 }: {
-  triage: Query<Schemas["TriageStatus"]>;
-  onFiled: (request: Schemas["RequestOut"]) => void;
+  triage: Query<Schemas['TriageStatus']>;
+  onFiled: (request: Schemas['RequestOut']) => void;
   /** An interview was made or changed in the dialog (the Interviews tab re-reads its list). */
   onInterviewed?: () => void;
 }) {
   const { can, capsReady } = useMe();
   const [interviewing, setInterviewing] = useState(false);
   const phone = usePhoneWidth();
-  const canChange = can("set_request_triage_daily");
-  const canStart = can("start_request_triage");
+  const canChange = can('set_request_triage_daily');
+  const canStart = can('start_request_triage');
   const triageMenu = <TriageMenu triage={triage} canChange={canChange} canStart={canStart} />;
-  const interview = can("create_interview") && (
+  const interview = can('create_interview') && (
     <Button data-closes-more="" className="max-[600px]:h-11" onClick={() => setInterviewing(true)}>
       Interview a customer
     </Button>
@@ -123,7 +125,7 @@ export function RequestsHeader({
         testId="requests-header"
         status={
           <>
-            {capsReady && !can("create_request", true) && <ViewOnly />}
+            {capsReady && !can('create_request', true) && <ViewOnly />}
             <TriageStatusLine status={triage.data} />
           </>
         }
@@ -143,7 +145,11 @@ export function RequestsHeader({
                 <>
                   {triageMenu}
                   {interview}
-                  <NewRequestButton onFiled={onFiled} className="max-[600px]:h-11 max-[600px]:flex-1" fromAddress />
+                  <NewRequestButton
+                    onFiled={onFiled}
+                    className="max-[600px]:h-11 max-[600px]:flex-1"
+                    fromAddress
+                  />
                 </>
               )}
             </div>
@@ -162,4 +168,3 @@ export function RequestsHeader({
     </>
   );
 }
-

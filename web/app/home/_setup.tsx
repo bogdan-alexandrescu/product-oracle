@@ -1,22 +1,28 @@
-"use client";
+'use client';
 
-import { Button, Icon, LinkButton, Panel } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { formatDay, zoneName } from "@/lib/format";
-import { ZONE_NOT_SET } from "@/lib/zone";
+import { Button, Icon, LinkButton, Panel } from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import { formatDay, zoneName } from '@/lib/format';
+import { ZONE_NOT_SET } from '@/lib/zone';
 
-type Step = Schemas["SetupStep"];
+type Step = Schemas['SetupStep'];
 
 /**
  * A step's words. `href` is where its button goes while the step is open ("Open"); once done
  * the button says `doneAction` ("Change", or "Review") and goes to `doneHref` when set.
  */
-type Copy = { label: string; href?: string; status: (s: Step, mine: Mine) => string; doneAction?: string; doneHref?: string };
+type Copy = {
+  label: string;
+  href?: string;
+  status: (s: Step, mine: Mine) => string;
+  doneAction?: string;
+  doneHref?: string;
+};
 
 /** What Home knows besides the step: how many sources the Sources page lists as the person's. */
 export type Mine = { sources?: number };
 
-const sourcesText = (n: number) => `${n} ${n === 1 ? "source" : "sources"}`;
+const sourcesText = (n: number) => `${n} ${n === 1 ? 'source' : 'sources'}`;
 
 /**
  * The web's copy of each setup step the API names (A1): label, where Open goes, and the
@@ -25,13 +31,13 @@ const sourcesText = (n: number) => `${n} ${n === 1 ? "source" : "sources"}`;
  */
 const STEPS: Record<string, Copy> = {
   connect: {
-    label: "Connect tools",
-    href: "/settings/connections?from=setup",
-    status: (s) => (s.done ? `${s.count} connected` : "None"),
+    label: 'Connect tools',
+    href: '/settings/connections?from=setup',
+    status: (s) => (s.done ? `${s.count} connected` : 'None'),
   },
   sources: {
-    label: "Pick sources",
-    href: "/settings/sources?from=setup",
+    label: 'Pick sources',
+    href: '/settings/sources?from=setup',
     // qa-onboarding-3: the step counts the sources with something read; Sources lists them
     // all. Both say the same number: a source with nothing read yet is said as such. Home
     // lists the sources only while the step is open (its call budget); a done step says how
@@ -42,55 +48,62 @@ const STEPS: Record<string, Copy> = {
       const read = s.count ?? 0;
       if (s.done) return `${sourcesText(read)} with content`;
       const all = Math.max(mine.sources ?? read, read);
-      if (all === 0) return "None";
+      if (all === 0) return 'None';
       if (read === 0) return `${sourcesText(all)} · nothing read yet`;
       return all > read ? `${sourcesText(all)} · ${read} with content` : sourcesText(read);
     },
   },
   invite: {
-    label: "Invite team",
-    href: "/settings/members?from=setup",
+    label: 'Invite team',
+    href: '/settings/members?from=setup',
     // Done with a second member, or with an open invite while still alone; open invites
     // are said too (qa-onboarding-18: "4 people · 3 invited").
     status: (s) => {
-      if (!s.done) return "Only you";
-      const invited = s.invited ? `${s.invited} invited` : "";
-      if ((s.count ?? 0) < 2) return invited || "Invited";
+      if (!s.done) return 'Only you';
+      const invited = s.invited ? `${s.invited} invited` : '';
+      if ((s.count ?? 0) < 2) return invited || 'Invited';
       return invited ? `${s.count} people · ${invited}` : `${s.count} people`;
     },
   },
   domains: {
-    label: "Company domains",
-    href: "/settings/sources?from=setup#company-domains",
-    status: (s) => (!s.done ? "Not set" : (s.detail ?? `${s.count} domains`)),
+    label: 'Company domains',
+    href: '/settings/sources?from=setup#company-domains',
+    status: (s) => (!s.done ? 'Not set' : (s.detail ?? `${s.count} domains`)),
   },
   eng_lead: {
-    label: "Engineering lead",
-    href: "/settings/members?from=setup#engineering-lead",
-    status: (s) => (s.done ? `${s.count} ${s.count === 1 ? "lead" : "leads"}` : "None"),
+    label: 'Engineering lead',
+    href: '/settings/members?from=setup#engineering-lead',
+    status: (s) => (s.done ? `${s.count} ${s.count === 1 ? 'lead' : 'leads'}` : 'None'),
   },
   horizons: {
-    label: "Horizons",
-    href: "/settings/company?from=setup#horizons",
-    status: (s) => (s.done ? "Checked" : "Not checked"),
+    label: 'Horizons',
+    href: '/settings/company?from=setup#horizons',
+    status: (s) => (s.done ? 'Checked' : 'Not checked'),
   },
   // H2: done once an owner stored the Company time zone; detail is the zone, in words
   // ("Pacific Time (Los Angeles)"), as Settings and Rituals name it; else the default is used.
   timezone: {
-    label: "Time zone",
-    href: "/settings/company?from=setup#timezone",
-    status: (s) => (s.done ? (s.detail ? zoneName(s.detail) : "Set") : ZONE_NOT_SET),
+    label: 'Time zone',
+    href: '/settings/company?from=setup#timezone',
+    status: (s) => (s.done ? (s.detail ? zoneName(s.detail) : 'Set') : ZONE_NOT_SET),
   },
   // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
   build_baseline: {
-    label: "Build the Ground Truth",
-    href: "/ground-truth?build=1&from=setup",
+    label: 'Build the Ground Truth',
+    href: '/ground-truth?build=1&from=setup',
     // qa-onboarding-10: a build under way says so (its row opens the run, see stepAction).
-    status: (s) => (s.run_id ? "Building…" : !s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
+    status: (s) =>
+      s.run_id
+        ? 'Building…'
+        : !s.done
+          ? 'Not built'
+          : s.detail
+            ? `Built ${formatDay(s.detail)}`
+            : 'Built',
     // Built: the row reviews the baseline, never starts a second build from Home.
-    doneAction: "Review",
+    doneAction: 'Review',
     // qa4-settings-5: from=setup, so the baseline keeps the way back to Home, as the other steps do.
-    doneHref: "/ground-truth?from=setup",
+    doneHref: '/ground-truth?from=setup',
   },
 };
 
@@ -98,8 +111,11 @@ const STEPS: Record<string, Copy> = {
 export function copyOf(s: Step): Copy {
   const known = STEPS[s.key];
   if (known) return known;
-  const words = String(s.key).replace(/_/g, " ");
-  return { label: words.charAt(0).toUpperCase() + words.slice(1), status: (x) => (x.done ? "Done" : "Not done") };
+  const words = String(s.key).replace(/_/g, ' ');
+  return {
+    label: words.charAt(0).toUpperCase() + words.slice(1),
+    status: (x) => (x.done ? 'Done' : 'Not done'),
+  };
 }
 
 /** The run of a Build the baseline under way, as the step reports it. */
@@ -112,27 +128,35 @@ export const buildRun = (runId: string) => `/runs/${runId}`;
  */
 export type BaselineState = { runId: string | null; inSetup: boolean };
 
-export function baselineStep(setup: Schemas["SetupOut"] | undefined): BaselineState | undefined {
-  const step = setup?.steps.find((s) => s.key === "build_baseline");
+export function baselineStep(setup: Schemas['SetupOut'] | undefined): BaselineState | undefined {
+  const step = setup?.steps.find((s) => s.key === 'build_baseline');
   if (!setup || !step) return undefined;
   return { runId: step.run_id ?? null, inSetup: setupOpen(setup) && !setup.hidden && !step.done };
 }
 
 /** A step's button: Open while it is open, Change or Review once done, Open the build while a build runs. */
 function stepAction(s: Step, copy: Copy): { label: string; href: string } | null {
-  if (s.run_id) return { label: "Open the build", href: buildRun(s.run_id) };
+  if (s.run_id) return { label: 'Open the build', href: buildRun(s.run_id) };
   if (!copy.href) return null;
-  if (!s.done) return { label: "Open", href: copy.href };
-  return { label: copy.doneAction ?? "Change", href: copy.doneHref ?? copy.href };
+  if (!s.done) return { label: 'Open', href: copy.href };
+  return { label: copy.doneAction ?? 'Change', href: copy.doneHref ?? copy.href };
 }
 
 /** Whether the checklist has anything left for this person. */
-export function setupOpen(setup: Schemas["SetupOut"] | undefined): setup is Schemas["SetupOut"] {
+export function setupOpen(setup: Schemas['SetupOut'] | undefined): setup is Schemas['SetupOut'] {
   return !!setup && setup.total > 0 && setup.done < setup.total;
 }
 
 /** The header chip that draws a hidden checklist again: "Set up 2/6". */
-export function SetupChip({ setup, onShow, busy }: { setup: Schemas["SetupOut"]; onShow: () => void; busy: boolean }) {
+export function SetupChip({
+  setup,
+  onShow,
+  busy,
+}: {
+  setup: Schemas['SetupOut'];
+  onShow: () => void;
+  busy: boolean;
+}) {
   return (
     <button
       type="button"
@@ -151,7 +175,17 @@ export function SetupChip({ setup, onShow, busy }: { setup: Schemas["SetupOut"];
  * Set up (A1): the first steps of this company's Oracle, done or open, each one click
  * away. Drawn first on Home while a step is open and the person has not hidden it.
  */
-export function SetupPanel({ setup, onHide, busy, mine = {} }: { setup: Schemas["SetupOut"]; onHide: () => void; busy: boolean; mine?: Mine }) {
+export function SetupPanel({
+  setup,
+  onHide,
+  busy,
+  mine = {},
+}: {
+  setup: Schemas['SetupOut'];
+  onHide: () => void;
+  busy: boolean;
+  mine?: Mine;
+}) {
   return (
     <Panel
       title="Set up"
@@ -177,16 +211,28 @@ export function SetupPanel({ setup, onHide, busy, mine = {} }: { setup: Schemas[
               className="flex min-h-12 min-w-0 items-center gap-2.5 border-b border-line px-4 py-1.5 last:border-b-0 max-[600px]:gap-2 max-[600px]:px-3"
             >
               {s.done ? (
-                <span aria-label="Done" role="img" className="grid size-6 flex-none place-items-center rounded-full bg-pass-bg text-pass">
+                <span
+                  aria-label="Done"
+                  role="img"
+                  className="grid size-6 flex-none place-items-center rounded-full bg-pass-bg text-pass"
+                >
                   <Icon name="check" size={16} />
                 </span>
               ) : (
-                <span aria-label="To do" role="img" className="size-6 flex-none rounded-full border-2 border-line-strong" />
+                <span
+                  aria-label="To do"
+                  role="img"
+                  className="size-6 flex-none rounded-full border-2 border-line-strong"
+                />
               )}
               {/* QA pass D-6, F-29: on a phone the name sits above its status (the figure under the name), both wrapping whole,
                   so neither is cut ("Company domai…"); the button stays right. */}
               <span className="flex min-w-0 flex-1 items-center gap-2.5 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-0">
-                <span data-testid="setup-name" className="min-w-0 truncate font-semibold max-[600px]:whitespace-normal max-[600px]:break-words" title={copy.label}>
+                <span
+                  data-testid="setup-name"
+                  className="min-w-0 truncate font-semibold max-[600px]:whitespace-normal max-[600px]:break-words"
+                  title={copy.label}
+                >
                   {copy.label}
                 </span>
                 <span

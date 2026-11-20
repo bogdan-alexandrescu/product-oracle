@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * walkc-meeting round 2: the meeting's steps after a chat card, on the mock's invented PRD
@@ -21,85 +21,103 @@ import { expect, test, type Locator, type Page } from "./test";
 test.use({ viewport: { width: 1366, height: 820 } });
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
-const steps = (page: Page) => page.getByRole("navigation", { name: "Steps" });
-const decisions = (page: Page) => page.getByRole("region", { name: "Decisions in this meeting" });
+const steps = (page: Page) => page.getByRole('navigation', { name: 'Steps' });
+const decisions = (page: Page) => page.getByRole('region', { name: 'Decisions in this meeting' });
 
 async function startReview(page: Page) {
   await login(page);
-  await page.goto("/simple/meetings");
-  await tap(page.getByRole("button", { name: /^Start review/ }).first());
-  const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
-  await tap(sheet.getByRole("button", { name: "Start", exact: true }));
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  await page.goto('/simple/meetings');
+  await tap(page.getByRole('button', { name: /^Start review/ }).first());
+  const sheet = page.getByRole('dialog', { name: 'Start a review' });
+  await sheet.getByLabel('PRD').selectOption({ label: 'Guided setup' });
+  await sheet.getByRole('checkbox', { name: 'Theo Brandt' }).check();
+  await tap(sheet.getByRole('button', { name: 'Start', exact: true }));
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
 }
 
 async function switchTo(page: Page, email: string) {
   // From a fresh page: the full-screen meeting covers the rail's account menu.
-  await page.goto("/simple");
+  await page.goto('/simple');
   await signOut(page);
   await login(page, email);
 }
 
 /** Says `line` in the meeting's chat and returns the card on Welcome video. */
 async function cardFor(page: Page, line: string): Promise<Locator> {
-  const chat = page.getByTestId("meeting-chat");
-  await chat.getByRole("textbox", { name: "Message Oracle" }).fill(line);
-  await tap(chat.getByRole("button", { name: "Send" }));
-  const card = chat.getByTestId("chat-card").filter({ hasText: "Welcome video" }).last();
+  const chat = page.getByTestId('meeting-chat');
+  await chat.getByRole('textbox', { name: 'Message Oracle' }).fill(line);
+  await tap(chat.getByRole('button', { name: 'Send' }));
+  const card = chat.getByTestId('chat-card').filter({ hasText: 'Welcome video' }).last();
   await expect(card).toBeVisible();
-  const preview = card.getByRole("button", { name: "Preview" });
+  const preview = card.getByRole('button', { name: 'Preview' });
   if (await preview.isVisible()) await tap(preview);
   return card;
 }
 
-test("5d: a move applied from the chat shows on the open Roadmap step at once", async ({ page }) => {
+test('5d: a move applied from the chat shows on the open Roadmap step at once', async ({
+  page,
+}) => {
   await startReview(page);
-  await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
-  const row = page.getByRole("region", { name: "Roadmap slice" }).getByRole("listitem").filter({ hasText: "Welcome video" });
+  await tap(steps(page).getByRole('button', { name: '2 Roadmap' }));
+  const row = page
+    .getByRole('region', { name: 'Roadmap slice' })
+    .getByRole('listitem')
+    .filter({ hasText: 'Welcome video' });
   // Welcome video has no code, so it carries the "Not in the Ground Truth" flag (simple-home-qa-nov14 #1).
-  await expect(row.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
-  await expect(row).toContainText("Ground Truth · Later");
-  const card = await cardFor(page, "move Welcome video to Now");
-  await tap(card.getByRole("button", { name: "Apply", exact: true }));
-  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+  await expect(row.getByTestId('not-in-gt')).toHaveText('Not in the Ground Truth');
+  await expect(row).toContainText('Ground Truth · Later');
+  const card = await cardFor(page, 'move Welcome video to Now');
+  await tap(card.getByRole('button', { name: 'Apply', exact: true }));
+  await expect(card.getByTestId('chat-card-outcome')).toContainText('Applied by you');
   // The step follows the chat without opening the page again.
-  await expect(row).toContainText("Ground Truth · Now");
-  await expect(row.getByRole("button", { name: "Move Welcome video to Later" })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Move Welcome video to Now" })).toHaveCount(0);
+  await expect(row).toContainText('Ground Truth · Now');
+  await expect(row.getByRole('button', { name: 'Move Welcome video to Later' })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Move Welcome video to Now' })).toHaveCount(0);
 });
 
-test("5e: a chat proposal declined in the meeting says declined, on the card and in the decision", async ({ page }) => {
+test('5e: a chat proposal declined in the meeting says declined, on the card and in the decision', async ({
+  page,
+}) => {
   await startReview(page);
   const url = page.url();
   // Theo proposes the move from the meeting's chat.
-  await switchTo(page, "commenter@example.com");
+  await switchTo(page, 'commenter@example.com');
   await page.goto(url);
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-  const card = await cardFor(page, "move Welcome video to Now");
-  await tap(card.getByRole("button", { name: "Propose" }));
-  await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to");
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+  const card = await cardFor(page, 'move Welcome video to Now');
+  await tap(card.getByRole('button', { name: 'Propose' }));
+  await expect(card.getByTestId('chat-card-outcome')).toContainText('Proposed to');
 
   // The owner declines it on the Decisions step.
-  await switchTo(page, "admin@example.com");
+  await switchTo(page, 'admin@example.com');
   await page.goto(url);
-  await tap(steps(page).getByRole("button", { name: "3 Decisions" }));
-  const pending = page.getByRole("region", { name: "Pending proposals" }).getByRole("listitem").filter({ hasText: "Welcome video" });
-  await tap(pending.getByRole("button", { name: "Decline" }));
+  await tap(steps(page).getByRole('button', { name: '3 Decisions' }));
+  const pending = page
+    .getByRole('region', { name: 'Pending proposals' })
+    .getByRole('listitem')
+    .filter({ hasText: 'Welcome video' });
+  await tap(pending.getByRole('button', { name: 'Decline' }));
   await expect(pending).toHaveCount(0);
-  const decided = decisions(page).getByTestId("meeting-decision").filter({ hasText: "Welcome video" });
+  const decided = decisions(page)
+    .getByTestId('meeting-decision')
+    .filter({ hasText: 'Welcome video' });
   await expect(decided).toContainText("Declined Theo Brandt's proposal: move Welcome video to Now");
-  await expect(decisions(page)).not.toContainText("Moved Welcome video");
+  await expect(decisions(page)).not.toContainText('Moved Welcome video');
 
   // Theo's card says it was declined, and by whom.
-  await switchTo(page, "commenter@example.com");
+  await switchTo(page, 'commenter@example.com');
   await page.goto(url);
-  const again = page.getByTestId("meeting-chat").getByTestId("chat-card").filter({ hasText: "Welcome video" }).last();
-  await expect(again.getByTestId("chat-card-outcome")).toContainText("Declined by Avery Stone: nothing changed");
-  await expect(again.getByTestId("chat-card-outcome")).not.toContainText("Proposed to");
+  const again = page
+    .getByTestId('meeting-chat')
+    .getByTestId('chat-card')
+    .filter({ hasText: 'Welcome video' })
+    .last();
+  await expect(again.getByTestId('chat-card-outcome')).toContainText(
+    'Declined by Avery Stone: nothing changed',
+  );
+  await expect(again.getByTestId('chat-card-outcome')).not.toContainText('Proposed to');
 });

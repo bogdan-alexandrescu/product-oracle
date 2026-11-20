@@ -1,35 +1,44 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useId, useRef, useState, type ReactNode } from "react";
+import Link from 'next/link';
+import { useId, useRef, useState, type ReactNode } from 'react';
 
-import { Button, Chip, CodeText, Panel, withCodes } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
-import { nameCodes } from "@/lib/code-index";
-import { useCompanyCodes } from "@/lib/codes";
-import { useCompanyZone, zoneDay } from "@/lib/dates";
-import { formatDateTime } from "@/lib/format";
+import { Button, Chip, CodeText, Panel, withCodes } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import type { GraphOut, ProposalOut, Schemas } from '@/lib/api/client';
+import { nameCodes } from '@/lib/code-index';
+import { useCompanyCodes } from '@/lib/codes';
+import { useCompanyZone, zoneDay } from '@/lib/dates';
+import { formatDateTime } from '@/lib/format';
 
-import { ACCEPT_LOCKS, codedTitleOf, fieldLabel, titleOf, valueWords } from "./common";
-import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
+import { ACCEPT_LOCKS, codedTitleOf, fieldLabel, titleOf, valueWords } from './common';
+import { LIMIT_LABEL, suggestedBlocker } from './PromoteBlocker';
 
-type Payload = { op?: string; kind?: string; fields?: Record<string, unknown>; reason?: string | null; origin?: string };
+type Payload = {
+  op?: string;
+  kind?: string;
+  fields?: Record<string, unknown>;
+  reason?: string | null;
+  origin?: string;
+};
 
 /** Flattens {title, attrs: {effort}} to [["title", ...], ["attrs.effort", ...]]. */
 function flatFields(fields: Record<string, unknown> = {}): [string, unknown][] {
   return Object.entries(fields).flatMap(([k, v]) =>
-    k === "attrs" && v && typeof v === "object" && !Array.isArray(v)
-      ? Object.entries(v as Record<string, unknown>).map(([ak, av]) => [`attrs.${ak}`, av] as [string, unknown])
+    k === 'attrs' && v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.entries(v as Record<string, unknown>).map(
+          ([ak, av]) => [`attrs.${ak}`, av] as [string, unknown],
+        )
       : [[k, v] as [string, unknown]],
   );
 }
 
-type ProposalRun = Schemas["ProposalRun"];
+type ProposalRun = Schemas['ProposalRun'];
 
 /** A run in plain words: "Ground Truth to PRD · Oct 16". */
 /** "Ground Truth to PRD · Oct 16": the day the run started in the Company time zone, as the API names it (#463). */
-export const runLabel = (run: ProposalRun, zone: string) => `${run.flow_title} · ${zoneDay(run.created_at, zone)}`;
+export const runLabel = (run: ProposalRun, zone: string) =>
+  `${run.flow_title} · ${zoneDay(run.created_at, zone)}`;
 
 /** The From filter: "" (all), "none" (people and intake answers) or a run's id. */
 export type FromFilter = string;
@@ -70,7 +79,9 @@ export function ProposalsTab({
   onMakeMeasurable?: (goalId: string) => void;
 }) {
   // Accepted intake constraints still marked as suggested blockers (B4).
-  const suggested = (graph?.entities ?? []).filter((e) => e.status !== "rejected" && suggestedBlocker(e));
+  const suggested = (graph?.entities ?? []).filter(
+    (e) => e.status !== 'rejected' && suggestedBlocker(e),
+  );
   return (
     <>
       {suggested.length > 0 && (
@@ -78,7 +89,10 @@ export function ProposalsTab({
           <ul aria-label="Suggested blockers">
             {suggested.map((e) => {
               const mark = suggestedBlocker(e)!;
-              const facts = [mark.severity && `${mark.severity} severity`, mark.limit_kind && LIMIT_LABEL[mark.limit_kind]];
+              const facts = [
+                mark.severity && `${mark.severity} severity`,
+                mark.limit_kind && LIMIT_LABEL[mark.limit_kind],
+              ];
               return (
                 <li
                   key={e.id}
@@ -97,7 +111,7 @@ export function ProposalsTab({
                       </button>
                     </div>
                     <p className="truncate text-sm text-text2">
-                      {["From an intake answer", ...facts.filter(Boolean)].join(" · ")}
+                      {['From an intake answer', ...facts.filter(Boolean)].join(' · ')}
                     </p>
                   </div>
                   {canWrite && (
@@ -130,7 +144,15 @@ export function ProposalsTab({
 }
 
 /** The From select: all proposals, those of no run, or one run's. */
-function FromSelect({ runs, from, onFrom }: { runs: ProposalRun[]; from: FromFilter; onFrom: (from: FromFilter) => void }) {
+function FromSelect({
+  runs,
+  from,
+  onFrom,
+}: {
+  runs: ProposalRun[];
+  from: FromFilter;
+  onFrom: (from: FromFilter) => void;
+}) {
   const id = useId();
   const zone = useCompanyZone();
   return (
@@ -159,7 +181,7 @@ function FromSelect({ runs, from, onFrom }: { runs: ProposalRun[]; from: FromFil
 /** Who made it and when: the run that made it, as a link; else the person (You), token or Oracle. */
 function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
   const zone = useCompanyZone();
-  const line = "tnum truncate text-[13px] text-text2";
+  const line = 'tnum truncate text-[13px] text-text2';
   if (p.run)
     return (
       <p className={line} data-testid="proposal-by">
@@ -169,10 +191,15 @@ function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
       </p>
     );
   // A run that is gone: deleting it nulls run_id, but a run's own merge keeps "run:<id>" as the actor.
-  if (p.proposer.kind === "run") return <p className={line} data-testid="proposal-by">From a run (removed)</p>;
-  const who = p.proposer.user_id && p.proposer.user_id === meId ? "You" : p.proposer.label;
+  if (p.proposer.kind === 'run')
+    return (
+      <p className={line} data-testid="proposal-by">
+        From a run (removed)
+      </p>
+    );
+  const who = p.proposer.user_id && p.proposer.user_id === meId ? 'You' : p.proposer.label;
   // B6 (c6): a version proposed from a discussion reads as the person's suggestion.
-  if (p.proposer.kind === "person" && (p.payload as Payload).reason?.startsWith("From discussion "))
+  if (p.proposer.kind === 'person' && (p.payload as Payload).reason?.startsWith('From discussion '))
     return (
       <p className={line} data-testid="proposal-by" title={p.proposer.email ?? undefined}>
         Suggested by {p.proposer.label} · {formatDateTime(p.created_at)}
@@ -186,7 +213,8 @@ function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
 }
 
 /** A goal the graph says is not measurable yet (B5's goal_check). */
-const vagueGoal = (graph: GraphOut | undefined, id: string) => graph?.entities.find((e) => e.id === id && e.type === "goal")?.goal_check?.measurable === false;
+const vagueGoal = (graph: GraphOut | undefined, id: string) =>
+  graph?.entities.find((e) => e.id === id && e.type === 'goal')?.goal_check?.measurable === false;
 
 /** A proposal's field key in words, the one map the Details list and the overlap warning
  * both read (#review minor): "attrs.milestone" is "milestone"; a feature's "status" is named
@@ -194,17 +222,22 @@ const vagueGoal = (graph: GraphOut | undefined, id: string) => graph?.entities.f
 export const fieldName = (key: string, entityType?: string | null) => fieldLabel(key, entityType);
 
 /** Fields the Details list leaves out: ids and keys people never read. */
-const HIDDEN_FIELDS = new Set(["id", "key"]);
-const OP_WORD: Record<string, string> = { create: "Add", update: "Change", delete: "Remove" };
+const HIDDEN_FIELDS = new Set(['id', 'key']);
+const OP_WORD: Record<string, string> = { create: 'Add', update: 'Change', delete: 'Remove' };
 
 /** Details' first line: "Change:", "Add feature:", "Remove link". */
 function opLine(payload: Payload, type: string | undefined, fields: number): string {
-  const verb = OP_WORD[payload.op ?? "update"] ?? "Change";
-  const what = payload.kind === "edge" ? " link" : payload.op === "update" || !type ? "" : ` ${type.replaceAll("_", " ")}`;
-  return `${verb}${what}${fields > 0 ? ":" : ""}`;
+  const verb = OP_WORD[payload.op ?? 'update'] ?? 'Change';
+  const what =
+    payload.kind === 'edge'
+      ? ' link'
+      : payload.op === 'update' || !type
+        ? ''
+        : ` ${type.replaceAll('_', ' ')}`;
+  return `${verb}${what}${fields > 0 ? ':' : ''}`;
 }
 
-type Overlap = Schemas["ProposalOverlap"];
+type Overlap = Schemas['ProposalOverlap'];
 
 /** Within the last hour: what "just accepted" means. */
 const justNow = (iso: string) => Date.now() - new Date(iso).getTime() < 60 * 60_000;
@@ -212,7 +245,7 @@ const justNow = (iso: string) => Date.now() - new Date(iso).getTime() < 60 * 60_
 /** "less than a minute ago", "12 min ago", "3 h ago", "2 days ago". */
 function ago(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (min < 1) return "less than a minute ago";
+  if (min < 1) return 'less than a minute ago';
   if (min < 60) return `${min} min ago`;
   if (min < 48 * 60) return `${Math.floor(min / 60)} h ago`;
   return `${Math.floor(min / (24 * 60))} days ago`;
@@ -223,7 +256,9 @@ function OverlapChip({ overlaps }: { overlaps: Overlap[] }) {
   return (
     <div>
       <Chip kind="warn" data-testid="overlap-chip">
-        {overlaps.some((o) => o.by === "proposal") ? "Changes what you just accepted" : "Changes a later edit"}
+        {overlaps.some((o) => o.by === 'proposal')
+          ? 'Changes what you just accepted'
+          : 'Changes a later edit'}
       </Chip>
     </div>
   );
@@ -242,29 +277,49 @@ function OverlapWarning({
   onDecide: (proposal: ProposalOut, accept: boolean, skip?: string[]) => void;
 }) {
   const overlaps = p.overlaps ?? [];
-  const latest = overlaps.reduce((a, o) => (o.changed_at > a ? o.changed_at : a), overlaps[0].changed_at);
-  const sentence = overlaps.some((o) => o.by === "proposal")
+  const latest = overlaps.reduce(
+    (a, o) => (o.changed_at > a ? o.changed_at : a),
+    overlaps[0].changed_at,
+  );
+  const sentence = overlaps.some((o) => o.by === 'proposal')
     ? `This would undo a change you accepted ${ago(latest)}.`
     : `This would undo a later edit made ${ago(latest)}.`;
   const skip = overlaps.map((o) => o.field);
   return (
-    <div role="group" aria-label={sentence} className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface2 p-3 text-sm">
+    <div
+      role="group"
+      aria-label={sentence}
+      className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface2 p-3 text-sm"
+    >
       <p className="font-semibold">{sentence}</p>
       <ul className="flex flex-col gap-1.5">
         {overlaps.map((o) => (
-          <li key={o.field} data-testid={`overlap-${fieldName(o.field)}`} className="flex min-w-0 flex-col gap-0.5">
+          <li
+            key={o.field}
+            data-testid={`overlap-${fieldName(o.field)}`}
+            className="flex min-w-0 flex-col gap-0.5"
+          >
             <p data-testid="overlap-now" className="[overflow-wrap:anywhere]">
-              <span className="text-text2">{fieldName(o.field, type)} now:</span> <b className="font-semibold">{valueWords(o.field, o.current)}</b>
+              <span className="text-text2">{fieldName(o.field, type)} now:</span>{' '}
+              <b className="font-semibold">{valueWords(o.field, o.current)}</b>
             </p>
             <p data-testid="overlap-proposed" className="[overflow-wrap:anywhere]">
-              <span className="text-text2">this proposal:</span> <b className="font-semibold">{valueWords(o.field, o.proposed)}</b>
+              <span className="text-text2">this proposal:</span>{' '}
+              <b className="font-semibold">{valueWords(o.field, o.proposed)}</b>
             </p>
           </li>
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" disabled={busy} title={ACCEPT_LOCKS} onClick={() => onDecide(p, true, skip)}>
-          {skip.length === 1 ? `Skip ${fieldName(skip[0], type)}, apply the rest` : "Skip these fields, apply the rest"}
+        <Button
+          variant="primary"
+          disabled={busy}
+          title={ACCEPT_LOCKS}
+          onClick={() => onDecide(p, true, skip)}
+        >
+          {skip.length === 1
+            ? `Skip ${fieldName(skip[0], type)}, apply the rest`
+            : 'Skip these fields, apply the rest'}
         </Button>
         <Button disabled={busy} title={ACCEPT_LOCKS} onClick={() => onDecide(p, true)}>
           Apply anyway
@@ -282,15 +337,20 @@ function OverlapWarning({
 export const cardsOf = (proposals: ProposalOut[]) =>
   proposals.filter((p) => !p.duplicate_of || !proposals.some((o) => o.id === p.duplicate_of));
 
-type Also = Schemas["ProposalAlso"];
+type Also = Schemas['ProposalAlso'];
 
 /** "Writer", "Writer and Critic", "Writer, Critic and Analyst". */
-const names = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+const names = (items: string[]) =>
+  items.length < 2
+    ? items.join('')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
 /** A choice's values in words: "Planned", or "milestone M2, effort L" when it sets more. */
 function choiceWords(fields: Record<string, unknown> | undefined, type?: string): string {
   const flat = flatFields(fields).filter(([k]) => !HIDDEN_FIELDS.has(k));
-  return flat.length === 1 ? valueWords(flat[0][0], flat[0][1]) : flat.map(([k, v]) => `${fieldName(k, type)} ${valueWords(k, v)}`).join(", ");
+  return flat.length === 1
+    ? valueWords(flat[0][0], flat[0][1])
+    : flat.map(([k, v]) => `${fieldName(k, type)} ${valueWords(k, v)}`).join(', ');
 }
 
 /** The card of a change proposed more than once: who else proposed it, and when they
@@ -315,11 +375,11 @@ function AlsoProposed({
   const mine = (p.payload as Payload).fields?.title;
   const titled = (a: Also) => {
     const title = (a.fields as Record<string, unknown>).title;
-    return typeof title === "string" && title !== mine ? title : null;
+    return typeof title === 'string' && title !== mine ? title : null;
   };
   const options: { id: string; label: string; by: string }[] = [];
   if (differ.length > 0) {
-    options.push({ id: p.id, label: choiceWords((p.payload as Payload).fields, type), by: "" });
+    options.push({ id: p.id, label: choiceWords((p.payload as Payload).fields, type), by: '' });
     for (const a of differ) {
       const label = choiceWords(a.fields as Record<string, unknown>, type);
       const same = options.find((o) => o.label === label);
@@ -331,17 +391,23 @@ function AlsoProposed({
     <>
       {agree.length > 0 && (
         <p data-testid="also-proposed" className="text-[13px] text-text2">
-          Also proposed by {names(agree.map((a: Also) => (titled(a) ? `${a.by} as “${titled(a)}”` : a.by)))}
+          Also proposed by{' '}
+          {names(agree.map((a: Also) => (titled(a) ? `${a.by} as “${titled(a)}”` : a.by)))}
         </p>
       )}
       {options.length > 1 && (
-        <div role="group" aria-label="Pick one" data-testid="proposal-choice" className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface2 p-3 text-sm">
-          <p className="font-semibold">{options.map((o) => o.label).join(" or ")}</p>
+        <div
+          role="group"
+          aria-label="Pick one"
+          data-testid="proposal-choice"
+          className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface2 p-3 text-sm"
+        >
+          <p className="font-semibold">{options.map((o) => o.label).join(' or ')}</p>
           <p className="text-text2">
             {options
               .filter((o) => o.by)
               .map((o) => `${o.by} suggests ${o.label}`)
-              .join(" · ")}
+              .join(' · ')}
           </p>
           {canWrite && (
             <div className="flex flex-wrap gap-2">
@@ -350,7 +416,9 @@ function AlsoProposed({
                   key={o.id}
                   disabled={busy}
                   title={ACCEPT_LOCKS}
-                  onClick={() => onDecide(o.id === p.id ? p : { ...p, id: o.id, also_proposed: [] }, true)}
+                  onClick={() =>
+                    onDecide(o.id === p.id ? p : { ...p, id: o.id, also_proposed: [] }, true)
+                  }
                 >
                   {o.label}
                 </Button>
@@ -364,25 +432,40 @@ function AlsoProposed({
 }
 
 /** A proposal whose every field already has its proposed value: the API's sentence says so. */
-export const noChange = (p: ProposalOut) => p.summary.startsWith("No change to ");
+export const noChange = (p: ProposalOut) => p.summary.startsWith('No change to ');
 
 /** The sentence, with the item it names as a button that opens its drawer. */
-function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | undefined; onOpen: (id: string) => void }) {
+function Sentence({
+  p,
+  graph,
+  onOpen,
+}: {
+  p: ProposalOut;
+  graph: GraphOut | undefined;
+  onOpen: (id: string) => void;
+}) {
   const op = (p.payload as Payload).op;
-  const title = p.entity_id && op !== "create" ? titleOf(graph, p.entity_id) : null;
+  const title = p.entity_id && op !== 'create' ? titleOf(graph, p.entity_id) : null;
   const at = title ? p.summary.indexOf(title) : -1;
   // A feature's button reads its Ground Truth code too (F-06 Setup error report), unless the sentence already names it.
   const coded = title ? codedTitleOf(graph, p.entity_id) : null;
-  const code = title && coded?.endsWith(` ${title}`) ? coded.slice(0, -title.length) : "";
+  const code = title && coded?.endsWith(` ${title}`) ? coded.slice(0, -title.length) : '';
   const named = code && !p.summary.slice(0, at).endsWith(code) ? coded : title;
   return (
-    <p data-testid="proposal-summary" className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
+    <p
+      data-testid="proposal-summary"
+      className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]"
+    >
       {at < 0 || !title ? (
         <CodeText text={p.summary} />
       ) : (
         <>
           <CodeText text={p.summary.slice(0, at)} />
-          <button type="button" onClick={() => onOpen(p.entity_id!)} className="inline text-left font-semibold hover:underline">
+          <button
+            type="button"
+            onClick={() => onOpen(p.entity_id!)}
+            className="inline text-left font-semibold hover:underline"
+          >
             {named}
           </button>
           <CodeText text={p.summary.slice(at + title.length)} />
@@ -427,22 +510,32 @@ function ProposalList({
   // A reason never shows a code without its name (codes-and-chips): a known code gets its
   // name, a source's own number the title of the document it comes from, when one is known.
   const codes = useCompanyCodes();
-  const reasonOf = (p: ProposalOut, reason: string) => nameCodes(reason, codes, p.run?.source_title);
+  const reasonOf = (p: ProposalOut, reason: string) =>
+    nameCodes(reason, codes, p.run?.source_title);
   const showSiblings = (ids: string[]) => {
     setHighlighted(ids);
-    cards.current.get(ids[0])?.scrollIntoView({ block: "center", behavior: "smooth" });
+    cards.current.get(ids[0])?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
   const zone = useCompanyZone();
-  const byRun = from !== "" && from !== "none";
+  const byRun = from !== '' && from !== 'none';
   const run = byRun ? runs.find((r) => r.id === from) : undefined;
   // One line for every open proposal that would undo what was just accepted (in the last
   // hour); one that would undo an older accept keeps its own chip only.
-  const undoing = proposals.filter((p) => (p.overlaps ?? []).some((o) => o.by === "proposal" && justNow(o.changed_at))).map((p) => p.id);
+  const undoing = proposals
+    .filter((p) => (p.overlaps ?? []).some((o) => o.by === 'proposal' && justNow(o.changed_at)))
+    .map((p) => p.id);
   return (
-    <Panel title="Proposals" count={proposals.length} tools={<FromSelect runs={runs} from={from} onFrom={onFrom} />}>
+    <Panel
+      title="Proposals"
+      count={proposals.length}
+      tools={<FromSelect runs={runs} from={from} onFrom={onFrom} />}
+    >
       {byRun && (
-        <p data-testid="run-filter-line" className="border-b border-line px-4 py-2 text-sm text-text2">
-          Proposals from {run ? runLabel(run, zone) : "this run"} ·{" "}
+        <p
+          data-testid="run-filter-line"
+          className="border-b border-line px-4 py-2 text-sm text-text2"
+        >
+          Proposals from {run ? runLabel(run, zone) : 'this run'} ·{' '}
           <Link href={`/runs/${from}`} className="font-semibold text-accent-ink hover:underline">
             Open run
           </Link>
@@ -454,13 +547,22 @@ function ProposalList({
         </div>
       )}
       {proposals.length === 0 ? (
-        <p className="px-4 py-8 text-center text-text2">{byRun ? "No open proposals from this run." : "No open proposals."}</p>
+        <p className="px-4 py-8 text-center text-text2">
+          {byRun ? 'No open proposals from this run.' : 'No open proposals.'}
+        </p>
       ) : (
         <>
           {undoing.length > 0 && (
             <p data-testid="undo-line" className="border-b border-line px-4 py-2 text-sm">
-              {undoing.length === 1 ? "1 proposal would undo what you just accepted" : `${undoing.length} proposals would undo what you just accepted`} ·{" "}
-              <button type="button" onClick={() => showSiblings(undoing)} className="font-semibold text-accent-ink hover:underline">
+              {undoing.length === 1
+                ? '1 proposal would undo what you just accepted'
+                : `${undoing.length} proposals would undo what you just accepted`}{' '}
+              ·{' '}
+              <button
+                type="button"
+                onClick={() => showSiblings(undoing)}
+                className="font-semibold text-accent-ink hover:underline"
+              >
                 Show
               </button>
             </p>
@@ -469,10 +571,16 @@ function ProposalList({
             {proposals.map((p) => {
               const payload = p.payload as Payload;
               const fields = flatFields(payload.fields).filter(([k]) => !HIDDEN_FIELDS.has(k));
-              const type = (p.entity_id && graph?.entities.find((e) => e.id === p.entity_id)?.type) || (payload.fields?.type as string | undefined);
+              const type =
+                (p.entity_id && graph?.entities.find((e) => e.id === p.entity_id)?.type) ||
+                (payload.fields?.type as string | undefined);
               const overlaps = p.overlaps ?? [];
               const warn = canWrite && warning === p.id && overlaps.length > 0;
-              const siblings = p.entity_id ? proposals.filter((o) => o.id !== p.id && o.entity_id === p.entity_id).map((o) => o.id) : [];
+              const siblings = p.entity_id
+                ? proposals
+                    .filter((o) => o.id !== p.id && o.entity_id === p.entity_id)
+                    .map((o) => o.id)
+                : [];
               const choice = (p.also_proposed ?? []).some((a) => !a.same);
               const lit = highlighted.includes(p.id);
               return (
@@ -484,10 +592,11 @@ function ProposalList({
                   }}
                   data-testid="proposal"
                   data-highlighted={lit || undefined}
-                  className={`flex items-start gap-4 border-t border-line px-4 py-3 transition-colors first:border-t-0 max-[600px]:flex-col max-[600px]:gap-2.5 max-[600px]:px-3 ${lit ? "bg-accent-soft" : ""}`}
+                  className={`flex items-start gap-4 border-t border-line px-4 py-3 transition-colors first:border-t-0 max-[600px]:flex-col max-[600px]:gap-2.5 max-[600px]:px-3 ${lit ? 'bg-accent-soft' : ''}`}
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:w-full">
-                    {(payload.fields?.attrs as Record<string, unknown> | undefined)?.proposed_blocker != null && (
+                    {(payload.fields?.attrs as Record<string, unknown> | undefined)
+                      ?.proposed_blocker != null && (
                       <div>
                         <Chip kind="warn">Suggested blocker</Chip>
                       </div>
@@ -495,31 +604,49 @@ function ProposalList({
                     <Sentence p={p} graph={graph} onOpen={onOpen} />
                     {overlaps.length > 0 && <OverlapChip overlaps={overlaps} />}
                     <Source p={p} meId={meId} />
-                    {(p.also_proposed ?? []).length > 0 && <AlsoProposed p={p} type={type} canWrite={canWrite} busy={busy} onDecide={onDecide} />}
+                    {(p.also_proposed ?? []).length > 0 && (
+                      <AlsoProposed
+                        p={p}
+                        type={type}
+                        canWrite={canWrite}
+                        busy={busy}
+                        onDecide={onDecide}
+                      />
+                    )}
                     {siblings.length > 0 && (
                       <button
                         type="button"
                         onClick={() => showSiblings(siblings)}
                         className="w-fit text-left text-[13px] font-semibold text-accent-ink hover:underline"
                       >
-                        {siblings.length === 1 ? "1 other open proposal on this entry" : `${siblings.length} other open proposals on this entry`}
+                        {siblings.length === 1
+                          ? '1 other open proposal on this entry'
+                          : `${siblings.length} other open proposals on this entry`}
                       </button>
                     )}
                     {payload.reason && (
-                      <p className="truncate text-sm text-text2" title={reasonOf(p, payload.reason)}>
+                      <p
+                        className="truncate text-sm text-text2"
+                        title={reasonOf(p, payload.reason)}
+                      >
                         {withCodes(reasonOf(p, payload.reason), codes)}
                       </p>
                     )}
                     <details className="text-sm">
-                      <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">Details</summary>
+                      <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">
+                        Details
+                      </summary>
                       <p className="mt-1 text-text2" data-testid="proposal-op">
                         {opLine(payload, type, fields.length)}
                       </p>
                       {fields.length > 0 && (
                         <dl className="mt-0.5 flex flex-col gap-0.5" aria-label="Proposed fields">
                           {fields.map(([k, v]) => (
-                            <div key={k} className="flex min-w-0 flex-wrap gap-1 [overflow-wrap:anywhere]">
-                              <dt className="text-text2">{fieldName(k, type)}</dt>{" "}
+                            <div
+                              key={k}
+                              className="flex min-w-0 flex-wrap gap-1 [overflow-wrap:anywhere]"
+                            >
+                              <dt className="text-text2">{fieldName(k, type)}</dt>{' '}
                               <dd className="font-semibold">→ {valueWords(k, v, graph)}</dd>
                             </div>
                           ))}
@@ -529,7 +656,11 @@ function ProposalList({
                     {warn && <OverlapWarning p={p} type={type} busy={busy} onDecide={onDecide} />}
                   </div>
                   {byRun && onMakeMeasurable && p.entity_id && vagueGoal(graph, p.entity_id) && (
-                    <Button className="flex-none" disabled={busy} onClick={() => onMakeMeasurable(p.entity_id!)}>
+                    <Button
+                      className="flex-none"
+                      disabled={busy}
+                      onClick={() => onMakeMeasurable(p.entity_id!)}
+                    >
                       Make measurable
                     </Button>
                   )}
@@ -546,7 +677,9 @@ function ProposalList({
                             <Button
                               disabled={busy}
                               title={ACCEPT_LOCKS}
-                              onClick={() => (overlaps.length > 0 ? setWarning(p.id) : onDecide(p, true))}
+                              onClick={() =>
+                                overlaps.length > 0 ? setWarning(p.id) : onDecide(p, true)
+                              }
                             >
                               Accept
                             </Button>

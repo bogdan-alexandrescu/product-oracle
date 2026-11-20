@@ -1,19 +1,20 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login, section, signOut } from "./helpers";
+import { login, section, signOut } from './helpers';
 
 // E1 Roadmap per PRD draft: every PRD version has Document and Roadmap tabs; Roadmap shows
 // the items-only roadmap Oracle derived from that draft. The mock seeds annual-billing
 // v1 (4 items, no problems) and v2 (4 items: 3 Now, 1 Next; Bulk import carries an
 // unverified date) in lib/api/mock/draft-roadmap.ts.
 
-const PRD = "/documents/annual-billing";
+const PRD = '/documents/annual-billing';
 
 // Next keeps recently visited routes mounted (hidden): only the visible page's elements.
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
-const rows = (page: Page) => visible(page, "roadmap-item-row");
-const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`).filter({ visible: true });
-const status = (page: Page) => visible(page, "draft-roadmap-status");
+const rows = (page: Page) => visible(page, 'roadmap-item-row');
+const row = (page: Page, key: string) =>
+  page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`).filter({ visible: true });
+const status = (page: Page) => visible(page, 'draft-roadmap-status');
 
 /**
  * Oracle's ticker: POST /v1/internal/tick. The mock API lives in the page, so the call goes
@@ -21,8 +22,11 @@ const status = (page: Page) => visible(page, "draft-roadmap-status");
  */
 async function tick(page: Page) {
   const code = await page.evaluate(async () => {
-    const fetchMock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> }).__poMockFetch!;
-    const res = await fetchMock(new Request(new URL("/v1/internal/tick", location.origin), { method: "POST" }));
+    const fetchMock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> })
+      .__poMockFetch!;
+    const res = await fetchMock(
+      new Request(new URL('/v1/internal/tick', location.origin), { method: 'POST' }),
+    );
     return res.status;
   });
   expect(code).toBe(200);
@@ -33,48 +37,54 @@ async function tick(page: Page) {
 // notice linking to its row and as a chip on the row (AC16); fails_when = the tab or count
 // is missing, the grouping is wrong, or the problem is not on the row or not linked;
 // no_claim = the real API's derivation (mocked by lib/api/mock/draft-roadmap.ts).
-test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next and the problem on its row", async ({ page }) => {
+test('a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next and the problem on its row', async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`${PRD}/v/2`);
-  await expect(visible(page, "version-tab-document")).toHaveText("Document");
-  await expect(visible(page, "version-tab-document")).toHaveAttribute("aria-current", "page");
-  const tab = visible(page, "version-tab-roadmap");
-  await expect(tab).toHaveText("Roadmap 4");
+  await expect(visible(page, 'version-tab-document')).toHaveText('Document');
+  await expect(visible(page, 'version-tab-document')).toHaveAttribute('aria-current', 'page');
+  const tab = visible(page, 'version-tab-roadmap');
+  await expect(tab).toHaveText('Roadmap 4');
   await tab.click();
   await expect(page).toHaveURL(new RegExp(`${PRD}/v/2/roadmap$`));
-  await expect(visible(page, "version-tab-roadmap")).toHaveAttribute("aria-current", "page");
+  await expect(visible(page, 'version-tab-roadmap')).toHaveAttribute('aria-current', 'page');
 
-  const pane = visible(page, "draft-roadmap");
-  await expect(pane).toContainText("Proposed by draft v2 · not an approved roadmap");
-  await expect(status(page)).toHaveAttribute("data-status", "ready");
-  await expect(status(page)).toContainText(/^4 items · 3 Now · 1 Next · built \w{3} \d{1,2}, \d{1,2}:\d\d [AP]M \S+ · 1 problem/);
+  const pane = visible(page, 'draft-roadmap');
+  await expect(pane).toContainText('Proposed by draft v2 · not an approved roadmap');
+  await expect(status(page)).toHaveAttribute('data-status', 'ready');
+  await expect(status(page)).toContainText(
+    /^4 items · 3 Now · 1 Next · built \w{3} \d{1,2}, \d{1,2}:\d\d [AP]M \S+ · 1 problem/,
+  );
   // E3b: the tab opens on what changed since draft v1; All shows every item.
-  await visible(page, "items-filter").getByRole("button", { name: /^All/ }).click();
+  await visible(page, 'items-filter').getByRole('button', { name: /^All/ }).click();
   await expect(rows(page)).toHaveCount(4);
-  const groups = pane.getByTestId("roadmap-group");
+  const groups = pane.getByTestId('roadmap-group');
   // Later holds only v1's One-tap wallet pay, dropped since (a struck row, not an item).
   await expect(groups).toHaveCount(3);
-  await expect(groups.nth(0)).toHaveAttribute("data-horizon", "now");
-  await expect(groups.nth(0)).toContainText("3");
-  await expect(groups.nth(1)).toHaveAttribute("data-horizon", "next");
-  await expect(groups.nth(1)).toContainText("1");
-  await expect(groups.nth(2)).toHaveAttribute("data-horizon", "later");
+  await expect(groups.nth(0)).toHaveAttribute('data-horizon', 'now');
+  await expect(groups.nth(0)).toContainText('3');
+  await expect(groups.nth(1)).toHaveAttribute('data-horizon', 'next');
+  await expect(groups.nth(1)).toContainText('1');
+  await expect(groups.nth(2)).toHaveAttribute('data-horizon', 'later');
   await expect(pane.locator('[data-testid="roadmap-group"][data-horizon="now"]')).toHaveCount(1);
 
-  const saved = row(page, "bulk-import");
-  await expect(saved).toContainText("Bulk import");
-  await expect(saved.getByTestId("draft-roadmap-chips")).toHaveText("Date unverified");
+  const saved = row(page, 'bulk-import');
+  await expect(saved).toContainText('Bulk import');
+  await expect(saved.getByTestId('draft-roadmap-chips')).toHaveText('Date unverified');
   // The other rows carry no problem chip.
-  await expect(pane.getByTestId("draft-roadmap-chips")).toHaveCount(1);
+  await expect(pane.getByTestId('draft-roadmap-chips')).toHaveCount(1);
   // No State column on draft items.
-  await expect(visible(page, "roadmap-items-table").locator("thead th", { hasText: /^State$/ })).toHaveCount(0);
+  await expect(
+    visible(page, 'roadmap-items-table').locator('thead th', { hasText: /^State$/ }),
+  ).toHaveCount(0);
 
-  const notice = visible(page, "draft-roadmap-problem");
+  const notice = visible(page, 'draft-roadmap-problem');
   await expect(notice).toHaveCount(1);
-  await expect(notice).toContainText("Date unverified");
-  await notice.getByTestId("draft-roadmap-problem-link").click();
-  await expect(saved).toHaveAttribute("aria-selected", "true");
-  await expect(visible(page, "roadmap-item-inspector")).toContainText("Bulk import");
+  await expect(notice).toContainText('Date unverified');
+  await notice.getByTestId('draft-roadmap-problem-link').click();
+  await expect(saved).toHaveAttribute('aria-selected', 'true');
+  await expect(visible(page, 'roadmap-item-inspector')).toContainText('Bulk import');
 });
 
 // Card derive-and-poll: protects = an approver's Derive again queues the version, keeps the
@@ -82,63 +92,84 @@ test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next
 // without a reload (AC17); fails_when = no Queued state, the items vanish while queued, or
 // the page needs a reload to see the result; no_claim = the ticker's timing in production
 // and what the agents derive.
-test("an approver's Derive again shows Queued, and after two ticks the page shows the items without a reload", async ({ page }) => {
-  await login(page, "approver@example.com");
+test("an approver's Derive again shows Queued, and after two ticks the page shows the items without a reload", async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
   await page.goto(`${PRD}/v/1/roadmap`);
-  await expect(status(page)).toHaveAttribute("data-status", "ready");
+  await expect(status(page)).toHaveAttribute('data-status', 'ready');
   await expect(rows(page)).toHaveCount(4);
-  await status(page).getByRole("button", { name: "Build again" }).click();
-  await expect(status(page)).toHaveAttribute("data-status", "queued");
-  await expect(status(page)).toHaveText("Building again: starts within a minute. The table shows the last build until the new one is ready.");
+  await status(page).getByRole('button', { name: 'Build again' }).click();
+  await expect(status(page)).toHaveAttribute('data-status', 'queued');
+  await expect(status(page)).toHaveText(
+    'Building again: starts within a minute. The table shows the last build until the new one is ready.',
+  );
   // No Derive while it is queued; the current items stay.
-  await expect(status(page).getByRole("button")).toHaveCount(0);
+  await expect(status(page).getByRole('button')).toHaveCount(0);
   await expect(rows(page)).toHaveCount(4);
 
   await tick(page);
-  await expect(status(page)).toHaveAttribute("data-status", "running", { timeout: 15_000 });
-  await expect(status(page)).toContainText("Building roadmap items from v1 · started");
-  await expect(status(page).getByRole("link", { name: "Open run" })).toHaveAttribute("href", /^\/runs\/[0-9a-f-]+$/);
+  await expect(status(page)).toHaveAttribute('data-status', 'running', { timeout: 15_000 });
+  await expect(status(page)).toContainText('Building roadmap items from v1 · started');
+  await expect(status(page).getByRole('link', { name: 'Open run' })).toHaveAttribute(
+    'href',
+    /^\/runs\/[0-9a-f-]+$/,
+  );
   await tick(page);
-  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+  await expect(status(page)).toHaveAttribute('data-status', 'ready', { timeout: 15_000 });
   await expect(status(page)).toContainText(/^4 items · 2 Now · 1 Next · 1 Later · built/);
   await expect(rows(page)).toHaveCount(4);
-  await expect(row(page, "wallet-pay")).toBeVisible();
+  await expect(row(page, 'wallet-pay')).toBeVisible();
 });
 
 // Card role-gates: protects = viewers see no Derive and no owner switch, approvers Derive
 // only, owners both, and the owner's switch is saved (AC18); fails_when = a viewer sees
 // Derive, an approver sees the switch, or unticking does not survive a reload; no_claim =
 // the API's own 403s (the mock answers the same way).
-test("Derive and the owner switch by role; unticking the switch persists across a reload", async ({ page }) => {
+test('Derive and the owner switch by role; unticking the switch persists across a reload', async ({
+  page,
+}) => {
   const URL = `${PRD}/v/2/roadmap`;
-  for (const who of ["viewer@example.com", "commenter@example.com"]) {
+  for (const who of ['viewer@example.com', 'commenter@example.com']) {
     await login(page, who);
     await page.goto(URL);
-    await expect(status(page)).toHaveAttribute("data-status", "ready");
-    await expect(visible(page, "draft-roadmap").getByRole("button", { name: /Build/ })).toHaveCount(0);
-    await expect(page.getByTestId("draft-roadmap-auto")).toHaveCount(0);
+    await expect(status(page)).toHaveAttribute('data-status', 'ready');
+    await expect(visible(page, 'draft-roadmap').getByRole('button', { name: /Build/ })).toHaveCount(
+      0,
+    );
+    await expect(page.getByTestId('draft-roadmap-auto')).toHaveCount(0);
     await signOut(page);
   }
 
-  await login(page, "approver@example.com");
+  await login(page, 'approver@example.com');
   await page.goto(URL);
-  await expect(status(page).getByRole("button", { name: "Build again" })).toBeVisible();
-  await expect(page.getByTestId("draft-roadmap-auto")).toHaveCount(0);
+  await expect(status(page).getByRole('button', { name: 'Build again' })).toBeVisible();
+  await expect(page.getByTestId('draft-roadmap-auto')).toHaveCount(0);
   await signOut(page);
 
   await login(page);
   await page.goto(URL);
-  await expect(status(page).getByRole("button", { name: "Build again" })).toBeVisible();
-  const auto = visible(page, "draft-roadmap-auto");
-  const box = auto.getByRole("checkbox", { name: "Refresh this roadmap whenever a new PRD version is drafted" });
+  await expect(status(page).getByRole('button', { name: 'Build again' })).toBeVisible();
+  const auto = visible(page, 'draft-roadmap-auto');
+  const box = auto.getByRole('checkbox', {
+    name: 'Refresh this roadmap whenever a new PRD version is drafted',
+  });
   await expect(box).toBeChecked();
-  await auto.getByRole("button", { name: "About refreshing with each new version" }).click();
-  await expect(page.getByText("About $5.50 per draft at standard depth. Runs in the background.").filter({ visible: true })).toBeVisible();
+  await auto.getByRole('button', { name: 'About refreshing with each new version' }).click();
+  await expect(
+    page
+      .getByText('About $5.50 per draft at standard depth. Runs in the background.')
+      .filter({ visible: true }),
+  ).toBeVisible();
   await box.uncheck();
   await expect(box).not.toBeChecked();
   await expect(box).toBeEnabled();
   await page.reload();
-  await expect(visible(page, "draft-roadmap-auto").getByRole("checkbox", { name: "Refresh this roadmap whenever a new PRD version is drafted" })).not.toBeChecked();
+  await expect(
+    visible(page, 'draft-roadmap-auto').getByRole('checkbox', {
+      name: 'Refresh this roadmap whenever a new PRD version is drafted',
+    }),
+  ).not.toBeChecked();
 });
 
 // Card open-section: protects = a row's "Open PRD section" opens the Document tab of the
@@ -147,42 +178,48 @@ test("Derive and the owner switch by role; unticking the switch persists across 
 test("Open PRD section goes to the Document tab with the item's section open", async ({ page }) => {
   await login(page);
   await page.goto(`${PRD}/v/2/roadmap`);
-  await row(page, "bulk-import").getByRole("link", { name: "Open PRD section" }).click();
+  await row(page, 'bulk-import').getByRole('link', { name: 'Open PRD section' }).click();
   await expect(page).toHaveURL(new RegExp(`${PRD}/v/2#s-5-3$`));
-  await expect(visible(page, "version-tab-document")).toHaveAttribute("aria-current", "page");
-  await expect(section(page, "s-5-3")).toBeVisible();
-  await expect(section(page, "s-5-3")).toContainText("5.3 Seat count");
+  await expect(visible(page, 'version-tab-document')).toHaveAttribute('aria-current', 'page');
+  await expect(section(page, 's-5-3')).toBeVisible();
+  await expect(section(page, 's-5-3')).toContainText('5.3 Seat count');
 });
 
 // Card draft-phone: protects = at 390 px the tab bar fits, rows stack, a tap opens the
 // inspector in a sheet and nothing scrolls sideways (AC20); fails_when = the page overflows
 // or no sheet opens; no_claim = other phone layouts of the version view.
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
-  test("at 390 px the tabs fit, rows stack and the inspector opens in a sheet", async ({ page }) => {
+  test('at 390 px the tabs fit, rows stack and the inspector opens in a sheet', async ({
+    page,
+  }) => {
     await login(page);
     await page.goto(`${PRD}/v/2/roadmap`);
-    const tabs = visible(page, "version-tabs");
+    const tabs = visible(page, 'version-tabs');
     await expect(tabs).toBeVisible();
     const box = (await tabs.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(390);
-    for (const t of ["version-tab-document", "version-tab-roadmap"]) {
+    for (const t of ['version-tab-document', 'version-tab-roadmap']) {
       const b = (await visible(page, t).boundingBox())!;
       expect(b.x + b.width).toBeLessThanOrEqual(390);
     }
-    const saved = row(page, "bulk-import");
+    const saved = row(page, 'bulk-import');
     await expect(saved).toBeVisible();
     // Stacked: the row is one card no wider than the screen.
     const r = (await saved.boundingBox())!;
     expect(r.x + r.width).toBeLessThanOrEqual(390);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
 
-    await expect(visible(page, "roadmap-item-inspector")).toHaveCount(0);
+    await expect(visible(page, 'roadmap-item-inspector')).toHaveCount(0);
     await saved.click();
-    const sheet = visible(page, "sheet-item");
+    const sheet = visible(page, 'sheet-item');
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByTestId("roadmap-item-inspector")).toContainText("Bulk import");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await expect(sheet.getByTestId('roadmap-item-inspector')).toContainText('Bulk import');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
   });
 });
 
@@ -192,124 +229,148 @@ test.describe("phone", () => {
 // higher total (AC21a); fails_when = the reused row costs anything, names no version, or
 // the advanced option does not change the estimate; no_claim = the run itself (the API's
 // test_draft_roadmaps_reuse.py) and the derivation's items (mocked).
-test("Build roadmap reuses the approved version's draft items, unless asked to derive them again", async ({ page }) => {
-  await login(page, "approver@example.com");
+test("Build roadmap reuses the approved version's draft items, unless asked to derive them again", async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
   // usage-alerts v1 is approved and has no draft items yet: derive them first.
-  await page.goto("/documents/usage-alerts/v/1/roadmap");
-  await expect(status(page)).toHaveAttribute("data-status", "none");
-  await status(page).getByRole("button", { name: "Build draft roadmap now" }).click();
-  await expect(status(page)).toHaveAttribute("data-status", "queued");
+  await page.goto('/documents/usage-alerts/v/1/roadmap');
+  await expect(status(page)).toHaveAttribute('data-status', 'none');
+  await status(page).getByRole('button', { name: 'Build draft roadmap now' }).click();
+  await expect(status(page)).toHaveAttribute('data-status', 'queued');
   await tick(page);
   await tick(page);
-  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+  await expect(status(page)).toHaveAttribute('data-status', 'ready', { timeout: 15_000 });
 
-  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Build roadmap" });
-  await expect(dialog).toContainText("Usage alerts PRD v1");
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  const items = dialog.getByTestId("estimate-row-roadmap_items");
+  await page.getByRole('button', { name: 'Build roadmap' }).filter({ visible: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Build roadmap' });
+  await expect(dialog).toContainText('Usage alerts PRD v1');
+  await dialog.getByRole('button', { name: 'Estimate' }).click();
+  const items = dialog.getByTestId('estimate-row-roadmap_items');
   await expect(items).toHaveText(/^Roadmap items · reused from v1\s*\$0\.00$/);
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$9.00");
+  await expect(dialog.getByTestId('estimate-total')).toHaveText('$9.00');
 
-  await dialog.getByText("Advanced options").click();
-  await dialog.getByRole("checkbox", { name: "Derive the items again" }).check();
+  await dialog.getByText('Advanced options').click();
+  await dialog.getByRole('checkbox', { name: 'Derive the items again' }).check();
   // The estimate was for the other choice: estimate again.
-  await expect(dialog.getByTestId("estimate")).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Estimate cost again" }).click();
+  await expect(dialog.getByTestId('estimate')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Estimate cost again' }).click();
   await expect(items).toHaveText(/^Roadmap items\s*\$5\.50$/);
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
+  await expect(dialog.getByTestId('estimate-total')).toHaveText('$14.50');
 });
 
 // Card reuse-items-advanced: protects = the Build roadmap dialog offers "Advanced options" /
 // "Derive the items again" only when the approved version has ready draft items to reuse;
 // fails_when = the option shows on a version with none (it would change nothing); no_claim =
 // the estimate rows (the test above).
-test("Build roadmap offers Derive the items again only when the version has ready draft items", async ({ page }) => {
-  await login(page, "approver@example.com");
-  await page.goto("/documents/usage-alerts/v/1/roadmap");
-  await expect(status(page)).toHaveAttribute("data-status", "none");
-  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
-  let dialog = page.getByRole("dialog", { name: "Build roadmap" });
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  await expect(dialog.getByTestId("estimate-row-roadmap_items")).toHaveText(/^Roadmap items\s*\$5\.50$/);
-  await expect(dialog.getByText("Advanced options")).toHaveCount(0);
-  await expect(dialog.getByRole("checkbox", { name: "Derive the items again" })).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Cancel" }).click();
+test('Build roadmap offers Derive the items again only when the version has ready draft items', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
+  await page.goto('/documents/usage-alerts/v/1/roadmap');
+  await expect(status(page)).toHaveAttribute('data-status', 'none');
+  await page.getByRole('button', { name: 'Build roadmap' }).filter({ visible: true }).click();
+  let dialog = page.getByRole('dialog', { name: 'Build roadmap' });
+  await dialog.getByRole('button', { name: 'Estimate' }).click();
+  await expect(dialog.getByTestId('estimate-row-roadmap_items')).toHaveText(
+    /^Roadmap items\s*\$5\.50$/,
+  );
+  await expect(dialog.getByText('Advanced options')).toHaveCount(0);
+  await expect(dialog.getByRole('checkbox', { name: 'Derive the items again' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
 
-  await status(page).getByRole("button", { name: "Build draft roadmap now" }).click();
+  await status(page).getByRole('button', { name: 'Build draft roadmap now' }).click();
   await tick(page);
   await tick(page);
-  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
-  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
-  dialog = page.getByRole("dialog", { name: "Build roadmap" });
-  await expect(dialog.getByText("Advanced options")).toBeVisible();
+  await expect(status(page)).toHaveAttribute('data-status', 'ready', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Build roadmap' }).filter({ visible: true }).click();
+  dialog = page.getByRole('dialog', { name: 'Build roadmap' });
+  await expect(dialog.getByText('Advanced options')).toBeVisible();
 });
 
 // Card reuse-items-stale: protects = as the API, Start uses what the estimate reused and
 // refuses (409) when the draft items changed since, so the person estimates again;
 // fails_when = Start re-decides the reuse itself and starts a run whose cost differs from
 // the estimate shown; no_claim = the run page after the start.
-test("Start after the draft items changed since the estimate asks to estimate again", async ({ page, context }) => {
-  await login(page, "approver@example.com");
-  await page.goto("/documents/usage-alerts/v/1/roadmap");
-  await status(page).getByRole("button", { name: "Build draft roadmap now" }).click();
+test('Start after the draft items changed since the estimate asks to estimate again', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'approver@example.com');
+  await page.goto('/documents/usage-alerts/v/1/roadmap');
+  await status(page).getByRole('button', { name: 'Build draft roadmap now' }).click();
   await tick(page);
   await tick(page);
-  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
-  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Build roadmap" });
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$9.00");
+  await expect(status(page)).toHaveAttribute('data-status', 'ready', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Build roadmap' }).filter({ visible: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Build roadmap' });
+  await dialog.getByRole('button', { name: 'Estimate' }).click();
+  await expect(dialog.getByTestId('estimate-total')).toHaveText('$9.00');
 
   // Meanwhile, in another tab, the same approver derives the items again.
   const other = await context.newPage();
-  await other.goto("/documents/usage-alerts/v/1/roadmap");
-  await status(other).getByRole("button", { name: "Build again" }).click();
-  await expect(status(other)).toHaveAttribute("data-status", "queued");
+  await other.goto('/documents/usage-alerts/v/1/roadmap');
+  await status(other).getByRole('button', { name: 'Build again' }).click();
+  await expect(status(other)).toHaveAttribute('data-status', 'queued');
   await other.close();
 
-  await dialog.getByRole("button", { name: "Start run" }).click();
-  await expect(dialog).toContainText("changed since the estimate");
+  await dialog.getByRole('button', { name: 'Start run' }).click();
+  await expect(dialog).toContainText('changed since the estimate');
   await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1\/roadmap$/);
-  await dialog.getByRole("button", { name: "Estimate cost again" }).click();
-  await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
+  await dialog.getByRole('button', { name: 'Estimate cost again' }).click();
+  await expect(dialog.getByTestId('estimate-total')).toHaveText('$14.50');
 });
 
 // Card retry-reopens: protects = Retry on a failed items run re-opens its draft roadmap
 // (review r1 blocker); fails_when = the Roadmap tab still shows the failure, or offers Build
 // again, while the retried run runs; no_claim = the real API's store (pytest).
-test("Retry on a failed items run shows the Roadmap tab building again, with no Build again meanwhile", async ({ page }) => {
+test('Retry on a failed items run shows the Roadmap tab building again, with no Build again meanwhile', async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`${PRD}/v/1/roadmap`);
-  await status(page).getByRole("button", { name: "Build again" }).click();
+  await status(page).getByRole('button', { name: 'Build again' }).click();
   await tick(page);
-  await expect(status(page)).toHaveAttribute("data-status", "running", { timeout: 15_000 });
-  const href = (await status(page).getByRole("link", { name: "Open run" }).getAttribute("href"))!;
-  const runId = href.split("/").pop()!;
+  await expect(status(page)).toHaveAttribute('data-status', 'running', { timeout: 15_000 });
+  const href = (await status(page).getByRole('link', { name: 'Open run' }).getAttribute('href'))!;
+  const runId = href.split('/').pop()!;
 
   // Its writer's session ran out of room: the run and its draft roadmap failed.
-  await page.goto("/icon.svg");
+  await page.goto('/icon.svg');
   await page.evaluate((id) => {
-    const key = "po-mock-db-v2";
+    const key = 'po-mock-db-v2';
     const db = JSON.parse(localStorage.getItem(key)!);
     const run = db.runs.runs.find((r: { id: string }) => r.id === id);
-    const at = "2026-10-17T09:00:00Z";
-    const cause = "The writer stopped: its session ran out of room.";
-    Object.assign(run.segments[0], { status: "failed", error: cause, finished_at: at, cost_usd: 0.1 });
-    Object.assign(run, { status: "failed", error: `Roadmap items: ${cause}`, finished_at: at, spent_usd: 0.1 });
+    const at = '2026-10-17T09:00:00Z';
+    const cause = 'The writer stopped: its session ran out of room.';
+    Object.assign(run.segments[0], {
+      status: 'failed',
+      error: cause,
+      finished_at: at,
+      cost_usd: 0.1,
+    });
+    Object.assign(run, {
+      status: 'failed',
+      error: `Roadmap items: ${cause}`,
+      finished_at: at,
+      spent_usd: 0.1,
+    });
     const draft = db.draft_roadmaps.rows.find((r: { run_id: string }) => r.run_id === id);
-    Object.assign(draft, { status: "failed", error: cause });
+    Object.assign(draft, { status: 'failed', error: cause });
     localStorage.setItem(key, JSON.stringify(db));
   }, runId);
   await page.goto(`${PRD}/v/1/roadmap`);
-  await expect(status(page)).toHaveAttribute("data-status", "failed");
+  await expect(status(page)).toHaveAttribute('data-status', 'failed');
 
   await page.goto(href);
-  await page.getByTestId("segment-roadmap_items").getByRole("button", { name: "Retry", exact: true }).click();
-  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Running");
+  await page
+    .getByTestId('segment-roadmap_items')
+    .getByRole('button', { name: 'Retry', exact: true })
+    .click();
+  await expect(page.getByTestId('run-status').filter({ visible: true })).toHaveText('Running');
 
   await page.goto(`${PRD}/v/1/roadmap`);
-  await expect(status(page)).toHaveAttribute("data-status", "running");
-  await expect(status(page)).toContainText("Building roadmap items from v1");
-  await expect(status(page).getByRole("button", { name: "Build again" })).toHaveCount(0);
+  await expect(status(page)).toHaveAttribute('data-status', 'running');
+  await expect(status(page)).toContainText('Building roadmap items from v1');
+  await expect(status(page).getByRole('button', { name: 'Build again' })).toHaveCount(0);
 });

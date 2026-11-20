@@ -1,15 +1,22 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter } from 'next/navigation';
+import { useState, type FormEvent } from 'react';
 
-import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
-import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { scopeLabel } from "@/components/account/scopes";
-import { SlackPingsPanel } from "@/components/account/SlackPingsPanel";
-import { Expiry, expiryText, Scopes, TokenStatus, tokenState, when } from "@/components/ApiTokensSettings";
-import { ROLE_LABEL } from "@/components/MembersSettings";
-import { Field, INPUT } from "@/app/settings/_components/fields";
+import { ActedCell, SETTLING, useActed } from '@/components/account/acted';
+import { ConfirmDialog } from '@/components/account/ConfirmDialog';
+import { scopeLabel } from '@/components/account/scopes';
+import { SlackPingsPanel } from '@/components/account/SlackPingsPanel';
+import {
+  Expiry,
+  expiryText,
+  Scopes,
+  TokenStatus,
+  tokenState,
+  when,
+} from '@/components/ApiTokensSettings';
+import { ROLE_LABEL } from '@/components/MembersSettings';
+import { Field, INPUT } from '@/app/settings/_components/fields';
 import {
   Button,
   Chip,
@@ -25,34 +32,43 @@ import {
   Panel,
   SegmentedControl,
   Split,
-} from "@/components/ds";
-import { api, ApiError, unwrap, type ApiToken, type McpClient, type MyAccount as Account } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import {
+  api,
+  ApiError,
+  unwrap,
+  type ApiToken,
+  type McpClient,
+  type MyAccount as Account,
+} from '@/lib/api/client';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
 /** "Password" or "Google". */
-const methodLabel = (m: Account["sign_in_methods"][number]) => (m === "google" ? "Google" : "Password");
-type Scope = "oracle:read" | "oracle:write";
+const methodLabel = (m: Account['sign_in_methods'][number]) =>
+  m === 'google' ? 'Google' : 'Password';
+type Scope = 'oracle:read' | 'oracle:write';
 /** A new personal token's lifetime: the API takes 30, 90 or 365 days, or null (never). */
-type Lifetime = "30" | "90" | "365" | "never";
+type Lifetime = '30' | '90' | '365' | 'never';
 const LIFETIMES: { value: Lifetime; label: string }[] = [
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "365", label: "1 year" },
-  { value: "never", label: "Never" },
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+  { value: '365', label: '1 year' },
+  { value: 'never', label: 'Never' },
 ];
-const lifetimeDays = (l: Lifetime) => (l === "never" ? null : (Number(l) as 30 | 90 | 365));
+const lifetimeDays = (l: Lifetime) => (l === 'never' ? null : (Number(l) as 30 | 90 | 365));
 /** What a password change and Sign out everywhere also revoke (AC1). */
-const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)";
+const REVOKES_TOO =
+  'your personal API tokens, every MCP client you authorized and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)';
 
 /**
  * A panel head's count that agrees with its table: "1 active · 2 total" when some rows
  * are expired or revoked, just the number when every row is active (qa-settings-30).
  */
-function ActiveOfTotal({ rows }: { rows?: Pick<ApiToken, "revoked_at" | "expires_at">[] }) {
+function ActiveOfTotal({ rows }: { rows?: Pick<ApiToken, 'revoked_at' | 'expires_at'>[] }) {
   if (!rows) return null;
-  const active = rows.filter((r) => tokenState(r) === "active").length;
+  const active = rows.filter((r) => tokenState(r) === 'active').length;
   if (active === rows.length) return <>{active}</>;
   return (
     <span className="text-[15px] font-semibold whitespace-nowrap">
@@ -65,25 +81,25 @@ function ActiveOfTotal({ rows }: { rows?: Pick<ApiToken, "revoked_at" | "expires
 export function MyAccount() {
   const router = useRouter();
   const { clear } = useMe();
-  const accountQ = useQuery("my-account", () => unwrap(api.GET("/v1/me/account")));
-  const tokensQ = useQuery("my-tokens", () => unwrap(api.GET("/v1/me/tokens")));
-  const clientsQ = useQuery("my-oauth-clients", () => unwrap(api.GET("/v1/me/oauth-clients")));
+  const accountQ = useQuery('my-account', () => unwrap(api.GET('/v1/me/account')));
+  const tokensQ = useQuery('my-tokens', () => unwrap(api.GET('/v1/me/tokens')));
+  const clientsQ = useQuery('my-oauth-clients', () => unwrap(api.GET('/v1/me/oauth-clients')));
   const [signingOut, setSigningOut] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const account = accountQ.data;
-  const liveClients = clientsQ.data?.filter((c) => tokenState(c) === "active").length;
-  const liveTokens = tokensQ.data?.filter((t) => tokenState(t) === "active").length;
+  const liveClients = clientsQ.data?.filter((c) => tokenState(c) === 'active').length;
+  const liveTokens = tokensQ.data?.filter((t) => tokenState(t) === 'active').length;
   const refreshCredentials = () => Promise.all([tokensQ.reload(), clientsQ.reload()]);
 
   async function signOutEverywhere() {
     setSigningOut(true);
     setSignOutError(null);
     try {
-      await unwrap(api.POST("/v1/me/sign-out-everywhere"));
+      await unwrap(api.POST('/v1/me/sign-out-everywhere'));
       clear();
-      router.push("/login");
+      router.push('/login');
     } catch (e) {
       setSignOutError(errorMessage(e));
       setSigningOut(false);
@@ -93,7 +109,7 @@ export function MyAccount() {
   const inspector = (
     <Inspector
       eyebrow="My account"
-      title={account?.email ?? "…"}
+      title={account?.email ?? '…'}
       label="My account"
       chips={
         account ? (
@@ -108,8 +124,8 @@ export function MyAccount() {
         ) : undefined
       }
       stats={[
-        { label: "Personal tokens", value: liveTokens ?? "—", testId: "stat-tokens" },
-        { label: "MCP clients", value: liveClients ?? "—", testId: "stat-clients" },
+        { label: 'Personal tokens', value: liveTokens ?? '—', testId: 'stat-tokens' },
+        { label: 'MCP clients', value: liveClients ?? '—', testId: 'stat-clients' },
       ]}
     >
       {account && <AccountDetails account={account} onSaved={(a) => accountQ.setData(() => a)} />}
@@ -122,12 +138,18 @@ export function MyAccount() {
         title="My account"
         info={
           <InfoTip label="your account" align="start" side="bottom">
-            How you sign in, your password, and the credentials that act as you: personal API tokens and the MCP clients
-            you authorized. Changing your password or signing out everywhere revokes them all.
+            How you sign in, your password, and the credentials that act as you: personal API tokens
+            and the MCP clients you authorized. Changing your password or signing out everywhere
+            revokes them all.
           </InfoTip>
         }
         action={
-          <Button variant="danger" icon="signout" onClick={() => setSignOutOpen(true)} data-testid="sign-out-everywhere">
+          <Button
+            variant="danger"
+            icon="signout"
+            onClick={() => setSignOutOpen(true)}
+            data-testid="sign-out-everywhere"
+          >
             Sign out everywhere
           </Button>
         }
@@ -151,27 +173,32 @@ export function MyAccount() {
         onClose={() => setSignOutOpen(false)}
         onConfirm={signOutEverywhere}
         consequences={[
-          { icon: "signout", text: "Every browser signed in as you is signed out, this one too." },
+          { icon: 'signout', text: 'Every browser signed in as you is signed out, this one too.' },
           {
-            icon: "lock",
+            icon: 'lock',
             text:
               liveTokens === 1
-                ? "Your personal API token is revoked."
+                ? 'Your personal API token is revoked.'
                 : `Your ${liveTokens ?? 0} personal API tokens are revoked.`,
           },
           {
-            icon: "lock",
+            icon: 'lock',
             text:
               liveClients === 1
-                ? "Your MCP client loses its access."
+                ? 'Your MCP client loses its access.'
                 : `Your ${liveClients ?? 0} MCP clients lose their access.`,
           },
           {
-            icon: "runs",
-            text: "Runs you started that are still going lose their current tokens; they keep running, and their next segment gets a new token.",
+            icon: 'runs',
+            text: 'Runs you started that are still going lose their current tokens; they keep running, and their next segment gets a new token.',
           },
-          ...(account?.sign_in_methods.includes("google")
-            ? [{ icon: "user" as const, text: "Google sign-in can sign a browser in again on its next visit." }]
+          ...(account?.sign_in_methods.includes('google')
+            ? [
+                {
+                  icon: 'user' as const,
+                  text: 'Google sign-in can sign a browser in again on its next visit.',
+                },
+              ]
             : []),
         ]}
       />
@@ -180,7 +207,8 @@ export function MyAccount() {
 }
 
 /** What a read-only credential is told (AC1, the API's refusal): it changes nothing. */
-const READ_ONLY = "This credential can only read (oracle:read): it cannot add, change or delete anything.";
+const READ_ONLY =
+  'This credential can only read (oracle:read): it cannot add, change or delete anything.';
 
 /**
  * A5: your name, shown to teammates instead of your email (PATCH /v1/me/account). Through a
@@ -188,7 +216,7 @@ const READ_ONLY = "This credential can only read (oracle:read): it cannot add, c
  */
 function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account) => void }) {
   const locked = !!account.read_only;
-  const [name, setName] = useState(account.name ?? "");
+  const [name, setName] = useState(account.name ?? '');
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,7 +225,7 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
     setPending(true);
     setError(null);
     try {
-      onSaved(await unwrap(api.PATCH("/v1/me/account", { body: { name: name.trim() || null } })));
+      onSaved(await unwrap(api.PATCH('/v1/me/account', { body: { name: name.trim() || null } })));
       setSaved(true);
     } catch (err) {
       setError(errorMessage(err));
@@ -212,7 +240,7 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
           value={name}
           maxLength={80}
           disabled={locked}
-          aria-describedby={locked ? "name-read-only" : undefined}
+          aria-describedby={locked ? 'name-read-only' : undefined}
           onChange={(e) => {
             setName(e.target.value);
             setSaved(false);
@@ -220,8 +248,8 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
           className={INPUT}
         />
       </Field>
-      <Button type="submit" disabled={locked || pending || name.trim() === (account.name ?? "")}>
-        {pending ? "Saving…" : saved ? "Saved" : "Save"}
+      <Button type="submit" disabled={locked || pending || name.trim() === (account.name ?? '')}>
+        {pending ? 'Saving…' : saved ? 'Saved' : 'Save'}
       </Button>
       {/* #1590: where the name shows sits behind the (i). */}
       <span className="mb-2 inline-flex">
@@ -230,7 +258,12 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
         </InfoTip>
       </span>
       {locked && (
-        <span id="name-read-only" data-testid="name-read-only" role="note" className="basis-full text-[13px] font-medium text-warn">
+        <span
+          id="name-read-only"
+          data-testid="name-read-only"
+          role="note"
+          className="basis-full text-[13px] font-medium text-warn"
+        >
           {READ_ONLY}
         </span>
       )}
@@ -248,23 +281,29 @@ function AccountDetails({ account, onSaved }: { account: Account; onSaved: (a: A
     <InspectorSection label="Details">
       <NameForm account={account} onSaved={onSaved} />
       <InspectorRow value={ROLE_LABEL[account.role]}>Role</InspectorRow>
-      <InspectorRow value={account.sign_in_methods.map(methodLabel).join(" and ") || "None"}>Signs in with</InspectorRow>
-      <InspectorRow value={account.last_sign_in_at ? formatDateTime(account.last_sign_in_at) : "Not known"}>Last sign-in</InspectorRow>
+      <InspectorRow value={account.sign_in_methods.map(methodLabel).join(' and ') || 'None'}>
+        Signs in with
+      </InspectorRow>
+      <InspectorRow
+        value={account.last_sign_in_at ? formatDateTime(account.last_sign_in_at) : 'Not known'}
+      >
+        Last sign-in
+      </InspectorRow>
       <InspectorRow value={formatDate(account.created_at)}>Member since</InspectorRow>
     </InspectorSection>
   );
 }
 
 function PasswordPanel({ account, onChanged }: { account: Account; onChanged: () => void }) {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [again, setAgain] = useState("");
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [again, setAgain] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const min = account.password_min_length ?? 12;
 
-  if (!account.sign_in_methods.includes("password")) {
+  if (!account.sign_in_methods.includes('password')) {
     return (
       <Panel title="Password" testId="password-panel">
         <div className="p-4">
@@ -283,14 +322,20 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
     setError(null);
     setDone(false);
     try {
-      await unwrap(api.POST("/v1/me/password", { body: { current_password: current, new_password: next } }));
+      await unwrap(
+        api.POST('/v1/me/password', { body: { current_password: current, new_password: next } }),
+      );
       setDone(true);
-      setCurrent("");
-      setNext("");
-      setAgain("");
+      setCurrent('');
+      setNext('');
+      setAgain('');
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 429 ? `Too many attempts. ${err.message}` : errorMessage(err));
+      setError(
+        err instanceof ApiError && err.status === 429
+          ? `Too many attempts. ${err.message}`
+          : errorMessage(err),
+      );
     } finally {
       setPending(false);
     }
@@ -299,11 +344,30 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
   return (
     <Panel title="Password" testId="password-panel">
       {/* qa-settings-38: each field's problem under it, so the three line up at the top. */}
-      <form onSubmit={submit} aria-label="Change password" className="grid grid-cols-3 items-start gap-3 p-4 max-[900px]:grid-cols-1">
+      <form
+        onSubmit={submit}
+        aria-label="Change password"
+        className="grid grid-cols-3 items-start gap-3 p-4 max-[900px]:grid-cols-1"
+      >
         {/* qa-shell-29: whose password this is, for a password manager to save it under. */}
-        <input type="email" name="username" autoComplete="username" value={account.email} readOnly hidden data-testid="password-username" />
+        <input
+          type="email"
+          name="username"
+          autoComplete="username"
+          value={account.email}
+          readOnly
+          hidden
+          data-testid="password-username"
+        />
         <Field label="Current password">
-          <input type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} className={INPUT} />
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            className={INPUT}
+          />
         </Field>
         {/* The message sits outside the label, so the field keeps its name. */}
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -315,7 +379,7 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
               minLength={min}
               value={next}
               aria-invalid={short || undefined}
-              aria-describedby={short ? "password-short" : undefined}
+              aria-describedby={short ? 'password-short' : undefined}
               onChange={(e) => setNext(e.target.value)}
               className={INPUT}
             />
@@ -334,24 +398,34 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
               required
               value={again}
               aria-invalid={mismatch || undefined}
-              aria-describedby={mismatch ? "password-mismatch" : undefined}
+              aria-describedby={mismatch ? 'password-mismatch' : undefined}
               onChange={(e) => setAgain(e.target.value)}
               className={INPUT}
             />
           </Field>
           {mismatch && (
-            <span id="password-mismatch" data-testid="password-mismatch" className="text-sm text-warn">
+            <span
+              id="password-mismatch"
+              data-testid="password-mismatch"
+              className="text-sm text-warn"
+            >
               The two new passwords differ
             </span>
           )}
         </div>
         <div className="col-span-full flex flex-wrap items-center gap-3">
-          <Button type="submit" variant="solid" disabled={pending || !current || !next || short || mismatch || again !== next}>
-            {pending ? "Changing…" : "Change password"}
+          <Button
+            type="submit"
+            variant="solid"
+            disabled={pending || !current || !next || short || mismatch || again !== next}
+          >
+            {pending ? 'Changing…' : 'Change password'}
           </Button>
           {/* Pass F, F-51: what a change also does is behind an (i), not a paragraph on the page. */}
           <InfoTip label="changing your password" align="start">
-            <span data-testid="password-revokes">Changing it signs out every other session and revokes {REVOKES_TOO}.</span>
+            <span data-testid="password-revokes">
+              Changing it signs out every other session and revokes {REVOKES_TOO}.
+            </span>
           </InfoTip>
         </div>
         {error && (
@@ -362,8 +436,8 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
         {done && (
           <div className="col-span-full">
             <Notice tone="pass">
-              Password changed. Every other session was signed out; your personal API tokens, MCP clients and the tokens of
-              your runs still going were revoked.
+              Password changed. Every other session was signed out; your personal API tokens, MCP
+              clients and the tokens of your runs still going were revoked.
             </Notice>
           </div>
         )}
@@ -373,12 +447,16 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
 }
 
 function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>> }) {
-  const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<Scope[]>(["oracle:read"]);
-  const [lifetime, setLifetime] = useState<Lifetime>("90");
+  const [name, setName] = useState('');
+  const [scopes, setScopes] = useState<Scope[]>(['oracle:read']);
+  const [lifetime, setLifetime] = useState<Lifetime>('90');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ name: string; secret: string; expiresAt?: string | null } | null>(null);
+  const [created, setCreated] = useState<{
+    name: string;
+    secret: string;
+    expiresAt?: string | null;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState<ApiToken | null>(null);
   const [revoking, setRevoking] = useState(false);
@@ -386,7 +464,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
   const acts = useActed();
   // qa4-settings-38: a role that can't comment writes almost nothing, so say what Write allows it.
   const { can, capsReady } = useMe();
-  const writeIsNarrow = capsReady && !can("create_comment");
+  const writeIsNarrow = capsReady && !can('create_comment');
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -394,11 +472,15 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
     setPending(true);
     setError(null);
     try {
-      const out = await unwrap(api.POST("/v1/me/tokens", { body: { name: name.trim(), scopes, expires_in_days: lifetimeDays(lifetime) } }));
+      const out = await unwrap(
+        api.POST('/v1/me/tokens', {
+          body: { name: name.trim(), scopes, expires_in_days: lifetimeDays(lifetime) },
+        }),
+      );
       query.setData((prev) => [...(prev ?? []), out.token]);
       setCreated({ name: out.token.name, secret: out.secret, expiresAt: out.token.expires_at });
       setCopied(false);
-      setName("");
+      setName('');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -410,11 +492,15 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
     setRevoking(true);
     setConfirmError(null);
     try {
-      await unwrap(api.DELETE("/v1/me/tokens/{token_id}", { params: { path: { token_id: t.id } } }));
+      await unwrap(
+        api.DELETE('/v1/me/tokens/{token_id}', { params: { path: { token_id: t.id } } }),
+      );
       const at = new Date().toISOString();
-      query.setData((prev) => prev?.map((x) => (x.id === t.id ? { ...x, revoked_at: x.revoked_at ?? at } : x)));
+      query.setData((prev) =>
+        prev?.map((x) => (x.id === t.id ? { ...x, revoked_at: x.revoked_at ?? at } : x)),
+      );
       setConfirming(null);
-      acts.mark({ key: t.id, outcome: "Revoked" });
+      acts.mark({ key: t.id, outcome: 'Revoked' });
     } catch (e) {
       setConfirmError(errorMessage(e));
     } finally {
@@ -422,34 +508,53 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
     }
   }
 
-  const toggle = (s: Scope) => setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s].sort() as Scope[]));
+  const toggle = (s: Scope) =>
+    setScopes((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : ([...prev, s].sort() as Scope[]),
+    );
   const rows = query.data ? [...query.data].reverse() : undefined;
   const columns: Column<ApiToken>[] = [
     {
-      key: "name",
-      header: "Name",
+      key: 'name',
+      header: 'Name',
       cell: (t) => (
-        <span className="truncate font-medium" title={`${t.name} · created ${formatDate(t.created_at)}`}>
+        <span
+          className="truncate font-medium"
+          title={`${t.name} · created ${formatDate(t.created_at)}`}
+        >
           {t.name}
         </span>
       ),
     },
-    { key: "scopes", header: "What it can do", width: "128px", hideOnPhone: true, wrap: true, cell: (t) => <Scopes scopes={t.scopes} /> },
-    { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
-    // Created is in the name's title: the expiry matters more on one line.
-    { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
-    { key: "status", header: "Status", width: "128px", cell: (t) => <TokenStatus t={t} /> },
     {
-      key: "action",
+      key: 'scopes',
+      header: 'What it can do',
+      width: '128px',
+      hideOnPhone: true,
+      wrap: true,
+      cell: (t) => <Scopes scopes={t.scopes} />,
+    },
+    {
+      key: 'used',
+      header: 'Last used',
+      width: '124px',
+      phoneLabel: 'Used ',
+      cell: (t) => when(t.last_used_at),
+    },
+    // Created is in the name's title: the expiry matters more on one line.
+    { key: 'expires', header: 'Expiry', width: '164px', cell: (t) => <Expiry t={t} /> },
+    { key: 'status', header: 'Status', width: '128px', cell: (t) => <TokenStatus t={t} /> },
+    {
+      key: 'action',
       header: <span className="sr-only">Actions</span>,
-      width: "96px",
-      align: "right",
-      phone: "action",
+      width: '96px',
+      align: 'right',
+      phone: 'action',
       wrap: true,
       cell: (t) =>
         acts.acted?.key === t.id ? (
           <ActedCell acted={acts.acted} onUndo={acts.undo} />
-        ) : tokenState(t) === "active" ? (
+        ) : tokenState(t) === 'active' ? (
           <Button
             aria-label={`Revoke ${t.name}`}
             onClick={() => {
@@ -470,14 +575,25 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
       testId="tokens-panel"
       tools={
         <InfoTip label="personal tokens" align="end">
-          A personal token acts as you from scripts and agents. Read only acts as a viewer; with write it has your role.
-          The secret is shown once, when you create it. It expires after the time you choose; an expired token is refused.
+          A personal token acts as you from scripts and agents. Read only acts as a viewer; with
+          write it has your role. The secret is shown once, when you create it. It expires after the
+          time you choose; an expired token is refused.
         </InfoTip>
       }
     >
-      <form onSubmit={create} aria-label="Create a token" className="flex flex-wrap items-end gap-3 border-b border-line p-4">
+      <form
+        onSubmit={create}
+        aria-label="Create a token"
+        className="flex flex-wrap items-end gap-3 border-b border-line p-4"
+      >
         <Field label="Name" className="w-64 max-[600px]:w-full">
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="e.g. My laptop" className={INPUT} />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={100}
+            placeholder="e.g. My laptop"
+            className={INPUT}
+          />
         </Field>
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 inline-flex items-center gap-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
@@ -486,27 +602,44 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
               // Pass F, F-51: why Write is narrow for this role is behind an (i).
               <InfoTip label="what Write allows">
                 <span data-testid="write-scope-note">
-                  Your role can&apos;t comment on or change documents, so Write only lets a token post in discussions and change your own
-                  settings.
+                  Your role can&apos;t comment on or change documents, so Write only lets a token
+                  post in discussions and change your own settings.
                 </span>
               </InfoTip>
             )}
           </legend>
           <div className="flex h-9 items-center gap-4">
-            {(["oracle:read", "oracle:write"] as const).map((s) => (
+            {(['oracle:read', 'oracle:write'] as const).map((s) => (
               <label key={s} className="inline-flex items-center gap-2 text-[15px]">
-                <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="size-4 accent-[var(--accent)]" />
+                <input
+                  type="checkbox"
+                  checked={scopes.includes(s)}
+                  onChange={() => toggle(s)}
+                  className="size-4 accent-[var(--accent)]"
+                />
                 <span>{scopeLabel(s)}</span>
               </label>
             ))}
           </div>
         </fieldset>
         <fieldset className="flex min-w-0 flex-col">
-          <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Expires after</legend>
-          <SegmentedControl label="Expires after" items={LIFETIMES} value={lifetime} onChange={setLifetime} />
+          <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+            Expires after
+          </legend>
+          <SegmentedControl
+            label="Expires after"
+            items={LIFETIMES}
+            value={lifetime}
+            onChange={setLifetime}
+          />
         </fieldset>
-        <Button type="submit" variant="solid" icon="plus" disabled={pending || !name.trim() || scopes.length === 0}>
-          {pending ? "Creating…" : "Create token"}
+        <Button
+          type="submit"
+          variant="solid"
+          icon="plus"
+          disabled={pending || !name.trim() || scopes.length === 0}
+        >
+          {pending ? 'Creating…' : 'Create token'}
         </Button>
         {error && (
           <div className="basis-full">
@@ -515,7 +648,12 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
         )}
       </form>
       {created && (
-        <div role="region" aria-label="New token" data-testid="new-token" className="flex flex-col gap-2 border-b border-line bg-accent-soft p-4">
+        <div
+          role="region"
+          aria-label="New token"
+          data-testid="new-token"
+          className="flex flex-col gap-2 border-b border-line bg-accent-soft p-4"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-accent-ink">{created.name}</span>
             <Chip kind="warn">Shown once</Chip>
@@ -524,7 +662,10 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <code data-testid="new-token-secret" className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 font-mono text-[13px] break-all text-text">
+            <code
+              data-testid="new-token-secret"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 font-mono text-[13px] break-all text-text"
+            >
               {created.secret}
             </code>
             <Button
@@ -534,7 +675,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
                 setCopied(true);
               }}
             >
-              {copied ? "Copied" : "Copy"}
+              {copied ? 'Copied' : 'Copy'}
             </Button>
             <Button variant="ghost" onClick={() => setCreated(null)}>
               Done
@@ -554,7 +695,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
             rows={rows}
             loading={!rows}
             rowKey={(t) => t.id}
-            rowProps={(t) => ({ "data-testid": "my-token-row", ...acts.rowAttrs(t.id) })}
+            rowProps={(t) => ({ 'data-testid': 'my-token-row', ...acts.rowAttrs(t.id) })}
             empty="No personal tokens"
           />
         </div>
@@ -571,9 +712,12 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
         onClose={() => setConfirming(null)}
         onConfirm={() => confirming && revoke(confirming)}
         consequences={[
-          { icon: "lock", text: "Every script or agent using it is refused from now on." },
-          { icon: "check", text: "Approvals given through it stop counting; yours given in person stand." },
-          { icon: "doc", text: "It stays listed as revoked; it can't be turned back on." },
+          { icon: 'lock', text: 'Every script or agent using it is refused from now on.' },
+          {
+            icon: 'check',
+            text: 'Approvals given through it stop counting; yours given in person stand.',
+          },
+          { icon: 'doc', text: "It stays listed as revoked; it can't be turned back on." },
         ]}
       />
     </Panel>
@@ -590,11 +734,15 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
     setRevoking(true);
     setConfirmError(null);
     try {
-      await unwrap(api.DELETE("/v1/me/oauth-clients/{grant_id}", { params: { path: { grant_id: c.id } } }));
+      await unwrap(
+        api.DELETE('/v1/me/oauth-clients/{grant_id}', { params: { path: { grant_id: c.id } } }),
+      );
       const at = new Date().toISOString();
-      query.setData((prev) => prev?.map((x) => (x.id === c.id ? { ...x, revoked_at: x.revoked_at ?? at } : x)));
+      query.setData((prev) =>
+        prev?.map((x) => (x.id === c.id ? { ...x, revoked_at: x.revoked_at ?? at } : x)),
+      );
       setConfirming(null);
-      acts.mark({ key: c.id, outcome: "Revoked" });
+      acts.mark({ key: c.id, outcome: 'Revoked' });
     } catch (e) {
       setConfirmError(errorMessage(e));
     } finally {
@@ -605,8 +753,8 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
   const rows = query.data ? [...query.data].reverse() : undefined;
   const columns: Column<McpClient>[] = [
     {
-      key: "name",
-      header: "Client",
+      key: 'name',
+      header: 'Client',
       cell: (c) => (
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-medium" title={c.client_name}>
@@ -615,21 +763,40 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
         </span>
       ),
     },
-    { key: "scopes", header: "What it can do", width: "128px", hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
-    { key: "authorized", header: "Authorized", width: "124px", hideOnPhone: true, cell: (c) => when(c.authorized_at) },
-    { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (c) => when(c.last_used_at) },
-    { key: "status", header: "Status", width: "140px", cell: (c) => <TokenStatus t={c} /> },
     {
-      key: "action",
+      key: 'scopes',
+      header: 'What it can do',
+      width: '128px',
+      hideOnPhone: true,
+      wrap: true,
+      cell: (c) => <Scopes scopes={c.scopes} />,
+    },
+    {
+      key: 'authorized',
+      header: 'Authorized',
+      width: '124px',
+      hideOnPhone: true,
+      cell: (c) => when(c.authorized_at),
+    },
+    {
+      key: 'used',
+      header: 'Last used',
+      width: '124px',
+      phoneLabel: 'Used ',
+      cell: (c) => when(c.last_used_at),
+    },
+    { key: 'status', header: 'Status', width: '140px', cell: (c) => <TokenStatus t={c} /> },
+    {
+      key: 'action',
       header: <span className="sr-only">Actions</span>,
-      width: "96px",
-      align: "right",
-      phone: "action",
+      width: '96px',
+      align: 'right',
+      phone: 'action',
       wrap: true,
       cell: (c) =>
         acts.acted?.key === c.id ? (
           <ActedCell acted={acts.acted} onUndo={acts.undo} />
-        ) : tokenState(c) === "active" ? (
+        ) : tokenState(c) === 'active' ? (
           <Button
             aria-label={`Revoke ${c.client_name}`}
             onClick={() => {
@@ -666,7 +833,7 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
             rows={rows}
             loading={!rows}
             rowKey={(c) => c.id}
-            rowProps={(c) => ({ "data-testid": "my-client-row", ...acts.rowAttrs(c.id) })}
+            rowProps={(c) => ({ 'data-testid': 'my-client-row', ...acts.rowAttrs(c.id) })}
             empty="No MCP clients"
           />
         </div>
@@ -683,9 +850,9 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
         onClose={() => setConfirming(null)}
         onConfirm={() => confirming && revoke(confirming)}
         consequences={[
-          { icon: "lock", text: "Its access and refresh tokens stop working at once." },
-          { icon: "check", text: "Approvals made through it stop counting." },
-          { icon: "link", text: "To use it again, authorize it again from the client." },
+          { icon: 'lock', text: 'Its access and refresh tokens stop working at once.' },
+          { icon: 'check', text: 'Approvals made through it stop counting.' },
+          { icon: 'link', text: 'To use it again, authorize it again from the client.' },
         ]}
       />
     </Panel>

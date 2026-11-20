@@ -4,4 +4,4 @@
  * on in the mock build). This module used to read ORACLE_SIMPLE_MODE, which the production
  * web build does not set, so the roadmap alone answered 404.
  */
-export { SIMPLE_MODE } from "@/lib/simple-mode";
+export { SIMPLE_MODE } from '@/lib/simple-mode';

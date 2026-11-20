@@ -1,15 +1,21 @@
-"use client";
+'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-import { Button } from "@/components/ds";
+import { Button } from '@/components/ds';
 
 /**
  * A row's ⋯ menu. Its panel is fixed to the viewport under the button, so the table's
  * clipping never cuts it off; it opens upward when the room below (above a phone's tab bar)
  * is too short. Escape, a click outside or a scroll closes it.
  */
-export function RowMenu({ label, children }: { label: string; children: (close: () => void) => ReactNode }) {
+export function RowMenu({
+  label,
+  children,
+}: {
+  label: string;
+  children: (close: () => void) => ReactNode;
+}) {
   const [at, setAt] = useState<{ top: number; right: number; above: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -18,25 +24,26 @@ export function RowMenu({ label, children }: { label: string; children: (close: 
     if (!at || !el) return;
     const h = el.offsetHeight;
     // The phone's tab bar covers the bottom 80 px.
-    if (at.top + h > window.innerHeight - 80 && at.above - h - 6 >= 8) el.style.top = `${at.above - h - 6}px`;
+    if (at.top + h > window.innerHeight - 80 && at.above - h - 6 >= 8)
+      el.style.top = `${at.above - h - 6}px`;
   }, [at]);
   useEffect(() => {
     if (!at) return;
     const close = () => setAt(null);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!root.current?.contains(t) && !panel.current?.contains(t)) close();
     };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
     };
   }, [at]);
   return (
@@ -51,7 +58,11 @@ export function RowMenu({ label, children }: { label: string; children: (close: 
         onClick={(e) => {
           if (at) return setAt(null);
           const r = e.currentTarget.getBoundingClientRect();
-          setAt({ top: r.bottom + 6, right: Math.max(12, window.innerWidth - r.right), above: r.top });
+          setAt({
+            top: r.bottom + 6,
+            right: Math.max(12, window.innerWidth - r.right),
+            above: r.top,
+          });
         }}
       />
       {at && (

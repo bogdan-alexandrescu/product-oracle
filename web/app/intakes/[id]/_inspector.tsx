@@ -1,26 +1,47 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import Link from 'next/link';
+import { useState } from 'react';
 
-import { Button, Chip, CodeChip, Inspector, InspectorRow, InspectorSection, type ChipKind } from "@/components/ds";
-import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
-import { LoadError } from "@/components/ui";
-import { assess, goalViews } from "@/app/home/_goals";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatCount, plural } from "@/lib/format";
-import { useMe, type Role } from "@/lib/me";
-import { sectionHref } from "@/lib/section-link";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  CodeChip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  type ChipKind,
+} from '@/components/ds';
+import { FIELD_LABEL, InlineError, TEXTAREA } from '@/components/review/parts';
+import { LoadError } from '@/components/ui';
+import { assess, goalViews } from '@/app/home/_goals';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatCount, plural } from '@/lib/format';
+import { useMe, type Role } from '@/lib/me';
+import { sectionHref } from '@/lib/section-link';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { HARD_BLOCKERS, categoryNote, criticalCount, holdCount, openCriticalCount, openCriticalGaps, tally, unknownGaps, unknownNote, type Batch, type Gap, type Summary } from "./_lib";
+import {
+  HARD_BLOCKERS,
+  categoryNote,
+  criticalCount,
+  holdCount,
+  openCriticalCount,
+  openCriticalGaps,
+  tally,
+  unknownGaps,
+  unknownNote,
+  type Batch,
+  type Gap,
+  type Summary,
+} from './_lib';
 
-type Decision = Schemas["DecisionIn"]["decision"];
+type Decision = Schemas['DecisionIn']['decision'];
 
 const DECISIONS: { value: Decision; label: string }[] = [
-  { value: "accept_assumption", label: "Accept as an assumption" },
-  { value: "accept_risk", label: "Accept the risk" },
-  { value: "validate", label: "Validate" },
+  { value: 'accept_assumption', label: 'Accept as an assumption' },
+  { value: 'accept_risk', label: 'Accept the risk' },
+  { value: 'validate', label: 'Validate' },
 ];
 
 /**
@@ -30,7 +51,7 @@ const DECISIONS: { value: Decision; label: string }[] = [
 export function DecideForm({
   gap,
   choices = DECISIONS,
-  submit = "Record decision",
+  submit = 'Record decision',
   onDone,
   onCancel,
 }: {
@@ -41,20 +62,20 @@ export function DecideForm({
   onCancel: () => void;
 }) {
   const [decision, setDecision] = useState<Decision>(choices[0].value);
-  const [rationale, setRationale] = useState("");
+  const [rationale, setRationale] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function record() {
     if (!rationale.trim()) {
-      setError("Write a rationale first");
+      setError('Write a rationale first');
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/gaps/{gap_id}/decisions", {
+        api.POST('/v1/gaps/{gap_id}/decisions', {
           params: { path: { gap_id: gap.id } },
           body: { decision, rationale: rationale.trim() },
         }),
@@ -68,13 +89,21 @@ export function DecideForm({
   }
 
   return (
-    <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5" data-testid="decide-form">
+    <div
+      className="mt-2 flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5"
+      data-testid="decide-form"
+    >
       {choices.length > 1 && (
         <fieldset className="flex flex-col gap-1">
           <legend className="sr-only">Decision</legend>
           {choices.map((c) => (
             <label key={c.value} className="flex items-center gap-2 text-sm text-text">
-              <input type="radio" name={`decision-${gap.id}`} checked={decision === c.value} onChange={() => setDecision(c.value)} />
+              <input
+                type="radio"
+                name={`decision-${gap.id}`}
+                checked={decision === c.value}
+                onChange={() => setDecision(c.value)}
+              />
               {c.label}
             </label>
           ))}
@@ -82,12 +111,18 @@ export function DecideForm({
       )}
       <label className={FIELD_LABEL}>
         Rationale
-        <textarea rows={2} maxLength={2000} value={rationale} onChange={(e) => setRationale(e.target.value)} className={TEXTAREA} />
+        <textarea
+          rows={2}
+          maxLength={2000}
+          value={rationale}
+          onChange={(e) => setRationale(e.target.value)}
+          className={TEXTAREA}
+        />
       </label>
       {error && <InlineError>{error}</InlineError>}
       <div className="flex flex-wrap gap-1.5">
         <Button variant="solid" icon="check" disabled={busy} onClick={record}>
-          {busy ? "Recording…" : submit}
+          {busy ? 'Recording…' : submit}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
           Cancel
@@ -101,8 +136,8 @@ export function DecideForm({
  * Who may decide a gap here (#370: `can` from useMe): whoever may decide gaps; below an
  * owner, not a hard blocker (B4).
  */
-export function mayReview(can: ReturnType<typeof useMe>["can"], gap: Gap): boolean {
-  return can("decide_knowledge_gap", !HARD_BLOCKERS.has(gap.category));
+export function mayReview(can: ReturnType<typeof useMe>['can'], gap: Gap): boolean {
+  return can('decide_knowledge_gap', !HARD_BLOCKERS.has(gap.category));
 }
 
 /**
@@ -112,25 +147,42 @@ export function mayReview(can: ReturnType<typeof useMe>["can"], gap: Gap): boole
  * show apart as suggestions, each with why (walk-brief: they read as picked).
  */
 function IntakeGoals({ summary: s }: { summary: Summary }) {
-  const confirmed = useQuery("intake-goals", () =>
-    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+  const confirmed = useQuery('intake-goals', () =>
+    unwrap(
+      api.GET('/v1/baseline/entities', {
+        params: { query: { type: 'goal', status: 'confirmed' } },
+      }),
+    ),
   );
   const views = new Map(goalViews(confirmed.data ?? []).map((g) => [g.id, g]));
   const picked = new Set(s.intake.goal_ids ?? []);
-  const found = [...new Set([...s.gaps.filter((g) => g.category === "goal_alignment").flatMap((g) => g.entity_ids), ...s.goals.map((g) => g.entity_id)])];
+  const found = [
+    ...new Set([
+      ...s.gaps.filter((g) => g.category === 'goal_alignment').flatMap((g) => g.entity_ids),
+      ...s.goals.map((g) => g.entity_id),
+    ]),
+  ];
   const goal = (id: string) => {
     const view = views.get(id);
     const link = s.goals.find((g) => g.entity_id === id);
     const title = view?.title ?? link?.title;
-    const why = link?.matched_on === "feature" ? "A feature it touches serves it" : "The brief speaks to it";
+    const why =
+      link?.matched_on === 'feature' ? 'A feature it touches serves it' : 'The brief speaks to it';
     return title ? { id, title, key: link?.key, why, progress: view ? assess(view) : null } : null;
   };
   const chosen = [...picked].map(goal).filter((g) => g !== null);
-  const suggested = found.filter((id) => !picked.has(id)).map(goal).filter((g) => g !== null);
+  const suggested = found
+    .filter((id) => !picked.has(id))
+    .map(goal)
+    .filter((g) => g !== null);
   const row = (g: NonNullable<ReturnType<typeof goal>>, note?: string) => (
     <InspectorRow
       key={g.id}
-      value={g.progress && (g.progress.state === "togo" || g.progress.state === "met") ? <span className="text-text2">{g.progress.text}</span> : undefined}
+      value={
+        g.progress && (g.progress.state === 'togo' || g.progress.state === 'met') ? (
+          <span className="text-text2">{g.progress.text}</span>
+        ) : undefined
+      }
     >
       <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} />
       {note && <span className="block text-[12px] text-text2">{note}</span>}
@@ -143,9 +195,17 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
         <div data-testid="intake-goals-picked">{chosen.map((g) => row(g))}</div>
       ) : confirmed.error ? (
         // #1586: goals that could not be read say so, never "No confirmed company goal yet".
-        <LoadError what="the goals" error={confirmed.error} onRetry={() => void confirmed.reload()} />
+        <LoadError
+          what="the goals"
+          error={confirmed.error}
+          onRetry={() => void confirmed.reload()}
+        />
       ) : (
-        <p className="text-sm text-text2">{confirmed.data?.length || suggested.length ? "No goal chosen yet" : "No confirmed company goal yet"}</p>
+        <p className="text-sm text-text2">
+          {confirmed.data?.length || suggested.length
+            ? 'No goal chosen yet'
+            : 'No confirmed company goal yet'}
+        </p>
       )}
       {suggested.length > 0 && (
         <div data-testid="intake-goals-suggested" className="mt-2">
@@ -159,34 +219,41 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
 
 /** The theme by its name ("Clean document"), never its key (walk-brief); nothing until the names load. */
 function ThemeName({ themeKey }: { themeKey: string | null | undefined }) {
-  const themes = useQuery("themes|prd", () => unwrap(api.GET("/v1/themes", { params: { query: { kind: "prd" } } })));
+  const themes = useQuery('themes|prd', () =>
+    unwrap(api.GET('/v1/themes', { params: { query: { kind: 'prd' } } })),
+  );
   if (!themeKey) return null;
   const name = themes.data?.find((t) => t.key === themeKey)?.name;
   if (name) return <span data-testid="intake-theme">{name}</span>;
-  return themes.error ? <span data-testid="intake-theme">{themeKey.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase())}</span> : null;
+  return themes.error ? (
+    <span data-testid="intake-theme">
+      {themeKey.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())}
+    </span>
+  ) : null;
 }
 
 /** Critical questions still open that hold nothing (none is a blocker): what the draft lacks. */
-function missingGaps(s: Summary): Summary["gaps"] {
+function missingGaps(s: Summary): Summary['gaps'] {
   return s.readiness.blocking_gap_ids.length ? [] : openCriticalGaps(s);
 }
 
 /** Where an open critical question stands, from its gap (production minors 24). */
 function gapStanding(g: Gap, asked: boolean): string | null {
-  if (g.status === "answered_pending_review") return "Answered: waiting for review.";
-  if (g.status === "under_investigation") return "Being researched.";
-  if (g.status === "deferred") return "Deferred.";
-  if (g.status === "unknown" && !asked) return "Not asked yet: ask it from Next questions.";
-  return asked ? null : "Asked: waiting for an answer.";
+  if (g.status === 'answered_pending_review') return 'Answered: waiting for review.';
+  if (g.status === 'under_investigation') return 'Being researched.';
+  if (g.status === 'deferred') return 'Deferred.';
+  if (g.status === 'unknown' && !asked) return 'Not asked yet: ask it from Next questions.';
+  return asked ? null : 'Asked: waiting for an answer.';
 }
 
 /** Where the brief stands, as the inspector's chip says it: archived, blocked, open critical questions, or ready. */
 export function readiness(s: Summary): { label: string; kind: ChipKind } {
-  if (s.intake.status === "archived") return { label: "Archived", kind: "na" };
-  if (s.readiness.gate === "blocked") return { label: holdCount(s.readiness.blocking_gap_ids.length), kind: "crit" };
+  if (s.intake.status === 'archived') return { label: 'Archived', kind: 'na' };
+  if (s.readiness.gate === 'blocked')
+    return { label: holdCount(s.readiness.blocking_gap_ids.length), kind: 'crit' };
   const missing = missingGaps(s).length;
-  if (missing > 0) return { label: `${criticalCount(missing)} open`, kind: "warn" };
-  return { label: "Ready to draft", kind: "pass" };
+  if (missing > 0) return { label: `${criticalCount(missing)} open`, kind: 'warn' };
+  return { label: 'Ready to draft', kind: 'pass' };
 }
 
 /**
@@ -195,9 +262,9 @@ export function readiness(s: Summary): { label: string; kind: ChipKind } {
  * draft" while a critical question is open).
  */
 export function readinessTitle(s: Summary): string {
-  if (s.intake.status === "archived") return "Not drafting";
-  if (s.readiness.gate !== "clear") return "Not ready to draft";
-  return missingGaps(s).length > 0 ? "Can draft, with gaps" : "Ready to draft";
+  if (s.intake.status === 'archived') return 'Not drafting';
+  if (s.readiness.gate !== 'clear') return 'Not ready to draft';
+  return missingGaps(s).length > 0 ? 'Can draft, with gaps' : 'Ready to draft';
 }
 
 /**
@@ -227,9 +294,11 @@ export function IntakeInspector({
   const { can } = useMe();
   const [deciding, setDeciding] = useState<string | null>(null);
   const gate = s.readiness;
-  const blocking = gate.blocking_gap_ids.map((id) => s.gaps.find((g) => g.id === id)).filter((g): g is Summary["gaps"][number] => !!g);
-  const converted = s.intake.status === "converted";
-  const archived = s.intake.status === "archived";
+  const blocking = gate.blocking_gap_ids
+    .map((id) => s.gaps.find((g) => g.id === id))
+    .filter((g): g is Summary['gaps'][number] => !!g);
+  const converted = s.intake.status === 'converted';
+  const archived = s.intake.status === 'archived';
   const missing = missingGaps(s);
   const openCritical = openCriticalCount(s);
   const counts = tally(s, batches);
@@ -243,9 +312,14 @@ export function IntakeInspector({
       testId="intake-inspector"
       label="Before drafting"
       stats={[
-        { label: "Open", value: counts.open, testId: "stat-open" },
-        { label: "Answered", value: counts.answered, testId: "stat-answered" },
-        { label: "Critical open", value: openCritical, tone: openCritical ? "crit" : undefined, testId: "stat-critical" },
+        { label: 'Open', value: counts.open, testId: 'stat-open' },
+        { label: 'Answered', value: counts.answered, testId: 'stat-answered' },
+        {
+          label: 'Critical open',
+          value: openCritical,
+          tone: openCritical ? 'crit' : undefined,
+          testId: 'stat-critical',
+        },
       ]}
     >
       <InspectorSection testId="ready-to-draft">
@@ -259,16 +333,18 @@ export function IntakeInspector({
             <Chip kind="na" dot>
               Archived
             </Chip>
-            <p className="text-[13px] text-text2">Its questions are kept here, and no one is asked them any more.</p>
+            <p className="text-[13px] text-text2">
+              Its questions are kept here, and no one is asked them any more.
+            </p>
           </div>
-        ) : gate.gate === "clear" && missing.length > 0 ? (
+        ) : gate.gate === 'clear' && missing.length > 0 ? (
           <div className="flex flex-col gap-2.5">
             <Chip kind="warn" dot>
               {criticalCount(missing.length)} open
             </Chip>
             <p data-testid="missing-note" className="text-[13px] text-text2">
-              {missing.length === 1 ? "It does not stop the draft." : "They do not stop the draft."} The PRD will mark{" "}
-              {missing.length === 1 ? "it" : "them"} as still unknown.
+              {missing.length === 1 ? 'It does not stop the draft.' : 'They do not stop the draft.'}{' '}
+              The PRD will mark {missing.length === 1 ? 'it' : 'them'} as still unknown.
             </p>
             <ul className="flex flex-col gap-2">
               {missing.map((g) => (
@@ -276,7 +352,9 @@ export function IntakeInspector({
                   <span className="text-sm break-words text-text">{g.statement}</span>
                   {(categoryNote(g) || unknown.has(g.id)) && (
                     <span className="text-[13px] text-text2">
-                      {[categoryNote(g), unknown.has(g.id) && "answered “I don't know”"].filter(Boolean).join(" · ")}
+                      {[categoryNote(g), unknown.has(g.id) && "answered “I don't know”"]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   )}
                   {/* qa-docs-19: each open question has a way to answer it, in the thread.
@@ -287,13 +365,20 @@ export function IntakeInspector({
                     return (
                       <>
                         {standing && (
-                          <span data-testid="missing-gap-standing" className="text-[13px] text-text2">
+                          <span
+                            data-testid="missing-gap-standing"
+                            className="text-[13px] text-text2"
+                          >
                             {standing}
                           </span>
                         )}
                         {q && onAnswer && (
                           <div className="mt-1">
-                            <Button variant="secondary" aria-label={`Go to question: ${g.statement}`} onClick={() => onAnswer(q)}>
+                            <Button
+                              variant="secondary"
+                              aria-label={`Go to question: ${g.statement}`}
+                              onClick={() => onAnswer(q)}
+                            >
                               Go to question
                             </Button>
                           </div>
@@ -305,7 +390,7 @@ export function IntakeInspector({
               ))}
             </ul>
           </div>
-        ) : gate.gate === "clear" ? (
+        ) : gate.gate === 'clear' ? (
           <Chip kind="pass" dot>
             Ready to draft
           </Chip>
@@ -318,12 +403,18 @@ export function IntakeInspector({
               {blocking.map((g) => (
                 <li key={g.id} className="flex min-w-0 flex-col gap-1.5" data-testid="blocking-gap">
                   <div className="flex min-w-0 items-start gap-2">
-                    <span className="min-w-0 flex-1 text-sm break-words text-text">{g.statement}</span>
-                    <Chip kind="crit">{g.importance === "critical" ? "Critical" : g.importance}</Chip>
+                    <span className="min-w-0 flex-1 text-sm break-words text-text">
+                      {g.statement}
+                    </span>
+                    <Chip kind="crit">
+                      {g.importance === 'critical' ? 'Critical' : g.importance}
+                    </Chip>
                   </div>
-                  {categoryNote(g) && <span className="text-[13px] text-text2">{categoryNote(g)}</span>}
+                  {categoryNote(g) && (
+                    <span className="text-[13px] text-text2">{categoryNote(g)}</span>
+                  )}
                   {/* #370: an approver may still reject a critical gap; the form says what needs an owner. */}
-                  {can("decide_knowledge_gap", true) && deciding !== g.id && (
+                  {can('decide_knowledge_gap', true) && deciding !== g.id && (
                     <div>
                       <Button onClick={() => setDeciding(g.id)}>Decide</Button>
                     </div>
@@ -348,14 +439,21 @@ export function IntakeInspector({
         {!archived && (s.work ?? []).length > 0 && (
           <div data-testid="unknown-work" className="mt-3 flex flex-col gap-1.5">
             <p className="text-[13px] text-text2">
-              Not known yet. Finding out is part of this work, so the PRD makes{" "}
-              {s.work!.length === 1 ? "it a requirement" : "them requirements"}, not {s.work!.length === 1 ? "a blocker" : "blockers"}:
+              Not known yet. Finding out is part of this work, so the PRD makes{' '}
+              {s.work!.length === 1 ? 'it a requirement' : 'them requirements'}, not{' '}
+              {s.work!.length === 1 ? 'a blocker' : 'blockers'}:
             </p>
             <ul className="flex flex-col gap-2">
               {s.work!.map((w) => (
-                <li key={w.answer_id} className="flex min-w-0 flex-col gap-0.5" data-testid="work-item">
+                <li
+                  key={w.answer_id}
+                  className="flex min-w-0 flex-col gap-0.5"
+                  data-testid="work-item"
+                >
                   <span className="text-sm break-words text-text">{w.requirement}</span>
-                  <span className="text-[13px] break-words text-text2">From the answer: “{w.answer}”</span>
+                  <span className="text-[13px] break-words text-text2">
+                    From the answer: “{w.answer}”
+                  </span>
                 </li>
               ))}
             </ul>
@@ -363,7 +461,8 @@ export function IntakeInspector({
         )}
         {!archived && gate.private_blocking_gap_ids.length > 0 && (
           <p className="mt-2 text-[13px] text-text2">
-            {criticalCount(gate.private_blocking_gap_ids.length)} from your own sources hold nothing until you share them.
+            {criticalCount(gate.private_blocking_gap_ids.length)} from your own sources hold nothing
+            until you share them.
           </p>
         )}
       </InspectorSection>
@@ -372,12 +471,14 @@ export function IntakeInspector({
       </InspectorSection>
       <IntakeRequests intakeId={s.intake.id} />
       <InspectorSection label="Template" testId="intake-template">
-        <InspectorRow value={<ThemeName themeKey={s.template.theme} />}>{s.template.name}</InspectorRow>
+        <InspectorRow value={<ThemeName themeKey={s.template.theme} />}>
+          {s.template.name}
+        </InspectorRow>
       </InspectorSection>
       {converted && (
         <InspectorSection label="Drafting" testId="answers-since">
           <p className="text-sm text-text">
-            {plural(s.answers_since_run ?? 0, "answer")} since drafting started
+            {plural(s.answers_since_run ?? 0, 'answer')} since drafting started
           </p>
           {/* C5: each became a feedback item on the PRD; the next draft takes them. */}
           {(s.late_answers_as_feedback ?? 0) > 0 && (
@@ -385,8 +486,13 @@ export function IntakeInspector({
               {formatCount(s.late_answers_as_feedback ?? 0)} became feedback for the next draft
               {s.draft_document && s.draft_version != null && (
                 <>
-                  {" · "}
-                  <Link href={sectionHref(s.draft_document, s.draft_version, null, { feedback: "open" })} className="font-semibold text-accent-ink underline">
+                  {' · '}
+                  <Link
+                    href={sectionHref(s.draft_document, s.draft_version, null, {
+                      feedback: 'open',
+                    })}
+                    className="font-semibold text-accent-ink underline"
+                  >
                     Open the PRD&apos;s feedback
                   </Link>
                 </>
@@ -394,7 +500,10 @@ export function IntakeInspector({
             </p>
           )}
           {s.draft_run_id && (
-            <Link href={`/runs/${s.draft_run_id}`} className="text-sm font-semibold text-accent-ink underline">
+            <Link
+              href={`/runs/${s.draft_run_id}`}
+              className="text-sm font-semibold text-accent-ink underline"
+            >
               Open the draft run
             </Link>
           )}
@@ -408,7 +517,7 @@ export function IntakeInspector({
  * when the brief has none. */
 function IntakeRequests({ intakeId }: { intakeId: string }) {
   const requests = useQuery(`intake-requests:${intakeId}`, () =>
-    unwrap(api.GET("/v1/requests", { params: { query: { intake_id: intakeId, limit: 200 } } })),
+    unwrap(api.GET('/v1/requests', { params: { query: { intake_id: intakeId, limit: 200 } } })),
   );
   const items = requests.data?.items ?? [];
   if (!requests.error && items.length === 0) return null;
@@ -418,7 +527,10 @@ function IntakeRequests({ intakeId }: { intakeId: string }) {
       <ul className="flex flex-col gap-1 text-sm">
         {items.map((r) => (
           <li key={r.id}>
-            <Link href={`/requests?request=${r.id}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline [overflow-wrap:anywhere]">
+            <Link
+              href={`/requests?request=${r.id}`}
+              className="font-semibold text-accent-ink underline-offset-2 hover:underline [overflow-wrap:anywhere]"
+            >
               {r.title}
             </Link>
           </li>

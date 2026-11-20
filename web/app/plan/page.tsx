@@ -1,38 +1,58 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { BuildRoadmapButton } from "@/components/BuildRoadmap";
-import { LinkIssueDialog } from "@/components/LinkIssueDialog";
-import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
-import { Chip, InfoTip, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
-import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { usePlanScope, usePlanView, type PlanScope, type PlanView } from "@/lib/preferences";
-import { useQuery } from "@/lib/use-query";
+import { BuildRoadmapButton } from '@/components/BuildRoadmap';
+import { LinkIssueDialog } from '@/components/LinkIssueDialog';
+import { LinkedDiscussion } from '@/components/discuss/LinkedDiscussion';
+import {
+  Chip,
+  InfoTip,
+  Notice,
+  PageHeader,
+  Panel,
+  SegmentedControl,
+  Sheet,
+  Split,
+  ViewOnly,
+} from '@/components/ds';
+import { Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { usePlanScope, usePlanView, type PlanScope, type PlanView } from '@/lib/preferences';
+import { useQuery } from '@/lib/use-query';
 
-import { GoalsPanel } from "../home/_goals-panel";
-import { useGoals } from "../home/_use-goals";
-import { approvedRoadmaps, draftOnlyRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
-import { PlanInspector } from "./_inspector";
-import { wantedRow, type PlanItem } from "./_lib";
-import { MissingItem } from "./_missing-item";
-import { PrdCards } from "./_prd-cards";
-import { grouped, PlanTable, type GroupBy } from "./_table";
-import { PlanTimeline } from "./_timeline";
-import { MilestoneEditor, TrackPanel, useTracks, type MilestonePick } from "./_tracks";
+import { GoalsPanel } from '../home/_goals-panel';
+import { useGoals } from '../home/_use-goals';
+import {
+  approvedRoadmaps,
+  draftOnlyRoadmaps,
+  EditPlanButton,
+  PlanChanges,
+  roadmapName,
+  useRoadmapDocs,
+} from './_edit-plan';
+import { PlanInspector } from './_inspector';
+import { wantedRow, type PlanItem } from './_lib';
+import { MissingItem } from './_missing-item';
+import { PrdCards } from './_prd-cards';
+import { grouped, PlanTable, type GroupBy } from './_table';
+import { PlanTimeline } from './_timeline';
+import { MilestoneEditor, TrackPanel, useTracks, type MilestonePick } from './_tracks';
 
 /** The goals band; with no confirmed goal, one line and the way to the Baseline. */
 function GoalsBand({ canImport }: { canImport: boolean }) {
-  const { goals, history, historyPending, historyFailed, error, loading } = useGoals("plan");
+  const { goals, history, historyPending, historyFailed, error, loading } = useGoals('plan');
   if (goals && !goals.some((g) => !g.proposed)) {
     return (
       <Panel title="Goals" testId="plan-goals">
         <div data-testid="plan-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
           <span className="text-[15px] font-semibold text-text2">No confirmed goals</span>
-          <Link href="/ground-truth" className="ml-auto inline-flex min-h-6 items-center font-semibold text-accent-ink underline-offset-2 hover:underline">
+          <Link
+            href="/ground-truth"
+            className="ml-auto inline-flex min-h-6 items-center font-semibold text-accent-ink underline-offset-2 hover:underline"
+          >
             Ground Truth
           </Link>
         </div>
@@ -55,8 +75,12 @@ function GoalsBand({ canImport }: { canImport: boolean }) {
 
 /** Approved PRDs that have no roadmap yet: each can build one (shown while the Plan has no items). */
 function BuildRoadmaps() {
-  const prds = useQuery("plan|documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
-  const roadmaps = useQuery("plan|documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
+  const prds = useQuery('plan|documents|prd', () =>
+    unwrap(api.GET('/v1/documents', { params: { query: { kind: 'prd' } } })),
+  );
+  const roadmaps = useQuery('plan|documents|roadmap', () =>
+    unwrap(api.GET('/v1/documents', { params: { query: { kind: 'roadmap' } } })),
+  );
   if (!prds.data || !roadmaps.data) return null;
   const built = new Set(roadmaps.data.map((r) => r.source?.slug).filter(Boolean));
   const open = prds.data.filter((d) => d.approved_version != null && !built.has(d.slug));
@@ -64,7 +88,10 @@ function BuildRoadmaps() {
   return (
     <ul className="flex flex-col border-t border-line">
       {open.map((d) => (
-        <li key={d.id} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0">
+        <li
+          key={d.id}
+          className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0"
+        >
           <span className="min-w-0 flex-1 truncate font-semibold">{d.title}</span>
           <BuildRoadmapButton prd={d} size="sm" />
         </li>
@@ -86,48 +113,63 @@ export default function PlanPage() {
   const userId = me?.user_id ?? null;
   // #370: approvers start PRDs (a PRD is any approver's; only a vision, strategy or update
   // is an owner's) and build the baseline; below that the Plan is read only.
-  const canWrite = can("start_draft", true);
+  const canWrite = can('start_draft', true);
   // create_run's handler wants an owner only to update a draft run; any other run lets
   // approvers in.
-  const canBuild = can("create_run", true);
+  const canBuild = can('create_run', true);
   // Import goes to /baseline?build=1, whose Build the Ground Truth shows with confirm_entity.
-  const canBaseline = can("confirm_entity");
+  const canBaseline = can('confirm_entity');
   // F7: approvers, owners and engineering leads link and unlink tracker issues.
-  const canLink = can("link_tracker_issue");
+  const canLink = can('link_tracker_issue');
   // #370 (#505): each track control shows only to a role that can call its route.
   const trackRights = useMemo(
     () => ({
-      edit: can("update_track"),
-      addMilestone: can("create_track_milestone"),
-      check: can("monitor_track"),
+      edit: can('update_track'),
+      addMilestone: can('create_track_milestone'),
+      check: can('monitor_track'),
       // Like create_run: an owner only for some runs, so an approver may on most tracks.
-      draftRoadmap: can("create_track_roadmap_run", true),
-      push: can("push_track_to_tracker"),
+      draftRoadmap: can('create_track_roadmap_run', true),
+      push: can('push_track_to_tracker'),
     }),
     [can],
   );
-  const canEditMilestone = can("update_milestone");
-  const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
+  const canEditMilestone = can('update_milestone');
+  const [scope, setScope, ready] = usePlanScope(userId ?? (me ? 'token' : null));
   // B-26: the roadmap as a table or a timeline, remembered per viewer.
-  const [view, setView] = usePlanView(userId ?? (me ? "token" : null));
+  const [view, setView] = usePlanView(userId ?? (me ? 'token' : null));
   const q = useQuery(
-    `plan|${ready ? scope : "wait"}`,
-    () => (ready ? unwrap(api.GET("/v1/plan", { params: { query: { scope } } })) : new Promise<never>(() => {})),
+    `plan|${ready ? scope : 'wait'}`,
+    () =>
+      ready
+        ? unwrap(api.GET('/v1/plan', { params: { query: { scope } } }))
+        : new Promise<never>(() => {}),
     { keepPrevious: true },
   );
-  const { goals, history } = useGoals("plan");
+  const { goals, history } = useGoals('plan');
   const tags = useMemo(() => new Map((goals ?? []).map((g) => [g.id, g])), [goals]);
-  const [by, setBy] = useState<GroupBy>("horizon");
+  const [by, setBy] = useState<GroupBy>('horizon');
   // F2: /plan?item=<key> (an Inbox track alert's Open) selects that item; &prd=<id> (a question
   // about it) picks it among the PRDs that share the key.
   // Read on each render: a client navigation updates the URL after the first one.
-  const wanted = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("item"), () => null);
-  const wantedPrd = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("prd"), () => null);
+  const wanted = useSyncExternalStore(
+    noSubscribe,
+    () => new URLSearchParams(window.location.search).get('item'),
+    () => null,
+  );
+  const wantedPrd = useSyncExternalStore(
+    noSubscribe,
+    () => new URLSearchParams(window.location.search).get('prd'),
+    () => null,
+  );
   // &roadmap=<slug> (Simple's card): keys are unique only per roadmap, so it picks among those.
-  const wantedRoadmap = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("roadmap"), () => null);
+  const wantedRoadmap = useSyncExternalStore(
+    noSubscribe,
+    () => new URLSearchParams(window.location.search).get('roadmap'),
+    () => null,
+  );
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
-  const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
+  const [opened, setOpened] = useState<Schemas['ChangeSetOut'] | null>(null);
   const [linking, setLinking] = useState<{ item: PlanItem; term?: string } | null>(null);
   const tracks = useTracks();
   // The tracks sit above the Roadmap: drawn before they answer, its rows would move down
@@ -139,9 +181,14 @@ export default function PlanPage() {
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
   const ordered = data ? grouped(data.items, by, tags, prdOrder).rows : [];
   // plan-open-from-simple: an item asked for and not found is never stood in for by the first row.
-  const wantedItem = wanted == null ? undefined : wantedRow(ordered, wanted, wantedPrd, wantedRoadmap);
+  const wantedItem =
+    wanted == null ? undefined : wantedRow(ordered, wanted, wantedPrd, wantedRoadmap);
   const fallback = wanted == null || picked != null ? ordered[0] : undefined;
-  const item = ordered.find((i) => i.id === picked) ?? (picked == null ? wantedItem : undefined) ?? fallback ?? null;
+  const item =
+    ordered.find((i) => i.id === picked) ??
+    (picked == null ? wantedItem : undefined) ??
+    fallback ??
+    null;
   // Once per link: the asked-for row scrolls into view, and on a phone its sheet opens.
   const landing = wantedItem && tracksKnown ? wantedItem.id : null;
   const landed = useRef<string | null>(null);
@@ -149,18 +196,20 @@ export default function PlanPage() {
     const at = `${wanted}|${wantedPrd}|${wantedRoadmap}`;
     if (!landing || landed.current === at) return;
     landed.current = at;
-    document.querySelector(`[data-testid="plan-row"][data-id="${landing}"]`)?.scrollIntoView({ block: "center" });
+    document
+      .querySelector(`[data-testid="plan-row"][data-id="${landing}"]`)
+      ?.scrollIntoView({ block: 'center' });
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
+    if (window.matchMedia('(max-width: 600px)').matches) setSheet(true);
   }, [landing, wanted, wantedPrd, wantedRoadmap]);
   const onSelect = useCallback((id: string) => {
     setPicked(id);
     setMilestone(null);
-    if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
+    if (window.matchMedia('(max-width: 600px)').matches) setSheet(true);
   }, []);
   const onPickMilestone = useCallback((pick: MilestonePick) => {
     setMilestone(pick);
-    if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
+    if (window.matchMedia('(max-width: 600px)').matches) setSheet(true);
   }, []);
   const counts = data?.counts;
   const roadmaps = approvedRoadmaps(data?.items);
@@ -168,22 +217,20 @@ export default function PlanPage() {
   const unapproved = draftOnlyRoadmaps(data?.items);
   // The live roadmap versions: each roadmap's title (qa-plan-21) and the Timeline's dates are read
   // again when one moves (an approved plan change).
-  const live = roadmaps.map((r) => `${r.slug}@${r.version}`).join(",");
+  const live = roadmaps.map((r) => `${r.slug}@${r.version}`).join(',');
   const roadmapDocs = useRoadmapDocs(live);
   const reload = q.reload;
-  const onLink = useCallback(
-    (i: PlanItem, term?: string) => {
-      setSheet(false);
-      setLinking({ item: i, term });
-    },
-    [],
-  );
+  const onLink = useCallback((i: PlanItem, term?: string) => {
+    setSheet(false);
+    setLinking({ item: i, term });
+  }, []);
   const links = canLink ? { onLink, onChanged: reload } : undefined;
-  const putTrack = (t: Schemas["TrackOverview"]) => tracks.setData((ts) => ts?.map((x) => (x.id === t.id ? t : x)));
+  const putTrack = (t: Schemas['TrackOverview']) =>
+    tracks.setData((ts) => ts?.map((x) => (x.id === t.id ? t : x)));
   const msTrack = milestone ? tracks.data?.find((t) => t.id === milestone.trackId) : undefined;
   const inspector = msTrack ? (
     <MilestoneEditor
-      key={`${msTrack.id}|${milestone?.id ?? "new"}`}
+      key={`${msTrack.id}|${milestone?.id ?? 'new'}`}
       track={msTrack}
       milestoneId={milestone?.id ?? null}
       // #370 (#505): a role that can never change the milestone sees it read only.
@@ -192,7 +239,9 @@ export default function PlanPage() {
         // The pick this save was made from: a pick made while the track reloads (Add milestone,
         // another milestone) wins over the saved one, never the other way round.
         const from = milestone;
-        const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
+        const t = await unwrap(
+          api.GET('/v1/tracks/{track_id}', { params: { path: { track_id: m.track_id } } }),
+        );
         putTrack(t);
         setMilestone((cur) => (cur === from ? { trackId: m.track_id, id: m.id } : cur));
       }}
@@ -202,13 +251,30 @@ export default function PlanPage() {
       }}
     />
   ) : item ? (
-    <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} links={links} onChanged={reload} />
+    <PlanInspector
+      key={item.id}
+      item={item}
+      goals={tags}
+      history={history}
+      me={userId}
+      links={links}
+      onChanged={reload}
+    />
   ) : undefined;
   // qa-plan-32: in the phone sheet the item's title shows once (the sheet's head says "Item",
   // the inspector the whole title), and the sheet scrolls with no second visible scrollbar.
   const sheetInspector =
     !msTrack && item ? (
-      <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} links={links} onChanged={reload} inSheet />
+      <PlanInspector
+        key={item.id}
+        item={item}
+        goals={tags}
+        history={history}
+        me={userId}
+        links={links}
+        onChanged={reload}
+        inSheet
+      />
     ) : (
       inspector
     );
@@ -222,41 +288,47 @@ export default function PlanPage() {
           <>
             {capsReady && !canWrite && !canBuild && <ViewOnly />}
             {counts && (
-            <>
-              <Chip kind="acc" data-testid="plan-count-prds">
-                {counts.prds} {counts.prds === 1 ? "PRD" : "PRDs"}
-              </Chip>
-              {counts.at_risk > 0 && (
-                <Chip kind="crit" data-testid="plan-count-at-risk">
-                  {counts.at_risk} at risk
+              <>
+                <Chip kind="acc" data-testid="plan-count-prds">
+                  {counts.prds} {counts.prds === 1 ? 'PRD' : 'PRDs'}
                 </Chip>
-              )}
-              {counts.proposed > 0 && (
-                <Chip kind="warn" data-testid="plan-count-proposed">
-                  {counts.proposed} proposed
-                </Chip>
-              )}
-            </>
+                {counts.at_risk > 0 && (
+                  <Chip kind="crit" data-testid="plan-count-at-risk">
+                    {counts.at_risk} at risk
+                  </Chip>
+                )}
+                {counts.proposed > 0 && (
+                  <Chip kind="warn" data-testid="plan-count-proposed">
+                    {counts.proposed} proposed
+                  </Chip>
+                )}
+              </>
             )}
           </>
         }
         info={
           <InfoTip label="Plan" align="start" side="bottom">
-            The goals, the PRDs in play and every roadmap item under Now, Next and Later, with its engineering
-            status and the next decision. Pick an item to see its history.
+            The goals, the PRDs in play and every roadmap item under Now, Next and Later, with its
+            engineering status and the next decision. Pick an item to see its history.
           </InfoTip>
         }
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
         {data && wanted != null && !wantedItem && (
-          <MissingItem wanted={wanted} prdId={wantedPrd} roadmap={wantedRoadmap} scope={scope} onShowDrafts={() => setScope("all")} />
+          <MissingItem
+            wanted={wanted}
+            prdId={wantedPrd}
+            roadmap={wantedRoadmap}
+            scope={scope}
+            onShowDrafts={() => setScope('all')}
+          />
         )}
         <GoalsBand canImport={canBaseline} />
         <PrdCards prds={data?.prds} canWrite={canWrite} tracks={tracks.data} />
         {roadmaps.map((r) => (
           <PlanChanges
-            key={`${r.slug}|${opened?.roadmap === r.slug ? opened.id : ""}`}
+            key={`${r.slug}|${opened?.roadmap === r.slug ? opened.id : ''}`}
             roadmap={r}
             opened={opened?.roadmap === r.slug ? opened : null}
             docs={roadmapDocs}
@@ -268,10 +340,20 @@ export default function PlanPage() {
         {!tracksKnown ? (
           <Loading />
         ) : (
-          <Split wide inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
+          <Split
+            wide
+            inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}
+          >
             {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
             {tracks.data?.map((t) => (
-              <TrackPanel key={t.id} track={t} may={trackRights} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
+              <TrackPanel
+                key={t.id}
+                track={t}
+                may={trackRights}
+                picked={milestone}
+                onPick={onPickMilestone}
+                onChange={putTrack}
+              />
             ))}
             <Panel
               title="Roadmap"
@@ -279,21 +361,34 @@ export default function PlanPage() {
                 <>
                   {/* qa-plan-9 (fix4): the live roadmap and Edit plan on a phone too. */}
                   {roadmaps.map((r) => (
-                    <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2">
+                    <span
+                      key={r.slug}
+                      data-testid="plan-live-version"
+                      className="text-sm text-text2"
+                    >
                       {roadmapName(r.slug, roadmapDocs)} v{r.version}
                     </span>
                   ))}
                   {unapproved.map((r) => (
-                    <span key={r.slug} data-testid="plan-unapproved-version" className="text-sm text-text2">
+                    <span
+                      key={r.slug}
+                      data-testid="plan-unapproved-version"
+                      className="text-sm text-text2"
+                    >
                       {roadmapName(r.slug, roadmapDocs)} v{r.version}: not approved yet
                     </span>
                   ))}
-                  {canWrite && <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />}
+                  {canWrite && (
+                    <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />
+                  )}
                   <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
                     Dashed: proposed by a draft, not approved
                   </span>
                   {/* qa-plan-60 (fix4): the scope filters the roadmap, so it sits in the Roadmap's head. */}
-                  <span className="inline-flex flex-wrap items-center gap-2" data-testid="plan-scope-bar">
+                  <span
+                    className="inline-flex flex-wrap items-center gap-2"
+                    data-testid="plan-scope-bar"
+                  >
                     <span className="text-sm text-text2">Show</span>
                     <SegmentedControl<PlanScope>
                       label="Plan scope"
@@ -301,8 +396,8 @@ export default function PlanPage() {
                       value={scope}
                       onChange={setScope}
                       items={[
-                        { value: "all", label: "Approved + drafts" },
-                        { value: "approved", label: "Approved only" },
+                        { value: 'all', label: 'Approved + drafts' },
+                        { value: 'approved', label: 'Approved only' },
                       ]}
                     />
                     <SegmentedControl<PlanView>
@@ -311,8 +406,8 @@ export default function PlanPage() {
                       value={view}
                       onChange={setView}
                       items={[
-                        { value: "table", label: "Table" },
-                        { value: "timeline", label: "Timeline" },
+                        { value: 'table', label: 'Table' },
+                        { value: 'timeline', label: 'Timeline' },
                       ]}
                     />
                   </span>
@@ -322,19 +417,20 @@ export default function PlanPage() {
                     value={by}
                     onChange={setBy}
                     items={[
-                      { value: "horizon", label: "Horizon" },
-                      { value: "goal", label: "Goal" },
-                      { value: "prd", label: "PRD" },
+                      { value: 'horizon', label: 'Horizon' },
+                      { value: 'goal', label: 'Goal' },
+                      { value: 'prd', label: 'PRD' },
                     ]}
                   />
                   <InfoTip label="the roadmap">
-                    Every item of each roadmap&apos;s approved version, and of its latest draft when Approved + drafts is
-                    on. A draft&apos;s item replaces its approved twin and says how it differs.
+                    Every item of each roadmap&apos;s approved version, and of its latest draft when
+                    Approved + drafts is on. A draft&apos;s item replaces its approved twin and says
+                    how it differs.
                   </InfoTip>
                 </>
               }
             >
-              {view === "timeline" && data && data.items.length > 0 ? (
+              {view === 'timeline' && data && data.items.length > 0 ? (
                 <PlanTimeline
                   items={data.items}
                   live={live}
@@ -346,19 +442,19 @@ export default function PlanPage() {
                   onSelect={onSelect}
                 />
               ) : (
-              <PlanTable
-                items={data?.items}
-                by={by}
-                tags={tags}
-                prdOrder={prdOrder}
-                // qa4-plan-20: a picked milestone is the one thing shown, so no row stays highlighted.
-                selected={msTrack ? null : (item?.id ?? null)}
-                onSelect={onSelect}
-                me={userId}
-                loading={q.loading}
-                failed={!!q.error}
-                onLink={canLink ? onLink : undefined}
-              />
+                <PlanTable
+                  items={data?.items}
+                  by={by}
+                  tags={tags}
+                  prdOrder={prdOrder}
+                  // qa4-plan-20: a picked milestone is the one thing shown, so no row stays highlighted.
+                  selected={msTrack ? null : (item?.id ?? null)}
+                  onSelect={onSelect}
+                  me={userId}
+                  loading={q.loading}
+                  failed={!!q.error}
+                  onLink={canLink ? onLink : undefined}
+                />
               )}
               {data && data.items.length === 0 && <BuildRoadmaps />}
             </Panel>
@@ -366,17 +462,39 @@ export default function PlanPage() {
         )}
       </div>
       {msTrack ? (
-        <Sheet open={sheet} title="Milestone" onClose={() => setSheet(false)} testId="sheet-plan-milestone">
+        <Sheet
+          open={sheet}
+          title="Milestone"
+          onClose={() => setSheet(false)}
+          testId="sheet-plan-milestone"
+        >
           {inspector}
         </Sheet>
       ) : (
-        <Sheet open={sheet && !!item} title="Item" onClose={() => setSheet(false)} testId="sheet-plan-item" scroll={false}>
-          <div data-testid="sheet-plan-item-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <Sheet
+          open={sheet && !!item}
+          title="Item"
+          onClose={() => setSheet(false)}
+          testId="sheet-plan-item"
+          scroll={false}
+        >
+          <div
+            data-testid="sheet-plan-item-body"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {sheetInspector}
           </div>
         </Sheet>
       )}
-      {linking && <LinkIssueDialog item={linking.item} term={linking.term} items={data?.items ?? []} onClose={() => setLinking(null)} onLinked={reload} />}
+      {linking && (
+        <LinkIssueDialog
+          item={linking.item}
+          term={linking.term}
+          items={data?.items ?? []}
+          onClose={() => setLinking(null)}
+          onLinked={reload}
+        />
+      )}
     </div>
   );
 }

@@ -33,60 +33,61 @@
  * A lane that adds prose hides it (an InfoTip, a tick whose tooltip says why, a link) or this
  * spec fails (docs/agents/lane-rules.md).
  */
-import { execFileSync } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { expect, test, type Page } from "./test";
-import { login, seedRoadmapReview } from "./helpers";
-import { MOCK_INTERVIEW_TOKEN } from "../lib/api/mock/interviews";
-import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { CHAT_MEETING_ID } from "../lib/api/mock/simple-chat";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
-import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
+import { expect, test, type Page } from './test';
+import { login, seedRoadmapReview } from './helpers';
+import { MOCK_INTERVIEW_TOKEN } from '../lib/api/mock/interviews';
+import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
+import { CHAT_MEETING_ID } from '../lib/api/mock/simple-chat';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
+import { ROADMAP_REVIEW_RUN } from '../lib/api/mock/runs';
 
 const MIN_WORDS = 8;
-const MISSING = /doesn['’]t exist|was not found|could not be found|may have been drafted into a PRD/i;
-const OUT = path.join(__dirname, "..", "test-results", "prose");
-const CEILINGS_FILE = path.join(__dirname, "prose-ceilings.json");
+const MISSING =
+  /doesn['’]t exist|was not found|could not be found|may have been drafted into a PRD/i;
+const OUT = path.join(__dirname, '..', 'test-results', 'prose');
+const CEILINGS_FILE = path.join(__dirname, 'prose-ceilings.json');
 
 /** Selectors whose text is never counted (the header's "Not counted"). */
 const SKIP = [
-  "[role=tooltip]",
-  "[popover]",
-  "[hidden]",
-  "[aria-hidden=true]",
-  "input",
-  "textarea",
-  "select",
-  "option",
-  "[contenteditable]:not([contenteditable=false])",
-  "code",
-  "pre",
-  "kbd",
-  "script",
-  "style",
-  "noscript",
-  "template",
-  "svg",
+  '[role=tooltip]',
+  '[popover]',
+  '[hidden]',
+  '[aria-hidden=true]',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  '[contenteditable]:not([contenteditable=false])',
+  'code',
+  'pre',
+  'kbd',
+  'script',
+  'style',
+  'noscript',
+  'template',
+  'svg',
 ];
 /** User content: what a person wrote, shown as written. */
 const USER_CONTENT = [
-  "[data-user-content]",
+  '[data-user-content]',
   // PRD sections as written (SectionView, EditSection, a ritual's body, the compare view).
-  ".doc-body",
-  "[data-section-body]",
-  "[data-testid=word-diff]",
+  '.doc-body',
+  '[data-section-body]',
+  '[data-testid=word-diff]',
   // A one-pager's lines and chat or meeting messages.
-  "[data-testid=one-pager-line-text]",
-  "[data-testid=chat-message-body]",
+  '[data-testid=one-pager-line-text]',
+  '[data-testid=chat-message-body]',
   // Copy the owner picked word for word to show as visible text (named in the PR that adds it), e.g.
   // the milestone panel's "Work that serves it · tap bars on the chart to add" (owner, Nov 10).
-  "[data-owner-copy]",
+  '[data-owner-copy]',
 ];
 
-type Role = "owner" | "viewer";
-const ROLES: Record<Role, string> = { owner: "admin@example.com", viewer: "viewer@example.com" };
+type Role = 'owner' | 'viewer';
+const ROLES: Record<Role, string> = { owner: 'admin@example.com', viewer: 'viewer@example.com' };
 
 /**
  * A page: its route (the ceilings' key) and how to reach it. `go` is a path, or a path then
@@ -96,100 +97,133 @@ const ROLES: Record<Role, string> = { owner: "admin@example.com", viewer: "viewe
  * /access, /oauth/consent, a shared link /s/<token>) and the routes that only redirect
  * (/, /company, /settings, /requests/new, /simple/prds/<doc>).
  */
-type Visit = { route: string; go: string | string[]; scenario?: string; seed?: (page: Page) => Promise<unknown> };
+type Visit = {
+  route: string;
+  go: string | string[];
+  scenario?: string;
+  seed?: (page: Page) => Promise<unknown>;
+};
 
 const SIMPLE: Visit[] = [
-  { route: "/simple", go: "/simple" },
-  { route: "/simple/decisions", go: "/simple/decisions" },
-  { route: "/simple/goals", go: "/simple/goals" },
-  { route: "/simple/meetings", go: "/simple/meetings" },
-  { route: "/simple/meetings/[id]", go: ["/simple/meetings", "/simple/meetings/[^/]+"] },
-  { route: "/simple/meetings/[id]/chat", go: `/simple/meetings/${CHAT_MEETING_ID}/chat` },
-  { route: "/simple/one-pagers", go: "/simple/one-pagers" },
-  { route: "/simple/one-pagers/[doc]", go: "/simple/one-pagers/guided-setup" },
-  { route: "/simple/priorities", go: "/simple/priorities" },
-  { route: "/simple/roadmap", go: "/simple/roadmap" },
+  { route: '/simple', go: '/simple' },
+  { route: '/simple/decisions', go: '/simple/decisions' },
+  { route: '/simple/goals', go: '/simple/goals' },
+  { route: '/simple/meetings', go: '/simple/meetings' },
+  { route: '/simple/meetings/[id]', go: ['/simple/meetings', '/simple/meetings/[^/]+'] },
+  { route: '/simple/meetings/[id]/chat', go: `/simple/meetings/${CHAT_MEETING_ID}/chat` },
+  { route: '/simple/one-pagers', go: '/simple/one-pagers' },
+  { route: '/simple/one-pagers/[doc]', go: '/simple/one-pagers/guided-setup' },
+  { route: '/simple/priorities', go: '/simple/priorities' },
+  { route: '/simple/roadmap', go: '/simple/roadmap' },
 ];
 
 const DETAILED: Visit[] = [
-  { route: "/home", go: "/home" },
-  { route: "/inbox", go: "/inbox" },
-  { route: "/documents", go: "/documents" },
-  { route: "/documents/new", go: "/documents/new" },
-  { route: "/documents/[doc]", go: "/documents/annual-billing" },
-  { route: "/documents/[doc]/composition", go: "/documents/annual-billing/composition" },
-  { route: "/documents/[doc]/diff", go: "/documents/annual-billing/diff" },
-  { route: "/documents/[doc]/public", go: "/documents/annual-billing/public" },
-  { route: "/documents/[doc]/publish", go: "/documents/referral-link/publish" },
-  { route: "/documents/[doc]/v/[n]", go: "/documents/annual-billing/v/2" },
-  { route: "/documents/[doc]/v/[n]/evidence", go: "/documents/annual-billing/v/2/evidence" },
-  { route: "/documents/[doc]/v/[n]/impact", go: "/documents/annual-billing/v/2/impact" },
-  { route: "/documents/[doc]/v/[n]/items", go: "/documents/annual-billing/v/2/items" },
-  { route: "/documents/[doc]/v/[n]/present", go: "/documents/referral-link/v/2/present" },
-  { route: "/documents/[doc]/v/[n]/quality", go: "/documents/referral-link/v/2/quality" },
-  { route: "/documents/[doc]/v/[n]/roadmap", go: "/documents/usage-alerts/v/1/roadmap" },
-  { route: "/briefs/[id]", go: ["/documents/annual-billing", "/briefs/[^/]+"] },
+  { route: '/home', go: '/home' },
+  { route: '/inbox', go: '/inbox' },
+  { route: '/documents', go: '/documents' },
+  { route: '/documents/new', go: '/documents/new' },
+  { route: '/documents/[doc]', go: '/documents/annual-billing' },
+  { route: '/documents/[doc]/composition', go: '/documents/annual-billing/composition' },
+  { route: '/documents/[doc]/diff', go: '/documents/annual-billing/diff' },
+  { route: '/documents/[doc]/public', go: '/documents/annual-billing/public' },
+  { route: '/documents/[doc]/publish', go: '/documents/referral-link/publish' },
+  { route: '/documents/[doc]/v/[n]', go: '/documents/annual-billing/v/2' },
+  { route: '/documents/[doc]/v/[n]/evidence', go: '/documents/annual-billing/v/2/evidence' },
+  { route: '/documents/[doc]/v/[n]/impact', go: '/documents/annual-billing/v/2/impact' },
+  { route: '/documents/[doc]/v/[n]/items', go: '/documents/annual-billing/v/2/items' },
+  { route: '/documents/[doc]/v/[n]/present', go: '/documents/referral-link/v/2/present' },
+  { route: '/documents/[doc]/v/[n]/quality', go: '/documents/referral-link/v/2/quality' },
+  { route: '/documents/[doc]/v/[n]/roadmap', go: '/documents/usage-alerts/v/1/roadmap' },
+  { route: '/briefs/[id]', go: ['/documents/annual-billing', '/briefs/[^/]+'] },
   // The mock's ids are stable for a scenario (its seed is seeded): Guided setup's entity and R-90's deletion.
-  { route: "/impact/entities/[id]", scenario: "impact", go: "/impact/entities/959a57aa-38ad-4d78-8178-3342688ce78c" },
-  { route: "/impact/changes/[id]", scenario: "impact", go: "/impact/changes/b7dce326-2a47-4000-8b74-562e8ac05a9c" },
-  { route: "/baseline", go: "/baseline" },
-  { route: "/priorities", go: "/priorities" },
-  { route: "/plan", go: "/plan" },
-  { route: "/plan/dates", go: "/plan/dates" },
-  { route: "/plan/documents", go: "/plan/documents" },
-  { route: "/plan/outcomes", go: "/plan/outcomes" },
-  { route: "/plan/reports", go: "/plan/reports" },
-  { route: "/plan/reports/latest", go: "/plan/reports/latest" },
-  { route: "/plan/reports/[id]", scenario: "alignment-report", go: ["/plan/reports", "/plan/reports/(?!latest)[^/]+"] },
-  { route: "/roadmap/changelog", go: "/roadmap/changelog" },
-  { route: "/roadmap/launches", go: "/roadmap/launches" },
-  { route: "/requests", go: "/requests" },
-  { route: "/requests/themes", go: "/requests/themes" },
-  { route: "/requests/to-decide", go: "/requests/to-decide" },
-  { route: "/requests/interviews", go: "/requests/interviews" },
-  { route: "/requests/interviews/[id]", go: "/requests/interviews/66952c66-1c80-4e84-84a4-838e1243af88" },
-  { route: "/intakes/[id]", scenario: "before-drafting", go: `/intakes/${BEFORE_DRAFTING.intakeId}` },
-  { route: "/runs", go: "/runs" },
-  { route: "/runs/[id]", go: ["/runs", "/runs/[^/]+"] },
   {
-    route: "/runs/[id]/review/[checkpoint]",
+    route: '/impact/entities/[id]',
+    scenario: 'impact',
+    go: '/impact/entities/959a57aa-38ad-4d78-8178-3342688ce78c',
+  },
+  {
+    route: '/impact/changes/[id]',
+    scenario: 'impact',
+    go: '/impact/changes/b7dce326-2a47-4000-8b74-562e8ac05a9c',
+  },
+  { route: '/baseline', go: '/baseline' },
+  { route: '/priorities', go: '/priorities' },
+  { route: '/plan', go: '/plan' },
+  { route: '/plan/dates', go: '/plan/dates' },
+  { route: '/plan/documents', go: '/plan/documents' },
+  { route: '/plan/outcomes', go: '/plan/outcomes' },
+  { route: '/plan/reports', go: '/plan/reports' },
+  { route: '/plan/reports/latest', go: '/plan/reports/latest' },
+  {
+    route: '/plan/reports/[id]',
+    scenario: 'alignment-report',
+    go: ['/plan/reports', '/plan/reports/(?!latest)[^/]+'],
+  },
+  { route: '/roadmap/changelog', go: '/roadmap/changelog' },
+  { route: '/roadmap/launches', go: '/roadmap/launches' },
+  { route: '/requests', go: '/requests' },
+  { route: '/requests/themes', go: '/requests/themes' },
+  { route: '/requests/to-decide', go: '/requests/to-decide' },
+  { route: '/requests/interviews', go: '/requests/interviews' },
+  {
+    route: '/requests/interviews/[id]',
+    go: '/requests/interviews/66952c66-1c80-4e84-84a4-838e1243af88',
+  },
+  {
+    route: '/intakes/[id]',
+    scenario: 'before-drafting',
+    go: `/intakes/${BEFORE_DRAFTING.intakeId}`,
+  },
+  { route: '/runs', go: '/runs' },
+  { route: '/runs/[id]', go: ['/runs', '/runs/[^/]+'] },
+  {
+    route: '/runs/[id]/review/[checkpoint]',
     seed: seedRoadmapReview,
     go: `/runs/${ROADMAP_REVIEW_RUN.run.id}/review/${ROADMAP_REVIEW_RUN.run.checkpoints[0].id}`,
   },
-  { route: "/sources", go: "/sources" },
-  { route: "/company/decisions", go: "/company/decisions" },
-  { route: "/company/market", go: "/company/market" },
-  { route: "/company/metrics", go: "/company/metrics" },
-  { route: "/company/rituals", go: "/company/rituals" },
+  { route: '/sources', go: '/sources' },
+  { route: '/company/decisions', go: '/company/decisions' },
+  { route: '/company/market', go: '/company/market' },
+  { route: '/company/metrics', go: '/company/metrics' },
+  { route: '/company/rituals', go: '/company/rituals' },
   // The market scenario's competitive digest (MARKET_DIGEST_ID in lib/api/mock/server.ts).
-  { route: "/company/rituals/[occurrence]", scenario: "market", go: "/company/rituals/6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b" },
-  { route: "/company/strategy", go: "/company/strategy" },
-  { route: "/company/updates", go: "/company/updates" },
-  { route: "/specs/[id]/design/[versionId]", go: "/specs/c3000000-0000-4000-8000-000000000001/design/c3000000-0000-4000-8000-000000000013" },
-  { route: "/design", go: "/design" },
-  { route: "/account", go: "/account" },
-  { route: "/i/[token]", go: `/i/${MOCK_INTERVIEW_TOKEN}` },
-  { route: "/settings/analytics", go: "/settings/analytics" },
-  { route: "/settings/api-tokens", go: "/settings/api-tokens" },
-  { route: "/settings/autonomy", go: "/settings/autonomy" },
-  { route: "/settings/claude-accounts", go: "/settings/claude-accounts" },
-  { route: "/settings/company", go: "/settings/company" },
-  { route: "/settings/connections", go: "/settings/connections" },
-  { route: "/settings/members", go: "/settings/members" },
-  { route: "/settings/notifications", go: "/settings/notifications" },
-  { route: "/settings/sources", go: "/settings/sources" },
-  { route: "/settings/templates", go: "/settings/templates" },
-  { route: "/settings/templates/new", go: "/settings/templates/new" },
-  { route: "/settings/templates/[key]", go: "/settings/templates/one-pager" },
-  { route: "/settings/themes", go: "/settings/themes" },
-  { route: "/settings/themes/new", go: "/settings/themes/new" },
-  { route: "/settings/themes/[key]", go: "/settings/themes/clean-document" },
-  { route: "/settings/trash", go: "/settings/trash" },
-  { route: "/settings/webhooks", go: "/settings/webhooks" },
+  {
+    route: '/company/rituals/[occurrence]',
+    scenario: 'market',
+    go: '/company/rituals/6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b',
+  },
+  { route: '/company/strategy', go: '/company/strategy' },
+  { route: '/company/updates', go: '/company/updates' },
+  {
+    route: '/specs/[id]/design/[versionId]',
+    go: '/specs/c3000000-0000-4000-8000-000000000001/design/c3000000-0000-4000-8000-000000000013',
+  },
+  { route: '/design', go: '/design' },
+  { route: '/account', go: '/account' },
+  { route: '/i/[token]', go: `/i/${MOCK_INTERVIEW_TOKEN}` },
+  { route: '/settings/analytics', go: '/settings/analytics' },
+  { route: '/settings/api-tokens', go: '/settings/api-tokens' },
+  { route: '/settings/autonomy', go: '/settings/autonomy' },
+  { route: '/settings/claude-accounts', go: '/settings/claude-accounts' },
+  { route: '/settings/company', go: '/settings/company' },
+  { route: '/settings/connections', go: '/settings/connections' },
+  { route: '/settings/members', go: '/settings/members' },
+  { route: '/settings/notifications', go: '/settings/notifications' },
+  { route: '/settings/sources', go: '/settings/sources' },
+  { route: '/settings/templates', go: '/settings/templates' },
+  { route: '/settings/templates/new', go: '/settings/templates/new' },
+  { route: '/settings/templates/[key]', go: '/settings/templates/one-pager' },
+  { route: '/settings/themes', go: '/settings/themes' },
+  { route: '/settings/themes/new', go: '/settings/themes/new' },
+  { route: '/settings/themes/[key]', go: '/settings/themes/clean-document' },
+  { route: '/settings/trash', go: '/settings/trash' },
+  { route: '/settings/webhooks', go: '/settings/webhooks' },
 ];
 
 type Ceilings = Record<Role, Record<string, number>>;
-const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE) ? JSON.parse(fs.readFileSync(CEILINGS_FILE, "utf8")) : { owner: {}, viewer: {} };
+const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE)
+  ? JSON.parse(fs.readFileSync(CEILINGS_FILE, 'utf8'))
+  : { owner: {}, viewer: {} };
 
 /**
  * The ceilings on the merge base (with origin/main, or PROSE_BASE), or an error saying why
@@ -198,17 +232,23 @@ const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE) ? JSON.parse(fs.readFile
  * (.github/workflows/ci.yml), and run locally it uses the ref that is there.
  */
 function baseCeilings(): Ceilings | string {
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: __dirname, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  const ref = process.env.PROSE_BASE || "origin/main";
+  const git = (...args: string[]) =>
+    execFileSync('git', args, {
+      cwd: __dirname,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  const ref = process.env.PROSE_BASE || 'origin/main';
   let base: string | null = null;
   try {
-    base = git("merge-base", "HEAD", ref);
+    base = git('merge-base', 'HEAD', ref);
   } catch {
     // No such ref, or a shallow checkout without the history: the error below says what to run.
   }
-  if (!base) return `no merge base with ${ref}: run git fetch origin main (with --unshallow in a shallow clone), or set PROSE_BASE to the branch the PR goes into`;
+  if (!base)
+    return `no merge base with ${ref}: run git fetch origin main (with --unshallow in a shallow clone), or set PROSE_BASE to the branch the PR goes into`;
   try {
-    return JSON.parse(git("show", `${base}:web/e2e/prose-ceilings.json`));
+    return JSON.parse(git('show', `${base}:web/e2e/prose-ceilings.json`));
   } catch {
     return { owner: {}, viewer: {} };
   }
@@ -217,11 +257,14 @@ const base = baseCeilings();
 
 /** Every route the guard visits, for the ratchet to drop the ceilings of routes gone since. */
 fs.mkdirSync(OUT, { recursive: true });
-fs.writeFileSync(path.join(OUT, "routes.json"), JSON.stringify([...SIMPLE, ...DETAILED].map((v) => v.route)));
+fs.writeFileSync(
+  path.join(OUT, 'routes.json'),
+  JSON.stringify([...SIMPLE, ...DETAILED].map((v) => v.route)),
+);
 
 /** Waits until the page's text stops changing (the mock answers in the browser). */
 async function settle(page: Page) {
-  await page.waitForLoadState("networkidle").catch(() => undefined);
+  await page.waitForLoadState('networkidle').catch(() => undefined);
   let last = -1;
   for (let i = 0; i < 20; i++) {
     const len = await page.evaluate(() => document.body.innerText.length);
@@ -233,12 +276,15 @@ async function settle(page: Page) {
 
 /** Follows `go` to the page, returning the path it opened, or null when a link is missing. */
 async function open(page: Page, go: string | string[]): Promise<string | null> {
-  const hops = typeof go === "string" ? [go] : go;
+  const hops = typeof go === 'string' ? [go] : go;
   await page.goto(hops[0]);
   await settle(page);
   for (const prefix of hops.slice(1)) {
     const href = await page.evaluate(
-      (p) => [...document.querySelectorAll<HTMLAnchorElement>("a[href]")].map((a) => a.getAttribute("href") ?? "").find((h) => new RegExp(`^${p}$`).test(h.split("?")[0])),
+      (p) =>
+        [...document.querySelectorAll<HTMLAnchorElement>('a[href]')]
+          .map((a) => a.getAttribute('href') ?? '')
+          .find((h) => new RegExp(`^${p}$`).test(h.split('?')[0])),
       prefix,
     );
     if (!href) return null;
@@ -258,7 +304,7 @@ function countProse(page: Page): Promise<Count> {
       const last = new Map<Element, Node>();
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        const text = n.nodeValue ?? "";
+        const text = n.nodeValue ?? '';
         if (!text.trim()) continue;
         const el = n.parentElement;
         if (!el || el.closest(skip)) continue;
@@ -266,7 +312,8 @@ function countProse(page: Page): Promise<Count> {
         const r = el.getBoundingClientRect();
         if (r.width < 2 || r.height < 2) continue;
         let block: Element = el;
-        while (block.parentElement && /^(inline|contents)$/.test(getComputedStyle(block).display)) block = block.parentElement;
+        while (block.parentElement && /^(inline|contents)$/.test(getComputedStyle(block).display))
+          block = block.parentElement;
         const parts = blocks.get(block) ?? [];
         if (parts.length && last.get(block) === n.previousSibling) parts[parts.length - 1] += text;
         else parts.push(text);
@@ -276,9 +323,9 @@ function countProse(page: Page): Promise<Count> {
       const sentences: string[] = [];
       let words = 0;
       for (const parts of blocks.values()) {
-        const text = parts.join(" ").replace(/\s+/g, " ").trim();
+        const text = parts.join(' ').replace(/\s+/g, ' ').trim();
         for (const s of text.split(/(?<=[.!?])\s+/)) {
-          const n = s.split(" ").filter((w) => /\p{L}/u.test(w)).length;
+          const n = s.split(' ').filter((w) => /\p{L}/u.test(w)).length;
           if (n >= minWords) {
             sentences.push(s);
             words += n;
@@ -287,11 +334,12 @@ function countProse(page: Page): Promise<Count> {
       }
       return { words, sentences };
     },
-    { skip: [...SKIP, ...USER_CONTENT].join(","), minWords: MIN_WORDS },
+    { skip: [...SKIP, ...USER_CONTENT].join(','), minWords: MIN_WORDS },
   );
 }
 
-const fileName = (role: Role, route: string) => `${role}${route.replace(/[^a-z0-9-]+/gi, "_")}.json`;
+const fileName = (role: Role, route: string) =>
+  `${role}${route.replace(/[^a-z0-9-]+/gi, '_')}.json`;
 
 /**
  * Pages in groups of CHUNK per sign-in (a page with its own scenario or seed alone), so the
@@ -308,50 +356,73 @@ function groups(pages: Visit[]): Visit[][] {
 
 async function check(page: Page, role: Role, mode: string, v: Visit) {
   const opened = await open(page, v.go);
-  expect.soft(opened, `no link to ${v.route} on the way there (${JSON.stringify(v.go)})`).not.toBeNull();
+  expect
+    .soft(opened, `no link to ${v.route} on the way there (${JSON.stringify(v.go)})`)
+    .not.toBeNull();
   if (!opened) return;
   // A stale id would count a "not found" page instead of the real one; the ratchet skips it.
-  const body = await page.locator("body").innerText();
+  const body = await page.locator('body').innerText();
   const missing = MISSING.test(body);
   expect.soft(body, `${v.route} opened a missing page (${opened})`).not.toMatch(MISSING);
   const { words, sentences } = await countProse(page);
-  fs.writeFileSync(path.join(OUT, fileName(role, v.route)), JSON.stringify({ role, mode, route: v.route, url: opened, missing, words, sentences }, null, 2));
+  fs.writeFileSync(
+    path.join(OUT, fileName(role, v.route)),
+    JSON.stringify({ role, mode, route: v.route, url: opened, missing, words, sentences }, null, 2),
+  );
   const ceiling = ceilings[role]?.[v.route];
-  expect.soft(ceiling, `${v.route} as ${role} has no ceiling in e2e/prose-ceilings.json: run npm run prose:ratchet`).toBeDefined();
+  expect
+    .soft(
+      ceiling,
+      `${v.route} as ${role} has no ceiling in e2e/prose-ceilings.json: run npm run prose:ratchet`,
+    )
+    .toBeDefined();
   if (ceiling === undefined) return;
   // A page new since the merge base starts at its count, never above it.
-  if (typeof base !== "string" && base[role]?.[v.route] === undefined && !missing)
+  if (typeof base !== 'string' && base[role]?.[v.route] === undefined && !missing)
     expect
-      .soft(ceiling, `${v.route} as ${role} is new since the merge base: its ceiling starts at its count, ${words} (npm run prose:ratchet), never above it`)
+      .soft(
+        ceiling,
+        `${v.route} as ${role} is new since the merge base: its ceiling starts at its count, ${words} (npm run prose:ratchet), never above it`,
+      )
       .toBeLessThanOrEqual(words);
   expect
     .soft(
       words,
-      `${v.route} as ${role}: ${words} words of visible prose, ceiling ${ceiling}. Hide the new explanation behind an InfoTip, a tick or a link (docs/agents/lane-rules.md). Prose sentences:\n${sentences.join("\n")}`,
+      `${v.route} as ${role}: ${words} words of visible prose, ceiling ${ceiling}. Hide the new explanation behind an InfoTip, a tick or a link (docs/agents/lane-rules.md). Prose sentences:\n${sentences.join('\n')}`,
     )
     .toBeLessThanOrEqual(ceiling);
 }
 
-test.describe("prose guard", () => {
+test.describe('prose guard', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("no ceiling is above the merge base's (ceilings are never raised by hand)", () => {
-    expect(typeof base === "string" ? base : null, "the merge base's ceilings").toBeNull();
-    if (typeof base === "string") return;
+    expect(typeof base === 'string' ? base : null, "the merge base's ceilings").toBeNull();
+    if (typeof base === 'string') return;
     const raised = (Object.keys(ROLES) as Role[]).flatMap((role) =>
       Object.entries(ceilings[role] ?? {})
         .filter(([route, n]) => base[role]?.[route] !== undefined && n > base[role][route])
         .map(([route, n]) => `${role} ${route}: ${n}, was ${base[role][route]}`),
     );
-    expect(raised, "Ceilings in e2e/prose-ceilings.json only go down (npm run prose:ratchet); hide the new prose instead").toEqual([]);
+    expect(
+      raised,
+      'Ceilings in e2e/prose-ceilings.json only go down (npm run prose:ratchet); hide the new prose instead',
+    ).toEqual([]);
   });
 
-  for (const [mode, pages] of [["Simple", SIMPLE], ["Detailed", DETAILED]] as const) {
+  for (const [mode, pages] of [
+    ['Simple', SIMPLE],
+    ['Detailed', DETAILED],
+  ] as const) {
     for (const role of Object.keys(ROLES) as Role[]) {
       for (const group of groups(pages)) {
-        test(`${mode} as ${role}: ${group.map((v) => v.route).join(", ")}`, async ({ page }) => {
+        test(`${mode} as ${role}: ${group.map((v) => v.route).join(', ')}`, async ({ page }) => {
           const [first] = group;
-          if (first.scenario) await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, first.scenario] as const);
+          if (first.scenario)
+            await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [
+              MOCK_SCENARIO_KEY,
+              first.scenario,
+            ] as const);
           await login(page, ROLES[role]);
           if (first.seed) await first.seed(page);
           for (const v of group) await test.step(v.route, () => check(page, role, mode, v));

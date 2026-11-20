@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * dod-perf review: a dragged bar moves on a layer of its own over the chart, so a drag frame
@@ -18,7 +18,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * no_claim = frame times (the timing spec's).
  */
 
-const URL = "/simple/roadmap";
+const URL = '/simple/roadmap';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 
@@ -30,63 +30,90 @@ async function watch(bar: Locator) {
     const svg = (g as SVGGElement).ownerSVGElement!;
     w.__chartWatch = new MutationObserver((ms) => {
       for (const m of ms) {
-        if (m.type === "attributes" && m.target === g && m.attributeName?.startsWith("data-")) continue;
-        w.__chartChanges.push(`${m.type} ${(m.target as Element).tagName} ${m.attributeName ?? ""}`);
+        if (m.type === 'attributes' && m.target === g && m.attributeName?.startsWith('data-'))
+          continue;
+        w.__chartChanges.push(
+          `${m.type} ${(m.target as Element).tagName} ${m.attributeName ?? ''}`,
+        );
       }
     });
-    w.__chartWatch.observe(svg, { subtree: true, attributes: true, childList: true, characterData: true });
+    w.__chartWatch.observe(svg, {
+      subtree: true,
+      attributes: true,
+      childList: true,
+      characterData: true,
+    });
   });
 }
 const changes = (page: Page) =>
   page.evaluate(() => {
     const w = window as unknown as { __chartChanges: string[]; __chartWatch: MutationObserver };
-    w.__chartChanges.push(...w.__chartWatch.takeRecords().map((m) => `${m.type} ${(m.target as Element).tagName} ${m.attributeName ?? ""}`));
+    w.__chartChanges.push(
+      ...w.__chartWatch
+        .takeRecords()
+        .map((m) => `${m.type} ${(m.target as Element).tagName} ${m.attributeName ?? ''}`),
+    );
     w.__chartWatch.disconnect();
     return w.__chartChanges;
   });
 
 async function open(page: Page, view: string) {
   await page.goto(URL);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
-  if (view !== "timeline") await page.getByTestId(`format-${view}`).click();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible({ timeout: 15_000 });
+  if (view !== 'timeline') await page.getByTestId(`format-${view}`).click();
   const bar = page.locator('g[data-testid="bar"][data-kind="dated"]').first();
   await expect(bar).toBeVisible({ timeout: 15_000 });
   return bar;
 }
 
 for (const [where, use] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
-  const phone = where === "phone";
+  const phone = where === 'phone';
   test.describe(`a dragged bar on its own layer, ${where}`, () => {
     test.use(use);
     test.beforeEach(async ({ context, page }) => {
-      await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
+      await context.addInitScript(
+        (key) => localStorage.setItem(key, 'simple-500'),
+        MOCK_SCENARIO_KEY,
+      );
       await login(page);
     });
 
     // The Timeline is no svg chart: its own case below reads its rows.
-    for (const view of phone ? ["gantt"] : ["gantt", "waterfall"]) {
+    for (const view of phone ? ['gantt'] : ['gantt', 'waterfall']) {
       test(`${view}: a drag frame leaves the chart's other bars alone`, async ({ page }) => {
         // simple-roadmap-drag-layer (see the file's card).
         const bar = await open(page, view);
-        const id = await bar.getAttribute("data-bar-id");
-        const was = await bar.getAttribute("data-start");
-        const body = bar.locator("rect[data-body]");
+        const id = await bar.getAttribute('data-bar-id');
+        const was = await bar.getAttribute('data-start');
+        const body = bar.locator('rect[data-body]');
         await body.scrollIntoViewIfNeeded();
         const box = (await body.boundingBox())!;
         const x = box.x + Math.min(box.width / 2, 20);
         const y = box.y + box.height / 2;
         const dx = phone ? 60 : 160;
-        const ev = { pointerId: 7, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
-        const surface = page.getByTestId("chart-svg");
+        const ev = {
+          pointerId: 7,
+          pointerType: 'touch',
+          isPrimary: true,
+          bubbles: true,
+          button: 0,
+          buttons: 1,
+        };
+        const surface = page.getByTestId('chart-svg');
         const move = async (n: number) => {
-          if (phone) await surface.dispatchEvent("pointermove", { ...ev, clientX: x + (dx * n) / 24, clientY: y });
+          if (phone)
+            await surface.dispatchEvent('pointermove', {
+              ...ev,
+              clientX: x + (dx * n) / 24,
+              clientY: y,
+            });
           else await page.mouse.move(x + (dx * n) / 24, y);
         };
         if (phone) {
-          await bar.dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+          await bar.dispatchEvent('pointerdown', { ...ev, clientX: x, clientY: y });
           await page.waitForTimeout(650);
         } else {
           await page.mouse.move(x, y);
@@ -101,16 +128,22 @@ for (const [where, use] of [
           await page.waitForTimeout(20);
         }
         // The person sees the bar's new dates as it moves.
-        await expect(page.getByTestId("drag-live")).toBeVisible();
-        await expect(page.getByTestId("drag-live")).toContainText("–");
+        await expect(page.getByTestId('drag-live')).toBeVisible();
+        await expect(page.getByTestId('drag-live')).toContainText('–');
         expect(await changes(page)).toEqual([]);
-        if (phone) await surface.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + dx, clientY: y });
+        if (phone)
+          await surface.dispatchEvent('pointerup', {
+            ...ev,
+            buttons: 0,
+            clientX: x + dx,
+            clientY: y,
+          });
         else await page.mouse.up();
         // Released: the bar lands on its new dates, drawn in the chart again.
         const landed = page.locator(`g[data-testid="bar"][data-bar-id="${id}"]`);
-        await expect(landed).not.toHaveAttribute("data-start", was!);
+        await expect(landed).not.toHaveAttribute('data-start', was!);
         await expect(landed).toBeVisible();
-        await expect(page.getByTestId("drag-live")).toBeHidden();
+        await expect(page.getByTestId('drag-live')).toBeHidden();
       });
     }
   });
@@ -121,21 +154,24 @@ for (const [where, use] of [
  * chart, and its bars move by drag (roadmap-r2). A drag frame there changes the dragged item's
  * own row only (its bar, its dates, the live words); no other row of the 500 is written.
  */
-test.describe("a dragged Timeline bar, desktop", () => {
+test.describe('a dragged Timeline bar, desktop', () => {
   test.use(DESKTOP);
   test.beforeEach(async ({ context, page }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
+    await context.addInitScript(
+      (key) => localStorage.setItem(key, 'simple-500'),
+      MOCK_SCENARIO_KEY,
+    );
     await login(page);
   });
 
-  test("timeline: a drag frame leaves the other rows alone", async ({ page }) => {
+  test('timeline: a drag frame leaves the other rows alone', async ({ page }) => {
     await page.goto(URL);
-    await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
-    const chart = page.getByTestId("simple-chart");
-    await expect(chart).toHaveAttribute("data-format", "timeline");
+    await expect(page.getByTestId('simple-roadmap')).toBeVisible({ timeout: 15_000 });
+    const chart = page.getByTestId('simple-chart');
+    await expect(chart).toHaveAttribute('data-format', 'timeline');
     // All 3 years in sight, then a bar that moves (a grab cursor), wholly in the chart's window.
-    await page.getByTestId("zoom-all").click();
-    await expect(page.getByTestId("zoom-all")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId('zoom-all').click();
+    await expect(page.getByTestId('zoom-all')).toHaveAttribute('aria-pressed', 'true');
     const bars = chart.locator('[data-testid="timeline-bar"].cursor-grab');
     await expect(bars.first()).toBeVisible({ timeout: 15_000 });
     // tb-mk: the bands are tracks now, and the first track's top rows are short October bars
@@ -145,7 +181,8 @@ test.describe("a dragged Timeline bar, desktop", () => {
       const inside = (b: Element) => {
         const r = b.getBoundingClientRect();
         let p = b.parentElement;
-        while (p && !(p.scrollWidth > p.clientWidth && getComputedStyle(p).overflowX !== "visible")) p = p.parentElement;
+        while (p && !(p.scrollWidth > p.clientWidth && getComputedStyle(p).overflowX !== 'visible'))
+          p = p.parentElement;
         const w = p?.getBoundingClientRect() ?? { left: 0, right: innerWidth };
         return r.width > 24 && r.left > w.left + 220 && r.right < w.right - 200;
       };
@@ -154,7 +191,7 @@ test.describe("a dragged Timeline bar, desktop", () => {
     expect(n).toBeGreaterThanOrEqual(0);
     const bar = bars.nth(n);
     // Scrolled to the middle of the page: rows out of sight are sized by estimate until drawn.
-    await bar.evaluate((b) => b.scrollIntoView({ block: "center" }));
+    await bar.evaluate((b) => b.scrollIntoView({ block: 'center' }));
     await expect(bar).toBeInViewport();
     expect(
       await bar.evaluate((b) => {
@@ -162,8 +199,8 @@ test.describe("a dragged Timeline bar, desktop", () => {
         return r.top > 0 && r.bottom < innerHeight - 20;
       }),
     ).toBe(true);
-    const id = await bar.getAttribute("data-bar-id");
-    const was = await bar.getAttribute("data-start");
+    const id = await bar.getAttribute('data-bar-id');
+    const was = await bar.getAttribute('data-start');
     const box = (await bar.boundingBox())!;
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
@@ -178,15 +215,24 @@ test.describe("a dragged Timeline bar, desktop", () => {
       const root = b.closest('[data-testid="simple-chart"]')!;
       w.__rowChanges = [];
       w.__rowWatch = new MutationObserver((ms) => {
-        for (const m of ms) if (!row.contains(m.target)) w.__rowChanges.push(`${m.type} ${(m.target as Element).tagName ?? "#text"} ${m.attributeName ?? ""}`);
+        for (const m of ms)
+          if (!row.contains(m.target))
+            w.__rowChanges.push(
+              `${m.type} ${(m.target as Element).tagName ?? '#text'} ${m.attributeName ?? ''}`,
+            );
       });
-      w.__rowWatch.observe(root, { subtree: true, attributes: true, childList: true, characterData: true });
+      w.__rowWatch.observe(root, {
+        subtree: true,
+        attributes: true,
+        childList: true,
+        characterData: true,
+      });
     });
     for (let n = 4; n <= 24; n++) {
       await page.mouse.move(x + (dx * n) / 24, y);
       await page.waitForTimeout(20);
     }
-    await expect(page.getByTestId("drag-live")).toContainText("–");
+    await expect(page.getByTestId('drag-live')).toContainText('–');
     const changed = await page.evaluate(() => {
       const w = window as unknown as { __rowChanges: string[]; __rowWatch: MutationObserver };
       w.__rowWatch.disconnect();
@@ -195,28 +241,33 @@ test.describe("a dragged Timeline bar, desktop", () => {
     expect(changed).toEqual([]);
     await page.mouse.up();
     // Released: the bar lands on its new dates.
-    await expect(chart.locator(`[data-testid="timeline-bar"][data-bar-id="${id}"]`)).not.toHaveAttribute("data-start", was!);
-    await expect(page.getByTestId("drag-live")).toBeHidden();
+    await expect(
+      chart.locator(`[data-testid="timeline-bar"][data-bar-id="${id}"]`),
+    ).not.toHaveAttribute('data-start', was!);
+    await expect(page.getByTestId('drag-live')).toBeHidden();
   });
 
   // ah-timeline-timing review: the 500-item Timeline drag still missed frames, each one
   // repainting all 500 rows. Counted, not timed: while a bar is dragged, the rows out of sight
   // are not drawn (content-visibility skips them), the dragged bar and the rows in sight are.
-  test("timeline: a drag draws the rows in sight, not the 500", async ({ page }) => {
+  test('timeline: a drag draws the rows in sight, not the 500', async ({ page }) => {
     await page.goto(URL);
-    await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
-    const rows = page.getByTestId("timeline-row");
+    await expect(page.getByTestId('simple-roadmap')).toBeVisible({ timeout: 15_000 });
+    const rows = page.getByTestId('timeline-row');
     await expect(rows).toHaveCount(500, { timeout: 15_000 });
     // At 6 months a movable bar is in sight (the Timeline opens on 3 months). tb-mk: the bands
     // are tracks now, and the first track's top bars start before the window, under the sticky
     // names, so the first movable bar that starts inside the window is the one grabbed.
-    await page.getByTestId("zoom-6m").click();
+    await page.getByTestId('zoom-6m').click();
     const movable = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]');
     await expect(movable.first()).toBeVisible();
     const first = await movable.evaluateAll((bs) =>
       bs.findIndex((b) => {
         const r = b.getBoundingClientRect();
-        const name = b.closest('[data-testid="timeline-row"]')!.querySelector("button")!.getBoundingClientRect();
+        const name = b
+          .closest('[data-testid="timeline-row"]')!
+          .querySelector('button')!
+          .getBoundingClientRect();
         return r.width > 24 && r.left > name.right + 4;
       }),
     );
@@ -228,23 +279,39 @@ test.describe("a dragged Timeline bar, desktop", () => {
     await page.mouse.move(x, y);
     await page.mouse.down();
     await page.mouse.move(x + 80, y, { steps: 8 });
-    await expect(page.getByTestId("drag-live")).toBeVisible();
+    await expect(page.getByTestId('drag-live')).toBeVisible();
     const drawn = (b: Element) => b.checkVisibility({ contentVisibilityAuto: true });
     expect(await bar.evaluate(drawn)).toBe(true);
     const inSight = await rows.evaluateAll((rs) =>
       rs
-        .filter((r) => r.getBoundingClientRect().top >= 0 && r.getBoundingClientRect().bottom <= innerHeight)
-        .map((r) => r.querySelector("[data-testid=timeline-bar]")!.checkVisibility({ contentVisibilityAuto: true })),
+        .filter(
+          (r) =>
+            r.getBoundingClientRect().top >= 0 && r.getBoundingClientRect().bottom <= innerHeight,
+        )
+        .map((r) =>
+          r
+            .querySelector('[data-testid=timeline-bar]')!
+            .checkVisibility({ contentVisibilityAuto: true }),
+        ),
     );
     expect(inSight.length).toBeGreaterThan(5);
     expect(inSight.every(Boolean)).toBe(true);
-    const far = await rows.evaluateAll((rs) => rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight).length);
+    const far = await rows.evaluateAll(
+      (rs) => rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight).length,
+    );
     expect(far).toBeGreaterThan(300);
-    const farDrawn = await rows.evaluateAll((rs) =>
-      rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight && r.querySelector("[data-testid=timeline-bar]")!.checkVisibility({ contentVisibilityAuto: true })).length,
+    const farDrawn = await rows.evaluateAll(
+      (rs) =>
+        rs.filter(
+          (r) =>
+            r.getBoundingClientRect().top > 4 * innerHeight &&
+            r
+              .querySelector('[data-testid=timeline-bar]')!
+              .checkVisibility({ contentVisibilityAuto: true }),
+        ).length,
     );
     expect(farDrawn).toBe(0);
     await page.mouse.up();
-    await expect(page.getByTestId("drag-live")).toBeHidden();
+    await expect(page.getByTestId('drag-live')).toBeHidden();
   });
 });

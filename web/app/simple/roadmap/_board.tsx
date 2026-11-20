@@ -1,42 +1,81 @@
-"use client";
+'use client';
 
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 
-import { InfoTip } from "@/components/ds";
-import { LINK_KINDS } from "@/lib/roadmap-links";
+import { InfoTip } from '@/components/ds';
+import { LINK_KINDS } from '@/lib/roadmap-links';
 
-import { itemName, NotInGt } from "./_gtflag";
-import { MsBoardRow } from "./_milestones";
-import { barKind, broken, brokenLinks, closedItem, codedFlag, drawnKeyDates, estimateOnly, estimateWords, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { itemName, NotInGt } from './_gtflag';
+import { MsBoardRow } from './_milestones';
+import {
+  barKind,
+  broken,
+  brokenLinks,
+  closedItem,
+  codedFlag,
+  drawnKeyDates,
+  estimateOnly,
+  estimateWords,
+  mergedName,
+  partsTree,
+  shortDay,
+  spanWords,
+  whereAttr,
+  type Change,
+  type Item,
+  type Roadmap,
+} from './_lib';
 
-export type Horizon = Item["horizon"];
+export type Horizon = Item['horizon'];
 
 export const HORIZONS: { key: Horizon; label: string }[] = [
-  { key: "now", label: "Now" },
-  { key: "next", label: "Next" },
-  { key: "later", label: "Later" },
+  { key: 'now', label: 'Now' },
+  { key: 'next', label: 'Next' },
+  { key: 'later', label: 'Later' },
 ];
 
 /** qa-simple-roadmap-27: each end of a span shows its year only when it isn't this year's. */
-const boardSpanWords = (start: string, end: string, today: string): string => spanWords(start, end, today, true);
+const boardSpanWords = (start: string, end: string, today: string): string =>
+  spanWords(start, end, today, true);
 
 /** board-quarters (owner, Nov 10): each column is a calendar quarter on the company's day,
  * read month first: Now and Next their span ("Oct 1 – Dec 31"), Later where it starts
  * ("Apr 1, 2027 on"). An item's column comes from its dates, so they never disagree. */
 function columnSpan(key: Horizon, window: { start: string; end: string }): string {
-  if (key === "later") return `${shortDay(window.start)}, ${window.start.slice(0, 4)} on`;
+  if (key === 'later') return `${shortDay(window.start)}, ${window.start.slice(0, 4)} on`;
   return `${shortDay(window.start)} – ${shortDay(window.end)}`;
 }
 
 /** fix4 qa-simple-roadmap-34: one legend style for every format, the Timeline's: a swatch
  * drawn as the mark is, then short words. */
-export const LEGEND_SWATCH = "inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px]";
+export const LEGEND_SWATCH = 'inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px]';
 export type LegendEntry = { key: string; swatch: ReactNode; words: ReactNode; testId?: string };
-export function LegendKeys({ entries, className = "" }: { entries: LegendEntry[]; className?: string }) {
+export function LegendKeys({
+  entries,
+  className = '',
+}: {
+  entries: LegendEntry[];
+  className?: string;
+}) {
   return (
-    <div data-testid="legend" className={`flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] leading-[18px] text-text-faint ${className}`}>
+    <div
+      data-testid="legend"
+      className={`flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] leading-[18px] text-text-faint ${className}`}
+    >
       {entries.map((e) => (
-        <span key={e.key} className="inline-flex items-center gap-1.5" data-testid={e.testId ?? "legend-item"} data-key={e.key}>
+        <span
+          key={e.key}
+          className="inline-flex items-center gap-1.5"
+          data-testid={e.testId ?? 'legend-item'}
+          data-key={e.key}
+        >
           {e.swatch}
           {e.words}
         </span>
@@ -48,10 +87,10 @@ export function LegendKeys({ entries, className = "" }: { entries: LegendEntry[]
 /** qa4-simple-roadmap-29: one wording per mark, whichever view's legend names it (the Timeline's
  * legend in _lanes.tsx says the same words). */
 export const MARK_WORDS = {
-  estimated: "Estimated dates",
-  suggestion: "Dates Oracle suggests (? opens them)",
-  pm: "No engineering work",
-  slices: "One bar per part of a feature",
+  estimated: 'Estimated dates',
+  suggestion: 'Dates Oracle suggests (? opens them)',
+  pm: 'No engineering work',
+  slices: 'One bar per part of a feature',
 } as const;
 
 /** fix4 qa-simple-roadmap-7: the board's legend names the marks its cards draw, and only those shown. */
@@ -61,32 +100,68 @@ export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): Le
   // QA Nov 12 #14: how to move a card is no visible prose: one word, the sentence behind its (i).
   if (canDrag)
     out.push({
-      key: "drag",
+      key: 'drag',
       swatch: null,
       words: (
         <span className="inline-flex items-center gap-1">
           Moving cards
           <InfoTip label="moving a card" align="start" testId="board-drag-tip">
-            Drag a card to another column{phone ? " (press and hold first)" : ""} to move its dates there
+            Drag a card to another column{phone ? ' (press and hold first)' : ''} to move its dates
+            there
           </InfoTip>
         </span>
       ),
     });
-  if (open.some((i) => barKind(i) === "estimated"))
-    out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: MARK_WORDS.estimated });
-  if (open.some((i) => barKind(i) === "draft")) out.push({ key: "draft", swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />, words: "Draft" });
+  if (open.some((i) => barKind(i) === 'estimated'))
+    out.push({
+      key: 'estimated',
+      swatch: (
+        <i
+          aria-hidden
+          className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid"
+        />
+      ),
+      words: MARK_WORDS.estimated,
+    });
+  if (open.some((i) => barKind(i) === 'draft'))
+    out.push({
+      key: 'draft',
+      swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />,
+      words: 'Draft',
+    });
   if (data.items.some((i) => brokenLinks(i).length > 0))
-    out.push({ key: "broken", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, words: "A broken link" });
-  if (data.items.some(closedItem)) out.push({ key: "cut", swatch: <i aria-hidden className="inline-block w-[18px] flex-none border-t border-dashed border-line-strong" />, words: "Below the line: cut" });
+    out.push({
+      key: 'broken',
+      swatch: (
+        <i
+          aria-hidden
+          className={LEGEND_SWATCH}
+          style={{ borderColor: 'var(--crit)', borderWidth: 2 }}
+        />
+      ),
+      words: 'A broken link',
+    });
+  if (data.items.some(closedItem))
+    out.push({
+      key: 'cut',
+      swatch: (
+        <i
+          aria-hidden
+          className="inline-block w-[18px] flex-none border-t border-dashed border-line-strong"
+        />
+      ),
+      words: 'Below the line: cut',
+    });
   return out;
 }
 
 /** qa4-simple-roadmap-8: the lane PM-owned work (no engineering) takes, grouped by goal (the
  * Timeline's own lane key); it is no goal, so nothing is added or suggested under it. */
-export const PM_LANE = "pm-owned";
-const goalLane = (key: string) => key !== "none" && key !== PM_LANE && !key.startsWith("plan-goal:");
+export const PM_LANE = 'pm-owned';
+const goalLane = (key: string) =>
+  key !== 'none' && key !== PM_LANE && !key.startsWith('plan-goal:');
 
-const itemsWords = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
+const itemsWords = (n: number) => `${n} ${n === 1 ? 'item' : 'items'}`;
 
 const LONG_PRESS_MS = 450;
 /** A held card this close to the screen's top or bottom scrolls the page (px), this far a frame. */
@@ -112,15 +187,26 @@ export function boardColumns(data: Roadmap): BoardColumn[] {
       .map((g) => ({
         key: g.key,
         title: g.title,
-        items: g.item_ids.map((id) => byId.get(id)).filter((i): i is Item => !!i && i.horizon === h.key && !closedItem(i)),
+        items: g.item_ids
+          .map((id) => byId.get(id))
+          .filter((i): i is Item => !!i && i.horizon === h.key && !closedItem(i)),
       }))
       .filter((g) => g.items.length);
     // feature-parts: each group's parts under their parents in the column, as a tree; a part
     // whose parent is in another column (or not shown) stays a card of its own at the top.
-    const tree = partsTree(groups.map((g) => g.items.map((i) => i.id)), byId);
+    const tree = partsTree(
+      groups.map((g) => g.items.map((i) => i.id)),
+      byId,
+    );
     const depth = new Map(tree.flat().map((x) => [x.id, x.depth]));
     const below = data.items.filter((i) => i.horizon === h.key && closedItem(i));
-    return { ...h, window: data.windows[h.key], groups: groups.map((g, n) => ({ ...g, items: tree[n].map((x) => byId.get(x.id)!) })), below, depth };
+    return {
+      ...h,
+      window: data.windows[h.key],
+      groups: groups.map((g, n) => ({ ...g, items: tree[n].map((x) => byId.get(x.id)!) })),
+      below,
+      depth,
+    };
   });
 }
 
@@ -174,18 +260,39 @@ export interface BoardProps {
  * change per burst. A held card at the screen's edge
  * scrolls the page; a cancelled touch moves nothing.
  */
-export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, pending: held, onKeyMove, onKeyEnd, onKeyCancel, dropTargets, goalSuggestions, onGoal }: BoardProps) {
+export function Board({
+  data,
+  phone,
+  canDrag,
+  proposals,
+  open,
+  onOpen,
+  onMove,
+  pending: held,
+  onKeyMove,
+  onKeyEnd,
+  onKeyCancel,
+  dropTargets,
+  goalSuggestions,
+  onGoal,
+}: BoardProps) {
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const keyDates = drawnKeyDates(data);
   // A card the keyboard moved: it gets the focus back once it is drawn in its new column.
   const refocus = useRef<{ id: string; horizon: Horizon } | null>(null);
-  const cols = boardColumns(Object.keys(held).length ? { ...data, items: data.items.map((i) => (held[i.id] ? { ...i, horizon: held[i.id] } : i)) } : data);
+  const cols = boardColumns(
+    Object.keys(held).length
+      ? { ...data, items: data.items.map((i) => (held[i.id] ? { ...i, horizon: held[i.id] } : i)) }
+      : data,
+  );
 
   // Before the blur's check below runs: the moved card is drawn anew in its column.
   useLayoutEffect(() => {
     const f = refocus.current;
-    const el = f && root.current?.querySelector<HTMLElement>(`[data-testid="board-card"][data-bar-id="${f.id}"]`);
+    const el =
+      f &&
+      root.current?.querySelector<HTMLElement>(`[data-testid="board-card"][data-bar-id="${f.id}"]`);
     if (f && el && el.dataset.horizon === f.horizon) {
       refocus.current = null;
       el.focus();
@@ -196,7 +303,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   // focus that really left it ends the burst.
   const onBlur = (item: Item) => {
     window.setTimeout(() => {
-      if (document.activeElement?.closest?.(`[data-testid="board-card"][data-bar-id="${item.id}"]`)) return;
+      if (document.activeElement?.closest?.(`[data-testid="board-card"][data-bar-id="${item.id}"]`))
+        return;
       onKeyEnd(item);
     }, 0);
   };
@@ -206,30 +314,39 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
     const stop = (e: TouchEvent) => {
       if (drag.current?.armed) e.preventDefault();
     };
-    document.addEventListener("touchmove", stop, { passive: false });
-    return () => document.removeEventListener("touchmove", stop);
+    document.addEventListener('touchmove', stop, { passive: false });
+    return () => document.removeEventListener('touchmove', stop);
   }, []);
 
   // The column under the pointer, by the columns' boxes (the dragged card is over it).
   const columnAt = (x: number, y: number): Horizon | null => {
-    for (const el of root.current?.querySelectorAll<HTMLElement>("[data-horizon-column]") ?? []) {
+    for (const el of root.current?.querySelectorAll<HTMLElement>('[data-horizon-column]') ?? []) {
       const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el.dataset.horizonColumn as Horizon;
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+        return el.dataset.horizonColumn as Horizon;
     }
     return null;
   };
-  const boxes = (): NonNullable<Drag["cols"]> =>
-    [...(root.current?.querySelectorAll<HTMLElement>("[data-horizon-column]") ?? [])].map((el) => {
+  const boxes = (): NonNullable<Drag['cols']> =>
+    [...(root.current?.querySelectorAll<HTMLElement>('[data-horizon-column]') ?? [])].map((el) => {
       const r = el.getBoundingClientRect();
-      return { key: el.dataset.horizonColumn as Horizon, left: r.left, right: r.right, top: r.top + window.scrollY, bottom: r.bottom + window.scrollY };
+      return {
+        key: el.dataset.horizonColumn as Horizon,
+        left: r.left,
+        right: r.right,
+        top: r.top + window.scrollY,
+        bottom: r.bottom + window.scrollY,
+      };
     });
-  const columnIn = (cols: NonNullable<Drag["cols"]>, x: number, y: number): Horizon | null => {
+  const columnIn = (cols: NonNullable<Drag['cols']>, x: number, y: number): Horizon | null => {
     const py = y + window.scrollY;
-    return cols.find((c) => x >= c.left && x <= c.right && py >= c.top && py <= c.bottom)?.key ?? null;
+    return (
+      cols.find((c) => x >= c.left && x <= c.right && py >= c.top && py <= c.bottom)?.key ?? null
+    );
   };
   const mark = (over: Horizon | null) => {
-    for (const el of root.current?.querySelectorAll<HTMLElement>("[data-horizon-column]") ?? []) {
-      if (el.dataset.horizonColumn === over) el.dataset.dropTarget = "true";
+    for (const el of root.current?.querySelectorAll<HTMLElement>('[data-horizon-column]') ?? []) {
+      if (el.dataset.horizonColumn === over) el.dataset.dropTarget = 'true';
       else delete el.dataset.dropTarget;
     }
   };
@@ -237,16 +354,16 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
     if (d.timer) clearTimeout(d.timer);
     if (d.scroll) cancelAnimationFrame(d.scroll);
     d.scroll = null;
-    d.el.style.transform = "";
-    d.el.style.zIndex = "";
-    d.el.removeAttribute("data-picked");
+    d.el.style.transform = '';
+    d.el.style.zIndex = '';
+    d.el.removeAttribute('data-picked');
     mark(null);
   };
 
   const onDown = (e: ReactPointerEvent<HTMLElement>, item: Item) => {
     if (e.button !== 0) return;
     const movable = canDrag && !closedItem(item);
-    const touch = e.pointerType === "touch";
+    const touch = e.pointerType === 'touch';
     const el = e.currentTarget;
     const d: Drag = {
       id: item.id,
@@ -276,7 +393,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
       d.timer = window.setTimeout(() => {
         d.armed = true;
         capture();
-        el.setAttribute("data-picked", "true");
+        el.setAttribute('data-picked', 'true');
         navigator.vibrate?.(10);
       }, LONG_PRESS_MS);
     } else if (d.armed) capture();
@@ -308,13 +425,14 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   const follow = (d: Drag) => {
     d.cols ??= boxes();
     d.el.style.transform = `translate(${d.x - d.x0}px, ${d.y - d.y0 + window.scrollY - d.sy0}px)`;
-    d.el.style.zIndex = "30";
+    d.el.style.zIndex = '30';
     const over = columnIn(d.cols, d.x, d.y);
     // Marked once per column change, not per move.
     if (over !== d.over) mark(over);
     d.over = over;
   };
-  const edgeStep = (y: number): number => (y < EDGE ? -EDGE_STEP : y > window.innerHeight - EDGE ? EDGE_STEP : 0);
+  const edgeStep = (y: number): number =>
+    y < EDGE ? -EDGE_STEP : y > window.innerHeight - EDGE ? EDGE_STEP : 0;
   const edgeScroll = (d: Drag) => {
     const step = edgeStep(d.y);
     const before = window.scrollY;
@@ -341,7 +459,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
     drag.current = null;
     reset(d);
     if (!d.moved) {
-      if (e.type === "pointerup") onOpen(item);
+      if (e.type === 'pointerup') onOpen(item);
       return;
     }
     const to = columnAt(e.clientX, e.clientY) ?? d.over;
@@ -349,15 +467,20 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   };
 
   const onKey = (e: ReactKeyboardEvent, item: Item) => {
-    if (e.key === "Enter" || e.key === " ") {
+    if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onOpen(item);
       return;
     }
     // Arrows move a card to the column beside it (on a phone the columns stack: up and down
     // too; on a desktop they scroll the page).
-    const step = e.key === "ArrowRight" || (phone && e.key === "ArrowDown") ? 1 : e.key === "ArrowLeft" || (phone && e.key === "ArrowUp") ? -1 : 0;
-    if (e.key === "Escape") {
+    const step =
+      e.key === 'ArrowRight' || (phone && e.key === 'ArrowDown')
+        ? 1
+        : e.key === 'ArrowLeft' || (phone && e.key === 'ArrowUp')
+          ? -1
+          : 0;
+    if (e.key === 'Escape') {
       onKeyCancel(item);
       return;
     }
@@ -374,7 +497,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   const depthOf = new Map(cols.flatMap((c) => [...c.depth]));
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const card = (item: Item) => {
-    const kind = closedItem(item) ? "cut" : barKind(item);
+    const kind = closedItem(item) ? 'cut' : barKind(item);
     // fix4 qa-simple-roadmap-7: only a broken link draws the red outline; a draft with no
     // owner keeps its own outline and says so in amber. An end past its milestone counts as a
     // broken link (pre-demo QA S-5): alone, it is the red line; beside a link between items,
@@ -382,11 +505,17 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
     const links = brokenLinks(item);
     const unowned = broken(item).find((f) => f !== links[0] && !LINK_KINDS.includes(f.kind));
     const red = links.length > 0;
-    const pending = proposals.find((c) => c.op === "change_horizon" && c.target.item_id === item.id);
+    const pending = proposals.find(
+      (c) => c.op === 'change_horizon' && c.target.item_id === item.id,
+    );
     const movable = canDrag && !closedItem(item);
     const depth = depthOf.get(item.id) ?? 0;
     return (
-      <li key={item.id} data-depth={depth || undefined} style={depth ? { marginLeft: depth * 16 } : undefined}>
+      <li
+        key={item.id}
+        data-depth={depth || undefined}
+        style={depth ? { marginLeft: depth * 16 } : undefined}
+      >
         <div
           role="button"
           tabIndex={0}
@@ -395,10 +524,10 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           data-item={item.key}
           data-horizon={item.horizon}
           data-kind={kind}
-          data-broken={red ? "true" : "false"}
-          data-open={open === item.id ? "true" : undefined}
-          aria-label={`${itemName(item)}, ${item.horizon}${held[item.id] ? ", not sent yet" : ""}${movable ? ". Arrows move it to another column, sent when you pause; Escape cancels" : ""}`}
-          style={{ touchAction: movable ? "pan-y" : "auto" }}
+          data-broken={red ? 'true' : 'false'}
+          data-open={open === item.id ? 'true' : undefined}
+          aria-label={`${itemName(item)}, ${item.horizon}${held[item.id] ? ', not sent yet' : ''}${movable ? '. Arrows move it to another column, sent when you pause; Escape cancels' : ''}`}
+          style={{ touchAction: movable ? 'pan-y' : 'auto' }}
           onPointerDown={(e) => onDown(e, item)}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => onUp(e, item)}
@@ -406,29 +535,50 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           onKeyDown={(e) => onKey(e, item)}
           onBlur={() => onBlur(item)}
           className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip ${
-            red ? "border-crit" : kind === "draft" ? "border-dashed border-line-strong" : "border-line"
-          } ${movable ? "cursor-grab" : "cursor-pointer"} ${kind === "cut" ? "opacity-70" : ""}`}
+            red
+              ? 'border-crit'
+              : kind === 'draft'
+                ? 'border-dashed border-line-strong'
+                : 'border-line'
+          } ${movable ? 'cursor-grab' : 'cursor-pointer'} ${kind === 'cut' ? 'opacity-70' : ''}`}
         >
           {/* QA Nov 12 #1: the code before the name ("F-06 Weekly alert digest"); #2: no code, flagged. */}
-          <p data-testid="board-card-name" className={`text-[16px] leading-snug font-medium ${kind === "cut" ? "text-text2 line-through" : ""}`}>{itemName(item)}</p>
+          <p
+            data-testid="board-card-name"
+            className={`text-[16px] leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
+          >
+            {itemName(item)}
+          </p>
           <NotInGt item={item} className="mt-1 h-5! px-2! text-xs!" />
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
             <span
               data-testid="board-dates"
-              className={kind === "estimated" ? "rounded border border-dashed border-accent-mid px-1 text-accent-ink" : ""}
+              className={
+                kind === 'estimated'
+                  ? 'rounded border border-dashed border-accent-mid px-1 text-accent-ink'
+                  : ''
+              }
             >
               {/* board-quarters: an item no source dates sits in Later with no dates. */}
-              {estimateOnly(item) ? estimateWords(item.start.date, item.end.date, data.today) : boardSpanWords(item.start.date, item.end.date, data.today)}
-              {kind === "estimated" && !estimateOnly(item) && " · estimated"}
+              {estimateOnly(item)
+                ? estimateWords(item.start.date, item.end.date, data.today)
+                : boardSpanWords(item.start.date, item.end.date, data.today)}
+              {kind === 'estimated' && !estimateOnly(item) && ' · estimated'}
             </span>
-            {kind === "draft" && (
-              <span className="rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
+            {kind === 'draft' && (
+              <span
+                className="rounded-full bg-na-bg px-1.5 text-xs text-na"
+                data-testid="draft-tag"
+              >
                 Draft
               </span>
             )}
             {/* Bring a date in: a sliced or split item's date waits for its new estimate. */}
             {item.estimate_pending && (
-              <span className="rounded-full bg-warn-bg px-1.5 text-xs text-warn" data-testid="estimate-pending">
+              <span
+                className="rounded-full bg-warn-bg px-1.5 text-xs text-warn"
+                data-testid="estimate-pending"
+              >
                 Estimate pending
               </span>
             )}
@@ -464,7 +614,9 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {pending && (
             <p className="mt-1 text-sm text-accent-ink" data-testid="board-pending">
-              Proposed by {pending.by_name || "a commenter"}: move to {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ?? String(pending.after.horizon)}
+              Proposed by {pending.by_name || 'a commenter'}: move to{' '}
+              {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ??
+                String(pending.after.horizon)}
             </p>
           )}
         </div>
@@ -473,13 +625,17 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   };
 
   return (
-    <div ref={root} data-testid="board" className={`isolate ${phone ? "space-y-3" : "grid grid-cols-3 gap-3"}`}>
+    <div
+      ref={root}
+      data-testid="board"
+      className={`isolate ${phone ? 'space-y-3' : 'grid grid-cols-3 gap-3'}`}
+    >
       {cols.map((c) => (
         <section
           key={c.key}
           data-testid="board-column"
           data-horizon-column={c.key}
-          data-add-where={dropTargets ? whereAttr("horizon", c.key) : undefined}
+          data-add-where={dropTargets ? whereAttr('horizon', c.key) : undefined}
           data-add-label={c.label}
           aria-label={c.label}
           className="min-w-0 rounded-[var(--simple-radius)] border border-line bg-surface2 p-2.5 data-[drop-target=true]:border-accent data-[drop-target=true]:bg-accent-soft"
@@ -490,41 +646,60 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
               · {columnSpan(c.key, c.window)}
             </span>
             {/* fix4 qa-simple-roadmap-32: the cut cards under the line are counted too. */}
-            <span className="tnum ml-auto text-sm whitespace-nowrap text-text2" data-testid="column-count">
+            <span
+              className="tnum ml-auto text-sm whitespace-nowrap text-text2"
+              data-testid="column-count"
+            >
               {/* qa4-simple-roadmap-21: plain words ("1 item, 1 cut"). */}
               {itemsWords(c.groups.reduce((n, g) => n + g.items.length, 0))}
               {c.below.length > 0 && `, ${c.below.length} cut`}
             </span>
           </header>
-          <MsBoardRow horizon={c.key} windows={data.windows} milestones={data.milestones} keyDates={keyDates} />
+          <MsBoardRow
+            horizon={c.key}
+            windows={data.windows}
+            milestones={data.milestones}
+            keyDates={keyDates}
+          />
           {c.groups.map((g) => (
             <div key={g.key} className="mb-2" data-testid="board-group">
               <h3
                 className="flex items-center gap-1 truncate px-1 pb-1 text-sm font-semibold text-text2"
-                data-add-where={dropTargets && data.group === "goal" && goalLane(g.key) ? whereAttr("goal", g.key) : undefined}
+                data-add-where={
+                  dropTargets && data.group === 'goal' && goalLane(g.key)
+                    ? whereAttr('goal', g.key)
+                    : undefined
+                }
                 data-add-label={g.title}
               >
                 <span className="min-w-0 flex-1 truncate">{g.title}</span>
-                {onGoal && data.group === "goal" && goalLane(g.key) && !!goalSuggestions?.get(g.key) && (
-                  <button
-                    type="button"
-                    data-testid="goal-suggestions-open"
-                    aria-label={`Suggested features for ${g.title}`}
-                    title="Suggested features"
-                    onClick={() => onGoal(g.key, g.title)}
-                    className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
-                  >
-                    {/* qa4-simple-roadmap-22: what the count is, in words. */}
-                    ✦ <span className="tnum">{goalSuggestions?.get(g.key)}</span> suggested {goalSuggestions?.get(g.key) === 1 ? "feature" : "features"}
-                  </button>
-                )}
+                {onGoal &&
+                  data.group === 'goal' &&
+                  goalLane(g.key) &&
+                  !!goalSuggestions?.get(g.key) && (
+                    <button
+                      type="button"
+                      data-testid="goal-suggestions-open"
+                      aria-label={`Suggested features for ${g.title}`}
+                      title="Suggested features"
+                      onClick={() => onGoal(g.key, g.title)}
+                      className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
+                    >
+                      {/* qa4-simple-roadmap-22: what the count is, in words. */}✦{' '}
+                      <span className="tnum">{goalSuggestions?.get(g.key)}</span> suggested{' '}
+                      {goalSuggestions?.get(g.key) === 1 ? 'feature' : 'features'}
+                    </button>
+                  )}
               </h3>
               <ul className="space-y-1.5">{g.items.map((i) => card(i))}</ul>
             </div>
           ))}
           {!c.groups.length && <p className="px-1 py-3 text-sm text-text2">Nothing here yet.</p>}
           {c.below.length > 0 && (
-            <div className="mt-2 border-t border-dashed border-line-strong pt-2" data-testid="board-below">
+            <div
+              className="mt-2 border-t border-dashed border-line-strong pt-2"
+              data-testid="board-below"
+            >
               <h3 className="px-1 pb-1 text-sm font-semibold text-text2">Below the line</h3>
               <ul className="space-y-1.5">{c.below.map((i) => card(i))}</ul>
             </div>

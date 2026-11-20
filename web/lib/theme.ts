@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from 'react';
 
 /** I3 rule 5: dark is a real theme, chosen by the system setting and switchable in the user menu. */
-export type ThemeChoice = "system" | "light" | "dark";
+export type ThemeChoice = 'system' | 'light' | 'dark';
 
-export const THEME_KEY = "oracle-theme";
+export const THEME_KEY = 'oracle-theme';
 
 /**
  * Runs in <head> before the first paint, so a saved choice never flashes the other theme.
@@ -18,32 +18,32 @@ const listeners = new Set<() => void>();
 function read(): ThemeChoice {
   try {
     const t = localStorage.getItem(THEME_KEY);
-    return t === "light" || t === "dark" ? t : "system";
+    return t === 'light' || t === 'dark' ? t : 'system';
   } catch {
-    return "system";
+    return 'system';
   }
 }
 
 function subscribe(on: () => void) {
   listeners.add(on);
-  window.addEventListener("storage", on);
+  window.addEventListener('storage', on);
   return () => {
     listeners.delete(on);
-    window.removeEventListener("storage", on);
+    window.removeEventListener('storage', on);
   };
 }
 
 /** The user's theme choice and a setter that saves it and applies it at once. */
 export function useTheme(): [ThemeChoice, (t: ThemeChoice) => void] {
-  const theme = useSyncExternalStore(subscribe, read, () => "system" as const);
+  const theme = useSyncExternalStore(subscribe, read, () => 'system' as const);
   const setTheme = useCallback((t: ThemeChoice) => {
     try {
-      if (t === "system") localStorage.removeItem(THEME_KEY);
+      if (t === 'system') localStorage.removeItem(THEME_KEY);
       else localStorage.setItem(THEME_KEY, t);
     } catch {
       // Storage blocked: the choice still applies to this page.
     }
-    if (t === "system") delete document.documentElement.dataset.theme;
+    if (t === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = t;
     listeners.forEach((l) => l());
   }, []);

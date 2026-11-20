@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * dod-perf: no layout read in a Simple roadmap drag's loop (the 500-item roadmap's drag at
@@ -17,7 +17,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * columns per move; no_claim = frame times (the timing spec's).
  */
 
-const URL = "/simple/roadmap";
+const URL = '/simple/roadmap';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 
@@ -25,7 +25,7 @@ async function countReads(page: Page) {
   await page.addInitScript(() => {
     const w = window as unknown as { __reads: Record<string, number> };
     w.__reads = { checkVisibility: 0, getBoundingClientRect: 0 };
-    for (const name of ["checkVisibility", "getBoundingClientRect"] as const) {
+    for (const name of ['checkVisibility', 'getBoundingClientRect'] as const) {
       const own = Element.prototype[name] as (...a: unknown[]) => unknown;
       Object.defineProperty(Element.prototype, name, {
         configurable: true,
@@ -38,10 +38,22 @@ async function countReads(page: Page) {
     }
   });
 }
-const reads = (page: Page) => page.evaluate(() => ({ ...(window as unknown as { __reads: Record<string, number> }).__reads }));
-const zero = (page: Page) => page.evaluate(() => Object.keys((window as unknown as { __reads: Record<string, number> }).__reads).forEach((k) => ((window as unknown as { __reads: Record<string, number> }).__reads[k] = 0)));
+const reads = (page: Page) =>
+  page.evaluate(() => ({ ...(window as unknown as { __reads: Record<string, number> }).__reads }));
+const zero = (page: Page) =>
+  page.evaluate(() =>
+    Object.keys((window as unknown as { __reads: Record<string, number> }).__reads).forEach(
+      (k) => ((window as unknown as { __reads: Record<string, number> }).__reads[k] = 0),
+    ),
+  );
 
-async function mouseDrag(page: Page, target: Locator, dx: number, dy: number, during: () => Promise<void>) {
+async function mouseDrag(
+  page: Page,
+  target: Locator,
+  dx: number,
+  dy: number,
+  during: () => Promise<void>,
+) {
   await target.scrollIntoViewIfNeeded();
   const box = (await target.boundingBox())!;
   const x = box.x + Math.min(box.width / 2, 20);
@@ -60,61 +72,89 @@ async function mouseDrag(page: Page, target: Locator, dx: number, dy: number, du
   await page.mouse.up();
 }
 
-async function touchDrag(page: Page, target: Locator, surface: Locator, dx: number, dy: number, during: () => Promise<void>) {
+async function touchDrag(
+  page: Page,
+  target: Locator,
+  surface: Locator,
+  dx: number,
+  dy: number,
+  during: () => Promise<void>,
+) {
   await target.scrollIntoViewIfNeeded();
   const box = (await target.boundingBox())!;
   const x = box.x + Math.min(box.width / 2, 20);
   const y = box.y + box.height / 2;
-  const ev = { pointerId: 7, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
-  await target.dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+  const ev = {
+    pointerId: 7,
+    pointerType: 'touch',
+    isPrimary: true,
+    bubbles: true,
+    button: 0,
+    buttons: 1,
+  };
+  await target.dispatchEvent('pointerdown', { ...ev, clientX: x, clientY: y });
   await page.waitForTimeout(650);
-  for (let n = 1; n <= 3; n++) await surface.dispatchEvent("pointermove", { ...ev, clientX: x + (dx * n) / 24, clientY: y + (dy * n) / 24 });
+  for (let n = 1; n <= 3; n++)
+    await surface.dispatchEvent('pointermove', {
+      ...ev,
+      clientX: x + (dx * n) / 24,
+      clientY: y + (dy * n) / 24,
+    });
   await page.waitForTimeout(50);
   await zero(page);
   for (let n = 4; n <= 24; n++) {
-    await surface.dispatchEvent("pointermove", { ...ev, clientX: x + (dx * n) / 24, clientY: y + (dy * n) / 24 });
+    await surface.dispatchEvent('pointermove', {
+      ...ev,
+      clientX: x + (dx * n) / 24,
+      clientY: y + (dy * n) / 24,
+    });
     await page.waitForTimeout(20);
   }
   await during();
-  await surface.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + dx, clientY: y + dy });
+  await surface.dispatchEvent('pointerup', { ...ev, buttons: 0, clientX: x + dx, clientY: y + dy });
 }
 
 for (const [where, use] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
-  const phone = where === "phone";
+  const phone = where === 'phone';
   test.describe(`drag reads, ${where}`, () => {
     test.use(use);
 
-    test("a Gantt bar's drag reads no layout per frame; the tab still names the page", async ({ page }) => {
+    test("a Gantt bar's drag reads no layout per frame; the tab still names the page", async ({
+      page,
+    }) => {
       // simple-roadmap-drag-reads (see the file's card).
       await countReads(page);
       await login(page);
       await page.goto(URL);
-      await page.getByTestId("format-gantt").click();
+      await page.getByTestId('format-gantt').click();
       const bar = page.locator('g[data-testid="bar"][data-item="alert-rules"]');
       await expect(bar).toBeVisible();
       await expect(page).toHaveTitle(/Roadmap/);
       const during = async () => {
-        await expect(page.getByTestId("drag-live")).toBeVisible();
+        await expect(page.getByTestId('drag-live')).toBeVisible();
         expect((await reads(page)).checkVisibility).toBe(0);
       };
-      if (phone) await touchDrag(page, bar, page.getByTestId("chart-svg"), 48, 0, during);
-      else await mouseDrag(page, bar.locator("rect[data-body]"), 96, 0, during);
+      if (phone) await touchDrag(page, bar, page.getByTestId('chart-svg'), 48, 0, during);
+      else await mouseDrag(page, bar.locator('rect[data-body]'), 96, 0, during);
       await expect(page).toHaveTitle(/Roadmap/);
     });
 
     test("a board card's drag measures the columns once, and lands", async ({ page, context }) => {
       // simple-roadmap-drag-reads (see the file's card).
-      await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
+      await context.addInitScript(
+        (key) => localStorage.setItem(key, 'simple-500'),
+        MOCK_SCENARIO_KEY,
+      );
       await countReads(page);
       await login(page);
       await page.goto(URL);
-      await page.getByTestId("format-board").click();
+      await page.getByTestId('format-board').click();
       const card = page.locator('[data-testid="board-card"][data-horizon="now"]').first();
       await expect(card).toBeVisible();
-      const key = (await card.getAttribute("data-bar-id"))!;
+      const key = (await card.getAttribute('data-bar-id'))!;
       const next = page.locator('[data-testid="board-column"][data-horizon-column="next"]');
       const from = (await card.boundingBox())!;
       await next.scrollIntoViewIfNeeded();
@@ -130,7 +170,10 @@ for (const [where, use] of [
       };
       if (phone) await touchDrag(page, card, card, dx, dy, during);
       else await mouseDrag(page, card, dx, dy, during);
-      if (!phone) await expect(page.locator(`[data-testid="board-card"][data-bar-id="${key}"]`)).toHaveAttribute("data-horizon", "next");
+      if (!phone)
+        await expect(
+          page.locator(`[data-testid="board-card"][data-bar-id="${key}"]`),
+        ).toHaveAttribute('data-horizon', 'next');
     });
   });
 }

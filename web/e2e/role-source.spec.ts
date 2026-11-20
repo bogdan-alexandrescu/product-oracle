@@ -1,7 +1,7 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
 /*
  * #370 fixes 4: what the signed-in role may do comes from GET /v1/me/capabilities only (the
@@ -10,9 +10,10 @@ import { expect, test } from "./test";
  * approvers to pick from) are not about the signed-in role and stay.
  */
 
-const ROOTS = ["app", "components"];
+const ROOTS = ['app', 'components'];
 // Signed-in role checks: hasRole(role, ...), hasRole(me.role, ...), role === "owner" and the like.
-const SELF_ROLE = /hasRole\(\s*(role|me\??\.role)\s*,|(^|[^.\w])role\s*[!=]==\s*["'](owner|approver|commenter|viewer)["']/;
+const SELF_ROLE =
+  /hasRole\(\s*(role|me\??\.role)\s*,|(^|[^.\w])role\s*[!=]==\s*["'](owner|approver|commenter|viewer)["']/;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -22,21 +23,23 @@ function files(dir: string): string[] {
   });
 }
 
-test("no page or component checks the signed-in role itself: can(action) decides", () => {
+test('no page or component checks the signed-in role itself: can(action) decides', () => {
   const found: string[] = [];
   for (const root of ROOTS) {
     for (const file of files(root)) {
-      readFileSync(file, "utf8")
-        .split("\n")
-        .forEach((line, i) => SELF_ROLE.test(line) && found.push(`${file}:${i + 1}: ${line.trim()}`));
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach(
+          (line, i) => SELF_ROLE.test(line) && found.push(`${file}:${i + 1}: ${line.trim()}`),
+        );
     }
   }
   expect(found).toEqual([]);
 });
 
-test("no page keeps an \"Approvers and owners\" role note", () => {
-  const found = ["app/requests/_components/Triage.tsx", "components/JobsPanel.tsx"].filter((f) =>
-    /Approvers and owners (start|turn|run|write|can)/.test(readFileSync(f, "utf8")),
+test('no page keeps an "Approvers and owners" role note', () => {
+  const found = ['app/requests/_components/Triage.tsx', 'components/JobsPanel.tsx'].filter((f) =>
+    /Approvers and owners (start|turn|run|write|can)/.test(readFileSync(f, 'utf8')),
   );
   expect(found).toEqual([]);
 });

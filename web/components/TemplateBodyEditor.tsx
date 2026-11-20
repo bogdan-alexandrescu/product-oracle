@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { Button, Chip, InfoTip, Label } from "@/components/ds";
-import { INPUT, TEXTAREA } from "@/app/settings/_components/fields";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { problemText, type Problem } from "@/lib/api/problems";
-import { useLive, type Live } from "@/lib/use-live";
-import { useQuery } from "@/lib/use-query";
+import { Button, Chip, InfoTip, Label } from '@/components/ds';
+import { INPUT, TEXTAREA } from '@/app/settings/_components/fields';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { problemText, type Problem } from '@/lib/api/problems';
+import { useLive, type Live } from '@/lib/use-live';
+import { useQuery } from '@/lib/use-query';
 
-export type TemplateCheck = Schemas["TemplateValidateOut"];
+export type TemplateCheck = Schemas['TemplateValidateOut'];
 
 /** A minimal body that passes validation: what "New template" starts from. */
 export const TEMPLATE_SKELETON = `---
@@ -38,7 +38,7 @@ brief: [problem, solution]
 export function sectionTitles(body: string): Map<string, string> {
   const out = new Map<string, string>();
   let fence = false;
-  for (const line of body.replace(/\r\n/g, "\n").split("\n")) {
+  for (const line of body.replace(/\r\n/g, '\n').split('\n')) {
     if (/^\s*(```|~~~)/.test(line)) fence = !fence;
     if (fence) continue;
     const m = /^ {0,3}#{1,3}\s+(.*?)\s*\{#([A-Za-z0-9_-]+)\}\s*#*\s*$/.exec(line);
@@ -54,14 +54,14 @@ export function sectionTitles(body: string): Map<string, string> {
  */
 export function sectionName(titles: Map<string, string>, key: string): string {
   const heading = titles.get(key);
-  if (!heading) return key === "title" ? "Title" : key;
+  if (!heading) return key === 'title' ? 'Title' : key;
   if (!/<[^>]*>/.test(heading)) return heading;
-  return key === "title" ? "Title" : heading.replace(/[<>]/g, "").trim() || key;
+  return key === 'title' ? 'Title' : heading.replace(/[<>]/g, '').trim() || key;
 }
 
 /** Section ids as their names, comma-separated ("none" when there are none). */
 export function sectionNames(titles: Map<string, string>, keys: string[]): string {
-  return keys.map((k) => sectionName(titles, k)).join(", ") || "none";
+  return keys.map((k) => sectionName(titles, k)).join(', ') || 'none';
 }
 
 /**
@@ -69,19 +69,25 @@ export function sectionNames(titles: Map<string, string>, keys: string[]): strin
  * name. Archived themes included, so an old suggestion still reads as a name.
  */
 const keyInWords = (key: string) => {
-  const words = key.replace(/[-_]+/g, " ").trim();
+  const words = key.replace(/[-_]+/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
 /** All themes, kept in one place so the name lookup and a theme <select> share one fetch. */
 function useThemesQuery() {
-  return useQuery("themes|all", () => unwrap(api.GET("/v1/themes", { params: { query: { include_archived: true } } })));
+  return useQuery('themes|all', () =>
+    unwrap(api.GET('/v1/themes', { params: { query: { include_archived: true } } })),
+  );
 }
 
 export function useThemeNames(): (key: string | null | undefined) => string {
   const q = useThemesQuery();
   // Until the names load, "…"; when they cannot load, the key in words, never "…" for good.
-  return (key) => (key ? (q.data?.find((t) => t.key === key)?.name ?? (q.data ? key : q.error ? keyInWords(key) : "…")) : "—");
+  return (key) =>
+    key
+      ? (q.data?.find((t) => t.key === key)?.name ??
+        (q.data ? key : q.error ? keyInWords(key) : '…'))
+      : '—';
 }
 
 /** Themes a template can suggest, by key and name (qa-F-75: a theme is picked by its name). */
@@ -90,7 +96,8 @@ export function useThemeOptions(): { key: string; name: string }[] {
   return q.data ?? [];
 }
 
-const validateBody = (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } }));
+const validateBody = (body: string) =>
+  unwrap(api.POST('/v1/templates/validate', { body: { body } }));
 
 /**
  * Live (debounced) validation of a template body by POST /v1/templates/validate. Call it in
@@ -101,9 +108,18 @@ export function useTemplateCheck(value: string, enabled = true): Live<TemplateCh
 }
 
 /** Validation problems of a template body, with line numbers. */
-export function ProblemList({ problems, testId = "problems" }: { problems: Problem[]; testId?: string }) {
+export function ProblemList({
+  problems,
+  testId = 'problems',
+}: {
+  problems: Problem[];
+  testId?: string;
+}) {
   return (
-    <ul data-testid={testId} className="space-y-1 rounded-button bg-crit-bg px-3 py-2 text-sm text-crit">
+    <ul
+      data-testid={testId}
+      className="space-y-1 rounded-button bg-crit-bg px-3 py-2 text-sm text-crit"
+    >
       {problems.map((p, i) => (
         <li key={i}>{problemText(p)}</li>
       ))}
@@ -114,7 +130,10 @@ export function ProblemList({ problems, testId = "problems" }: { problems: Probl
 /** Findings on a body or a stored version that do not block anything by themselves. */
 export function WarningList({ warnings }: { warnings: Problem[] }) {
   return (
-    <ul data-testid="template-warnings" className="mt-1 space-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+    <ul
+      data-testid="template-warnings"
+      className="mt-1 space-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+    >
       {warnings.map((w, i) => (
         <li key={i}>{problemText(w)}</li>
       ))}
@@ -125,7 +144,10 @@ export function WarningList({ warnings }: { warnings: Problem[] }) {
 /** How to fix `no_brief_sections` (O1g): every template marks the sections it presents. */
 export function BriefFix() {
   return (
-    <div data-testid="brief-fix" className="rounded-button border border-line bg-surface2 px-3 py-2 text-sm text-text">
+    <div
+      data-testid="brief-fix"
+      className="rounded-button border border-line bg-surface2 px-3 py-2 text-sm text-text"
+    >
       <p className="flex items-center gap-2 font-semibold">
         Mark the brief, either:
         <InfoTip label="the brief" align="start">
@@ -134,10 +156,12 @@ export function BriefFix() {
       </p>
       <ul className="mt-1 list-disc space-y-1 pl-5">
         <li>
-          <code className="font-mono text-[13px]">brief: [summary, problem, decisions]</code> in the front matter
+          <code className="font-mono text-[13px]">brief: [summary, problem, decisions]</code> in the
+          front matter
         </li>
         <li>
-          <code className="font-mono text-[13px]">{"# Full version {#full}"}</code> after the brief sections
+          <code className="font-mono text-[13px]">{'# Full version {#full}'}</code> after the brief
+          sections
         </li>
       </ul>
     </div>
@@ -155,21 +179,22 @@ export function BriefFix() {
 export type Sec = { id: string; heading: string; guide: string; brief: boolean };
 
 /** A new row, before it has a heading of its own. */
-export const BLANK_SEC: Sec = { id: "", heading: "", guide: "", brief: false };
+export const BLANK_SEC: Sec = { id: '', heading: '', guide: '', brief: false };
 
 /** An id made from a name ("Launch brief" → "launch-brief"). */
 export const keyFromName = (name: string) =>
   name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
     .slice(0, 60);
 
 /** A guide as a Markdown comment's words: "-->" would close the comment and spill the rest into the body. */
-export const commentSafe = (text: string) => text.trim().replace(/-{2,}>/g, "->");
+export const commentSafe = (text: string) => text.trim().replace(/-{2,}>/g, '->');
 
 /** Every template ends with this section (the template check asks for it). */
-export const SOURCES_BODY = "## Sources and data points {#sources}\n<!-- The only place for sources, numbers and evidence. -->\n";
+export const SOURCES_BODY =
+  '## Sources and data points {#sources}\n<!-- The only place for sources, numbers and evidence. -->\n';
 
 /** A template body's theme and sections, read as rows, plus whatever else the body carries
  * (the title heading and the Sources section) unchanged, since rows do not edit those. */
@@ -194,11 +219,11 @@ const COMMENT_RE = /^\s*<!--\s*(.*?)\s*-->\s*$/;
  * returns null, so the page falls back to the Markdown editor instead of guessing.
  */
 export function parseTemplateSections(body: string): ParsedTemplate | null {
-  const lines = body.replace(/\r\n/g, "\n").split("\n");
-  if (lines[0]?.trim() !== "---") return null;
+  const lines = body.replace(/\r\n/g, '\n').split('\n');
+  if (lines[0]?.trim() !== '---') return null;
   let fmEnd = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === "---") {
+    if (lines[i].trim() === '---') {
       fmEnd = i;
       break;
     }
@@ -209,7 +234,7 @@ export function parseTemplateSections(body: string): ParsedTemplate | null {
   let briefIds: string[] | null = null;
   const frontExtra: string[] = [];
   for (const l of lines.slice(1, fmEnd)) {
-    if (l.trim() === "") continue;
+    if (l.trim() === '') continue;
     const tm = /^theme:\s*(.*)$/.exec(l);
     if (tm) {
       theme = tm[1].trim();
@@ -219,9 +244,9 @@ export function parseTemplateSections(body: string): ParsedTemplate | null {
     if (bm) {
       briefIds = bm[1]
         .trim()
-        .replace(/^\[|\]$/g, "")
-        .split(",")
-        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .replace(/^\[|\]$/g, '')
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''))
         .filter(Boolean);
       continue;
     }
@@ -230,30 +255,36 @@ export function parseTemplateSections(body: string): ParsedTemplate | null {
   if (!theme) return null;
 
   let i = fmEnd + 1;
-  while ((lines[i] ?? "").trim() === "") i++;
-  if (!/^#\s+.*\{#title\}\s*$/.test(lines[i] ?? "")) return null;
+  while ((lines[i] ?? '').trim() === '') i++;
+  if (!/^#\s+.*\{#title\}\s*$/.test(lines[i] ?? '')) return null;
   const titleLine = lines[i];
   i++;
-  while ((lines[i] ?? "").trim() === "") i++;
+  while ((lines[i] ?? '').trim() === '') i++;
 
   const secs: Sec[] = [];
   while (i < lines.length) {
-    const m = HEADING_RE.exec(lines[i] ?? "");
+    const m = HEADING_RE.exec(lines[i] ?? '');
     if (!m) return null;
     const [, hashes, headingText, id] = m;
-    if (id === "sources") return { theme, frontExtra, titleLine, secs, sourcesBlock: lines.slice(i).join("\n") };
+    if (id === 'sources')
+      return { theme, frontExtra, titleLine, secs, sourcesBlock: lines.slice(i).join('\n') };
     if (hashes.length !== 2) return null; // rows only model flat level-2 sections
     i++;
-    let guide = "";
-    const cm = COMMENT_RE.exec(lines[i] ?? "");
+    let guide = '';
+    const cm = COMMENT_RE.exec(lines[i] ?? '');
     if (cm) {
       guide = cm[1];
       i++;
-    } else if ((lines[i] ?? "").trim() !== "" && !HEADING_RE.test(lines[i] ?? "")) {
+    } else if ((lines[i] ?? '').trim() !== '' && !HEADING_RE.test(lines[i] ?? '')) {
       return null; // real content, not a plain guide comment: cannot be shown as a row
     }
-    while ((lines[i] ?? "") === "") i++;
-    secs.push({ id, heading: headingText.trim(), guide, brief: briefIds ? briefIds.includes(id) : false });
+    while ((lines[i] ?? '') === '') i++;
+    secs.push({
+      id,
+      heading: headingText.trim(),
+      guide,
+      brief: briefIds ? briefIds.includes(id) : false,
+    });
   }
   return null; // ran off the end without a Sources section
 }
@@ -261,31 +292,41 @@ export function parseTemplateSections(body: string): ParsedTemplate | null {
 /** The Markdown written from a parsed template's theme and rows (the inverse of
  * `parseTemplateSections`): the title line, front matter and Sources section are kept as
  * given; sections with no heading are dropped (qa-F-75, same as a new template's sections). */
-export function serializeTemplateSections(parsed: Pick<ParsedTemplate, "theme" | "frontExtra" | "titleLine" | "sourcesBlock"> & { secs: Sec[] }): string {
-  const keyed = parsed.secs.filter((s) => s.heading.trim()).map((s) => ({ ...s, key: s.id || keyFromName(s.heading) || "section" }));
+export function serializeTemplateSections(
+  parsed: Pick<ParsedTemplate, 'theme' | 'frontExtra' | 'titleLine' | 'sourcesBlock'> & {
+    secs: Sec[];
+  },
+): string {
+  const keyed = parsed.secs
+    .filter((s) => s.heading.trim())
+    .map((s) => ({ ...s, key: s.id || keyFromName(s.heading) || 'section' }));
   const lines = [
-    "---",
+    '---',
     ...parsed.frontExtra,
     `theme: ${parsed.theme}`,
     `brief: [${keyed
       .filter((s) => s.brief)
       .map((s) => s.key)
-      .join(", ")}]`,
-    "---",
-    "",
+      .join(', ')}]`,
+    '---',
+    '',
     parsed.titleLine,
-    "",
-    ...keyed.flatMap((s) => [`## ${s.heading.trim()} {#${s.key}}`, ...(s.guide.trim() ? [`<!-- ${commentSafe(s.guide)} -->`] : []), ""]),
+    '',
+    ...keyed.flatMap((s) => [
+      `## ${s.heading.trim()} {#${s.key}}`,
+      ...(s.guide.trim() ? [`<!-- ${commentSafe(s.guide)} -->`] : []),
+      '',
+    ]),
     // `sourcesBlock` keeps its own trailing newline; joined after the blank-line separator above.
     parsed.sourcesBlock,
   ];
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /** A guide box that grows to show all its words. */
 function growGuide(el: HTMLTextAreaElement | null) {
   if (!el) return;
-  el.style.height = "auto";
+  el.style.height = 'auto';
   el.style.height = `${el.scrollHeight + 2}px`;
 }
 
@@ -295,7 +336,8 @@ function growGuide(el: HTMLTextAreaElement | null) {
  * points row. Used by New template and, when a stored template's body parses, by its own page.
  */
 export function SectionRows({ secs, onChange }: { secs: Sec[]; onChange: (secs: Sec[]) => void }) {
-  const set = (i: number, patch: Partial<Sec>) => onChange(secs.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  const set = (i: number, patch: Partial<Sec>) =>
+    onChange(secs.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   return (
     <div className="flex flex-col gap-2" data-testid="template-sections">
       {secs.map((s, i) => (
@@ -335,7 +377,7 @@ export function SectionRows({ secs, onChange }: { secs: Sec[]; onChange: (secs: 
           <Button
             variant="ghost"
             icon="x"
-            aria-label={`Remove ${s.heading.trim() || "this section"}`}
+            aria-label={`Remove ${s.heading.trim() || 'this section'}`}
             onClick={() => onChange(secs.filter((_, j) => j !== i))}
           />
         </div>
@@ -343,7 +385,9 @@ export function SectionRows({ secs, onChange }: { secs: Sec[]; onChange: (secs: 
       <div className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-center gap-2 rounded-lg border border-dashed border-line p-2 text-[15px] text-text2 max-[700px]:grid-cols-1">
         <span className="px-3 font-semibold text-text">Sources and data points</span>
         <span className="px-3">
-          <InfoTip label="sources and data points">Always last: the only place for sources, numbers and evidence.</InfoTip>
+          <InfoTip label="sources and data points">
+            Always last: the only place for sources, numbers and evidence.
+          </InfoTip>
         </span>
       </div>
       <span>
@@ -364,7 +408,7 @@ export function SectionRows({ secs, onChange }: { secs: Sec[]; onChange: (secs: 
 export function CheckStatus({ live, value }: { live: Live<TemplateCheck>; value: string }) {
   const check = live.data;
   const titles = sectionTitles(value);
-  const named = (keys: string[]) => keys.map((k) => sectionName(titles, k)).join(", ");
+  const named = (keys: string[]) => keys.map((k) => sectionName(titles, k)).join(', ');
   const themeName = useThemeNames();
   return (
     <div aria-live="polite" className="flex min-h-6 flex-col gap-2 text-sm">
@@ -373,7 +417,7 @@ export function CheckStatus({ live, value }: { live: Live<TemplateCheck>; value:
       {check && check.valid && (
         <p data-testid="validation-ok" className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Chip kind="pass" dot>
-            {live.pending ? "Checking…" : "Valid."}
+            {live.pending ? 'Checking…' : 'Valid.'}
           </Chip>
           <Label>Sections:</Label>
           <span data-testid="section-names" className="min-w-0 break-words">
@@ -400,12 +444,13 @@ export function CheckStatus({ live, value }: { live: Live<TemplateCheck>; value:
         <div className="flex flex-col gap-1.5">
           <p className="flex items-center gap-2">
             <Chip kind="crit" dot>
-              <span className="tnum">{check.problems.length}</span> problem{check.problems.length > 1 ? "s" : ""}
-              {live.pending ? " · checking…" : ""}
+              <span className="tnum">{check.problems.length}</span> problem
+              {check.problems.length > 1 ? 's' : ''}
+              {live.pending ? ' · checking…' : ''}
             </Chip>
           </p>
           <ProblemList problems={check.problems} />
-          {check.problems.some((p) => p.code === "no_brief_sections") && <BriefFix />}
+          {check.problems.some((p) => p.code === 'no_brief_sections') && <BriefFix />}
         </div>
       )}
     </div>
@@ -421,7 +466,7 @@ export function CheckStatus({ live, value }: { live: Live<TemplateCheck>; value:
 export function TemplateBodyEditor({
   value,
   onChange,
-  label = "Body",
+  label = 'Body',
   rows = 22,
   live: given,
   children,
@@ -438,13 +483,16 @@ export function TemplateBodyEditor({
   return (
     <div className="flex flex-col gap-2">
       <span className="flex items-center gap-1.5">
-        <label className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2" htmlFor="template-body">
+        <label
+          className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          htmlFor="template-body"
+        >
           {label}
         </label>
         <InfoTip label="template rules" align="start" side="bottom">
-          Every heading ends with <code>{"{#id}"}</code>; the last section is{" "}
-          <code>## Sources and data points {"{#sources}"}</code>. Saving adds a new version; documents keep the version they
-          started from.
+          Every heading ends with <code>{'{#id}'}</code>; the last section is{' '}
+          <code>## Sources and data points {'{#sources}'}</code>. Saving adds a new version;
+          documents keep the version they started from.
         </InfoTip>
       </span>
       <textarea

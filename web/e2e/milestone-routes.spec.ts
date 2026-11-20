@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * milestone-routes: a milestone proposal goes where the API sends it. A roadmap's own milestone
@@ -11,79 +11,98 @@ import { expect, test, type Page } from "./test";
  * "simple-prd-milestones" (Nora Vance owns Usage alerts' track); invented goals and people.
  */
 
-const APPROVER = "approver@example.com";
-const NORA = "nora.vance@example.com";
+const APPROVER = 'approver@example.com';
+const NORA = 'nora.vance@example.com';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 async function open(page: Page, scenario: string, email?: string) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      scenario,
+    ] as const);
   await login(page, email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
-const label = (page: Page, code: string) => page.getByTestId("ms-label").filter({ hasText: new RegExp(`^${code} `) });
-const card = (page: Page) => page.getByTestId("ms-card");
+const label = (page: Page, code: string) =>
+  page.getByTestId('ms-label').filter({ hasText: new RegExp(`^${code} `) });
+const card = (page: Page) => page.getByTestId('ms-card');
 
 /** Proposes a new name from the milestone's card on the roadmap. */
 async function proposeName(page: Page, code: string, name: string) {
   await label(page, code).click();
-  await expect(card(page)).toHaveAttribute("data-rights", "propose");
-  await card(page).getByLabel("Name", { exact: true }).fill(name);
-  await card(page).getByTestId("ms-propose").click();
-  await expect(page.getByTestId("ms-toast")).toContainText(`Proposed a change to ${code}`);
+  await expect(card(page)).toHaveAttribute('data-rights', 'propose');
+  await card(page).getByLabel('Name', { exact: true }).fill(name);
+  await card(page).getByTestId('ms-propose').click();
+  await expect(page.getByTestId('ms-toast')).toContainText(`Proposed a change to ${code}`);
 }
 
 /** The proposer's own proposal on Home, waiting for `who`. */
 async function waitsFor(page: Page, who: string) {
-  await page.goto("/simple");
-  const mine = page.getByTestId("home-proposals").getByTestId("home-proposal");
+  await page.goto('/simple');
+  const mine = page.getByTestId('home-proposals').getByTestId('home-proposal');
   await expect(mine).toHaveCount(1);
   await expect(mine).toContainText(`Waiting for ${who}`);
 }
 
 async function signOut(page: Page) {
-  await page.getByTestId("user-menu").click();
-  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await page.getByTestId('user-menu').click();
+  await page
+    .getByRole('dialog', { name: 'Account' })
+    .getByRole('button', { name: 'Sign out' })
+    .click();
   await expect(page).toHaveURL(/\/login/);
 }
 
-test("a roadmap's own milestone: the proposal goes to the roadmap's track owner, who decides it", async ({ page }) => {
-  await open(page, "simple-milestones-track-owner", APPROVER);
-  await proposeName(page, "M1", "Alerts live for 70 teams");
-  await waitsFor(page, "Nora Vance");
+test("a roadmap's own milestone: the proposal goes to the roadmap's track owner, who decides it", async ({
+  page,
+}) => {
+  await open(page, 'simple-milestones-track-owner', APPROVER);
+  await proposeName(page, 'M1', 'Alerts live for 70 teams');
+  await waitsFor(page, 'Nora Vance');
 
   await signOut(page);
   await login(page, NORA);
-  await page.goto("/simple/roadmap");
-  await page.getByTestId("needs-decision").click();
-  const row = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Milestone 'M1 Alerts live for 50 teams': change it" });
+  await page.goto('/simple/roadmap');
+  await page.getByTestId('needs-decision').click();
+  const row = page
+    .getByTestId('decision-tray')
+    .getByTestId('tray-proposal')
+    .filter({ hasText: "Milestone 'M1 Alerts live for 50 teams': change it" });
   await expect(row).toBeVisible();
-  await row.getByRole("button", { name: "Accept" }).click();
+  await row.getByRole('button', { name: 'Accept' }).click();
   await expect(row).toHaveCount(0);
-  await page.getByTestId("decision-tray").getByRole("button", { name: "Close" }).click();
-  await expect(label(page, "M1")).toContainText("M1 Alerts live for 70 teams");
+  await page.getByTestId('decision-tray').getByRole('button', { name: 'Close' }).click();
+  await expect(label(page, 'M1')).toContainText('M1 Alerts live for 70 teams');
 });
 
 test("a goal's own milestone: the proposal goes to its roadmap's track owner", async ({ page }) => {
-  await open(page, "simple-milestones-track-owner", APPROVER);
-  await proposeName(page, "M5", "Ninety teams activated");
-  await waitsFor(page, "Nora Vance");
+  await open(page, 'simple-milestones-track-owner', APPROVER);
+  await proposeName(page, 'M5', 'Ninety teams activated');
+  await waitsFor(page, 'Nora Vance');
 });
 
-test("with no track owner who decides, a roadmap's own milestone's proposal goes to the company's owner", async ({ page }) => {
-  await open(page, "simple-milestones", APPROVER);
-  await proposeName(page, "M1", "Alerts live for 70 teams");
-  await waitsFor(page, "Avery Stone");
+test("with no track owner who decides, a roadmap's own milestone's proposal goes to the company's owner", async ({
+  page,
+}) => {
+  await open(page, 'simple-milestones', APPROVER);
+  await proposeName(page, 'M1', 'Alerts live for 70 teams');
+  await waitsFor(page, 'Avery Stone');
 });
 
 test("a PRD's milestone: the ask goes to the PRD's owner", async ({ page }) => {
-  await open(page, "simple-prd-milestones", APPROVER);
-  await page.getByTestId("ms-prd-label").filter({ hasText: /^M\d+ Digest for all teams$/ }).click();
-  const prd = page.getByTestId("ms-prd-card");
-  await prd.getByLabel("Date").fill("2027-01-20");
-  await prd.getByRole("button", { name: "Ask to change it" }).click();
-  await expect(page.getByTestId("ms-toast")).toContainText(/to move M\d+ Digest for all teams/);
-  await waitsFor(page, "Nora Vance");
+  await open(page, 'simple-prd-milestones', APPROVER);
+  await page
+    .getByTestId('ms-prd-label')
+    .filter({ hasText: /^M\d+ Digest for all teams$/ })
+    .click();
+  const prd = page.getByTestId('ms-prd-card');
+  await prd.getByLabel('Date').fill('2027-01-20');
+  await prd.getByRole('button', { name: 'Ask to change it' }).click();
+  await expect(page.getByTestId('ms-toast')).toContainText(/to move M\d+ Digest for all teams/);
+  await waitsFor(page, 'Nora Vance');
 });

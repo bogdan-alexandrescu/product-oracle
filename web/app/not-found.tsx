@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata } from 'next';
 
-import { LinkButton, NotFoundPanel } from "@/components/ds";
-import { SectionBackLink } from "@/components/SectionBackLink";
+import { LinkButton, NotFoundPanel } from '@/components/ds';
+import { SectionBackLink } from '@/components/SectionBackLink';
 
 export const metadata: Metadata = {
-  title: "Page not found · Product Oracle",
+  title: 'Page not found · Product Oracle',
 };
 
 /**

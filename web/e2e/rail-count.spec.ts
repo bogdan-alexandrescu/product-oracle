@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Card rail-count-light: protects = a Simple page that does not show the Inbox (Roadmap, Goal
@@ -10,14 +10,16 @@ import { expect, test, type Page } from "./test";
  * (the rail shares that read).
  */
 
-const calls = (page: Page) => page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
+const calls = (page: Page) =>
+  page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
 const wholeInbox = (list: string[]) => list.filter((c) => /^GET \/v1\/inbox(\?|$)/.test(c));
-const railCount = (page: Page) => page.getByTestId("simple-nav").getByTestId("simple-nav-inbox-count");
+const railCount = (page: Page) =>
+  page.getByTestId('simple-nav').getByTestId('simple-nav-inbox-count');
 
 /** The Inbox's "N waiting", on its page. */
 async function waiting(page: Page): Promise<number> {
   // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
-  const shown = page.getByTestId("inbox-needs").getByTestId("panel-count").first();
+  const shown = page.getByTestId('inbox-needs').getByTestId('panel-count').first();
   await expect(shown).toHaveText(/^\d+$/, { timeout: 15_000 });
   return Number((await shown.textContent())!.trim());
 }
@@ -27,22 +29,24 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const [name, path] of [
-  ["Roadmap", "/simple/roadmap"],
-  ["Goal map", "/simple/goals"],
-  ["Priorities", "/simple/priorities"],
-  ["Decisions", "/simple/decisions"],
-  ["Meetings", "/simple/meetings"],
-  ["One-pagers", "/simple/one-pagers"],
+  ['Roadmap', '/simple/roadmap'],
+  ['Goal map', '/simple/goals'],
+  ['Priorities', '/simple/priorities'],
+  ['Decisions', '/simple/decisions'],
+  ['Meetings', '/simple/meetings'],
+  ['One-pagers', '/simple/one-pagers'],
 ] as const) {
-  test(`${name}: the rail's Inbox count reads the counts alone, never the whole Inbox`, async ({ page }) => {
+  test(`${name}: the rail's Inbox count reads the counts alone, never the whole Inbox`, async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/simple/inbox");
+    await page.goto('/simple/inbox');
     const n = await waiting(page);
     await page.goto(path);
     await expect(railCount(page)).toHaveText(String(n), { timeout: 15_000 });
     const seen = await calls(page);
     expect(wholeInbox(seen)).toEqual([]);
-    expect(seen).toContain("GET /v1/inbox/counts");
+    expect(seen).toContain('GET /v1/inbox/counts');
   });
 }
 
@@ -52,14 +56,18 @@ for (const [name, path] of [
  * reading the whole Inbox; fails_when = the rail keeps the count from before, or reads the whole
  * Inbox to update it.
  */
-test("Decisions: confirming dates the Inbox counts brings the rail's count down at once", async ({ page }) => {
+test("Decisions: confirming dates the Inbox counts brings the rail's count down at once", async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/simple/decisions");
+  await page.goto('/simple/decisions');
   const count = railCount(page);
   await expect(count).toHaveText(/^\d+$/, { timeout: 15_000 });
   const before = Number(await count.textContent());
-  const dates = page.getByTestId("questions-mine").getByRole("listitem", { name: "Dates to confirm: Alert routing by team" });
-  await dates.getByRole("button", { name: "Confirm" }).click();
+  const dates = page
+    .getByTestId('questions-mine')
+    .getByRole('listitem', { name: 'Dates to confirm: Alert routing by team' });
+  await dates.getByRole('button', { name: 'Confirm' }).click();
   await expect(dates).toHaveCount(0, { timeout: 15_000 });
   await expect(count).toHaveText(String(before - 1), { timeout: 15_000 });
   expect(wholeInbox(await calls(page))).toEqual([]);

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * Settings > Claude accounts: the Claude subscriptions Oracle's built-in jobs run on.
@@ -14,7 +14,7 @@
  * window past its reset says `reset`. Every change reloads the listing rather than
  * patching a local copy. No credential is ever rendered, not even its length.
  */
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
   Button,
@@ -33,15 +33,15 @@ import {
   type ChipKind,
   type Column,
   type InspectorStat,
-} from "@/components/ds";
-import { ClaudeOffNotice, limitWord } from "@/components/ClaudeOffNotice";
-import { LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatPercent, inWords } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { ClaudeOffNotice, limitWord } from '@/components/ClaudeOffNotice';
+import { LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatPercent, inWords } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { Field, INPUT, TEXTAREA } from "../_components/fields";
+import { Field, INPUT, TEXTAREA } from '../_components/fields';
 
 import {
   FIVE_HOUR,
@@ -60,31 +60,31 @@ import {
   type Account,
   type AccountReading,
   type Clears,
-} from "./_readings";
+} from './_readings';
 
-type Page = Schemas["AccountsPage"];
-type StateName = Account["state"];
+type Page = Schemas['AccountsPage'];
+type StateName = Account['state'];
 
 /** A sign-in between its authorize URL and its pasted code. Survives a reload. */
 type SignIn =
-  | { kind: "idle" }
-  | { kind: "started"; label: string; state: string; url: string; expiresIn: number }
-  | { kind: "done"; account: Account };
+  | { kind: 'idle' }
+  | { kind: 'started'; label: string; state: string; url: string; expiresIn: number }
+  | { kind: 'done'; account: Account };
 
 /** Separator that keeps the summary's text "4 accounts · 3 available" between chips. */
 const Dot = () => <span className="sr-only"> · </span>;
 
 export function ClaudeAccounts() {
-  const q = useQuery("claude-accounts", () => unwrap(api.GET("/v1/claude-accounts")));
+  const q = useQuery('claude-accounts', () => unwrap(api.GET('/v1/claude-accounts')));
   const { can, capsReady } = useMe();
-  const owner = can("add_claude_account");
+  const owner = can('add_claude_account');
   const [chosen, setChosen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [fallbackOpen, setFallbackOpen] = useState(false);
   // Keyed by what they are for ("add", or an account id for signing in again), held
   // here so a reload after a write does not lose a sign-in under way.
   const [signins, setSignins] = useState<Record<string, SignIn>>({});
-  const signin = (key: string) => signins[key] ?? { kind: "idle" };
+  const signin = (key: string) => signins[key] ?? { kind: 'idle' };
   const setSignin = (key: string, s: SignIn) => setSignins((all) => ({ ...all, [key]: s }));
 
   return (
@@ -93,9 +93,10 @@ export function ClaudeAccounts() {
         title="Claude accounts"
         info={
           <InfoTip label="Claude accounts" align="start" side="bottom">
-            The Claude subscriptions Oracle&apos;s built-in jobs (review comments, reporting, refinement) run on.
-            Each call takes the account with the most headroom and moves to another when one runs out. Agent
-            workflows run in SwarmCloud on SwarmCloud&apos;s own accounts.
+            The Claude subscriptions Oracle&apos;s built-in jobs (review comments, reporting,
+            refinement) run on. Each call takes the account with the most headroom and moves to
+            another when one runs out. Agent workflows run in SwarmCloud on SwarmCloud&apos;s own
+            accounts.
           </InfoTip>
         }
         status={
@@ -112,7 +113,7 @@ export function ClaudeAccounts() {
               aria-label="+ Add account"
               className="max-sm:min-h-11"
               aria-expanded={adding}
-              disabled={signin("add").kind === "started"}
+              disabled={signin('add').kind === 'started'}
               onClick={() => setAdding(!adding)}
             >
               Add account
@@ -121,12 +122,14 @@ export function ClaudeAccounts() {
         }
       />
       {/* F-1: a list that did not load says so, with Try again (no Add account under it). */}
-      {q.error && <LoadError what="your Claude accounts" error={q.error} onRetry={() => void q.reload()} />}
+      {q.error && (
+        <LoadError what="your Claude accounts" error={q.error} onRetry={() => void q.reload()} />
+      )}
       {q.loading && !q.data && !q.error && (
         <Panel title="Accounts">
           <DataTable<Account>
             label="Subscription accounts"
-            columns={[{ key: "label", header: "Account", cell: (a) => a.label }]}
+            columns={[{ key: 'label', header: 'Account', cell: (a) => a.label }]}
             rows={undefined}
             rowKey={(a) => a.account_id}
             loading
@@ -135,7 +138,13 @@ export function ClaudeAccounts() {
       )}
       {q.data && (
         <div className="flex flex-col gap-4 max-[600px]:gap-3 max-sm:[&_[data-variant]]:min-h-11">
-          {owner && <ClaudeOffNotice page={q.data} onAdd={() => setAdding(true)} onFallback={() => setFallbackOpen(true)} />}
+          {owner && (
+            <ClaudeOffNotice
+              page={q.data}
+              onAdd={() => setAdding(true)}
+              onFallback={() => setFallbackOpen(true)}
+            />
+          )}
           <Broken accounts={q.data.accounts} owner={owner} onOpen={(id) => setChosen(id)} />
           <Pool
             page={q.data}
@@ -143,7 +152,7 @@ export function ClaudeAccounts() {
             chosen={chosen}
             choose={(id) => {
               setChosen(id);
-              if (signin("add").kind === "idle") setAdding(false);
+              if (signin('add').kind === 'idle') setAdding(false);
             }}
             adding={adding || (owner && q.data.accounts.length === 0)}
             setAdding={setAdding}
@@ -164,15 +173,17 @@ function SummaryChips({ page, onOpen }: { page: Page; onOpen: (id: string) => vo
   const n = page.accounts.length;
   // What the pool would give a call to, not the state alone: a spent account is AVAILABLE.
   const available = page.accounts.filter((a) => a.takes_calls).length;
-  const brokenRows = page.accounts.filter(needsAHuman).sort((a, b) => a.label.localeCompare(b.label));
+  const brokenRows = page.accounts
+    .filter(needsAHuman)
+    .sort((a, b) => a.label.localeCompare(b.label));
   const broken = brokenRows.length;
   const missing = page.unreadable_document_count;
   const sweep = page.refresh_sweep;
-  const sweepOk = sweep.readable && !!sweep.last_completed_at && sweep.last_outcome === "ok";
+  const sweepOk = sweep.readable && !!sweep.last_completed_at && sweep.last_outcome === 'ok';
   return (
     <span data-testid="accounts-summary" className="flex flex-wrap items-center gap-2">
       <Chip kind="line">
-        {n} account{n === 1 ? "" : "s"}
+        {n} account{n === 1 ? '' : 's'}
       </Chip>
       <Dot />
       <Chip kind="pass">{available} available</Chip>
@@ -180,7 +191,7 @@ function SummaryChips({ page, onOpen }: { page: Page; onOpen: (id: string) => vo
         <>
           <Dot />
           <Chip kind="crit" title="This list is short.">
-            {missing} row{missing === 1 ? "" : "s"} unreadable
+            {missing} row{missing === 1 ? '' : 's'} unreadable
           </Chip>
         </>
       )}
@@ -196,19 +207,19 @@ function SummaryChips({ page, onOpen }: { page: Page; onOpen: (id: string) => vo
             onClick={() => onOpen(brokenRows[0].account_id)}
           >
             <Chip kind="warn">
-              {broken} need{broken === 1 ? "s" : ""} a sign-in
+              {broken} need{broken === 1 ? 's' : ''} a sign-in
             </Chip>
           </button>
         </>
       )}
       <Dot />
-      <Chip kind={sweepOk ? "na" : "warn"} data-testid="refresh-sweep">
+      <Chip kind={sweepOk ? 'na' : 'warn'} data-testid="refresh-sweep">
         {/* The sign-in check, named as such: the table's foot says when usage was read (qa4-settings-33). */}
         {!sweep.readable
-          ? "Sign-in check unknown"
+          ? 'Sign-in check unknown'
           : sweep.last_completed_at
-            ? `${sweep.last_outcome === "ok" ? "Sign-ins checked" : "Sign-in check failed"} ${timeAgo(sweep.last_completed_at)}`
-            : "Sign-ins not checked yet"}
+            ? `${sweep.last_outcome === 'ok' ? 'Sign-ins checked' : 'Sign-in check failed'} ${timeAgo(sweep.last_completed_at)}`
+            : 'Sign-ins not checked yet'}
       </Chip>
     </span>
   );
@@ -218,7 +229,15 @@ function SummaryChips({ page, onOpen }: { page: Page; onOpen: (id: string) => vo
 const providerName = (p: string) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : p);
 
 /** The accounts a timer will never fix, before anything else. */
-function Broken({ accounts, owner, onOpen }: { accounts: Account[]; owner: boolean; onOpen: (id: string) => void }) {
+function Broken({
+  accounts,
+  owner,
+  onOpen,
+}: {
+  accounts: Account[];
+  owner: boolean;
+  onOpen: (id: string) => void;
+}) {
   const broken = accounts.filter(needsAHuman);
   if (broken.length === 0) return null;
   return (
@@ -227,11 +246,12 @@ function Broken({ accounts, owner, onOpen }: { accounts: Account[]; owner: boole
       className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn"
     >
       <span>
-        <b>{broken.map((a) => a.label).join(", ")}</b> need{broken.length === 1 ? "s" : ""} someone to sign in again
+        <b>{broken.map((a) => a.label).join(', ')}</b> need{broken.length === 1 ? 's' : ''} someone
+        to sign in again
       </span>
       <InfoTip label="sign-ins" align="start" side="bottom">
-        {broken.length === 1 ? "It gives" : "They give"} out nothing until then.{" "}
-        {owner ? "" : "An owner signs in again."}
+        {broken.length === 1 ? 'It gives' : 'They give'} out nothing until then.{' '}
+        {owner ? '' : 'An owner signs in again.'}
       </InfoTip>
       {owner &&
         broken.map((a) => (
@@ -241,7 +261,7 @@ function Broken({ accounts, owner, onOpen }: { accounts: Account[]; owner: boole
             className="font-semibold underline underline-offset-2 max-sm:min-h-11"
             onClick={() => onOpen(a.account_id)}
           >
-            {broken.length === 1 ? "Sign in again" : `Sign in again to ${a.label}`}
+            {broken.length === 1 ? 'Sign in again' : `Sign in again to ${a.label}`}
           </button>
         ))}
     </div>
@@ -280,38 +300,41 @@ function Pool({
   const addForm = owner ? (
     <AddAccount
       accounts={accounts}
-      signin={signin("add")}
-      setSignin={(s) => setSignin("add", s)}
+      signin={signin('add')}
+      setSignin={(s) => setSignin('add', s)}
       close={() => setAdding(false)}
       reload={reload}
     />
   ) : null;
-  const showDetail = !!shown && !(adding && signin("add").kind === "idle");
+  const showDetail = !!shown && !(adding && signin('add').kind === 'idle');
   // One column (phones, narrow windows) puts the pane under the whole list: a tap on a row
   // brings it into view, as the side-by-side layout shows it at once (qa-settings-44).
   const paneRef = useRef<HTMLDivElement>(null);
   const [tapped, setTapped] = useState(0);
   useEffect(() => {
-    if (tapped === 0 || !window.matchMedia("(max-width: 1100px)").matches) return;
-    paneRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (tapped === 0 || !window.matchMedia('(max-width: 1100px)').matches) return;
+    paneRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, [tapped]);
 
   const columns: Column<Account>[] = [
     {
-      key: "label",
-      header: "Account",
+      key: 'label',
+      header: 'Account',
       cell: (a) => (
         <span className="flex min-w-0 items-center gap-2">
           <button
             type="button"
             tabIndex={-1}
-            aria-current={showDetail && shown?.account_id === a.account_id ? "true" : undefined}
+            aria-current={showDetail && shown?.account_id === a.account_id ? 'true' : undefined}
             className="min-w-0 truncate text-left font-semibold"
           >
             {a.label}
           </button>
           {a.unreadable_now && (
-            <Chip kind="crit" title="A call could not read this account's credential; the pool skips it for thirty minutes.">
+            <Chip
+              kind="crit"
+              title="A call could not read this account's credential; the pool skips it for thirty minutes."
+            >
               skipped
             </Chip>
           )}
@@ -319,33 +342,44 @@ function Pool({
       ),
     },
     {
-      key: "5h",
-      header: "5-hour use",
-      phoneLabel: "5-hour use",
-      width: "112px",
-      align: "right",
+      key: '5h',
+      header: '5-hour use',
+      phoneLabel: '5-hour use',
+      width: '112px',
+      align: 'right',
       cell: (a) => <WindowFig reading={readingOf(a, FIVE_HOUR)} window="five-hour" />,
     },
-    { key: "state", header: "State", width: "196px", wrap: true, cell: (a) => <AcctState account={a} zone={page.time_zone} stacked /> },
     {
-      key: "clears",
-      header: "Next reset",
-      width: "176px",
+      key: 'state',
+      header: 'State',
+      width: '196px',
+      wrap: true,
+      cell: (a) => <AcctState account={a} zone={page.time_zone} stacked />,
+    },
+    {
+      key: 'clears',
+      header: 'Next reset',
+      width: '176px',
       wrap: true,
       hideOnPhone: true,
-      className: "text-text2",
+      className: 'text-text2',
       cell: (a) => <ClearsLine account={a} now={now} />,
     },
     {
-      key: "given",
-      header: "Last used",
-      width: "168px",
+      key: 'given',
+      header: 'Last used',
+      width: '168px',
       wrap: true,
       hideOnPhone: true,
-      className: "text-text2",
+      className: 'text-text2',
       cell: (a) => (
-        <span className="tnum" title={a.last_assigned_at ? inWords(a.last_assigned_at, page.time_zone) : undefined}>
-          {a.last_assigned_at ? `Used by a job ${agoPastDay(a.last_assigned_at, now)}` : "Not used by a job yet"}
+        <span
+          className="tnum"
+          title={a.last_assigned_at ? inWords(a.last_assigned_at, page.time_zone) : undefined}
+        >
+          {a.last_assigned_at
+            ? `Used by a job ${agoPastDay(a.last_assigned_at, now)}`
+            : 'Not used by a job yet'}
         </span>
       ),
     },
@@ -354,7 +388,11 @@ function Pool({
   const ages = readingAges(accounts, now);
   const inspector =
     (adding && addForm) || showDetail ? (
-      <div ref={paneRef} className="flex min-w-0 scroll-mt-4 flex-col gap-4 max-[600px]:gap-3" data-testid="account-pane">
+      <div
+        ref={paneRef}
+        className="flex min-w-0 scroll-mt-4 flex-col gap-4 max-[600px]:gap-3"
+        data-testid="account-pane"
+      >
         {adding && addForm}
         {showDetail && shown && (
           <Detail
@@ -391,7 +429,7 @@ function Pool({
               choose(id);
               setTapped((n) => n + 1);
             }}
-            rowProps={(a) => ({ "data-testid": `account-row-${a.label}` })}
+            rowProps={(a) => ({ 'data-testid': `account-row-${a.label}` })}
           />
         )}
         {accounts.length > 0 && (
@@ -400,18 +438,28 @@ function Pool({
             data-testid="accounts-foot"
           >
             <span>
-              {accounts.length} account{accounts.length === 1 ? "" : "s"}
-              {page.unreadable_document_count > 0 && <> of {accounts.length + page.unreadable_document_count}</>}
+              {accounts.length} account{accounts.length === 1 ? '' : 's'}
+              {page.unreadable_document_count > 0 && (
+                <> of {accounts.length + page.unreadable_document_count}</>
+              )}
               {ages && <> · {ages}</>}
             </span>
             <InfoTip label="the figures" align="start">
-              {anyProjected(accounts, now) ? "~ is an old reading, not current" : "no projected figures"} · — is not
-              measured
+              {anyProjected(accounts, now)
+                ? '~ is an old reading, not current'
+                : 'no projected figures'}{' '}
+              · — is not measured
             </InfoTip>
           </p>
         )}
       </Panel>
-      <Fallback page={page} owner={owner} open={fallbackOpen} setOpen={setFallbackOpen} reload={reload} />
+      <Fallback
+        page={page}
+        owner={owner}
+        open={fallbackOpen}
+        setOpen={setFallbackOpen}
+        reload={reload}
+      />
     </Split>
   );
 }
@@ -427,33 +475,33 @@ function useNow(tickMs: number): number {
 }
 
 const STATE_KIND: Record<string, ChipKind> = {
-  AVAILABLE: "pass",
-  PAUSED: "acc",
-  DRAINING: "na",
-  REAUTH_REQUIRED: "warn",
+  AVAILABLE: 'pass',
+  PAUSED: 'acc',
+  DRAINING: 'na',
+  REAUTH_REQUIRED: 'warn',
 };
 
 const STATE_LABEL: Record<string, string> = {
-  AVAILABLE: "Available",
-  PAUSED: "Paused",
-  DRAINING: "Moving jobs off",
-  REAUTH_REQUIRED: "Needs sign-in",
+  AVAILABLE: 'Available',
+  PAUSED: 'Paused',
+  DRAINING: 'Moving jobs off',
+  REAUTH_REQUIRED: 'Needs sign-in',
 };
 
 /** A state as a plain label; an unknown one in sentence case. */
 export function stateLabel(state: string): string {
-  return STATE_LABEL[state] ?? sentence(state.toLowerCase().replace(/_/g, " "));
+  return STATE_LABEL[state] ?? sentence(state.toLowerCase().replace(/_/g, ' '));
 }
 
 /** The platform's reason codes, in words. */
 const REASON_LABEL: Record<string, string> = {
-  reauth_required: "sign-in needed",
-  unreadable: "credential unreadable",
-  refresh_failed: "refresh failed",
-  refreshed: "refreshed",
-  still_valid: "still valid",
-  published: "published",
-  held_deferred: "deferred while in use",
+  reauth_required: 'sign-in needed',
+  unreadable: 'credential unreadable',
+  refresh_failed: 'refresh failed',
+  refreshed: 'refreshed',
+  still_valid: 'still valid',
+  published: 'published',
+  held_deferred: 'deferred while in use',
 };
 
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -464,7 +512,7 @@ export function reasonLabel(reason: string): string {
   // A reason someone typed reads as they typed it.
   if (!/[a-z]+(?:_[a-z]+)+/.test(reason)) return reason;
   const words = reason.replace(/[a-z]+(?:_[a-z]+)+/g, (code) =>
-    code === NO_REFRESH ? "nothing to refresh" : (REASON_LABEL[code] ?? code.replace(/_/g, " ")),
+    code === NO_REFRESH ? 'nothing to refresh' : (REASON_LABEL[code] ?? code.replace(/_/g, ' ')),
   );
   return sentence(words);
 }
@@ -476,10 +524,12 @@ export function reasonLabel(reason: string): string {
  */
 export function spentWhy(a: Account): string {
   const w = a.spent_by ? a.windows[a.spent_by] : undefined;
-  const used = w ? `${formatPercent(w.utilization)} of its ${windowWord(a.spent_by!)} window is used.` : "";
+  const used = w
+    ? `${formatPercent(w.utilization)} of its ${windowWord(a.spent_by!)} window is used.`
+    : '';
   // A window used up needs no floor to explain it.
   if (atLimit(a)) return used;
-  return `${used}${used ? " " : ""}Oracle stops giving an account new calls once less than 15% of a window is left, so a job it starts can finish.`;
+  return `${used}${used ? ' ' : ''}Oracle stops giving an account new calls once less than 15% of a window is left, so a job it starts can finish.`;
 }
 
 /** Whether the window that spends the account is used up, not only near its end. */
@@ -490,7 +540,7 @@ function atLimit(a: Account): boolean {
 
 /** "Near its weekly limit", or "At its weekly limit" once that window is used up. */
 export function spentLabel(a: Account): string {
-  return `${atLimit(a) ? "At" : "Near"} its ${a.spent_by ? limitWord(a.spent_by) : "limit"}`;
+  return `${atLimit(a) ? 'At' : 'Near'} its ${a.spent_by ? limitWord(a.spent_by) : 'limit'}`;
 }
 
 /**
@@ -498,7 +548,15 @@ export function spentLabel(a: Account): string {
  * pool will not choose because a window is spent reads "Spent until", as the gateway
  * treats it, never Available.
  */
-function AcctState({ account, zone, stacked }: { account: Account; zone: string; stacked?: boolean }) {
+function AcctState({
+  account,
+  zone,
+  stacked,
+}: {
+  account: Account;
+  zone: string;
+  stacked?: boolean;
+}) {
   const { state } = account;
   if (account.spent_until) {
     const title = `${spentLabel(account)}: Oracle gives it no new calls until then. ${spentWhy(account)}`;
@@ -518,7 +576,7 @@ function AcctState({ account, zone, stacked }: { account: Account; zone: string;
     );
   }
   return (
-    <Chip kind={STATE_KIND[state] ?? "na"} dot title={state}>
+    <Chip kind={STATE_KIND[state] ?? 'na'} dot title={state}>
       {stateLabel(state)}
     </Chip>
   );
@@ -526,15 +584,15 @@ function AcctState({ account, zone, stacked }: { account: Account; zone: string;
 
 function readingTitle(r: AccountReading, window: string): string {
   switch (r.kind) {
-    case "never":
-      return "No reading has ever arrived. Unknown is not zero.";
-    case "absent":
+    case 'never':
+      return 'No reading has ever arrived. Unknown is not zero.';
+    case 'absent':
       return `The last reading carried no ${window} window. Unmeasured is not zero.`;
-    case "reset":
+    case 'reset':
       return `Passed its reset ${timeAgo(r.resetsAt)}; the figure is what the window before it had used.`;
-    case "stale":
+    case 'stale':
       return `Last read ${timeAgo(r.observedAt)}, past the age a reading is trusted for. Marked ~.`;
-    case "live":
+    case 'live':
       return `Read ${timeAgo(r.observedAt)}, within the age a reading is trusted for.`;
   }
 }
@@ -542,14 +600,14 @@ function readingTitle(r: AccountReading, window: string): string {
 /** A window's figure: an em dash when unmeasured, `~` when projected, `reset` once refilled. */
 function WindowFig({ reading, window }: { reading: AccountReading; window: string }) {
   const title = readingTitle(reading, window);
-  if (reading.kind === "never" || reading.kind === "absent") {
+  if (reading.kind === 'never' || reading.kind === 'absent') {
     return (
       <span className="tnum text-text2" title={title} data-testid="fig-unmeasured">
         —
       </span>
     );
   }
-  if (reading.kind === "reset") {
+  if (reading.kind === 'reset') {
     return (
       <span className="tnum text-text2" title={`${title} Was ${Math.round(reading.pct)}%.`}>
         reset
@@ -558,7 +616,7 @@ function WindowFig({ reading, window }: { reading: AccountReading; window: strin
   }
   const projected = isProjected(reading);
   return (
-    <span className={`tnum font-semibold ${projected ? "text-text2" : "text-text"}`} title={title}>
+    <span className={`tnum font-semibold ${projected ? 'text-text2' : 'text-text'}`} title={title}>
       {projected && <span data-testid="tilde">~</span>}
       {Math.round(reading.pct)}%
     </span>
@@ -568,9 +626,9 @@ function WindowFig({ reading, window }: { reading: AccountReading; window: strin
 /** When the binding window resets, in words: "in 1h 19m", "in ~29h 59m", "already", or null unmeasured. */
 function resetWords(c: Clears): string | null {
   if (c.unmeasured) return null;
-  if (c.text === "cleared") return "already";
-  if (c.text === "now") return "~now";
-  return `in ${c.tilde ? "~" : ""}${c.text}`;
+  if (c.text === 'cleared') return 'already';
+  if (c.text === 'now') return '~now';
+  return `in ${c.tilde ? '~' : ''}${c.text}`;
 }
 
 function ClearsLine({ account, now }: { account: Account; now: number }) {
@@ -579,20 +637,23 @@ function ClearsLine({ account, now }: { account: Account; now: number }) {
   return (
     <span className="tnum" title={c.title} data-testid="clears">
       {when === null
-        ? "Not measured"
-        : when === "already"
-          ? `${sentence(c.win ?? "")} window has reset`
-          : `${sentence(c.win ?? "")} window resets ${when}`}
+        ? 'Not measured'
+        : when === 'already'
+          ? `${sentence(c.win ?? '')} window has reset`
+          : `${sentence(c.win ?? '')} window resets ${when}`}
     </span>
   );
 }
 
 /** A thin bar under a window figure; none when unmeasured. */
-function Bar({ pct, tone }: { pct: number; tone: "full" | "old" | "live" }) {
+function Bar({ pct, tone }: { pct: number; tone: 'full' | 'old' | 'live' }) {
   return (
-    <span className="mt-1.5 block h-1.5 w-full max-w-24 overflow-hidden rounded bg-surface2" aria-hidden="true">
+    <span
+      className="mt-1.5 block h-1.5 w-full max-w-24 overflow-hidden rounded bg-surface2"
+      aria-hidden="true"
+    >
       <span
-        className={`block h-full rounded ${tone === "full" ? "bg-crit" : tone === "old" ? "bg-line-strong" : "bg-accent"}`}
+        className={`block h-full rounded ${tone === 'full' ? 'bg-crit' : tone === 'old' ? 'bg-line-strong' : 'bg-accent'}`}
         style={{ width: `${Math.max(1, Math.min(100, pct))}%` }}
       />
     </span>
@@ -600,11 +661,21 @@ function Bar({ pct, tone }: { pct: number; tone: "full" | "old" | "live" }) {
 }
 
 /** A stat's figure: a display numeral sized for four across, and a 13 px note. */
-function StatFig({ children, note, dim, title }: { children: ReactNode; note?: ReactNode; dim?: boolean; title?: string }) {
+function StatFig({
+  children,
+  note,
+  dim,
+  title,
+}: {
+  children: ReactNode;
+  note?: ReactNode;
+  dim?: boolean;
+  title?: string;
+}) {
   return (
     <span className="block min-w-0" title={title}>
       <span
-        className={`tnum block truncate font-display text-[22px] leading-7 font-bold tracking-heading ${dim ? "text-text2" : ""}`}
+        className={`tnum block truncate font-display text-[22px] leading-7 font-bold tracking-heading ${dim ? 'text-text2' : ''}`}
       >
         {children}
       </span>
@@ -614,9 +685,12 @@ function StatFig({ children, note, dim, title }: { children: ReactNode; note?: R
 }
 
 /** A window's stat: the figure, and an InfoTip for the label's line when it is not measured. */
-function windowStat(reading: AccountReading, window: string): Pick<InspectorStat, "figure" | "extra"> {
+function windowStat(
+  reading: AccountReading,
+  window: string,
+): Pick<InspectorStat, 'figure' | 'extra'> {
   const title = readingTitle(reading, window);
-  if (reading.kind === "never" || reading.kind === "absent") {
+  if (reading.kind === 'never' || reading.kind === 'absent') {
     return {
       figure: <StatFig dim>—</StatFig>,
       extra: (
@@ -626,7 +700,7 @@ function windowStat(reading: AccountReading, window: string): Pick<InspectorStat
       ),
     };
   }
-  if (reading.kind === "reset") {
+  if (reading.kind === 'reset') {
     return {
       figure: (
         <StatFig title={title} note={`was ${Math.round(reading.pct)}% before it refilled`}>
@@ -636,26 +710,36 @@ function windowStat(reading: AccountReading, window: string): Pick<InspectorStat
     };
   }
   const projected = isProjected(reading);
-  const full = reading.kind === "live" && reading.pct >= 100;
+  const full = reading.kind === 'live' && reading.pct >= 100;
   return {
     figure: (
       <StatFig title={title} dim={projected}>
-        {projected && "~"}
+        {projected && '~'}
         {Math.round(reading.pct)}%
-        <Bar pct={reading.pct} tone={full ? "full" : projected ? "old" : "live"} />
+        <Bar pct={reading.pct} tone={full ? 'full' : projected ? 'old' : 'live'} />
       </StatFig>
     ),
   };
 }
 
 /** One fact: a 13 px label left, the value right (truncated, full text in its title). */
-function Fact({ label, children, mono, testId }: { label: string; children: ReactNode; mono?: boolean; testId?: string }) {
+function Fact({
+  label,
+  children,
+  mono,
+  testId,
+}: {
+  label: string;
+  children: ReactNode;
+  mono?: boolean;
+  testId?: string;
+}) {
   return (
     <div className="flex min-h-8 items-center gap-3" data-testid={testId}>
       <Label className="flex-none">{label}</Label>
       <span
-        className={`tnum min-w-0 flex-1 truncate text-right font-semibold ${mono ? "font-mono text-sm" : ""}`}
-        title={typeof children === "string" ? children : undefined}
+        className={`tnum min-w-0 flex-1 truncate text-right font-semibold ${mono ? 'font-mono text-sm' : ''}`}
+        title={typeof children === 'string' ? children : undefined}
       >
         {children}
       </span>
@@ -695,22 +779,37 @@ function Detail({
       }
       statColumns={2}
       stats={[
-        { label: "5-hour use", testId: "tile-5h used", ...windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
-        { label: "7-day use", testId: "tile-7d used", ...windowStat(readingOf(account, SEVEN_DAY), "seven-day") },
         {
-          label: "Next reset",
-          testId: "tile-Clears",
+          label: '5-hour use',
+          testId: 'tile-5h used',
+          ...windowStat(readingOf(account, FIVE_HOUR), 'five-hour'),
+        },
+        {
+          label: '7-day use',
+          testId: 'tile-7d used',
+          ...windowStat(readingOf(account, SEVEN_DAY), 'seven-day'),
+        },
+        {
+          label: 'Next reset',
+          testId: 'tile-Clears',
           figure: (
-            <StatFig title={c.title} note={c.win ? `${c.win} window` : undefined} dim={c.unmeasured}>
-              {resetWords(c) ?? "—"}
+            <StatFig
+              title={c.title}
+              note={c.win ? `${c.win} window` : undefined}
+              dim={c.unmeasured}
+            >
+              {resetWords(c) ?? '—'}
             </StatFig>
           ),
         },
         {
-          label: "Last used by a job",
-          testId: "tile-Last given out",
+          label: 'Last used by a job',
+          testId: 'tile-Last given out',
           figure: account.last_assigned_at ? (
-            <StatFig title={inWords(account.last_assigned_at, zone)} note={inWords(account.last_assigned_at, zone)}>
+            <StatFig
+              title={inWords(account.last_assigned_at, zone)}
+              note={inWords(account.last_assigned_at, zone)}
+            >
               {timeAgo(account.last_assigned_at, now)}
             </StatFig>
           ) : (
@@ -726,7 +825,10 @@ function Detail({
         {owner && (
           <Fact label="Claude account" testId="fact-claude-account">
             {claudeAccountOf(account) ?? (
-              <span className="font-normal text-text2" title="Claude reports it at sign-in; a pasted saved login carries none.">
+              <span
+                className="font-normal text-text2"
+                title="Claude reports it at sign-in; a pasted saved login carries none."
+              >
                 Not reported
               </span>
             )}
@@ -742,34 +844,45 @@ function Detail({
         <Fact label="Jobs on it">{account.assigned}</Fact>
         <Fact label="Last read">
           {account.observed_at === null
-            ? "Not measured"
-            : `${timeAgo(account.observed_at, now)}${account.stale ? " (old: figures are projected)" : ""}`}
+            ? 'Not measured'
+            : `${timeAgo(account.observed_at, now)}${account.stale ? ' (old: figures are projected)' : ''}`}
         </Fact>
         <Fact label="Token expires">
           {!account.token_expires_at
-            ? "—"
+            ? '—'
             : new Date(account.token_expires_at).getTime() <= now
-              ? "Expired"
+              ? 'Expired'
               : `in ${clearsIn(account.token_expires_at, now)}`}
         </Fact>
         <Fact label="Last refresh">
           {account.last_refresh_at
-            ? `${account.last_refresh_reason ? `${reasonLabel(account.last_refresh_reason)} · ` : ""}${timeAgo(account.last_refresh_at, now)}`
-            : "Not refreshed yet"}
+            ? `${account.last_refresh_reason ? `${reasonLabel(account.last_refresh_reason)} · ` : ''}${timeAgo(account.last_refresh_at, now)}`
+            : 'Not refreshed yet'}
         </Fact>
       </InspectorSection>
       <Holding account={account} now={now} zone={zone} />
       {owner ? (
         <>
           {needsAHuman(account) && (
-            <SignInAgain account={account} signin={signin} setSignin={setSignin} reload={reload} prominent />
+            <SignInAgain
+              account={account}
+              signin={signin}
+              setSignin={setSignin}
+              reload={reload}
+              prominent
+            />
           )}
           <StateControls account={account} reload={reload} />
           <InspectorSection label="Credential">
             <div className="flex flex-col gap-3">
               <RefreshControl account={account} reload={reload} />
               {!needsAHuman(account) && (
-                <SignInAgain account={account} signin={signin} setSignin={setSignin} reload={reload} />
+                <SignInAgain
+                  account={account}
+                  signin={signin}
+                  setSignin={setSignin}
+                  reload={reload}
+                />
               )}
             </div>
           </InspectorSection>
@@ -780,19 +893,21 @@ function Detail({
   );
 }
 
-const TAB = "h-8 max-sm:min-h-11 rounded-lg px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-70";
-const tabTone = (on: boolean) => (on ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2 hover:text-text");
+const TAB =
+  'h-8 max-sm:min-h-11 rounded-lg px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-70';
+const tabTone = (on: boolean) =>
+  on ? 'bg-accent text-on-accent' : 'text-text2 hover:bg-surface2 hover:text-text';
 
 /** Running now | History, both closed by default and loaded only when opened. */
 function Holding({ account, now, zone }: { account: Account; now: number; zone: string }) {
-  const [tab, setTab] = useState<"now" | "history" | null>(null);
+  const [tab, setTab] = useState<'now' | 'history' | null>(null);
   return (
     <InspectorSection label="Jobs">
       <div role="tablist" aria-label="Jobs on this account" className="flex flex-wrap gap-1">
         {(
           [
-            ["now", `Running now (${account.assigned})`],
-            ["history", "History"],
+            ['now', `Running now (${account.assigned})`],
+            ['history', 'History'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -807,8 +922,8 @@ function Holding({ account, now, zone }: { account: Account; now: number; zone: 
           </button>
         ))}
       </div>
-      {tab === "now" && <HoldingNow account={account} now={now} zone={zone} />}
-      {tab === "history" && <HoldingHistory account={account} now={now} zone={zone} />}
+      {tab === 'now' && <HoldingNow account={account} now={now} zone={zone} />}
+      {tab === 'history' && <HoldingHistory account={account} now={now} zone={zone} />}
     </InspectorSection>
   );
 }
@@ -816,21 +931,23 @@ function Holding({ account, now, zone }: { account: Account; now: number; zone: 
 function heldFor(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60_000));
   if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
 const JOB_LABEL: Record<string, string> = {
-  review_comments: "review comments",
-  reporting: "reporting",
-  refinement: "refinement",
+  review_comments: 'review comments',
+  reporting: 'reporting',
+  refinement: 'refinement',
 };
 
-const Quiet = ({ children }: { children: ReactNode }) => <p className="mt-2 text-sm text-text2">{children}</p>;
+const Quiet = ({ children }: { children: ReactNode }) => (
+  <p className="mt-2 text-sm text-text2">{children}</p>
+);
 
 function HoldingNow({ account, now, zone }: { account: Account; now: number; zone: string }) {
   const path = { params: { path: { account_id: account.account_id } } };
   const q = useQuery(`holders:${account.account_id}`, () =>
-    unwrap(api.GET("/v1/claude-accounts/{account_id}/holders", path)),
+    unwrap(api.GET('/v1/claude-accounts/{account_id}/holders', path)),
   );
   if (q.loading) return <Quiet>Loading holders…</Quiet>;
   if (q.error)
@@ -845,15 +962,29 @@ function HoldingNow({ account, now, zone }: { account: Account; now: number; zon
     <ul className="mt-2" data-testid="holding-now">
       {b.holders.map((h, i) => {
         const note =
-          h.move === "drain" ? "moving off (draining)" : h.swapped_from ? `moved here: ${h.swapped_from_reason}` : "";
+          h.move === 'drain'
+            ? 'moving off (draining)'
+            : h.swapped_from
+              ? `moved here: ${h.swapped_from_reason}`
+              : '';
         return (
-          <li key={i} className="flex min-h-9 items-center gap-2.5 border-t border-line first:border-t-0">
+          <li
+            key={i}
+            className="flex min-h-9 items-center gap-2.5 border-t border-line first:border-t-0"
+          >
             <span className="min-w-0 flex-1 truncate" title={note || undefined}>
-              {h.task_id ? (JOB_LABEL[h.task_id] ?? h.task_id) : <span className="text-text2">not recorded</span>}
+              {h.task_id ? (
+                (JOB_LABEL[h.task_id] ?? h.task_id)
+              ) : (
+                <span className="text-text2">not recorded</span>
+              )}
             </span>
-            {h.move === "drain" && <Chip kind="na">moving off</Chip>}
-            <span className="tnum flex-none text-sm text-text2" title={h.since ? inWords(h.since, zone) : undefined}>
-              {h.since ? heldFor(now - Date.parse(h.since)) : "—"}
+            {h.move === 'drain' && <Chip kind="na">moving off</Chip>}
+            <span
+              className="tnum flex-none text-sm text-text2"
+              title={h.since ? inWords(h.since, zone) : undefined}
+            >
+              {h.since ? heldFor(now - Date.parse(h.since)) : '—'}
             </span>
           </li>
         );
@@ -864,9 +995,9 @@ function HoldingNow({ account, now, zone }: { account: Account; now: number; zon
 
 function HoldingHistory({ account, now, zone }: { account: Account; now: number; zone: string }) {
   const [cursor, setCursor] = useState<string | null>(null);
-  const q = useQuery(`history:${account.account_id}:${cursor ?? ""}`, () =>
+  const q = useQuery(`history:${account.account_id}:${cursor ?? ''}`, () =>
     unwrap(
-      api.GET("/v1/claude-accounts/{account_id}/history", {
+      api.GET('/v1/claude-accounts/{account_id}/history', {
         params: { path: { account_id: account.account_id }, query: cursor ? { cursor } : {} },
       }),
     ),
@@ -883,15 +1014,15 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
   const spans = h.spans;
   const from = Date.parse(h.from);
   const to = Date.parse(h.to) || now;
-  const starts = spans.map((s) => Date.parse(s.since ?? "")).filter((t) => Number.isFinite(t));
+  const starts = spans.map((s) => Date.parse(s.since ?? '')).filter((t) => Number.isFinite(t));
   const lo = starts.length === 0 ? from : Math.max(from, Math.min(...starts));
   const scale = Math.max(1, to - lo);
   return (
     <div className="mt-2" data-testid="holding-history">
       {/* One reading per window is kept, not a series: today's figure, labelled as current. */}
-      {(five.kind === "live" || five.kind === "stale") && (
+      {(five.kind === 'live' || five.kind === 'stale') && (
         <Label className="tnum">
-          Five-hour window now: {five.kind === "stale" && "~"}
+          Five-hour window now: {five.kind === 'stale' && '~'}
           {Math.round(five.pct)}%
         </Label>
       )}
@@ -900,7 +1031,7 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
       ) : (
         <ul className="mt-1">
           {spans.map((s, i) => {
-            const a = Date.parse(s.since ?? "");
+            const a = Date.parse(s.since ?? '');
             const b = s.until ? Date.parse(s.until) : now;
             const left = Number.isFinite(a) ? ((a - lo) / scale) * 100 : 0;
             const width = Number.isFinite(a) ? ((b - a) / scale) * 100 : 0;
@@ -909,13 +1040,18 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
                 <span className="flex min-h-7 items-center gap-2.5">
                   <span
                     className="min-w-0 flex-1 truncate"
-                    title={s.since ? `Started ${inWords(s.since, zone)}` : "start not recorded"}
+                    title={s.since ? `Started ${inWords(s.since, zone)}` : 'start not recorded'}
                   >
-                    {s.task_id ? (JOB_LABEL[s.task_id] ?? s.task_id) : "not recorded"}
+                    {s.task_id ? (JOB_LABEL[s.task_id] ?? s.task_id) : 'not recorded'}
                   </span>
-                  <span className="tnum flex-none text-sm text-text2">{s.since ? heldFor(b - a) : "—"}</span>
+                  <span className="tnum flex-none text-sm text-text2">
+                    {s.since ? heldFor(b - a) : '—'}
+                  </span>
                   {s.end ? (
-                    <Chip kind="line" title={s.swapped_to ? (s.swapped_to_reason ?? undefined) : undefined}>
+                    <Chip
+                      kind="line"
+                      title={s.swapped_to ? (s.swapped_to_reason ?? undefined) : undefined}
+                    >
                       {s.end}
                     </Chip>
                   ) : (
@@ -925,7 +1061,10 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
                 <span className="relative mt-1 block h-1.5 rounded bg-surface2" aria-hidden="true">
                   <i
                     className="absolute block h-1.5 rounded bg-accent"
-                    style={{ left: `${Math.max(0, Math.min(100, left))}%`, width: `${Math.max(1, Math.min(100, width))}%` }}
+                    style={{
+                      left: `${Math.max(0, Math.min(100, left))}%`,
+                      width: `${Math.max(1, Math.min(100, width))}%`,
+                    }}
                   />
                 </span>
               </li>
@@ -943,27 +1082,32 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
 }
 
 const TARGETS: { to: StateName; verb: string; why: string }[] = [
-  { to: "AVAILABLE", verb: "Make available", why: "assignable to new jobs" },
-  { to: "PAUSED", verb: "Pause", why: "no new jobs; the ones on it keep running" },
-  { to: "DRAINING", verb: "Move jobs off", why: "no new jobs, and the ones on it are moved to other accounts" },
+  { to: 'AVAILABLE', verb: 'Make available', why: 'assignable to new jobs' },
+  { to: 'PAUSED', verb: 'Pause', why: 'no new jobs; the ones on it keep running' },
+  {
+    to: 'DRAINING',
+    verb: 'Move jobs off',
+    why: 'no new jobs, and the ones on it are moved to other accounts',
+  },
 ];
 
-const SIGN_IN_FIRST = "It can be made available once someone signs in to it again: until then it has no working sign-in.";
+const SIGN_IN_FIRST =
+  'It can be made available once someone signs in to it again: until then it has no working sign-in.';
 
 /** Taking an account out of rotation is the move that has to say why. */
 export function stateNeedsReason(to: StateName): boolean {
-  return to === "PAUSED" || to === "DRAINING";
+  return to === 'PAUSED' || to === 'DRAINING';
 }
 
 /** PAUSED, DRAINING and back, each behind a confirm that names the account. */
 function StateControls({ account, reload }: { account: Account; reload: () => Promise<void> }) {
   const [asking, setAsking] = useState<StateName | null>(null);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const asked = TARGETS.find((t) => t.to === asking) ?? null;
   const needsReason = asking !== null && stateNeedsReason(asking);
-  const jobs = `${account.assigned} job${account.assigned === 1 ? "" : "s"}`;
+  const jobs = `${account.assigned} job${account.assigned === 1 ? '' : 's'}`;
   // An account whose sign-in is gone has nothing to call with: it is made available by signing in again.
   const signInFirst = needsAHuman(account);
 
@@ -973,13 +1117,13 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
     setError(null);
     try {
       await unwrap(
-        api.PUT("/v1/claude-accounts/{account_id}/state", {
+        api.PUT('/v1/claude-accounts/{account_id}/state', {
           params: { path: { account_id: account.account_id } },
           body: { state: to, reason: reason.trim() },
         }),
       );
       setAsking(null);
-      setReason("");
+      setReason('');
       await reload();
     } catch (e) {
       setError(errorMessage(e));
@@ -994,13 +1138,13 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
         {TARGETS.map((t) => (
           <span key={t.to} className="inline-flex items-center gap-1">
             <Button
-              title={t.to === "AVAILABLE" && signInFirst ? SIGN_IN_FIRST : t.why}
-              disabled={account.state === t.to || (t.to === "AVAILABLE" && signInFirst)}
+              title={t.to === 'AVAILABLE' && signInFirst ? SIGN_IN_FIRST : t.why}
+              disabled={account.state === t.to || (t.to === 'AVAILABLE' && signInFirst)}
               onClick={() => setAsking(t.to)}
             >
               {t.verb}
             </Button>
-            {t.to === "AVAILABLE" && signInFirst && (
+            {t.to === 'AVAILABLE' && signInFirst && (
               // #1590: why Make available is disabled sits behind the (i).
               <InfoTip label="making it available" align="start" testId="claude-account-signin-tip">
                 {SIGN_IN_FIRST}
@@ -1021,14 +1165,14 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
             </span>
             <InfoTip label="this state">After: {asked.why}.</InfoTip>
           </p>
-          {asked.to !== "AVAILABLE" && account.assigned > 0 && (
+          {asked.to !== 'AVAILABLE' && account.assigned > 0 && (
             <p className="text-sm font-medium text-warn">
-              {asked.to === "DRAINING"
+              {asked.to === 'DRAINING'
                 ? `${jobs} on it now will be moved off at their next turn.`
                 : `${jobs} on it now keep running; no new ones start on it.`}
             </p>
           )}
-          <Field label={needsReason ? "Reason (required)" : "Reason"}>
+          <Field label={needsReason ? 'Reason (required)' : 'Reason'}>
             <input
               className={INPUT}
               value={reason}
@@ -1038,8 +1182,12 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
             />
           </Field>
           <div className="flex flex-wrap gap-2">
-            <Button variant="solid" disabled={busy || (needsReason && !reason.trim())} onClick={() => void move(asked.to)}>
-              {busy ? "Saving…" : asked.verb}
+            <Button
+              variant="solid"
+              disabled={busy || (needsReason && !reason.trim())}
+              onClick={() => void move(asked.to)}
+            >
+              {busy ? 'Saving…' : asked.verb}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setAsking(null)}>
               Cancel
@@ -1053,17 +1201,17 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
 }
 
 // The reason's name, built from parts.
-const NO_REFRESH = ["no", "refresh", "credential"].join("_");
+const NO_REFRESH = ['no', 'refresh', 'credential'].join('_');
 
 const REFRESH_WORDS: Record<string, string> = {
-  refreshed: "Refreshed: the credential was exchanged for a new one.",
-  still_valid: "Still valid: the token has hours left, so nothing was exchanged.",
-  published: "Still valid, and its access token is now the one calls use.",
-  held_deferred: "A job is running on it, so the exchange waits until the token nears expiry.",
-  reauth_required: "Its sign-in ended. Sign in again to use it.",
-  unreadable: "The stored credential cannot be read. Sign in again.",
-  refresh_failed: "The sign-in check failed; Oracle tries again in five minutes.",
-  [NO_REFRESH]: "Nothing is stored to exchange. Sign in again.",
+  refreshed: 'Refreshed: the credential was exchanged for a new one.',
+  still_valid: 'Still valid: the token has hours left, so nothing was exchanged.',
+  published: 'Still valid, and its access token is now the one calls use.',
+  held_deferred: 'A job is running on it, so the exchange waits until the token nears expiry.',
+  reauth_required: 'Its sign-in ended. Sign in again to use it.',
+  unreadable: 'The stored credential cannot be read. Sign in again.',
+  refresh_failed: 'The sign-in check failed; Oracle tries again in five minutes.',
+  [NO_REFRESH]: 'Nothing is stored to exchange. Sign in again.',
 };
 
 function RefreshControl({ account, reload }: { account: Account; reload: () => Promise<void> }) {
@@ -1074,10 +1222,15 @@ function RefreshControl({ account, reload }: { account: Account; reload: () => P
     setVerdict(null);
     try {
       const r = await unwrap(
-        api.POST("/v1/claude-accounts/{account_id}/refresh", { params: { path: { account_id: account.account_id } } }),
+        api.POST('/v1/claude-accounts/{account_id}/refresh', {
+          params: { path: { account_id: account.account_id } },
+        }),
       );
       const words = REFRESH_WORDS[r.refresh.reason] ?? `The refresh answered ${r.refresh.reason}.`;
-      setVerdict({ ok: !["reauth_required", "unreadable", "refresh_failed"].includes(r.refresh.reason), text: words });
+      setVerdict({
+        ok: !['reauth_required', 'unreadable', 'refresh_failed'].includes(r.refresh.reason),
+        text: words,
+      });
       await reload();
     } catch (e) {
       setVerdict({ ok: false, text: errorMessage(e) });
@@ -1088,12 +1241,12 @@ function RefreshControl({ account, reload }: { account: Account; reload: () => P
   return (
     <div className="flex flex-col items-start gap-2">
       <Button icon="clock" disabled={busy} onClick={() => void run()}>
-        {busy ? "Refreshing…" : "Refresh now"}
+        {busy ? 'Refreshing…' : 'Refresh now'}
       </Button>
       {verdict && (
         <p
           role="status"
-          className={`rounded-button px-3 py-2 text-sm font-medium ${verdict.ok ? "bg-pass-bg text-pass" : "bg-crit-bg text-crit"}`}
+          className={`rounded-button px-3 py-2 text-sm font-medium ${verdict.ok ? 'bg-pass-bg text-pass' : 'bg-crit-bg text-crit'}`}
         >
           {verdict.text}
         </p>
@@ -1104,7 +1257,7 @@ function RefreshControl({ account, reload }: { account: Account; reload: () => P
 
 /** Remove: the button arms only once the label is typed. */
 function Remove({ account, reload }: { account: Account; reload: () => Promise<void> }) {
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const armed = typed === account.label;
@@ -1113,8 +1266,12 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.DELETE("/v1/claude-accounts/{account_id}", { params: { path: { account_id: account.account_id } } }));
-      setTyped("");
+      await unwrap(
+        api.DELETE('/v1/claude-accounts/{account_id}', {
+          params: { path: { account_id: account.account_id } },
+        }),
+      );
+      setTyped('');
       await reload();
     } catch (e) {
       setError(errorMessage(e));
@@ -1127,8 +1284,8 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
       tools={
         <InfoTip label="deleting">
           Jobs on it: {account.assigned}
-          {account.assigned > 0 && " (in use: press Move jobs off first)"}. Its credential is deleted
-          with it. Type its label to turn on Remove.
+          {account.assigned > 0 && ' (in use: press Move jobs off first)'}. Its credential is
+          deleted with it. Type its label to turn on Remove.
         </InfoTip>
       }
     >
@@ -1145,7 +1302,7 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
           onChange={(e) => setTyped(e.target.value)}
         />
         <Button variant="danger" disabled={!armed || busy} onClick={() => void run()}>
-          {busy ? "Removing…" : "Remove"}
+          {busy ? 'Removing…' : 'Remove'}
         </Button>
       </div>
       {error && (
@@ -1158,13 +1315,13 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
 }
 
 /** Which Claude account it is, as Claude reported it at sign-in; null when not reported. */
-function claudeAccountOf(a: Pick<Account, "claude_email" | "claude_organization">): string | null {
-  return [a.claude_email, a.claude_organization].filter(Boolean).join(" · ") || null;
+function claudeAccountOf(a: Pick<Account, 'claude_email' | 'claude_organization'>): string | null {
+  return [a.claude_email, a.claude_organization].filter(Boolean).join(' · ') || null;
 }
 
 /** Claude's page signs in whoever that browser is signed in as. */
 const WHICH_ACCOUNT =
-  "Claude adds the account signed in on that page. To add a different one, open the link in a browser signed in to it";
+  'Claude adds the account signed in on that page. To add a different one, open the link in a browser signed in to it';
 
 /** The browser sign-in: open Claude's page (or copy its link), sign in, paste the code it shows. */
 function SignInSteps({
@@ -1185,7 +1342,7 @@ function SignInSteps({
   /** The panel's one action: the filled primary button. */
   primary?: boolean;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -1196,18 +1353,24 @@ function SignInSteps({
       await navigator.clipboard.writeText(url);
       setCopied(true);
     } catch {
-      setError("Could not copy the link. Open shows it.");
+      setError('Could not copy the link. Open shows it.');
     }
   }
 
   /** Starts the sign-in, then opens Claude's page here, or copies its link for another browser. */
-  async function begin(then: "open" | "copy") {
+  async function begin(then: 'open' | 'copy') {
     setBusy(true);
     setError(null);
     try {
-      const s = await unwrap(api.POST("/v1/claude-accounts/authorize", { body: { label } }));
-      setSignin({ kind: "started", label, state: s.state, url: s.authorize_url, expiresIn: s.expires_in_seconds });
-      if (then === "open") window.open(s.authorize_url, "_blank", "noopener");
+      const s = await unwrap(api.POST('/v1/claude-accounts/authorize', { body: { label } }));
+      setSignin({
+        kind: 'started',
+        label,
+        state: s.state,
+        url: s.authorize_url,
+        expiresIn: s.expires_in_seconds,
+      });
+      if (then === 'open') window.open(s.authorize_url, '_blank', 'noopener');
       else await copy(s.authorize_url);
     } catch (e) {
       setError(errorMessage(e));
@@ -1231,13 +1394,17 @@ function SignInSteps({
 
   async function finish(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (signin.kind !== "started") return;
+    if (signin.kind !== 'started') return;
     setBusy(true);
     setError(null);
     try {
-      const r = await unwrap(api.POST("/v1/claude-accounts/exchange", { body: { state: signin.state, code: code.trim() } }));
-      setCode("");
-      setSignin({ kind: "done", account: r.account });
+      const r = await unwrap(
+        api.POST('/v1/claude-accounts/exchange', {
+          body: { state: signin.state, code: code.trim() },
+        }),
+      );
+      setCode('');
+      setSignin({ kind: 'done', account: r.account });
       await reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -1246,7 +1413,7 @@ function SignInSteps({
     }
   }
 
-  if (signin.kind === "done") {
+  if (signin.kind === 'done') {
     return (
       <div
         role="status"
@@ -1254,7 +1421,8 @@ function SignInSteps({
         data-testid="signin-done"
       >
         <span>
-          Signed in: <b>{signin.account.label}</b> is {signin.account.state.toLowerCase().replace(/_/g, " ")}.
+          Signed in: <b>{signin.account.label}</b> is{' '}
+          {signin.account.state.toLowerCase().replace(/_/g, ' ')}.
         </span>
         {claudeAccountOf(signin.account) && (
           <span>
@@ -1264,30 +1432,30 @@ function SignInSteps({
         <button
           type="button"
           className="font-semibold underline underline-offset-2 max-sm:min-h-11"
-          onClick={() => setSignin({ kind: "idle" })}
+          onClick={() => setSignin({ kind: 'idle' })}
         >
           Done
         </button>
       </div>
     );
   }
-  if (signin.kind === "idle") {
+  if (signin.kind === 'idle') {
     return (
       <div className="flex flex-col items-start gap-2">
         <span className="flex flex-wrap items-center gap-2">
           <Button
-            variant={primary ? "primary" : "solid"}
+            variant={primary ? 'primary' : 'solid'}
             icon="signout"
             disabled={busy || !label}
-            title={!fixedLabel && !label ? "Give it a label first" : undefined}
-            onClick={() => void begin("open")}
+            title={!fixedLabel && !label ? 'Give it a label first' : undefined}
+            onClick={() => void begin('open')}
           >
-            {busy ? "starting…" : start}
+            {busy ? 'starting…' : start}
           </Button>
           <Button
             disabled={busy || !label}
-            title={!fixedLabel && !label ? "Give it a label first" : undefined}
-            onClick={() => void begin("copy")}
+            title={!fixedLabel && !label ? 'Give it a label first' : undefined}
+            onClick={() => void begin('copy')}
           >
             Copy link
           </Button>
@@ -1299,7 +1467,11 @@ function SignInSteps({
   }
   const codeId = `code-${signin.state}`;
   return (
-    <form onSubmit={finish} className="flex flex-col gap-2.5" aria-label="Finish the Claude sign-in">
+    <form
+      onSubmit={finish}
+      className="flex flex-col gap-2.5"
+      aria-label="Finish the Claude sign-in"
+    >
       <span className="flex flex-wrap items-center gap-2">
         <a
           href={signin.url}
@@ -1315,8 +1487,9 @@ function SignInSteps({
           {Math.round(signin.expiresIn / 60)} min
         </Chip>
         <InfoTip label="the steps" align="start">
-          Sign in on Claude&apos;s page to the account to add as <b>{signin.label}</b>. Claude shows a code when you are
-          done. Copy all of it (it may end in #…) and paste it here within {Math.round(signin.expiresIn / 60)} minutes.
+          Sign in on Claude&apos;s page to the account to add as <b>{signin.label}</b>. Claude shows
+          a code when you are done. Copy all of it (it may end in #…) and paste it here within{' '}
+          {Math.round(signin.expiresIn / 60)} minutes.
         </InfoTip>
         {copiedNote}
       </span>
@@ -1333,9 +1506,9 @@ function SignInSteps({
       </Field>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="solid" disabled={busy || code.trim().length < 4}>
-          {busy ? "finishing…" : "Finish sign-in"}
+          {busy ? 'finishing…' : 'Finish sign-in'}
         </Button>
-        <Button variant="ghost" disabled={busy} onClick={() => setSignin({ kind: "idle" })}>
+        <Button variant="ghost" disabled={busy} onClick={() => setSignin({ kind: 'idle' })}>
           Start over
         </Button>
       </div>
@@ -1360,19 +1533,23 @@ function SignInAgain({
   const tip = (
     <InfoTip label="signing in again">
       {prominent
-        ? "Its sign-in ended. Sign in again to use it; it comes back as it was."
-        : "Replaces its credential with a fresh sign-in; its state, holds and readings stay."}
+        ? 'Its sign-in ended. Sign in again to use it; it comes back as it was.'
+        : 'Replaces its credential with a fresh sign-in; its state, holds and readings stay.'}
     </InfoTip>
   );
   const steps = (
-    <SignInSteps label={account.label} fixedLabel signin={signin} setSignin={setSignin} reload={reload} start="Sign in again with Claude" />
+    <SignInSteps
+      label={account.label}
+      fixedLabel
+      signin={signin}
+      setSignin={setSignin}
+      reload={reload}
+      start="Sign in again with Claude"
+    />
   );
   if (prominent) {
     return (
-      <InspectorSection
-        label="Sign-in"
-        tools={tip}
-      >
+      <InspectorSection label="Sign-in" tools={tip}>
         {steps}
       </InspectorSection>
     );
@@ -1401,9 +1578,9 @@ function AddAccount({
   close: () => void;
   reload: () => Promise<void>;
 }) {
-  const [label, setLabel] = useState(signin.kind === "started" ? signin.label : "");
-  const [mode, setMode] = useState<"signin" | "paste">("signin");
-  const [credential, setCredential] = useState("");
+  const [label, setLabel] = useState(signin.kind === 'started' ? signin.label : '');
+  const [mode, setMode] = useState<'signin' | 'paste'>('signin');
+  const [credential, setCredential] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const taken = accounts.some((a) => a.label === label.trim());
@@ -1413,9 +1590,11 @@ function AddAccount({
     setBusy(true);
     setError(null);
     try {
-      const r = await unwrap(api.POST("/v1/claude-accounts", { body: { label: label.trim(), credential } }));
-      setCredential("");
-      setSignin({ kind: "done", account: r.account });
+      const r = await unwrap(
+        api.POST('/v1/claude-accounts', { body: { label: label.trim(), credential } }),
+      );
+      setCredential('');
+      setSignin({ kind: 'done', account: r.account });
       await reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -1431,7 +1610,7 @@ function AddAccount({
       eyebrow="Account · new"
       title="Add a Claude account"
       action={
-        signin.kind !== "started" ? (
+        signin.kind !== 'started' ? (
           <Button variant="hero" onClick={close}>
             Cancel
           </Button>
@@ -1441,15 +1620,21 @@ function AddAccount({
         <>
           <Chip hero>Pro or Max</Chip>
           <InfoTip label="adding" hero align="start" side="bottom">
-            A Claude subscription (Pro or Max). Oracle keeps it signed in by refreshing its token; nobody has to sign in
-            again unless the subscription is signed out.
+            A Claude subscription (Pro or Max). Oracle keeps it signed in by refreshing its token;
+            nobody has to sign in again unless the subscription is signed out.
           </InfoTip>
         </>
       }
     >
-      {signin.kind === "done" ? (
+      {signin.kind === 'done' ? (
         <InspectorSection>
-          <SignInSteps label={label} signin={signin} setSignin={setSignin} reload={reload} start="" />
+          <SignInSteps
+            label={label}
+            signin={signin}
+            setSignin={setSignin}
+            reload={reload}
+            start=""
+          />
         </InspectorSection>
       ) : (
         <>
@@ -1467,7 +1652,7 @@ function AddAccount({
                 id="add-account-label"
                 className={`${INPUT} font-mono`}
                 value={label}
-                disabled={signin.kind === "started"}
+                disabled={signin.kind === 'started'}
                 placeholder="e.g. team-laptop"
                 onChange={(e) => setLabel(e.target.value.toLowerCase())}
               />
@@ -1484,8 +1669,8 @@ function AddAccount({
             <div role="radiogroup" aria-label="How to add it" className="flex flex-col gap-1.5">
               {(
                 [
-                  ["signin", "Sign in with Claude"],
-                  ["paste", "Paste Claude Code's saved login"],
+                  ['signin', 'Sign in with Claude'],
+                  ['paste', "Paste Claude Code's saved login"],
                 ] as const
               ).map(([key, text]) => (
                 <label
@@ -1497,7 +1682,7 @@ function AddAccount({
                     name="add-account-method"
                     className="size-4 accent-[var(--accent)]"
                     checked={mode === key}
-                    disabled={signin.kind === "started"}
+                    disabled={signin.kind === 'started'}
                     onChange={() => setMode(key)}
                   />
                   {text}
@@ -1505,7 +1690,7 @@ function AddAccount({
               ))}
             </div>
             <div className="mt-3">
-              {mode === "signin" ? (
+              {mode === 'signin' ? (
                 <SignInSteps
                   label={label.trim()}
                   signin={signin}
@@ -1515,14 +1700,19 @@ function AddAccount({
                   primary
                 />
               ) : (
-                <form onSubmit={paste} className="flex flex-col gap-2.5" aria-label="Paste Claude Code login JSON">
+                <form
+                  onSubmit={paste}
+                  className="flex flex-col gap-2.5"
+                  aria-label="Paste Claude Code login JSON"
+                >
                   <Field
                     label="Saved login"
                     htmlFor="add-account-json"
                     tip={
                       <InfoTip label="the JSON" align="start">
-                        The JSON Claude Code keeps for its login (on macOS the keychain item &quot;Claude
-                        Code-credentials&quot;), pasted whole. It must include a refresh token.
+                        The JSON Claude Code keeps for its login (on macOS the keychain item
+                        &quot;Claude Code-credentials&quot;), pasted whole. It must include a
+                        refresh token.
                       </InfoTip>
                     }
                   >
@@ -1536,8 +1726,12 @@ function AddAccount({
                     />
                   </Field>
                   <div>
-                    <Button type="submit" variant="solid" disabled={busy || !label.trim() || !credential.trim()}>
-                      {busy ? "adding…" : "Add account"}
+                    <Button
+                      type="submit"
+                      variant="solid"
+                      disabled={busy || !label.trim() || !credential.trim()}
+                    >
+                      {busy ? 'adding…' : 'Add account'}
                     </Button>
                   </div>
                   {error && <Notice tone="error">{error}</Notice>}
@@ -1565,7 +1759,7 @@ function Fallback({
   setOpen: (on: boolean) => void;
   reload: () => Promise<void>;
 }) {
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const spare = page.fallback;
@@ -1575,8 +1769,8 @@ function Fallback({
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.PUT("/v1/claude-accounts/fallback", { body: { token: token.trim() } }));
-      setToken("");
+      await unwrap(api.PUT('/v1/claude-accounts/fallback', { body: { token: token.trim() } }));
+      setToken('');
       setOpen(false);
       await reload();
     } catch (err) {
@@ -1590,7 +1784,7 @@ function Fallback({
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.DELETE("/v1/claude-accounts/fallback"));
+      await unwrap(api.DELETE('/v1/claude-accounts/fallback'));
       await reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -1605,17 +1799,23 @@ function Fallback({
       tools={
         // The tip sits outside the `fallback` block, so a reader's block holds no buttons.
         <InfoTip label="the fallback">
-          Used while no account is registered or every account is spent: a long-lived Claude key or an
-          Anthropic API key. Accounts that are paused or draining are waited for, never replaced by this.
+          Used while no account is registered or every account is spent: a long-lived Claude key or
+          an Anthropic API key. Accounts that are paused or draining are waited for, never replaced
+          by this.
         </InfoTip>
       }
     >
-      <div data-testid="fallback" aria-label="Fallback credential" role="group" className="flex flex-col gap-3 px-4 py-3">
+      <div
+        data-testid="fallback"
+        aria-label="Fallback credential"
+        role="group"
+        className="flex flex-col gap-3 px-4 py-3"
+      >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="min-w-0 flex-1" data-testid="fallback-status">
             {spare ? (
               <>
-                <b className="font-semibold">{spare.label}</b>{" "}
+                <b className="font-semibold">{spare.label}</b>{' '}
                 <span className="tnum text-sm text-text2">(set {timeAgo(spare.updated_at)})</span>
               </>
             ) : (
@@ -1624,7 +1824,7 @@ function Fallback({
           </p>
           {owner && !open && (
             <div className="flex gap-2">
-              <Button onClick={() => setOpen(true)}>{spare ? "Replace" : "Set a fallback"}</Button>
+              <Button onClick={() => setOpen(true)}>{spare ? 'Replace' : 'Set a fallback'}</Button>
               {spare && (
                 <Button variant="ghost" disabled={busy} onClick={() => void clear()}>
                   Remove
@@ -1634,7 +1834,11 @@ function Fallback({
           )}
         </div>
         {owner && open && (
-          <form onSubmit={save} className="flex flex-col gap-2.5" aria-label="Set the fallback credential">
+          <form
+            onSubmit={save}
+            className="flex flex-col gap-2.5"
+            aria-label="Set the fallback credential"
+          >
             <Field label="Setup-token or API key" className="max-w-md">
               <input
                 type="password"

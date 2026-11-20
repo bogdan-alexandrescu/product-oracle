@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { notFound, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import Link from 'next/link';
+import { notFound, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
-import { Button, PageSkeleton } from "@/components/ds";
-import { PreRead } from "@/components/simple/meetings/PreRead";
-import { StartSheet } from "@/components/simple/meetings/StartSheet";
-import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useCompanyZone } from "@/lib/dates";
-import { zoneName } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { Button, PageSkeleton } from '@/components/ds';
+import { PreRead } from '@/components/simple/meetings/PreRead';
+import { StartSheet } from '@/components/simple/meetings/StartSheet';
+import { SimpleEmpty, SimplePage, SimpleSection } from '@/components/simple/SimplePage';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useCompanyZone } from '@/lib/dates';
+import { zoneName } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-import { SIMPLE_MODE } from "../_flag";
-import { LINK, momentWords } from "./_flow";
+import { SIMPLE_MODE } from '../_flag';
+import { LINK, momentWords } from './_flow';
 
 /** qa-simple-decide-33: a 44 px tap area on a phone. */
-const TAP = "inline-flex items-center max-[600px]:min-h-11";
+const TAP = 'inline-flex items-center max-[600px]:min-h-11';
 
 /**
  * Simple S8 (#723): Meetings, direction B: the scheduled reviews (from rituals) to start,
@@ -41,19 +41,28 @@ export default function SimpleMeetings() {
 function Meetings() {
   const zone = useCompanyZone();
   const { can } = useMe();
-  const q = useQuery("simple-meetings-page", () => unwrap(api.GET("/v1/simple/meetings")));
-  const opts = useQuery("simple-meetings-start-options", () => unwrap(api.GET("/v1/simple/meetings/options", { params: { query: {} } })));
-  const [sheet, setSheet] = useState<{ occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"] } | null>(null);
+  const q = useQuery('simple-meetings-page', () => unwrap(api.GET('/v1/simple/meetings')));
+  const opts = useQuery('simple-meetings-start-options', () =>
+    unwrap(api.GET('/v1/simple/meetings/options', { params: { query: {} } })),
+  );
+  const [sheet, setSheet] = useState<{
+    occurrence?: string;
+    ritual?: Schemas['SimpleUpcomingMeeting'];
+  } | null>(null);
   const params = useSearchParams();
-  const startParam = params.get("start");
+  const startParam = params.get('start');
   // Home's "Open pre-read" (`?pre_read=` the occurrence): that review's pre-read, here in Simple.
-  const preReadParam = params.get("pre_read");
-  const preRead = preReadParam ? q.data?.upcoming.find((x) => x.occurrence_id === preReadParam) : undefined;
+  const preReadParam = params.get('pre_read');
+  const preRead = preReadParam
+    ? q.data?.upcoming.find((x) => x.occurrence_id === preReadParam)
+    : undefined;
   const [opened, setOpened] = useState(false);
   // Home's Start meeting (`?start=` its ritual): the sheet opens on that review, once.
   if (startParam && !opened && q.data) {
     setOpened(true);
-    const o = q.data.upcoming.find((x) => x.ritual_id === startParam && !x.meeting_id && x.can_start);
+    const o = q.data.upcoming.find(
+      (x) => x.ritual_id === startParam && !x.meeting_id && x.can_start,
+    );
     if (o) setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o });
   }
   if (!SIMPLE_MODE) notFound();
@@ -62,10 +71,15 @@ function Meetings() {
   const when = (at: string) => momentWords(at, zone, false, true);
   // qa-simple-decide-8: Start review only for who may start one (an owner, or a review's own owner).
   // A PRD's own decider may start its review too, so the PRDs' can_start counts as well.
-  const mayStart = can("start_simple_meeting", !!q.data?.upcoming.some((o) => o.can_start) || !!opts.data?.prds.some((p) => p.can_start));
+  const mayStart = can(
+    'start_simple_meeting',
+    !!q.data?.upcoming.some((o) => o.can_start) || !!opts.data?.prds.some((p) => p.can_start),
+  );
   // The live reviews are listed under Live only (qa-simple-decide-34).
   const liveIds = new Set((q.data?.live ?? []).map((m) => m.id));
-  const upcoming = (q.data?.upcoming ?? []).filter((o) => !o.meeting_id || !liveIds.has(o.meeting_id));
+  const upcoming = (q.data?.upcoming ?? []).filter(
+    (o) => !o.meeting_id || !liveIds.has(o.meeting_id),
+  );
   return (
     <SimplePage
       title="Meetings"
@@ -75,9 +89,13 @@ function Meetings() {
         // qa-simple-decide-34: one verb, "Start review".
         <span className="flex flex-wrap items-center gap-3">
           {mayStart ? (
-            <Button variant="primary" onClick={() => setSheet({})}>Start review</Button>
+            <Button variant="primary" onClick={() => setSheet({})}>
+              Start review
+            </Button>
           ) : (
-            <span className="simple-small" data-testid="meetings-start-why">An owner or a review&apos;s owner starts reviews; join one when it is on.</span>
+            <span className="simple-small" data-testid="meetings-start-why">
+              An owner or a review&apos;s owner starts reviews; join one when it is on.
+            </span>
           )}
         </span>
       }
@@ -87,70 +105,135 @@ function Meetings() {
       {q.data && (
         <>
           {preRead && <PreRead review={preRead} />}
-          {preReadParam && !preRead && <SimpleEmpty testId="meetings-pre-read-gone">This review is no longer scheduled.</SimpleEmpty>}
+          {preReadParam && !preRead && (
+            <SimpleEmpty testId="meetings-pre-read-gone">
+              This review is no longer scheduled.
+            </SimpleEmpty>
+          )}
           <SimpleSection title="Live" testId="meetings-live">
-            {q.data.live.length === 0 && <p className="simple-meta" data-testid="meetings-live-empty">No meeting is on now.</p>}
+            {q.data.live.length === 0 && (
+              <p className="simple-meta" data-testid="meetings-live-empty">
+                No meeting is on now.
+              </p>
+            )}
             <ul className="space-y-2">
               {q.data.live.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <strong>{m.title}</strong> · started <span className="inline-block whitespace-nowrap">{when(m.started_at)}</span> by {m.presenter.name} · {m.decisions} {m.decisions === 1 ? "decision" : "decisions"}
+                    <strong>{m.title}</strong> · started{' '}
+                    <span className="inline-block whitespace-nowrap">{when(m.started_at)}</span> by{' '}
+                    {m.presenter.name} · {m.decisions}{' '}
+                    {m.decisions === 1 ? 'decision' : 'decisions'}
                   </span>
-                  <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>Join</Link>
+                  <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>
+                    Join
+                  </Link>
                 </li>
               ))}
             </ul>
           </SimpleSection>
           <SimpleSection title="Upcoming" testId="meetings-upcoming">
-            {upcoming.length === 0 && <SimpleEmpty testId="meetings-upcoming-empty">No review is scheduled. Rituals in Detailed schedule them.</SimpleEmpty>}
+            {upcoming.length === 0 && (
+              <SimpleEmpty testId="meetings-upcoming-empty">
+                No review is scheduled. Rituals in Detailed schedule them.
+              </SimpleEmpty>
+            )}
             <ul className="space-y-2">
               {upcoming.map((o) => (
-                <li key={o.occurrence_id ?? `${o.ritual_id}|${o.due_at}`} data-testid="meetings-upcoming-row" className="flex flex-wrap items-center justify-between gap-2">
+                <li
+                  key={o.occurrence_id ?? `${o.ritual_id}|${o.due_at}`}
+                  data-testid="meetings-upcoming-row"
+                  className="flex flex-wrap items-center justify-between gap-2"
+                >
                   <span>
                     {/* qa4-simple-decide-34: a time and "Pre-read" never break across lines on a phone. */}
-                    <strong>{o.ritual_title}</strong> · <span className="inline-block whitespace-nowrap">{when(o.due_at)}</span> · {o.length_min} min · {o.attendees.map((a) => a.name).join(", ")}
+                    <strong>{o.ritual_title}</strong> ·{' '}
+                    <span className="inline-block whitespace-nowrap">{when(o.due_at)}</span> ·{' '}
+                    {o.length_min} min · {o.attendees.map((a) => a.name).join(', ')}
                     {/* qa-simple-decide-37: its pre-read and agenda before it starts. */}
                     {o.occurrence_id ? (
                       <>
-                        {" · "}
-                        <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings?pre_read=${o.occurrence_id}`} data-testid="meetings-pre-read-link">
+                        {' · '}
+                        <Link
+                          className="font-semibold text-accent-ink hover:underline"
+                          href={`/simple/meetings?pre_read=${o.occurrence_id}`}
+                          data-testid="meetings-pre-read-link"
+                        >
                           <span className="whitespace-nowrap">Pre-read</span> and agenda
                         </Link>
                       </>
                     ) : (
-                      <span className="simple-small"> · <span className="whitespace-nowrap">Pre-read</span> not ready yet</span>
+                      <span className="simple-small">
+                        {' '}
+                        · <span className="whitespace-nowrap">Pre-read</span> not ready yet
+                      </span>
                     )}
                   </span>
                   {o.meeting_id ? (
-                    <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings/${o.meeting_id}`}>Open</Link>
+                    <Link
+                      className="font-semibold text-accent-ink hover:underline"
+                      href={`/simple/meetings/${o.meeting_id}`}
+                    >
+                      Open
+                    </Link>
                   ) : o.can_start ? (
                     // qa4-simple-decide-39: each row's Start review names its review for a screen reader.
-                    <Button aria-label={`Start review: ${o.ritual_title}`} onClick={() => setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o })}>Start review</Button>
+                    <Button
+                      aria-label={`Start review: ${o.ritual_title}`}
+                      onClick={() =>
+                        setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o })
+                      }
+                    >
+                      Start review
+                    </Button>
                   ) : null}
                 </li>
               ))}
             </ul>
           </SimpleSection>
           <SimpleSection title="Past" testId="meetings-past">
-            {q.data.past.length === 0 && <SimpleEmpty testId="meetings-past-empty">No meeting yet.</SimpleEmpty>}
+            {q.data.past.length === 0 && (
+              <SimpleEmpty testId="meetings-past-empty">No meeting yet.</SimpleEmpty>
+            )}
             <ul className="space-y-3">
               {q.data.past.map((m) => (
                 <li key={m.id} className="space-y-1">
                   {/* qa4-simple-decide-7: the start, labelled, as Decisions dates a meeting by its start;
                       qa4-simple-decide-21: the count once, the minutes' summary says it when sent. */}
                   <p data-testid="meetings-past-row">
-                    <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>{m.title}</Link> · started <span className="inline-block whitespace-nowrap">{when(m.started_at)}</span>
-                    {!m.summary && ` · ${m.decisions} ${m.decisions === 1 ? "decision" : "decisions"}`}
+                    <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>
+                      {m.title}
+                    </Link>{' '}
+                    · started{' '}
+                    <span className="inline-block whitespace-nowrap">{when(m.started_at)}</span>
+                    {!m.summary &&
+                      ` · ${m.decisions} ${m.decisions === 1 ? 'decision' : 'decisions'}`}
                   </p>
-                  {m.summary ? <p className="simple-small">{m.summary}</p> : <p className="simple-small">Minutes not sent yet.</p>}
-                  <Link className={`${LINK} ${TAP}`} href={`/simple/decisions?meeting=${m.id}`} data-testid="meetings-its-decisions">Its decisions</Link>
+                  {m.summary ? (
+                    <p className="simple-small">{m.summary}</p>
+                  ) : (
+                    <p className="simple-small">Minutes not sent yet.</p>
+                  )}
+                  <Link
+                    className={`${LINK} ${TAP}`}
+                    href={`/simple/decisions?meeting=${m.id}`}
+                    data-testid="meetings-its-decisions"
+                  >
+                    Its decisions
+                  </Link>
                 </li>
               ))}
             </ul>
           </SimpleSection>
         </>
       )}
-      <StartSheet open={!!sheet} onClose={() => setSheet(null)} occurrence={sheet?.occurrence} ritual={sheet?.ritual} origin="one_pager" />
+      <StartSheet
+        open={!!sheet}
+        onClose={() => setSheet(null)}
+        occurrence={sheet?.occurrence}
+        ritual={sheet?.ritual}
+        origin="one_pager"
+      />
     </SimplePage>
   );
 }

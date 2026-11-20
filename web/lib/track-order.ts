@@ -17,7 +17,10 @@ export function byTrackOrder(a: OrderedTrack, b: OrderedTrack): number {
 }
 
 /** `[id, title]` choices in the order of `tracks` (the read's, already in the track order); one it does not list keeps its place after them. */
-export function inTrackOrder<T extends readonly [string, string]>(choices: readonly T[], tracks: readonly { id: string }[] | null | undefined): T[] {
+export function inTrackOrder<T extends readonly [string, string]>(
+  choices: readonly T[],
+  tracks: readonly { id: string }[] | null | undefined,
+): T[] {
   const at = new Map((tracks ?? []).map((t, n) => [t.id, n]));
   return choices
     .map((c, n) => [c, at.get(c[0]) ?? (tracks?.length ?? 0) + n] as const)

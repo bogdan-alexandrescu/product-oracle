@@ -1,38 +1,43 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useId, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
-import { onJobSettingsChanged, usePolling } from "@/components/JobsPanel";
-import { Button, Chip, Icon, InfoTip, Notice } from "@/components/ds";
-import { JobStatusChip } from "@/components/review/parts";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useCompanyZone, zoneDay } from "@/lib/dates";
-import { formatDateTime, jobFailure, turnedOff } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useLive } from "@/lib/use-live";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
+import { onJobSettingsChanged, usePolling } from '@/components/JobsPanel';
+import { Button, Chip, Icon, InfoTip, Notice } from '@/components/ds';
+import { JobStatusChip } from '@/components/review/parts';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useCompanyZone, zoneDay } from '@/lib/dates';
+import { formatDateTime, jobFailure, turnedOff } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useLive } from '@/lib/use-live';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, onWaitingChanged, waitingChanged } from '@/lib/waiting';
 
-type Staged = Schemas["StagedChanges"];
-type StagedItem = Schemas["StagedChange"];
-type Preview = Schemas["NextDraftPreview"];
-type PreviewSection = Schemas["NextDraftSection"];
-type AgentItem = Schemas["AgentItem"];
-type Plan = Schemas["NextDraftPlan"];
-type AgentsRun = Schemas["NextDraftRun"];
+type Staged = Schemas['StagedChanges'];
+type StagedItem = Schemas['StagedChange'];
+type Preview = Schemas['NextDraftPreview'];
+type PreviewSection = Schemas['NextDraftSection'];
+type AgentItem = Schemas['AgentItem'];
+type Plan = Schemas['NextDraftPlan'];
+type AgentsRun = Schemas['NextDraftRun'];
 /** What Build sends: the ticked text changes and items for the agents, and the engine the plan chose. */
-type Choice = { engine: Plan["engine"]; suggestion_ids: string[]; feedback_ids: string[]; next_draft_change_ids: string[] };
+type Choice = {
+  engine: Plan['engine'];
+  suggestion_ids: string[];
+  feedback_ids: string[];
+  next_draft_change_ids: string[];
+};
 
 /** `?build=1` on a document page (the Inbox's "Build draft" action) opens the sheet. */
-export const BUILD_PARAM = "build";
+export const BUILD_PARAM = 'build';
 
 /** qa4-docs-2: why Build waits while the agents' run on the document is under way. */
-const RUN_UNDER_WAY = "A run is under way; build once it ends.";
+const RUN_UNDER_WAY = 'A run is under way; build once it ends.';
 
-const building = (status?: string | null) => status === "queued" || status === "running";
+const building = (status?: string | null) => status === 'queued' || status === 'running';
 
 /**
  * C1e: "Build draft N+1 · K staged" next to Publish when accepted changes or items staged
@@ -43,11 +48,11 @@ const building = (status?: string | null) => status === "queued" || status === "
  */
 export function BuildDraftButton({ doc }: { doc: string }) {
   const { can } = useMe();
-  const canBuild = can("build_next_draft");
+  const canBuild = can('build_next_draft');
   const [reload, setReload] = useState(0);
   const q = useQuery(`staged|${doc}|${reload}`, () =>
     unwrap(
-      api.GET("/v1/documents/{doc}/staged-changes", {
+      api.GET('/v1/documents/{doc}/staged-changes', {
         params: { path: { doc } },
       }),
     ),
@@ -56,14 +61,16 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   // An owner may flip it in History on this page: read it again then.
   const [swReload, setSwReload] = useState(0);
   const sw = useQuery(`llm-settings|${doc}|${swReload}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } } })),
+    unwrap(api.GET('/v1/documents/{doc}/llm-jobs/settings', { params: { path: { doc } } })),
   );
   const refinementOff = sw.data?.refinement === false;
   useEffect(() => onJobSettingsChanged(doc, () => setSwReload((k) => k + 1)), [doc]);
   // The sheet opens on arrival from the Inbox's "Build draft" (?build=1); the button shows
   // only once the staged list has loaded on the client, so the server render never differs.
   const [open, setOpen] = useState(
-    () => typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get(BUILD_PARAM),
+    () =>
+      typeof window !== 'undefined' &&
+      !!new URLSearchParams(window.location.search).get(BUILD_PARAM),
   );
   // Accepting or dismissing a suggestion elsewhere on the page changes what is staged.
   useEffect(() => onWaitingChanged(() => setReload((k) => k + 1)), []);
@@ -71,12 +78,13 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   const data = q.data;
   if (!canBuild || !data) return null;
   const job = data.draft_job;
-  const count = data.items.length + data.agent_items.length + (data.next_draft_changes ?? []).length;
+  const count =
+    data.items.length + data.agent_items.length + (data.next_draft_changes ?? []).length;
   // #574 review: while the agents' run is under way, the sheet shows what it was sent.
   if (!count && !job && !data.agents_run) return null;
   const label = building(job?.status)
     ? `Building draft ${data.next_version}`
-    : job?.status === "succeeded"
+    : job?.status === 'succeeded'
       ? `Draft ${data.next_version} ready`
       : `Build draft ${data.next_version}`;
   // qa4-docs-2: nothing left to stage while the agents' run is under way: the button says
@@ -102,8 +110,8 @@ export function BuildDraftButton({ doc }: { doc: string }) {
         variant="secondary"
         icon="doc"
         disabled
-        title={turnedOff("refinement")}
-        aria-label={`${label}: ${turnedOff("refinement")}`}
+        title={turnedOff('refinement')}
+        aria-label={`${label}: ${turnedOff('refinement')}`}
         data-testid="build-draft"
       >
         {label}
@@ -161,12 +169,15 @@ function Sheet({
 }) {
   const id = useId();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -176,7 +187,9 @@ function Sheet({
       >
         <div className="bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
+            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+              {eyebrow}
+            </span>
             <button
               type="button"
               onClick={onClose}
@@ -186,7 +199,10 @@ function Sheet({
               <Icon name="x" size={20} />
             </button>
           </div>
-          <h2 id={`${id}-title`} className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-heading">
+          <h2
+            id={`${id}-title`}
+            className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-heading"
+          >
             {title}
           </h2>
           {chips && <div className="mt-2 flex flex-wrap items-center gap-2">{chips}</div>}
@@ -203,7 +219,13 @@ function Sheet({
 }
 
 /** "v5 → v6": the version a build starts from and the draft it makes. */
-function VersionStep({ from, to }: { from: number | null | undefined; to: number | null | undefined }) {
+function VersionStep({
+  from,
+  to,
+}: {
+  from: number | null | undefined;
+  to: number | null | undefined;
+}) {
   return (
     <span className="inline-flex items-center gap-1" aria-label={`v${from} to v${to}`}>
       v{from}
@@ -212,11 +234,17 @@ function VersionStep({ from, to }: { from: number | null | undefined; to: number
   );
 }
 
-function HeroChip({ children, tone = "plain" }: { children: ReactNode; tone?: "plain" | "accent" }) {
+function HeroChip({
+  children,
+  tone = 'plain',
+}: {
+  children: ReactNode;
+  tone?: 'plain' | 'accent';
+}) {
   return (
     <span
       className={`tnum inline-flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-[13px] font-semibold ${
-        tone === "accent" ? "bg-accent-soft text-accent-ink" : "bg-hero-2 text-hero-text"
+        tone === 'accent' ? 'bg-accent-soft text-accent-ink' : 'bg-hero-2 text-hero-text'
       }`}
     >
       {children}
@@ -225,7 +253,15 @@ function HeroChip({ children, tone = "plain" }: { children: ReactNode; tone?: "p
 }
 
 /** Pick → build (progress) → combined preview → apply, or discard (everything stays staged). */
-export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: Staged; onClose: () => void }) {
+export function NextDraftSheet({
+  doc,
+  staged,
+  onClose,
+}: {
+  doc: string;
+  staged: Staged;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [jobId, setJobId] = useState<string | null>(staged.draft_job?.id ?? null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -237,7 +273,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
   const pq = useQuery(`next-draft|${doc}|${jobId}`, () =>
     jobId
       ? unwrap(
-          api.GET("/v1/documents/{doc}/next-draft/{job_id}", {
+          api.GET('/v1/documents/{doc}/next-draft/{job_id}', {
             params: { path: { doc, job_id: jobId } },
           }),
         )
@@ -261,17 +297,26 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
 
   const build = ({ engine, suggestion_ids, feedback_ids, next_draft_change_ids }: Choice) =>
     act(async () => {
-      const body = { suggestion_ids, feedback_ids, next_draft_change_ids, depth: "standard" as const };
-      if (engine === "agents") {
+      const body = {
+        suggestion_ids,
+        feedback_ids,
+        next_draft_change_ids,
+        depth: 'standard' as const,
+      };
+      if (engine === 'agents') {
         // D12: the agents write the draft in a feedback-loop run; its page follows it.
-        const run = await unwrap(api.POST("/v1/documents/{doc}/next-draft/run", { params: { path: { doc } }, body }));
+        const run = await unwrap(
+          api.POST('/v1/documents/{doc}/next-draft/run', { params: { path: { doc } }, body }),
+        );
         setRunId(run.id);
         invalidateWaiting();
         waitingChanged();
         router.push(`/runs/${run.id}`);
         return;
       }
-      const job = await unwrap(api.POST("/v1/documents/{doc}/next-draft", { params: { path: { doc } }, body }));
+      const job = await unwrap(
+        api.POST('/v1/documents/{doc}/next-draft', { params: { path: { doc } }, body }),
+      );
       setJobId(job.id);
     });
 
@@ -279,7 +324,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
     act(async () => {
       if (jobId)
         await unwrap(
-          api.POST("/v1/documents/{doc}/next-draft/{job_id}/discard", {
+          api.POST('/v1/documents/{doc}/next-draft/{job_id}/discard', {
             params: { path: { doc, job_id: jobId } },
           }),
         );
@@ -292,7 +337,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
     act(async () => {
       if (!jobId) return;
       await unwrap(
-        api.POST("/v1/llm-jobs/{job_id}/retry", {
+        api.POST('/v1/llm-jobs/{job_id}/retry', {
           params: { path: { job_id: jobId } },
         }),
       );
@@ -303,7 +348,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
     act(async () => {
       if (!jobId) return;
       const v = await unwrap(
-        api.POST("/v1/documents/{doc}/next-draft/{job_id}/apply", {
+        api.POST('/v1/documents/{doc}/next-draft/{job_id}/apply', {
           params: { path: { doc, job_id: jobId } },
           body: { drop_sections: drop, edits: {} },
         }),
@@ -318,26 +363,38 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
     return (
       <Sheet eyebrow="Next draft" title={`Agents are writing draft ${next}`} onClose={onClose}>
         <p className="text-text2" data-testid="agents-writing">
-          The draft comes back as version {next} with its run review.{" "}
-          <Link href={`/runs/${runId}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+          The draft comes back as version {next} with its run review.{' '}
+          <Link
+            href={`/runs/${runId}`}
+            className="font-semibold text-accent-ink underline-offset-2 hover:underline"
+          >
             Open the run
           </Link>
         </p>
       </Sheet>
     );
-  if (!jobId) return <PickStep staged={staged} busy={busy} error={error} onBuild={build} onClose={onClose} />;
+  if (!jobId)
+    return <PickStep staged={staged} busy={busy} error={error} onBuild={build} onClose={onClose} />;
 
   const job = preview?.job;
   const chips = (
     <>
       <HeroChip>
-        <VersionStep from={preview?.base_version ?? staged.latest_version} to={preview?.next_version ?? next} />
+        <VersionStep
+          from={preview?.base_version ?? staged.latest_version}
+          to={preview?.next_version ?? next}
+        />
       </HeroChip>
       {job && <JobStatusChip status={job.status} at={job.finished_at} />}
     </>
   );
 
-  if (!preview || building(job?.status) || job?.status === "failed" || job?.status === "cancelled") {
+  if (
+    !preview ||
+    building(job?.status) ||
+    job?.status === 'failed' ||
+    job?.status === 'cancelled'
+  ) {
     return (
       <Sheet
         eyebrow="Next draft"
@@ -349,7 +406,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
             <Button variant="ghost" disabled={busy} onClick={discard}>
               Discard
             </Button>
-            {job?.status === "failed" && (
+            {job?.status === 'failed' && (
               <Button variant="primary" disabled={busy} onClick={retry}>
                 Retry
               </Button>
@@ -357,22 +414,24 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
           </>
         }
       >
-        {job?.status === "failed" ? (
-          <Notice tone="error">
-            {jobFailure(job, "The build failed.")}
-          </Notice>
+        {job?.status === 'failed' ? (
+          <Notice tone="error">{jobFailure(job, 'The build failed.')}</Notice>
         ) : (
           <div data-testid="next-draft-progress" className="flex flex-col gap-2.5 py-2">
             <div className="flex items-center gap-2 text-sm font-semibold text-text2">
               <Icon name="clock" size={16} />
-              {job?.status === "running" ? "Writing every affected section" : "Waiting for a Claude account"}
+              {job?.status === 'running'
+                ? 'Writing every affected section'
+                : 'Waiting for a Claude account'}
             </div>
             <div
               className="h-1.5 w-full overflow-hidden rounded-full bg-surface2"
               role="progressbar"
               aria-label="Building the next draft"
             >
-              <div className={`h-full rounded-full bg-accent ${job?.status === "running" ? "w-2/3" : "w-1/4"} animate-pulse`} />
+              <div
+                className={`h-full rounded-full bg-accent ${job?.status === 'running' ? 'w-2/3' : 'w-1/4'} animate-pulse`}
+              />
             </div>
           </div>
         )}
@@ -396,7 +455,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
 
 function why(item: StagedItem, latest: number | null | undefined): string | null {
   if (item.section_gone) return `Section gone in v${latest}`;
-  if (item.section_locked) return "Section approved · locked";
+  if (item.section_locked) return 'Section approved · locked';
   return null;
 }
 
@@ -406,17 +465,27 @@ const money = (usd: number) => `$${usd.toFixed(2)}`;
 
 /** "a, b and c" */
 function joined(parts: string[]): string {
-  return parts.length < 2 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
+  return parts.length < 2
+    ? (parts[0] ?? '')
+    : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }
 
 /** D12: which engine builds the ticked items, and why, in one line. */
 function engineLine(plan: Plan, next: number): string {
-  if (plan.engine === "oracle")
-    return `Oracle rewrites ${plan.sections} section${plan.sections === 1 ? "" : "s"} itself and shows you a preview.`;
+  if (plan.engine === 'oracle')
+    return `Oracle rewrites ${plan.sections} section${plan.sections === 1 ? '' : 's'} itself and shows you a preview.`;
   return `Agents write draft ${next} because ${joined(plan.why.map((w) => w.text))}.`;
 }
 
-function Group({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+function Group({
+  label,
+  testId,
+  children,
+}: {
+  label: string;
+  testId: string;
+  children: ReactNode;
+}) {
   return (
     <section aria-label={label} data-testid={testId}>
       <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</h3>
@@ -425,7 +494,17 @@ function Group({ label, testId, children }: { label: string; testId: string; chi
   );
 }
 
-function Tick({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (on: boolean) => void }) {
+function Tick({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+}) {
   return (
     <input
       type="checkbox"
@@ -455,7 +534,7 @@ function PickStep({
   // whose section is gone is listed unticked (ticked, it goes to the agents).
   const all = useQuery(`staged-all|${staged.slug}`, () =>
     unwrap(
-      api.GET("/v1/documents/{doc}/staged-changes", {
+      api.GET('/v1/documents/{doc}/staged-changes', {
         params: { path: { doc: staged.slug }, query: { include_gone: true } },
       }),
     ),
@@ -474,20 +553,29 @@ function PickStep({
     else nextSet.add(id);
     setFlipped(nextSet);
   };
-  const ticked = (i: StagedItem) => !i.section_locked && i.section_gone === flipped.has(i.suggestion_id);
+  const ticked = (i: StagedItem) =>
+    !i.section_locked && i.section_gone === flipped.has(i.suggestion_id);
   const texts = items.filter(ticked);
   const agentsOn = agents.filter((a) => !flipped.has(a.feedback_id));
-  const discussedOn = discussed.filter((d) => !d.section_locked && d.section_gone === flipped.has(d.id));
+  const discussedOn = discussed.filter(
+    (d) => !d.section_locked && d.section_gone === flipped.has(d.id),
+  );
   const chosen = texts.length + agentsOn.length + discussedOn.length;
   const body = {
     suggestion_ids: texts.map((i) => i.suggestion_id),
     feedback_ids: agentsOn.map((a) => a.feedback_id),
     next_draft_change_ids: discussedOn.map((d) => d.id),
-    depth: "standard" as const,
+    depth: 'standard' as const,
   };
   const live = useLive(
     body,
-    (b) => unwrap(api.POST("/v1/documents/{doc}/next-draft/plan", { params: { path: { doc: staged.slug } }, body: b })),
+    (b) =>
+      unwrap(
+        api.POST('/v1/documents/{doc}/next-draft/plan', {
+          params: { path: { doc: staged.slug } },
+          body: b,
+        }),
+      ),
     250,
     chosen > 0,
   );
@@ -504,11 +592,13 @@ function PickStep({
             <VersionStep from={staged.latest_version} to={next} />
           </HeroChip>
           <HeroChip tone="accent">
-            <span data-testid="pick-count">{chosen}</span> of {items.length + agents.length + discussed.length} staged
+            <span data-testid="pick-count">{chosen}</span> of{' '}
+            {items.length + agents.length + discussed.length} staged
           </HeroChip>
           <InfoTip label="Build draft" align="start" side="bottom" hero>
-            Oracle rewrites the sections text changes touch, together, and you review one preview; anything that needs more than a
-            section&apos;s text goes to the agents, who write the whole draft.
+            Oracle rewrites the sections text changes touch, together, and you review one preview;
+            anything that needs more than a section&apos;s text goes to the agents, who write the
+            whole draft.
           </InfoTip>
         </>
       }
@@ -517,11 +607,19 @@ function PickStep({
         <>
           <span className="mr-auto flex min-w-0 flex-col gap-0.5 text-sm" aria-live="polite">
             <span className="font-semibold text-text" data-testid="engine-line">
-              {agentsRun ? RUN_UNDER_WAY : plan ? engineLine(plan, next) : chosen ? "…" : "Tick at least one item."}
+              {agentsRun
+                ? RUN_UNDER_WAY
+                : plan
+                  ? engineLine(plan, next)
+                  : chosen
+                    ? '…'
+                    : 'Tick at least one item.'}
             </span>
-            {plan?.engine === "agents" && plan.estimate_usd != null && (
+            {plan?.engine === 'agents' && plan.estimate_usd != null && (
               <span className="tnum text-text2" data-testid="run-estimate">
-                {plan.needs_owner_approval ? `Ask an owner to approve (${money(plan.estimate_usd)})` : `Estimate ${money(plan.estimate_usd)}`}
+                {plan.needs_owner_approval
+                  ? `Ask an owner to approve (${money(plan.estimate_usd)})`
+                  : `Estimate ${money(plan.estimate_usd)}`}
               </span>
             )}
           </span>
@@ -554,8 +652,14 @@ function PickStep({
           {items.map((i) => {
             const reason = why(i, staged.latest_version);
             return (
-              <li key={i.suggestion_id} className="border-b border-line py-2.5 last:border-b-0" data-testid="staged-item">
-                <label className={`flex items-start gap-3 ${i.section_locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
+              <li
+                key={i.suggestion_id}
+                className="border-b border-line py-2.5 last:border-b-0"
+                data-testid="staged-item"
+              >
+                <label
+                  className={`flex items-start gap-3 ${i.section_locked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                >
                   <Tick
                     label={`Include ${i.section_heading}: ${i.feedback_summary}`}
                     checked={ticked(i)}
@@ -564,23 +668,29 @@ function PickStep({
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className={`font-semibold ${reason ? "text-text2" : "text-text"}`}>Section {i.section_heading}</span>
+                      <span className={`font-semibold ${reason ? 'text-text2' : 'text-text'}`}>
+                        Section {i.section_heading}
+                      </span>
                       <Chip kind="line">v{i.raised_on_version}</Chip>
                       {reason && (
-                        <Chip kind={i.section_locked ? "warn" : "na"}>
+                        <Chip kind={i.section_locked ? 'warn' : 'na'}>
                           {i.section_locked && <Icon name="lock" size={16} />}
                           {reason}
                         </Chip>
                       )}
                     </span>
-                    <span className={`text-[15px] leading-[22px] ${reason ? "text-text2" : "text-text"}`}>{i.feedback_summary}</span>
+                    <span
+                      className={`text-[15px] leading-[22px] ${reason ? 'text-text2' : 'text-text'}`}
+                    >
+                      {i.feedback_summary}
+                    </span>
                     {i.text && (
                       <span className="text-sm leading-5 text-text2" data-testid="staged-text">
                         {excerpt(i.text)}
                       </span>
                     )}
                     <span className="tnum text-[13px] text-text2">
-                      {i.accepted_by_name ?? "Accepted"}
+                      {i.accepted_by_name ?? 'Accepted'}
                       {i.accepted_at && ` · ${formatDateTime(i.accepted_at)}`}
                     </span>
                   </span>
@@ -593,8 +703,14 @@ function PickStep({
       {discussed.length > 0 && (
         <Group label="From discussions" testId="discussion-list">
           {discussed.map((d) => (
-            <li key={d.id} className="border-b border-line py-2.5 last:border-b-0" data-testid="discussion-item">
-              <label className={`flex items-start gap-3 ${d.section_locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
+            <li
+              key={d.id}
+              className="border-b border-line py-2.5 last:border-b-0"
+              data-testid="discussion-item"
+            >
+              <label
+                className={`flex items-start gap-3 ${d.section_locked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              >
                 <Tick
                   label={`Include ${d.section_heading}: ${d.instruction}`}
                   checked={!d.section_locked && d.section_gone === flipped.has(d.id)}
@@ -613,7 +729,10 @@ function PickStep({
                   </span>
                   <span className="text-[15px] leading-[22px] text-text">{d.instruction}</span>
                   {d.reason && <span className="text-sm leading-5 text-text2">{d.reason}</span>}
-                  <span className="flex items-center gap-1 text-[13px] text-text2" data-testid="discussion-origin">
+                  <span
+                    className="flex items-center gap-1 text-[13px] text-text2"
+                    data-testid="discussion-origin"
+                  >
                     <Icon name="comment" size={16} />
                     {d.origin_line}
                   </span>
@@ -626,18 +745,26 @@ function PickStep({
       {agents.length > 0 && (
         <Group label="Needs the agents" testId="agent-list">
           {agents.map((a) => {
-            const where = a.section_key ? `Section ${a.section_key}` : "General";
+            const where = a.section_key ? `Section ${a.section_key}` : 'General';
             return (
-              <li key={a.feedback_id} className="border-b border-line py-2.5 last:border-b-0" data-testid="agent-item">
+              <li
+                key={a.feedback_id}
+                className="border-b border-line py-2.5 last:border-b-0"
+                data-testid="agent-item"
+              >
                 <label className="flex cursor-pointer items-start gap-3">
-                  <Tick label={`Include ${where}: ${a.summary}`} checked={!flipped.has(a.feedback_id)} onChange={() => flip(a.feedback_id)} />
+                  <Tick
+                    label={`Include ${where}: ${a.summary}`}
+                    checked={!flipped.has(a.feedback_id)}
+                    onChange={() => flip(a.feedback_id)}
+                  />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-2">
                       <Chip kind="line">{where}</Chip>
                     </span>
                     <span className="text-[15px] leading-[22px] text-text">{a.summary}</span>
                     <span className="tnum text-[13px] text-text2">
-                      {a.staged_by_name ?? "Staged"}
+                      {a.staged_by_name ?? 'Staged'}
                       {a.staged_at && ` · ${formatDateTime(a.staged_at)}`}
                     </span>
                   </span>
@@ -664,14 +791,26 @@ function InRun({ run }: { run: AgentsRun }) {
   const zone = useCompanyZone();
   const label = `In run · ${run.flow_title} · ${zoneDay(run.created_at, zone)}`;
   const rows = [
-    ...run.items.map((i) => ({ id: i.suggestion_id, where: `Section ${i.section_heading}`, what: i.feedback_summary })),
-    ...run.next_draft_changes.map((d) => ({ id: d.id, where: `Section ${d.section_heading}`, what: d.instruction })),
-    ...run.agent_items.map((a) => ({ id: a.feedback_id, where: a.section_key ? `Section ${a.section_key}` : "General", what: a.summary })),
+    ...run.items.map((i) => ({
+      id: i.suggestion_id,
+      where: `Section ${i.section_heading}`,
+      what: i.feedback_summary,
+    })),
+    ...run.next_draft_changes.map((d) => ({
+      id: d.id,
+      where: `Section ${d.section_heading}`,
+      what: d.instruction,
+    })),
+    ...run.agent_items.map((a) => ({
+      id: a.feedback_id,
+      where: a.section_key ? `Section ${a.section_key}` : 'General',
+      what: a.summary,
+    })),
   ];
   return (
     <>
       <Notice testId="agents-run-notice">
-        The agents&apos; run on this document is under way: build the next draft once it ends.{" "}
+        The agents&apos; run on this document is under way: build the next draft once it ends.{' '}
         <Link href={`/runs/${run.id}`} className="font-semibold underline underline-offset-2">
           Open the run
         </Link>
@@ -679,10 +818,18 @@ function InRun({ run }: { run: AgentsRun }) {
       {rows.length > 0 && (
         <Group label="In the agents' run" testId="in-run-list">
           {rows.map((r) => (
-            <li key={r.id} className="flex flex-col gap-1 border-b border-line py-2.5 last:border-b-0" data-testid="in-run-item">
+            <li
+              key={r.id}
+              className="flex flex-col gap-1 border-b border-line py-2.5 last:border-b-0"
+              data-testid="in-run-item"
+            >
               <span className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-text2">{r.where}</span>
-                <Link href={`/runs/${run.id}`} data-testid="in-run-chip" className="hover:underline">
+                <Link
+                  href={`/runs/${run.id}`}
+                  data-testid="in-run-chip"
+                  className="hover:underline"
+                >
                   <Chip kind="acc">{label}</Chip>
                 </Link>
               </span>
@@ -695,15 +842,15 @@ function InRun({ run }: { run: AgentsRun }) {
   );
 }
 
-function Words({ words }: { words: Schemas["WordOp"][] }) {
+function Words({ words }: { words: Schemas['WordOp'][] }) {
   return (
     <p className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap text-text">
       {words.map((w, i) =>
-        w.op === "insert" ? (
+        w.op === 'insert' ? (
           <ins key={i} className="diff-ins">
             {w.text}
           </ins>
-        ) : w.op === "delete" ? (
+        ) : w.op === 'delete' ? (
           <del key={i} className="diff-del">
             {w.text}
           </del>
@@ -715,17 +862,27 @@ function Words({ words }: { words: Schemas["WordOp"][] }) {
   );
 }
 
-function PreviewSectionCard({ s, keep, onKeep }: { s: PreviewSection; keep: boolean; onKeep: (keep: boolean) => void }) {
+function PreviewSectionCard({
+  s,
+  keep,
+  onKeep,
+}: {
+  s: PreviewSection;
+  keep: boolean;
+  onKeep: (keep: boolean) => void;
+}) {
   return (
     <section
       aria-label={s.heading}
       data-testid="next-draft-section"
       data-section={s.section_key}
-      data-keep={keep ? "true" : "false"}
-      className={`rounded-panel border px-3.5 py-3 ${keep ? "border-line" : "border-dashed border-line bg-surface2"}`}
+      data-keep={keep ? 'true' : 'false'}
+      className={`rounded-panel border px-3.5 py-3 ${keep ? 'border-line' : 'border-dashed border-line bg-surface2'}`}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className={`min-w-0 font-semibold ${keep ? "text-text" : "text-text2 line-through"}`}>{s.heading}</h3>
+        <h3 className={`min-w-0 font-semibold ${keep ? 'text-text' : 'text-text2 line-through'}`}>
+          {s.heading}
+        </h3>
         <span className="font-mono text-[13px] text-text2">#{s.section_key}</span>
         <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
           <input
@@ -792,7 +949,8 @@ function PreviewStep({
         <>
           {chips}
           <HeroChip tone="accent">
-            <span data-testid="kept-count">{kept.length}</span> of {preview.sections.length} sections
+            <span data-testid="kept-count">{kept.length}</span> of {preview.sections.length}{' '}
+            sections
           </HeroChip>
           {preview.notes && (
             <InfoTip label="Oracle's notes" align="start" side="bottom" hero>
@@ -818,7 +976,9 @@ function PreviewStep({
         </>
       }
     >
-      {preview.stale && <Notice tone="error">v{preview.latest_version} exists now · build again</Notice>}
+      {preview.stale && (
+        <Notice tone="error">v{preview.latest_version} exists now · build again</Notice>
+      )}
       <div className="flex flex-col gap-3" data-testid="next-draft-preview">
         {preview.sections.map((s) => (
           <PreviewSectionCard

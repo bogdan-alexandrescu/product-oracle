@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { Chip, InspectorSection } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import type { Schemas } from "@/lib/api/client";
-import type { Query } from "@/lib/use-query";
+import { Chip, InspectorSection } from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import type { Schemas } from '@/lib/api/client';
+import type { Query } from '@/lib/use-query';
 
-import { horizonLabel } from "./item-row";
-import { changeChips, changeLine, type ItemChange } from "./useItemsDiff";
+import { horizonLabel } from './item-row';
+import { changeChips, changeLine, type ItemChange } from './useItemsDiff';
 
 /** At most two change chips, then "+N" (E3 Change column). */
 export function ChangeChips({ change }: { change?: ItemChange }) {
@@ -14,7 +14,11 @@ export function ChangeChips({ change }: { change?: ItemChange }) {
   const chips = changeChips(change);
   if (!chips.length) return <span className="text-text2">—</span>;
   return (
-    <span data-testid="item-change" data-change={change.change} className="inline-flex min-w-0 flex-wrap items-center gap-1">
+    <span
+      data-testid="item-change"
+      data-change={change.change}
+      className="inline-flex min-w-0 flex-wrap items-center gap-1"
+    >
       {chips.slice(0, 2).map((c) => (
         <Chip key={c.label} kind={c.kind}>
           {c.label}
@@ -26,13 +30,21 @@ export function ChangeChips({ change }: { change?: ItemChange }) {
 }
 
 /** The inspector's "What changed since …" (E3): one line per field, then the notes. */
-export function WhatChanged({ change, since, titles }: { change: ItemChange; since: string; titles: ReadonlyMap<string, string> }) {
+export function WhatChanged({
+  change,
+  since,
+  titles,
+}: {
+  change: ItemChange;
+  since: string;
+  titles: ReadonlyMap<string, string>;
+}) {
   return (
     <InspectorSection label={`What changed since ${since}`} testId="item-what-changed">
       <ul className="flex flex-col gap-1 text-[15px]">
-        {change.change === "added" && <li>New since {since}</li>}
-        {change.change === "dropped" && <li>Dropped since {since}</li>}
-        {change.change === "unchanged" && !change.notes.length && <li>No change</li>}
+        {change.change === 'added' && <li>New since {since}</li>}
+        {change.change === 'dropped' && <li>Dropped since {since}</li>}
+        {change.change === 'unchanged' && !change.notes.length && <li>No change</li>}
         {change.fields.map((f) => (
           <li key={f.field}>{changeLine(f, titles)}</li>
         ))}
@@ -47,7 +59,7 @@ export function WhatChanged({ change, since, titles }: { change: ItemChange; sin
 }
 
 /** The inspector's History (E3): "Draft v1 · Next", "Roadmap v1 · Now · approved", "Draft v3 · dropped", newest last. */
-export function ItemHistory({ q }: { q: Query<Schemas["RoadmapItemHistoryOut"] | null> }) {
+export function ItemHistory({ q }: { q: Query<Schemas['RoadmapItemHistoryOut'] | null> }) {
   // #1586: a history that could not be read says so, never reads as no history.
   if (q.error)
     return (
@@ -62,7 +74,9 @@ export function ItemHistory({ q }: { q: Query<Schemas["RoadmapItemHistoryOut"] |
       <ol className="flex flex-col gap-1 text-[15px]">
         {history.entries.map((e) => (
           <li key={e.ref}>
-            {e.present ? `${e.label} · ${horizonLabel(e.horizon ?? "")}${e.approved ? " · approved" : ""}` : `${e.label} · dropped`}
+            {e.present
+              ? `${e.label} · ${horizonLabel(e.horizon ?? '')}${e.approved ? ' · approved' : ''}`
+              : `${e.label} · dropped`}
           </li>
         ))}
       </ol>

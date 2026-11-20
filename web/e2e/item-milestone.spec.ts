@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * item-milestone (product gap, Nov 6, 2026: no screen could put a roadmap item in a milestone):
@@ -16,38 +16,47 @@ const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
 // Each goal's first, second and third milestone, read by its roadmap-wide code (roadmap-milestone-codes).
-const SAFETY_M1 = "M1 Reports reach a person (User Safety)";
-const SAFETY_M2 = "M3 Blocks hold everywhere (User Safety)";
-const SAFETY_M3 = "M6 Ready for launch (User Safety)";
-const SCALE_M1 = "M2 Load measured (Scale)";
-const SCALE_M2 = "M4 Twice the load (Scale)";
+const SAFETY_M1 = 'M1 Reports reach a person (User Safety)';
+const SAFETY_M2 = 'M3 Blocks hold everywhere (User Safety)';
+const SAFETY_M3 = 'M6 Ready for launch (User Safety)';
+const SCALE_M1 = 'M2 Load measured (Scale)';
+const SCALE_M2 = 'M4 Twice the load (Scale)';
 // The same name as User Safety's third: told apart by id, never by name.
-const SCALE_M3 = "M5 Ready for launch (Scale)";
-const ITEM = "read-replicas";
+const SCALE_M3 = 'M5 Ready for launch (Scale)';
+const ITEM = 'read-replicas';
 
 async function open(page: Page, email: string = ADMIN.email) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "item-milestone"] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      'item-milestone',
+    ] as const);
   await login(page, email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
-const card = (page: Page): Locator => page.getByTestId("floating-card");
+const card = (page: Page): Locator => page.getByTestId('floating-card');
 
 /** Opens the Milestone picker in the open card and saves `label`. */
 async function pick(page: Page, label: string) {
-  await card(page).getByRole("button", { name: "Change the milestone" }).click();
-  await card(page).getByLabel("Milestone", { exact: true }).selectOption({ label });
-  await card(page).getByRole("button", { name: "Save" }).click();
+  await card(page).getByRole('button', { name: 'Change the milestone' }).click();
+  await card(page).getByLabel('Milestone', { exact: true }).selectOption({ label });
+  await card(page).getByRole('button', { name: 'Save' }).click();
 }
 
 /** The items (their keys) in a lane of the Gantt: the bars between its header and the next one's. */
 async function itemsIn(page: Page, title: string): Promise<string[]> {
-  const header = page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: new RegExp(`^${title.replace(/[()]/g, "\\$&")}$`) }) });
+  const header = page.getByTestId('chart-group').filter({
+    has: page.locator('span', { hasText: new RegExp(`^${title.replace(/[()]/g, '\\$&')}$`) }),
+  });
   await expect(header, `a lane "${title}"`).toHaveCount(1);
   await header.scrollIntoViewIfNeeded();
   const top = (await header.boundingBox())!.y;
-  const tops = await page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
+  const tops = await page
+    .locator('[data-testid="chart-group"], [data-testid="below-the-line"]')
+    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
   const next = Math.min(...tops.filter((t) => t > top + 1), Number.POSITIVE_INFINITY);
   return page.locator('g[data-testid="bar"]').evaluateAll(
     (els, [from, to]) =>
@@ -57,14 +66,18 @@ async function itemsIn(page: Page, title: string): Promise<string[]> {
           const mid = r.top + r.height / 2;
           return mid > from && mid < to;
         })
-        .map((e) => e.getAttribute("data-item") ?? ""),
+        .map((e) => e.getAttribute('data-item') ?? ''),
     [top, next] as const,
   );
 }
 
-const lane = (page: Page, title: string): Locator => page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: title }) });
+const lane = (page: Page, title: string): Locator =>
+  page.getByTestId('chart-group').filter({ has: page.locator('span', { hasText: title }) });
 
-for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
+for (const [name, device] of [
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
+] as const) {
   test.describe(`a feature's milestone in its panel (${name})`, () => {
     test.use(device);
     test.setTimeout(90_000);
@@ -79,45 +92,49 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
      * milestones are not offered, the pick is not saved, or the Gantt keeps the old grouping
      * until a reload; no_claim = how the API stores the pick (api pytest).
      */
-    test("an owner puts a feature in any PRD's milestone and the Gantt regroups", async ({ page }) => {
+    test("an owner puts a feature in any PRD's milestone and the Gantt regroups", async ({
+      page,
+    }) => {
       await open(page);
       await openRoadmapItem(page, ITEM);
       await expect(card(page)).toBeVisible();
-      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
-      await card(page).getByRole("button", { name: "Change the milestone" }).click();
-      await expect(card(page).getByLabel("Milestone", { exact: true }).locator("option")).toHaveText(["No milestone", SCALE_M1, SCALE_M2, SCALE_M3, SAFETY_M1, SAFETY_M2, SAFETY_M3]);
-      await card(page).getByRole("button", { name: "Cancel" }).click();
+      await expect(card(page).getByTestId('card-milestone')).toHaveText('No milestone');
+      await card(page).getByRole('button', { name: 'Change the milestone' }).click();
+      await expect(
+        card(page).getByLabel('Milestone', { exact: true }).locator('option'),
+      ).toHaveText(['No milestone', SCALE_M1, SCALE_M2, SCALE_M3, SAFETY_M1, SAFETY_M2, SAFETY_M3]);
+      await card(page).getByRole('button', { name: 'Cancel' }).click();
 
       await pick(page, SAFETY_M2);
-      await expect(page.getByText("Milestone changed in your working draft").first()).toBeVisible();
-      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M2);
-      await card(page).getByRole("button", { name: "Close" }).click();
+      await expect(page.getByText('Milestone changed in your working draft').first()).toBeVisible();
+      await expect(card(page).getByTestId('card-milestone')).toHaveText(SAFETY_M2);
+      await card(page).getByRole('button', { name: 'Close' }).click();
 
-      await page.getByTestId("format-gantt").click();
-      await page.getByTestId("group-milestone").click();
+      await page.getByTestId('format-gantt').click();
+      await page.getByTestId('group-milestone').click();
       expect(await itemsIn(page, SAFETY_M2)).toEqual([ITEM]);
-      expect(await itemsIn(page, "No milestone")).not.toContain(ITEM);
+      expect(await itemsIn(page, 'No milestone')).not.toContain(ITEM);
 
       // From the grouped Gantt: its bar opens the same panel; the lane follows the pick at once.
       const bar = page.locator(`g[data-testid="bar"][data-item="${ITEM}"]`);
       await bar.scrollIntoViewIfNeeded();
       await bar.click();
-      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M2);
+      await expect(card(page).getByTestId('card-milestone')).toHaveText(SAFETY_M2);
       await pick(page, SCALE_M1);
-      await expect(card(page).getByTestId("card-milestone")).toHaveText(SCALE_M1);
+      await expect(card(page).getByTestId('card-milestone')).toHaveText(SCALE_M1);
       await expect(lane(page, SAFETY_M2)).toHaveCount(0);
       expect(await itemsIn(page, SCALE_M1)).toEqual([ITEM]);
 
       // Undo puts it back in User Safety's M2.
-      await page.getByRole("button", { name: "Undo" }).last().click();
-      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M2);
+      await page.getByRole('button', { name: 'Undo' }).last().click();
+      await expect(card(page).getByTestId('card-milestone')).toHaveText(SAFETY_M2);
       await expect(lane(page, SCALE_M1)).toHaveCount(0);
       expect(await itemsIn(page, SAFETY_M2)).toEqual([ITEM]);
 
-      await pick(page, "No milestone");
-      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+      await pick(page, 'No milestone');
+      await expect(card(page).getByTestId('card-milestone')).toHaveText('No milestone');
       await expect(lane(page, SAFETY_M2)).toHaveCount(0);
-      expect(await itemsIn(page, "No milestone")).toContain(ITEM);
+      expect(await itemsIn(page, 'No milestone')).toContain(ITEM);
     });
 
     /**
@@ -127,23 +144,25 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
      * fails_when = the two are told apart by name only, so the stale pick goes through;
      * no_claim = the API's check (api pytest).
      */
-    test("a stale pick is refused when the feature moved to a milestone of the same name", async ({ page }) => {
+    test('a stale pick is refused when the feature moved to a milestone of the same name', async ({
+      page,
+    }) => {
       await open(page);
       await openRoadmapItem(page, ITEM);
       await pick(page, SAFETY_M3);
-      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M3);
+      await expect(card(page).getByTestId('card-milestone')).toHaveText(SAFETY_M3);
       // Someone else (the same person in another tab) moves it to Scale's milestone of that name.
       const other = await page.context().newPage();
-      await other.goto("/simple/roadmap");
-      await expect(other.getByTestId("simple-roadmap")).toBeVisible();
+      await other.goto('/simple/roadmap');
+      await expect(other.getByTestId('simple-roadmap')).toBeVisible();
       await openRoadmapItem(other, ITEM);
-      await expect(card(other).getByTestId("card-milestone")).toHaveText(SAFETY_M3);
+      await expect(card(other).getByTestId('card-milestone')).toHaveText(SAFETY_M3);
       await pick(other, SCALE_M3);
-      await expect(card(other).getByTestId("card-milestone")).toHaveText(SCALE_M3);
+      await expect(card(other).getByTestId('card-milestone')).toHaveText(SCALE_M3);
       await other.close();
       await pick(page, SAFETY_M1);
       await expect(page.getByText(/Changed since you saw it/).first()).toBeVisible();
-      await expect(card(page).getByTestId("card-milestone")).not.toHaveText(SAFETY_M1);
+      await expect(card(page).getByTestId('card-milestone')).not.toHaveText(SAFETY_M1);
     });
 
     /**
@@ -153,12 +172,14 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
      * change engine's own specs).
      */
     test("a commenter's pick waits for a decision", async ({ page }) => {
-      await open(page, "commenter@example.com");
+      await open(page, 'commenter@example.com');
       await openRoadmapItem(page, ITEM);
-      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+      await expect(card(page).getByTestId('card-milestone')).toHaveText('No milestone');
       await pick(page, SCALE_M1);
-      await expect(page.getByText(/^Milestone changed proposed: it waits for/).first()).toBeVisible();
-      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+      await expect(
+        page.getByText(/^Milestone changed proposed: it waits for/).first(),
+      ).toBeVisible();
+      await expect(card(page).getByTestId('card-milestone')).toHaveText('No milestone');
     });
   });
 }
@@ -169,25 +190,30 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
  * "the PRD's owner" (no track owner found, or every item read as one PRD's); no_claim = who
  * decides an ask (milestone-asks.spec.ts).
  */
-test("each PRD milestone on the company roadmap names its owner", async ({ page }) => {
+test('each PRD milestone on the company roadmap names its owner', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize(DESKTOP.viewport);
   await open(page);
   // roadmap-milestone-codes: each label reads its roadmap code ("M<n> name"), the two PRDs' "Ready for launch" one each.
-  const label = (name: string) => page.getByTestId("ms-prd-label").filter({ hasText: new RegExp(`^M\\d+ ${name}$`) });
+  const label = (name: string) =>
+    page.getByTestId('ms-prd-label').filter({ hasText: new RegExp(`^M\\d+ ${name}$`) });
   for (const [name, nth, prdTitle] of [
-    ["Reports reach a person", 0, "User Safety"],
-    ["Blocks hold everywhere", 0, "User Safety"],
-    ["Load measured", 0, "Scale"],
-    ["Twice the load", 0, "Scale"],
-    ["Ready for launch", 0, null],
-    ["Ready for launch", 1, null],
+    ['Reports reach a person', 0, 'User Safety'],
+    ['Blocks hold everywhere', 0, 'User Safety'],
+    ['Load measured', 0, 'Scale'],
+    ['Twice the load', 0, 'Scale'],
+    ['Ready for launch', 0, null],
+    ['Ready for launch', 1, null],
   ] as const) {
     await label(name).nth(nth).click();
-    const prd = page.getByTestId("ms-prd-card");
-    await expect(prd).toContainText(prdTitle ? `From the PRD ${prdTitle} · owned by Marta Moss` : /From the PRD (User Safety|Scale) · owned by Marta Moss/);
-    await expect(prd).toContainText("A change here goes to Marta Moss as a change to the PRD");
-    await prd.getByRole("button", { name: "Cancel" }).click();
+    const prd = page.getByTestId('ms-prd-card');
+    await expect(prd).toContainText(
+      prdTitle
+        ? `From the PRD ${prdTitle} · owned by Marta Moss`
+        : /From the PRD (User Safety|Scale) · owned by Marta Moss/,
+    );
+    await expect(prd).toContainText('A change here goes to Marta Moss as a change to the PRD');
+    await prd.getByRole('button', { name: 'Cancel' }).click();
     await expect(prd).toHaveCount(0);
   }
 });
@@ -199,26 +225,34 @@ test("each PRD milestone on the company roadmap names its owner", async ({ page 
  * new owner is named as (and decides for) User Safety too; no_claim = the API's track rows (api
  * pytest).
  */
-test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not User Safety's", async ({ page }) => {
+test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not User Safety's", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
   await page.setViewportSize(DESKTOP.viewport);
   await open(page);
-  await page.getByTestId("tracks-open").click();
-  const sheet = page.getByTestId("tracks-sheet");
-  const row = sheet.getByTestId("track-row").filter({ has: page.getByText("Scale track", { exact: true }) });
-  await sheet.getByRole("button", { name: "Change Scale track" }).click();
+  await page.getByTestId('tracks-open').click();
+  const sheet = page.getByTestId('tracks-sheet');
+  const row = sheet
+    .getByTestId('track-row')
+    .filter({ has: page.getByText('Scale track', { exact: true }) });
+  await sheet.getByRole('button', { name: 'Change Scale track' }).click();
   // tracks-goal: a track lists its PRDs (none, one or many, each with Remove); the Scale track holds only its own.
-  await expect(row.getByTestId("track-prds").getByTestId("track-prd-title")).toHaveText(["Scale"]);
-  await expect(row.getByRole("button", { name: "Remove Scale from Scale track" })).toBeVisible();
-  await row.getByLabel("Owner").selectOption({ label: "Priya Raman" });
-  await expect(row).toContainText("Priya Raman ·");
-  await page.getByRole("button", { name: "Close" }).first().click();
+  await expect(row.getByTestId('track-prds').getByTestId('track-prd-title')).toHaveText(['Scale']);
+  await expect(row.getByRole('button', { name: 'Remove Scale from Scale track' })).toBeVisible();
+  await row.getByLabel('Owner').selectOption({ label: 'Priya Raman' });
+  await expect(row).toContainText('Priya Raman ·');
+  await page.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toHaveCount(0);
 
-  await page.getByTestId("ms-prd-label").filter({ hasText: /^M\d+ Reports reach a person$/ }).first().click();
-  const prd = page.getByTestId("ms-prd-card");
-  await expect(prd).toContainText("From the PRD User Safety · owned by Marta Moss");
-  await expect(prd).not.toContainText("Priya Raman");
+  await page
+    .getByTestId('ms-prd-label')
+    .filter({ hasText: /^M\d+ Reports reach a person$/ })
+    .first()
+    .click();
+  const prd = page.getByTestId('ms-prd-card');
+  await expect(prd).toContainText('From the PRD User Safety · owned by Marta Moss');
+  await expect(prd).not.toContainText('Priya Raman');
 });
 
 /**
@@ -229,42 +263,50 @@ test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not
  * fails_when = Undo puts it back in the removed milestone, or fails without saying why;
  * no_claim = the API's check (api pytest).
  */
-test("undoing a pick refuses a milestone moved to Trash since", async ({ page }) => {
+test('undoing a pick refuses a milestone moved to Trash since', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize(DESKTOP.viewport);
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-milestones"] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      'simple-milestones',
+    ] as const);
   await login(page, ADMIN.email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 
-  const mobile = "alert-mobile";
+  const mobile = 'alert-mobile';
   await openRoadmapItem(page, mobile);
-  await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+  await expect(card(page).getByTestId('card-milestone')).toHaveText('No milestone');
   // The picker's words for the roadmap's own milestones (code and name, no PRD).
-  await card(page).getByRole("button", { name: "Change the milestone" }).click();
-  const option = (name: string) => card(page).getByLabel("Milestone", { exact: true }).locator("option", { hasText: name });
-  const first = (await option("Alerts live for 50 teams").textContent())!.trim();
-  const second = (await option("60% of teams active at day 90").textContent())!.trim();
-  await card(page).getByRole("button", { name: "Cancel" }).click();
+  await card(page).getByRole('button', { name: 'Change the milestone' }).click();
+  const option = (name: string) =>
+    card(page).getByLabel('Milestone', { exact: true }).locator('option', { hasText: name });
+  const first = (await option('Alerts live for 50 teams').textContent())!.trim();
+  const second = (await option('60% of teams active at day 90').textContent())!.trim();
+  await card(page).getByRole('button', { name: 'Cancel' }).click();
 
   await pick(page, first);
-  await expect(card(page).getByTestId("card-milestone")).toHaveText(first);
+  await expect(card(page).getByTestId('card-milestone')).toHaveText(first);
   await pick(page, second);
-  await expect(card(page).getByTestId("card-milestone")).toHaveText(second);
-  const toasts = page.getByTestId("toasts");
-  await expect(toasts.getByRole("button", { name: "Undo" })).toBeVisible();
-  await card(page).getByRole("button", { name: "Close" }).click();
+  await expect(card(page).getByTestId('card-milestone')).toHaveText(second);
+  const toasts = page.getByTestId('toasts');
+  await expect(toasts.getByRole('button', { name: 'Undo' })).toBeVisible();
+  await card(page).getByRole('button', { name: 'Close' }).click();
   await expect(card(page)).toHaveCount(0);
 
   // The first milestone goes to Trash from its card on the roadmap.
   await page.locator('[data-testid="ms-label"][aria-label^="M1 Alerts live for 50 teams"]').click();
-  await page.getByTestId("ms-card").getByTestId("ms-remove").click();
-  await expect(page.getByTestId("ms-toast")).toContainText("M1 Alerts live for 50 teams removed");
+  await page.getByTestId('ms-card').getByTestId('ms-remove').click();
+  await expect(page.getByTestId('ms-toast')).toContainText('M1 Alerts live for 50 teams removed');
 
   // The second pick's Undo would put it back in the removed milestone: refused, in plain words.
-  await toasts.getByRole("button", { name: "Undo" }).click();
-  await expect(toasts).toContainText("That milestone was deleted.");
+  await toasts.getByRole('button', { name: 'Undo' }).click();
+  await expect(toasts).toContainText('That milestone was deleted.');
   // Still in M2 (its code may move up now M1 is gone: roadmap-milestone-codes).
   await openRoadmapItem(page, mobile);
-  await expect(card(page).getByTestId("card-milestone")).toHaveText(/^M\d+ 60% of teams active at day 90$/);
+  await expect(card(page).getByTestId('card-milestone')).toHaveText(
+    /^M\d+ 60% of teams active at day 90$/,
+  );
 });

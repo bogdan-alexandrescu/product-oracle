@@ -1,6 +1,6 @@
-import { named } from "@/lib/codes";
-import { goalTree } from "@/lib/goal-tree";
-import { goalName } from "@/lib/placeholders";
+import { named } from '@/lib/codes';
+import { goalTree } from '@/lib/goal-tree';
+import { goalName } from '@/lib/placeholders';
 
 /** The fields read (an EntityOut is one). */
 type GoalLike = Parameters<typeof goalTree>[0][number];
@@ -21,8 +21,9 @@ export type KeyResults = {
 
 const metric = (attrs: Record<string, unknown> | undefined): string | null => {
   let m = attrs?.metric;
-  if (m && typeof m === "object") m = (m as { name?: unknown; title?: unknown }).name ?? (m as { title?: unknown }).title;
-  return typeof m === "string" && m ? m : null;
+  if (m && typeof m === 'object')
+    m = (m as { name?: unknown; title?: unknown }).name ?? (m as { title?: unknown }).title;
+  return typeof m === 'string' && m ? m : null;
 };
 
 /**
@@ -34,8 +35,8 @@ const metric = (attrs: Record<string, unknown> | undefined): string | null => {
  * listed are the confirmed ones.
  */
 export function keyResults(entities: GoalLike[]): KeyResults {
-  const goals = entities.filter((e) => e.type === "goal");
-  const confirmed = new Map(goals.filter((e) => e.status === "confirmed").map((g) => [g.id, g]));
+  const goals = entities.filter((e) => e.type === 'goal');
+  const confirmed = new Map(goals.filter((e) => e.status === 'confirmed').map((g) => [g.id, g]));
   // Numbered over every goal, archived and proposed ones too, so a code stays when a sibling comes or goes.
   const tree = goalTree([...confirmed.values()], goals);
   const parents = new Map<string, GoalRef>();
@@ -61,7 +62,8 @@ export function keyResults(entities: GoalLike[]): KeyResults {
   // The listed key results: the tree's confirmed subgoals, each followed by its own confirmed
   // subgoals at any depth (code: its parent's and its number, as goalTree numbers a subgoal: its
   // place among every subgoal of its parent by age, archived and proposed ones counted).
-  const oldest = (a: GoalLike, b: GoalLike) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id);
+  const oldest = (a: GoalLike, b: GoalLike) =>
+    (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id);
   const below = (id: string) => goals.filter((s) => s.parent_id === id).sort(oldest);
   for (const n of tree) {
     if (!n.parentId) continue;
@@ -86,7 +88,8 @@ export function keyResults(entities: GoalLike[]): KeyResults {
 }
 
 /** The goal a suggestion serves as people read it: its key result's name (kr_title) when it serves one. */
-export const servedName = (goal: { title: string; kr_title?: string }): string => goal.kr_title ?? goal.title;
+export const servedName = (goal: { title: string; kr_title?: string }): string =>
+  goal.kr_title ?? goal.title;
 
 type SuggestionsOut<B extends GoalRef> = {
   goals: { goal: B; pending: boolean; empty: boolean }[];
@@ -98,7 +101,10 @@ type SuggestionsOut<B extends GoalRef> = {
  * key result's suggestions are under its parent goal (reached from its "Suggest a feature"),
  * each still named by its key result.
  */
-export function topGoalSuggestions<B extends GoalRef, T extends SuggestionsOut<B>>(data: T | undefined, krs: KeyResults): T | undefined {
+export function topGoalSuggestions<B extends GoalRef, T extends SuggestionsOut<B>>(
+  data: T | undefined,
+  krs: KeyResults,
+): T | undefined {
   if (!data) return data;
   const top = (b: B): B => {
     const p = krs.parentOf(b.id) ?? krs.parentOf(b.key);
@@ -107,9 +113,21 @@ export function topGoalSuggestions<B extends GoalRef, T extends SuggestionsOut<B
   const subs = (id: string) => data.goals.filter((g) => g.goal.id !== id && top(g.goal).id === id);
   const goals = data.goals
     .filter((g) => top(g.goal).id === g.goal.id)
-    .map((g) => (subs(g.goal.id).length ? { ...g, pending: g.pending || subs(g.goal.id).some((s) => s.pending), empty: g.empty && subs(g.goal.id).every((s) => s.empty) } : g));
+    .map((g) =>
+      subs(g.goal.id).length
+        ? {
+            ...g,
+            pending: g.pending || subs(g.goal.id).some((s) => s.pending),
+            empty: g.empty && subs(g.goal.id).every((s) => s.empty),
+          }
+        : g,
+    );
   // kr-name-kept: a key result's suggestion is listed under its parent goal (its home, whose id,
   // key and title its goal carries) and keeps the key result it serves as kr_title (servedName).
   const home = (b: B): B => (top(b).id === b.id ? b : ({ ...top(b), kr_title: b.title } as B));
-  return { ...data, goals, suggestions: data.suggestions.map((s) => ({ ...s, goal: home(s.goal) })) };
+  return {
+    ...data,
+    goals,
+    suggestions: data.suggestions.map((s) => ({ ...s, goal: home(s.goal) })),
+  };
 }

@@ -1,26 +1,48 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, useSyncExternalStore } from 'react';
 
-import { Button, Chip, type Column, DataTable, InfoTip, PageSkeleton, Panel, Sheet, Sparkline, Split, ViewOnly } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  type Column,
+  DataTable,
+  InfoTip,
+  PageSkeleton,
+  Panel,
+  Sheet,
+  Sparkline,
+  Split,
+  ViewOnly,
+} from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-import { CompanyEmpty } from "../_empty";
-import { CompanyHeader } from "../_nav";
-import { KIND_LABEL, SOURCE_LABEL, STATUS_KIND, STATUS_LABEL, VARIANCE_KIND, VARIANCE_LABEL, changeText, valueText, type Metric } from "./_components/lib";
-import { MetricForm } from "./_components/MetricForm";
-import { MetricInspector } from "./_components/MetricInspector";
+import { CompanyEmpty } from '../_empty';
+import { CompanyHeader } from '../_nav';
+import {
+  KIND_LABEL,
+  SOURCE_LABEL,
+  STATUS_KIND,
+  STATUS_LABEL,
+  VARIANCE_KIND,
+  VARIANCE_LABEL,
+  changeText,
+  valueText,
+  type Metric,
+} from './_components/lib';
+import { MetricForm } from './_components/MetricForm';
+import { MetricInspector } from './_components/MetricInspector';
 
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 function useIsPhone(): boolean {
@@ -50,26 +72,48 @@ function Metrics() {
   const params = useSearchParams();
   const { me, can } = useMe();
   const phone = useIsPhone();
-  const [form, setForm] = useState<"add" | "edit" | null>(null);
+  const [form, setForm] = useState<'add' | 'edit' | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [archived, setArchived] = useState(false);
-  const listQ = useQuery(`metrics|${archived}`, () => unwrap(api.GET("/v1/metrics", { params: { query: { include_archived: archived } } })), { keepPrevious: true });
+  const listQ = useQuery(
+    `metrics|${archived}`,
+    () => unwrap(api.GET('/v1/metrics', { params: { query: { include_archived: archived } } })),
+    { keepPrevious: true },
+  );
   const rows = listQ.data ?? [];
-  const writer = can("create_metric");
+  const writer = can('create_metric');
   // The metric's owner (any role) records the values of a metric typed by hand or by API: the
   // page is View only for them only when they own no such metric.
-  const records = rows.some((m) => m.source !== "posthog" && m.status !== "archived" && can("record_metric_value", m.owner_id === me?.user_id));
-  const goalsQ = useQuery("metric-goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })));
+  const records = rows.some(
+    (m) =>
+      m.source !== 'posthog' &&
+      m.status !== 'archived' &&
+      can('record_metric_value', m.owner_id === me?.user_id),
+  );
+  const goalsQ = useQuery('metric-goals', () =>
+    unwrap(
+      api.GET('/v1/baseline/entities', {
+        params: { query: { type: 'goal', status: 'confirmed' } },
+      }),
+    ),
+  );
   const peopleQ = useQuery(`metric-people|${writer}`, () =>
-    writer ? unwrap(api.GET("/v1/people", { params: { query: { limit: 100 } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
+    writer
+      ? unwrap(api.GET('/v1/people', { params: { query: { limit: 100 } } }))
+      : Promise.resolve([] as Schemas['PersonOut'][]),
   );
   const goals = goalsQ.data ?? [];
-  const picked = params.get("metric");
+  const picked = params.get('metric');
   const selected = rows.find((m) => m.id === picked) ?? (phone || picked ? undefined : rows[0]);
   const selectedId = picked ?? selected?.id ?? null;
   const detailQ = useQuery(
-    `metric|${selectedId ?? "none"}`,
-    () => (selectedId ? unwrap(api.GET("/v1/metrics/{metric_id}", { params: { path: { metric_id: selectedId } } })) : Promise.resolve(null)),
+    `metric|${selectedId ?? 'none'}`,
+    () =>
+      selectedId
+        ? unwrap(
+            api.GET('/v1/metrics/{metric_id}', { params: { path: { metric_id: selectedId } } }),
+          )
+        : Promise.resolve(null),
     { keepPrevious: true },
   );
   const detail = detailQ.data && detailQ.data.id === selectedId ? detailQ.data : null;
@@ -87,25 +131,31 @@ function Metrics() {
   // beside it) Kind, Owner, Source and then the sparkline give way, so a name is not cut to "Ac…".
   const columns: Column<Metric>[] = [
     {
-      key: "title",
-      header: "Metric",
-      phone: "title",
+      key: 'title',
+      header: 'Metric',
+      phone: 'title',
       // D-9: the metric's kind (Result or Driver) as a chip beside its name, in the panel's words; never hidden.
       cell: (m) => (
-        <span className={`flex min-w-0 items-center gap-2 ${m.kind === "input" ? "pl-5 max-[600px]:pl-3" : ""}`}>
+        <span
+          className={`flex min-w-0 items-center gap-2 ${m.kind === 'input' ? 'pl-5 max-[600px]:pl-3' : ''}`}
+        >
           <span className="truncate font-medium">{m.title}</span>
-          <Chip kind={m.kind === "output" ? "acc" : "line"} className="flex-none" data-testid="metric-kind">
+          <Chip
+            kind={m.kind === 'output' ? 'acc' : 'line'}
+            className="flex-none"
+            data-testid="metric-kind"
+          >
             {KIND_LABEL[m.kind]}
           </Chip>
         </span>
       ),
     },
     {
-      key: "last",
-      header: "Last week",
-      width: "120px",
-      phone: "meta",
-      phoneLabel: "Last week",
+      key: 'last',
+      header: 'Last week',
+      width: '120px',
+      phone: 'meta',
+      phoneLabel: 'Last week',
       cell: (m) => (
         <span className="tnum text-sm" data-col="last">
           {valueText(m.last_week?.value, m.unit)}
@@ -113,18 +163,25 @@ function Metrics() {
       ),
     },
     {
-      key: "change",
-      header: "Change",
-      width: "184px",
-      phone: "meta",
+      key: 'change',
+      header: 'Change',
+      width: '184px',
+      phone: 'meta',
       cell: (m) =>
         m.change ? (
           // pass F F-40: the whole change, its chip beside it or under it, never cut.
-          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm" data-col="change">
+          <span
+            className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm"
+            data-col="change"
+          >
             <span className="tnum whitespace-nowrap" data-testid="change-value">
               {changeText(m.change.value, m.change.pct)}
             </span>
-            {m.change.variance && <Chip kind={VARIANCE_KIND[m.change.variance]}>{VARIANCE_LABEL[m.change.variance]}</Chip>}
+            {m.change.variance && (
+              <Chip kind={VARIANCE_KIND[m.change.variance]}>
+                {VARIANCE_LABEL[m.change.variance]}
+              </Chip>
+            )}
           </span>
         ) : (
           // qa4-company-42: on a phone the column has no header, so the dash says what it means.
@@ -135,23 +192,41 @@ function Metrics() {
         ),
     },
     {
-      key: "spark",
-      header: "12 weeks",
-      width: "116px",
-      phone: "hide",
-      narrow: "hide",
+      key: 'spark',
+      header: '12 weeks',
+      width: '116px',
+      phone: 'hide',
+      narrow: 'hide',
       cell: (m) => {
         const known = m.spark.filter((v): v is number => v != null);
-        return known.length > 1 ? <Sparkline values={known} label={`Trend ${known.join(", ")}`} /> : <span className="text-sm text-text2">—</span>;
+        return known.length > 1 ? (
+          <Sparkline values={known} label={`Trend ${known.join(', ')}`} />
+        ) : (
+          <span className="text-sm text-text2">—</span>
+        );
       },
     },
-    { key: "owner", header: "Owner", width: "120px", phone: "hide", narrow: "mid", cell: (m) => <span className="truncate text-sm">{m.owner_name ?? "—"}</span> },
-    { key: "source", header: "Source", width: "92px", phone: "hide", narrow: "wide", cell: (m) => <span className="text-sm text-text2">{SOURCE_LABEL[m.source]}</span> },
     {
-      key: "state",
-      header: "State",
-      width: "104px",
-      phone: "hide",
+      key: 'owner',
+      header: 'Owner',
+      width: '120px',
+      phone: 'hide',
+      narrow: 'mid',
+      cell: (m) => <span className="truncate text-sm">{m.owner_name ?? '—'}</span>,
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      width: '92px',
+      phone: 'hide',
+      narrow: 'wide',
+      cell: (m) => <span className="text-sm text-text2">{SOURCE_LABEL[m.source]}</span>,
+    },
+    {
+      key: 'state',
+      header: 'State',
+      width: '104px',
+      phone: 'hide',
       cell: (m) => (
         <Chip kind={STATUS_KIND[m.status]} dot>
           {STATUS_LABEL[m.status]}
@@ -169,7 +244,7 @@ function Metrics() {
       onEdit={() => {
         // pass F F-4: on a phone the form replaces the metric sheet, never sits behind it.
         setSheetOpen(false);
-        setForm("edit");
+        setForm('edit');
       }}
       onChanged={changed}
     />
@@ -185,14 +260,21 @@ function Metrics() {
           // the tab strip for one with the button, then back once the list came back empty.
           writer &&
           rows.length > 0 && (
-            <Button variant="primary" icon="plus" disabled={!!listQ.error} onClick={() => setForm("add")}>
+            <Button
+              variant="primary"
+              icon="plus"
+              disabled={!!listQ.error}
+              onClick={() => setForm('add')}
+            >
               Add metric
             </Button>
           )
         }
       />
       {/* F-1: a list that did not load says so, with Try again, and no empty table under it. */}
-      {listQ.error && <LoadError what="the metrics" error={listQ.error} onRetry={() => void listQ.reload()} />}
+      {listQ.error && (
+        <LoadError what="the metrics" error={listQ.error} onRetry={() => void listQ.reload()} />
+      )}
       <Split inspector={!phone ? inspector : undefined}>
         <Panel
           title="Metrics"
@@ -200,13 +282,18 @@ function Metrics() {
           tools={
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1.5 text-sm text-text2">
-                <input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={archived}
+                  onChange={(e) => setArchived(e.target.checked)}
+                />
                 Archived
               </label>
               <InfoTip label="metrics" align="end">
-                The numbers Oracle reads every week, Monday to Sunday in the Company time zone. Results are what the company wants; drivers are
-                numbers the team can move, listed under the result they drive. A week whose change is outside the normal range is an unusual
-                week, and the metric&apos;s owner explains it in the Weekly metrics review.
+                The numbers Oracle reads every week, Monday to Sunday in the Company time zone.
+                Results are what the company wants; drivers are numbers the team can move, listed
+                under the result they drive. A week whose change is outside the normal range is an
+                unusual week, and the metric&apos;s owner explains it in the Weekly metrics review.
               </InfoTip>
             </div>
           }
@@ -218,17 +305,18 @@ function Metrics() {
               title="No metrics yet"
               action={
                 writer ? (
-                  <Button icon="plus" onClick={() => setForm("add")}>
+                  <Button icon="plus" onClick={() => setForm('add')}>
                     Add your first metric
                   </Button>
                 ) : undefined
               }
             >
-              Track a number every week.{" "}
+              Track a number every week.{' '}
               <InfoTip label="metrics">
-                A metric is read from your product analytics, typed by hand or sent from another tool. One linked to a goal keeps that
-                goal&apos;s current value up to date, and Oracle flags a week that changes more than usual.
-                {writer ? "" : " Approvers and owners add metrics."}
+                A metric is read from your product analytics, typed by hand or sent from another
+                tool. One linked to a goal keeps that goal&apos;s current value up to date, and
+                Oracle flags a week that changes more than usual.
+                {writer ? '' : ' Approvers and owners add metrics.'}
               </InfoTip>
             </CompanyEmpty>
           ) : (
@@ -239,21 +327,28 @@ function Metrics() {
               rows={listQ.data ? rows : undefined}
               loading={listQ.loading}
               rowKey={(m) => m.id}
-              selected={phone ? (sheetOpen ? (selected?.id ?? null) : null) : (selected?.id ?? null)}
+              selected={
+                phone ? (sheetOpen ? (selected?.id ?? null) : null) : (selected?.id ?? null)
+              }
               onSelect={(_, m) => select(m)}
-              rowProps={(m) => ({ "data-testid": "metric-row", "data-kind": m.kind })}
+              rowProps={(m) => ({ 'data-testid': 'metric-row', 'data-kind': m.kind })}
             />
           )}
         </Panel>
       </Split>
       {phone && (
-        <Sheet open={sheetOpen && !!detail} title="Metric" onClose={() => setSheetOpen(false)} testId="metric-sheet">
+        <Sheet
+          open={sheetOpen && !!detail}
+          title="Metric"
+          onClose={() => setSheetOpen(false)}
+          testId="metric-sheet"
+        >
           {inspector}
         </Sheet>
       )}
       {form && writer && (
         <MetricForm
-          metric={form === "edit" ? detail : null}
+          metric={form === 'edit' ? detail : null}
           metrics={rows}
           goals={goals}
           people={peopleQ.data ?? []}

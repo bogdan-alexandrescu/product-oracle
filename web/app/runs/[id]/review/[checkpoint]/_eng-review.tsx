@@ -1,63 +1,75 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { Button, Chip, Icon, Page, PageHeader, SegmentedControl, toast } from "@/components/ds";
-import { Menu } from "@/components/review/parts";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
-import { useMe } from "@/lib/me";
-import { sortPrds, usePrds } from "@/lib/prd-order";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, Icon, Page, PageHeader, SegmentedControl, toast } from '@/components/ds';
+import { Menu } from '@/components/review/parts';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { named, namedText } from '@/lib/codes';
+import { useMe } from '@/lib/me';
+import { sortPrds, usePrds } from '@/lib/prd-order';
+import { errorMessage } from '@/lib/use-query';
 
-import type { BriefsCheck, CheckpointOut, RunOut } from "../../../_lib";
-import { NewRunDialog, type RunStart } from "../../../_new-run-dialog";
+import type { BriefsCheck, CheckpointOut, RunOut } from '../../../_lib';
+import { NewRunDialog, type RunStart } from '../../../_new-run-dialog';
 
-type Review = Schemas["CheckpointReview"];
-type Action = Review["items"][number]["actions"][number];
-type Feature = BriefsCheck["features"][number];
-type Reason = NonNullable<Review["gate"]>["left"][number];
-type ActIn = Omit<Schemas["ActionIn"], "answers">;
-type Verdict = "feasible" | "feasible_with_changes" | "not_feasible";
+type Review = Schemas['CheckpointReview'];
+type Action = Review['items'][number]['actions'][number];
+type Feature = BriefsCheck['features'][number];
+type Reason = NonNullable<Review['gate']>['left'][number];
+type ActIn = Omit<Schemas['ActionIn'], 'answers'>;
+type Verdict = 'feasible' | 'feasible_with_changes' | 'not_feasible';
 
-const SIZES = ["xs", "s", "m", "l", "xl"] as const;
+const SIZES = ['xs', 's', 'm', 'l', 'xl'] as const;
 const VERDICTS: { value: Verdict; label: string; needs?: string }[] = [
-  { value: "feasible", label: "Feasible" },
-  { value: "feasible_with_changes", label: "Feasible with changes", needs: "What changes" },
-  { value: "not_feasible", label: "Not feasible as scoped", needs: "Why not as scoped" },
+  { value: 'feasible', label: 'Feasible' },
+  { value: 'feasible_with_changes', label: 'Feasible with changes', needs: 'What changes' },
+  { value: 'not_feasible', label: 'Not feasible as scoped', needs: 'Why not as scoped' },
 ];
-const VERDICT_WORDS: Record<Verdict, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
-const VERDICT_KIND = { feasible: "pass", feasible_with_changes: "warn", not_feasible: "crit" } as const;
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const VERDICT_WORDS: Record<Verdict, string> = {
+  feasible: 'Feasible',
+  feasible_with_changes: 'Feasible with changes',
+  not_feasible: 'Not feasible as scoped',
+};
+const VERDICT_KIND = {
+  feasible: 'pass',
+  feasible_with_changes: 'warn',
+  not_feasible: 'crit',
+} as const;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** qa4-work-54: what a brief written without a code map means, in an owner's words. */
-const NO_CODE_MAP = "Oracle could not read the code, so this approach is a guess";
+const NO_CODE_MAP = 'Oracle could not read the code, so this approach is a guess';
 
 /** The feature's actions in the shared draft, staged first. */
 function actionsOf(review: Review, key: string): Action[] {
   const all = review.items.find((i) => i.key === key)?.actions ?? [];
-  return [...all].sort((a, b) => (a.state === b.state ? 0 : a.state === "staged" ? -1 : 1));
+  return [...all].sort((a, b) => (a.state === b.state ? 0 : a.state === 'staged' ? -1 : 1));
 }
-const edit = (acts: Action[], field: string) => acts.find((a) => a.kind === "edit" && a.field === field);
-const verdictOf = (acts: Action[]) => edit(acts, "verdict")?.value as { verdict: Verdict; note?: string | null } | undefined;
+const edit = (acts: Action[], field: string) =>
+  acts.find((a) => a.kind === 'edit' && a.field === field);
+const verdictOf = (acts: Action[]) =>
+  edit(acts, 'verdict')?.value as { verdict: Verdict; note?: string | null } | undefined;
 
 /** A staged change in words: its feature (code and name) and what it settles ("F-12 Usage export: Feasible"). */
 function stagedLabel(a: Action, feature: Feature | undefined, itemKey: string): string {
-  const name = namedText(named(feature?.title || itemKey.replace(/^f\./, "").replace(/[-_]+/g, " "), itemKey));
-  const field = a.field ?? "";
+  const name = namedText(
+    named(feature?.title || itemKey.replace(/^f\./, '').replace(/[-_]+/g, ' '), itemKey),
+  );
+  const field = a.field ?? '';
   const what =
-    field === "verdict"
-      ? VERDICT_WORDS[(a.value as { verdict: Verdict } | null)?.verdict ?? "feasible"]
-      : field === "size"
-        ? `Size ${String(a.value ?? "").toUpperCase()}`
-        : field.startsWith("answer:")
+    field === 'verdict'
+      ? VERDICT_WORDS[(a.value as { verdict: Verdict } | null)?.verdict ?? 'feasible']
+      : field === 'size'
+        ? `Size ${String(a.value ?? '').toUpperCase()}`
+        : field.startsWith('answer:')
           ? feature?.questions.find((q) => `answer:${q.id}` === field)?.blocking
-            ? "Blocking question answered"
-            : "Question answered"
-          : a.kind === "question"
-            ? "Question asked"
-            : "Changed";
+            ? 'Blocking question answered'
+            : 'Question answered'
+          : a.kind === 'question'
+            ? 'Question asked'
+            : 'Changed';
   return `${name}: ${what}`;
 }
 /** Named staged changes shown before the rest are counted. */
@@ -94,7 +106,7 @@ export function EngReview({
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState(review.note ?? "");
+  const [note, setNote] = useState(review.note ?? '');
   const [sending, setSending] = useState(false);
   // Answers being typed, by feature and question: kept here, above the inspector, so a verdict
   // or size saved meanwhile (or another feature selected) never empties a box being typed in.
@@ -113,7 +125,8 @@ export function EngReview({
   useEffect(() => {
     const el = barRef.current;
     if (!el) return;
-    const place = () => setListTop(Math.max(16, Math.round(listRef.current?.getBoundingClientRect().top ?? 16)));
+    const place = () =>
+      setListTop(Math.max(16, Math.round(listRef.current?.getBoundingClientRect().top ?? 16)));
     const ro = new ResizeObserver(() => {
       setBarH(el.offsetHeight);
       place();
@@ -121,15 +134,15 @@ export function EngReview({
     ro.observe(el);
     ro.observe(document.body);
     place();
-    window.addEventListener("scroll", place, { passive: true });
-    window.addEventListener("resize", place);
+    window.addEventListener('scroll', place, { passive: true });
+    window.addEventListener('resize', place);
     return () => {
       ro.disconnect();
-      window.removeEventListener("scroll", place);
-      window.removeEventListener("resize", place);
+      window.removeEventListener('scroll', place);
+      window.removeEventListener('resize', place);
     };
   }, []);
-  const pending = cp.status === "pending";
+  const pending = cp.status === 'pending';
   const stages = pending && review.can_stage;
   // Choices from whoever does not stage are suggestions a decider stages (AC6). Train N (owner
   // 2026-10-24): the review's own can_suggest says who may suggest, as the items and scope
@@ -152,26 +165,51 @@ export function EngReview({
       setBusy(false);
     }
   }
-  const act = (body: ActIn) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...path, body: { answers: [], ...body } })));
+  const act = (body: ActIn) =>
+    write(() =>
+      unwrap(
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions', {
+          ...path,
+          body: { answers: [], ...body },
+        }),
+      ),
+    );
   const stage = (id: string) =>
-    write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", { params: { path: { ...path.params.path, action_id: id } } })));
+    write(() =>
+      unwrap(
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage', {
+          params: { path: { ...path.params.path, action_id: id } },
+        }),
+      ),
+    );
 
-  async function decide(decision: "approved" | "changes_requested") {
+  async function decide(decision: 'approved' | 'changes_requested') {
     setError(null);
     setBusy(true);
     try {
-      if (decision === "changes_requested") {
-        onReview(await unwrap(api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", { ...path, body: { note: note.trim() || null } })));
+      if (decision === 'changes_requested') {
+        onReview(
+          await unwrap(
+            api.PUT('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note', {
+              ...path,
+              body: { note: note.trim() || null },
+            }),
+          ),
+        );
       }
       await unwrap(
-        api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide', {
           ...path,
-          body: { decision, note: decision === "changes_requested" ? note.trim() : null, expected_revision: decision === "approved" ? review.revision : null },
+          body: {
+            decision,
+            note: decision === 'changes_requested' ? note.trim() : null,
+            expected_revision: decision === 'approved' ? review.revision : null,
+          },
         }),
       );
       await onDecided();
       // inbox-eng-send-back: what happened and to whom, as the other review actions say it.
-      if (decision === "changes_requested") toast({ message: "Sent back to the architect" });
+      if (decision === 'changes_requested') toast({ message: 'Sent back to the architect' });
       router.push(`/runs/${run.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -181,15 +219,34 @@ export function EngReview({
 
   const left = review.gate?.left ?? [];
   const reasonsOf = (key: string) => left.filter((x) => x.item === key);
-  const decided = check.features.filter((f) => verdictOf(actionsOf(review, f.key).filter((a) => a.state === "staged"))).length;
-  const blockingQuestions = left.filter((x) => x.code === "blocking_question").length;
+  const decided = check.features.filter((f) =>
+    verdictOf(actionsOf(review, f.key).filter((a) => a.state === 'staged')),
+  ).length;
+  const blockingQuestions = left.filter((x) => x.code === 'blocking_question').length;
   const notFeasible = new Set(
-    check.features.filter((f) => verdictOf(actionsOf(review, f.key).filter((a) => a.state === "staged"))?.verdict === "not_feasible").map((f) => f.key),
+    check.features
+      .filter(
+        (f) =>
+          verdictOf(actionsOf(review, f.key).filter((a) => a.state === 'staged'))?.verdict ===
+          'not_feasible',
+      )
+      .map((f) => f.key),
   );
   const gateOpen = !!review.gate?.open;
-  const staged = review.items.flatMap((i) => i.actions.filter((a) => a.state === "staged").map((a) => ({ item: i.key, a })));
-  const stagedNames = staged.map(({ item, a }) => stagedLabel(a, check.features.find((f) => f.key === item), item));
-  const at = Math.max(0, check.features.findIndex((f) => f.key === selected));
+  const staged = review.items.flatMap((i) =>
+    i.actions.filter((a) => a.state === 'staged').map((a) => ({ item: i.key, a })),
+  );
+  const stagedNames = staged.map(({ item, a }) =>
+    stagedLabel(
+      a,
+      check.features.find((f) => f.key === item),
+      item,
+    ),
+  );
+  const at = Math.max(
+    0,
+    check.features.findIndex((f) => f.key === selected),
+  );
   const feature = check.features[at] ?? null;
   const open = (key: string) => {
     setSelected(key);
@@ -200,22 +257,28 @@ export function EngReview({
     if (next) setSelected(next.key);
   };
   // Only who can decide: the engineering lead once one is named, else the stop's role.
-  const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
+  const waitsFor = cp.lead_stop
+    ? 'Waits for the engineering lead'
+    : `Waits for an ${cp.approver_role}`;
 
   // Every briefs problem is file-level (oracle.engineering.check): nothing to decide. A feature in no
   // PRD yet is added to one ("Add it to a PRD"); any other problem means Send back. The gate counts
   // the same problems (oracle.runs.service.recheck_briefs); either says so.
-  const noPrd = check.problems.filter((p) => p.code === "dependency_in_no_prd");
-  const unreadable = Math.max(check.problems.length, review.gate?.file_problems ?? 0) > noPrd.length;
+  const noPrd = check.problems.filter((p) => p.code === 'dependency_in_no_prd');
+  const unreadable =
+    Math.max(check.problems.length, review.gate?.file_problems ?? 0) > noPrd.length;
   const tally = unreadable
-    ? "The briefs could not be read"
-    : `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
+    ? 'The briefs could not be read'
+    : `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, 'blocking question')}` : ''}`;
   // Every reason Approve waits on, at once.
-  const waits = [noPrd.length ? "add each feature in no PRD yet to a PRD" : null, left.length ? "give each feature a verdict and answer each blocking question" : null].filter(Boolean);
+  const waits = [
+    noPrd.length ? 'add each feature in no PRD yet to a PRD' : null,
+    left.length ? 'give each feature a verdict and answer each blocking question' : null,
+  ].filter(Boolean);
   const approveWhy = unreadable
-    ? "Send the briefs back to the architect to write them again"
+    ? 'Send the briefs back to the architect to write them again'
     : !gateOpen
-      ? `${(waits.join(", ") || "give each feature a verdict and answer each blocking question").replace(/^./, (c) => c.toUpperCase())} first`
+      ? `${(waits.join(', ') || 'give each feature a verdict and answer each blocking question').replace(/^./, (c) => c.toUpperCase())} first`
       : null;
 
   return (
@@ -225,10 +288,12 @@ export function EngReview({
         back={back}
         status={
           <>
-            <Chip kind={pending ? "warn" : "na"}>{pending ? "Waiting" : cp.status === "approved" ? "Approved" : "Sent back"}</Chip>
+            <Chip kind={pending ? 'warn' : 'na'}>
+              {pending ? 'Waiting' : cp.status === 'approved' ? 'Approved' : 'Sent back'}
+            </Chip>
             {pending && !decides && (
               <span className="inline-flex items-center gap-2" data-testid="view-only">
-                <Chip kind="na">{suggests ? "Suggestions only" : "View only"}</Chip>
+                <Chip kind="na">{suggests ? 'Suggestions only' : 'View only'}</Chip>
                 <span className="text-sm text-text2">{waitsFor}</span>
               </span>
             )}
@@ -236,12 +301,18 @@ export function EngReview({
         }
       />
       {unreadable && (
-        <div role="alert" data-testid="briefs-problem" className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]">
-          <p className="font-semibold">The briefs could not be read: send them back to the architect.</p>
+        <div
+          role="alert"
+          data-testid="briefs-problem"
+          className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]"
+        >
+          <p className="font-semibold">
+            The briefs could not be read: send them back to the architect.
+          </p>
           {check.problems.length > noPrd.length && (
             <ul className="mt-1 list-disc pl-5">
               {check.problems
-                .filter((p) => p.code !== "dependency_in_no_prd")
+                .filter((p) => p.code !== 'dependency_in_no_prd')
                 .map((p, i) => (
                   <li key={i}>{p.message}</li>
                 ))}
@@ -252,44 +323,65 @@ export function EngReview({
       {noPrd.length > 0 && <NoPrd problems={noPrd} />}
       {!!check.unmapped_repos?.length && (
         <p data-testid="briefs-unmapped" className="mb-4 text-[15px] text-text2">
-          No code map covers {check.unmapped_repos.join(", ")}: {check.unmapped_repos.length > 1 ? "their" : "its"} work is described as assumptions.
+          No code map covers {check.unmapped_repos.join(', ')}:{' '}
+          {check.unmapped_repos.length > 1 ? 'their' : 'its'} work is described as assumptions.
         </p>
       )}
       {check.unnamed_repo && (
         <p data-testid="briefs-unnamed" className="mb-4 text-[15px] text-text2">
-          No code map of this run holds some cited ids, and the briefs do not say which repository they come from.
+          No code map of this run holds some cited ids, and the briefs do not say which repository
+          they come from.
         </p>
       )}
-      <div style={{ "--bar-h": `${barH}px`, "--list-top": `${listTop}px` } as CSSProperties} className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
+      <div
+        style={{ '--bar-h': `${barH}px`, '--list-top': `${listTop}px` } as CSSProperties}
+        className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-4 max-[900px]:grid-cols-1"
+      >
         {/* EC1 b (owner, Nov 1): the features in a list that scrolls on its own, the picked one at reading width beside it. */}
         <section
           ref={listRef}
           aria-label="Features"
           data-testid="brief-list"
           className={`sticky top-4 h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:h-auto ${
-            reading ? "max-[900px]:hidden" : ""
+            reading ? 'max-[900px]:hidden' : ''
           }`}
         >
-          <div className="border-b border-line px-4 py-2 text-[13px] font-semibold text-text2">{plural(check.features.length, "feature")}</div>
+          <div className="border-b border-line px-4 py-2 text-[13px] font-semibold text-text2">
+            {plural(check.features.length, 'feature')}
+          </div>
           <ul>
             {check.features.map((f) => {
-              const acts = actionsOf(review, f.key).filter((a) => a.state === "staged");
+              const acts = actionsOf(review, f.key).filter((a) => a.state === 'staged');
               const v = verdictOf(acts);
-              const size = (edit(acts, "size")?.value as string | undefined) ?? f.size;
-              const confirm = f.depends_on.some((d) => notFeasible.has(d)) ? "Depends on a feature judged not feasible" : null;
+              const size = (edit(acts, 'size')?.value as string | undefined) ?? f.size;
+              const confirm = f.depends_on.some((d) => notFeasible.has(d))
+                ? 'Depends on a feature judged not feasible'
+                : null;
               return (
-                <li key={f.key} data-testid="brief-row" data-feature={f.key} aria-current={f.key === selected ? "true" : undefined}>
+                <li
+                  key={f.key}
+                  data-testid="brief-row"
+                  data-feature={f.key}
+                  aria-current={f.key === selected ? 'true' : undefined}
+                >
                   <button
                     type="button"
                     onClick={() => open(f.key)}
                     className={`block w-full border-b border-line px-4 py-2.5 text-left hover:bg-surface2 ${
-                      f.key === selected ? "bg-accent-soft shadow-[inset_3px_0_0_var(--color-accent)] hover:bg-accent-soft" : ""
+                      f.key === selected
+                        ? 'bg-accent-soft shadow-[inset_3px_0_0_var(--color-accent)] hover:bg-accent-soft'
+                        : ''
                     }`}
                   >
                     <span className="flex items-baseline gap-2">
                       {/* detailed-b 3: the row's code with its name, never the raw key alone. */}
-                      <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{namedText(named(f.title, f.key))}</span>
-                      <span className="tnum text-sm font-semibold text-text2" data-testid="brief-size">
+                      <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
+                        {namedText(named(f.title, f.key))}
+                      </span>
+                      <span
+                        className="tnum text-sm font-semibold text-text2"
+                        data-testid="brief-size"
+                      >
                         <span className="sr-only">Size </span>
                         {size.toUpperCase()}
                       </span>
@@ -323,7 +415,11 @@ export function EngReview({
             onList={() => setReading(false)}
             reading={reading}
             codeMap={check.code_map_used}
-            titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? check.elsewhere?.[key] ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
+            titleOf={(key) =>
+              check.features.find((x) => x.key === key)?.title ??
+              check.elsewhere?.[key] ??
+              key.replace(/^f\./, '').replace(/[-_]+/g, ' ')
+            }
             acts={actionsOf(review, feature.key)}
             stages={stages}
             suggests={suggests}
@@ -331,7 +427,9 @@ export function EngReview({
             onAct={act}
             onStage={stage}
             drafts={drafts}
-            onDraft={(qid, text) => setDrafts((all) => ({ ...all, [`${feature.key}:${qid}`]: text }))}
+            onDraft={(qid, text) =>
+              setDrafts((all) => ({ ...all, [`${feature.key}:${qid}`]: text }))
+            }
             onAsk={(text) => {
               setNote((n) => (n.trim() ? `${n.trim()}\n${text}` : text));
               setSending(true);
@@ -348,8 +446,15 @@ export function EngReview({
         {error && <ErrorNote>{error}</ErrorNote>}
         {sending && decides && (
           <label className="mb-2 block">
-            <span className="mb-1 block text-sm font-semibold text-text2">Note to the architect</span>
-            <textarea className={`${INPUT} min-h-16`} value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note to the architect" />
+            <span className="mb-1 block text-sm font-semibold text-text2">
+              Note to the architect
+            </span>
+            <textarea
+              className={`${INPUT} min-h-16`}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              aria-label="Note to the architect"
+            />
           </label>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -364,8 +469,12 @@ export function EngReview({
                 </Chip>
               ))}
               {stagedNames.length > NAMED_STAGED && (
-                <Chip kind="acc" title={stagedNames.slice(NAMED_STAGED).join("\n")} data-testid="staged-more">
-                  {plural(stagedNames.length - NAMED_STAGED, "more change")}
+                <Chip
+                  kind="acc"
+                  title={stagedNames.slice(NAMED_STAGED).join('\n')}
+                  data-testid="staged-more"
+                >
+                  {plural(stagedNames.length - NAMED_STAGED, 'more change')}
                 </Chip>
               )}
             </span>
@@ -377,12 +486,17 @@ export function EngReview({
               <Button
                 variant="ghost"
                 disabled={busy || (sending && !note.trim())}
-                onClick={() => (sending ? void decide("changes_requested") : setSending(true))}
+                onClick={() => (sending ? void decide('changes_requested') : setSending(true))}
               >
                 Send back to architect
               </Button>
               {!unreadable && (
-                <Button variant="primary" disabled={busy || !gateOpen} title={approveWhy ?? undefined} onClick={() => void decide("approved")}>
+                <Button
+                  variant="primary"
+                  disabled={busy || !gateOpen}
+                  title={approveWhy ?? undefined}
+                  onClick={() => void decide('approved')}
+                >
                   Approve
                 </Button>
               )}
@@ -405,22 +519,30 @@ export function EngReview({
  * it (its features knob). While that run is live the check reads the feature as being added and
  * the item goes; a stopped run brings it back.
  */
-function NoPrd({ problems }: { problems: BriefsCheck["problems"] }) {
+function NoPrd({ problems }: { problems: BriefsCheck['problems'] }) {
   const { can } = useMe();
   const prds = usePrds();
   const [start, setStart] = useState<RunStart | null>(null);
   // A new run lets approvers in; adding to an existing PRD is the same new run.
-  const adds = can("create_run", true);
+  const adds = can('create_run', true);
   return (
-    <div role="status" data-testid="briefs-no-prd" className="mb-4 rounded-panel border border-warn bg-warn-bg px-4 py-3 text-[15px]">
+    <div
+      role="status"
+      data-testid="briefs-no-prd"
+      className="mb-4 rounded-panel border border-warn bg-warn-bg px-4 py-3 text-[15px]"
+    >
       <p className="font-semibold">Features in no PRD yet</p>
       <ul className="mt-1 space-y-1">
         {problems.map((p, i) => {
           // The API writes "<name> is in no PRD yet: <feature> depends on it".
-          const name = p.message.split(" is in no PRD yet")[0];
+          const name = p.message.split(' is in no PRD yet')[0];
           const features = p.entity ? [{ id: p.entity, title: name }] : [];
           return (
-            <li key={i} data-testid="no-prd-item" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <li
+              key={i}
+              data-testid="no-prd-item"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1"
+            >
               <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{p.message}</span>
               {adds && p.entity && (
                 <Menu label="Add it to a PRD" align="end">
@@ -433,7 +555,12 @@ function NoPrd({ problems }: { problems: BriefsCheck["problems"] }) {
                             className="block w-full rounded-button px-2 py-1.5 text-left hover:bg-surface2"
                             onClick={() => {
                               close();
-                              setStart({ flow: "baseline_to_prd", document: d.slug, title: `Add ${name} to ${d.title}`, features });
+                              setStart({
+                                flow: 'baseline_to_prd',
+                                document: d.slug,
+                                title: `Add ${name} to ${d.title}`,
+                                features,
+                              });
                             }}
                           >
                             {d.title}
@@ -446,7 +573,12 @@ function NoPrd({ problems }: { problems: BriefsCheck["problems"] }) {
                           className="block w-full rounded-button px-2 py-1.5 text-left font-semibold text-accent-ink hover:bg-surface2"
                           onClick={() => {
                             close();
-                            setStart({ flow: "baseline_to_prd", document: "", title: `Add ${name} to a new PRD`, features });
+                            setStart({
+                              flow: 'baseline_to_prd',
+                              document: '',
+                              title: `Add ${name} to a new PRD`,
+                              features,
+                            });
                           }}
                         >
                           New PRD
@@ -466,12 +598,23 @@ function NoPrd({ problems }: { problems: BriefsCheck["problems"] }) {
 }
 
 /** A list row's questions: the blocking ones the gate still holds Approve on, in its words, and how many are answered. */
-function QuestionCount({ feature: f, acts, reasons }: { feature: Feature; acts: Action[]; reasons: Reason[] }) {
+function QuestionCount({
+  feature: f,
+  acts,
+  reasons,
+}: {
+  feature: Feature;
+  acts: Action[];
+  reasons: Reason[];
+}) {
   if (!f.questions.length) return null;
   const answered = f.questions.filter((q) => edit(acts, `answer:${q.id}`)).length;
-  const blocking = reasons.filter((x) => x.code === "blocking_question");
+  const blocking = reasons.filter((x) => x.code === 'blocking_question');
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5 text-sm" data-testid="brief-questions">
+    <span
+      className="inline-flex flex-wrap items-center gap-1.5 text-sm"
+      data-testid="brief-questions"
+    >
       {blocking.length > 0 && (
         <Chip kind="crit" title={blocking[0].label}>
           {blocking.length} blocking
@@ -486,7 +629,13 @@ function QuestionCount({ feature: f, acts, reasons }: { feature: Feature; acts: 
 
 /** The gate's other reasons for a row (Not decided and the blocking chip say the rest), and a warning to confirm. */
 function Reasons({ reasons, confirm }: { reasons: Reason[]; confirm: string | null }) {
-  const labels = [...new Set(reasons.filter((x) => x.code !== "no_verdict" && x.code !== "blocking_question").map((x) => x.label))];
+  const labels = [
+    ...new Set(
+      reasons
+        .filter((x) => x.code !== 'no_verdict' && x.code !== 'blocking_question')
+        .map((x) => x.label),
+    ),
+  ];
   if (!labels.length && !confirm) return null;
   return (
     <span className="inline-flex flex-wrap gap-1.5" data-testid="brief-reasons">
@@ -560,20 +709,25 @@ function BriefPane({
   // EC1/EC2 b: the frames end the questions with the last card, so asking the architect is one
   // quiet link on that card's line (or after "None for this feature."), not a button below.
   const ask = stages ? (
-    <button type="button" data-testid="ask-architect" className="text-sm font-semibold whitespace-nowrap text-accent" onClick={() => onAsk(`${f.title}: `)}>
+    <button
+      type="button"
+      data-testid="ask-architect"
+      className="text-sm font-semibold whitespace-nowrap text-accent"
+      onClick={() => onAsk(`${f.title}: `)}
+    >
       Ask the architect
     </button>
   ) : null;
-  const verdict = edit(acts, "verdict");
+  const verdict = edit(acts, 'verdict');
   const current = verdict?.value as { verdict: Verdict; note?: string | null } | undefined;
   const [picking, setPicking] = useState<Verdict | null>(null);
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   // The answered questions whose box is open again (Change).
   const [editing, setEditing] = useState<Record<string, boolean>>({});
-  const draftOf = (qid: string) => drafts[`${f.key}:${qid}`] ?? "";
-  const size = (edit(acts, "size")?.value as string | undefined) ?? f.size;
+  const draftOf = (qid: string) => drafts[`${f.key}:${qid}`] ?? '';
+  const size = (edit(acts, 'size')?.value as string | undefined) ?? f.size;
   const need = VERDICTS.find((v) => v.value === picking)?.needs;
-  const suggestions = acts.filter((a) => a.state === "suggested");
+  const suggestions = acts.filter((a) => a.state === 'suggested');
   const answered = f.questions.filter((q) => edit(acts, `answer:${q.id}`)).length;
   // The picked verdict is filled in as soon as it is clicked, before its note is saved.
   const shown = picking ?? current?.verdict ?? null;
@@ -582,50 +736,80 @@ function BriefPane({
   const n = named(f.title, f.key);
 
   const pick = (v: Verdict) => {
-    if (v === "feasible") {
+    if (v === 'feasible') {
       setPicking(null);
-      void onAct({ item_key: f.key, kind: "edit", field: "verdict", value: { verdict: v, note: null } });
+      void onAct({
+        item_key: f.key,
+        kind: 'edit',
+        field: 'verdict',
+        value: { verdict: v, note: null },
+      });
     } else {
       setPicking(v);
-      setText(current?.verdict === v ? (current.note ?? "") : "");
+      setText(current?.verdict === v ? (current.note ?? '') : '');
     }
   };
 
   return (
     <article
-      className={`min-w-0 rounded-panel border border-line bg-surface min-[901px]:mb-4 ${reading ? "" : "max-[900px]:hidden"}`}
+      className={`min-w-0 rounded-panel border border-line bg-surface min-[901px]:mb-4 ${reading ? '' : 'max-[900px]:hidden'}`}
       data-testid="brief-inspector"
       aria-label={`Brief: ${f.title}`}
     >
       <header className="flex items-start gap-3 border-b border-line px-6 py-4 max-[600px]:px-4">
         <div className="min-w-0 flex-1">
-          <button type="button" className="mb-1 text-sm font-semibold text-accent min-[901px]:hidden" onClick={onList}>
+          <button
+            type="button"
+            className="mb-1 text-sm font-semibold text-accent min-[901px]:hidden"
+            onClick={onList}
+          >
             ‹ All features
           </button>
           <div className="text-[13px] font-semibold text-text2" data-testid="brief-position">
             Feature {at + 1} of {count}
-            {n.code && <span className="ml-2 font-mono font-normal [overflow-wrap:anywhere]">{n.code}</span>}
+            {n.code && (
+              <span className="ml-2 font-mono font-normal [overflow-wrap:anywhere]">{n.code}</span>
+            )}
           </div>
           <h2 className="font-display text-[22px] leading-7 font-bold">{n.name}</h2>
         </div>
         <div className="flex flex-none gap-1.5">
-          <Button variant="secondary" disabled={at === 0} onClick={() => onGo(at - 1)} aria-label="Previous feature">
+          <Button
+            variant="secondary"
+            disabled={at === 0}
+            onClick={() => onGo(at - 1)}
+            aria-label="Previous feature"
+          >
             ‹
           </Button>
-          <Button variant="secondary" disabled={at === count - 1} onClick={() => onGo(at + 1)} aria-label="Next feature">
+          <Button
+            variant="secondary"
+            disabled={at === count - 1}
+            onClick={() => onGo(at + 1)}
+            aria-label="Next feature"
+          >
             ›
           </Button>
         </div>
       </header>
 
-      <section data-testid="decide" className="border-b border-line bg-surface2 px-6 py-3.5 max-[600px]:px-4">
+      <section
+        data-testid="decide"
+        className="border-b border-line bg-surface2 px-6 py-3.5 max-[600px]:px-4"
+      >
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
           <div>
             <div className="mb-1.5 text-[13px] font-semibold text-text2">Verdict</div>
             {writes ? (
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Verdict">
                 {VERDICTS.map((v) => (
-                  <Button key={v.value} variant={shown === v.value ? "solid" : "secondary"} aria-pressed={shown === v.value} disabled={busy} onClick={() => pick(v.value)}>
+                  <Button
+                    key={v.value}
+                    variant={shown === v.value ? 'solid' : 'secondary'}
+                    aria-pressed={shown === v.value}
+                    disabled={busy}
+                    onClick={() => pick(v.value)}
+                  >
                     {v.label}
                   </Button>
                 ))}
@@ -642,28 +826,38 @@ function BriefPane({
                 size="sm"
                 items={SIZES.map((s) => ({ value: s, label: s.toUpperCase() }))}
                 value={size as (typeof SIZES)[number]}
-                onChange={(s) => void onAct({ item_key: f.key, kind: "edit", field: "size", value: s })}
+                onChange={(s) =>
+                  void onAct({ item_key: f.key, kind: 'edit', field: 'size', value: s })
+                }
               />
             ) : (
               <span className="tnum font-semibold">{size.toUpperCase()}</span>
             )}
-            <div className="mt-1 text-[12px] text-text2">Architect proposed {f.size.toUpperCase()}</div>
+            <div className="mt-1 text-[12px] text-text2">
+              Architect proposed {f.size.toUpperCase()}
+            </div>
           </div>
         </div>
-        {current && (verdict?.state === "suggested" || !writes) && (
+        {current && (verdict?.state === 'suggested' || !writes) && (
           <p className="mt-2" data-testid="verdict-now">
             <Chip kind={VERDICT_KIND[current.verdict]} wrap>
               {VERDICT_WORDS[current.verdict]}
-              {verdict?.state === "suggested" ? " (suggested)" : ""}
+              {verdict?.state === 'suggested' ? ' (suggested)' : ''}
             </Chip>
           </p>
         )}
         {current?.note && !picking && (
           <p className="mt-2 text-sm" data-testid="verdict-note">
-            <span className="font-semibold">{current.verdict === "not_feasible" ? "Why: " : "Changes: "}</span>
-            {current.note}{" "}
+            <span className="font-semibold">
+              {current.verdict === 'not_feasible' ? 'Why: ' : 'Changes: '}
+            </span>
+            {current.note}{' '}
             {writes && (
-              <button type="button" className="font-semibold text-accent" onClick={() => pick(current.verdict)}>
+              <button
+                type="button"
+                className="font-semibold text-accent"
+                onClick={() => pick(current.verdict)}
+              >
                 Change
               </button>
             )}
@@ -673,14 +867,24 @@ function BriefPane({
           <div className="mt-2.5 max-w-[640px] space-y-1.5">
             <label className="block">
               <span className="mb-1 block text-sm font-semibold text-text2">{need}</span>
-              <textarea className={`${INPUT} min-h-16`} aria-label={need} value={text} onChange={(e) => setText(e.target.value)} />
+              <textarea
+                className={`${INPUT} min-h-16`}
+                aria-label={need}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
             </label>
             <div className="flex gap-1.5">
               <Button
                 variant="primary"
                 disabled={busy || !text.trim()}
                 onClick={() => {
-                  void onAct({ item_key: f.key, kind: "edit", field: "verdict", value: { verdict: picking, note: text.trim() } }).then((saved) => saved && setPicking(null));
+                  void onAct({
+                    item_key: f.key,
+                    kind: 'edit',
+                    field: 'verdict',
+                    value: { verdict: picking, note: text.trim() },
+                  }).then((saved) => saved && setPicking(null));
                 }}
               >
                 Save verdict
@@ -698,8 +902,12 @@ function BriefPane({
               {suggestions.map((a) => (
                 <li key={a.id} className="flex items-center gap-2" data-testid="suggestion">
                   <span className="min-w-0 flex-1 truncate">
-                    {a.field === "verdict" ? VERDICT_WORDS[(a.value as { verdict: Verdict }).verdict] : a.field === "size" ? `Size ${String(a.value).toUpperCase()}` : String(a.value)}
-                    <span className="text-text2"> · {a.created_by?.name ?? "someone"}</span>
+                    {a.field === 'verdict'
+                      ? VERDICT_WORDS[(a.value as { verdict: Verdict }).verdict]
+                      : a.field === 'size'
+                        ? `Size ${String(a.value).toUpperCase()}`
+                        : String(a.value)}
+                    <span className="text-text2"> · {a.created_by?.name ?? 'someone'}</span>
                   </span>
                   {stages && (
                     <Button disabled={busy} onClick={() => void onStage(a.id)}>
@@ -713,7 +921,13 @@ function BriefPane({
         )}
       </section>
 
-      <PaneSection label={f.questions.length ? `Architect's questions · ${answered} of ${f.questions.length} answered` : "Architect's questions"}>
+      <PaneSection
+        label={
+          f.questions.length
+            ? `Architect's questions · ${answered} of ${f.questions.length} answered`
+            : "Architect's questions"
+        }
+      >
         {f.questions.length === 0 && (
           <p className="flex flex-wrap items-baseline gap-x-3">
             <span className="text-text2">None for this feature.</span>
@@ -727,7 +941,12 @@ function BriefPane({
               const open = writes && (!answer || editing[q.id]);
               const done = !!answer && !open;
               return (
-                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className="rounded-md border border-line px-3 py-2.5">
+                <li
+                  key={q.id}
+                  data-testid="brief-question"
+                  data-answered={answer ? 'true' : 'false'}
+                  className="rounded-md border border-line px-3 py-2.5"
+                >
                   <p className="flex items-start gap-1.5">
                     {done ? (
                       // detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium.
@@ -739,16 +958,18 @@ function BriefPane({
                     ) : (
                       <Chip kind="na">Question</Chip>
                     )}
-                    <span className={done ? "text-text2" : "font-semibold"}>{q.question}</span>
-                    {qi === f.questions.length - 1 && ask && <span className="ml-auto flex-none pl-3">{ask}</span>}
+                    <span className={done ? 'text-text2' : 'font-semibold'}>{q.question}</span>
+                    {qi === f.questions.length - 1 && ask && (
+                      <span className="ml-auto flex-none pl-3">{ask}</span>
+                    )}
                   </p>
                   {done && (
                     <p className="mt-1 ml-5 text-[15px]" data-testid="answer">
-                      {String(answer.value)}{" "}
+                      {String(answer.value)}{' '}
                       <span className="text-sm text-text2">
-                        · {answer.state === "suggested" ? "Suggested by " : ""}
-                        {answer.updated_by?.name ?? answer.created_by?.name ?? "someone"}
-                      </span>{" "}
+                        · {answer.state === 'suggested' ? 'Suggested by ' : ''}
+                        {answer.updated_by?.name ?? answer.created_by?.name ?? 'someone'}
+                      </span>{' '}
                       {writes && (
                         <button
                           type="button"
@@ -776,9 +997,14 @@ function BriefPane({
                       <Button
                         disabled={busy || !draftOf(q.id).trim()}
                         onClick={() =>
-                          void onAct({ item_key: f.key, kind: "edit", field: `answer:${q.id}`, value: draftOf(q.id).trim() }).then((saved) => {
+                          void onAct({
+                            item_key: f.key,
+                            kind: 'edit',
+                            field: `answer:${q.id}`,
+                            value: draftOf(q.id).trim(),
+                          }).then((saved) => {
                             if (!saved) return;
-                            onDraft(q.id, "");
+                            onDraft(q.id, '');
                             setEditing((all) => ({ ...all, [q.id]: false }));
                           })
                         }
@@ -786,7 +1012,10 @@ function BriefPane({
                         Answer
                       </Button>
                       {answer && (
-                        <Button variant="ghost" onClick={() => setEditing((all) => ({ ...all, [q.id]: false }))}>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setEditing((all) => ({ ...all, [q.id]: false }))}
+                        >
                           Cancel
                         </Button>
                       )}
@@ -802,12 +1031,14 @@ function BriefPane({
       <PaneSection label="Approach">
         <div className="max-w-[72ch] space-y-1.5 text-[15px] leading-6">
           {f.approach
-            .split("\n")
+            .split('\n')
             .filter((t) => t.trim())
             .map((t, i) => (
               <p key={i}>{t}</p>
             ))}
-          {f.depends_on.length > 0 && <p className="text-sm text-text2">Depends on {f.depends_on.map(titleOf).join(", ")}</p>}
+          {f.depends_on.length > 0 && (
+            <p className="text-sm text-text2">Depends on {f.depends_on.map(titleOf).join(', ')}</p>
+          )}
           {!codeMap && (
             <p className="text-sm text-text2" data-testid="brief-guess">
               {NO_CODE_MAP}

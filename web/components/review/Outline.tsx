@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   useCallback,
@@ -11,13 +11,13 @@ import {
   type MouseEvent,
   type ReactNode,
   type RefObject,
-} from "react";
+} from 'react';
 
-import { Button, FilterChips, Icon, MARK_LABEL } from "@/components/ds";
-import { Kbd, SectionMark, sectionMark } from "@/components/review/parts";
-import type { SectionOut } from "@/lib/api/client";
-import { sectionHref } from "@/lib/section-link";
-import { useViewportFit } from "@/lib/use-viewport-fit";
+import { Button, FilterChips, Icon, MARK_LABEL } from '@/components/ds';
+import { Kbd, SectionMark, sectionMark } from '@/components/review/parts';
+import type { SectionOut } from '@/lib/api/client';
+import { sectionHref } from '@/lib/section-link';
+import { useViewportFit } from '@/lib/use-viewport-fit';
 
 /*
  * PRD page navigation (I3, owner 2026-10-20): the outline rail left of the section card
@@ -26,7 +26,7 @@ import { useViewportFit } from "@/lib/use-viewport-fit";
  * name, and an open-feedback count; a filter box and All / To review / With feedback chips.
  */
 
-export type OutlineChip = "all" | "review" | "feedback";
+export type OutlineChip = 'all' | 'review' | 'feedback';
 
 type OutlineNode = {
   s: SectionOut;
@@ -44,7 +44,10 @@ type OutlineNode = {
 export function buildOutline(sections: SectionOut[]): OutlineNode[] {
   // reduce, not Math.min(...spread): no argument limit on a long document.
   const top = sections.reduce((m, s) => Math.min(m, s.level), Infinity);
-  const titled = sections.length > 1 && sections[0].level === top && sections.filter((s) => s.level === top).length === 1;
+  const titled =
+    sections.length > 1 &&
+    sections[0].level === top &&
+    sections.filter((s) => s.level === top).length === 1;
   const nodes: OutlineNode[] = [];
   const stack: OutlineNode[] = [];
   sections.forEach((s, i) => {
@@ -53,7 +56,13 @@ export function buildOutline(sections: SectionOut[]): OutlineNode[] {
       return;
     }
     while (stack.length && stack[stack.length - 1].s.level >= s.level) stack.pop();
-    const node: OutlineNode = { s, depth: stack.length, parent: stack.at(-1)?.s.section_key ?? null, subtree: [s.section_key], hasChildren: false };
+    const node: OutlineNode = {
+      s,
+      depth: stack.length,
+      parent: stack.at(-1)?.s.section_key ?? null,
+      subtree: [s.section_key],
+      hasChildren: false,
+    };
     for (const a of stack) a.subtree.push(s.section_key);
     if (stack.length) stack[stack.length - 1].hasChildren = true;
     stack.push(node);
@@ -64,7 +73,7 @@ export function buildOutline(sections: SectionOut[]): OutlineNode[] {
 
 function ancestorsOf(nodes: Map<string, OutlineNode>, key: string | null): Set<string> {
   const out = new Set<string>();
-  let k = key ? nodes.get(key)?.parent ?? null : null;
+  let k = key ? (nodes.get(key)?.parent ?? null) : null;
   while (k) {
     out.add(k);
     k = nodes.get(k)?.parent ?? null;
@@ -74,8 +83,8 @@ function ancestorsOf(nodes: Map<string, OutlineNode>, key: string | null): Set<s
 
 /** The filter box and chips' state, one per list. */
 export function useOutlineFilter() {
-  const [query, setQuery] = useState("");
-  const [chip, setChip] = useState<OutlineChip>("all");
+  const [query, setQuery] = useState('');
+  const [chip, setChip] = useState<OutlineChip>('all');
   return { query, setQuery, chip, setChip };
 }
 export type OutlineFilterState = ReturnType<typeof useOutlineFilter>;
@@ -104,7 +113,8 @@ function revealIn(box: HTMLElement | null, el: HTMLElement | null) {
   else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
 }
 
-const plainClick = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+const plainClick = (e: MouseEvent) =>
+  e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
 /** The filter box and the chips above a list. */
 export function OutlineFilters({
@@ -134,7 +144,7 @@ export function OutlineFilters({
   const toReview = shown.filter((s) => !s.verdict).length;
   const withFeedback = shown.filter((s) => (openCounts.get(s.section_key) ?? 0) > 0).length;
   return (
-    <div className={`flex flex-col gap-2 ${compact ? "" : "px-3"}`}>
+    <div className={`flex flex-col gap-2 ${compact ? '' : 'px-3'}`}>
       <label className="relative flex items-center">
         <span className="sr-only">Filter sections</span>
         <span aria-hidden className="pointer-events-none absolute left-2.5 text-text2">
@@ -143,15 +153,15 @@ export function OutlineFilters({
         <input
           ref={inputRef}
           type="search"
-          data-autofocus={autoFocus ? "" : undefined}
+          data-autofocus={autoFocus ? '' : undefined}
           autoFocus={autoFocus}
           value={filter.query}
           onChange={(e) => filter.setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") {
+            if (e.key === 'ArrowDown') {
               e.preventDefault();
               onArrowDown?.();
-            } else if (e.key === "Enter") {
+            } else if (e.key === 'Enter') {
               e.preventDefault();
               onEnter?.();
             }
@@ -171,9 +181,14 @@ export function OutlineFilters({
         value={filter.chip}
         onChange={filter.setChip}
         items={[
-          { value: "all", label: "All", count: shown.length, testId: "chip-all" },
-          { value: "review", label: "To review", count: toReview, testId: "chip-review" },
-          { value: "feedback", label: "With feedback", count: withFeedback, testId: "chip-feedback" },
+          { value: 'all', label: 'All', count: shown.length, testId: 'chip-all' },
+          { value: 'review', label: 'To review', count: toReview, testId: 'chip-review' },
+          {
+            value: 'feedback',
+            label: 'With feedback',
+            count: withFeedback,
+            testId: 'chip-feedback',
+          },
         ]}
       />
     </div>
@@ -199,7 +214,7 @@ export function OutlineList({
   listRef,
   tall = false,
 }: ListProps & {
-  mode: "tree" | "flat";
+  mode: 'tree' | 'flat';
   /** The scrolling box the current row is kept in view within. */
   scrollRef: RefObject<HTMLElement | null>;
   listRef?: RefObject<HTMLUListElement | null>;
@@ -241,10 +256,10 @@ export function OutlineList({
   const q = filter.query.trim().toLowerCase();
   const matches = (s: SectionOut) =>
     (!q || s.heading.toLowerCase().includes(q)) &&
-    (filter.chip === "all" ||
-      (filter.chip === "review" && !s.verdict) ||
-      (filter.chip === "feedback" && (openCounts.get(s.section_key) ?? 0) > 0));
-  const filtering = !!q || filter.chip !== "all";
+    (filter.chip === 'all' ||
+      (filter.chip === 'review' && !s.verdict) ||
+      (filter.chip === 'feedback' && (openCounts.get(s.section_key) ?? 0) > 0));
+  const filtering = !!q || filter.chip !== 'all';
 
   // Rows on screen: when filtering, the matches with their chapters (for context), all open.
   const rows = useMemo(() => {
@@ -257,7 +272,7 @@ export function OutlineList({
       }
       return nodes.filter((nd) => keep.has(nd.s.section_key));
     }
-    if (mode === "flat") return nodes;
+    if (mode === 'flat') return nodes;
     return nodes.filter((nd) => [...ancestorsOf(byKey, nd.s.section_key)].every(isOpen));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, byKey, filtering, q, filter.chip, openCounts, mode, folds, current]);
@@ -265,11 +280,14 @@ export function OutlineList({
   // Keep the current row in view inside the list's own scroll (never scrolling the page).
   useLayoutEffect(() => {
     if (!openKey) return;
-    revealIn(scrollRef.current, ul.current?.querySelector<HTMLElement>(`[data-outline-key="${CSS.escape(openKey)}"]`) ?? null);
+    revealIn(
+      scrollRef.current,
+      ul.current?.querySelector<HTMLElement>(`[data-outline-key="${CSS.escape(openKey)}"]`) ?? null,
+    );
   }, [openKey, rows, scrollRef, ul]);
 
   const onKey = (e: KeyboardEvent<HTMLUListElement>) => {
-    const links = [...(ul.current?.querySelectorAll<HTMLElement>("a[data-outline-key]") ?? [])];
+    const links = [...(ul.current?.querySelectorAll<HTMLElement>('a[data-outline-key]') ?? [])];
     const at = links.indexOf(document.activeElement as HTMLElement);
     if (at < 0) return;
     const go = (i: number) => {
@@ -277,32 +295,38 @@ export function OutlineList({
       e.stopPropagation();
       links[Math.max(0, Math.min(links.length - 1, i))]?.focus();
     };
-    if (e.key === "ArrowDown") go(at + 1);
-    else if (e.key === "ArrowUp") go(at - 1);
-    else if (e.key === "Home") go(0);
-    else if (e.key === "End") go(links.length - 1);
-    else if (mode === "tree" && !filtering && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+    if (e.key === 'ArrowDown') go(at + 1);
+    else if (e.key === 'ArrowUp') go(at - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(links.length - 1);
+    else if (mode === 'tree' && !filtering && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const key = links[at].dataset.outlineKey!;
       const nd = byKey.get(key);
       if (!nd) return;
       e.preventDefault();
-      if (e.key === "ArrowRight" && nd.hasChildren) toggle(key, true);
-      else if (e.key === "ArrowLeft" && nd.hasChildren && isOpen(key)) toggle(key, false);
-      else if (e.key === "ArrowLeft" && nd.parent) ul.current?.querySelector<HTMLElement>(`a[data-outline-key="${CSS.escape(nd.parent)}"]`)?.focus();
+      if (e.key === 'ArrowRight' && nd.hasChildren) toggle(key, true);
+      else if (e.key === 'ArrowLeft' && nd.hasChildren && isOpen(key)) toggle(key, false);
+      else if (e.key === 'ArrowLeft' && nd.parent)
+        ul.current
+          ?.querySelector<HTMLElement>(`a[data-outline-key="${CSS.escape(nd.parent)}"]`)
+          ?.focus();
     }
   };
 
   if (rows.length === 0) {
     return (
       // qa-docs-49: a filter with no match says so and offers the way back.
-      <p className="flex flex-wrap items-center justify-center gap-x-1.5 px-4 py-6 text-center text-sm text-text2" data-testid="outline-empty">
+      <p
+        className="flex flex-wrap items-center justify-center gap-x-1.5 px-4 py-6 text-center text-sm text-text2"
+        data-testid="outline-empty"
+      >
         No sections match ·
         <button
           type="button"
           data-testid="outline-clear-filter"
           onClick={() => {
-            filter.setQuery("");
-            filter.setChip("all");
+            filter.setQuery('');
+            filter.setChip('all');
           }}
           className="font-semibold text-accent-ink underline underline-offset-2"
         >
@@ -313,40 +337,48 @@ export function OutlineList({
   }
 
   return (
-    <ul ref={ul} aria-label="Sections" className="flex flex-col py-1" onKeyDown={onKey} data-testid="outline-list">
+    <ul
+      ref={ul}
+      aria-label="Sections"
+      className="flex flex-col py-1"
+      onKeyDown={onKey}
+      data-testid="outline-list"
+    >
       {rows.map((nd) => {
         const s = nd.s;
         const key = s.section_key;
         const on = key === openKey;
-        const folded = mode === "tree" && !filtering && nd.hasChildren && !isOpen(key);
+        const folded = mode === 'tree' && !filtering && nd.hasChildren && !isOpen(key);
         const count = folded
           ? nd.subtree.reduce((sum, k) => sum + (openCounts.get(k) ?? 0), 0)
-          : openCounts.get(key) ?? 0;
+          : (openCounts.get(key) ?? 0);
         const reviewed = nd.subtree.filter((k) => byKey.get(k)?.s.verdict).length;
         const chapter = nd.hasChildren;
         const dimmed = filtering && !matches(s);
-        const indent = mode === "tree" ? nd.depth * 14 : chapter ? 0 : Math.min(nd.depth, 3) * 14;
+        const indent = mode === 'tree' ? nd.depth * 14 : chapter ? 0 : Math.min(nd.depth, 3) * 14;
         const state = sectionMark(s.verdict?.verdict, closed, Boolean(s.verdict?.lapsed_at));
         return (
           <li
             key={s.id}
-            className={`relative mx-1.5 flex items-center rounded-lg ${tall ? "min-h-11" : "min-h-8"} ${
-              on ? "bg-accent-soft before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-[2px] before:bg-accent before:content-['']" : "hover:bg-surface2"
+            className={`relative mx-1.5 flex items-center rounded-lg ${tall ? 'min-h-11' : 'min-h-8'} ${
+              on
+                ? "bg-accent-soft before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-[2px] before:bg-accent before:content-['']"
+                : 'hover:bg-surface2'
             }`}
             style={{ paddingLeft: indent }}
           >
-            {mode === "tree" &&
+            {mode === 'tree' &&
               (chapter && !filtering ? (
                 <button
                   type="button"
                   tabIndex={-1}
                   aria-expanded={!folded}
-                  aria-label={`${folded ? "Unfold" : "Fold"} ${s.heading}`}
+                  aria-label={`${folded ? 'Unfold' : 'Fold'} ${s.heading}`}
                   data-testid="outline-fold"
                   onClick={() => toggle(key)}
                   className="grid size-6 flex-none place-items-center rounded-md text-text2 hover:bg-surface2 hover:text-text"
                 >
-                  <Icon name={folded ? "chevron-right" : "chevron-down"} size={16} />
+                  <Icon name={folded ? 'chevron-right' : 'chevron-down'} size={16} />
                 </button>
               ) : (
                 <span aria-hidden className="w-6 flex-none" />
@@ -356,8 +388,8 @@ export function OutlineList({
               data-outline-key={key}
               data-state={state}
               data-folded={folded || undefined}
-              aria-current={on ? "true" : undefined}
-              aria-label={`${s.heading}, ${MARK_LABEL[state]}${count ? `, ${count} open feedback` : ""}${folded ? `, ${reviewed} of ${nd.subtree.length} reviewed` : ""}`}
+              aria-current={on ? 'true' : undefined}
+              aria-label={`${s.heading}, ${MARK_LABEL[state]}${count ? `, ${count} open feedback` : ''}${folded ? `, ${reviewed} of ${nd.subtree.length} reviewed` : ''}`}
               title={s.heading}
               data-own-nav
               onClick={(e) => {
@@ -365,18 +397,25 @@ export function OutlineList({
                 e.preventDefault();
                 onSelect(key);
               }}
-              className={`flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-lg pr-2 ${mode === "tree" ? "pl-1" : "pl-2.5"} text-sm ${
-                tall ? "text-[15px]" : ""
-              } ${chapter && mode === "flat" ? "font-bold" : chapter ? "font-semibold" : "font-medium"} ${
-                on ? "text-text" : dimmed ? "text-text2" : "text-text"
+              className={`flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-lg pr-2 ${mode === 'tree' ? 'pl-1' : 'pl-2.5'} text-sm ${
+                tall ? 'text-[15px]' : ''
+              } ${chapter && mode === 'flat' ? 'font-bold' : chapter ? 'font-semibold' : 'font-medium'} ${
+                on ? 'text-text' : dimmed ? 'text-text2' : 'text-text'
               }`}
             >
-              <SectionMark verdict={s.verdict?.verdict} closed={closed} lapsed={Boolean(s.verdict?.lapsed_at)} />
+              <SectionMark
+                verdict={s.verdict?.verdict}
+                closed={closed}
+                lapsed={Boolean(s.verdict?.lapsed_at)}
+              />
               <span className="min-w-0 flex-1 truncate" data-testid="outline-name">
                 {s.heading}
               </span>
               {folded && (
-                <span className="tnum flex-none text-[13px] font-medium text-text2" data-testid="outline-folded-count">
+                <span
+                  className="tnum flex-none text-[13px] font-medium text-text2"
+                  data-testid="outline-folded-count"
+                >
                   {reviewed}/{nd.subtree.length}
                 </span>
               )}
@@ -404,7 +443,7 @@ export function ReviewProgress({
   reviewed,
   total,
   compact = false,
-  noun = "sections",
+  noun = 'sections',
 }: {
   reviewed: number;
   total: number;
@@ -414,12 +453,14 @@ export function ReviewProgress({
   const what = `${noun} reviewed`;
   return (
     <div
-      className={`flex flex-col gap-1 ${compact ? "min-w-24" : "min-w-0"}`}
+      className={`flex flex-col gap-1 ${compact ? 'min-w-24' : 'min-w-0'}`}
       data-testid="review-progress"
       title={compact ? `${reviewed} of ${total} ${what}` : undefined}
     >
-      <span className={`tnum text-[13px] leading-4 font-semibold text-text2 ${compact ? "whitespace-nowrap" : ""}`}>
-        <b className="font-bold text-text">{reviewed}</b> of {total} {compact ? "reviewed" : what}
+      <span
+        className={`tnum text-[13px] leading-4 font-semibold text-text2 ${compact ? 'whitespace-nowrap' : ''}`}
+      >
+        <b className="font-bold text-text">{reviewed}</b> of {total} {compact ? 'reviewed' : what}
       </span>
       <span
         role="progressbar"
@@ -429,22 +470,25 @@ export function ReviewProgress({
         aria-valuenow={reviewed}
         className="block h-1.5 overflow-hidden rounded-full bg-surface2"
       >
-        <span className="block h-full rounded-full bg-pass" style={{ width: `${total ? (reviewed / total) * 100 : 0}%` }} />
+        <span
+          className="block h-full rounded-full bg-pass"
+          style={{ width: `${total ? (reviewed / total) * 100 : 0}%` }}
+        />
       </span>
     </div>
   );
 }
 
-const COLLAPSE_KEY = "oracle-outline-collapsed";
+const COLLAPSE_KEY = 'oracle-outline-collapsed';
 
 /** The rail's collapsed state, remembered per user in localStorage. */
 export function useRailCollapsed(userId: string | null): [boolean, (v: boolean) => void] {
-  const key = `${COLLAPSE_KEY}:${userId ?? "anon"}`;
+  const key = `${COLLAPSE_KEY}:${userId ?? 'anon'}`;
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     try {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCollapsed(localStorage.getItem(key) === "1");
+      setCollapsed(localStorage.getItem(key) === '1');
     } catch {
       // Storage refused (private mode): the rail starts open.
     }
@@ -453,7 +497,7 @@ export function useRailCollapsed(userId: string | null): [boolean, (v: boolean) 
     (v: boolean) => {
       setCollapsed(v);
       try {
-        if (v) localStorage.setItem(key, "1");
+        if (v) localStorage.setItem(key, '1');
         else localStorage.removeItem(key);
       } catch {
         // Not remembered this time.
@@ -474,9 +518,9 @@ export function OutlineRail({
   const list = useRef<HTMLUListElement>(null);
   const nav = useRef<HTMLElement>(null);
   // Sticky under the header and never taller than the viewport below its top.
-  useViewportFit(nav, "(min-width: 1280px)");
+  useViewportFit(nav, '(min-width: 1280px)');
   const reviewed = props.sections.filter((s) => s.verdict).length;
-  const firstRow = () => list.current?.querySelector<HTMLElement>("a[data-outline-key]");
+  const firstRow = () => list.current?.querySelector<HTMLElement>('a[data-outline-key]');
   return (
     <nav
       ref={nav}
@@ -511,7 +555,11 @@ export function OutlineRail({
           onEnter={() => firstRow()?.click()}
         />
       </div>
-      <div ref={scroll} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="outline-scroll">
+      <div
+        ref={scroll}
+        className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        data-testid="outline-scroll"
+      >
         <OutlineList {...props} mode="tree" scrollRef={scroll} listRef={list} />
       </div>
     </nav>
@@ -536,7 +584,13 @@ export function ShowOutlineButton({ onClick }: { onClick: () => void }) {
 
 /** The listbox popover: fixed, kept fully inside the viewport. */
 function usePopoverBox(open: boolean, trigger: RefObject<HTMLElement | null>) {
-  const [box, setBox] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
+  const [box, setBox] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
@@ -548,20 +602,21 @@ function usePopoverBox(open: boolean, trigger: RefObject<HTMLElement | null>) {
       const left = Math.max(12, Math.min(t.left, vw - width - 12));
       const below = vh - t.bottom - 18;
       const above = t.top - 18;
-      if (below >= 280 || below >= above) setBox({ top: t.bottom + 6, left, width, maxHeight: Math.max(160, below) });
+      if (below >= 280 || below >= above)
+        setBox({ top: t.bottom + 6, left, width, maxHeight: Math.max(160, below) });
       else setBox({ bottom: vh - t.top + 6, left, width, maxHeight: above });
     };
     // Scrolling the popover's own list does not move its trigger: only other scrolls place it again.
     const onScroll = (e: Event) => {
-      if (e.target instanceof Element && e.target.closest("[data-testid=switcher-popover]")) return;
+      if (e.target instanceof Element && e.target.closest('[data-testid=switcher-popover]')) return;
       place();
     };
     place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open, trigger]);
   return box;
@@ -609,7 +664,7 @@ export function SectionSwitcher({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         close();
@@ -619,24 +674,24 @@ export function SectionSwitcher({
       const t = e.target as Node;
       if (pop.current?.contains(t) || trigger.current?.contains(t)) return;
       // Focus goes back to the trigger unless the click lands on something focusable.
-      const focusable = (t as Element).closest?.("a, button, input, select, textarea, [tabindex]");
+      const focusable = (t as Element).closest?.('a, button, input, select, textarea, [tabindex]');
       close(!focusable);
     };
-    document.addEventListener("keydown", onKey, true);
-    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown, true);
     return () => {
-      document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onDown, true);
     };
   }, [open, close]);
 
-  const firstRow = () => list.current?.querySelector<HTMLElement>("a[data-outline-key]");
-  const step = (s: SectionOut | null, dir: "prev" | "next") =>
+  const firstRow = () => list.current?.querySelector<HTMLElement>('a[data-outline-key]');
+  const step = (s: SectionOut | null, dir: 'prev' | 'next') =>
     s ? (
       <a
         href={sectionHref(props.doc, props.n, s.section_key)}
         rel={dir}
-        aria-label={`${dir === "prev" ? "Previous" : "Next"} section: ${s.heading}`}
+        aria-label={`${dir === 'prev' ? 'Previous' : 'Next'} section: ${s.heading}`}
         title={s.heading}
         data-own-nav
         onClick={(e) => {
@@ -646,11 +701,11 @@ export function SectionSwitcher({
         }}
         className="grid size-9 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text"
       >
-        <Icon name={dir === "prev" ? "chevron-left" : "chevron-right"} size={20} />
+        <Icon name={dir === 'prev' ? 'chevron-left' : 'chevron-right'} size={20} />
       </a>
     ) : (
       <span aria-hidden className="grid size-9 flex-none place-items-center text-line-strong">
-        <Icon name={dir === "prev" ? "chevron-left" : "chevron-right"} size={20} />
+        <Icon name={dir === 'prev' ? 'chevron-left' : 'chevron-right'} size={20} />
       </span>
     );
 
@@ -661,34 +716,57 @@ export function SectionSwitcher({
     >
       <div className="flex min-w-0 flex-1 basis-80 items-center gap-1">
         {leading}
-        {step(prev, "prev")}
+        {step(prev, 'prev')}
         <button
           ref={trigger}
           type="button"
           aria-haspopup="dialog"
           aria-expanded={open}
-          aria-label={current ? `Section ${index} of ${props.sections.length}: ${current.heading}. Choose a section` : "Choose a section"}
+          aria-label={
+            current
+              ? `Section ${index} of ${props.sections.length}: ${current.heading}. Choose a section`
+              : 'Choose a section'
+          }
           data-testid="switcher-trigger"
           onClick={() => (open ? close() : setOpen(true))}
           className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left hover:bg-surface2"
         >
-          {current && <SectionMark verdict={current.verdict?.verdict} closed={props.closed} lapsed={Boolean(current.verdict?.lapsed_at)} />}
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text" title={current?.heading}>
-            {current?.heading ?? "Sections"}
+          {current && (
+            <SectionMark
+              verdict={current.verdict?.verdict}
+              closed={props.closed}
+              lapsed={Boolean(current.verdict?.lapsed_at)}
+            />
+          )}
+          <span
+            className="min-w-0 flex-1 truncate text-sm font-semibold text-text"
+            title={current?.heading}
+          >
+            {current?.heading ?? 'Sections'}
           </span>
-          <span className="tnum flex-none text-[13px] font-semibold text-text2" data-testid="switcher-index">
+          <span
+            className="tnum flex-none text-[13px] font-semibold text-text2"
+            data-testid="switcher-index"
+          >
             {index} of {props.sections.length}
           </span>
           <Icon name="chevron-down" size={16} className="text-text2" />
         </button>
-        {step(next, "next")}
+        {step(next, 'next')}
       </div>
       <div className="flex flex-none items-center gap-3">
-        <ReviewProgress reviewed={reviewed} total={props.sections.length} noun={props.noun} compact />
+        <ReviewProgress
+          reviewed={reviewed}
+          total={props.sections.length}
+          noun={props.noun}
+          compact
+        />
         <Button
           disabled={!nextToReview}
           onClick={() => nextToReview && props.onSelect(nextToReview.section_key)}
-          aria-label={nextToReview ? `Next to review: ${nextToReview.heading}` : "Nothing left to review"}
+          aria-label={
+            nextToReview ? `Next to review: ${nextToReview.heading}` : 'Nothing left to review'
+          }
           data-testid="next-to-review"
         >
           Next to review
@@ -703,7 +781,13 @@ export function SectionSwitcher({
           aria-label="Choose a section"
           data-testid="switcher-popover"
           className="fixed z-50 flex min-h-0 flex-col overflow-hidden rounded-panel border border-line bg-surface text-text shadow-tip"
-          style={{ top: box.top, bottom: box.bottom, left: box.left, width: box.width, maxHeight: box.maxHeight }}
+          style={{
+            top: box.top,
+            bottom: box.bottom,
+            left: box.left,
+            width: box.width,
+            maxHeight: box.maxHeight,
+          }}
         >
           <div className="flex-none border-b border-line py-3">
             <OutlineFilters
@@ -727,7 +811,10 @@ export function SectionSwitcher({
               }}
             />
           </div>
-          <p className="flex-none border-t border-line px-3 py-2 text-[13px] text-text2" data-testid="switcher-hints">
+          <p
+            className="flex-none border-t border-line px-3 py-2 text-[13px] text-text2"
+            data-testid="switcher-hints"
+          >
             ↑↓ move · ↵ open · j k next/previous
           </p>
         </div>
@@ -740,7 +827,7 @@ export function SectionSwitcher({
 export function SectionsSheetBody(props: ListProps & { header?: ReactNode }) {
   const scroll = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  const firstRow = () => list.current?.querySelector<HTMLElement>("a[data-outline-key]");
+  const firstRow = () => list.current?.querySelector<HTMLElement>('a[data-outline-key]');
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-2.5 border-b border-line py-3">
@@ -753,7 +840,11 @@ export function SectionsSheetBody(props: ListProps & { header?: ReactNode }) {
           onEnter={() => firstRow()?.click()}
         />
       </div>
-      <div ref={scroll} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="sheet-sections-scroll">
+      <div
+        ref={scroll}
+        className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        data-testid="sheet-sections-scroll"
+      >
         <OutlineList {...props} mode="flat" tall scrollRef={scroll} listRef={list} />
       </div>
     </div>

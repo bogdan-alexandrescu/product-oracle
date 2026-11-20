@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { login } from "./helpers";
+import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
+import { login } from './helpers';
 
 /*
  * INT2: reading an intake again is capped per Company day (owner decision 2026-10-26, on
@@ -16,41 +16,45 @@ import { login } from "./helpers";
  *   the button gives no reason; no_claim=the API's own count (api/tests/test_intake_read_cap.py).
  */
 
-const CAPPED = "This intake was read 3 times today; read it again tomorrow";
+const CAPPED = 'This intake was read 3 times today; read it again tomorrow';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    if (!localStorage.getItem("po-mock-scenario")) localStorage.setItem("po-mock-scenario", "before-drafting");
+    if (!localStorage.getItem('po-mock-scenario'))
+      localStorage.setItem('po-mock-scenario', 'before-drafting');
   });
 });
 
-const readLine = (page: Page) => page.getByTestId("intake-read");
-const readAgain = (page: Page) => readLine(page).getByRole("button", { name: "Read the brief again" });
+const readLine = (page: Page) => page.getByTestId('intake-read');
+const readAgain = (page: Page) =>
+  readLine(page).getByRole('button', { name: 'Read the brief again' });
 
-test("read again until the cap: the fourth read waits for tomorrow, and says so", async ({ page }) => {
+test('read again until the cap: the fourth read waits for tomorrow, and says so', async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
+  await expect(page.getByRole('heading', { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
 
   // The read on create finished; it is not one of today's three.
-  await expect(readLine(page)).toContainText("Oracle assumed");
+  await expect(readLine(page)).toContainText('Oracle assumed');
   await expect(readAgain(page)).toBeEnabled();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 analyses left today");
+  await expect(readLine(page).getByTestId('intake-read-count')).toHaveText('3 analyses left today');
 
   await readAgain(page).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 analyses left today");
+  await expect(readLine(page).getByTestId('intake-read-count')).toHaveText('2 analyses left today');
   await readAgain(page).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("1 analysis left today");
+  await expect(readLine(page).getByTestId('intake-read-count')).toHaveText('1 analysis left today');
   await expect(readAgain(page)).toBeEnabled();
   await expect(readLine(page)).not.toContainText(CAPPED);
 
   await readAgain(page).click();
   await expect(readAgain(page)).toBeDisabled();
-  await expect(readLine(page).getByTestId("intake-read-capped")).toHaveText(CAPPED);
-  await expect(readAgain(page)).toHaveAttribute("title", CAPPED);
+  await expect(readLine(page).getByTestId('intake-read-capped')).toHaveText(CAPPED);
+  await expect(readAgain(page)).toHaveAttribute('title', CAPPED);
 
   // It holds across a reload: the count is the mock API's, not the page's.
   await page.reload();
   await expect(readAgain(page)).toBeDisabled();
-  await expect(readLine(page).getByTestId("intake-read-capped")).toHaveText(CAPPED);
+  await expect(readLine(page).getByTestId('intake-read-capped')).toHaveText(CAPPED);
 });

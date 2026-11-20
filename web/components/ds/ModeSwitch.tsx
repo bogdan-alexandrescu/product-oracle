@@ -1,17 +1,24 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter } from "next/navigation";
-import { useLayoutEffect } from "react";
+import { usePathname, useRouter } from 'next/navigation';
+import { useLayoutEffect } from 'react';
 
-import { DETAILED_HOME, modeOf, SIMPLE_HOME, saveMode, switchTarget, type Mode } from "@/lib/experience";
-import { leave } from "@/lib/leave-guard";
-import { useMe } from "@/lib/me";
+import {
+  DETAILED_HOME,
+  modeOf,
+  SIMPLE_HOME,
+  saveMode,
+  switchTarget,
+  type Mode,
+} from '@/lib/experience';
+import { leave } from '@/lib/leave-guard';
+import { useMe } from '@/lib/me';
 
-import { onRadioKeys, radioTabIndex } from "./radio-keys";
+import { onRadioKeys, radioTabIndex } from './radio-keys';
 
 const MODES: { value: Mode; label: string }[] = [
-  { value: "simple", label: "Simple" },
-  { value: "detailed", label: "Detailed" },
+  { value: 'simple', label: 'Simple' },
+  { value: 'detailed', label: 'Detailed' },
 ];
 
 /**
@@ -20,11 +27,11 @@ const MODES: { value: Mode; label: string }[] = [
  * lighter outlined one).
  */
 export const SEGMENTED = {
-  track: "gap-0.5 rounded-xl bg-surface2 p-1",
-  option: "h-9 rounded-lg text-[15px]",
+  track: 'gap-0.5 rounded-xl bg-surface2 p-1',
+  option: 'h-9 rounded-lg text-[15px]',
   // qa-simple-home-20: in dark the chosen option is a lighter, outlined pill (a dark pill on its track read as unchosen).
-  on: "bg-surface font-semibold text-accent-ink shadow-sm [:root[data-theme=dark]_&]:bg-accent-mid [:root[data-theme=dark]_&]:shadow-[0_0_0_1px_var(--line-strong)] dark:[:root:not([data-theme=light])_&]:bg-accent-mid dark:[:root:not([data-theme=light])_&]:shadow-[0_0_0_1px_var(--line-strong)]",
-  off: "font-medium text-text2 hover:text-accent-ink",
+  on: 'bg-surface font-semibold text-accent-ink shadow-sm [:root[data-theme=dark]_&]:bg-accent-mid [:root[data-theme=dark]_&]:shadow-[0_0_0_1px_var(--line-strong)] dark:[:root:not([data-theme=light])_&]:bg-accent-mid dark:[:root:not([data-theme=light])_&]:shadow-[0_0_0_1px_var(--line-strong)]',
+  off: 'font-medium text-text2 hover:text-accent-ink',
 };
 
 /** Before paint on a full load (the layout's head script) and on every navigation after it: html[data-mode]. */
@@ -44,7 +51,7 @@ export function ModeRoot() {
 }
 
 /** qa4-shell-6: the Detailed page switched away from, and the Simple page it opened. */
-const RETURN_KEY = "po-mode-return";
+const RETURN_KEY = 'po-mode-return';
 
 function keepReturn(from: string, to: string) {
   try {
@@ -57,9 +64,14 @@ function keepReturn(from: string, to: string) {
 /** The Detailed page to go back to, when the person is still on the Simple page the switch opened. */
 function takeReturn(pathname: string): string | null {
   try {
-    const kept = JSON.parse(sessionStorage.getItem(RETURN_KEY) ?? "null") as { from?: string; to?: string } | null;
+    const kept = JSON.parse(sessionStorage.getItem(RETURN_KEY) ?? 'null') as {
+      from?: string;
+      to?: string;
+    } | null;
     sessionStorage.removeItem(RETURN_KEY);
-    return kept?.from && kept.to === pathname && modeOf(kept.from) === "detailed" ? kept.from : null;
+    return kept?.from && kept.to === pathname && modeOf(kept.from) === 'detailed'
+      ? kept.from
+      : null;
   } catch {
     return null;
   }
@@ -70,7 +82,13 @@ function takeReturn(pathname: string): string | null {
  * drawer. Shown only while the API says Simple is on. A choice saves the person's mode
  * (preferences.experience) and opens the matching page of the other mode.
  */
-export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "wide" | "sheet"; documentHome?: string }) {
+export function ModeSwitch({
+  placement,
+  documentHome,
+}: {
+  placement: 'rail' | 'wide' | 'sheet';
+  documentHome?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { simpleMode } = useMe();
@@ -79,8 +97,13 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
   // qa-company-45: a Detailed page with no Simple match (Inbox, Company, Settings…) says so on
   // the switch, so Simple opening Simple's Home, and the rail showing Detailed here after
   // choosing Simple, do not look broken.
-  const detailedOnly = current === "detailed" && pathname !== DETAILED_HOME && switchTarget(pathname, "simple", documentHome) === SIMPLE_HOME;
-  const note = detailedOnly ? "This page is in Detailed only. Simple opens Simple's Home." : undefined;
+  const detailedOnly =
+    current === 'detailed' &&
+    pathname !== DETAILED_HOME &&
+    switchTarget(pathname, 'simple', documentHome) === SIMPLE_HOME;
+  const note = detailedOnly
+    ? "This page is in Detailed only. Simple opens Simple's Home."
+    : undefined;
 
   // qa-shell-6: the page opens at once; the choice is saved meanwhile (it only decides where
   // the person lands next time), so a slow save never makes the click look dead.
@@ -91,30 +114,38 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
       void saveMode(mode);
       const target = switchTarget(pathname, mode, documentHome);
       // qa4-shell-6: Detailed -> Simple -> Detailed, straight back, returns to the page left.
-      const back = mode === "detailed" ? takeReturn(pathname) : null;
-      if (mode === "simple") keepReturn(`${location.pathname}${location.search}`, target);
+      const back = mode === 'detailed' ? takeReturn(pathname) : null;
+      if (mode === 'simple') keepReturn(`${location.pathname}${location.search}`, target);
       router.push(back ?? target);
     });
   }
 
-  const rail = placement !== "sheet";
-  const narrow = placement === "rail";
+  const rail = placement !== 'sheet';
+  const narrow = placement === 'rail';
 
   return (
     <div
       role="radiogroup"
       aria-label="Mode"
       // A choice opens the other mode: the arrows move focus, Enter or Space opens it.
-      onKeyDown={(e) => onRadioKeys(e, MODES.map((m) => m.value), current, choose, { follow: false })}
+      onKeyDown={(e) =>
+        onRadioKeys(
+          e,
+          MODES.map((m) => m.value),
+          current,
+          choose,
+          { follow: false },
+        )
+      }
       title={note}
       data-detailed-only={detailedOnly || undefined}
-      data-testid={rail ? "mode-switch" : "mode-switch-sheet"}
+      data-testid={rail ? 'mode-switch' : 'mode-switch-sheet'}
       // qa-simple-home-31: Simple's rail and the More sheet draw the one segmented control (the
       // rail's white pill, SEGMENTED); Detailed's narrow rail keeps its stacked switch.
       className={
         narrow
-          ? "mb-3 flex w-[70px] flex-none flex-col gap-0.5 rounded-[10px] bg-rail-hover/40 p-0.5"
-          : `${placement === "wide" ? "mb-4" : "mb-3"} grid w-full flex-none grid-cols-2 ${SEGMENTED.track}`
+          ? 'mb-3 flex w-[70px] flex-none flex-col gap-0.5 rounded-[10px] bg-rail-hover/40 p-0.5'
+          : `${placement === 'wide' ? 'mb-4' : 'mb-3'} grid w-full flex-none grid-cols-2 ${SEGMENTED.track}`
       }
     >
       {MODES.map((m) => {
@@ -127,13 +158,13 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
             aria-checked={on}
             tabIndex={radioTabIndex(on)}
             data-mode-value={m.value}
-            aria-description={m.value === "simple" ? note : undefined}
-            title={m.value === "simple" ? note : undefined}
-            data-testid={`mode-${m.value}${rail ? "" : "-sheet"}`}
+            aria-description={m.value === 'simple' ? note : undefined}
+            title={m.value === 'simple' ? note : undefined}
+            data-testid={`mode-${m.value}${rail ? '' : '-sheet'}`}
             onClick={() => choose(m.value)}
             className={
               narrow
-                ? `h-7 rounded-lg text-[13px] leading-4 ${on ? "bg-rail-active font-semibold text-rail-active-text" : "font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text"}`
+                ? `h-7 rounded-lg text-[13px] leading-4 ${on ? 'bg-rail-active font-semibold text-rail-active-text' : 'font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text'}`
                 : `${SEGMENTED.option} ${on ? SEGMENTED.on : SEGMENTED.off}`
             }
           >

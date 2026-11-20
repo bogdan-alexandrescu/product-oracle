@@ -1,22 +1,23 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import Link from 'next/link';
+import { useState } from 'react';
 
-import { Button, InfoTip, Notice, Panel } from "@/components/ds";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, InfoTip, Notice, Panel } from '@/components/ds';
+import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { INPUT } from "../_components/fields";
+import { INPUT } from '../_components/fields';
 
-const ROW = "grid grid-cols-[160px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 max-[600px]:grid-cols-1 max-[600px]:gap-1.5 max-[600px]:px-3";
-const ROW_LABEL = "text-[15px] font-semibold";
-const SMALL = INPUT.replace("w-full", "w-24");
+const ROW =
+  'grid grid-cols-[160px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 max-[600px]:grid-cols-1 max-[600px]:gap-1.5 max-[600px]:px-3';
+const ROW_LABEL = 'text-[15px] font-semibold';
+const SMALL = INPUT.replace('w-full', 'w-24');
 
 /** null while the company has none (the API's 404). */
 const readCompanyRoadmap = () =>
-  unwrap(api.GET("/v1/roadmaps/company")).catch((e: unknown) => {
+  unwrap(api.GET('/v1/roadmaps/company')).catch((e: unknown) => {
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
   });
@@ -27,7 +28,7 @@ const readCompanyRoadmap = () =>
  */
 export function ProductRoadmapPanel() {
   const { can } = useMe();
-  const q = useQuery("company-roadmap", readCompanyRoadmap);
+  const q = useQuery('company-roadmap', readCompanyRoadmap);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +36,7 @@ export function ProductRoadmapPanel() {
     setBusy(true);
     setError(null);
     try {
-      const made = await unwrap(api.POST("/v1/roadmaps/company"));
+      const made = await unwrap(api.POST('/v1/roadmaps/company'));
       q.setData(() => made);
     } catch (e) {
       setError(errorMessage(e));
@@ -59,8 +60,11 @@ export function ProductRoadmapPanel() {
           {q.error && <Notice tone="error">{q.error}</Notice>}
           {found && (
             <p className="text-[15px]" data-testid="product-roadmap-state">
-              Created:{" "}
-              <Link href={`/documents/${found.slug}`} className="font-semibold text-accent-ink hover:underline">
+              Created:{' '}
+              <Link
+                href={`/documents/${found.slug}`}
+                className="font-semibold text-accent-ink hover:underline"
+              >
                 {found.title}
               </Link>
             </p>
@@ -70,7 +74,7 @@ export function ProductRoadmapPanel() {
               <p className="text-[15px]" data-testid="product-roadmap-state">
                 No product roadmap yet.
               </p>
-              {can("create_company_roadmap") ? (
+              {can('create_company_roadmap') ? (
                 <div>
                   <Button variant="solid" disabled={busy} onClick={() => void create()}>
                     Create the product roadmap
@@ -95,22 +99,28 @@ type Capacity = { team_size: number; focus: number };
  * its time it gives the roadmap (focus). Owners change it.
  */
 export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
-  const settingQ = useQuery("settings|team_capacity", () => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "team_capacity" } } })));
+  const settingQ = useQuery('settings|team_capacity', () =>
+    unwrap(api.GET('/v1/settings/{key}', { params: { path: { key: 'team_capacity' } } })),
+  );
   const stored = settingQ.data ? (settingQ.data.value as Capacity) : null;
   const [size, setSize] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sizeText = size ?? (stored ? String(stored.team_size) : "");
-  const focusText = focus ?? (stored ? String(Math.round(stored.focus * 100)) : "");
-  const changed = !!stored && (sizeText !== String(stored.team_size) || focusText !== String(Math.round(stored.focus * 100)));
+  const sizeText = size ?? (stored ? String(stored.team_size) : '');
+  const focusText = focus ?? (stored ? String(Math.round(stored.focus * 100)) : '');
+  const changed =
+    !!stored &&
+    (sizeText !== String(stored.team_size) || focusText !== String(Math.round(stored.focus * 100)));
 
   function wrong(): string | null {
     const n = Number(sizeText);
-    if (!sizeText.trim() || !Number.isInteger(n) || n < 1 || n > 1000) return "Team size is a whole number from 1 to 1000.";
+    if (!sizeText.trim() || !Number.isInteger(n) || n < 1 || n > 1000)
+      return 'Team size is a whole number from 1 to 1000.';
     const f = Number(focusText);
-    if (!focusText.trim() || !Number.isFinite(f) || f <= 0 || f > 100) return "Focus is more than 0% and at most 100%.";
+    if (!focusText.trim() || !Number.isFinite(f) || f <= 0 || f > 100)
+      return 'Focus is more than 0% and at most 100%.';
     return null;
   }
 
@@ -122,7 +132,12 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
     setSaved(false);
     try {
       const value = { team_size: Number(sizeText), focus: Number(focusText) / 100 };
-      const out: Schemas["SettingOut"] = await unwrap(api.PUT("/v1/settings/{key}", { params: { path: { key: "team_capacity" } }, body: { value } }));
+      const out: Schemas['SettingOut'] = await unwrap(
+        api.PUT('/v1/settings/{key}', {
+          params: { path: { key: 'team_capacity' } },
+          body: { value },
+        }),
+      );
       settingQ.setData(() => out);
       setSize(null);
       setFocus(null);
@@ -146,7 +161,8 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
         tools={
           // F-30: what the team is for, in the title's (i).
           <InfoTip label="team capacity" side="bottom">
-            One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size and focus.
+            One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size
+            and focus.
           </InfoTip>
         }
       >
@@ -169,7 +185,18 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
                 Team size
               </label>
               <div className="flex items-center gap-2 text-[15px]">
-                <input id="team-size" type="number" inputMode="numeric" min={1} max={1000} step={1} className={SMALL} value={sizeText} disabled={!canChange} onChange={edit(setSize)} />
+                <input
+                  id="team-size"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={1000}
+                  step={1}
+                  className={SMALL}
+                  value={sizeText}
+                  disabled={!canChange}
+                  onChange={edit(setSize)}
+                />
                 <span className="text-text2">people</span>
               </div>
             </div>
@@ -178,7 +205,17 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
                 Focus
               </label>
               <div className="flex items-center gap-2 text-[15px]">
-                <input id="team-focus" type="number" inputMode="numeric" min={1} max={100} className={SMALL} value={focusText} disabled={!canChange} onChange={edit(setFocus)} />
+                <input
+                  id="team-focus"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={100}
+                  className={SMALL}
+                  value={focusText}
+                  disabled={!canChange}
+                  onChange={edit(setFocus)}
+                />
                 <span className="text-text2">% of their time on the roadmap</span>
               </div>
             </div>
@@ -199,7 +236,11 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
                   </InfoTip>
                 )}
                 {saved && (
-                  <span role="status" className="text-sm font-semibold text-pass" data-testid="team-capacity-saved">
+                  <span
+                    role="status"
+                    className="text-sm font-semibold text-pass"
+                    data-testid="team-capacity-saved"
+                  >
                     Saved
                   </span>
                 )}

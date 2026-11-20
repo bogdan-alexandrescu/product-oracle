@@ -1,23 +1,23 @@
-"use client";
+'use client';
 // one-feature-panel: every field of a feature, read and changed in place in its panel. Each
 // save is one Simple change (Undo, the "changed by …" conflict rule; a commenter's is a
 // suggestion for an approver). Without canChange (a viewer) the fields only read.
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Icon } from "@/components/ds/Icon";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { LoadError, Loading } from "@/components/ui";
-import { Named, NOT_IN_GT, NotInGt } from "@/components/simple/FeatureName";
+import { Icon } from '@/components/ds/Icon';
+import { InfoTip } from '@/components/ds/InfoTip';
+import { LoadError, Loading } from '@/components/ui';
+import { Named, NOT_IN_GT, NotInGt } from '@/components/simple/FeatureName';
 
-import { api, unwrap } from "@/lib/api/client";
-import { goalFigure } from "@/lib/format";
-import { calendarDay } from "@/lib/dates";
-import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
-import { byTrackOrder } from "@/lib/track-order";
-import { useQuery } from "@/lib/use-query";
+import { api, unwrap } from '@/lib/api/client';
+import { goalFigure } from '@/lib/format';
+import { calendarDay } from '@/lib/dates';
+import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
+import { byTrackOrder } from '@/lib/track-order';
+import { useQuery } from '@/lib/use-query';
 
-import type { Act } from "./_card";
+import type { Act } from './_card';
 import {
   confidenceWord,
   datesFrom,
@@ -32,21 +32,23 @@ import {
   type GoalMilestone,
   type Item,
   type Milestone,
-} from "./_lib";
+} from './_lib';
 
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
-const TAP = "max-sm:min-h-11 max-sm:min-w-11 max-sm:inline-flex max-sm:items-center max-sm:justify-center";
+const TAP =
+  'max-sm:min-h-11 max-sm:min-w-11 max-sm:inline-flex max-sm:items-center max-sm:justify-center';
 const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 /** roadmap-edit-fixes round 1: a dependency's x, a 24 px target of its own (a bare 16 px icon on the line's baseline was missed). */
-const REMOVE = "relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11";
-const INPUT =
-  "w-full rounded-md border border-line bg-surface px-2 py-1 text-[15px]";
+const REMOVE =
+  'relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11';
+const INPUT = 'w-full rounded-md border border-line bg-surface px-2 py-1 text-[15px]';
 
 /** A feature's code chip, then its name: "F-12 Alert rules engine", as every page shows it. */
 export { Named };
 
 /** "Mar 31, 2027": a goal's date, month first. */
-const dayWords = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
+const dayWords = (day: string) =>
+  calendarDay(day, { month: 'short', day: 'numeric', year: 'numeric' });
 
 /** "61%", "3 days": a goal's reading in its unit. */
 const readingWords = (n: number, unit?: string | null) => goalFigure(n, unit);
@@ -74,7 +76,9 @@ function Field({
           <div data-testid={`${testId}-edit`}>{editor(() => setOpen(false))}</div>
         ) : (
           <span className="flex flex-wrap items-baseline gap-x-2">
-            <span data-testid={testId} className="min-w-0">{value}</span>
+            <span data-testid={testId} className="min-w-0">
+              {value}
+            </span>
             {canChange && (
               <button
                 type="button"
@@ -92,13 +96,7 @@ function Field({
   );
 }
 
-function SaveCancel({
-  onCancel,
-  disabled,
-}: {
-  onCancel: () => void;
-  disabled?: boolean;
-}) {
+function SaveCancel({ onCancel, disabled }: { onCancel: () => void; disabled?: boolean }) {
   return (
     <span className="mt-1 flex gap-3">
       <button
@@ -166,9 +164,9 @@ function Pick({
 }
 
 /** item-milestone: the Milestone picker's option for the milestone shown now when it was not picked there. */
-const SHOWN = "shown";
+const SHOWN = 'shown';
 
-const HORIZON_WORDS: Record<Item["horizon"], string> = { now: "Now", next: "Next", later: "Later" };
+const HORIZON_WORDS: Record<Item['horizon'], string> = { now: 'Now', next: 'Next', later: 'Later' };
 
 /** The distinct refs (track, PRD, goal) the roadmap's items have: what an item may be moved to. */
 function refs<T extends { id: string }>(
@@ -187,52 +185,71 @@ function refs<T extends { id: string }>(
 function datesReason(item: Item): string {
   // roadmap-dates: an undated item's estimate is Oracle's suggestion, else the quarter it was added to.
   const picked = item.picked_quarter ? quarterOf(item.picked_quarter) : null;
-  const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
+  const out =
+    picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
   if (item.estimated && item.suggestion)
-    return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ""} Set dates to override them.`;
+    return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ''} Set dates to override them.`;
   // qa-leftovers: dates accepted from Oracle's suggestion into an open draft.
-  if (item.estimated && item.estimate_basis === "suggestion")
+  if (item.estimated && item.estimate_basis === 'suggestion')
     return "These dates were accepted from Oracle's suggestion in a draft that is not published yet. Set dates to override them.";
   // qa-nov17: the estimate after what it depends on can leave the quarter.
   if (item.estimated && out)
     return `Oracle estimated these dates after what it depends on. They fall outside ${picked.label}, the quarter it was added to. Set dates to override them.`;
   // flakes-dates: moved after what it depends on, still inside the quarter it was added to.
-  if (item.estimated && item.estimate_basis === "dependencies" && picked)
+  if (item.estimated && item.estimate_basis === 'dependencies' && picked)
     return `Oracle estimated these dates after what it depends on, inside ${picked.label}, the quarter it was added to. Set dates to override them.`;
-  if (item.estimated && item.estimate_basis === "quarter" && picked)
+  if (item.estimated && item.estimate_basis === 'quarter' && picked)
     return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)
     return `Oracle estimated these dates from the ${item.horizon} window and what the feature depends on. Set dates to override them.`;
-  if (item.source === "typed")
+  if (item.source === 'typed')
     return "Someone set these dates here. They override Oracle's estimate and any date source.";
   return `${datesFrom(item)}. Set dates here to override them.`;
 }
 
 /** Home QA #6: an estimate that is only its horizon's window (no suggestion, open or accepted
  * into an open draft, and no picked quarter). */
-const windowOnly = (item: Item): boolean => item.estimated && !item.estimate_basis && !item.suggestion && !item.picked_quarter;
+const windowOnly = (item: Item): boolean =>
+  item.estimated && !item.estimate_basis && !item.suggestion && !item.picked_quarter;
 
 /** Which the dates are: set here, from a date source, or Oracle's estimate. */
 function datesKind(item: Item): string {
   if (item.estimated) return "Oracle's estimate";
-  if (item.source === "typed") return "Set here";
+  if (item.source === 'typed') return 'Set here';
   return datesFrom(item);
 }
 
 /** item-milestone: the milestone a feature reads: the goal milestone picked for it, else its
  * PRD plan's (its slices'), else its own (with its roadmap code, as the Timeline names it: QA
  * Nov 12 #5), else the one a page shows it under (the Goal map's, GM2); "" with none. */
-function milestoneShown(item: Item, milestones: readonly GoalMilestone[], planned: readonly Milestone[], served?: string | null): string {
-  const picked = item.milestone?.id ? milestones.find((m) => m.id === item.milestone!.id) : undefined;
+function milestoneShown(
+  item: Item,
+  milestones: readonly GoalMilestone[],
+  planned: readonly Milestone[],
+  served?: string | null,
+): string {
+  const picked = item.milestone?.id
+    ? milestones.find((m) => m.id === item.milestone!.id)
+    : undefined;
   if (picked) return goalMilestoneWords(picked, milestones);
   if (!item.milestone?.id && item.slices.length)
-    return [...new Map(item.slices.map((x) => [x.milestone, `${x.milestone} ${x.milestone_name}`])).values()].join(", ");
+    return [
+      ...new Map(
+        item.slices.map((x) => [x.milestone, `${x.milestone} ${x.milestone_name}`]),
+      ).values(),
+    ].join(', ');
   const name = item.milestone?.name;
   if (name) {
-    const own = planned.find((m) => m.item_ids.includes(item.id) && m.name === name) ?? planned.find((m) => m.name === name);
-    return milestoneWords(own?.roadmap_code && !name.startsWith(own.roadmap_code) ? `${own.roadmap_code} ${name}` : name);
+    const own =
+      planned.find((m) => m.item_ids.includes(item.id) && m.name === name) ??
+      planned.find((m) => m.name === name);
+    return milestoneWords(
+      own?.roadmap_code && !name.startsWith(own.roadmap_code)
+        ? `${own.roadmap_code} ${name}`
+        : name,
+    );
   }
-  return served ?? "";
+  return served ?? '';
 }
 
 export function PanelFields({
@@ -268,7 +285,7 @@ export function PanelFields({
   const goal = item.goal;
   const people = useQuery(`people:panel:${canChange}`, () =>
     canChange
-      ? unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } }))
+      ? unwrap(api.GET('/v1/people', { params: { query: { limit: 200 } } }))
       : Promise.resolve([]),
   );
   // #1586 review: members that could not be read say why (still loading says so), never a pick with no one in it.
@@ -287,21 +304,20 @@ export function PanelFields({
     note?: string,
   ) => act(what, { op: op as never, target: { ...target, ...more }, before, after }, note);
   // panel-menu: a feature with parts says, as it is cut or moved, that they stay as they are.
-  const parts = (how: Parameters<typeof partsWords>[1]) => partsWords(item.parts.length, how) || undefined;
-  const others = [...items.values()].filter(
-    (i) => i.id !== item.id && i.status !== "merged",
-  );
+  const parts = (how: Parameters<typeof partsWords>[1]) =>
+    partsWords(item.parts.length, how) || undefined;
+  const others = [...items.values()].filter((i) => i.id !== item.id && i.status !== 'merged');
   // empty-track: every active track is offered, so a track that holds nothing yet (a new track
   // with no PRD) can take its first item; then any other track an item names. track-order: in
   // the company's track order.
   const trackList = useQuery(`simple-tracks:panel:${canChange}`, () =>
-    canChange ? unwrap(api.GET("/v1/simple/tracks")) : Promise.resolve(null),
+    canChange ? unwrap(api.GET('/v1/simple/tracks')) : Promise.resolve(null),
   );
   const tracks = [
     ...new Map(
       [
         ...(trackList.data?.tracks ?? [])
-          .filter((t) => t.status === "active")
+          .filter((t) => t.status === 'active')
           .map((t) => ({ id: t.id, title: t.title, order: t.order })),
         ...refs(items, (i) => i.track),
       ].map((t) => [t.id, t] as const),
@@ -357,18 +373,23 @@ export function PanelFields({
             <span className="inline-flex items-center gap-1">
               {item.code}
               <InfoTip label="this code" align="start" testId="card-code-why">
-                {item.code_from === "feature"
-                  ? "It comes from its Ground Truth feature: change it there."
+                {item.code_from === 'feature'
+                  ? 'It comes from its Ground Truth feature: change it there.'
                   : "It comes from its PRD's section: change it in the PRD."}
               </InfoTip>
             </span>
           ) : (
             (item.code ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
-              <span className="inline-flex flex-wrap items-center gap-x-1" data-testid="card-code-flag">
-                <span className="text-text2">None</span> · <NotInGt className="h-5! px-2! text-xs!" />
+              <span
+                className="inline-flex flex-wrap items-center gap-x-1"
+                data-testid="card-code-flag"
+              >
+                <span className="text-text2">None</span> ·{' '}
+                <NotInGt className="h-5! px-2! text-xs!" />
                 <InfoTip label={NOT_IN_GT} align="start" testId="card-code-gt-why">
-                  Roadmap items that are no feature of the Ground Truth, or one only proposed so far.
+                  Roadmap items that are no feature of the Ground Truth, or one only proposed so
+                  far.
                 </InfoTip>
               </span>
             ))
@@ -377,11 +398,13 @@ export function PanelFields({
         editor={(done) => (
           <TextEdit
             label="Code"
-            value={item.code ?? ""}
+            value={item.code ?? ''}
             optional
             max={12}
             done={done}
-            save={(v) => change("Code changed", "set_code", { code: item.code ?? null }, { code: v || null })}
+            save={(v) =>
+              change('Code changed', 'set_code', { code: item.code ?? null }, { code: v || null })
+            }
           />
         )}
       />
@@ -389,19 +412,17 @@ export function PanelFields({
         label="Outcome"
         testId="card-outcome"
         canChange={canChange}
-        value={
-          item.outcome ?? <span className="text-text2">Not written yet</span>
-        }
+        value={item.outcome ?? <span className="text-text2">Not written yet</span>}
         editor={(done) => (
           <TextEdit
             label="Outcome"
-            value={item.outcome ?? ""}
+            value={item.outcome ?? ''}
             multiline
             done={done}
             save={(v) =>
               change(
-                "Outcome changed",
-                "edit_outcome",
+                'Outcome changed',
+                'edit_outcome',
                 { outcome: item.outcome ?? null },
                 { outcome: v || null },
               )
@@ -417,17 +438,12 @@ export function PanelFields({
         editor={(done) => (
           <TextEdit
             label="Notes"
-            value={item.note ?? ""}
+            value={item.note ?? ''}
             multiline
             max={500}
             done={done}
             save={(v) =>
-              change(
-                "Notes changed",
-                "edit_note",
-                { note: item.note ?? null },
-                { note: v || null },
-              )
+              change('Notes changed', 'edit_note', { note: item.note ?? null }, { note: v || null })
             }
           />
         )}
@@ -441,12 +457,15 @@ export function PanelFields({
             {/* simple-home-qa-nov14 #4, roadmap-dates: Oracle's one estimate, its suggested span when it has one (the item's own dates);
                 Home QA #6: only its horizon's window is no dates yet ("Later · no dates yet"). */}
             {windowOnly(item) ? (
-              <span data-testid="card-dates-kind">{HORIZON_WORDS[item.horizon]} · no dates yet</span>
+              <span data-testid="card-dates-kind">
+                {HORIZON_WORDS[item.horizon]} · no dates yet
+              </span>
             ) : (
               <>
-                {yearSpan(item.start.date, item.end.date)} · <span data-testid="card-dates-kind">{datesKind(item)}</span>
+                {yearSpan(item.start.date, item.end.date)} ·{' '}
+                <span data-testid="card-dates-kind">{datesKind(item)}</span>
               </>
-            )}{" "}
+            )}{' '}
             {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
             <InfoTip label="these dates" align="start" testId="card-dates-why">
               {datesReason(item)}
@@ -459,8 +478,8 @@ export function PanelFields({
             done={done}
             save={(s, e) =>
               change(
-                "Dates set",
-                "move_dates",
+                'Dates set',
+                'move_dates',
                 { start_date: item.start.date, end_date: item.end.date },
                 { start_date: s, end_date: e },
               )
@@ -480,19 +499,14 @@ export function PanelFields({
             done={done}
             options={[
               // pm1 '⋯ menu by the close': Cut and Restore are the panel menu's, not a status picked here.
-              ...(["planned", "done"].includes(item.status)
+              ...(['planned', 'done'].includes(item.status)
                 ? []
                 : [{ value: item.status, label: statusWord(item.status) }]),
-              { value: "planned", label: "Planned" },
-              { value: "done", label: "Done" },
+              { value: 'planned', label: 'Planned' },
+              { value: 'done', label: 'Done' },
             ]}
             save={(v) =>
-              change(
-                "Status changed",
-                "set_status",
-                { status: item.status },
-                { status: v },
-              )
+              change('Status changed', 'set_status', { status: item.status }, { status: v })
             }
           />
         )}
@@ -501,23 +515,23 @@ export function PanelFields({
         label="Confidence"
         testId="card-confidence"
         canChange={canChange}
-        value={item.confidence ? confidenceWord(item.confidence) : "Not rated"}
+        value={item.confidence ? confidenceWord(item.confidence) : 'Not rated'}
         editor={(done) => (
           <Pick
             label="Confidence"
-            value={item.confidence ?? ""}
+            value={item.confidence ?? ''}
             done={done}
             options={[
-              { value: "", label: "Not rated" },
-              ...["low", "medium", "high"].map((c) => ({
+              { value: '', label: 'Not rated' },
+              ...['low', 'medium', 'high'].map((c) => ({
                 value: c,
                 label: confidenceWord(c),
               })),
             ]}
             save={(v) =>
               change(
-                "Confidence changed",
-                "set_confidence",
+                'Confidence changed',
+                'set_confidence',
                 { confidence: item.confidence ?? null },
                 { confidence: v || null },
               )
@@ -529,30 +543,28 @@ export function PanelFields({
         label="Owner"
         testId="card-owner"
         canChange={canChange}
-        value={
-          item.owner?.name ?? <span className="text-text2">No owner yet</span>
-        }
+        value={item.owner?.name ?? <span className="text-text2">No owner yet</span>}
         editor={(done) =>
           peopleRead ?? (
-          <Pick
-            label="Owner"
-            value={item.own_owner_id ?? ""}
-            done={done}
-            options={[
-              { value: "", label: "The track's owner" },
-              ...(people.data ?? [])
-                .filter((p) => p.can_write)
-                .map((p) => ({ value: p.user_id, label: p.name })),
-            ]}
-            save={(v) =>
-              change(
-                "Owner changed",
-                "set_owner",
-                { owner_id: item.own_owner_id ?? null },
-                { owner_id: v || null },
-              )
-            }
-          />
+            <Pick
+              label="Owner"
+              value={item.own_owner_id ?? ''}
+              done={done}
+              options={[
+                { value: '', label: "The track's owner" },
+                ...(people.data ?? [])
+                  .filter((p) => p.can_write)
+                  .map((p) => ({ value: p.user_id, label: p.name })),
+              ]}
+              save={(v) =>
+                change(
+                  'Owner changed',
+                  'set_owner',
+                  { owner_id: item.own_owner_id ?? null },
+                  { owner_id: v || null },
+                )
+              }
+            />
           )
         }
       />
@@ -562,29 +574,33 @@ export function PanelFields({
         testId="card-decider"
         canChange={canChange}
         value={
-          item.deciders.length ? item.deciders.join(", ") : <span className="text-text2">No decider yet</span>
+          item.deciders.length ? (
+            item.deciders.join(', ')
+          ) : (
+            <span className="text-text2">No decider yet</span>
+          )
         }
         editor={(done) =>
           peopleRead ?? (
-          <Pick
-            label="Decider"
-            value={item.own_decider_id ?? ""}
-            done={done}
-            options={[
-              { value: "", label: "The roadmap's decider" },
-              ...(people.data ?? [])
-                .filter((p) => p.can_write)
-                .map((p) => ({ value: p.user_id, label: p.name })),
-            ]}
-            save={(v) =>
-              change(
-                "Decider changed",
-                "set_decider",
-                { decider_id: item.own_decider_id ?? null },
-                { decider_id: v || null },
-              )
-            }
-          />
+            <Pick
+              label="Decider"
+              value={item.own_decider_id ?? ''}
+              done={done}
+              options={[
+                { value: '', label: "The roadmap's decider" },
+                ...(people.data ?? [])
+                  .filter((p) => p.can_write)
+                  .map((p) => ({ value: p.user_id, label: p.name })),
+              ]}
+              save={(v) =>
+                change(
+                  'Decider changed',
+                  'set_decider',
+                  { decider_id: item.own_decider_id ?? null },
+                  { decider_id: v || null },
+                )
+              }
+            />
           )
         }
       />
@@ -599,11 +615,14 @@ export function PanelFields({
               label="Horizon"
               value={item.horizon}
               done={done}
-              options={(["now", "next", "later"] as const).map((h) => ({ value: h, label: HORIZON_WORDS[h] }))}
+              options={(['now', 'next', 'later'] as const).map((h) => ({
+                value: h,
+                label: HORIZON_WORDS[h],
+              }))}
               save={(v) =>
                 change(
-                  "Horizon changed",
-                  "change_horizon",
+                  'Horizon changed',
+                  'change_horizon',
                   { horizon: item.horizon },
                   { horizon: v },
                 )
@@ -617,25 +636,28 @@ export function PanelFields({
         testId="card-track"
         canChange={canChange}
         value={
-          (picking ? picking.title : item.track?.title) ?? <span className="text-text2">No track</span>
+          (picking ? picking.title : item.track?.title) ?? (
+            <span className="text-text2">No track</span>
+          )
         }
         editor={(done) => (
           <Pick
             label="Track"
-            value={item.track?.id ?? ""}
+            value={item.track?.id ?? ''}
             done={done}
             options={[
-              { value: "", label: "No track" },
+              { value: '', label: 'No track' },
               ...tracks.map((t) => ({ value: t.id, label: t.title })),
             ]}
             save={async (v) => {
               // Roadmap Nov 10: one who decides sees the picked track at once; the read after
               // the change shows what holds (the old track again when it failed).
-              if (item.can_decide) setPicking({ title: tracks.find((t) => t.id === v)?.title ?? null });
+              if (item.can_decide)
+                setPicking({ title: tracks.find((t) => t.id === v)?.title ?? null });
               try {
                 await change(
-                  "Track changed",
-                  "set_track",
+                  'Track changed',
+                  'set_track',
                   { track_id: item.track?.id ?? null },
                   { track_id: v || null },
                 );
@@ -650,35 +672,27 @@ export function PanelFields({
         label="Goal"
         testId="card-goal"
         canChange={canChange}
-        value={
-          item.goal ? (
-            item.goal.title
-          ) : (
-            <span className="text-text2">No goal yet</span>
-          )
-        }
+        value={item.goal ? item.goal.title : <span className="text-text2">No goal yet</span>}
         editor={(done) => (
           <Pick
             label="Goal"
-            value={item.goal?.id ?? ""}
+            value={item.goal?.id ?? ''}
             done={done}
             options={[
-              { value: "", label: "Its feature's goal" },
+              { value: '', label: "Its feature's goal" },
               ...goals.map((g) => ({
                 value: g.id,
-                label: g.metric
-                  ? `${g.title} (measured by ${g.metric})`
-                  : g.title,
+                label: g.metric ? `${g.title} (measured by ${g.metric})` : g.title,
               })),
             ]}
             save={(v) =>
               change(
-                "Goal changed",
-                "set_goal",
+                'Goal changed',
+                'set_goal',
                 { goal_id: item.goal?.id ?? null },
                 { goal_id: v || null },
                 undefined,
-                parts("goal"),
+                parts('goal'),
               )
             }
           />
@@ -688,32 +702,46 @@ export function PanelFields({
         // How the goal is measured, its target and date: one change to the goal (set_goal_measure),
         // checked against what was read, with Undo; a commenter's is a suggestion.
         <>
-          {(["measure", "target", "due"] as const).map((f) => {
-            const now = { measure: goal.metric ?? null, target: goal.target ?? null, due: goal.due ?? null };
-            const label = { measure: "Measure", target: "Target", due: "Date" }[f];
+          {(['measure', 'target', 'due'] as const).map((f) => {
+            const now = {
+              measure: goal.metric ?? null,
+              target: goal.target ?? null,
+              due: goal.due ?? null,
+            };
+            const label = { measure: 'Measure', target: 'Target', due: 'Date' }[f];
             const value = now[f];
             return (
               <Field
                 key={f}
                 label={label}
-                testId={`card-goal-${f === "due" ? "date" : f}`}
+                testId={`card-goal-${f === 'due' ? 'date' : f}`}
                 canChange={canChange}
                 value={
-                  value ? (f === "due" ? dayWords(value) : value) : (
-                    <span className="text-text2">{f === "measure" ? "No measure set for this goal yet" : `No ${label.toLowerCase()} yet`}</span>
+                  value ? (
+                    f === 'due' ? (
+                      dayWords(value)
+                    ) : (
+                      value
+                    )
+                  ) : (
+                    <span className="text-text2">
+                      {f === 'measure'
+                        ? 'No measure set for this goal yet'
+                        : `No ${label.toLowerCase()} yet`}
+                    </span>
                   )
                 }
                 editor={(done) => (
                   <TextEdit
                     label={label}
-                    value={value ?? ""}
-                    type={f === "due" ? "date" : undefined}
-                    optional={f !== "measure"}
+                    value={value ?? ''}
+                    type={f === 'due' ? 'date' : undefined}
+                    optional={f !== 'measure'}
                     done={done}
                     save={(v) =>
                       change(
                         `${label} changed`,
-                        "set_goal_measure",
+                        'set_goal_measure',
                         now,
                         { ...now, [f]: v || null },
                         { goal_id: goal.id },
@@ -731,8 +759,8 @@ export function PanelFields({
               <dt className="text-text2">Reading</dt>
               <dd className="min-w-0 tnum" data-testid="card-goal-reading">
                 Today {readingWords(goal.current, goal.unit)}
-                {goal.target ? ` · target ${goal.target}` : ""}
-                {goal.due ? ` by ${dayWords(goal.due)}` : ""}
+                {goal.target ? ` · target ${goal.target}` : ''}
+                {goal.due ? ` by ${dayWords(goal.due)}` : ''}
               </dd>
             </>
           )}
@@ -746,20 +774,20 @@ export function PanelFields({
         editor={(done) => (
           <Pick
             label="PRD"
-            value={item.prd?.id ?? ""}
+            value={item.prd?.id ?? ''}
             done={done}
             options={[
-              ...(item.prd ? [] : [{ value: "", label: "No PRD" }]),
+              ...(item.prd ? [] : [{ value: '', label: 'No PRD' }]),
               ...prds.map((p) => ({ value: p.id, label: p.title })),
             ]}
             save={(v) =>
               change(
-                "PRD changed",
-                "set_prd",
+                'PRD changed',
+                'set_prd',
                 { prd_document_id: item.prd?.id ?? null },
                 { prd_document_id: v || null },
                 undefined,
-                parts("PRD"),
+                parts('PRD'),
               )
             }
           />
@@ -773,22 +801,32 @@ export function PanelFields({
         editor={(done) => (
           <Pick
             label="Milestone"
-            value={item.milestone?.id ?? (shownMilestone ? SHOWN : "")}
+            value={item.milestone?.id ?? (shownMilestone ? SHOWN : '')}
             done={done}
             options={[
               // A milestone the feature reads that is not one picked here (its plan's, or typed in chat).
-              ...(shownMilestone && !item.milestone?.id ? [{ value: SHOWN, label: shownMilestone }] : []),
-              { value: "", label: "No milestone" },
-              ...placeable(milestones, item.roadmap.id, byPrdOrderOf(prdOrderOf)).map((m) => ({ value: m.id, label: goalMilestoneWords(m, milestones) })),
+              ...(shownMilestone && !item.milestone?.id
+                ? [{ value: SHOWN, label: shownMilestone }]
+                : []),
+              { value: '', label: 'No milestone' },
+              ...placeable(milestones, item.roadmap.id, byPrdOrderOf(prdOrderOf)).map((m) => ({
+                value: m.id,
+                label: goalMilestoneWords(m, milestones),
+              })),
             ]}
             save={async (v) => {
               if (v === SHOWN) return;
               const m = item.milestone;
               await change(
-                "Milestone changed",
-                "set_milestone",
+                'Milestone changed',
+                'set_milestone',
                 // The item's own milestone as it reads it (one from its track or plan is not its own).
-                { milestone: m && m.source === "item" ? { id: m.id ?? null, name: m.name ?? null, date: m.date ?? null } : null },
+                {
+                  milestone:
+                    m && m.source === 'item'
+                      ? { id: m.id ?? null, name: m.name ?? null, date: m.date ?? null }
+                      : null,
+                },
                 { milestone: v ? { id: v } : null },
               );
             }}
@@ -798,108 +836,104 @@ export function PanelFields({
       <dt className="text-text2">Depends on</dt>
       <dd className="min-w-0">
         <div data-testid="card-depends">
-        {deps.length + loose.length === 0 && (
-          <span className="text-text2">Nothing</span>
-        )}
-        <ul className="space-y-0.5">
-          {deps.map((d) => (
-            <li
-              key={d.id}
-              className="flex flex-wrap items-baseline gap-x-2"
-              data-testid="card-depends-row"
-            >
-              {featureButton(d)}
-              {canChange && (
-                <button
-                  type="button"
-                  className={REMOVE}
-                  aria-label={`Remove ${d.title} from what it depends on`}
-                  onClick={() =>
-                    void change(
-                      "Dependency removed",
-                      "set_depends",
-                      { depends_on: item.depends_keys },
-                      {
-                        depends_on: item.depends_keys.filter(
-                          (k) => !keysOf(d).has(k),
-                        ),
-                      },
-                    )
-                  }
-                >
-                  <Icon name="x" size={16} />
-                </button>
-              )}
-            </li>
-          ))}
-          {loose.map(({ k, found }) => (
-            <li
-              key={k}
-              className="flex flex-wrap items-baseline gap-x-2"
-              data-testid="card-depends-row"
-            >
-              {found ? featureButton(found) : <span>{k}</span>}
-              {canChange && (
-                <button
-                  type="button"
-                  className={REMOVE}
-                  aria-label={`Remove ${found?.title ?? k} from what it depends on`}
-                  onClick={() =>
-                    void change(
-                      "Dependency removed",
-                      "set_depends",
-                      { depends_on: item.depends_keys },
-                      { depends_on: item.depends_keys.filter((x) => x !== k) },
-                    )
-                  }
-                >
-                  <Icon name="x" size={16} />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        {/* roadmap-edit-fixes: Oracle's ideas of what a new item depends on: a person adds them. */}
-        {canChange &&
-          (item.suggested_depends ?? []).map((k) => {
-            const found = others.find((i) => i.key === k);
-            return (
-              <p
-                key={k}
-                className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm text-text2"
-                data-testid="card-depends-idea"
+          {deps.length + loose.length === 0 && <span className="text-text2">Nothing</span>}
+          <ul className="space-y-0.5">
+            {deps.map((d) => (
+              <li
+                key={d.id}
+                className="flex flex-wrap items-baseline gap-x-2"
+                data-testid="card-depends-row"
               >
-                <span>
-                  Oracle suggests {found ? <Named item={found} /> : k}
-                </span>
-                <button
-                  type="button"
-                  className={LINK}
-                  aria-label={`Add ${found?.title ?? k} to what it depends on`}
-                  onClick={() =>
-                    void change(
-                      "Dependency added",
-                      "set_depends",
-                      { depends_on: item.depends_keys },
-                      { depends_on: [...item.depends_keys, k] },
-                    )
-                  }
+                {featureButton(d)}
+                {canChange && (
+                  <button
+                    type="button"
+                    className={REMOVE}
+                    aria-label={`Remove ${d.title} from what it depends on`}
+                    onClick={() =>
+                      void change(
+                        'Dependency removed',
+                        'set_depends',
+                        { depends_on: item.depends_keys },
+                        {
+                          depends_on: item.depends_keys.filter((k) => !keysOf(d).has(k)),
+                        },
+                      )
+                    }
+                  >
+                    <Icon name="x" size={16} />
+                  </button>
+                )}
+              </li>
+            ))}
+            {loose.map(({ k, found }) => (
+              <li
+                key={k}
+                className="flex flex-wrap items-baseline gap-x-2"
+                data-testid="card-depends-row"
+              >
+                {found ? featureButton(found) : <span>{k}</span>}
+                {canChange && (
+                  <button
+                    type="button"
+                    className={REMOVE}
+                    aria-label={`Remove ${found?.title ?? k} from what it depends on`}
+                    onClick={() =>
+                      void change(
+                        'Dependency removed',
+                        'set_depends',
+                        { depends_on: item.depends_keys },
+                        { depends_on: item.depends_keys.filter((x) => x !== k) },
+                      )
+                    }
+                  >
+                    <Icon name="x" size={16} />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {/* roadmap-edit-fixes: Oracle's ideas of what a new item depends on: a person adds them. */}
+          {canChange &&
+            (item.suggested_depends ?? []).map((k) => {
+              const found = others.find((i) => i.key === k);
+              return (
+                <p
+                  key={k}
+                  className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm text-text2"
+                  data-testid="card-depends-idea"
                 >
-                  Add
-                </button>
-              </p>
-            );
-          })}
+                  <span>Oracle suggests {found ? <Named item={found} /> : k}</span>
+                  <button
+                    type="button"
+                    className={LINK}
+                    aria-label={`Add ${found?.title ?? k} to what it depends on`}
+                    onClick={() =>
+                      void change(
+                        'Dependency added',
+                        'set_depends',
+                        { depends_on: item.depends_keys },
+                        { depends_on: [...item.depends_keys, k] },
+                      )
+                    }
+                  >
+                    Add
+                  </button>
+                </p>
+              );
+            })}
         </div>
         {canChange && (
           <AddDependency
             item={item}
             loops={needsMe(item, items)}
-            options={others.filter((o) => !item.depends_on.includes(o.id) && !loose.some((l) => l.found?.id === o.id))}
+            options={others.filter(
+              (o) => !item.depends_on.includes(o.id) && !loose.some((l) => l.found?.id === o.id),
+            )}
             add={(key) =>
               change(
-                "Dependency added",
-                "set_depends",
+                'Dependency added',
+                'set_depends',
                 { depends_on: item.depends_keys },
                 { depends_on: [...item.depends_keys, key] },
               )
@@ -910,43 +944,43 @@ export function PanelFields({
       <dt className="text-text2">Needed by</dt>
       <dd className="min-w-0">
         <div data-testid="card-needed">
-        {item.needed_by.length === 0 ? (
-          "None"
-        ) : (
-          <ul className="space-y-0.5">
-            {item.needed_by
-              .map(shown)
-              .filter((i): i is Item => !!i)
-              .map((i) => (
-                <li
-                  key={i.id}
-                  className="flex flex-wrap items-baseline gap-x-2"
-                  data-testid="card-needed-row"
-                >
-                  {featureButton(i)}
-                  {/* pre-demo QA S-4: the same dependency edit, from the other side (its set_depends). */}
-                  {canChange && (
-                    <button
-                      type="button"
-                      className={REMOVE}
-                      aria-label={`Remove ${i.title} from what needs it`}
-                      onClick={() =>
-                        void change(
-                          "Dependency removed",
-                          "set_depends",
-                          { depends_on: i.depends_keys },
-                          { depends_on: i.depends_keys.filter((k) => !keysIn(i, item).has(k)) },
-                          { item_id: i.id },
-                        )
-                      }
-                    >
-                      <Icon name="x" size={16} />
-                    </button>
-                  )}
-                </li>
-              ))}
-          </ul>
-        )}
+          {item.needed_by.length === 0 ? (
+            'None'
+          ) : (
+            <ul className="space-y-0.5">
+              {item.needed_by
+                .map(shown)
+                .filter((i): i is Item => !!i)
+                .map((i) => (
+                  <li
+                    key={i.id}
+                    className="flex flex-wrap items-baseline gap-x-2"
+                    data-testid="card-needed-row"
+                  >
+                    {featureButton(i)}
+                    {/* pre-demo QA S-4: the same dependency edit, from the other side (its set_depends). */}
+                    {canChange && (
+                      <button
+                        type="button"
+                        className={REMOVE}
+                        aria-label={`Remove ${i.title} from what needs it`}
+                        onClick={() =>
+                          void change(
+                            'Dependency removed',
+                            'set_depends',
+                            { depends_on: i.depends_keys },
+                            { depends_on: i.depends_keys.filter((k) => !keysIn(i, item).has(k)) },
+                            { item_id: i.id },
+                          )
+                        }
+                      >
+                        <Icon name="x" size={16} />
+                      </button>
+                    )}
+                  </li>
+                ))}
+            </ul>
+          )}
         </div>
         {canChange && (
           <AddDependent
@@ -954,11 +988,16 @@ export function PanelFields({
             options={others.filter((o) => !item.needed_by.includes(o.id))}
             add={(o) =>
               change(
-                "Dependency added",
-                "set_depends",
+                'Dependency added',
+                'set_depends',
                 { depends_on: o.depends_keys },
                 // The same roadmap: this item's key; another roadmap's feature: its code.
-                { depends_on: [...o.depends_keys, o.roadmap.id === item.roadmap.id ? item.key : (item.code ?? item.key)] },
+                {
+                  depends_on: [
+                    ...o.depends_keys,
+                    o.roadmap.id === item.roadmap.id ? item.key : (item.code ?? item.key),
+                  ],
+                },
                 { item_id: o.id },
               )
             }
@@ -985,7 +1024,7 @@ function TextEdit({
   max?: number;
   multiline?: boolean;
   /** "date": a day picker (YYYY-MM-DD). */
-  type?: "date";
+  type?: 'date';
   /** May be saved empty (cleared). */
   optional?: boolean;
   save: (v: string) => Promise<void>;
@@ -1032,15 +1071,7 @@ function TextEdit({
 }
 
 /** The name, edited in the panel's header. */
-export function NameEdit({
-  item,
-  act,
-  done,
-}: {
-  item: Item;
-  act: Act;
-  done: () => void;
-}) {
+export function NameEdit({ item, act, done }: { item: Item; act: Act; done: () => void }) {
   return (
     <TextEdit
       label="Name"
@@ -1048,8 +1079,8 @@ export function NameEdit({
       max={200}
       done={done}
       save={(v) =>
-        act("Renamed", {
-          op: "edit_title",
+        act('Renamed', {
+          op: 'edit_title',
           target: { item_id: item.id },
           before: { title: item.title },
           after: { title: v },
@@ -1102,11 +1133,7 @@ function DatesEdit({
           />
         </label>
       </span>
-      {bad && (
-        <span className="block text-sm text-warn">
-          The end cannot come before the start
-        </span>
-      )}
+      {bad && <span className="block text-sm text-warn">The end cannot come before the start</span>}
       <SaveCancel onCancel={done} disabled={bad} />
     </form>
   );
@@ -1171,10 +1198,10 @@ function AddDependency({
   add: (key: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [pick, setPick] = useState("");
-  const [search, setSearch] = useState("");
+  const [pick, setPick] = useState('');
+  const [search, setSearch] = useState('');
   // goals-dep-picker: the feature from another PRD picked from the search (its id).
-  const [far, setFar] = useState("");
+  const [far, setFar] = useState('');
   if (!open)
     return (
       <button
@@ -1190,7 +1217,7 @@ function AddDependency({
   const term = search.trim().toLowerCase();
   const otherPrd = options.filter((o) => !item.prd || o.prd?.id !== item.prd.id);
   const found = term
-    ? otherPrd.filter((o) => `${o.code ?? ""} ${o.title}`.toLowerCase().includes(term)).slice(0, 8)
+    ? otherPrd.filter((o) => `${o.code ?? ''} ${o.title}`.toLowerCase().includes(term)).slice(0, 8)
     : [];
   const chosen = options.find((o) => o.id === (pick || far));
   // The same roadmap: its item key; another roadmap's feature: its code (a feature key).
@@ -1198,12 +1225,12 @@ function AddDependency({
     ? chosen.roadmap.id === item.roadmap.id
       ? chosen.key
       : (chosen.code ?? chosen.key)
-    : "";
+    : '';
   const close = () => {
     setOpen(false);
-    setPick("");
-    setSearch("");
-    setFar("");
+    setPick('');
+    setSearch('');
+    setFar('');
   };
   return (
     <form
@@ -1221,7 +1248,7 @@ function AddDependency({
         value={pick}
         onChange={(e) => {
           setPick(e.target.value);
-          setFar("");
+          setFar('');
         }}
         autoFocus
       >
@@ -1229,7 +1256,7 @@ function AddDependency({
         {options.map((o) => (
           <option key={o.id} value={o.id} disabled={loops.has(o.id)}>
             {o.code ? `${o.code} ${o.title}` : o.title}
-            {loops.has(o.id) ? " · Needs this one: it would make a loop" : ""}
+            {loops.has(o.id) ? ' · Needs this one: it would make a loop' : ''}
           </option>
         ))}
       </select>
@@ -1242,11 +1269,14 @@ function AddDependency({
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setFar("");
+              setFar('');
             }}
           />
           {term && (
-            <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto" data-testid="card-depends-search">
+            <ul
+              className="mt-1 max-h-48 space-y-0.5 overflow-y-auto"
+              data-testid="card-depends-search"
+            >
               {found.length === 0 && <li className="text-sm text-text2">No feature matches</li>}
               {found.map((o) => (
                 <li key={o.id}>
@@ -1254,11 +1284,11 @@ function AddDependency({
                     type="button"
                     aria-pressed={far === o.id}
                     disabled={loops.has(o.id)}
-                    className={`w-full rounded-md border px-2 py-1 text-left text-[15px] disabled:opacity-50 ${far === o.id ? "border-accent bg-accent-soft" : "border-line"}`}
+                    className={`w-full rounded-md border px-2 py-1 text-left text-[15px] disabled:opacity-50 ${far === o.id ? 'border-accent bg-accent-soft' : 'border-line'}`}
                     onClick={() => setFar(o.id)}
                   >
                     <Named item={o} />
-                    {loops.has(o.id) ? " · Needs this one: it would make a loop" : ""}
+                    {loops.has(o.id) ? ' · Needs this one: it would make a loop' : ''}
                   </button>
                 </li>
               ))}
@@ -1283,7 +1313,7 @@ function AddDependent({
   add: (o: Item) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [pick, setPick] = useState("");
+  const [pick, setPick] = useState('');
   if (!open)
     return (
       <button
@@ -1302,7 +1332,7 @@ function AddDependent({
         e.preventDefault();
         if (!chosen) return;
         setOpen(false);
-        setPick("");
+        setPick('');
         void add(chosen);
       }}
     >
@@ -1317,7 +1347,7 @@ function AddDependent({
         {options.map((o) => (
           <option key={o.id} value={o.id} disabled={loops.has(o.id)}>
             {o.code ? `${o.code} ${o.title}` : o.title}
-            {loops.has(o.id) ? " · This one needs it: it would make a loop" : ""}
+            {loops.has(o.id) ? ' · This one needs it: it would make a loop' : ''}
           </option>
         ))}
       </select>

@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
-import { Button, Icon, type IconName, Notice } from "@/components/ds";
+import { Button, Icon, type IconName, Notice } from '@/components/ds';
 
 export type Consequence = { icon?: IconName; text: ReactNode };
 
@@ -27,7 +27,7 @@ export function ConfirmDialog({
   children,
   note,
   waiting,
-  confirmVariant = "danger",
+  confirmVariant = 'danger',
 }: {
   open: boolean;
   title: string;
@@ -47,7 +47,7 @@ export function ConfirmDialog({
   note?: ReactNode;
   /** While what the action does is still being read: the confirm button is disabled with this label. */
   waiting?: string | null;
-  confirmVariant?: "danger" | "solid";
+  confirmVariant?: 'danger' | 'solid';
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -75,22 +75,38 @@ export function ConfirmDialog({
         <div className="flex max-h-[calc(100dvh-26px)] flex-col">
           <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5 pb-0">
             <div className="flex items-start gap-3">
-              <span aria-hidden className="grid size-10 flex-none place-items-center rounded-full bg-crit-bg text-crit">
+              <span
+                aria-hidden
+                className="grid size-10 flex-none place-items-center rounded-full bg-crit-bg text-crit"
+              >
                 <Icon name="alert" size={20} />
               </span>
               <div className="min-w-0">
-                <h2 id={titleId} className="font-display text-lg leading-6 font-bold tracking-heading">
+                <h2
+                  id={titleId}
+                  className="font-display text-lg leading-6 font-bold tracking-heading"
+                >
                   {title}
                 </h2>
-                {subject && <p data-testid="confirm-subject" className="mt-0.5 break-words text-[15px] font-medium text-text2">{subject}</p>}
+                {subject && (
+                  <p
+                    data-testid="confirm-subject"
+                    className="mt-0.5 break-words text-[15px] font-medium text-text2"
+                  >
+                    {subject}
+                  </p>
+                )}
               </div>
             </div>
             {consequences.length > 0 && (
-              <ul aria-label="What happens" className="flex flex-col gap-2 text-[15px] leading-[22px]">
+              <ul
+                aria-label="What happens"
+                className="flex flex-col gap-2 text-[15px] leading-[22px]"
+              >
                 {consequences.map((c, i) => (
                   <li key={i} className="flex items-start gap-2.5">
                     <span aria-hidden className="mt-0.5 flex-none text-text2">
-                      <Icon name={c.icon ?? "check"} size={16} />
+                      <Icon name={c.icon ?? 'check'} size={16} />
                     </span>
                     <span className="min-w-0">{c.text}</span>
                   </li>
@@ -106,7 +122,12 @@ export function ConfirmDialog({
             <Button variant="secondary" autoFocus disabled={pending} onClick={onClose}>
               Cancel
             </Button>
-            <Button variant={confirmVariant} disabled={pending || !!waiting} onClick={onConfirm} data-testid="confirm-action">
+            <Button
+              variant={confirmVariant}
+              disabled={pending || !!waiting}
+              onClick={onConfirm}
+              data-testid="confirm-action"
+            >
               {pending ? (pendingLabel ?? `${confirmLabel}…`) : (waiting ?? confirmLabel)}
             </Button>
           </div>

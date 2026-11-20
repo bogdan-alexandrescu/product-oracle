@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { Button, Icon, InfoTip } from "@/components/ds";
-import { api, type Schemas, unwrap } from "@/lib/api/client";
-import { errorMessage, useAuthRedirect } from "@/lib/use-query";
+import { Button, Icon, InfoTip } from '@/components/ds';
+import { api, type Schemas, unwrap } from '@/lib/api/client';
+import { errorMessage, useAuthRedirect } from '@/lib/use-query';
 
-import { INPUT } from "../_components/fields";
-import { pickedLabels, sameLabels } from "./_browse-list";
+import { INPUT } from '../_components/fields';
+import { pickedLabels, sameLabels } from './_browse-list';
 
-export type NotionPage = Schemas["NotionPageOut"];
+export type NotionPage = Schemas['NotionPageOut'];
 
 // Pages fetched on open before "Load more" (100 each).
 const AUTO_PAGES = 3;
-const SHARE_HELP = "https://www.notion.com/help/add-and-manage-connections-with-the-api";
+const SHARE_HELP = 'https://www.notion.com/help/add-and-manage-connections-with-the-api';
 
 /** A page or database id from a dashed or undashed id, or a Notion URL (as the connector reads it). */
 export function notionId(value: string): string | null {
-  const last = value.trim().split("?")[0].split("#")[0].replace(/\/+$/, "").split("/").pop() ?? "";
-  const match = /([0-9a-f]{32})$/i.exec(last.replaceAll("-", ""));
+  const last = value.trim().split('?')[0].split('#')[0].replace(/\/+$/, '').split('/').pop() ?? '';
+  const match = /([0-9a-f]{32})$/i.exec(last.replaceAll('-', ''));
   if (!match) return null;
   const h = match[1].toLowerCase();
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
@@ -31,8 +31,8 @@ export function notionRoots(config: Record<string, unknown>): string[] {
 }
 
 // Where Notion serves page icons from: its own sites and its file CDN.
-const ICON_HOSTS = ["notion.so", "notion.site", "notion-static.com"];
-const ICON_EXACT_HOSTS = ["prod-files-secure.s3.us-west-2.amazonaws.com"];
+const ICON_HOSTS = ['notion.so', 'notion.site', 'notion-static.com'];
+const ICON_EXACT_HOSTS = ['prod-files-secure.s3.us-west-2.amazonaws.com'];
 
 /** A page icon's URL if it is safe to load: https, on a Notion host. Anything else (a tracking
  * pixel, plain http) gets the default glyph instead. */
@@ -46,7 +46,8 @@ export function notionIconUrl(icon: string | null | undefined): string | null {
   } catch {
     return null;
   }
-  const ok = ICON_EXACT_HOSTS.includes(host) || ICON_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  const ok =
+    ICON_EXACT_HOSTS.includes(host) || ICON_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
   return ok ? icon : null;
 }
 
@@ -57,11 +58,17 @@ function isEmoji(icon: string): boolean {
 
 /** The parent this picker can place: a page or database it has seen. */
 function parentOf(p: NotionPage, known: Map<string, NotionPage>): NotionPage | undefined {
-  return p.parent_id && (p.parent_type === "page" || p.parent_type === "database") ? known.get(p.parent_id) : undefined;
+  return p.parent_id && (p.parent_type === 'page' || p.parent_type === 'database')
+    ? known.get(p.parent_id)
+    : undefined;
 }
 
 /** The nearest picked ancestor of `id`, if any. */
-function pickedAncestor(id: string, known: Map<string, NotionPage>, picked: Set<string>): NotionPage | undefined {
+function pickedAncestor(
+  id: string,
+  known: Map<string, NotionPage>,
+  picked: Set<string>,
+): NotionPage | undefined {
   const seen = new Set<string>();
   let p = known.get(id);
   while (p && !seen.has(p.id)) {
@@ -74,17 +81,21 @@ function pickedAncestor(id: string, known: Map<string, NotionPage>, picked: Set<
 }
 
 function PageIcon({ page }: { page: NotionPage }) {
-  const box = "grid size-6 flex-none place-items-center rounded-md";
+  const box = 'grid size-6 flex-none place-items-center rounded-md';
   const src = notionIconUrl(page.icon);
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt="" referrerPolicy="no-referrer" className={`${box} object-cover`} />;
   }
   if (page.icon && isEmoji(page.icon))
-    return <span aria-hidden className={`${box} text-[16px] leading-none`}>{page.icon}</span>;
+    return (
+      <span aria-hidden className={`${box} text-[16px] leading-none`}>
+        {page.icon}
+      </span>
+    );
   return (
     <span aria-hidden className={`${box} bg-surface2 text-text2`}>
-      <Icon name={page.type === "database" ? "priorities" : "doc"} size={16} />
+      <Icon name={page.type === 'database' ? 'priorities' : 'doc'} size={16} />
     </span>
   );
 }
@@ -114,8 +125,11 @@ function useNotionPages(connectionId: string, search: string) {
 
   async function fetchPage(from: string | null) {
     return unwrap(
-      api.GET("/v1/connections/{connection_id}/notion/pages", {
-        params: { path: { connection_id: connectionId }, query: { search, ...(from ? { cursor: from } : {}) } },
+      api.GET('/v1/connections/{connection_id}/notion/pages', {
+        params: {
+          path: { connection_id: connectionId },
+          query: { search, ...(from ? { cursor: from } : {}) },
+        },
       }),
     );
   }
@@ -132,7 +146,7 @@ function useNotionPages(connectionId: string, search: string) {
         let next: string | null = null;
         try {
           for (let n = 0; n < AUTO_PAGES; n++) {
-            const page: Schemas["NotionPagesOut"] = await fetchPage(next);
+            const page: Schemas['NotionPagesOut'] = await fetchPage(next);
             if (!live()) return;
             all = [...all, ...page.items];
             next = page.next_cursor;
@@ -217,9 +231,9 @@ export function NotionPicker({
   onLabels?: (labels: Record<string, string>) => void;
 }) {
   const searchId = useId();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const [link, setLink] = useState("");
+  const [link, setLink] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
   // "<child> is now included with <parent>", after a pick folds earlier picks into it.
   const [absorbed, setAbsorbed] = useState<string | null>(null);
@@ -244,7 +258,8 @@ export function NotionPicker({
   // What will be read: every known page that is picked or under a pick, and picks not seen yet.
   const toRead = useMemo(() => {
     let n = value.filter((id) => !known.has(id)).length;
-    for (const p of known.values()) if (picked.has(p.id) || pickedAncestor(p.id, known, picked)) n++;
+    for (const p of known.values())
+      if (picked.has(p.id) || pickedAncestor(p.id, known, picked)) n++;
     return n;
   }, [value, known, picked]);
 
@@ -255,20 +270,26 @@ export function NotionPicker({
     const top: NotionPage[] = [];
     for (const p of list.items) {
       // A parent that arrives in a later load leaves its child where it was shown.
-      const parent = p.parent_id && ids.has(p.parent_id) && at(p.parent_id) <= at(p.id) ? p.parent_id : null;
-      if (parent && (p.parent_type === "page" || p.parent_type === "database")) {
+      const parent =
+        p.parent_id && ids.has(p.parent_id) && at(p.parent_id) <= at(p.id) ? p.parent_id : null;
+      if (parent && (p.parent_type === 'page' || p.parent_type === 'database')) {
         children.set(parent, [...(children.get(parent) ?? []), p]);
       } else top.push(p);
     }
     // In load order; within a load, shared at the top of the workspace first, then pages whose parent was not shared.
     top.sort(
-      (a, b) => at(a.id) - at(b.id) || Number(b.parent_type === "workspace") - Number(a.parent_type === "workspace"),
+      (a, b) =>
+        at(a.id) - at(b.id) ||
+        Number(b.parent_type === 'workspace') - Number(a.parent_type === 'workspace'),
     );
     const counts = new Map<string, number>();
     const count = (id: string, seen: Set<string>): number => {
       if (counts.has(id)) return counts.get(id)!;
       seen.add(id);
-      const n = (children.get(id) ?? []).reduce((sum, c) => sum + (seen.has(c.id) ? 0 : 1 + count(c.id, seen)), 0);
+      const n = (children.get(id) ?? []).reduce(
+        (sum, c) => sum + (seen.has(c.id) ? 0 : 1 + count(c.id, seen)),
+        0,
+      );
       counts.set(id, n);
       return n;
     };
@@ -282,9 +303,12 @@ export function NotionPicker({
     // Picking a parent covers its children: drop the picks it now includes, and say so.
     const under = value.filter((id) => isUnder(id, page.id));
     if (under.length) {
-      const names = under.map((id) => known.get(id)?.title ?? labels[id] ?? `Page ${id.slice(0, 8)}…`);
-      const joined = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
-      setAbsorbed(`${joined} ${names.length > 1 ? "are" : "is"} now included with ${page.title}`);
+      const names = under.map(
+        (id) => known.get(id)?.title ?? labels[id] ?? `Page ${id.slice(0, 8)}…`,
+      );
+      const joined =
+        names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+      setAbsorbed(`${joined} ${names.length > 1 ? 'are' : 'is'} now included with ${page.title}`);
     }
     onChange([...value.filter((id) => !under.includes(id)), page.id]);
   }
@@ -303,9 +327,9 @@ export function NotionPicker({
 
   function addLink() {
     const id = notionId(link);
-    if (!id) return setLinkError("Not a Notion page link or id");
+    if (!id) return setLinkError('Not a Notion page link or id');
     setLinkError(null);
-    setLink("");
+    setLink('');
     setAbsorbed(null);
     if (!picked.has(id)) onChange([...value, id]);
   }
@@ -319,7 +343,13 @@ export function NotionPicker({
     const parent = search ? parentOf(page, known) : undefined;
     const boxId = `${searchId}-${page.id}`;
     return (
-      <li key={page.id} role="treeitem" aria-expanded={kids.length ? expanded : undefined} aria-selected={checked} aria-label={page.title}>
+      <li
+        key={page.id}
+        role="treeitem"
+        aria-expanded={kids.length ? expanded : undefined}
+        aria-selected={checked}
+        aria-label={page.title}
+      >
         <div
           className="flex min-h-11 items-center gap-2 border-t border-line pr-3 hover:bg-surface2 max-[600px]:gap-1.5"
           style={{ paddingLeft: 6 + depth * 18 }}
@@ -328,7 +358,7 @@ export function NotionPicker({
           {kids.length ? (
             <button
               type="button"
-              aria-label={`${expanded ? "Collapse" : "Expand"} ${page.title}`}
+              aria-label={`${expanded ? 'Collapse' : 'Expand'} ${page.title}`}
               onClick={() =>
                 setOpen((prev) => {
                   const next = new Set(prev);
@@ -339,7 +369,11 @@ export function NotionPicker({
               }
               className="grid size-7 flex-none place-items-center rounded-md text-text2 hover:bg-surface hover:text-text"
             >
-              <Icon name="chevron-right" size={16} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
+              <Icon
+                name="chevron-right"
+                size={16}
+                className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+              />
             </button>
           ) : (
             <span aria-hidden className="size-7 flex-none" />
@@ -356,22 +390,25 @@ export function NotionPicker({
           <div className="flex min-w-0 flex-1 flex-col py-1.5">
             <label
               htmlFor={boxId}
-              className={`truncate text-[15px] leading-[22px] font-medium ${included ? "text-text2" : "text-text"}`}
+              className={`truncate text-[15px] leading-[22px] font-medium ${included ? 'text-text2' : 'text-text'}`}
               title={page.title}
             >
               {page.title}
             </label>
-            {(parent || page.type === "database" || count > 0 || included) && (
+            {(parent || page.type === 'database' || count > 0 || included) && (
               <span className="tnum flex min-w-0 flex-wrap items-center gap-x-2 text-[13px] leading-[18px] text-text2">
                 {parent && <span className="min-w-0 truncate">in {parent.title}</span>}
-                {page.type === "database" && <span>Database</span>}
+                {page.type === 'database' && <span>Database</span>}
                 {count > 0 && (
                   <span title={`${count} shared sub-page(s) known`}>
-                    {count} sub-page{count === 1 ? "" : "s"}
+                    {count} sub-page{count === 1 ? '' : 's'}
                   </span>
                 )}
                 {included && (
-                  <span className="inline-flex items-center gap-1 font-semibold text-accent-ink" title={`Included with ${included.title}`}>
+                  <span
+                    className="inline-flex items-center gap-1 font-semibold text-accent-ink"
+                    title={`Included with ${included.title}`}
+                  >
                     <Icon name="check" size={16} />
                     Included
                   </span>
@@ -382,7 +419,9 @@ export function NotionPicker({
         </div>
         {kids.length > 0 && expanded && (
           <ul role="group" className="flex flex-col">
-            {kids.map((k) => row(k, depth + 1, included ?? (picked.has(page.id) ? page : undefined)))}
+            {kids.map((k) =>
+              row(k, depth + 1, included ?? (picked.has(page.id) ? page : undefined)),
+            )}
           </ul>
         )}
       </li>
@@ -392,7 +431,10 @@ export function NotionPicker({
   const shown = search ? list.items : tree.top;
 
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface" data-testid="notion-picker">
+    <div
+      className="flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface"
+      data-testid="notion-picker"
+    >
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
         <span className="flex min-w-0 flex-1 basis-48 items-center gap-2">
           <Icon name="search" size={16} className="flex-none text-text2" />
@@ -408,12 +450,20 @@ export function NotionPicker({
             className={`${INPUT} h-8`}
           />
         </span>
-        <span className="tnum flex-none text-[13px] font-semibold text-accent-ink" aria-live="polite" data-testid="notion-picked-count">
-          {toRead} page{toRead === 1 ? "" : "s"} to read
+        <span
+          className="tnum flex-none text-[13px] font-semibold text-accent-ink"
+          aria-live="polite"
+          data-testid="notion-picked-count"
+        >
+          {toRead} page{toRead === 1 ? '' : 's'} to read
         </span>
       </div>
       {absorbed && (
-        <p role="status" className="border-b border-line bg-accent-soft px-3 py-2 text-[13px] font-medium text-accent-ink" data-testid="notion-absorbed">
+        <p
+          role="status"
+          className="border-b border-line bg-accent-soft px-3 py-2 text-[13px] font-medium text-accent-ink"
+          data-testid="notion-absorbed"
+        >
           {absorbed}
         </p>
       )}
@@ -421,7 +471,10 @@ export function NotionPicker({
       <div className="max-h-[340px] overflow-y-auto" aria-busy={list.loading}>
         {list.error && (
           <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-            <p role="alert" className="min-w-0 flex-1 rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit">
+            <p
+              role="alert"
+              className="min-w-0 flex-1 rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit"
+            >
               {list.error}
             </p>
             <Button onClick={list.retry}>Retry</Button>
@@ -430,36 +483,54 @@ export function NotionPicker({
         {!list.error && list.loading && !list.items.length && (
           <div className="flex flex-col">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="flex h-11 items-center border-t border-line px-3 first:border-t-0">
+              <div
+                key={i}
+                className="flex h-11 items-center border-t border-line px-3 first:border-t-0"
+              >
                 <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
               </div>
             ))}
           </div>
         )}
         {!list.loading && !list.error && !shown.length && (
-          <p className="px-3 py-6 text-center text-[15px] text-text2">{search ? "No shared page matches" : "Nothing shared yet"}</p>
+          <p className="px-3 py-6 text-center text-[15px] text-text2">
+            {search ? 'No shared page matches' : 'Nothing shared yet'}
+          </p>
         )}
         {shown.length > 0 && (
-          <ul role="tree" aria-label="Shared Notion pages" aria-multiselectable className="-mt-px flex flex-col">
+          <ul
+            role="tree"
+            aria-label="Shared Notion pages"
+            aria-multiselectable
+            className="-mt-px flex flex-col"
+          >
             {shown.map((p) => row(p, 0))}
           </ul>
         )}
         {list.cursor && !list.error && (
           <div className="border-t border-line px-3 py-2">
             <Button variant="ghost" disabled={list.loading} onClick={list.loadMore}>
-              {list.loading ? "Loading…" : "Load more"}
+              {list.loading ? 'Loading…' : 'Load more'}
             </Button>
           </div>
         )}
       </div>
 
       {value.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-3 py-2.5" aria-label="Picked pages" role="list">
+        <div
+          className="flex flex-wrap items-center gap-1.5 border-t border-line px-3 py-2.5"
+          aria-label="Picked pages"
+          role="list"
+        >
           {value.map((id) => {
             const p = known.get(id);
             const title = p?.title ?? labels[id] ?? `Page ${id.slice(0, 8)}…`;
             return (
-              <span role="listitem" key={id} className="inline-flex h-[30px] max-w-full items-center gap-1 rounded-full bg-accent-soft pr-1 pl-2.5 text-[13px] font-semibold text-accent-ink">
+              <span
+                role="listitem"
+                key={id}
+                className="inline-flex h-[30px] max-w-full items-center gap-1 rounded-full bg-accent-soft pr-1 pl-2.5 text-[13px] font-semibold text-accent-ink"
+              >
                 <span className="min-w-0 truncate" title={p || labels[id] ? title : id}>
                   {title}
                 </span>
@@ -481,7 +552,10 @@ export function NotionPicker({
       )}
 
       <div className="flex flex-col gap-1.5 border-t border-line bg-surface2 px-3 py-2.5">
-        <label htmlFor={`${searchId}-link`} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        <label
+          htmlFor={`${searchId}-link`}
+          className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+        >
           Paste a link
         </label>
         <div className="flex items-center gap-2">
@@ -493,7 +567,7 @@ export function NotionPicker({
               setLinkError(null);
             }}
             onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
+              if (e.key !== 'Enter') return;
               // Inside the add-source form: Enter adds the link, it does not submit the form.
               e.preventDefault();
               addLink();
@@ -515,7 +589,12 @@ export function NotionPicker({
           <InfoTip label="which pages show" align="start">
             Only pages you shared with Product Oracle in Notion appear here.
           </InfoTip>
-          <a href={SHARE_HELP} target="_blank" rel="noreferrer" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+          <a
+            href={SHARE_HELP}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-accent-ink underline-offset-2 hover:underline"
+          >
             Share more in Notion
           </a>
         </p>

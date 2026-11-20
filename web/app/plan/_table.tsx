@@ -1,14 +1,25 @@
-import Link from "next/link";
+import Link from 'next/link';
 
-import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
-import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds";
-import { namedText } from "@/lib/codes";
+import { MarkFor, WithFeatureMarks } from '@/components/current-state/CurrentState';
+import { Button, Chip, CodeChip, DataTable, type Column } from '@/components/ds';
+import { namedText } from '@/lib/codes';
 
-import type { GoalView } from "../home/_goals";
-import { driftMarker, engineeringParts, HORIZON_LABEL, HORIZONS, nextButton, nextSentence, prdLabel, prdName, stateChip, type PlanItem } from "./_lib";
+import type { GoalView } from '../home/_goals';
+import {
+  driftMarker,
+  engineeringParts,
+  HORIZON_LABEL,
+  HORIZONS,
+  nextButton,
+  nextSentence,
+  prdLabel,
+  prdName,
+  stateChip,
+  type PlanItem,
+} from './_lib';
 
-export type GroupBy = "horizon" | "goal" | "prd";
-const NO_GOAL = "No goal";
+export type GroupBy = 'horizon' | 'goal' | 'prd';
+const NO_GOAL = 'No goal';
 
 /** H4 §5: "Stopped in the strategy" or "Outside the strategy" on the row, while a finding is open. */
 function DriftMarker({ item }: { item: PlanItem }) {
@@ -26,16 +37,24 @@ function DriftMarker({ item }: { item: PlanItem }) {
  * word on one line and the rest ("Next → Now", "in draft 2 (was Planned)") sits below it, outside
  * the pill (qa-plan-30).
  */
-export function StateChip({ item, hero = false, split = false }: { item: PlanItem; hero?: boolean; split?: boolean }) {
+export function StateChip({
+  item,
+  hero = false,
+  split = false,
+}: {
+  item: PlanItem;
+  hero?: boolean;
+  split?: boolean;
+}) {
   const s = stateChip(item);
   const chip = (text: string, attrs: boolean) => (
     <Chip
       kind={s.kind}
       hero={hero}
-      data-testid={attrs ? "plan-state" : undefined}
+      data-testid={attrs ? 'plan-state' : undefined}
       data-state={attrs ? item.state : undefined}
-      data-dashed={attrs && s.dashed ? "true" : undefined}
-      className={`flex-none ${s.dashed ? "border-dashed" : ""}`}
+      data-dashed={attrs && s.dashed ? 'true' : undefined}
+      className={`flex-none ${s.dashed ? 'border-dashed' : ''}`}
     >
       {text}
     </Chip>
@@ -45,7 +64,7 @@ export function StateChip({ item, hero = false, split = false }: { item: PlanIte
     <span
       data-testid="plan-state"
       data-state={item.state}
-      data-dashed={s.dashed ? "true" : undefined}
+      data-dashed={s.dashed ? 'true' : undefined}
       title={s.label}
       className="inline-flex max-w-full min-w-0 flex-col items-start gap-0.5"
     >
@@ -59,9 +78,19 @@ export function StateChip({ item, hero = false, split = false }: { item: PlanIte
 }
 
 /** On a phone an empty cell ("—") is dropped rather than left alone on a line (qa-plan-54). */
-const EMPTY_ON_PHONE = "max-[600px]:has-[[data-empty]]:hidden";
+const EMPTY_ON_PHONE = 'max-[600px]:has-[[data-empty]]:hidden';
 
-function NextCell({ item, me, onLink, repeat = false }: { item: PlanItem; me: string | null | undefined; onLink?: (i: PlanItem) => void; repeat?: boolean }) {
+function NextCell({
+  item,
+  me,
+  onLink,
+  repeat = false,
+}: {
+  item: PlanItem;
+  me: string | null | undefined;
+  onLink?: (i: PlanItem) => void;
+  repeat?: boolean;
+}) {
   const n = item.next;
   // B-26: a PRD's review shows once in its group, on its first row; the PRD column names it on the rest.
   if (!n.action || repeat)
@@ -73,7 +102,7 @@ function NextCell({ item, me, onLink, repeat = false }: { item: PlanItem; me: st
   const sentence = nextSentence(n, me);
   // qa-plan-29: a viewer who may take the decision gets its button ("Review the PRD"); the rest
   // read who takes it in one sentence ("Owners decide on the slip"), never "Decide on slip · owners".
-  if (n.action === "link_issue" && onLink && item.prd)
+  if (n.action === 'link_issue' && onLink && item.prd)
     return (
       <span data-testid="plan-next" className="flex min-w-0 flex-col items-start">
         <Button
@@ -118,31 +147,44 @@ function EngineeringCell({ item }: { item: PlanItem }) {
   return (
     <span data-testid="plan-engineering" className="tnum text-sm">
       {issue && <span className="whitespace-nowrap">{issue}</span>}
-      {issue && day && " "}
+      {issue && day && ' '}
       {day && <span className="whitespace-nowrap">{issue ? `· ${day}` : day}</span>}
     </span>
   );
 }
 
 /** Rows in their group's order, and each row's group (Horizon, Goal or PRD). */
-export function grouped(items: PlanItem[], by: GroupBy, tags: Map<string, GoalView>, prdOrder: string[]) {
+export function grouped(
+  items: PlanItem[],
+  by: GroupBy,
+  tags: Map<string, GoalView>,
+  prdOrder: string[],
+) {
   const goalOf = (i: PlanItem) => i.goal_ids.map((id) => tags.get(id)).find(Boolean);
   const goalLabel = (i: PlanItem) => {
     const g = goalOf(i);
     return g ? namedText(g) : NO_GOAL;
   };
-  const group = (i: PlanItem) => (by === "horizon" ? HORIZON_LABEL[i.horizon] : by === "goal" ? goalLabel(i) : (i.prd?.title ?? "—"));
+  const group = (i: PlanItem) =>
+    by === 'horizon'
+      ? HORIZON_LABEL[i.horizon]
+      : by === 'goal'
+        ? goalLabel(i)
+        : (i.prd?.title ?? '—');
   const rank = (i: PlanItem): number => {
-    if (by === "horizon") return HORIZONS.indexOf(i.horizon);
-    if (by === "goal") {
+    if (by === 'horizon') return HORIZONS.indexOf(i.horizon);
+    if (by === 'goal') {
       const g = goalOf(i);
       return g ? Number(g.tag.slice(1)) : 1e6;
     }
-    const at = prdOrder.indexOf(i.prd?.slug ?? "");
+    const at = prdOrder.indexOf(i.prd?.slug ?? '');
     return at < 0 ? 1e6 : at;
   };
   // Stable: within a group, the API's order (by roadmap, then position).
-  const rows = items.map((i, n) => ({ i, n })).sort((a, b) => rank(a.i) - rank(b.i) || a.n - b.n).map((x) => x.i);
+  const rows = items
+    .map((i, n) => ({ i, n }))
+    .sort((a, b) => rank(a.i) - rank(b.i) || a.n - b.n)
+    .map((x) => x.i);
   const counts = new Map<string, number>();
   for (const r of rows) counts.set(group(r), (counts.get(group(r)) ?? 0) + 1);
   return { rows, group, counts };
@@ -153,8 +195,8 @@ export function repeatedReviews(rows: PlanItem[], group: (i: PlanItem) => string
   const seen = new Set<string>();
   const repeats = new Set<string>();
   for (const r of rows) {
-    if (r.next.action !== "review_prd") continue;
-    const k = `${group(r)}|${r.prd?.id ?? ""}|${r.next.href ?? ""}`;
+    if (r.next.action !== 'review_prd') continue;
+    const k = `${group(r)}|${r.prd?.id ?? ''}|${r.next.href ?? ''}`;
     if (seen.has(k)) repeats.add(r.id);
     else seen.add(k);
   }
@@ -190,19 +232,22 @@ export function PlanTable({
   const repeats = repeatedReviews(rows, group);
   const columns: Column<PlanItem>[] = [
     {
-      key: "item",
-      header: "Item",
-      phone: "title",
+      key: 'item',
+      header: 'Item',
+      phone: 'title',
       wrap: true,
       // Two lines before an ellipsis; the whole title on hover (qa-plan-5). The feature's
       // Current-state pill follows the name (cs2-b, the owner's later pick), on its line or under it.
       cell: (i) => (
-        <span data-testid="plan-name" className="flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          data-testid="plan-name"
+          className="flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+        >
           <span
             data-testid="plan-title"
             title={i.title}
             className={`line-clamp-2 min-w-0 font-semibold break-words max-[600px]:line-clamp-none ${
-              i.change?.kind === "dropped" ? "text-text2 line-through decoration-1" : ""
+              i.change?.kind === 'dropped' ? 'text-text2 line-through decoration-1' : ''
             }`}
           >
             {i.title}
@@ -212,35 +257,52 @@ export function PlanTable({
       ),
     },
     {
-      key: "prd",
-      header: "PRD",
-      width: "120px",
+      key: 'prd',
+      header: 'PRD',
+      width: '120px',
       wrap: true,
       // The PRD by its name; its version is on hover and the state chip says a draft's (qa-plan-5).
       cell: (i) => (
-        <span data-testid="plan-prd" title={prdLabel(i)} className="line-clamp-2 break-words text-text2 max-[600px]:line-clamp-none">
+        <span
+          data-testid="plan-prd"
+          title={prdLabel(i)}
+          className="line-clamp-2 break-words text-text2 max-[600px]:line-clamp-none"
+        >
           {prdName(i)}
         </span>
       ),
     },
     {
-      key: "goal",
-      header: "Goal",
-      width: "128px",
+      key: 'goal',
+      header: 'Goal',
+      width: '128px',
       wrap: true,
       // prod-4: the first goal in full (its name on two lines), "+N goals" for the rest, named on hover.
       cell: (i) => {
         const goals = i.goal_ids.map((id) => tags.get(id)).filter((g): g is GoalView => !!g);
         const [first, ...rest] = goals;
         return (
-          <span data-testid="plan-goal" className="flex max-w-full min-w-0 flex-wrap items-center gap-1">
+          <span
+            data-testid="plan-goal"
+            className="flex max-w-full min-w-0 flex-wrap items-center gap-1"
+          >
             {first ? (
               <>
-                <CodeChip kind="goal" entityId={first.id} title={first.title} proposed={first.proposed} wrap />
+                <CodeChip
+                  kind="goal"
+                  entityId={first.id}
+                  title={first.title}
+                  proposed={first.proposed}
+                  wrap
+                />
                 {rest.length > 0 && (
-                  <span data-testid="plan-goal-more" title={rest.map((g) => namedText(g)).join(", ")} className="tnum flex-none text-sm font-semibold text-text2">
-                    {/* qa4-plan-25: says what the number counts, on a phone (no hover) too. */}
-                    +{rest.length} {rest.length === 1 ? "goal" : "goals"}
+                  <span
+                    data-testid="plan-goal-more"
+                    title={rest.map((g) => namedText(g)).join(', ')}
+                    className="tnum flex-none text-sm font-semibold text-text2"
+                  >
+                    {/* qa4-plan-25: says what the number counts, on a phone (no hover) too. */}+
+                    {rest.length} {rest.length === 1 ? 'goal' : 'goals'}
                   </span>
                 )}
               </>
@@ -252,12 +314,12 @@ export function PlanTable({
       },
     },
     {
-      key: "state",
-      header: "State",
-      width: "144px",
-      phone: "action",
+      key: 'state',
+      header: 'State',
+      width: '144px',
+      phone: 'action',
       wrap: true,
-      className: "overflow-visible",
+      className: 'overflow-visible',
       cell: (i) => (
         <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
           {/* qa-plan-31: a dropped item's one chip says so, "Dropped in draft 2 (was Planned)". */}
@@ -267,16 +329,23 @@ export function PlanTable({
       ),
     },
     {
-      key: "engineering",
-      header: "Engineering",
-      width: "160px",
+      key: 'engineering',
+      header: 'Engineering',
+      width: '160px',
       wrap: true,
       // Under 760 px (the Ask panel docked) the inspector says it; the other columns keep their room.
-      narrow: "hide",
+      narrow: 'hide',
       className: EMPTY_ON_PHONE,
       cell: (i) => <EngineeringCell item={i} />,
     },
-    { key: "next", header: "Next", width: "144px", wrap: true, className: EMPTY_ON_PHONE, cell: (i) => <NextCell item={i} me={me} onLink={onLink} repeat={repeats.has(i.id)} /> },
+    {
+      key: 'next',
+      header: 'Next',
+      width: '144px',
+      wrap: true,
+      className: EMPTY_ON_PHONE,
+      cell: (i) => <NextCell item={i} me={me} onLink={onLink} repeat={repeats.has(i.id)} />,
+    },
   ];
   return (
     <WithFeatureMarks>
@@ -298,9 +367,14 @@ export function PlanTable({
             <span className="tnum text-accent-ink">{counts.get(g)}</span>
           </span>
         )}
-        groupProps={() => ({ "data-testid": "plan-group" })}
-        rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key, "data-id": i.id })}
-        empty={failed ? null : "No roadmap items yet"}
+        groupProps={() => ({ 'data-testid': 'plan-group' })}
+        rowProps={(i) => ({
+          'data-testid': 'plan-row',
+          'data-origin': i.origin,
+          'data-item': i.key,
+          'data-id': i.id,
+        })}
+        empty={failed ? null : 'No roadmap items yet'}
       />
     </WithFeatureMarks>
   );

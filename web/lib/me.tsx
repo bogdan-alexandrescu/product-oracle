@@ -1,18 +1,28 @@
-"use client";
+'use client';
 
-import { usePathname } from "next/navigation";
-import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname } from 'next/navigation';
+import {
+  createContext,
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
-import { api, type Me, type Schemas } from "@/lib/api/client";
-import type { operations } from "@/lib/api/schema";
-import { streamed } from "@/lib/boundaries";
-import { DEFAULT_ZONE, setDisplayZone } from "@/lib/zone";
+import { api, type Me, type Schemas } from '@/lib/api/client';
+import type { operations } from '@/lib/api/schema';
+import { streamed } from '@/lib/boundaries';
+import { DEFAULT_ZONE, setDisplayZone } from '@/lib/zone';
 
-export type Role = Me["role"];
+export type Role = Me['role'];
 /** An API operation (its operationId), as GET /v1/me/capabilities names it. */
 export type Operation = keyof operations;
 
-const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"];
+const ROLE_ORDER: readonly Role[] = ['viewer', 'commenter', 'approver', 'owner'];
 
 /** True when `role` is at least `min` (viewer < commenter < approver < owner). */
 export function hasRole(role: Role | null | undefined, min: Role): boolean {
@@ -63,7 +73,10 @@ export const CompanyZoneContext = createContext<string>(DEFAULT_ZONE);
  * boundary) to re-check on every navigation, so sign-in and sign-out show up.
  */
 export function MeProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ me: Me | null; loading: boolean }>({ me: null, loading: true });
+  const [state, setState] = useState<{ me: Me | null; loading: boolean }>({
+    me: null,
+    loading: true,
+  });
   const seq = useRef(0);
   // True once the first answer is drawn: the server's page is hydrated by then.
   const hydrated = useRef(false);
@@ -73,7 +86,7 @@ export function MeProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const call = ++seq.current;
-    const res = await api.GET("/v1/me").catch(() => undefined);
+    const res = await api.GET('/v1/me').catch(() => undefined);
     const next = { me: res?.response.ok ? (res.data ?? null) : null, loading: false };
     if (hydrated.current) {
       // Later pages are drawn on the client: the answer lands at once.
@@ -96,8 +109,10 @@ export function MeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Read once per signed-in principal and role: a new sign-in or a role change reloads them.
-  const capsKey = state.me ? `${state.me.user_id ?? state.me.token_id}|${state.me.role}|${state.me.engineering_lead}` : null;
-  const [caps, setCaps] = useState<{ key: string; caps: Schemas["Capabilities"] } | null>(null);
+  const capsKey = state.me
+    ? `${state.me.user_id ?? state.me.token_id}|${state.me.role}|${state.me.engineering_lead}`
+    : null;
+  const [caps, setCaps] = useState<{ key: string; caps: Schemas['Capabilities'] } | null>(null);
   const [capsFailed, setCapsFailed] = useState<{ key: string; error: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -105,15 +120,15 @@ export function MeProvider({ children }: { children: ReactNode }) {
     let alive = true;
     const failed = (error: string) => alive && setCapsFailed({ key: capsKey, error });
     api
-      .GET("/v1/me/capabilities")
+      .GET('/v1/me/capabilities')
       .then((res) => {
         if (!alive) return;
         if (res.data) {
           setCapsFailed(null);
           setCaps({ key: capsKey, caps: res.data });
-        } else failed("Oracle could not read what your role may do.");
+        } else failed('Oracle could not read what your role may do.');
       })
-      .catch(() => failed("Oracle could not read what your role may do."));
+      .catch(() => failed('Oracle could not read what your role may do.'));
     return () => {
       alive = false;
     };
@@ -170,7 +185,7 @@ export function MeSync() {
   const pathname = usePathname();
   const { refresh } = useMe();
   useEffect(() => {
-    if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return;
+    if (pathname.startsWith('/i/') || pathname.startsWith('/s/')) return;
     void refresh();
   }, [pathname, refresh]);
   return null;
@@ -178,6 +193,6 @@ export function MeSync() {
 
 export function useMe(): MeState {
   const ctx = useContext(MeContext);
-  if (!ctx) throw new Error("useMe() must be used inside <MeProvider>");
+  if (!ctx) throw new Error('useMe() must be used inside <MeProvider>');
   return ctx;
 }

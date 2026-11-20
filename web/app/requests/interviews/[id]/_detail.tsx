@@ -1,16 +1,33 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import Link from 'next/link';
+import { useState, type ReactNode } from 'react';
 
-import { Button, Chip, confirmInPage, Dialog, Empty, InfoTip, Label, Page, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, LoadError, Loading } from "@/components/ui";
-import { ApiError, api, unwrap } from "@/lib/api/client";
-import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
-import { formatDateTime, formatDay } from "@/lib/format";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  confirmInPage,
+  Dialog,
+  Empty,
+  InfoTip,
+  Label,
+  Page,
+  PageHeader,
+  Panel,
+} from '@/components/ds';
+import { ErrorNote, LoadError, Loading } from '@/components/ui';
+import { ApiError, api, unwrap } from '@/lib/api/client';
+import {
+  INTERVIEW_STATUS_KIND,
+  INTERVIEW_STATUS_LABEL,
+  interviewsCall,
+  type InterviewLink,
+  type InterviewOut,
+} from '@/lib/api/interviews';
+import { formatDateTime, formatDay } from '@/lib/format';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { expiresIn, LinkShown } from "../../_components/InterviewDialog";
+import { expiresIn, LinkShown } from '../../_components/InterviewDialog';
 
 /**
  * One customer interview (C3): what it was about, the approved guide, the transcript, Oracle's
@@ -24,19 +41,27 @@ import { expiresIn, LinkShown } from "../../_components/InterviewDialog";
  * An empty section says why it is empty and what comes next (qa-work-44).
  */
 export function InterviewDetail({ id }: { id: string }) {
-  const q = useQuery(`interview:${id}`, () => interviewsCall<InterviewOut>("GET", `/v1/interviews/${encodeURIComponent(id)}`));
+  const q = useQuery(`interview:${id}`, () =>
+    interviewsCall<InterviewOut>('GET', `/v1/interviews/${encodeURIComponent(id)}`),
+  );
   const iv = q.data;
   // rirs-40: back to the Interviews tab, above the name.
   const back = (
-    <Link href="/requests/interviews" data-testid="interview-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
+    <Link
+      href="/requests/interviews"
+      data-testid="interview-back"
+      className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline"
+    >
       ← Interviews
     </Link>
   );
-  const requests = useQuery(`interview-requests:${iv?.request_ids.join(",") ?? ""}`, () =>
+  const requests = useQuery(`interview-requests:${iv?.request_ids.join(',') ?? ''}`, () =>
     Promise.all(
       (iv?.request_ids ?? []).map((rid) =>
         // #1586: a request deleted since is an answer (its link stays); any other failure is shown.
-        unwrap(api.GET("/v1/requests/{request_id}", { params: { path: { request_id: rid } } })).catch((e) => {
+        unwrap(
+          api.GET('/v1/requests/{request_id}', { params: { path: { request_id: rid } } }),
+        ).catch((e) => {
           if (e instanceof ApiError && e.status === 404) return null;
           throw e;
         }),
@@ -49,14 +74,14 @@ export function InterviewDetail({ id }: { id: string }) {
   async function withdraw() {
     if (!iv) return;
     const yes = await confirmInPage({
-      action: "Withdraw link",
+      action: 'Withdraw link',
       message: `Withdraw the link sent to ${iv.interviewee_name}? It stops working at once.`,
       destructive: true,
     });
     if (!yes) return;
     setError(null);
     try {
-      const next = await interviewsCall<InterviewOut>("POST", `/v1/interviews/${iv.id}/revoke`);
+      const next = await interviewsCall<InterviewOut>('POST', `/v1/interviews/${iv.id}/revoke`);
       q.setData(() => next);
     } catch (e) {
       setError(errorMessage(e));
@@ -72,8 +97,10 @@ export function InterviewDetail({ id }: { id: string }) {
     );
   }
 
-  const open = iv.status === "invited" || iv.status === "in_progress";
-  const who = iv.interviewee_company ? `${iv.interviewee_name} · ${iv.interviewee_company}` : (iv.interviewee_name ?? "Interview");
+  const open = iv.status === 'invited' || iv.status === 'in_progress';
+  const who = iv.interviewee_company
+    ? `${iv.interviewee_name} · ${iv.interviewee_company}`
+    : (iv.interviewee_name ?? 'Interview');
   const prompt = (item: string | null) => iv.guide.find((g) => g.id === item)?.prompt ?? null;
   const snap = iv.snapshot ?? {};
   const facts = snap.quick_facts ?? [];
@@ -81,9 +108,9 @@ export function InterviewDetail({ id }: { id: string }) {
   const needs = snap.needs ?? [];
   const insights = snap.insights ?? [];
   const hasSnapshot = facts.length + quotes.length + needs.length + insights.length > 0;
-  const transcript = iv.messages.filter((m) => m.kind !== "intro");
-  const name = iv.interviewee_name ?? "The customer";
-  const finished = iv.status === "finished";
+  const transcript = iv.messages.filter((m) => m.kind !== 'intro');
+  const name = iv.interviewee_name ?? 'The customer';
+  const finished = iv.status === 'finished';
 
   return (
     <Page>
@@ -105,13 +132,19 @@ export function InterviewDetail({ id }: { id: string }) {
         }
       />
       {error && <ErrorNote>{error}</ErrorNote>}
-      {newLink && <NewLinkDialog interview={iv} onMade={(next) => q.setData(() => next)} onClose={() => setNewLink(false)} />}
+      {newLink && (
+        <NewLinkDialog
+          interview={iv}
+          onMade={(next) => q.setData(() => next)}
+          onClose={() => setNewLink(false)}
+        />
+      )}
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
         <Panel title="About" testId="interview-about">
           <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[15px]">
             <Fact label="What it was about">{iv.title}</Fact>
             <Fact label="Created by">
-              {iv.created_by_name ?? "—"}
+              {iv.created_by_name ?? '—'}
               {/* qa-work-44: one date: the link's, when it shows, else the day it was made. */}
               {!(iv.link_created_at && open) && ` · ${formatDay(iv.created_at)}`}
             </Fact>
@@ -138,12 +171,16 @@ export function InterviewDetail({ id }: { id: string }) {
                     shrink
                     trigger={
                       <span className="text-left break-words whitespace-normal underline decoration-dotted underline-offset-4">
-                        {iv.link_opened_at ? `Opened ${formatDateTime(iv.link_opened_at)}.` : "Not opened yet."}
+                        {iv.link_opened_at
+                          ? `Opened ${formatDateTime(iv.link_opened_at)}.`
+                          : 'Not opened yet.'}
                       </span>
                     }
                   >
-                    For safety the link is shown only once, when it is made, so it can&apos;t be shown or copied again.
-                    {iv.can_manage && ` If ${name} lost it, use Make a new link; the old link stops working.`}
+                    For safety the link is shown only once, when it is made, so it can&apos;t be
+                    shown or copied again.
+                    {iv.can_manage &&
+                      ` If ${name} lost it, use Make a new link; the old link stops working.`}
                   </InfoTip>
                 </span>
                 {iv.can_manage && (
@@ -178,10 +215,16 @@ export function InterviewDetail({ id }: { id: string }) {
           {transcript.length ? (
             <ol className="flex flex-col gap-3 px-4 py-3">
               {transcript.map((m) => (
-                <li key={m.id} data-testid={`transcript-${m.role}`} className="flex min-w-0 flex-col gap-0.5">
-                  <Label>{m.role === "oracle" ? "Oracle" : iv.interviewee_name}</Label>
-                  {m.kind === "skip" ? (
-                    <p className="text-[15px] text-text2 italic">Skipped: {prompt(m.guide_item) ?? "this question"}</p>
+                <li
+                  key={m.id}
+                  data-testid={`transcript-${m.role}`}
+                  className="flex min-w-0 flex-col gap-0.5"
+                >
+                  <Label>{m.role === 'oracle' ? 'Oracle' : iv.interviewee_name}</Label>
+                  {m.kind === 'skip' ? (
+                    <p className="text-[15px] text-text2 italic">
+                      Skipped: {prompt(m.guide_item) ?? 'this question'}
+                    </p>
                   ) : (
                     <p className="text-[15px] break-words whitespace-pre-wrap" data-user-content>
                       {m.body}
@@ -210,7 +253,11 @@ export function InterviewDetail({ id }: { id: string }) {
               {quotes.length > 0 && (
                 <Part title="Quotes">
                   {quotes.map((x, i) => (
-                    <blockquote key={i} className="border-l-2 border-line-strong pl-3 break-words" data-user-content>
+                    <blockquote
+                      key={i}
+                      className="border-l-2 border-line-strong pl-3 break-words"
+                      data-user-content
+                    >
                       &ldquo;{x.text}&rdquo;
                     </blockquote>
                   ))}
@@ -243,12 +290,16 @@ export function InterviewDetail({ id }: { id: string }) {
           ) : (
             <Empty testId="interview-snapshot-empty">
               {finished ? (
-                "Oracle is writing the snapshot"
+                'Oracle is writing the snapshot'
               ) : (
                 // #1590: a short status stays visible; the full sentence sits behind the (i).
                 <>
-                  <span data-testid="interview-snapshot-status">{`After ${name} finishes`}</span>{" "}
-                  <InfoTip label="when the snapshot comes" align="start" testId="interview-snapshot-tip">
+                  <span data-testid="interview-snapshot-status">{`After ${name} finishes`}</span>{' '}
+                  <InfoTip
+                    label="when the snapshot comes"
+                    align="start"
+                    testId="interview-snapshot-tip"
+                  >
                     {`Oracle writes a snapshot here once ${name} finishes the interview.`}
                   </InfoTip>
                 </>
@@ -260,14 +311,21 @@ export function InterviewDetail({ id }: { id: string }) {
         <Panel title="Requests created" count={iv.request_ids.length} testId="interview-requests">
           {iv.request_ids.length && requests.error ? (
             <div className="px-4 pt-3">
-              <LoadError what="the requests" error={requests.error} onRetry={() => void requests.reload()} />
+              <LoadError
+                what="the requests"
+                error={requests.error}
+                onRetry={() => void requests.reload()}
+              />
             </div>
           ) : iv.request_ids.length ? (
             <ul className="flex flex-col gap-1.5 px-4 py-3 text-[15px]">
               {iv.request_ids.map((rid, i) => (
                 <li key={rid}>
-                  <Link href={`/requests?request=${encodeURIComponent(rid)}`} className="font-semibold text-accent-ink hover:underline">
-                    {requests.data?.[i]?.title ?? "Request"}
+                  <Link
+                    href={`/requests?request=${encodeURIComponent(rid)}`}
+                    className="font-semibold text-accent-ink hover:underline"
+                  >
+                    {requests.data?.[i]?.title ?? 'Request'}
                   </Link>
                 </li>
               ))}
@@ -279,7 +337,7 @@ export function InterviewDetail({ id }: { id: string }) {
               ) : (
                 // #1590: a short status stays visible; the full sentence sits behind the (i).
                 <>
-                  <span data-testid="interview-requests-status">{`After ${name} finishes`}</span>{" "}
+                  <span data-testid="interview-requests-status">{`After ${name} finishes`}</span>{' '}
                   <InfoTip label="when requests show" align="start" testId="interview-requests-tip">
                     {`The requests ${name} makes show here, to decide, once they finish the interview.`}
                   </InfoTip>
@@ -296,18 +354,18 @@ export function InterviewDetail({ id }: { id: string }) {
 /** Why the transcript is empty, and what to do (qa-work-44). */
 function transcriptEmpty(iv: InterviewOut, name: string): string {
   switch (iv.status) {
-    case "draft":
-      return "No link has been made yet, so nobody has been asked.";
-    case "invited":
+    case 'draft':
+      return 'No link has been made yet, so nobody has been asked.';
+    case 'invited':
       return iv.link_opened_at
         ? `${name} opened the link but hasn't answered yet.`
         : // qa4-docs-share-63: the link can't be shown again, so a link never sent is replaced, not sent.
-          `${name} hasn't opened the link yet.${iv.can_manage ? " If you didn't send it, make a new link." : ""}`;
-    case "in_progress":
+          `${name} hasn't opened the link yet.${iv.can_manage ? " If you didn't send it, make a new link." : ''}`;
+    case 'in_progress':
       return `${name} has started but hasn't answered yet.`;
-    case "expired":
+    case 'expired':
       return `The link expired before ${name} answered. Interview them again for a new link.`;
-    case "revoked":
+    case 'revoked':
       return `The link was withdrawn before ${name} answered.`;
     default:
       return `${name} finished without answering.`;
@@ -318,7 +376,15 @@ function transcriptEmpty(iv: InterviewOut, name: string): string {
  * Make a new link (qa-work-43): asks first, then shows the new link once with Copy, as when the
  * interview was first made. The interview is read again so the page shows when it was made.
  */
-function NewLinkDialog({ interview, onMade, onClose }: { interview: InterviewOut; onMade: (next: InterviewOut) => void; onClose: () => void }) {
+function NewLinkDialog({
+  interview,
+  onMade,
+  onClose,
+}: {
+  interview: InterviewOut;
+  onMade: (next: InterviewOut) => void;
+  onClose: () => void;
+}) {
   const [link, setLink] = useState<InterviewLink | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -327,9 +393,12 @@ function NewLinkDialog({ interview, onMade, onClose }: { interview: InterviewOut
     setBusy(true);
     setError(null);
     try {
-      const made = await interviewsCall<InterviewLink>("POST", `/v1/interviews/${interview.id}/new-link`);
+      const made = await interviewsCall<InterviewLink>(
+        'POST',
+        `/v1/interviews/${interview.id}/new-link`,
+      );
       setLink(made);
-      onMade(await interviewsCall<InterviewOut>("GET", `/v1/interviews/${interview.id}`));
+      onMade(await interviewsCall<InterviewOut>('GET', `/v1/interviews/${interview.id}`));
     } catch (e) {
       setError(errorMessage(e));
     } finally {

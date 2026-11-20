@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN } from './helpers';
 
 /*
  * The fix4-simple-home review's minors on Simple's Home (mock-backed, through the UI only):
@@ -15,33 +15,35 @@ import { ADMIN } from "./helpers";
 async function signIn(page: Page, email: string, scenario: string) {
   await page.context().addInitScript(
     ([key, value]) => {
-      if (!sessionStorage.getItem("fix4-home-review")) {
-        localStorage.removeItem("po-mock-db-v2");
-        sessionStorage.setItem("fix4-home-review", "1");
+      if (!sessionStorage.getItem('fix4-home-review')) {
+        localStorage.removeItem('po-mock-db-v2');
+        sessionStorage.setItem('fix4-home-review', '1');
       }
       localStorage.setItem(key, value);
     },
     [MOCK_SCENARIO_KEY, scenario] as const,
   );
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/login/);
-  await page.goto("/simple");
-  await expect(home(page).getByTestId("home-sentence")).toBeVisible();
+  await page.goto('/simple');
+  await expect(home(page).getByTestId('home-sentence')).toBeVisible();
 }
 
-const home = (page: Page) => page.getByTestId("simple-page");
+const home = (page: Page) => page.getByTestId('simple-page');
 
 /** Each goal's share line starts where its name starts, or right after its guardrail tag. */
 async function shareBesideName(page: Page) {
-  const goals = home(page).getByTestId("home-goal").filter({ has: page.getByTestId("home-goal-weight") });
+  const goals = home(page)
+    .getByTestId('home-goal')
+    .filter({ has: page.getByTestId('home-goal-weight') });
   await expect(goals.first()).toBeVisible();
   for (const goal of await goals.all()) {
-    const share = (await goal.getByTestId("home-goal-weight").boundingBox())!;
-    const name = (await goal.getByTestId("home-goal-link").boundingBox())!;
-    const tag = goal.locator(".simple-tag");
+    const share = (await goal.getByTestId('home-goal-weight').boundingBox())!;
+    const name = (await goal.getByTestId('home-goal-link').boundingBox())!;
+    const tag = goal.locator('.simple-tag');
     const t = (await tag.count()) ? await tag.boundingBox() : null;
     // On the tag's line it follows the tag; on its own line it starts with the name.
     const start = t && Math.abs(t.y - share.y) < t.height ? t.x + t.width : name.x;
@@ -49,57 +51,73 @@ async function shareBesideName(page: Page) {
   }
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("qa-simple-home-15: the greeting names what waits; the counts are the tiles' alone", async ({ page }) => {
+  test("qa-simple-home-15: the greeting names what waits; the counts are the tiles' alone", async ({
+    page,
+  }) => {
     // fails_when: the sentence repeats the tiles' numbers ("9 decisions and 5 broken links wait on you")
-    await signIn(page, ADMIN.email, "simple-home");
-    const decisions = home(page).getByTestId("home-summary-decisions").locator(".simple-number");
+    await signIn(page, ADMIN.email, 'simple-home');
+    const decisions = home(page).getByTestId('home-summary-decisions').locator('.simple-number');
     await expect(decisions).toHaveText(/^\d+$/);
-    const sentence = home(page).getByTestId("home-sentence");
+    const sentence = home(page).getByTestId('home-sentence');
     await expect(sentence).toHaveText(/^[A-Z][^\d]* wait on you\./);
     await expect(sentence).toContainText(/decisions/i);
-    await expect(sentence).toContainText("broken links");
+    await expect(sentence).toContainText('broken links');
   });
 
   test("fix4 review: a goal's share line sits with its name (desktop)", async ({ page }) => {
-    await signIn(page, ADMIN.email, "simple-home");
+    await signIn(page, ADMIN.email, 'simple-home');
     await shareBesideName(page);
   });
 
-  test("fix4 review: a question's Blocks line on Home names the feature with its code and the milestone", async ({ page }) => {
+  test("fix4 review: a question's Blocks line on Home names the feature with its code and the milestone", async ({
+    page,
+  }) => {
     // fails_when: a milestone code (M1) shows in the Blocks line, or the feature is named without its code
     // (simple-home-qa-nov14 #3: every feature shows its code with its name, as on Decisions)
-    await signIn(page, ADMIN.email, "simple-home");
+    await signIn(page, ADMIN.email, 'simple-home');
     // build-rundecide RD3 a: a PRD's questions wait in its own "Waiting for you" card.
-    const blocks = home(page).locator('[data-testid="home-decisions"], [data-testid="home-prd-waiting"]').locator(".simple-meta").filter({ hasText: "Blocks " }).first();
+    const blocks = home(page)
+      .locator('[data-testid="home-decisions"], [data-testid="home-prd-waiting"]')
+      .locator('.simple-meta')
+      .filter({ hasText: 'Blocks ' })
+      .first();
     await expect(blocks).toBeVisible();
     await expect(blocks).toHaveText(/Blocks F-\d+ [A-Z][a-z][^:]*, \w+ milestone$/);
     await expect(blocks).not.toHaveText(/\bM\d/);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("fix4 review: a goal's share line sits with its name, at the card's start", async ({ page }) => {
+  test("fix4 review: a goal's share line sits with its name, at the card's start", async ({
+    page,
+  }) => {
     // fails_when: "Counts for N% of each feature's score" is pushed to the card's right edge, away from the name
-    await signIn(page, ADMIN.email, "simple-home");
+    await signIn(page, ADMIN.email, 'simple-home');
     await shareBesideName(page);
   });
 
-  test("fix4 review: the phone tab bar shows every label whole", async ({ page }) => {
+  test('fix4 review: the phone tab bar shows every label whole', async ({ page }) => {
     // fails_when: "One-pagers" is cut to "One-page…" at 390 px
-    await signIn(page, ADMIN.email, "simple-home");
-    const tab = page.getByTestId("simple-tab-one-pagers");
+    await signIn(page, ADMIN.email, 'simple-home');
+    const tab = page.getByTestId('simple-tab-one-pagers');
     await expect(tab).toBeVisible();
-    for (const id of ["simple-tab-home", "simple-tab-one-pagers", "simple-tab-roadmap", "simple-tab-decisions"]) {
-      const label = page.getByTestId(id).locator(":scope > span:not(.simple-count)");
+    for (const id of [
+      'simple-tab-home',
+      'simple-tab-one-pagers',
+      'simple-tab-roadmap',
+      'simple-tab-decisions',
+    ]) {
+      const label = page.getByTestId(id).locator(':scope > span:not(.simple-count)');
       // The text's own width (fractional), laid out unclipped in the label's font, against the label's room.
       const [text, room] = await label.evaluate((el) => {
         const probe = el.cloneNode(true) as HTMLElement;
-        probe.style.cssText = "position:absolute;visibility:hidden;max-width:none;width:auto;overflow:visible;white-space:nowrap";
+        probe.style.cssText =
+          'position:absolute;visibility:hidden;max-width:none;width:auto;overflow:visible;white-space:nowrap';
         el.parentElement!.appendChild(probe);
         const w = probe.getBoundingClientRect().width;
         probe.remove();

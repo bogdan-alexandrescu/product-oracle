@@ -1,120 +1,151 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 // QA pass 4, docs lane: the Publish page. Annual billing PRD v2 (default scenario) is held
 // by one critical blocker; Usage alerts roadmap v1 is held by a date whose schedule basis was
 // withdrawn, and is published in the "approved-plan" scenario. Invented data only.
 
-type Role = "viewer" | "commenter" | "approver" | "owner";
+type Role = 'viewer' | 'commenter' | 'approver' | 'owner';
 
-async function open(page: Page, slug: string, role: Role = "owner", scenario?: string) {
-  await page.addInitScript(([rk, r]) => localStorage.setItem(rk, r), [MOCK_ROLE_KEY, role] as const);
-  if (scenario) await page.addInitScript(([sk, s]) => localStorage.setItem(sk, s), [MOCK_SCENARIO_KEY, scenario] as const);
+async function open(page: Page, slug: string, role: Role = 'owner', scenario?: string) {
+  await page.addInitScript(([rk, r]) => localStorage.setItem(rk, r), [
+    MOCK_ROLE_KEY,
+    role,
+  ] as const);
+  if (scenario)
+    await page.addInitScript(([sk, s]) => localStorage.setItem(sk, s), [
+      MOCK_SCENARIO_KEY,
+      scenario,
+    ] as const);
   await login(page);
   await page.goto(`/documents/${slug}/publish`);
-  await expect(page.getByTestId("publish-readiness")).toBeVisible();
+  await expect(page.getByTestId('publish-readiness')).toBeVisible();
 }
 
-const inspector = (page: Page) => page.getByTestId("publish-inspector");
+const inspector = (page: Page) => page.getByTestId('publish-inspector');
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("qa4-docs-share-3: a roadmap's Publish page uses roadmap words and its own check, not the PRD checks", async ({ page }) => {
-    await open(page, "usage-alerts-roadmap");
-    await expect(page.getByTestId("block-row")).toHaveCount(1);
-    const lines = inspector(page).getByTestId("on-publish").getByRole("listitem");
-    await expect(lines).toContainText(["Roadmap status set to Approved"]);
-    await expect(inspector(page)).not.toContainText("PRD status");
-    await expect(page.getByRole("region", { name: "Advisory" })).toHaveCount(0);
-    await expect(page.getByText("Problem and user clarity")).toHaveCount(0);
+  test("qa4-docs-share-3: a roadmap's Publish page uses roadmap words and its own check, not the PRD checks", async ({
+    page,
+  }) => {
+    await open(page, 'usage-alerts-roadmap');
+    await expect(page.getByTestId('block-row')).toHaveCount(1);
+    const lines = inspector(page).getByTestId('on-publish').getByRole('listitem');
+    await expect(lines).toContainText(['Roadmap status set to Approved']);
+    await expect(inspector(page)).not.toContainText('PRD status');
+    await expect(page.getByRole('region', { name: 'Advisory' })).toHaveCount(0);
+    await expect(page.getByText('Problem and user clarity')).toHaveCount(0);
   });
 
-  test("qa4-docs-share-20: a roadmap shows no 'Hard checks 3' that do not apply; its dates check is shown instead", async ({ page }) => {
-    await open(page, "usage-alerts-roadmap");
-    await expect(page.getByRole("region", { name: "Hard checks" })).toHaveCount(0);
-    const checks = page.getByRole("region", { name: "Checks" });
-    await expect(checks).toContainText("Dates backed by a confirmed schedule");
-    await expect(checks.getByTestId("dates-check")).toContainText("Fail");
+  test("qa4-docs-share-20: a roadmap shows no 'Hard checks 3' that do not apply; its dates check is shown instead", async ({
+    page,
+  }) => {
+    await open(page, 'usage-alerts-roadmap');
+    await expect(page.getByRole('region', { name: 'Hard checks' })).toHaveCount(0);
+    const checks = page.getByRole('region', { name: 'Checks' });
+    await expect(checks).toContainText('Dates backed by a confirmed schedule');
+    await expect(checks.getByTestId('dates-check')).toContainText('Fail');
   });
 
-  test("build-review: an approved roadmap's breadcrumb says Approved, as in Simple", async ({ page }) => {
-    await open(page, "usage-alerts-roadmap", "owner", "approved-plan");
-    const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-    await expect(crumb).toContainText("Approved");
-    await expect(crumb).not.toContainText("Published");
+  test("build-review: an approved roadmap's breadcrumb says Approved, as in Simple", async ({
+    page,
+  }) => {
+    await open(page, 'usage-alerts-roadmap', 'owner', 'approved-plan');
+    const crumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumb).toContainText('Approved');
+    await expect(crumb).not.toContainText('Published');
   });
 
-  test("qa4-docs-share-11: the advisory blocker check does not pass while the hard check has an open critical blocker", async ({ page }) => {
-    await open(page, "annual-billing");
-    await expect(page.locator('[data-testid="hard-check"][data-key="critical_blockers"]')).toHaveAttribute("data-status", "critical");
+  test('qa4-docs-share-11: the advisory blocker check does not pass while the hard check has an open critical blocker', async ({
+    page,
+  }) => {
+    await open(page, 'annual-billing');
+    await expect(
+      page.locator('[data-testid="hard-check"][data-key="critical_blockers"]'),
+    ).toHaveAttribute('data-status', 'critical');
     const advisory = page.locator('[data-testid="advisory"][data-key="blocker_feasibility"]');
     await expect(advisory).toBeVisible();
-    await expect(advisory).not.toHaveAttribute("data-status", "pass");
-    await expect(advisory).not.toContainText("Pass");
+    await expect(advisory).not.toHaveAttribute('data-status', 'pass');
+    await expect(advisory).not.toContainText('Pass');
   });
 
-  test("qa4fix-docs-share review: the advisory blocker check is critical when a critical blocker has no workable option or experiment", async ({ page }) => {
+  test('qa4fix-docs-share review: the advisory blocker check is critical when a critical blocker has no workable option or experiment', async ({
+    page,
+  }) => {
     // As the API's rule: the seeded critical blocker's one option is rejected and its experiment fails.
     await login(page);
-    await page.goto("/ground-truth?tab=blockers");
-    const lookup = page.getByTestId("blocker-row").filter({ hasText: "The address lookup service allows 100 requests a minute per company" });
+    await page.goto('/ground-truth?tab=blockers');
+    const lookup = page
+      .getByTestId('blocker-row')
+      .filter({ hasText: 'The address lookup service allows 100 requests a minute per company' });
     await lookup.click();
-    const insp = page.getByTestId("blocker-inspector");
-    const option = insp.getByTestId("blocker-option").filter({ hasText: "Batch address lookups within the published quota" });
-    await option.getByRole("button", { name: "Reject" }).click();
-    const no = option.getByRole("form", { name: "Reject option" });
-    await no.getByLabel("Reason").fill("Batching still passes the quota at launch");
-    await no.getByRole("button", { name: "Reject" }).click();
-    await expect(option).toContainText("Rejected");
-    const x = insp.getByTestId("experiment").filter({ hasText: "Batching halves lookup calls" });
-    await x.getByRole("button", { name: "Start" }).click();
-    await expect(x).toContainText("Running");
-    await x.getByRole("button", { name: "Conclude" }).click();
-    const end = x.getByRole("form", { name: "Conclude experiment" });
-    await end.getByLabel("Outcome").selectOption("failed");
-    await end.getByLabel("Result").fill("Calls fell by a tenth only");
-    await end.getByRole("button", { name: "Save result" }).click();
+    const insp = page.getByTestId('blocker-inspector');
+    const option = insp
+      .getByTestId('blocker-option')
+      .filter({ hasText: 'Batch address lookups within the published quota' });
+    await option.getByRole('button', { name: 'Reject' }).click();
+    const no = option.getByRole('form', { name: 'Reject option' });
+    await no.getByLabel('Reason').fill('Batching still passes the quota at launch');
+    await no.getByRole('button', { name: 'Reject' }).click();
+    await expect(option).toContainText('Rejected');
+    const x = insp.getByTestId('experiment').filter({ hasText: 'Batching halves lookup calls' });
+    await x.getByRole('button', { name: 'Start' }).click();
+    await expect(x).toContainText('Running');
+    await x.getByRole('button', { name: 'Conclude' }).click();
+    const end = x.getByRole('form', { name: 'Conclude experiment' });
+    await end.getByLabel('Outcome').selectOption('failed');
+    await end.getByLabel('Result').fill('Calls fell by a tenth only');
+    await end.getByRole('button', { name: 'Save result' }).click();
     // The form closes (its Outcome list names Failed too), and the row reads Failed.
     await expect(end).toHaveCount(0);
-    await expect(x.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(x.getByText('Failed', { exact: true })).toBeVisible();
     // Both are kept: they still read so after a reload.
     await page.reload();
     await lookup.click();
-    await expect(x.getByText("Failed", { exact: true })).toBeVisible();
-    await expect(option).toContainText("Rejected");
+    await expect(x.getByText('Failed', { exact: true })).toBeVisible();
+    await expect(option).toContainText('Rejected');
 
-    await page.goto("/documents/annual-billing/publish");
-    await expect(page.getByTestId("publish-readiness")).toBeVisible();
+    await page.goto('/documents/annual-billing/publish');
+    await expect(page.getByTestId('publish-readiness')).toBeVisible();
     const advisory = page.locator('[data-testid="advisory"][data-key="blocker_feasibility"]');
-    await expect(advisory).toHaveAttribute("data-status", "critical");
+    await expect(advisory).toHaveAttribute('data-status', 'critical');
   });
 
-  test("qa4-docs-share-52: a blocker's Resolve and Open blocker go to the same place", async ({ page }) => {
-    await open(page, "annual-billing");
-    const row = page.getByTestId("block-row").filter({ hasText: "Critical blocker" }).first();
+  test("qa4-docs-share-52: a blocker's Resolve and Open blocker go to the same place", async ({
+    page,
+  }) => {
+    await open(page, 'annual-billing');
+    const row = page.getByTestId('block-row').filter({ hasText: 'Critical blocker' }).first();
     await row.click();
-    const resolve = await row.getByRole("link", { name: "Resolve" }).getAttribute("href");
-    const openBlocker = await inspector(page).getByRole("link", { name: "Open blocker" }).getAttribute("href");
-    expect(resolve).toContain("tab=blockers");
+    const resolve = await row.getByRole('link', { name: 'Resolve' }).getAttribute('href');
+    const openBlocker = await inspector(page)
+      .getByRole('link', { name: 'Open blocker' })
+      .getAttribute('href');
+    expect(resolve).toContain('tab=blockers');
     expect(resolve).toBe(openBlocker);
   });
 
-  test("qa4-docs-share-54: the disabled Publish is explained in words on the page", async ({ page }) => {
-    await open(page, "annual-billing");
-    await expect(page.getByTestId("publish-button")).toBeDisabled();
-    await expect(page.getByText("Publishing waits for 1 critical blocker")).toBeVisible();
+  test('qa4-docs-share-54: the disabled Publish is explained in words on the page', async ({
+    page,
+  }) => {
+    await open(page, 'annual-billing');
+    await expect(page.getByTestId('publish-button')).toBeDisabled();
+    await expect(page.getByText('Publishing waits for 1 critical blocker')).toBeVisible();
   });
 });
 
-test.describe("phone", () => {
-  test("qa4-docs-share-55: a viewer is told advisory criticals never block publishing", async ({ page }) => {
+test.describe('phone', () => {
+  test('qa4-docs-share-55: a viewer is told advisory criticals never block publishing', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await open(page, "annual-billing", "viewer");
-    const advisory = page.getByRole("region", { name: "Advisory" });
-    await expect(advisory).toContainText("critical");
-    await expect(advisory.getByText("Advice only: these never block publishing")).toBeVisible();
+    await open(page, 'annual-billing', 'viewer');
+    const advisory = page.getByRole('region', { name: 'Advisory' });
+    await expect(advisory).toContainText('critical');
+    await expect(advisory.getByText('Advice only: these never block publishing')).toBeVisible();
   });
 });

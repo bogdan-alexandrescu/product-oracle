@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * prd-questions: a PRD's open questions read in as decisions, driven through Simple's UI on
@@ -7,23 +7,33 @@ import { expect, test, type Page } from "./test";
  * mock's today is Thu 22 Oct 2026), desktop and phone, light and dark.
  */
 
-const region = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
+const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
 /** "Waiting for you" says its count in the yellow chip beside its title (none when nothing waits):
  * `n` questions, and (home-waiting-one-list) everything else waiting on the person, each a row there
  * (a feature's broken links fold into one row that counts each). */
 async function waiting(page: Page, n: number) {
-  const mine = region(page, "Waiting for you");
-  const chip = mine.getByTestId("questions-mine-count");
-  await expect(mine.getByTestId("waiting-item").first().or(mine.getByText("Nothing waits on you."))).toBeVisible();
+  const mine = region(page, 'Waiting for you');
+  const chip = mine.getByTestId('questions-mine-count');
+  await expect(
+    mine.getByTestId('waiting-item').first().or(mine.getByText('Nothing waits on you.')),
+  ).toBeVisible();
   // A folded row (one per feature) counts each of its broken links (data-breaks).
   let others = 0;
-  for (const r of await mine.getByTestId("waiting-item").all()) others += Number((await r.getAttribute("data-breaks")) ?? 1);
+  for (const r of await mine.getByTestId('waiting-item').all())
+    others += Number((await r.getAttribute('data-breaks')) ?? 1);
   if (n + others > 0) await expect(chip).toHaveText(String(n + others));
   else await expect(chip).toHaveCount(0);
 }
 /** A decision taken outside meetings (a PRD's question keeps its code). */
-const outside = (page: Page, code: string) => region(page, "Outside meetings").getByTestId("decision-row").filter({ hasText: new RegExp(`^${code} `) });
-const row = (page: Page, code: string) => page.getByTestId("question-row").filter({ visible: true }).and(page.locator(`[data-code="${code}"]`));
+const outside = (page: Page, code: string) =>
+  region(page, 'Outside meetings')
+    .getByTestId('decision-row')
+    .filter({ hasText: new RegExp(`^${code} `) });
+const row = (page: Page, code: string) =>
+  page
+    .getByTestId('question-row')
+    .filter({ visible: true })
+    .and(page.locator(`[data-code="${code}"]`));
 
 /** Signs in as `email` (signing out first when `again`; the account menu is the wide rail's) and opens Decisions. */
 async function decisions(page: Page, email?: string, again = false) {
@@ -34,14 +44,17 @@ async function decisions(page: Page, email?: string, again = false) {
     await login(page, email);
     await page.setViewportSize(size);
   } else await login(page, email);
-  await page.goto("/simple/decisions");
-  await expect(page.getByRole("heading", { level: 1, name: "Decisions" })).toBeVisible();
+  await page.goto('/simple/decisions');
+  await expect(page.getByRole('heading', { level: 1, name: 'Decisions' })).toBeVisible();
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
       /**
        * Card questions-list: protects = List is the default view; "Waiting for you" with its count
@@ -52,33 +65,53 @@ for (const phone of [false, true]) {
        * wrong or missing, or Ask Oracle does not open the Ask panel with the question in its box;
        * no_claim = the real API's due-day maths.
        */
-      test("List: waiting for you, a late row, Show N more, others and decided", async ({ page }) => {
+      test('List: waiting for you, a late row, Show N more, others and decided', async ({
+        page,
+      }) => {
         await decisions(page);
-        await expect(page.getByRole("group", { name: "Show decisions as" }).getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
-        const mine = region(page, "Waiting for you");
-        await expect(mine.getByRole("heading", { name: "Waiting for you" })).toBeVisible();
+        await expect(
+          page
+            .getByRole('group', { name: 'Show decisions as' })
+            .getByRole('button', { name: 'List' }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        const mine = region(page, 'Waiting for you');
+        await expect(mine.getByRole('heading', { name: 'Waiting for you' })).toBeVisible();
         await waiting(page, 9);
-        await expect(mine.getByTestId("question-row")).toHaveCount(5);
-        const first = mine.getByTestId("question-row").first();
-        await expect(first).toContainText("Q5 Reminder default time");
-        await expect(first.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
-        await expect(first.getByTestId("question-due")).toHaveAttribute("data-late", "true");
-        await expect(first).toContainText("Blocks F-03 Health log, first milestone");
-        await expect(first).toContainText("Recommended in Guided setup: 9:00 in each person's zone");
-        await expect(mine.getByTestId("question-row").nth(1).getByTestId("question-due")).toHaveText("Due Mon Oct 26");
-        await mine.getByRole("button", { name: "Show 4 more" }).click();
-        await expect(mine.getByTestId("question-row")).toHaveCount(9);
-        await expect(mine.getByTestId("question-row").last()).toContainText("Q16 Self-serve plan cancel");
-        await expect(region(page, "Waiting for others")).toContainText("Q7 Legal input on health notes");
-        await expect(region(page, "Waiting for others")).toContainText("No decider yet");
-        await expect(outside(page, "Q1")).toContainText("Q1 Data retention period");
-        await expect(outside(page, "Q1")).toContainText("Keep 90 days · Avery Stone");
+        await expect(mine.getByTestId('question-row')).toHaveCount(5);
+        const first = mine.getByTestId('question-row').first();
+        await expect(first).toContainText('Q5 Reminder default time');
+        await expect(first.getByTestId('question-due')).toHaveText('Late · due Fri Oct 16');
+        await expect(first.getByTestId('question-due')).toHaveAttribute('data-late', 'true');
+        await expect(first).toContainText('Blocks F-03 Health log, first milestone');
+        await expect(first).toContainText(
+          "Recommended in Guided setup: 9:00 in each person's zone",
+        );
+        await expect(
+          mine.getByTestId('question-row').nth(1).getByTestId('question-due'),
+        ).toHaveText('Due Mon Oct 26');
+        await mine.getByRole('button', { name: 'Show 4 more' }).click();
+        await expect(mine.getByTestId('question-row')).toHaveCount(9);
+        await expect(mine.getByTestId('question-row').last()).toContainText(
+          'Q16 Self-serve plan cancel',
+        );
+        await expect(region(page, 'Waiting for others')).toContainText(
+          'Q7 Legal input on health notes',
+        );
+        await expect(region(page, 'Waiting for others')).toContainText('No decider yet');
+        await expect(outside(page, 'Q1')).toContainText('Q1 Data retention period');
+        await expect(outside(page, 'Q1')).toContainText('Keep 90 days · Avery Stone');
         // simple-home-qa-nov12 #14: one short line to Simple's Inbox, the why behind its (i).
-        await expect(page.getByTestId("decisions-approvals").getByRole("link", { name: "1 approval waits in your Inbox" })).toBeVisible();
-        await expect(region(page, "Review: Usage alerts")).toBeVisible();
+        await expect(
+          page
+            .getByTestId('decisions-approvals')
+            .getByRole('link', { name: '1 approval waits in your Inbox' }),
+        ).toBeVisible();
+        await expect(region(page, 'Review: Usage alerts')).toBeVisible();
         // Ask Oracle opens Simple's Ask panel with the question in its box.
-        await row(page, "Q5").getByRole("button", { name: "Ask Oracle" }).click();
-        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^What should we decide on Reminder default time, in Guided setup/);
+        await row(page, 'Q5').getByRole('button', { name: 'Ask Oracle' }).click();
+        await expect(
+          page.getByRole('textbox', { name: 'Message Oracle' }).filter({ visible: true }),
+        ).toHaveValue(/^What should we decide on Reminder default time, in Guided setup/);
       });
 
       /**
@@ -89,50 +122,65 @@ for (const phone of [false, true]) {
        * "Name a person" on a question with no recommendation names who answers it;
        * no_claim = Ask Oracle's reply.
        */
-      test("Board: columns (tabs on a phone), Name a decider, remembered after reload", async ({ page }) => {
+      test('Board: columns (tabs on a phone), Name a decider, remembered after reload', async ({
+        page,
+      }) => {
         await decisions(page);
-        await page.getByRole("group", { name: "Show decisions as" }).getByRole("button", { name: "Board" }).click();
-        const needs = page.getByTestId("board-needs_input");
-        const recommended = page.getByTestId("board-recommended");
-        const decided = page.getByTestId("board-decided");
-        await expect(needs).toContainText("Missing a decider or a recommendation 3");
+        await page
+          .getByRole('group', { name: 'Show decisions as' })
+          .getByRole('button', { name: 'Board' })
+          .click();
+        const needs = page.getByTestId('board-needs_input');
+        const recommended = page.getByTestId('board-recommended');
+        const decided = page.getByTestId('board-decided');
+        await expect(needs).toContainText('Missing a decider or a recommendation 3');
         if (phone) {
           await expect(needs).toBeVisible();
           await expect(recommended).toBeHidden();
-          await page.getByTestId("board-tab-recommended").click();
+          await page.getByTestId('board-tab-recommended').click();
           await expect(recommended).toBeVisible();
           await expect(needs).toBeHidden();
-          await expect(recommended.getByTestId("question-row")).toHaveCount(12);
-          await page.getByTestId("board-tab-decided").click();
-          await expect(decided).toContainText("Q1 Data retention period");
-          await page.getByTestId("board-tab-needs_input").click();
+          await expect(recommended.getByTestId('question-row')).toHaveCount(12);
+          await page.getByTestId('board-tab-decided').click();
+          await expect(decided).toContainText('Q1 Data retention period');
+          await page.getByTestId('board-tab-needs_input').click();
         } else {
-          await expect(recommended).toContainText("Recommended 12");
-          await expect(decided).toContainText("Decided questions 1");
+          await expect(recommended).toContainText('Recommended 12');
+          await expect(decided).toContainText('Decided questions 1');
           await expect(needs).toBeVisible();
           await expect(recommended).toBeVisible();
           await expect(decided).toBeVisible();
         }
         const q2 = needs.locator('[data-code="Q2"]');
         const q3 = needs.locator('[data-code="Q3"]');
-        await q3.getByRole("button", { name: "Ask someone to answer" }).click();
+        await q3.getByRole('button', { name: 'Ask someone to answer' }).click();
         // qa-simple-decide-16: the current decider is marked, not offered again.
-        const who = q3.getByRole("group", { name: "Who answers Q3" });
-        await expect(who.getByRole("button", { name: "Already Priya Raman" })).toBeDisabled();
-        await who.getByRole("button", { name: "Avery Stone", exact: true }).click();
-        await expect(page.getByText("Avery Stone decides Q3 Offline mode scope")).toBeVisible();
-        await q2.getByRole("button", { name: "Name a decider" }).click();
-        await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Priya Raman" }).click();
-        await expect(page.getByText("Priya Raman decides Q2 Export format sign-off")).toBeVisible();
+        const who = q3.getByRole('group', { name: 'Who answers Q3' });
+        await expect(who.getByRole('button', { name: 'Already Priya Raman' })).toBeDisabled();
+        await who.getByRole('button', { name: 'Avery Stone', exact: true }).click();
+        await expect(page.getByText('Avery Stone decides Q3 Offline mode scope')).toBeVisible();
+        await q2.getByRole('button', { name: 'Name a decider' }).click();
+        await q2
+          .getByRole('group', { name: 'Who decides Q2' })
+          .getByRole('button', { name: 'Priya Raman' })
+          .click();
+        await expect(page.getByText('Priya Raman decides Q2 Export format sign-off')).toBeVisible();
         await expect(needs.locator('[data-code="Q2"]')).toHaveCount(0);
-        await expect(recommended.locator('[data-code="Q2"]')).toContainText("Priya Raman decides");
+        await expect(recommended.locator('[data-code="Q2"]')).toContainText('Priya Raman decides');
 
         await page.reload();
-        await expect(page.getByRole("group", { name: "Show decisions as" }).getByRole("button", { name: "Board" })).toHaveAttribute("aria-pressed", "true");
+        await expect(
+          page
+            .getByRole('group', { name: 'Show decisions as' })
+            .getByRole('button', { name: 'Board' }),
+        ).toHaveAttribute('aria-pressed', 'true');
         await expect(needs).toBeVisible();
-        await page.getByRole("group", { name: "Show decisions as" }).getByRole("button", { name: "By meeting" }).click();
-        await expect(region(page, "Review: Usage alerts")).toBeVisible();
-        await expect(page.getByTestId("question-row")).toHaveCount(0);
+        await page
+          .getByRole('group', { name: 'Show decisions as' })
+          .getByRole('button', { name: 'By meeting' })
+          .click();
+        await expect(region(page, 'Review: Usage alerts')).toBeVisible();
+        await expect(page.getByTestId('question-row')).toHaveCount(0);
       });
 
       /**
@@ -141,35 +189,47 @@ for (const phone of [false, true]) {
        * recommended" is sent to the decider; a viewer sees no button to decide or propose;
        * fails_when = the role's button, the result or Undo is wrong; no_claim = the API's checks.
        */
-      test("Decide as recommended: applied with Undo, proposed by a commenter, read by a viewer", async ({ page }) => {
+      test('Decide as recommended: applied with Undo, proposed by a commenter, read by a viewer', async ({
+        page,
+      }) => {
         await decisions(page);
-        const mine = region(page, "Waiting for you");
-        await row(page, "Q5").getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(page.getByText("Decided Q5 Reminder default time: 9:00 in each person's zone")).toBeVisible();
+        const mine = region(page, 'Waiting for you');
+        await row(page, 'Q5').getByRole('button', { name: 'Decide as recommended' }).click();
+        await expect(
+          page.getByText("Decided Q5 Reminder default time: 9:00 in each person's zone"),
+        ).toBeVisible();
         await waiting(page, 8);
-        await expect(outside(page, "Q5")).toContainText("9:00 in each person's zone");
-        await page.getByRole("button", { name: "Undo" }).click();
+        await expect(outside(page, 'Q5')).toContainText("9:00 in each person's zone");
+        await page.getByRole('button', { name: 'Undo' }).click();
         await waiting(page, 9);
         await expect(mine.locator('[data-code="Q5"]')).toBeVisible();
-        await expect(outside(page, "Q5")).toHaveCount(0);
+        await expect(outside(page, 'Q5')).toHaveCount(0);
 
         // The decider (an approver) applies their own question.
-        await decisions(page, "approver@example.com", true);
+        await decisions(page, 'approver@example.com', true);
         await waiting(page, 4);
-        await row(page, "Q7").getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(page.getByText("Decided Q7 Legal input on health notes: Ask outside counsel")).toBeVisible();
+        await row(page, 'Q7').getByRole('button', { name: 'Decide as recommended' }).click();
+        await expect(
+          page.getByText('Decided Q7 Legal input on health notes: Ask outside counsel'),
+        ).toBeVisible();
         await waiting(page, 3);
 
-        await decisions(page, "commenter@example.com", true);
+        await decisions(page, 'commenter@example.com', true);
         await waiting(page, 0);
-        await expect(page.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
-        await row(page, "Q6").getByRole("button", { name: "Propose as recommended" }).click();
-        await expect(page.getByText("Sent to Avery Stone to decide")).toBeVisible();
-        await expect(row(page, "Q6").getByTestId("question-pending")).toHaveText("Theo Brandt proposed: 5 invites");
+        await expect(page.getByRole('button', { name: 'Decide as recommended' })).toHaveCount(0);
+        await row(page, 'Q6').getByRole('button', { name: 'Propose as recommended' }).click();
+        await expect(page.getByText('Sent to Avery Stone to decide')).toBeVisible();
+        await expect(row(page, 'Q6').getByTestId('question-pending')).toHaveText(
+          'Theo Brandt proposed: 5 invites',
+        );
 
-        await decisions(page, "viewer@example.com", true);
-        await expect(region(page, "Waiting for others")).toContainText("Q5 Reminder default time");
-        await expect(page.locator("main").getByRole("button", { name: /Decide|Propose|Another answer|Name a/ })).toHaveCount(0);
+        await decisions(page, 'viewer@example.com', true);
+        await expect(region(page, 'Waiting for others')).toContainText('Q5 Reminder default time');
+        await expect(
+          page
+            .locator('main')
+            .getByRole('button', { name: /Decide|Propose|Another answer|Name a/ }),
+        ).toHaveCount(0);
       });
 
       /**
@@ -179,20 +239,27 @@ for (const phone of [false, true]) {
        * fails_when = an alternative is missing, or the answer recorded is not the one chosen;
        * no_claim = how the API words the decision.
        */
-      test("Another answer: an alternative, and Something else…", async ({ page }) => {
+      test('Another answer: an alternative, and Something else…', async ({ page }) => {
         await decisions(page);
-        await row(page, "Q5").getByRole("button", { name: "Another answer" }).click();
-        await expect(row(page, "Q5").getByRole("button", { name: "Another answer" })).toHaveAttribute("aria-pressed", "true");
-        await expect(row(page, "Q5").getByTestId("question-answers")).toContainText("Another answer:");
-        await row(page, "Q5").getByRole("group", { name: "Answers for Q5" }).getByRole("button", { name: "Noon", exact: true }).click();
-        await expect(page.getByText("Decided Q5 Reminder default time: Noon")).toBeVisible();
-        await expect(outside(page, "Q5")).toContainText("Noon · Avery Stone");
+        await row(page, 'Q5').getByRole('button', { name: 'Another answer' }).click();
+        await expect(
+          row(page, 'Q5').getByRole('button', { name: 'Another answer' }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        await expect(row(page, 'Q5').getByTestId('question-answers')).toContainText(
+          'Another answer:',
+        );
+        await row(page, 'Q5')
+          .getByRole('group', { name: 'Answers for Q5' })
+          .getByRole('button', { name: 'Noon', exact: true })
+          .click();
+        await expect(page.getByText('Decided Q5 Reminder default time: Noon')).toBeVisible();
+        await expect(outside(page, 'Q5')).toContainText('Noon · Avery Stone');
 
-        await row(page, "Q6").getByRole("button", { name: "Another answer" }).click();
-        await row(page, "Q6").getByRole("button", { name: "Something else…" }).click();
-        await row(page, "Q6").getByLabel("Your answer to Q6").fill("Ten invites");
-        await row(page, "Q6").getByRole("button", { name: "Decide", exact: true }).click();
-        await expect(outside(page, "Q6")).toContainText("Ten invites · Avery Stone");
+        await row(page, 'Q6').getByRole('button', { name: 'Another answer' }).click();
+        await row(page, 'Q6').getByRole('button', { name: 'Something else…' }).click();
+        await row(page, 'Q6').getByLabel('Your answer to Q6').fill('Ten invites');
+        await row(page, 'Q6').getByRole('button', { name: 'Decide', exact: true }).click();
+        await expect(outside(page, 'Q6')).toContainText('Ten invites · Avery Stone');
         await waiting(page, 7);
       });
 
@@ -204,38 +271,45 @@ for (const phone of [false, true]) {
        * all three; fails_when = the counts differ or the row is missing; no_claim = the Inbox's
        * other rows.
        */
-      test("Home: the count, the late row first, the rail; Decide as recommended from Home", async ({ page }) => {
+      test('Home: the count, the late row first, the rail; Decide as recommended from Home', async ({
+        page,
+      }) => {
         await login(page);
-        await page.goto("/simple");
+        await page.goto('/simple');
         // build-rundecide RD3 a: the questions I own wait in their PRD's own card.
-        const card = region(page, "Waiting for you: Guided setup");
+        const card = region(page, 'Waiting for you: Guided setup');
         // fix4 (qa-simple-home-15): the count is the summary tile's alone, not repeated in the header.
-        await expect(card.getByTestId("home-decisions-count")).toHaveCount(0);
-        const count = page.getByTestId("home-summary-decisions").locator(".simple-number");
+        await expect(card.getByTestId('home-decisions-count')).toHaveCount(0);
+        const count = page.getByTestId('home-summary-decisions').locator('.simple-number');
         await expect(count).toHaveText(/^\d+$/);
         const n = Number(await count.textContent());
         expect(n).toBeGreaterThanOrEqual(9);
-        await expect(page.getByTestId("home-summary-decisions")).toContainText(String(n));
+        await expect(page.getByTestId('home-summary-decisions')).toContainText(String(n));
         // home-waiting-one-list: the rail counts everything waiting on you (Decisions' "Waiting for you"), the decisions among it.
-        const rail = phone ? 0 : Number(await page.getByTestId("simple-nav-decisions-count").textContent());
+        const rail = phone
+          ? 0
+          : Number(await page.getByTestId('simple-nav-decisions-count').textContent());
         if (!phone) expect(rail).toBeGreaterThanOrEqual(n);
-        const q5 = card.getByTestId("home-question").first();
+        const q5 = card.getByTestId('home-question').first();
         // fix4 (qa-simple-home-13): Home names the question and what it blocks in words, no codes.
-        await expect(q5).toContainText("Reminder default time");
-        await expect(q5).not.toContainText("Q5");
-        await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
-        await expect(q5.getByTestId("question-due")).toHaveAttribute("data-late", "true");
+        await expect(q5).toContainText('Reminder default time');
+        await expect(q5).not.toContainText('Q5');
+        await expect(q5.getByTestId('question-due')).toHaveText('Late · due Fri Oct 16');
+        await expect(q5.getByTestId('question-due')).toHaveAttribute('data-late', 'true');
         // simple-home-qa-nov14 #3: the blocked feature reads its code with its name, as on Decisions.
-        await expect(q5).toContainText("Blocks F-03 Health log, first milestone");
-        await expect(q5.getByRole("button", { name: "Another answer" })).toBeVisible();
-        await expect(q5.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
-        await q5.getByRole("button", { name: "Decide as recommended" }).click();
+        await expect(q5).toContainText('Blocks F-03 Health log, first milestone');
+        await expect(q5.getByRole('button', { name: 'Another answer' })).toBeVisible();
+        await expect(q5.getByRole('button', { name: 'Ask Oracle' })).toBeVisible();
+        await q5.getByRole('button', { name: 'Decide as recommended' }).click();
         // vqa-simple-runs (RD3 a, frame "done"): the row itself says it is decided, with Undo.
-        await expect(q5.getByTestId("question-decided")).toContainText("9:00 in each person's zone · ");
-        await expect(q5.getByRole("button", { name: "Undo" })).toBeVisible();
+        await expect(q5.getByTestId('question-decided')).toContainText(
+          "9:00 in each person's zone · ",
+        );
+        await expect(q5.getByRole('button', { name: 'Undo' })).toBeVisible();
         await expect(count).toHaveText(String(n - 1));
         await expect(card.locator('[data-late="true"]')).toHaveCount(0);
-        if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(rail - 1));
+        if (!phone)
+          await expect(page.getByTestId('simple-nav-decisions-count')).toHaveText(String(rail - 1));
       });
 
       /**
@@ -248,24 +322,46 @@ for (const phone of [false, true]) {
        */
       test("a review meeting's Decisions due, decided in the meeting", async ({ page }) => {
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start a review meeting" }).click();
-        await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
-        const due = region(page, "On the agenda");
-        await expect(due.getByTestId("question-row").first()).toContainText("Q5 Reminder default time");
-        await expect(due.getByTestId("question-row").first()).toContainText("Late · due Fri Oct 16");
-        await expect(due.getByTestId("question-row").first()).toContainText("Blocks F-03 Health log, first milestone");
+        await page.goto('/simple/prds/guided-setup');
+        await page.getByRole('button', { name: 'Start a review meeting' }).click();
+        await page
+          .getByRole('dialog', { name: 'Start a review' })
+          .getByRole('button', { name: 'Start', exact: true })
+          .click();
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+        await page
+          .getByRole('navigation', { name: 'Steps' })
+          .getByRole('button', { name: '3 Decisions' })
+          .click();
+        const due = region(page, 'On the agenda');
+        await expect(due.getByTestId('question-row').first()).toContainText(
+          'Q5 Reminder default time',
+        );
+        await expect(due.getByTestId('question-row').first()).toContainText(
+          'Late · due Fri Oct 16',
+        );
+        await expect(due.getByTestId('question-row').first()).toContainText(
+          'Blocks F-03 Health log, first milestone',
+        );
         // The PRD's open questions, whoever decides them (Q7 is the approver's), not only mine.
-        await expect(due.locator('[data-code="Q7"]')).toContainText("Q7 Legal input on health notes");
-        await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(region(page, "Decisions in this meeting")).toContainText("Q5 Reminder default time");
+        await expect(due.locator('[data-code="Q7"]')).toContainText(
+          'Q7 Legal input on health notes',
+        );
+        await due
+          .getByTestId('question-row')
+          .first()
+          .getByRole('button', { name: 'Decide as recommended' })
+          .click();
+        await expect(region(page, 'Decisions in this meeting')).toContainText(
+          'Q5 Reminder default time',
+        );
         const q5 = due.locator('[data-code="Q5"]');
-        await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: 9:00 in each person's zone · Avery Stone ·");
-        await q5.getByRole("button", { name: "Undo" }).click();
-        await expect(q5.getByRole("button", { name: "Decide as recommended" })).toBeVisible();
-        await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
+        await expect(q5.getByTestId('question-decided')).toContainText(
+          "Decided in this meeting: 9:00 in each person's zone · Avery Stone ·",
+        );
+        await q5.getByRole('button', { name: 'Undo' }).click();
+        await expect(q5.getByRole('button', { name: 'Decide as recommended' })).toBeVisible();
+        await expect(q5.getByTestId('question-due')).toHaveText('Late · due Fri Oct 16');
       });
 
       /**
@@ -279,15 +375,21 @@ for (const phone of [false, true]) {
        * setup draft 3" and every row under it; fails_when = a part is missing, placed
        * elsewhere or the switch spans the page; no_claim = pixel sizes beyond the layout.
        */
-      test("A: Decisions, Home and the meeting's agenda as the mock-up draws them", async ({ page }) => {
+      test("A: Decisions, Home and the meeting's agenda as the mock-up draws them", async ({
+        page,
+      }) => {
         await decisions(page);
         // QA: the page's explanation sits behind the (i) beside the heading.
-        await page.getByTestId("page-info").click();
-        await expect(page.getByText("What waits for you, soonest first. Then every decision, beside the meeting that took it.")).toBeVisible();
-        await page.getByTestId("page-info").click();
-        const sw = page.getByRole("group", { name: "Show decisions as" });
+        await page.getByTestId('page-info').click();
+        await expect(
+          page.getByText(
+            'What waits for you, soonest first. Then every decision, beside the meeting that took it.',
+          ),
+        ).toBeVisible();
+        await page.getByTestId('page-info').click();
+        const sw = page.getByRole('group', { name: 'Show decisions as' });
         const swBox = (await sw.boundingBox())!;
-        const prdBox = (await page.getByRole("combobox").first().boundingBox())!;
+        const prdBox = (await page.getByRole('combobox').first().boundingBox())!;
         if (phone) expect(swBox.width).toBeGreaterThan(340);
         else {
           expect(swBox.width).toBeLessThan(320);
@@ -295,12 +397,16 @@ for (const phone of [false, true]) {
           expect(Math.abs(swBox.y + swBox.height - (prdBox.y + prdBox.height))).toBeLessThan(8);
           expect(swBox.x).toBeGreaterThan(prdBox.x + 600);
         }
-        const mine = region(page, "Waiting for you");
-        await expect(mine.getByTestId("questions-source")).toHaveText("Questions from the Guided setup PRD (draft 3), checked Oct 21");
+        const mine = region(page, 'Waiting for you');
+        await expect(mine.getByTestId('questions-source')).toHaveText(
+          'Questions from the Guided setup PRD (draft 3), checked Oct 21',
+        );
         await waiting(page, 9);
-        const first = mine.getByTestId("question-row").first();
-        const title = (await first.getByText("Reminder default time").boundingBox())!;
-        const decide = (await first.getByRole("button", { name: "Decide as recommended" }).boundingBox())!;
+        const first = mine.getByTestId('question-row').first();
+        const title = (await first.getByText('Reminder default time').boundingBox())!;
+        const decide = (await first
+          .getByRole('button', { name: 'Decide as recommended' })
+          .boundingBox())!;
         const firstBox = (await first.boundingBox())!;
         if (phone) {
           expect(decide.y).toBeGreaterThan(title.y + title.height);
@@ -310,32 +416,47 @@ for (const phone of [false, true]) {
           expect(decide.x).toBeGreaterThan(title.x + title.width);
           expect(Math.abs(decide.y - title.y)).toBeLessThan(24);
         }
-        const more = mine.getByRole("button", { name: "Show 4 more" });
-        await expect(more).toHaveCSS("border-top-width", "0px");
-        const note = page.getByTestId("decisions-approvals");
-        const outsideBox = (await region(page, "Outside meetings").boundingBox())!;
+        const more = mine.getByRole('button', { name: 'Show 4 more' });
+        await expect(more).toHaveCSS('border-top-width', '0px');
+        const note = page.getByTestId('decisions-approvals');
+        const outsideBox = (await region(page, 'Outside meetings').boundingBox())!;
         expect((await note.boundingBox())!.y).toBeGreaterThan(outsideBox.y + outsideBox.height);
-        await expect(note.getByRole("link", { name: "1 approval waits in your Inbox" })).toBeVisible();
+        await expect(
+          note.getByRole('link', { name: '1 approval waits in your Inbox' }),
+        ).toBeVisible();
 
-        await page.goto("/simple");
-        const card = region(page, "Waiting for you: Guided setup");
-        await expect(card.getByTestId("home-question")).toHaveCount(phone ? 2 : 3);
-        await expect(card.getByTestId("home-more")).toHaveText(/^\d+ more ->$/);
-        await expect(card.getByTestId("home-more")).toHaveAttribute("href", "/simple/decisions?prd=guided-setup");
+        await page.goto('/simple');
+        const card = region(page, 'Waiting for you: Guided setup');
+        await expect(card.getByTestId('home-question')).toHaveCount(phone ? 2 : 3);
+        await expect(card.getByTestId('home-more')).toHaveText(/^\d+ more ->$/);
+        await expect(card.getByTestId('home-more')).toHaveAttribute(
+          'href',
+          '/simple/decisions?prd=guided-setup',
+        );
 
-        await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start a review meeting" }).click();
-        await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
-        const due = region(page, "On the agenda");
-        await expect(due.getByRole("heading", { name: "On the agenda" })).toBeVisible();
+        await page.goto('/simple/prds/guided-setup');
+        await page.getByRole('button', { name: 'Start a review meeting' }).click();
+        await page
+          .getByRole('dialog', { name: 'Start a review' })
+          .getByRole('button', { name: 'Start', exact: true })
+          .click();
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+        await page
+          .getByRole('navigation', { name: 'Steps' })
+          .getByRole('button', { name: '3 Decisions' })
+          .click();
+        const due = region(page, 'On the agenda');
+        await expect(due.getByRole('heading', { name: 'On the agenda' })).toBeVisible();
         // build-rundecide RD3 a: every open question of the PRD is on the agenda, soonest first.
-        await expect(due.getByTestId("decisions-due-summary")).toHaveText(/^Due by \w{3} \w{3} \d{1,2} · 15 decisions · from Guided setup draft 3$/);
+        await expect(due.getByTestId('decisions-due-summary')).toHaveText(
+          /^Due by \w{3} \w{3} \d{1,2} · 15 decisions · from Guided setup draft 3$/,
+        );
         // Fidelity ("Waiting for you + agenda"): every decision listed, none folded.
-        await expect(due.getByTestId("question-row")).toHaveCount(15);
-        await expect(due.getByRole("button", { name: /more/ })).toHaveCount(0);
-        await expect(due.getByTestId("question-row").last()).toContainText("Q16 Self-serve plan cancel");
+        await expect(due.getByTestId('question-row')).toHaveCount(15);
+        await expect(due.getByRole('button', { name: /more/ })).toHaveCount(0);
+        await expect(due.getByTestId('question-row').last()).toContainText(
+          'Q16 Self-serve plan cancel',
+        );
       });
     });
   }

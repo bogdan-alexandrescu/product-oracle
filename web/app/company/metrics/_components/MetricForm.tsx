@@ -1,23 +1,23 @@
-"use client";
+'use client';
 
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from 'react';
 
-import { Button, InfoTip, useFocusTrap } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
-import { errorMessage } from "@/lib/use-query";
+import { Button, InfoTip, useFocusTrap } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { displayName } from '@/lib/names';
+import { errorMessage } from '@/lib/use-query';
 
-import { SOURCE_LABEL, UNITS, valueText, weekText, type Metric } from "./lib";
+import { SOURCE_LABEL, UNITS, valueText, weekText, type Metric } from './lib';
 
-export type Goal = Schemas["EntityOut"];
-export type Person = Schemas["PersonOut"];
+export type Goal = Schemas['EntityOut'];
+export type Person = Schemas['PersonOut'];
 
-const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
-const FIELD_ERROR = "text-[13px] font-medium text-crit";
-const COUNT = "count";
+const LABEL = 'flex flex-col gap-1 text-sm font-semibold text-text2';
+const FIELD_ERROR = 'text-[13px] font-medium text-crit';
+const COUNT = 'count';
 
-type Field = "title" | "description" | "unit" | "drives" | "owner" | "query" | "threshold";
+type Field = 'title' | 'description' | 'unit' | 'drives' | 'owner' | 'query' | 'threshold';
 
 /**
  * qa-company-8: the word after a required field's label. Screen readers hear it from the
@@ -26,7 +26,7 @@ type Field = "title" | "description" | "unit" | "drives" | "owner" | "query" | "
 function Required() {
   return (
     <span aria-hidden="true" className="font-normal text-text2">
-      {" "}
+      {' '}
       (required)
     </span>
   );
@@ -37,7 +37,11 @@ function FieldError({ field, errors }: { field: Field; errors: Partial<Record<Fi
   const text = errors[field];
   if (!text) return null;
   return (
-    <span id={`metric-${field}-error`} data-testid={`metric-error-${field}`} className={FIELD_ERROR}>
+    <span
+      id={`metric-${field}-error`}
+      data-testid={`metric-error-${field}`}
+      className={FIELD_ERROR}
+    >
       {text}
     </span>
   );
@@ -67,39 +71,51 @@ export function MetricForm({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
-  const [title, setTitle] = useState(metric?.title ?? "");
-  const [description, setDescription] = useState(metric?.description ?? "");
-  const [kind, setKind] = useState<Metric["kind"]>(metric?.kind ?? "output");
+  const [title, setTitle] = useState(metric?.title ?? '');
+  const [description, setDescription] = useState(metric?.description ?? '');
+  const [kind, setKind] = useState<Metric['kind']>(metric?.kind ?? 'output');
   // qa4-company-39: a unit from the list, or "Count of…" and the counted noun typed in.
-  const [unitPick, setUnitPick] = useState(!metric?.unit || UNITS.includes(metric.unit) ? (metric?.unit ?? "") : COUNT);
-  const [noun, setNoun] = useState(metric?.unit && !UNITS.includes(metric.unit) ? metric.unit : "");
+  const [unitPick, setUnitPick] = useState(
+    !metric?.unit || UNITS.includes(metric.unit) ? (metric?.unit ?? '') : COUNT,
+  );
+  const [noun, setNoun] = useState(metric?.unit && !UNITS.includes(metric.unit) ? metric.unit : '');
   const unit = unitPick === COUNT ? noun : unitPick;
-  const [direction, setDirection] = useState<Metric["direction"]>(metric?.direction ?? "up");
-  const [drives, setDrives] = useState(metric?.drives_metric_id ?? "");
-  const [goal, setGoal] = useState(metric?.goal_id ?? "");
-  const [owner, setOwner] = useState(metric?.owner_id ?? "");
-  const [source, setSource] = useState<Metric["source"]>(metric?.source ?? "posthog");
-  const [query, setQuery] = useState(metric?.query ?? "");
-  const [threshold, setThreshold] = useState(metric?.threshold_pct != null ? String(metric.threshold_pct) : "");
-  const [tested, setTested] = useState<Schemas["MetricTestOut"] | null>(null);
+  const [direction, setDirection] = useState<Metric['direction']>(metric?.direction ?? 'up');
+  const [drives, setDrives] = useState(metric?.drives_metric_id ?? '');
+  const [goal, setGoal] = useState(metric?.goal_id ?? '');
+  const [owner, setOwner] = useState(metric?.owner_id ?? '');
+  const [source, setSource] = useState<Metric['source']>(metric?.source ?? 'posthog');
+  const [query, setQuery] = useState(metric?.query ?? '');
+  const [threshold, setThreshold] = useState(
+    metric?.threshold_pct != null ? String(metric.threshold_pct) : '',
+  );
+  const [tested, setTested] = useState<Schemas['MetricTestOut'] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // After the first Add or Save, each field's problem shows under it until it is fixed.
   const [tried, setTried] = useState(false);
 
-  const outputs = metrics.filter((m) => m.kind === "output" && m.status !== "archived" && m.id !== metric?.id);
-  const taken = new Set(metrics.filter((m) => m.goal_id && m.status !== "archived" && m.id !== metric?.id).map((m) => m.goal_id));
-  const goalUnit = (g: Goal) => (typeof g.attrs.unit === "string" ? g.attrs.unit : null);
-  const goalChoices = goals.filter((g) => g.status === "confirmed" && !taken.has(g.id) && goalUnit(g) === unit.trim());
+  const outputs = metrics.filter(
+    (m) => m.kind === 'output' && m.status !== 'archived' && m.id !== metric?.id,
+  );
+  const taken = new Set(
+    metrics
+      .filter((m) => m.goal_id && m.status !== 'archived' && m.id !== metric?.id)
+      .map((m) => m.goal_id),
+  );
+  const goalUnit = (g: Goal) => (typeof g.attrs.unit === 'string' ? g.attrs.unit : null);
+  const goalChoices = goals.filter(
+    (g) => g.status === 'confirmed' && !taken.has(g.id) && goalUnit(g) === unit.trim(),
+  );
   // The goal the select shows, and the one Save sends: none once the picked goal is no longer a
   // choice (another unit, or no longer confirmed).
-  const goalId = goalChoices.some((g) => g.id === goal) ? goal : "";
+  const goalId = goalChoices.some((g) => g.id === goal) ? goal : '';
 
   async function test() {
     setBusy(true);
     setError(null);
     try {
-      setTested(await unwrap(api.POST("/v1/metrics/test", { body: { query } })));
+      setTested(await unwrap(api.POST('/v1/metrics/test', { body: { query } })));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -110,17 +126,22 @@ export function MetricForm({
   /** qa-company-8: every missing or wrong field at once, before anything is sent. */
   function check(): Partial<Record<Field, string>> {
     const out: Partial<Record<Field, string>> = {};
-    if (!title.trim()) out.title = "Give the metric a title.";
+    if (!title.trim()) out.title = 'Give the metric a title.';
     const d = description.trim().length;
-    if (d === 0) out.description = "Say what the metric counts.";
-    else if (d < 3) out.description = "Write at least 3 characters.";
-    if (!unit.trim()) out.unit = unitPick === COUNT ? "Name what is counted, such as teams." : "Give a unit, such as % or teams.";
-    if (kind === "input" && !drives) out.drives = "Pick the result this driver drives.";
-    if (!owner) out.owner = "Pick who explains its changes.";
-    if (source === "posthog" && !query.trim()) out.query = "Write the query Oracle runs each week.";
+    if (d === 0) out.description = 'Say what the metric counts.';
+    else if (d < 3) out.description = 'Write at least 3 characters.';
+    if (!unit.trim())
+      out.unit =
+        unitPick === COUNT
+          ? 'Name what is counted, such as teams.'
+          : 'Give a unit, such as % or teams.';
+    if (kind === 'input' && !drives) out.drives = 'Pick the result this driver drives.';
+    if (!owner) out.owner = 'Pick who explains its changes.';
+    if (source === 'posthog' && !query.trim()) out.query = 'Write the query Oracle runs each week.';
     if (threshold.trim()) {
       const n = Number(threshold);
-      if (!Number.isFinite(n) || n < 1 || n > 500) out.threshold = "Write a number from 1 to 500, or leave it empty.";
+      if (!Number.isFinite(n) || n < 1 || n > 500)
+        out.threshold = 'Write a number from 1 to 500, or leave it empty.';
     }
     return out;
   }
@@ -144,16 +165,21 @@ export function MetricForm({
       description: description.trim(),
       unit: unit.trim(),
       direction,
-      goal_id: kind === "output" && goalId ? goalId : null,
-      drives_metric_id: kind === "input" && drives ? drives : null,
+      goal_id: kind === 'output' && goalId ? goalId : null,
+      drives_metric_id: kind === 'input' && drives ? drives : null,
       owner_id: owner,
-      query: source === "posthog" ? query : null,
+      query: source === 'posthog' ? query : null,
       threshold_pct: pct,
     };
     try {
       const saved = metric
-        ? await unwrap(api.PATCH("/v1/metrics/{metric_id}", { params: { path: { metric_id: metric.id } }, body: { ...fields, lock_version: metric.lock_version } }))
-        : await unwrap(api.POST("/v1/metrics", { body: { ...fields, kind, source } }));
+        ? await unwrap(
+            api.PATCH('/v1/metrics/{metric_id}', {
+              params: { path: { metric_id: metric.id } },
+              body: { ...fields, lock_version: metric.lock_version },
+            }),
+          )
+        : await unwrap(api.POST('/v1/metrics', { body: { ...fields, kind, source } }));
       onSaved(saved);
     } catch (err) {
       setError(errorMessage(err));
@@ -162,9 +188,12 @@ export function MetricForm({
     }
   }
 
-  const name = metric ? "Edit metric" : "Add metric";
+  const name = metric ? 'Edit metric' : 'Add metric';
   return (
-    <div data-backdrop="" className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+    >
       <div
         ref={panel}
         role="dialog"
@@ -178,7 +207,11 @@ export function MetricForm({
             {name}
           </h2>
         </div>
-        <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
+        <form
+          className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4"
+          onSubmit={submit}
+          noValidate
+        >
           <p className="text-[13px] text-text2">Fields marked (required) must be filled in.</p>
           <label className={LABEL}>
             <span>
@@ -194,7 +227,7 @@ export function MetricForm({
               value={title}
               maxLength={120}
               aria-invalid={!!errors.title}
-              aria-describedby={errors.title ? "metric-title-error" : undefined}
+              aria-describedby={errors.title ? 'metric-title-error' : undefined}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Weekly active teams"
             />
@@ -213,7 +246,7 @@ export function MetricForm({
               value={description}
               maxLength={200}
               aria-invalid={!!errors.description}
-              aria-describedby={errors.description ? "metric-description-error" : undefined}
+              aria-describedby={errors.description ? 'metric-description-error' : undefined}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Teams with 3 or more sessions in the week"
             />
@@ -225,10 +258,14 @@ export function MetricForm({
               <span className="flex items-center gap-1.5">
                 <label htmlFor="metric-kind">Kind</label>
                 <InfoTip label="result and driver" align="start">
-                  <span id="metric-kind-help" data-testid="metric-kind-help" className="font-normal">
-                    {kind === "output"
+                  <span
+                    id="metric-kind-help"
+                    data-testid="metric-kind-help"
+                    className="font-normal"
+                  >
+                    {kind === 'output'
                       ? "A result is what the company wants, such as paying customers. It can keep a goal's value up to date."
-                      : "A driver is a number the team can move directly, such as invites sent. It sits under the result it drives."}
+                      : 'A driver is a number the team can move directly, such as invites sent. It sits under the result it drives.'}
                   </span>
                 </InfoTip>
               </span>
@@ -238,7 +275,7 @@ export function MetricForm({
                 className={INPUT}
                 value={kind}
                 disabled={!!metric}
-                onChange={(e) => setKind(e.target.value as Metric["kind"])}
+                onChange={(e) => setKind(e.target.value as Metric['kind'])}
               >
                 <option value="output">Result</option>
                 <option value="input">Driver</option>
@@ -251,13 +288,15 @@ export function MetricForm({
                 <Required />
               </span>
               <select
-                data-field={unitPick === COUNT ? undefined : "unit"}
+                data-field={unitPick === COUNT ? undefined : 'unit'}
                 aria-labelledby="metric-unit-label"
                 aria-required="true"
                 className={INPUT}
                 value={unitPick}
                 aria-invalid={!!errors.unit && unitPick !== COUNT}
-                aria-describedby={errors.unit && unitPick !== COUNT ? "metric-unit-error" : undefined}
+                aria-describedby={
+                  errors.unit && unitPick !== COUNT ? 'metric-unit-error' : undefined
+                }
                 onChange={(e) => setUnitPick(e.target.value)}
               >
                 <option value="">Pick a unit</option>
@@ -272,7 +311,11 @@ export function MetricForm({
             </label>
             <label className={LABEL}>
               Good direction
-              <select className={INPUT} value={direction} onChange={(e) => setDirection(e.target.value as Metric["direction"])}>
+              <select
+                className={INPUT}
+                value={direction}
+                onChange={(e) => setDirection(e.target.value as Metric['direction'])}
+              >
                 <option value="up">Up</option>
                 <option value="down">Down</option>
               </select>
@@ -289,14 +332,14 @@ export function MetricForm({
                 value={noun}
                 maxLength={40}
                 aria-invalid={!!errors.unit}
-                aria-describedby={errors.unit ? "metric-unit-error" : undefined}
+                aria-describedby={errors.unit ? 'metric-unit-error' : undefined}
                 onChange={(e) => setNoun(e.target.value)}
                 placeholder="teams or accounts"
               />
               <FieldError field="unit" errors={errors} />
             </label>
           )}
-          {kind === "input" ? (
+          {kind === 'input' ? (
             <label className={LABEL}>
               <span>
                 <span id="metric-drives-label">Drives</span>
@@ -309,7 +352,7 @@ export function MetricForm({
                 className={INPUT}
                 value={drives}
                 aria-invalid={!!errors.drives}
-                aria-describedby={errors.drives ? "metric-drives-error" : undefined}
+                aria-describedby={errors.drives ? 'metric-drives-error' : undefined}
                 onChange={(e) => setDrives(e.target.value)}
               >
                 <option value="">Pick the result it drives</option>
@@ -340,12 +383,16 @@ export function MetricForm({
                 ))}
               </select>
               {/* qa-company-40: an empty list says why. */}
-              <span id="metric-goal-help" data-testid="metric-goal-help" className="text-[13px] font-normal">
+              <span
+                id="metric-goal-help"
+                data-testid="metric-goal-help"
+                className="text-[13px] font-normal"
+              >
                 {goalChoices.length
-                  ? "Confirmed goals measured in the same unit. The latest weekly value becomes the goal’s current value."
+                  ? 'Confirmed goals measured in the same unit. The latest weekly value becomes the goal’s current value.'
                   : unit.trim()
                     ? `No confirmed goal is measured in ${unit.trim()} yet.`
-                    : "Pick a unit to see goals measured in it."}
+                    : 'Pick a unit to see goals measured in it.'}
               </span>
             </div>
           )}
@@ -361,7 +408,7 @@ export function MetricForm({
               className={INPUT}
               value={owner}
               aria-invalid={!!errors.owner}
-              aria-describedby={errors.owner ? "metric-owner-error" : undefined}
+              aria-describedby={errors.owner ? 'metric-owner-error' : undefined}
               onChange={(e) => setOwner(e.target.value)}
             >
               <option value="">Pick who explains its changes</option>
@@ -375,15 +422,20 @@ export function MetricForm({
           </label>
           <label className={LABEL}>
             Source
-            <select className={INPUT} value={source} disabled={!!metric} onChange={(e) => setSource(e.target.value as Metric["source"])}>
-              {(Object.keys(SOURCE_LABEL) as Metric["source"][]).map((s) => (
+            <select
+              className={INPUT}
+              value={source}
+              disabled={!!metric}
+              onChange={(e) => setSource(e.target.value as Metric['source'])}
+            >
+              {(Object.keys(SOURCE_LABEL) as Metric['source'][]).map((s) => (
                 <option key={s} value={s}>
                   {SOURCE_LABEL[s]}
                 </option>
               ))}
             </select>
           </label>
-          {source === "posthog" && (
+          {source === 'posthog' && (
             <div className="flex flex-col gap-2">
               <div className={LABEL}>
                 <span className="flex items-center gap-1.5">
@@ -393,9 +445,10 @@ export function MetricForm({
                   </label>
                   <InfoTip label="PostHog" align="start">
                     <span id="metric-query-help" className="font-normal">
-                      A PostHog query that returns one number for a week. To count only that week, write {"{period_start}"} and{" "}
-                      {"{period_end}"}: Oracle fills in the week&apos;s first and last moment in the Company time zone. Test shows what it
-                      reads for the last 4 weeks.
+                      A PostHog query that returns one number for a week. To count only that week,
+                      write {'{period_start}'} and {'{period_end}'}: Oracle fills in the week&apos;s
+                      first and last moment in the Company time zone. Test shows what it reads for
+                      the last 4 weeks.
                     </span>
                   </InfoTip>
                 </span>
@@ -405,7 +458,9 @@ export function MetricForm({
                   aria-labelledby="metric-query-label"
                   aria-required="true"
                   aria-invalid={!!errors.query}
-                  aria-describedby={errors.query ? "metric-query-error metric-query-help" : "metric-query-help"}
+                  aria-describedby={
+                    errors.query ? 'metric-query-error metric-query-help' : 'metric-query-help'
+                  }
                   // qa-company-11: a light, plain-font example, so an empty box does not look filled in.
                   className={`${INPUT} min-h-24 font-mono text-sm placeholder:font-sans placeholder:italic placeholder:text-text2/60`}
                   value={query}
@@ -419,22 +474,34 @@ export function MetricForm({
                 <FieldError field="query" errors={errors} />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button disabled={busy || !query.trim()} onClick={test} aria-describedby={!query.trim() ? "metric-test-hint" : undefined}>
+                <Button
+                  disabled={busy || !query.trim()}
+                  onClick={test}
+                  aria-describedby={!query.trim() ? 'metric-test-hint' : undefined}
+                >
                   Test
                 </Button>
                 {/* qa-company-11: why Test is not available yet. */}
                 {!query.trim() && (
-                  <span id="metric-test-hint" data-testid="metric-test-hint" className="text-[13px] text-text2">
+                  <span
+                    id="metric-test-hint"
+                    data-testid="metric-test-hint"
+                    className="text-[13px] text-text2"
+                  >
                     Write a query to test it.
                   </span>
                 )}
                 {tested?.error && <span className="text-sm text-crit">{tested.error}</span>}
               </div>
               {tested && !tested.error && (
-                <ul data-testid="metric-test-values" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <ul
+                  data-testid="metric-test-values"
+                  className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
+                >
                   {tested.values.map((v) => (
                     <li key={v.week_start} className="tnum">
-                      Week of {weekText(v.week_start)}: <span className="font-semibold">{valueText(v.value, unit.trim() || "")}</span>
+                      Week of {weekText(v.week_start)}:{' '}
+                      <span className="font-semibold">{valueText(v.value, unit.trim() || '')}</span>
                     </li>
                   ))}
                 </ul>
@@ -446,13 +513,18 @@ export function MetricForm({
               <label htmlFor="metric-threshold">Alert size (%)</label>
               <InfoTip label="the alert size" align="start">
                 <span id="metric-threshold-help" className="font-normal">
-                  A week that changes by at least this share of the week before is flagged as an unusual week too.
+                  A week that changes by at least this share of the week before is flagged as an
+                  unusual week too.
                 </span>
               </InfoTip>
             </span>
             <input
               id="metric-threshold"
-              aria-describedby={errors.threshold ? "metric-threshold-error metric-threshold-help" : "metric-threshold-help"}
+              aria-describedby={
+                errors.threshold
+                  ? 'metric-threshold-error metric-threshold-help'
+                  : 'metric-threshold-help'
+              }
               className={`${INPUT} w-32`}
               data-field="threshold"
               aria-invalid={!!errors.threshold}
@@ -469,7 +541,7 @@ export function MetricForm({
               Cancel
             </Button>
             <Button type="submit" variant="solid" disabled={busy}>
-              {metric ? "Save" : "Add metric"}
+              {metric ? 'Save' : 'Add metric'}
             </Button>
           </div>
         </form>

@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import type { ReactNode } from "react";
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import {
   Button,
@@ -16,35 +16,43 @@ import {
   LinkButton,
   Notice,
   type Column,
-} from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { formatAge, formatCount, formatDate, formatDateTime, formatDay, formatPercent, plural } from "@/lib/format";
+} from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import {
+  formatAge,
+  formatCount,
+  formatDate,
+  formatDateTime,
+  formatDay,
+  formatPercent,
+  plural,
+} from '@/lib/format';
 
-import { itemKinds, KIND_LABEL } from "./confidence";
+import { itemKinds, KIND_LABEL } from './confidence';
 
-export type Coverage = Schemas["SourceCoverage"];
-export type CoverageDetail = Schemas["SourceCoverageDetail"];
-type Freshness = Schemas["FreshnessCounts"];
-type UsedIn = Schemas["UsedIn"];
-type NotReadStatus = NonNullable<Schemas["UnavailableItem"]["status"]>;
+export type Coverage = Schemas['SourceCoverage'];
+export type CoverageDetail = Schemas['SourceCoverageDetail'];
+type Freshness = Schemas['FreshnessCounts'];
+type UsedIn = Schemas['UsedIn'];
+type NotReadStatus = NonNullable<Schemas['UnavailableItem']['status']>;
 
-export const STATUS_LABEL: Record<Coverage["status"], string> = {
-  active: "Active",
-  paused: "Paused",
-  error: "Error",
-  needs_attention: "Needs attention",
+export const STATUS_LABEL: Record<Coverage['status'], string> = {
+  active: 'Active',
+  paused: 'Paused',
+  error: 'Error',
+  needs_attention: 'Needs attention',
 };
 const NOT_READ_LABEL: Record<NotReadStatus, string> = {
-  skipped: "Skipped",
-  unavailable: "No access",
-  flagged: "Flagged",
-  limited: "Limited",
+  skipped: 'Skipped',
+  unavailable: 'No access',
+  flagged: 'Flagged',
+  limited: 'Limited',
 };
 
 const n = formatCount;
 
 /** No value: one dash style on the page. */
-export const NONE = "—";
+export const NONE = '—';
 
 /** The last sync as a date ("Oct 17"), its relative age in the title; "Never" before the first. */
 export function Synced({ at, testId }: { at: string | null | undefined; testId?: string }) {
@@ -73,7 +81,7 @@ export function FreshShare({ freshness, testId }: { freshness: Freshness; testId
     <span
       data-testid={testId}
       className="tnum whitespace-nowrap"
-      title={`${formatCount(freshness.fresh)} of ${plural(items, "item")} fresh: newer than their kind's half-life`}
+      title={`${formatCount(freshness.fresh)} of ${plural(items, 'item')} fresh: newer than their kind's half-life`}
     >
       {share} fresh
     </span>
@@ -84,14 +92,18 @@ export function FreshShare({ freshness, testId }: { freshness: Freshness; testId
 export function FreshnessBar({ freshness }: { freshness: Freshness }) {
   const items = total(freshness) || 1;
   const parts = [
-    { key: "fresh", label: "Fresh", value: freshness.fresh, cls: "bg-accent" },
-    { key: "aging", label: "Aging", value: freshness.aging, cls: "bg-warn" },
-    { key: "stale", label: "Stale", value: freshness.stale, cls: "bg-line-strong" },
+    { key: 'fresh', label: 'Fresh', value: freshness.fresh, cls: 'bg-accent' },
+    { key: 'aging', label: 'Aging', value: freshness.aging, cls: 'bg-warn' },
+    { key: 'stale', label: 'Stale', value: freshness.stale, cls: 'bg-line-strong' },
   ];
   return (
     <div className="flex flex-col gap-2">
       <div aria-hidden className="flex h-2.5 overflow-hidden rounded-full bg-surface2">
-        {parts.map((p) => (p.value ? <span key={p.key} className={p.cls} style={{ width: `${(p.value / items) * 100}%` }} /> : null))}
+        {parts.map((p) =>
+          p.value ? (
+            <span key={p.key} className={p.cls} style={{ width: `${(p.value / items) * 100}%` }} />
+          ) : null,
+        )}
       </div>
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label="Freshness">
         {parts.map((p) => (
@@ -108,18 +120,22 @@ export function FreshnessBar({ freshness }: { freshness: Freshness }) {
 /** The reason without the status the chip beside it already says: "Skipped: shared from outside" is "Shared from outside". */
 function whyNotRead(reason: string, label: string): string {
   const prefix = `${label.toLowerCase()}:`;
-  const rest = reason.toLowerCase().startsWith(prefix) ? reason.slice(prefix.length).trim() : reason.trim();
+  const rest = reason.toLowerCase().startsWith(prefix)
+    ? reason.slice(prefix.length).trim()
+    : reason.trim();
   return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 
 /** What each count on a source counts (rirs-39): items, things not read, and uses are not one unit. */
 const COUNTS = {
-  items: "Items read: what Oracle holds from the source.",
-  notRead: "Not read: channels, files or messages it skipped or could not open, counted apart from the items.",
-  used: "Used: times its items back evidence, a citation or a section link; one item can be used more than once.",
+  items: 'Items read: what Oracle holds from the source.',
+  notRead:
+    'Not read: channels, files or messages it skipped or could not open, counted apart from the items.',
+  used: 'Used: times its items back evidence, a citation or a section link; one item can be used more than once.',
 };
 
-const notReadTotal = (c: Coverage) => c.not_read.skipped + c.not_read.unavailable + c.not_read.flagged + c.not_read.limited;
+const notReadTotal = (c: Coverage) =>
+  c.not_read.skipped + c.not_read.unavailable + c.not_read.flagged + c.not_read.limited;
 const usedTotal = (c: Coverage) => c.used.evidence + c.used.citations + c.used.section_links;
 
 /** Mine: one line per source. */
@@ -136,8 +152,8 @@ export function CoverageTable({
 }) {
   const columns: Column<Coverage>[] = [
     {
-      key: "source",
-      header: "Source",
+      key: 'source',
+      header: 'Source',
       cell: (c) => (
         <span className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 truncate font-semibold">{c.name}</span>
@@ -146,11 +162,11 @@ export function CoverageTable({
       ),
     },
     {
-      key: "items",
+      key: 'items',
       header: <span title={COUNTS.items}>Items read</span>,
-      width: "96px",
-      align: "right",
-      phoneLabel: "Items",
+      width: '96px',
+      align: 'right',
+      phoneLabel: 'Items',
       cell: (c) => (
         <span className="tnum" data-testid="coverage-items">
           {n(c.items)}
@@ -158,11 +174,11 @@ export function CoverageTable({
       ),
     },
     {
-      key: "not-read",
+      key: 'not-read',
       header: <span title={COUNTS.notRead}>Not read</span>,
-      width: "92px",
-      align: "right",
-      phoneLabel: "Not read",
+      width: '92px',
+      align: 'right',
+      phoneLabel: 'Not read',
       cell: (c) => {
         const v = notReadTotal(c);
         return (
@@ -172,26 +188,26 @@ export function CoverageTable({
                 {n(v)}
               </Chip>
             ) : (
-              "0"
+              '0'
             )}
           </span>
         );
       },
     },
     {
-      key: "fresh",
-      header: "Fresh",
-      width: "96px",
-      align: "right",
-      phone: "action",
+      key: 'fresh',
+      header: 'Fresh',
+      width: '96px',
+      align: 'right',
+      phone: 'action',
       cell: (c) => <FreshShare freshness={c.freshness} testId="coverage-fresh" />,
     },
     {
-      key: "used",
+      key: 'used',
       header: <span title={COUNTS.used}>Used</span>,
-      width: "72px",
-      align: "right",
-      phoneLabel: "Used",
+      width: '72px',
+      align: 'right',
+      phoneLabel: 'Used',
       cell: (c) => (
         <span className="tnum" data-testid="coverage-used">
           {n(usedTotal(c))}
@@ -199,11 +215,11 @@ export function CoverageTable({
       ),
     },
     {
-      key: "synced",
-      header: "Synced",
-      width: "84px",
-      align: "right",
-      phoneLabel: "Synced",
+      key: 'synced',
+      header: 'Synced',
+      width: '84px',
+      align: 'right',
+      phoneLabel: 'Synced',
       cell: (c) => <Synced at={c.last_synced_at} testId="coverage-synced" />,
     },
   ];
@@ -232,32 +248,34 @@ export function CoverageCountsTip() {
 
 /** A baseline type in words: "feature" is "Feature", "job_to_be_done" is "Job to be done". */
 const typeWords = (t: string) => {
-  const w = t.replace(/_/g, " ");
+  const w = t.replace(/_/g, ' ');
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
 /** One use: a link to the baseline item, the document version, or the section. */
 function UseRow({ use }: { use: UsedIn }) {
-  let href = "";
-  let icon: "baseline" | "doc" | "outline" = "doc";
+  let href = '';
+  let icon: 'baseline' | 'doc' | 'outline' = 'doc';
   let title: ReactNode = null;
   let extra: ReactNode = null;
-  if (use.kind === "evidence") {
-    icon = "baseline";
-    title = use.entity?.title ?? "Ground Truth item";
+  if (use.kind === 'evidence') {
+    icon = 'baseline';
+    title = use.entity?.title ?? 'Ground Truth item';
     // qa-work-34: the baseline type in words ("Feature"), never the lowercase enum.
     extra = use.entity ? <Chip kind="acc">{typeWords(use.entity.type)}</Chip> : null;
-    href = use.entity ? `/ground-truth?entity=${use.entity.id}` : "/ground-truth";
+    href = use.entity ? `/ground-truth?entity=${use.entity.id}` : '/ground-truth';
   } else if (use.document) {
-    const base = `/documents/${use.document.slug}${use.version ? `/v/${use.version}` : ""}`;
+    const base = `/documents/${use.document.slug}${use.version ? `/v/${use.version}` : ''}`;
     title = use.document.title;
-    if (use.kind === "citation") {
+    if (use.kind === 'citation') {
       href = base;
       extra = use.version ? <Chip kind="na">v{use.version}</Chip> : null;
     } else {
-      icon = "outline";
+      icon = 'outline';
       href = use.section_key ? `${base}#${use.section_key}` : base;
-      extra = <span className="min-w-0 truncate text-text2">{use.section_title ?? use.section_key}</span>;
+      extra = (
+        <span className="min-w-0 truncate text-text2">{use.section_title ?? use.section_key}</span>
+      );
     }
   }
   const body = (
@@ -269,7 +287,7 @@ function UseRow({ use }: { use: UsedIn }) {
           {extra}
         </span>
         <span className="block truncate text-[13px] text-text2">
-          {use.item.title ?? "Item"} · {formatDate(use.at)}
+          {use.item.title ?? 'Item'} · {formatDate(use.at)}
         </span>
       </span>
     </>
@@ -308,7 +326,7 @@ export function CoverageInspector({
   /** Whether the capabilities have loaded: until then neither Sync now nor the read-only note shows. */
   capsReady: boolean;
   /** How the last sync of this source went when it did not finish (rate limited, superseded). */
-  notice?: { tone: "pass" | "warn"; text: string } | null;
+  notice?: { tone: 'pass' | 'warn'; text: string } | null;
   onSync: () => void;
   onLoadMore: () => void;
   loadingMore: boolean;
@@ -329,12 +347,16 @@ export function CoverageInspector({
         </>
       }
       stats={[
-        { label: "Items", value: n(c.items) },
-        { label: "Not read", value: n(notReadTotal(c)), tone: notReadTotal(c) > 0 ? "warn" : undefined },
-        { label: "Used", value: n(usedTotal(c)) },
+        { label: 'Items', value: n(c.items) },
+        {
+          label: 'Not read',
+          value: n(notReadTotal(c)),
+          tone: notReadTotal(c) > 0 ? 'warn' : undefined,
+        },
+        { label: 'Used', value: n(usedTotal(c)) },
       ]}
     >
-      {c.kind === "fireflies" && endpoint && (
+      {c.kind === 'fireflies' && endpoint && (
         <InspectorSection label="Reads" testId="coverage-endpoint">
           <p className="min-w-0 truncate font-mono text-sm" title={endpoint}>
             {endpoint}
@@ -349,7 +371,12 @@ export function CoverageInspector({
               <>
                 {n(k.items)}
                 {/* qa-work-34: the date says what it is. */}
-                {k.newest_at && <span className="ml-1 font-normal text-text2"> · newest {formatDate(k.newest_at)}</span>}
+                {k.newest_at && (
+                  <span className="ml-1 font-normal text-text2">
+                    {' '}
+                    · newest {formatDate(k.newest_at)}
+                  </span>
+                )}
               </>
             }
           >
@@ -372,8 +399,11 @@ export function CoverageInspector({
             Freshness
             <InfoTip label="Freshness" align="start">
               Fresh: newer than this kind&apos;s half-life
-              {detail?.by_kind[0] ? ` (${KIND_LABEL[c.kind]} ${detail.by_kind[0].half_life_days} days)` : ""}. Aging: up to two
-              half-lives. Stale: older. Sync now brings in what changed since the last sync.
+              {detail?.by_kind[0]
+                ? ` (${KIND_LABEL[c.kind]} ${detail.by_kind[0].half_life_days} days)`
+                : ''}
+              . Aging: up to two half-lives. Stale: older. Sync now brings in what changed since the
+              last sync.
             </InfoTip>
           </>
         }
@@ -381,10 +411,16 @@ export function CoverageInspector({
         <FreshnessBar freshness={c.freshness} />
         <div className="mt-2 flex gap-4 text-sm text-text2">
           <span>
-            Newest <b className="text-text" title={c.newest_at ? formatDateTime(c.newest_at) : undefined}>{c.newest_at ? formatAge(c.newest_at) : NONE}</b>
+            Newest{' '}
+            <b className="text-text" title={c.newest_at ? formatDateTime(c.newest_at) : undefined}>
+              {c.newest_at ? formatAge(c.newest_at) : NONE}
+            </b>
           </span>
           <span>
-            Oldest <b className="text-text" title={c.oldest_at ? formatDateTime(c.oldest_at) : undefined}>{c.oldest_at ? formatAge(c.oldest_at) : NONE}</b>
+            Oldest{' '}
+            <b className="text-text" title={c.oldest_at ? formatDateTime(c.oldest_at) : undefined}>
+              {c.oldest_at ? formatAge(c.oldest_at) : NONE}
+            </b>
           </span>
         </div>
       </InspectorSection>
@@ -394,14 +430,17 @@ export function CoverageInspector({
         ) : (
           <ul aria-label="Not read" className="flex flex-col">
             {(detail?.not_read_items ?? []).map((u) => {
-              const status = u.status ?? "unavailable";
+              const status = u.status ?? 'unavailable';
               return (
-                <li key={u.external_id} className="flex min-w-0 flex-wrap items-center gap-x-2.5 border-t border-line py-1.5 first:border-t-0">
+                <li
+                  key={u.external_id}
+                  className="flex min-w-0 flex-wrap items-center gap-x-2.5 border-t border-line py-1.5 first:border-t-0"
+                >
                   {/* fix-work review: an item without a name reads by its id. */}
                   <span className="min-w-0 flex-1 truncate" title={u.name ?? u.external_id}>
                     {u.name ?? `Item ${u.external_id}`}
                   </span>
-                  <Chip kind={status === "skipped" ? "na" : "warn"} title={u.reason}>
+                  <Chip kind={status === 'skipped' ? 'na' : 'warn'} title={u.reason}>
                     {NOT_READ_LABEL[status]}
                   </Chip>
                   {/* qa-work-51: why it was not read, on every width. */}
@@ -444,15 +483,17 @@ export function CoverageInspector({
           )}
           {canSync ? (
             <div className="flex flex-wrap items-center gap-2">
-              {c.kind !== "upload" && (
-                <Button onClick={onSync} disabled={busy || c.status === "paused"} icon="clock">
-                  {busy ? "Syncing…" : "Sync now"}
+              {c.kind !== 'upload' && (
+                <Button onClick={onSync} disabled={busy || c.status === 'paused'} icon="clock">
+                  {busy ? 'Syncing…' : 'Sync now'}
                 </Button>
               )}
               <LinkButton href={`/settings/sources#source-${c.source_id}`} icon="settings">
                 Edit picks in Settings
               </LinkButton>
-              {c.status === "paused" && c.kind !== "upload" && <span className="text-sm text-text2">Paused: resume it to sync</span>}
+              {c.status === 'paused' && c.kind !== 'upload' && (
+                <span className="text-sm text-text2">Paused: resume it to sync</span>
+              )}
             </div>
           ) : (
             <p className="text-sm text-text2" data-testid="sync-viewer-note">
@@ -466,7 +507,7 @@ export function CoverageInspector({
 }
 
 /** No sources yet: where to add one. */
-export function NoSources({ children = "No sources yet" }: { children?: ReactNode }) {
+export function NoSources({ children = 'No sources yet' }: { children?: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-3 pb-8">
       <Empty icon="sources">{children}</Empty>
@@ -477,22 +518,28 @@ export function NoSources({ children = "No sources yet" }: { children?: ReactNod
   );
 }
 
-export type CoverageTab = "mine" | "company";
+export type CoverageTab = 'mine' | 'company';
 
 /** Mine and Company (owners only): tab semantics, arrow keys move between them. */
-export function CoverageTabs({ value, onChange }: { value: CoverageTab; onChange: (t: CoverageTab) => void }) {
+export function CoverageTabs({
+  value,
+  onChange,
+}: {
+  value: CoverageTab;
+  onChange: (t: CoverageTab) => void;
+}) {
   const items: { id: CoverageTab; label: string }[] = [
-    { id: "mine", label: "Mine" },
-    { id: "company", label: "Company" },
+    { id: 'mine', label: 'Mine' },
+    { id: 'company', label: 'Company' },
   ];
   return (
     <div
       role="tablist"
       aria-label="Coverage"
       onKeyDown={(e) => {
-        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
         e.preventDefault();
-        const next = value === "mine" ? "company" : "mine";
+        const next = value === 'mine' ? 'company' : 'mine';
         onChange(next);
         e.currentTarget.querySelector<HTMLElement>(`[data-testid="coverage-tab-${next}"]`)?.focus();
       }}
@@ -510,7 +557,7 @@ export function CoverageTabs({ value, onChange }: { value: CoverageTab; onChange
             data-testid={`coverage-tab-${t.id}`}
             onClick={() => onChange(t.id)}
             className={`flex h-8 items-center px-3 text-sm font-medium whitespace-nowrap not-last:border-r not-last:border-line ${
-              on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+              on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
             }`}
           >
             {t.label}

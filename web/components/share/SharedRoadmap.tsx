@@ -1,18 +1,23 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
-import { Button, Icon } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { Button, Icon } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api } from '@/lib/api/client';
+import { formatDate } from '@/lib/format';
 
-const ENDED = "This link has ended. Ask the person who sent it for a new one.";
-const NOT_OPENED = "That did not open the link. The passcode may be wrong, or the link may have ended. Check the passcode and the address, or ask the person who sent it.";
+const ENDED = 'This link has ended. Ask the person who sent it for a new one.';
+const NOT_OPENED =
+  'That did not open the link. The passcode may be wrong, or the link may have ended. Check the passcode and the address, or ask the person who sent it.';
 
 /** "Platform roadmap, autumn - Oct 31, 2026.pdf": the roadmap's name and today's date. */
 function pdfName(title: string | null | undefined): string {
-  const name = (title ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Roadmap";
+  const name =
+    (title ?? '')
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Roadmap';
   return `${name} - ${formatDate(new Date().toISOString())}.pdf`;
 }
 
@@ -21,18 +26,25 @@ function pdfName(title: string | null | undefined): string {
  * person who shared it, and the day it ends (`expires_on`, written by the API in the Company
  * time zone, as the page's footer: this page has no member's zone to read).
  */
-type About = { title?: string | null; shared_by?: string | null; shared_by_name?: string | null; expires_at?: string | null; expires_on?: string | null };
+type About = {
+  title?: string | null;
+  shared_by?: string | null;
+  shared_by_name?: string | null;
+  expires_at?: string | null;
+  expires_on?: string | null;
+};
 type View =
-  | { kind: "loading" }
-  | { kind: "locked"; note: string | null }
-  | { kind: "open"; html: string; download: boolean; about: About }
-  | { kind: "ended" }
-  | { kind: "error"; note: string };
+  | { kind: 'loading' }
+  | { kind: 'locked'; note: string | null }
+  | { kind: 'open'; html: string; download: boolean; about: About }
+  | { kind: 'ended' }
+  | { kind: 'error'; note: string };
 /** The status once the passcode opened the link: allow_download and the rest come only then (never while locked). */
 type Status = { state?: string; allow_download?: boolean } & About;
 
 const path = (token: string) => ({ params: { path: { token } } });
-const status = async (token: string) => (await api.GET("/v1/public/shares/{token}/status", path(token))).data as Status | undefined;
+const status = async (token: string) =>
+  (await api.GET('/v1/public/shares/{token}/status', path(token))).data as Status | undefined;
 
 /**
  * The link holder's page (spec-O5 §3, owner answer O5-Q5): the passcode form until the
@@ -42,24 +54,32 @@ const status = async (token: string) => (await api.GET("/v1/public/shares/{token
  * the company before the passcode, and an ended link says only that it ended.
  */
 export function SharedRoadmap({ token }: { token: string }) {
-  const [view, setView] = useState<View>({ kind: "loading" });
-  const [passcode, setPasscode] = useState("");
+  const [view, setView] = useState<View>({ kind: 'loading' });
+  const [passcode, setPasscode] = useState('');
   const [busy, setBusy] = useState(false);
   const [download, setDownload] = useState<string | null>(null);
   const id = useId();
 
-  const show = async (res: Response, html: string | undefined, download: boolean, about: About = {}) => {
-    if (res.ok && html) return setView({ kind: "open", html, download, about });
-    if (res.status === 410) return setView({ kind: "ended" });
+  const show = async (
+    res: Response,
+    html: string | undefined,
+    download: boolean,
+    about: About = {},
+  ) => {
+    if (res.ok && html) return setView({ kind: 'open', html, download, about });
+    if (res.status === 410) return setView({ kind: 'ended' });
     // qa4-docs-share-31: the API answers a wrong passcode and an ended link alike (it never
     // says which), so the note blames neither the passcode alone nor the person.
-    if (res.status === 404) return setView({ kind: "locked", note: NOT_OPENED });
+    if (res.status === 404) return setView({ kind: 'locked', note: NOT_OPENED });
     if (res.status === 429) {
-      const wait = Math.max(1, Math.ceil(Number(res.headers.get("Retry-After") ?? "60") / 60));
-      return setView({ kind: "locked", note: `Too many tries. Try again in ${wait} minute${wait === 1 ? "" : "s"}.` });
+      const wait = Math.max(1, Math.ceil(Number(res.headers.get('Retry-After') ?? '60') / 60));
+      return setView({
+        kind: 'locked',
+        note: `Too many tries. Try again in ${wait} minute${wait === 1 ? '' : 's'}.`,
+      });
     }
-    if (res.status === 401) return setView({ kind: "locked", note: null });
-    setView({ kind: "error", note: "Try again in a moment." });
+    if (res.status === 401) return setView({ kind: 'locked', note: null });
+    setView({ kind: 'error', note: 'Try again in a moment.' });
   };
 
   useEffect(() => {
@@ -67,11 +87,17 @@ export function SharedRoadmap({ token }: { token: string }) {
     void (async () => {
       const now = await status(token);
       if (!alive) return;
-      if (now?.state === "ended") return setView({ kind: "ended" });
-      if (now?.state !== "active") return setView({ kind: "locked", note: null });
-      const page = await api.GET("/v1/public/shares/{token}", { ...path(token), parseAs: "text" });
-      if (alive) await show(page.response, page.data as string | undefined, now.allow_download === true, now);
-    })().catch(() => alive && setView({ kind: "error", note: "Try again in a moment." }));
+      if (now?.state === 'ended') return setView({ kind: 'ended' });
+      if (now?.state !== 'active') return setView({ kind: 'locked', note: null });
+      const page = await api.GET('/v1/public/shares/{token}', { ...path(token), parseAs: 'text' });
+      if (alive)
+        await show(
+          page.response,
+          page.data as string | undefined,
+          now.allow_download === true,
+          now,
+        );
+    })().catch(() => alive && setView({ kind: 'error', note: 'Try again in a moment.' }));
     return () => {
       alive = false;
     };
@@ -79,7 +105,7 @@ export function SharedRoadmap({ token }: { token: string }) {
 
   // qa-docs-71: the browser tab names the roadmap once the link is open.
   // The title it had comes back when the page goes.
-  const shownTitle = view.kind === "open" ? view.about.title : null;
+  const shownTitle = view.kind === 'open' ? view.about.title : null;
   useEffect(() => {
     if (!shownTitle) return;
     const before = document.title;
@@ -94,13 +120,22 @@ export function SharedRoadmap({ token }: { token: string }) {
     setBusy(true);
     try {
       // The right passcode sets this link's cookie; the API then answers with the page.
-      const out = await api.POST("/v1/public/shares/{token}", { ...path(token), body: { passcode } as never, parseAs: "text" });
+      const out = await api.POST('/v1/public/shares/{token}', {
+        ...path(token),
+        body: { passcode } as never,
+        parseAs: 'text',
+      });
       // The cookie now opens the link: its status says whether it allows downloads.
       const now = out.response.ok ? await status(token) : undefined;
-      await show(out.response, out.data as string | undefined, now?.allow_download === true, now ?? {});
-      if (out.response.ok) setPasscode("");
+      await show(
+        out.response,
+        out.data as string | undefined,
+        now?.allow_download === true,
+        now ?? {},
+      );
+      if (out.response.ok) setPasscode('');
     } catch {
-      setView({ kind: "error", note: "Try again in a moment." });
+      setView({ kind: 'error', note: 'Try again in a moment.' });
     } finally {
       setBusy(false);
     }
@@ -108,21 +143,27 @@ export function SharedRoadmap({ token }: { token: string }) {
 
   const pdf = async () => {
     setDownload(null);
-    const out = await api.GET("/v1/public/shares/{token}/pdf", { ...path(token), parseAs: "blob" });
-    if (out.response.status === 410) return setView({ kind: "ended" });
+    const out = await api.GET('/v1/public/shares/{token}/pdf', { ...path(token), parseAs: 'blob' });
+    if (out.response.status === 410) return setView({ kind: 'ended' });
     if (!out.response.ok || !(out.data instanceof Blob)) {
-      return setDownload(out.response.status === 404 ? "Downloads are off for this link." : out.response.status === 429 ? "Too many downloads. Try again later." : "Try again in a moment.");
+      return setDownload(
+        out.response.status === 404
+          ? 'Downloads are off for this link.'
+          : out.response.status === 429
+            ? 'Too many downloads. Try again later.'
+            : 'Try again in a moment.',
+      );
     }
     const url = URL.createObjectURL(out.data);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
     // qa4-docs-share-25: named after the roadmap and the day it was saved.
-    a.download = pdfName(view.kind === "open" ? view.about.title : null);
+    a.download = pdfName(view.kind === 'open' ? view.about.title : null);
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  if (view.kind === "open") {
+  if (view.kind === 'open') {
     const { title, expires_on } = view.about;
     const who = sharedBy(view.about);
     // qa-docs-11: the page follows the reader's light or dark preference, as the page in its
@@ -131,16 +172,26 @@ export function SharedRoadmap({ token }: { token: string }) {
     return (
       <main
         className="flex min-h-dvh flex-col bg-[#ffffff] text-[#0f172a] dark:bg-[#0f172a] dark:text-[#e2e8f0]"
-        style={{ colorScheme: "light dark" }}
+        style={{ colorScheme: 'light dark' }}
         data-testid="shared-page"
       >
-        <header data-testid="shared-header" className="border-b border-[#e2e8f0] bg-[#ffffff] px-6 py-3 dark:border-[#334155] dark:bg-[#0f172a]">
+        <header
+          data-testid="shared-header"
+          className="border-b border-[#e2e8f0] bg-[#ffffff] px-6 py-3 dark:border-[#334155] dark:bg-[#0f172a]"
+        >
           {/* qa4-docs-share-26: on a phone the title has the row; Download PDF goes under it. */}
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 max-[600px]:flex-col max-[600px]:items-start">
             <div className="min-w-0 flex-1 max-[600px]:w-full max-[600px]:flex-none">
-              {title && <h1 className="font-display text-xl font-bold tracking-heading break-words">{title}</h1>}
+              {title && (
+                <h1 className="font-display text-xl font-bold tracking-heading break-words">
+                  {title}
+                </h1>
+              )}
               {(who || expires_on) && (
-                <p className="text-sm text-[#475569] dark:text-[#94a3b8]" data-testid="shared-about">
+                <p
+                  className="text-sm text-[#475569] dark:text-[#94a3b8]"
+                  data-testid="shared-about"
+                >
                   {/* qa4-docs-share-26: each part on its own line on a phone, so no line starts with "·". */}
                   {[who ? `Shared by ${who}` : null, expires_on ? `Link ends ${expires_on}` : null]
                     .filter(Boolean)
@@ -181,14 +232,16 @@ export function SharedRoadmap({ token }: { token: string }) {
   }
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-10">
-      {view.kind === "loading" && <p className="text-text2">Opening…</p>}
-      {view.kind === "ended" && <p className="text-lg">{ENDED}</p>}
-      {view.kind === "error" && <p role="alert">{view.note}</p>}
-      {view.kind === "locked" && (
+      {view.kind === 'loading' && <p className="text-text2">Opening…</p>}
+      {view.kind === 'ended' && <p className="text-lg">{ENDED}</p>}
+      {view.kind === 'error' && <p role="alert">{view.note}</p>}
+      {view.kind === 'locked' && (
         <form onSubmit={unlock} className="space-y-4">
           <h1 className="font-display text-2xl font-bold tracking-heading">Enter the passcode</h1>
           {/* qa-docs-71: who shared what stays unsaid until the passcode (spec-O5 Q5: nothing before it). */}
-          <p className="text-text2">Someone shared a private roadmap with you. It opens with the passcode they gave you.</p>
+          <p className="text-text2">
+            Someone shared a private roadmap with you. It opens with the passcode they gave you.
+          </p>
           <div>
             <label htmlFor={id} className="mb-1.5 block text-[13px] font-semibold text-text2">
               Passcode
@@ -206,21 +259,32 @@ export function SharedRoadmap({ token }: { token: string }) {
               aria-describedby={view.note ? `${id}-error` : undefined}
               onChange={(e) => {
                 setPasscode(e.target.value);
-                if (view.note) setView({ kind: "locked", note: null });
+                if (view.note) setView({ kind: 'locked', note: null });
               }}
             />
             {view.note && (
-              <p id={`${id}-error`} role="alert" className="mt-1.5 flex items-start gap-2 text-sm text-crit">
+              <p
+                id={`${id}-error`}
+                role="alert"
+                className="mt-1.5 flex items-start gap-2 text-sm text-crit"
+              >
                 <Icon name="alert" size={16} className="mt-0.5" />
                 <span className="min-w-0 break-words">
-                  <span className="font-semibold">{view.note.split(". ")[0]}.</span>
-                  {view.note.includes(". ") && <span className="block">{view.note.split(". ").slice(1).join(". ")}</span>}
+                  <span className="font-semibold">{view.note.split('. ')[0]}.</span>
+                  {view.note.includes('. ') && (
+                    <span className="block">{view.note.split('. ').slice(1).join('. ')}</span>
+                  )}
                 </span>
               </p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="primary" type="submit" disabled={busy || !passcode} aria-describedby={!passcode ? `${id}-why` : undefined}>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={busy || !passcode}
+              aria-describedby={!passcode ? `${id}-why` : undefined}
+            >
               Open
             </Button>
             {/* qa-docs-71: a greyed Open says why. */}
@@ -259,7 +323,7 @@ function Frame({ title, html }: { title: string; html: string }) {
       const doc = frame?.contentDocument;
       if (!frame || !doc?.documentElement) return;
       const was = frame.style.height;
-      frame.style.height = "0px";
+      frame.style.height = '0px';
       const content = doc.documentElement.scrollHeight;
       frame.style.height = was;
       setHeight(content);
@@ -276,12 +340,12 @@ function Frame({ title, html }: { title: string; html: string }) {
       watch.observe(body);
     };
     attach();
-    el?.addEventListener("load", attach);
-    window.addEventListener("resize", fit);
+    el?.addEventListener('load', attach);
+    window.addEventListener('resize', fit);
     return () => {
       watch?.disconnect();
-      el?.removeEventListener("load", attach);
-      window.removeEventListener("resize", fit);
+      el?.removeEventListener('load', attach);
+      window.removeEventListener('resize', fit);
     };
   }, [html]);
   return (
@@ -295,7 +359,11 @@ function Frame({ title, html }: { title: string; html: string }) {
       scrolling="no"
       data-testid="shared-frame"
       className="block w-full border-0"
-      style={{ backgroundColor: "transparent", colorScheme: "light dark", ...(height != null ? { height } : { minHeight: "80dvh" }) }}
+      style={{
+        backgroundColor: 'transparent',
+        colorScheme: 'light dark',
+        ...(height != null ? { height } : { minHeight: '80dvh' }),
+      }}
     />
   );
 }

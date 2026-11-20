@@ -1,8 +1,8 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page } from '@playwright/test';
 
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /*
  * Sub-tab strips (ds ScrollStrip: Settings, Plan, Company, Sources). Each test states its card:
@@ -10,22 +10,27 @@ import { login } from "./helpers";
  */
 
 /** The scrolling element of a tab strip nav. */
-const scroller = (nav: Locator) => nav.locator(".scroll-fade");
+const scroller = (nav: Locator) => nav.locator('.scroll-fade');
 
 /** Each tab's box against the strip's clear area (inside the fades); a tab is cut if it straddles an edge. */
 async function cutTabs(nav: Locator) {
   return scroller(nav).evaluate((el) => {
     const box = el.getBoundingClientRect();
-    const cutL = el.hasAttribute("data-more-left") ? parseFloat(el.style.getPropertyValue("--cut-l")) || 0 : 0;
-    const cutR = el.hasAttribute("data-more-right") ? parseFloat(el.style.getPropertyValue("--cut-r")) || 0 : 0;
+    const cutL = el.hasAttribute('data-more-left')
+      ? parseFloat(el.style.getPropertyValue('--cut-l')) || 0
+      : 0;
+    const cutR = el.hasAttribute('data-more-right')
+      ? parseFloat(el.style.getPropertyValue('--cut-r')) || 0
+      : 0;
     const left = box.left + cutL;
     const right = box.right - cutR;
     const cut: string[] = [];
-    for (const a of el.querySelectorAll("a")) {
+    for (const a of el.querySelectorAll('a')) {
       const r = a.getBoundingClientRect();
       const visible = Math.min(r.right, right) - Math.max(r.left, left);
       if (visible <= 2) continue; // hidden, or only its padding in the fade
-      if (r.left < left - 2 || r.right > right + 2) cut.push(`${a.textContent} [${r.left}, ${r.right}] in [${left}, ${right}]`);
+      if (r.left < left - 2 || r.right > right + 2)
+        cut.push(`${a.textContent} [${r.left}, ${r.right}] in [${left}, ${right}]`);
     }
     // The fades hide no more than 20 px of a cut tab: its padding, never a run of letters.
     return { cut, cutL, cutR };
@@ -45,7 +50,7 @@ async function settle(page: Page, nav: Locator) {
   await page.waitForTimeout(100);
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   for (const width of [1440, 1512]) {
@@ -54,98 +59,107 @@ test.describe("desktop", () => {
       // runs past the strip or the viewport, or the strip needs its chevrons; no_claim=phone layout.
       await page.setViewportSize({ width, height: 900 });
       await login(page);
-      await page.goto("/settings/members");
-      const nav = page.getByRole("navigation", { name: "Settings" }).filter({ visible: true });
-      await expect(nav.getByTestId("nav-trash")).toBeVisible();
+      await page.goto('/settings/members');
+      const nav = page.getByRole('navigation', { name: 'Settings' }).filter({ visible: true });
+      await expect(nav.getByTestId('nav-trash')).toBeVisible();
       await page.waitForTimeout(300);
       const strip = (await scroller(nav).boundingBox())!;
-      const links = await nav.getByRole("link").all();
+      const links = await nav.getByRole('link').all();
       expect(links.length).toBeGreaterThanOrEqual(13);
       for (const link of links) {
         const b = (await link.boundingBox())!;
-        const name = (await link.textContent()) ?? "";
+        const name = (await link.textContent()) ?? '';
         expect(b.x, name).toBeGreaterThanOrEqual(Math.max(0, strip.x) - 0.5);
-        expect(b.x + b.width, name).toBeLessThanOrEqual(Math.min(width, strip.x + strip.width) + 0.5);
+        expect(b.x + b.width, name).toBeLessThanOrEqual(
+          Math.min(width, strip.x + strip.width) + 0.5,
+        );
         expect(b.y, name).toBeGreaterThanOrEqual(strip.y - 0.5);
         expect(b.y + b.height, name).toBeLessThanOrEqual(strip.y + strip.height + 0.5);
       }
-      await expect(nav.getByTestId("strip-more-right")).toHaveCount(0);
-      await expect(scroller(nav)).toHaveCSS("scrollbar-width", "none");
+      await expect(nav.getByTestId('strip-more-right')).toHaveCount(0);
+      await expect(scroller(nav)).toHaveCSS('scrollbar-width', 'none');
     });
   }
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("Company's strip: every tab shows whole, wrapping onto a second line, with no chevrons", async ({ page }) => {
+  test("Company's strip: every tab shows whole, wrapping onto a second line, with no chevrons", async ({
+    page,
+  }) => {
     // protects=qa-company-44 (was qa-company-32, qa-shell-11, qa-shell-13: a scrolling strip
     // showed three of six tabs); fails_when=a tab is hidden, cut, or the strip scrolls with
     // chevrons; no_claim=which tabs share a line.
     await login(page);
-    await page.goto("/company/strategy");
-    const nav = page.getByRole("navigation", { name: "Company" }).filter({ visible: true });
-    await expect(nav.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
-    for (const key of ["strategy", "decisions", "rituals", "updates", "metrics", "market"]) {
+    await page.goto('/company/strategy');
+    const nav = page.getByRole('navigation', { name: 'Company' }).filter({ visible: true });
+    await expect(nav.getByTestId('company-tab-strategy')).toHaveAttribute('aria-current', 'page');
+    for (const key of ['strategy', 'decisions', 'rituals', 'updates', 'metrics', 'market']) {
       await expect(nav.getByTestId(`company-tab-${key}`)).toBeInViewport({ ratio: 1 });
     }
-    await expect(nav.getByRole("button", { name: /^Scroll tabs/ })).toHaveCount(0);
-    await expect(nav.locator("[data-wrap]")).toHaveCount(1);
+    await expect(nav.getByRole('button', { name: /^Scroll tabs/ })).toHaveCount(0);
+    await expect(nav.locator('[data-wrap]')).toHaveCount(1);
   });
 
   // qa-settings-41: Settings on a phone is a page picker, not a strip (fix2-shell.spec.ts).
-  for (const [path, label] of [["/plan", "Plan"]] as const) {
+  for (const [path, label] of [['/plan', 'Plan']] as const) {
     test(`${path}: the ${label} strip shows whole tab names only`, async ({ page }) => {
       // protects=no tab is cut mid-word under the fade or a chevron on a phone; overflowing
       // strips have named chevrons (qa-plan-62, qa-work-15, qa-work-48); fails_when=a tab
       // straddles the strip's edge after paging; no_claim=which tabs fit without scrolling.
       await login(page);
       await page.goto(path);
-      const nav = page.getByRole("navigation", { name: label }).filter({ visible: true });
-      await expect(nav.getByRole("link").first()).toBeVisible();
+      const nav = page.getByRole('navigation', { name: label }).filter({ visible: true });
+      await expect(nav.getByRole('link').first()).toBeVisible();
       await page.waitForTimeout(300);
-      if ((await nav.locator("[data-wrap]").count()) > 0) {
+      if ((await nav.locator('[data-wrap]').count()) > 0) {
         // A wrapping strip (the Plan's, qa-plan-4): no chevrons, every tab whole on screen.
-        await expect(nav.getByRole("button", { name: /^Scroll tabs/ })).toHaveCount(0);
-        for (const link of await nav.getByRole("link").all()) await expect(link).toBeInViewport({ ratio: 1 });
+        await expect(nav.getByRole('button', { name: /^Scroll tabs/ })).toHaveCount(0);
+        for (const link of await nav.getByRole('link').all())
+          await expect(link).toBeInViewport({ ratio: 1 });
         return;
       }
       await settle(page, nav);
-      await expect(scroller(nav)).toHaveCSS("scrollbar-width", "none");
+      await expect(scroller(nav)).toHaveCSS('scrollbar-width', 'none');
       expect((await cutTabs(nav)).cut).toEqual([]);
-      const right = nav.getByRole("button", { name: "Scroll tabs right" });
+      const right = nav.getByRole('button', { name: 'Scroll tabs right' });
       if ((await right.count()) === 0) {
         // Everything fits: every tab in full inside the strip.
         const strip = (await scroller(nav).boundingBox())!;
-        for (const link of await nav.getByRole("link").all()) {
+        for (const link of await nav.getByRole('link').all()) {
           const b = (await link.boundingBox())!;
           expect(b.x).toBeGreaterThanOrEqual(strip.x - 0.5);
           expect(b.x + b.width).toBeLessThanOrEqual(strip.x + strip.width + 0.5);
         }
         return;
       }
-      await expect(right).not.toHaveAttribute("tabindex", "-1");
-      for (let i = 0; i < 8 && (await scroller(nav).getAttribute("data-more-right")) !== null; i++) {
+      await expect(right).not.toHaveAttribute('tabindex', '-1');
+      for (
+        let i = 0;
+        i < 8 && (await scroller(nav).getAttribute('data-more-right')) !== null;
+        i++
+      ) {
         await right.click();
         await settle(page, nav);
         expect((await cutTabs(nav)).cut, `after page ${i + 1}`).toEqual([]);
       }
-      await expect(scroller(nav)).not.toHaveAttribute("data-more-right");
+      await expect(scroller(nav)).not.toHaveAttribute('data-more-right');
     });
   }
 });
 
-test.describe("phone, a strip that is not tabs", () => {
+test.describe('phone, a strip that is not tabs', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("its chevrons say Scroll left and Scroll right, not tabs", async ({ page }) => {
+  test('its chevrons say Scroll left and Scroll right, not tabs', async ({ page }) => {
     // protects=the chevrons' names fit what the strip holds (fix-shell review); fails_when=a strip
     // of plain items calls its chevrons "Scroll tabs right"; no_claim=paging (tested above).
     await login(page);
-    await page.goto("/design");
-    const strip = page.getByTestId("design-scroll-strip");
+    await page.goto('/design');
+    const strip = page.getByTestId('design-scroll-strip');
     await expect(strip).toBeVisible({ timeout: 20_000 });
-    await expect(strip.getByRole("button", { name: "Scroll right", exact: true })).toBeVisible();
-    await expect(strip.getByRole("button", { name: /tabs/ })).toHaveCount(0);
+    await expect(strip.getByRole('button', { name: 'Scroll right', exact: true })).toBeVisible();
+    await expect(strip.getByRole('button', { name: /tabs/ })).toHaveCount(0);
   });
 });

@@ -1,28 +1,28 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 /** Status colours are only for status (B1); `now` (accent-soft) only for "now"; `acc` for counts and kinds. */
-export type ChipKind = "pass" | "warn" | "crit" | "na" | "acc" | "now" | "line";
+export type ChipKind = 'pass' | 'warn' | 'crit' | 'na' | 'acc' | 'now' | 'line';
 
 const KIND: Record<ChipKind, string> = {
-  pass: "bg-pass-bg text-pass",
-  warn: "bg-warn-bg text-warn",
-  crit: "bg-crit-bg text-crit",
-  na: "bg-na-bg text-na",
-  acc: "bg-accent-soft text-accent-ink",
-  now: "bg-accent-soft text-accent-ink",
-  line: "border border-line-strong bg-transparent text-text",
+  pass: 'bg-pass-bg text-pass',
+  warn: 'bg-warn-bg text-warn',
+  crit: 'bg-crit-bg text-crit',
+  na: 'bg-na-bg text-na',
+  acc: 'bg-accent-soft text-accent-ink',
+  now: 'bg-accent-soft text-accent-ink',
+  line: 'border border-line-strong bg-transparent text-text',
 };
 
 /** Hero variant: chips in the inspector's dark head. */
 const HERO: Partial<Record<ChipKind, string>> = { now: KIND.now };
 
 export function Chip({
-  kind = "na",
+  kind = 'na',
   dot = false,
   hero = false,
   wrap = false,
   title,
-  className = "",
+  className = '',
   children,
   ...rest
 }: {
@@ -37,14 +37,16 @@ export function Chip({
   className?: string;
   children: ReactNode;
 } & { [data: `data-${string}`]: string | undefined }) {
-  const tone = hero ? (HERO[kind] ?? "bg-hero-2 text-hero-text") : KIND[kind];
+  const tone = hero ? (HERO[kind] ?? 'bg-hero-2 text-hero-text') : KIND[kind];
   return (
     <span
       title={title}
       data-kind={kind}
       {...rest}
       className={`tnum inline-flex max-w-full items-center gap-1.5 px-2.5 text-[13px] font-semibold ${
-        wrap ? "min-h-[26px] rounded-[13px] py-1 leading-[18px]" : "h-[26px] rounded-full leading-none whitespace-nowrap"
+        wrap
+          ? 'min-h-[26px] rounded-[13px] py-1 leading-[18px]'
+          : 'h-[26px] rounded-full leading-none whitespace-nowrap'
       } ${tone} ${className}`}
     >
       {dot && <span aria-hidden className="size-2 flex-none rounded-full bg-current" />}
@@ -57,13 +59,21 @@ export function Chip({
  * A goal's code tag (G-B): mono, accent-soft; a proposed goal shows in warn. A goal with no
  * code has no tag (codes-and-chips): its name beside it is all a person reads, never twice.
  */
-export function GoalTag({ id, proposed = false, title }: { id: string | null | undefined; proposed?: boolean; title?: string }) {
+export function GoalTag({
+  id,
+  proposed = false,
+  title,
+}: {
+  id: string | null | undefined;
+  proposed?: boolean;
+  title?: string;
+}) {
   if (!id) return null;
   return (
     <span
       title={title ?? (proposed ? `${id} · proposed` : id)}
       className={`tnum inline-grid h-6 flex-none place-items-center rounded-goal px-[7px] font-mono text-[13px] leading-none font-medium ${
-        proposed ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"
+        proposed ? 'bg-warn-bg text-warn' : 'bg-accent-soft text-accent-ink'
       }`}
     >
       {id}

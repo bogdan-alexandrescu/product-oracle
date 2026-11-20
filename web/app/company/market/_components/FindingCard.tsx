@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Button, Chip } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-import { FINDING_KIND, findingDate, type Change, type Finding } from "./lib";
+import { FINDING_KIND, findingDate, type Change, type Finding } from './lib';
 
 /**
  * One web finding from the monthly search: Not vetted, its kind, source host and date; the
@@ -29,7 +29,7 @@ export function FindingCard({
   onDismissed?: (f: Finding) => void;
 }) {
   const [dismissing, setDismissing] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = { params: { path: { finding_id: finding.id } } };
@@ -46,14 +46,20 @@ export function FindingCard({
   }
 
   return (
-    <article data-testid="web-finding" data-status={finding.status} className="flex min-w-0 flex-col gap-1.5 py-3 [overflow-wrap:anywhere]">
+    <article
+      data-testid="web-finding"
+      data-status={finding.status}
+      className="flex min-w-0 flex-col gap-1.5 py-3 [overflow-wrap:anywhere]"
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
-        {finding.status === "open" ? (
+        {finding.status === 'open' ? (
           <Chip kind="warn" data-testid="not-vetted">
             Not vetted
           </Chip>
         ) : (
-          <Chip kind={finding.status === "promoted" ? "pass" : "na"}>{finding.status === "promoted" ? "Promoted" : "Dismissed"}</Chip>
+          <Chip kind={finding.status === 'promoted' ? 'pass' : 'na'}>
+            {finding.status === 'promoted' ? 'Promoted' : 'Dismissed'}
+          </Chip>
         )}
         <span>{FINDING_KIND[finding.kind]}</span>
         <span aria-hidden>·</span>
@@ -69,19 +75,36 @@ export function FindingCard({
       </div>
       <h3 className="text-[15px] font-semibold">{finding.title}</h3>
       <p className="text-[15px]">{finding.summary}</p>
-      {finding.excerpt && <blockquote className="border-l-2 border-line-strong pl-3 text-sm text-text2" data-user-content>“{finding.excerpt}”</blockquote>}
+      {finding.excerpt && (
+        <blockquote
+          className="border-l-2 border-line-strong pl-3 text-sm text-text2"
+          data-user-content
+        >
+          “{finding.excerpt}”
+        </blockquote>
+      )}
       <div className="flex flex-wrap items-center gap-2">
-        <a href={finding.url} target="_blank" rel="noopener noreferrer nofollow" className="text-sm text-accent-ink hover:underline">
+        <a
+          href={finding.url}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          className="text-sm text-accent-ink hover:underline"
+        >
           Open page on {finding.host} ↗
         </a>
-        {canDecide && finding.status === "open" && !dismissing && (
+        {canDecide && finding.status === 'open' && !dismissing && (
           <>
             <span className="flex-1" />
             <Button
               disabled={busy}
               onClick={() =>
                 act(async () => {
-                  const change = await unwrap(api.POST("/v1/competitor-web-findings/{finding_id}/promote", { ...path, body: {} }));
+                  const change = await unwrap(
+                    api.POST('/v1/competitor-web-findings/{finding_id}/promote', {
+                      ...path,
+                      body: {},
+                    }),
+                  );
                   onPromoted?.(change);
                 })
               }
@@ -100,14 +123,24 @@ export function FindingCard({
           onSubmit={(e) => {
             e.preventDefault();
             void act(async () => {
-              const out = await unwrap(api.POST("/v1/competitor-web-findings/{finding_id}/dismiss", { ...path, body: { reason: reason.trim() || null } }));
+              const out = await unwrap(
+                api.POST('/v1/competitor-web-findings/{finding_id}/dismiss', {
+                  ...path,
+                  body: { reason: reason.trim() || null },
+                }),
+              );
               onDismissed?.(out);
             });
           }}
         >
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-semibold text-text2">
             Why dismiss (optional)
-            <input className={INPUT} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+            <input
+              className={INPUT}
+              value={reason}
+              maxLength={500}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </label>
           <Button type="submit" disabled={busy}>
             Dismiss finding

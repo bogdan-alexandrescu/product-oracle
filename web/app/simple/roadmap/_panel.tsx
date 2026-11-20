@@ -1,27 +1,50 @@
-"use client";
+'use client';
 // The Simple item panel outside the roadmap: a page that lists a feature (Priorities' goal
 // buckets) opens the same panel the Timeline does, with the same card, so the feature can be
 // read and changed where it is listed.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { toast as dsToast, type ToastAsk } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
-import { GOAL_OPS, ITEM_CHANGED_EVENT, sendCardChanged, sendGoalChanged, sendItemChanged } from "@/lib/api/simple-chat";
-import { useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/simple-waiting";
+import { toast as dsToast, type ToastAsk } from '@/components/ds';
+import { api, unwrap } from '@/lib/api/client';
+import {
+  GOAL_OPS,
+  ITEM_CHANGED_EVENT,
+  sendCardChanged,
+  sendGoalChanged,
+  sendItemChanged,
+} from '@/lib/api/simple-chat';
+import { useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/simple-waiting';
 
-import { FloatingCard, type Act } from "./_card";
-import { DraftDetails, type DraftItem, type DraftPrd } from "./_drafts";
-import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, setRoadmapToday, suggestion, undo, type Change, type Item } from "./_lib";
+import { FloatingCard, type Act } from './_card';
+import { DraftDetails, type DraftItem, type DraftPrd } from './_drafts';
+import {
+  ChangeFailed,
+  changedWords,
+  decide,
+  nearWords,
+  propose,
+  resultWords,
+  setRoadmapToday,
+  suggestion,
+  undo,
+  type Change,
+  type Item,
+} from './_lib';
 
-const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
+const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
 /** Which roadmap item is the feature: its code in the plan's PRD, else its code, else its name, else its key. */
-export function itemFor(items: Item[], f: { code: string; name: string; prd?: { id: string; slug: string } | null }): Item | undefined {
+export function itemFor(
+  items: Item[],
+  f: { code: string; name: string; prd?: { id: string; slug: string } | null },
+): Item | undefined {
   const same = (i: Item) => !!i.code && i.code.toLowerCase() === f.code.toLowerCase();
   return (
-    items.find((i) => same(i) && !!f.prd && (i.prd?.id === f.prd.id || i.prd?.slug === f.prd.slug)) ??
+    items.find(
+      (i) => same(i) && !!f.prd && (i.prd?.id === f.prd.id || i.prd?.slug === f.prd.slug),
+    ) ??
     items.find(same) ??
     items.find((i) => i.title === f.name) ??
     // S-3: a Goal bucket feature with no ranked row is known only by its key.
@@ -30,18 +53,31 @@ export function itemFor(items: Item[], f: { code: string; name: string; prd?: { 
 }
 
 /** What opens the panel: a roadmap item's id when the page has it, else its code, PRD and name. */
-export type PanelFeature = { id?: string | null; code: string; name: string; prd?: { id: string; slug: string } | null };
+export type PanelFeature = {
+  id?: string | null;
+  code: string;
+  name: string;
+  prd?: { id: string; slug: string } | null;
+};
 
 /**
  * The item a panel shows: the one it moved to (a dependency), else the one it showed first (kept
  * after a rename), else the item of the feature's id when its name is the card's, else the item
  * with its code, then its name. Never another feature's item under a wrong id.
  */
-export function usePanelItem(items: Item[], feature: PanelFeature, opened: string | null): Item | undefined {
+export function usePanelItem(
+  items: Item[],
+  feature: PanelFeature,
+  opened: string | null,
+): Item | undefined {
   const [pinned, setPinned] = useState<string | null>(null);
   const byId = (id?: string | null) => (id ? items.find((i) => i.id === id) : undefined);
   const own = byId(feature.id);
-  const found = byId(opened) ?? byId(pinned) ?? (own && own.title === feature.name ? own : undefined) ?? itemFor(items, feature);
+  const found =
+    byId(opened) ??
+    byId(pinned) ??
+    (own && own.title === feature.name ? own : undefined) ??
+    itemFor(items, feature);
   if (found && !opened && !pinned) setPinned(found.id);
   return found;
 }
@@ -77,13 +113,15 @@ export function FeaturePanel({
   /** Where the desktop panel starts (px from the top), when not its corner: under the page's toolbar. */
   top?: number;
 }) {
-  const roadmap = useQuery("simple-roadmap:{}", () =>
-    unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
+  const roadmap = useQuery('simple-roadmap:{}', () =>
+    unwrap(api.GET('/v1/simple/roadmap', {})).then((d) => {
       setRoadmapToday(d.today);
       return d;
     }),
   );
-  const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
+  const proposals = useQuery('simple-proposals', () =>
+    unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+  );
   // build-feature-panel (AN PR 1204 review 7): a change made here is said to the whole page
   // (every query reads again, this panel's among them), so the page behind shows it at once;
   // home-waiting-one-list: it may change what waits on me, so the one list is read afresh too.
@@ -93,9 +131,9 @@ export function FeaturePanel({
     waitingChanged();
   }, []);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   const data = roadmap.data;
@@ -110,9 +148,9 @@ export function FeaturePanel({
         toast({
           message: resultWords(r, what, item?.deciders, note),
           action:
-            r.change.status === "applied" && r.change.can_undo
+            r.change.status === 'applied' && r.change.can_undo
               ? {
-                  label: "Undo",
+                  label: 'Undo',
                   onClick: () =>
                     void undo(r.change.id).then(
                       () => {
@@ -125,12 +163,17 @@ export function FeaturePanel({
                 }
               : undefined,
         });
-        if (r.change.status === "applied" && GOAL_OPS.includes(body.op)) sendGoalChanged();
+        if (r.change.status === 'applied' && GOAL_OPS.includes(body.op)) sendGoalChanged();
       } catch (e) {
         if (e instanceof ChangeFailed && e.status === 409) {
           const changed = changedWords(e.changed);
-          toast({ message: `${e.message}${changed.length ? ` (its ${changed.join(" and ")})` : ""}. Reload to see the latest, then try again.` });
-        } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
+          toast({
+            message: `${e.message}${changed.length ? ` (its ${changed.join(' and ')})` : ''}. Reload to see the latest, then try again.`,
+          });
+        } else
+          toast({
+            message: e instanceof ChangeFailed ? e.message : 'Oracle could not make this change',
+          });
       } finally {
         await reload();
         sendItemChanged();
@@ -138,37 +181,59 @@ export function FeaturePanel({
     },
     [item, reload],
   );
-  const onSuggestion = async (how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => {
+  const onSuggestion = async (
+    how: 'accept' | 'edit' | 'dismiss',
+    dates?: { start_date: string; end_date: string },
+  ) => {
     if (!item?.suggestion) return;
     try {
       await suggestion(item.suggestion.id, how, dates);
-      toast({ message: how === "dismiss" ? "Dismissed Oracle's dates" : item.suggestion.can_decide ? "Dates accepted in your working draft" : "Dates proposed: they wait in Needs a decision" });
+      toast({
+        message:
+          how === 'dismiss'
+            ? "Dismissed Oracle's dates"
+            : item.suggestion.can_decide
+              ? 'Dates accepted in your working draft'
+              : 'Dates proposed: they wait in Needs a decision',
+      });
     } catch (e) {
-      toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not do that" });
+      toast({ message: e instanceof ChangeFailed ? e.message : 'Oracle could not do that' });
     }
     await reload();
   };
-  const onDecide = async (c: Change, how: "accept" | "decline") => {
+  const onDecide = async (c: Change, how: 'accept' | 'decline') => {
     try {
       await decide(c.id, how);
-      toast({ message: how === "accept" ? "Accepted: it is in your working draft" : "Declined" });
-      if (how === "accept" && GOAL_OPS.includes(c.op)) sendGoalChanged();
+      toast({ message: how === 'accept' ? 'Accepted: it is in your working draft' : 'Declined' });
+      if (how === 'accept' && GOAL_OPS.includes(c.op)) sendGoalChanged();
     } catch (e) {
-      toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
+      toast({ message: e instanceof ChangeFailed ? e.message : 'Oracle could not decide it' });
     }
     await reload();
     sendItemChanged();
   };
 
   const body = draft ? (
-    <DraftDetails item={draft.item} prd={draft.prd.prd} canChange={draft.prd.can_change} onChanged={draft.onChanged} onClose={onClose} />
+    <DraftDetails
+      item={draft.item}
+      prd={draft.prd.prd}
+      canChange={draft.prd.can_change}
+      onChanged={draft.onChanged}
+      onClose={onClose}
+    />
   ) : !data ? (
-    <p className="p-4 text-[15px] text-text2">{roadmap.error ?? "Loading…"}</p>
+    <p className="p-4 text-[15px] text-text2">{roadmap.error ?? 'Loading…'}</p>
   ) : !item ? (
     <div className="p-4">
       <h2 className="text-[18px] font-[650]">{feature.name}</h2>
-      <p className="mt-1 text-[15px] text-text2">This feature is not on a roadmap you can see yet.</p>
-      <button type="button" className="mt-3 text-[15px] font-[650] text-accent-ink underline" onClick={onClose}>
+      <p className="mt-1 text-[15px] text-text2">
+        This feature is not on a roadmap you can see yet.
+      </p>
+      <button
+        type="button"
+        className="mt-3 text-[15px] font-[650] text-accent-ink underline"
+        onClick={onClose}
+      >
         Close
       </button>
     </div>
@@ -178,10 +243,18 @@ export function FeaturePanel({
       item={item}
       items={new Map(items.map((i) => [i.id, i]))}
       proposals={(proposals.data ?? []).filter((c) => c.target.item_id === item.id)}
-      proposalsFailed={proposals.error && !proposals.data ? { error: proposals.error, retry: () => void proposals.reload() } : null}
+      proposalsFailed={
+        proposals.error && !proposals.data
+          ? { error: proposals.error, retry: () => void proposals.reload() }
+          : null
+      }
       proposalsLoading={!proposals.data && !proposals.error}
       phone={phone}
-      style={phone ? { height: "52dvh" } : { position: "relative", left: 0, top: 0, width: "100%", border: 0, boxShadow: "none" }}
+      style={
+        phone
+          ? { height: '52dvh' }
+          : { position: 'relative', left: 0, top: 0, width: '100%', border: 0, boxShadow: 'none' }
+      }
       act={act}
       canChange={canChange}
       onDecide={(c, how) => void onDecide(c, how)}
@@ -193,15 +266,20 @@ export function FeaturePanel({
       planned={data.milestones}
     />
   );
-  if (phone && item && !draft) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;
+  if (phone && item && !draft)
+    return (
+      <div data-testid="item-panel" aria-label={item.title} className="contents">
+        {body}
+      </div>
+    );
   return (
     <aside
       data-testid="item-panel"
       aria-label={draft?.item.title ?? item?.title ?? feature.name}
       className={
         phone
-          ? "fixed inset-x-0 bottom-0 z-40 rounded-t-xl border border-line bg-surface shadow-tip"
-          : "fixed right-3 top-3 z-40 max-h-[calc(100dvh-24px)] w-[400px] overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
+          ? 'fixed inset-x-0 bottom-0 z-40 rounded-t-xl border border-line bg-surface shadow-tip'
+          : 'fixed right-3 top-3 z-40 max-h-[calc(100dvh-24px)] w-[400px] overflow-y-auto rounded-xl border border-line bg-surface shadow-tip'
       }
       style={!phone && top ? { top, maxHeight: `calc(100dvh - ${top + 12}px)` } : undefined}
     >

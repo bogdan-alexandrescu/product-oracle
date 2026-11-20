@@ -1,8 +1,12 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { BASELINE_REVIEW_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_STALE_GOAL_RUN } from "../lib/api/mock/runs";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import {
+  BASELINE_REVIEW_RUN,
+  PRIORITY_NO_GOAL_RUN,
+  PRIORITY_STALE_GOAL_RUN,
+} from '../lib/api/mock/runs';
+import { login } from './helpers';
 
 /**
  * Follow-ups to PR 1244 (review minors), on the mock layer, driven as a person would. Test cards:
@@ -18,24 +22,30 @@ import { login } from "./helpers";
  *   show; no_claim=the goal's last known name (api tests).
  */
 
-const STALE_GOAL = "Gift box sizes serves the goal Cut early churn, which was rejected after the order was checked: the run must name a goal of the Ground Truth";
-const DELETED_GOAL = "Gift wrap choice names a goal that was deleted: the run must name a goal of the Ground Truth";
+const STALE_GOAL =
+  'Gift box sizes serves the goal Cut early churn, which was rejected after the order was checked: the run must name a goal of the Ground Truth';
+const DELETED_GOAL =
+  'Gift wrap choice names a goal that was deleted: the run must name a goal of the Ground Truth';
 
 // The Gift boxes order and a Build the Ground Truth run, still at its review, that proposed Cut early churn.
-const withScenario = (page: Page, scenario = "priority-order-goal-review") => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
+const withScenario = (page: Page, scenario = 'priority-order-goal-review') =>
+  page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
 
 async function openOrder(page: Page, run: string) {
   await page.goto(`/runs/${run}`);
-  await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
-  await expect(page.getByTestId("snapshot-band")).toBeVisible();
+  await page
+    .getByTestId('checkpoint-priority_order')
+    .getByRole('link', { name: 'Review the order' })
+    .click();
+  await expect(page.getByTestId('snapshot-band')).toBeVisible();
 }
 
 /** The Ground Truth run's review of what it wrote: Cut early churn's row. */
 async function churnRow(page: Page) {
   await page.goto(`/ground-truth?tab=from-run&run=${BASELINE_REVIEW_RUN}`);
   // Decided, it no longer needs anyone: it is under All from this run.
-  await page.getByRole("button", { name: /All from this run/ }).click();
-  const row = page.getByTestId("from-run-row").filter({ hasText: "Cut early churn" });
+  await page.getByRole('button', { name: /All from this run/ }).click();
+  const row = page.getByTestId('from-run-row').filter({ hasText: 'Cut early churn' });
   await expect(row).toBeVisible();
   return row;
 }
@@ -45,82 +55,88 @@ async function rejectAndTry(page: Page) {
   const order = page.url();
   // A person rejects the goal after the order was checked.
   const row = await churnRow(page);
-  await row.getByRole("button", { name: "Reject", exact: true }).click();
-  await expect(row.getByTestId("row-result")).toContainText("Rejected");
+  await row.getByRole('button', { name: 'Reject', exact: true }).click();
+  await expect(row.getByTestId('row-result')).toContainText('Rejected');
   // Approve order is refused, the problem named on the band.
   await page.goto(order);
-  const band = page.getByTestId("snapshot-band");
-  await band.getByRole("button", { name: "Approve order" }).click();
-  await expect(band.getByRole("list", { name: "Blocking problems" })).toContainText(STALE_GOAL);
-  await expect(band.getByRole("button", { name: "Approve order" })).toBeDisabled();
+  const band = page.getByTestId('snapshot-band');
+  await band.getByRole('button', { name: 'Approve order' }).click();
+  await expect(band.getByRole('list', { name: 'Blocking problems' })).toContainText(STALE_GOAL);
+  await expect(band.getByRole('button', { name: 'Approve order' })).toBeDisabled();
   return order;
 }
 
-test.describe("Follow-ups to PR 1244: order problems about goals", () => {
+test.describe('Follow-ups to PR 1244: order problems about goals', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("a stale goal problem clears once the goal is back, and Approve order saves", async ({ page }) => {
+  test('a stale goal problem clears once the goal is back, and Approve order saves', async ({
+    page,
+  }) => {
     await withScenario(page);
     await login(page);
     const order = await rejectAndTry(page);
 
     // The person changes their mind: Undo brings the goal back, proposed.
     const row = await churnRow(page);
-    await row.getByRole("button", { name: "Undo" }).click();
-    await expect(row.getByRole("button", { name: "Confirm" })).toBeVisible();
+    await row.getByRole('button', { name: 'Undo' }).click();
+    await expect(row.getByRole('button', { name: 'Confirm' })).toBeVisible();
 
     // The run page's gate no longer lists it.
     await page.goto(`/runs/${PRIORITY_STALE_GOAL_RUN}`);
-    const cp = page.getByTestId("checkpoint-priority_order");
-    await expect(cp.getByRole("link", { name: "Review the order" })).toBeVisible();
-    await expect(cp).not.toContainText("rejected after the order was checked");
+    const cp = page.getByTestId('checkpoint-priority_order');
+    await expect(cp.getByRole('link', { name: 'Review the order' })).toBeVisible();
+    await expect(cp).not.toContainText('rejected after the order was checked');
 
     // Nor does the band, and Approve order saves the order.
     await page.goto(order);
-    const band = page.getByTestId("snapshot-band");
-    await expect(band.getByRole("button", { name: "Approve order" })).toBeEnabled();
+    const band = page.getByTestId('snapshot-band');
+    await expect(band.getByRole('button', { name: 'Approve order' })).toBeEnabled();
     await expect(band).not.toContainText(STALE_GOAL);
-    await band.getByRole("button", { name: "Approve order" }).click();
-    await expect(band).toContainText("Saved for Gift boxes");
-    await expect(band.getByRole("button", { name: "Approve order" })).toHaveCount(0);
+    await band.getByRole('button', { name: 'Approve order' }).click();
+    await expect(band).toContainText('Saved for Gift boxes');
+    await expect(band.getByRole('button', { name: 'Approve order' })).toHaveCount(0);
   });
 
-  test("a goal confirmed again clears the problem too", async ({ page }) => {
+  test('a goal confirmed again clears the problem too', async ({ page }) => {
     await withScenario(page);
     await login(page);
     const order = await rejectAndTry(page);
     const row = await churnRow(page);
-    await row.getByRole("button", { name: "Undo" }).click();
-    await row.getByRole("button", { name: "Confirm" }).click();
-    await expect(row.getByTestId("row-result")).toContainText("Confirmed");
+    await row.getByRole('button', { name: 'Undo' }).click();
+    await row.getByRole('button', { name: 'Confirm' }).click();
+    await expect(row.getByTestId('row-result')).toContainText('Confirmed');
 
     await page.goto(order);
-    const band = page.getByTestId("snapshot-band");
+    const band = page.getByTestId('snapshot-band');
     await expect(band).not.toContainText(STALE_GOAL);
-    await expect(band.getByTestId("cannot-approve")).toHaveCount(0);
-    await expect(band.getByRole("button", { name: "Approve order" })).toBeEnabled();
+    await expect(band.getByTestId('cannot-approve')).toHaveCount(0);
+    await expect(band.getByRole('button', { name: 'Approve order' })).toBeEnabled();
   });
 
-  test("a goal with no name is said as a deleted goal, never by its key", async ({ page }) => {
-    await withScenario(page, "priority-order");
-    await login(page, "approver@example.com");
+  test('a goal with no name is said as a deleted goal, never by its key', async ({ page }) => {
+    await withScenario(page, 'priority-order');
+    await login(page, 'approver@example.com');
     // The band.
     await openOrder(page, PRIORITY_NO_GOAL_RUN);
-    const band = page.getByTestId("snapshot-band");
-    await expect(band.getByRole("list", { name: "Blocking problems" }).getByText(DELETED_GOAL, { exact: true })).toBeVisible();
-    await expect(band).not.toContainText("g.no-such-goal");
-    await expect(band).not.toContainText("an unknown goal");
+    const band = page.getByTestId('snapshot-band');
+    await expect(
+      band
+        .getByRole('list', { name: 'Blocking problems' })
+        .getByText(DELETED_GOAL, { exact: true }),
+    ).toBeVisible();
+    await expect(band).not.toContainText('g.no-such-goal');
+    await expect(band).not.toContainText('an unknown goal');
 
     // The run page's gate chip.
     await page.goto(`/runs/${PRIORITY_NO_GOAL_RUN}`);
-    const gate = page.getByTestId("checkpoint-priority_order").getByTestId("approve-gate");
+    const gate = page.getByTestId('checkpoint-priority_order').getByTestId('approve-gate');
     await expect(gate.getByText(DELETED_GOAL, { exact: true })).toBeVisible();
-    await expect(page.locator("main")).not.toContainText("g.no-such-goal");
-    await expect(page.locator("main")).not.toContainText("an unknown goal");
+    await expect(page.locator('main')).not.toContainText('g.no-such-goal');
+    await expect(page.locator('main')).not.toContainText('an unknown goal');
 
     // The Inbox.
-    await page.goto("/inbox");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator("main")).not.toContainText("g.no-such-goal");
+    await page.goto('/inbox');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.locator('main')).not.toContainText('g.no-such-goal');
   });
 });

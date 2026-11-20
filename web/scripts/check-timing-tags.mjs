@@ -36,36 +36,42 @@
 //   node scripts/check-timing-tags.mjs              self-test, then every e2e spec (not e2e/real)
 //                                                   and every Vitest test file
 //   node scripts/check-timing-tags.mjs --self-test  the self-test only
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
-const TAG = "@timing";
-const COARSE = "timing-check: coarse";
+const TAG = '@timing';
+const COARSE = 'timing-check: coarse';
 
-const CLOCK_OBJECTS = ["Date", "performance", "process"];
-const GLOBALS = ["globalThis", "window", "self", "global"];
+const CLOCK_OBJECTS = ['Date', 'performance', 'process'];
+const GLOBALS = ['globalThis', 'window', 'self', 'global'];
 
 /** The member `a.b` or `a["b"]` names: b, or null. */
 function memberName(n) {
   if (ts.isPropertyAccessExpression(n)) return n.name.text;
-  if (ts.isElementAccessExpression(n) && ts.isStringLiteralLike(n.argumentExpression)) return n.argumentExpression.text;
+  if (ts.isElementAccessExpression(n) && ts.isStringLiteralLike(n.argumentExpression))
+    return n.argumentExpression.text;
   return null;
 }
 
 /** The clock object `n` is ("Date", "performance" or "process"), also as globalThis.Date and the like or a variable set to one (const D = Date); or null. */
 function clockObject(n, clocks) {
   n = skipParens(n);
-  if (ts.isIdentifier(n)) return CLOCK_OBJECTS.includes(n.text) ? n.text : (clocks?.objects.get(symbolOf(n, clocks)) ?? null);
+  if (ts.isIdentifier(n))
+    return CLOCK_OBJECTS.includes(n.text)
+      ? n.text
+      : (clocks?.objects.get(symbolOf(n, clocks)) ?? null);
   const name = memberName(n);
   const of = name && skipParens(n.expression);
-  return CLOCK_OBJECTS.includes(name) && ts.isIdentifier(of) && GLOBALS.includes(of.text) ? name : null;
+  return CLOCK_OBJECTS.includes(name) && ts.isIdentifier(of) && GLOBALS.includes(of.text)
+    ? name
+    : null;
 }
 
 /** `performance.now()`, however spelt (window.performance["now"](), clock() with const { now: clock } = performance). */
 function isPerformanceNow(n, clocks) {
-  return calledClock(n, clocks)?.object === "performance";
+  return calledClock(n, clocks)?.object === 'performance';
 }
 
 /**
@@ -84,8 +90,13 @@ function clockRef(n, clocks) {
 /** The clock `of.name` is (clockRef), or null. */
 function memberClock(of, name, clocks) {
   const object = clockObject(of, clocks);
-  if (object) return (name === "now" && object !== "process") || (name === "hrtime" && object === "process") ? { object, name } : null;
-  return name === "bigint" && clockRef(of, clocks)?.name === "hrtime" ? { object: "process", name } : null;
+  if (object)
+    return (name === 'now' && object !== 'process') || (name === 'hrtime' && object === 'process')
+      ? { object, name }
+      : null;
+  return name === 'bigint' && clockRef(of, clocks)?.name === 'hrtime'
+    ? { object: 'process', name }
+    : null;
 }
 
 /** The clock the call `n` reads, also through .call(), .apply() or .bind()(): { object, name, args }, args being those the clock gets; or null. */
@@ -95,32 +106,44 @@ function calledClock(n, clocks) {
   const ref = clockRef(e, clocks);
   if (ref) return { ...ref, args: n.arguments };
   const how = memberName(e);
-  const by = how === "call" || how === "apply" ? clockRef(e.expression, clocks) : null;
+  const by = how === 'call' || how === 'apply' ? clockRef(e.expression, clocks) : null;
   if (by) {
     const list = n.arguments[1] && skipParens(n.arguments[1]);
-    const args = how === "call" ? n.arguments.slice(1) : !list ? [] : ts.isArrayLiteralExpression(list) ? list.elements : [list];
+    const args =
+      how === 'call'
+        ? n.arguments.slice(1)
+        : !list
+          ? []
+          : ts.isArrayLiteralExpression(list)
+            ? list.elements
+            : [list];
     return { ...by, args };
   }
-  const bound = ts.isCallExpression(e) && memberName(skipParens(e.expression)) === "bind" ? clockRef(skipParens(e.expression).expression, clocks) : null;
+  const bound =
+    ts.isCallExpression(e) && memberName(skipParens(e.expression)) === 'bind'
+      ? clockRef(skipParens(e.expression).expression, clocks)
+      : null;
   return bound ? { ...bound, args: n.arguments } : null;
 }
 
 /** `process.hrtime(t0)`: the time since t0, a measure in itself. */
 function isHrtimeSince(n, clocks) {
   const c = calledClock(n, clocks);
-  return c?.name === "hrtime" && c.args.length > 0;
+  return c?.name === 'hrtime' && c.args.length > 0;
 }
 
 /** `process.hrtime()` or `process.hrtime.bigint()` (or an item of one): a read in ns or [s, ns], not ms. */
 function isHrtimeRead(n, clocks) {
   n = skipParens(n);
   if (ts.isElementAccessExpression(n)) return isHrtimeRead(n.expression, clocks);
-  return ["hrtime", "bigint"].includes(calledClock(n, clocks)?.name);
+  return ['hrtime', 'bigint'].includes(calledClock(n, clocks)?.name);
 }
 
 /** `new Date()`, no arguments (also new D() with const D = Date). */
 function isNewDate(n, clocks) {
-  return ts.isNewExpression(n) && clockObject(n.expression, clocks) === "Date" && !n.arguments?.length;
+  return (
+    ts.isNewExpression(n) && clockObject(n.expression, clocks) === 'Date' && !n.arguments?.length
+  );
 }
 
 // How surely a value is a clock read: a timestamp, or a `new Date()` that is one only when
@@ -141,12 +164,18 @@ function clockKind(node, clocks) {
   if (ts.isElementAccessExpression(n)) return clockKind(n.expression, clocks); // process.hrtime()[0]
   if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.PlusToken)
     return isNewDate(skipParens(n.operand), clocks) ? STRONG : clockKind(n.operand, clocks);
-  if (ts.isCallExpression(n) && !n.arguments.length && ts.isPropertyAccessExpression(n.expression) && ["getTime", "valueOf"].includes(n.expression.name.text)) {
+  if (
+    ts.isCallExpression(n) &&
+    !n.arguments.length &&
+    ts.isPropertyAccessExpression(n.expression) &&
+    ['getTime', 'valueOf'].includes(n.expression.name.text)
+  ) {
     const of = skipParens(n.expression.expression);
     return isNewDate(of, clocks) ? STRONG : clockKind(of, clocks);
   }
   if (ts.isIdentifier(n)) return clocks.vars.get(symbolOf(n, clocks)) ?? 0;
-  if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) return clocks.fns.get(symbolOf(n.expression, clocks)) ?? 0;
+  if (ts.isCallExpression(n) && ts.isIdentifier(n.expression))
+    return clocks.fns.get(symbolOf(n.expression, clocks)) ?? 0;
   return 0;
 }
 
@@ -161,13 +190,19 @@ function checkerFor(sf) {
     fileExists: () => true,
     readFile: () => undefined,
     writeFile: () => {},
-    getDefaultLibFileName: () => "lib.d.ts",
-    getCurrentDirectory: () => "/",
+    getDefaultLibFileName: () => 'lib.d.ts',
+    getCurrentDirectory: () => '/',
     getCanonicalFileName: (f) => f,
     useCaseSensitiveFileNames: () => true,
-    getNewLine: () => "\n",
+    getNewLine: () => '\n',
   };
-  return ts.createProgram({ rootNames: [sf.fileName], options: { noLib: true, noResolve: true, types: [] }, host }).getTypeChecker();
+  return ts
+    .createProgram({
+      rootNames: [sf.fileName],
+      options: { noLib: true, noResolve: true, types: [] },
+      host,
+    })
+    .getTypeChecker();
 }
 
 /** What a function with this `body` returns: its expression body, or its return statements' values. */
@@ -197,7 +232,16 @@ function returnKind(fn, clocks) {
  * not one.
  */
 function findClocks(sf) {
-  const clocks = { sf, checker: checkerFor(sf), vars: new Map(), fns: new Map(), deadlines: new Map(), deadlineFns: new Map(), objects: new Map(), refs: new Map() };
+  const clocks = {
+    sf,
+    checker: checkerFor(sf),
+    vars: new Map(),
+    fns: new Map(),
+    deadlines: new Map(),
+    deadlineFns: new Map(),
+    objects: new Map(),
+    refs: new Map(),
+  };
   let grew = true;
   const raise = (map, id, kind) => {
     const s = kind && symbolOf(id, clocks);
@@ -206,7 +250,8 @@ function findClocks(sf) {
       grew = true;
     }
   };
-  const returnsDeadline = (fn) => (returned(fn.body).some((x) => isDeadline(x, clocks)) ? STRONG : 0);
+  const returnsDeadline = (fn) =>
+    returned(fn.body).some((x) => isDeadline(x, clocks)) ? STRONG : 0;
   const name = (map, id, value) => {
     const s = value && symbolOf(id, clocks);
     if (s && !map.has(s)) {
@@ -236,14 +281,19 @@ function findClocks(sf) {
       // const { now } = Date; const { now: clock } = performance; const { hrtime } = process; const { bigint } = process.hrtime
       for (const el of n.name.elements) {
         const key = el.propertyName ?? el.name;
-        if (!ts.isIdentifier(el.name) || !(ts.isIdentifier(key) || ts.isStringLiteral(key))) continue;
+        if (!ts.isIdentifier(el.name) || !(ts.isIdentifier(key) || ts.isStringLiteral(key)))
+          continue;
         name(clocks.refs, el.name, memberClock(n.initializer, key.text, clocks));
       }
     } else if (ts.isFunctionDeclaration(n) && n.name) {
       raise(clocks.fns, n.name, returnKind(n, clocks));
       raise(clocks.deadlineFns, n.name, returnsDeadline(n));
-    }
-    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left) && !alias(n.left, skipParens(n.right))) {
+    } else if (
+      ts.isBinaryExpression(n) &&
+      n.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(n.left) &&
+      !alias(n.left, skipParens(n.right))
+    ) {
       raise(clocks.vars, n.left, clockKind(n.right, clocks));
       raise(clocks.deadlines, n.left, isDeadline(n.right, clocks) ? STRONG : 0);
     }
@@ -259,7 +309,8 @@ function findClocks(sf) {
 /** `Date.now` or `performance.now.bind(performance)`: a clock under another name, as clockRef gives it; or null. */
 function clockAlias(n, clocks) {
   n = skipParens(n);
-  if (ts.isCallExpression(n) && memberName(skipParens(n.expression)) === "bind") n = skipParens(n.expression).expression;
+  if (ts.isCallExpression(n) && memberName(skipParens(n.expression)) === 'bind')
+    n = skipParens(n.expression).expression;
   return clockRef(n, clocks);
 }
 
@@ -267,14 +318,21 @@ function clockAlias(n, clocks) {
 function isDeadline(node, clocks) {
   const n = inner(node);
   if (ts.isIdentifier(n)) return clocks.deadlines.has(symbolOf(n, clocks));
-  if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) return clocks.deadlineFns.has(symbolOf(n.expression, clocks));
+  if (ts.isCallExpression(n) && ts.isIdentifier(n.expression))
+    return clocks.deadlineFns.has(symbolOf(n.expression, clocks));
   if (!ts.isBinaryExpression(n)) return false;
   const [l, r] = [clockKind(n.left, clocks), clockKind(n.right, clocks)];
-  if (n.operatorToken.kind === ts.SyntaxKind.PlusToken) return (l === STRONG && !r) || (r === STRONG && !l);
+  if (n.operatorToken.kind === ts.SyntaxKind.PlusToken)
+    return (l === STRONG && !r) || (r === STRONG && !l);
   return n.operatorToken.kind === ts.SyntaxKind.MinusToken && l === STRONG && !r;
 }
 
-const COMPARISONS = [ts.SyntaxKind.LessThanToken, ts.SyntaxKind.LessThanEqualsToken, ts.SyntaxKind.GreaterThanToken, ts.SyntaxKind.GreaterThanEqualsToken];
+const COMPARISONS = [
+  ts.SyntaxKind.LessThanToken,
+  ts.SyntaxKind.LessThanEqualsToken,
+  ts.SyntaxKind.GreaterThanToken,
+  ts.SyntaxKind.GreaterThanEqualsToken,
+];
 
 /** Whether `n` (outside nested functions) throws or calls expect(). */
 function asserts(n) {
@@ -287,8 +345,10 @@ function asserts(n) {
 function assertedAt(id) {
   for (let c = id, p = id.parent; p && !ts.isFunctionLike(p); [c, p] = [p, p.parent]) {
     if (ts.isThrowStatement(p) || (ts.isCallExpression(p) && expected(p) !== null)) return true;
-    if (ts.isIfStatement(p) && p.expression === c) return asserts(p.thenStatement) || asserts(p.elseStatement);
-    if (ts.isConditionalExpression(p) && p.condition === c) return asserts(p.whenTrue) || asserts(p.whenFalse);
+    if (ts.isIfStatement(p) && p.expression === c)
+      return asserts(p.thenStatement) || asserts(p.elseStatement);
+    if (ts.isConditionalExpression(p) && p.condition === c)
+      return asserts(p.whenTrue) || asserts(p.whenFalse);
     if (ts.isStatement(p)) return false;
   }
   return false;
@@ -309,12 +369,13 @@ function assertedVars(clocks) {
 
 const INCREMENTS = [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken];
 // Methods that put a value into what they are called on: late.push(1), seen.add(id).
-const ADDS = ["push", "unshift", "splice", "add", "set"];
+const ADDS = ['push', 'unshift', 'splice', 'add', 'set'];
 
 /** The variable `n` sets into: `x` of x, x.late, x[0] or x.a.b; or null. */
 function rootOf(n) {
   n = skipParens(n);
-  while (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) n = skipParens(n.expression);
+  while (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n))
+    n = skipParens(n.expression);
   return ts.isIdentifier(n) ? n : null;
 }
 
@@ -333,8 +394,17 @@ function isAsserted(target, clocks) {
 function setsAsserted(n, clocks) {
   if (!n) return false;
   let target = null;
-  if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) target = rootOf(n.left);
-  else if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && INCREMENTS.includes(n.operator)) target = rootOf(n.operand);
+  if (
+    ts.isBinaryExpression(n) &&
+    n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+    n.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+  )
+    target = rootOf(n.left);
+  else if (
+    (ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) &&
+    INCREMENTS.includes(n.operator)
+  )
+    target = rootOf(n.operand);
   else if (ts.isVariableDeclaration(n) && n.initializer && ts.isIdentifier(n.name)) target = n.name;
   else if (ts.isCallExpression(n)) target = addedTo(n);
   if (isAsserted(target, clocks)) return true;
@@ -345,8 +415,14 @@ function setsAsserted(n, clocks) {
 function setIntoAsserted(n, clocks) {
   const v = valueOf(n);
   const p = v.parent;
-  if (ts.isVariableDeclaration(p) && p.initializer === v) return ts.isIdentifier(p.name) && isAsserted(p.name, clocks);
-  if (ts.isBinaryExpression(p) && p.right === v && p.operatorToken.kind === ts.SyntaxKind.EqualsToken) return isAsserted(rootOf(p.left), clocks);
+  if (ts.isVariableDeclaration(p) && p.initializer === v)
+    return ts.isIdentifier(p.name) && isAsserted(p.name, clocks);
+  if (
+    ts.isBinaryExpression(p) &&
+    p.right === v &&
+    p.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  )
+    return isAsserted(rootOf(p.left), clocks);
   return ts.isCallExpression(p) && p.arguments.includes(v) && isAsserted(addedTo(p), clocks);
 }
 
@@ -362,14 +438,18 @@ function onlyWaits(cmp, clocks) {
   const passes = (x) =>
     ts.isParenthesizedExpression(x) ||
     (ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.ExclamationToken) ||
-    (ts.isBinaryExpression(x) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(x.operatorToken.kind));
+    (ts.isBinaryExpression(x) &&
+      [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(
+        x.operatorToken.kind,
+      ));
   while (p && passes(p)) [c, p] = [p, p.parent];
   if (!p) return false;
   if ((ts.isWhileStatement(p) || ts.isDoStatement(p)) && p.expression === c) return true;
   if (ts.isForStatement(p) && p.condition === c) return true;
   const quiet = (...branches) => branches.every((b) => !asserts(b) && !setsAsserted(b, clocks));
   if (ts.isIfStatement(p) && p.expression === c) return quiet(p.thenStatement, p.elseStatement);
-  if (ts.isConditionalExpression(p) && p.condition === c) return quiet(p.whenTrue, p.whenFalse) && !setIntoAsserted(p, clocks);
+  if (ts.isConditionalExpression(p) && p.condition === c)
+    return quiet(p.whenTrue, p.whenFalse) && !setIntoAsserted(p, clocks);
   return false;
 }
 
@@ -377,7 +457,8 @@ function onlyWaits(cmp, clocks) {
 function calleeName(call) {
   const e = call.expression;
   if (ts.isIdentifier(e)) return e.text;
-  if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression)) return `${e.expression.text}.${e.name.text}`;
+  if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression))
+    return `${e.expression.text}.${e.name.text}`;
   return null;
 }
 
@@ -397,8 +478,17 @@ function measureAt(n, helpers, clocks) {
       if (left === STRONG || (left && clockKind(n.right, clocks))) return true;
     } else if (op === ts.SyntaxKind.PlusToken) {
       // -start + Date.now()
-      const negated = (x) => ((x = skipParens(x)), ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken ? clockKind(x.operand, clocks) : 0);
-      if ((negated(n.left) && clockKind(n.right, clocks)) || (negated(n.right) && clockKind(n.left, clocks))) return true;
+      const negated = (x) => (
+        (x = skipParens(x)),
+        ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken
+          ? clockKind(x.operand, clocks)
+          : 0
+      );
+      if (
+        (negated(n.left) && clockKind(n.right, clocks)) ||
+        (negated(n.right) && clockKind(n.left, clocks))
+      )
+        return true;
     } else if (COMPARISONS.includes(op)) {
       const vs = (a, b) => clockKind(a, clocks) && isDeadline(b, clocks);
       if ((vs(n.left, n.right) || vs(n.right, n.left)) && !onlyWaits(n, clocks)) return true;
@@ -406,14 +496,25 @@ function measureAt(n, helpers, clocks) {
     return false;
   }
   if (!ts.isCallExpression(n)) return false;
-  if (isPerformanceNow(n, clocks) || isHrtimeSince(n, clocks) || helpers.has(calleeName(n))) return true;
+  if (isPerformanceNow(n, clocks) || isHrtimeSince(n, clocks) || helpers.has(calleeName(n)))
+    return true;
   // expect(Date.now()).toBeLessThan(until), expect.poll(() => Date.now())..., expect(t0 + 50).toBeGreaterThan(Date.now())
-  if (ts.isPropertyAccessExpression(n.expression) && [...BOUNDS, "toBeGreaterThanOrEqual"].includes(n.expression.name.text) && n.arguments[0]) {
+  if (
+    ts.isPropertyAccessExpression(n.expression) &&
+    [...BOUNDS, 'toBeGreaterThanOrEqual'].includes(n.expression.name.text) &&
+    n.arguments[0]
+  ) {
     const x = expected(n);
     if (!x) return false;
-    const subject = ts.isArrowFunction(x) || ts.isFunctionExpression(x) ? returnKind(x, clocks) : clockKind(x, clocks);
+    const subject =
+      ts.isArrowFunction(x) || ts.isFunctionExpression(x)
+        ? returnKind(x, clocks)
+        : clockKind(x, clocks);
     const b = n.arguments[0];
-    return !!((subject && isDeadline(b, clocks)) || (isDeadline(x, clocks) && clockKind(b, clocks)));
+    return !!(
+      (subject && isDeadline(b, clocks)) ||
+      (isDeadline(x, clocks) && clockKind(b, clocks))
+    );
   }
   return false;
 }
@@ -421,9 +522,17 @@ function measureAt(n, helpers, clocks) {
 /** How surely `node` is a clock read called right there and moved by an offset ((Date.now() + 0), now() - 50), as clockKind; else 0. */
 function movedRead(node, clocks) {
   const n = inner(node);
-  if (!ts.isBinaryExpression(n) || ![ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken].includes(n.operatorToken.kind)) return 0;
-  const called = (x) => (ts.isCallExpression(inner(x)) ? clockKind(x, clocks) : movedRead(x, clocks));
-  const [l, r] = [called(n.left), n.operatorToken.kind === ts.SyntaxKind.PlusToken && called(n.right)];
+  if (
+    !ts.isBinaryExpression(n) ||
+    ![ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken].includes(n.operatorToken.kind)
+  )
+    return 0;
+  const called = (x) =>
+    ts.isCallExpression(inner(x)) ? clockKind(x, clocks) : movedRead(x, clocks);
+  const [l, r] = [
+    called(n.left),
+    n.operatorToken.kind === ts.SyntaxKind.PlusToken && called(n.right),
+  ];
   if (l && !clockKind(n.right, clocks)) return l;
   return r && !clockKind(n.left, clocks) ? r : 0;
 }
@@ -440,8 +549,14 @@ function valuesSet(id, clocks) {
     };
     const visit = (n) => {
       if (ts.isVariableDeclaration(n) && n.initializer) add(n.name, n.initializer);
-      else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) add(skipParens(n.left), n.right);
-      else if (ts.isBinaryExpression(n) && n.operatorToken.kind > ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) add(skipParens(n.left), n);
+      else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken)
+        add(skipParens(n.left), n.right);
+      else if (
+        ts.isBinaryExpression(n) &&
+        n.operatorToken.kind > ts.SyntaxKind.FirstAssignment &&
+        n.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      )
+        add(skipParens(n.left), n);
       ts.forEachChild(n, visit);
     };
     visit(clocks.sf);
@@ -449,12 +564,20 @@ function valuesSet(id, clocks) {
   return clocks.sets.get(s) ?? [];
 }
 
-const ROUNDS = ["Math.round", "Math.floor", "Math.ceil", "Math.trunc", "Math.abs"];
+const ROUNDS = ['Math.round', 'Math.floor', 'Math.ceil', 'Math.trunc', 'Math.abs'];
 
 /** `n` past parentheses, await, `as`, `satisfies` and `!`. */
 function inner(n) {
   for (;;) {
-    if (ts.isParenthesizedExpression(n) || ts.isAwaitExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isNonNullExpression(n) || ts.isTypeAssertionExpression(n)) n = n.expression;
+    if (
+      ts.isParenthesizedExpression(n) ||
+      ts.isAwaitExpression(n) ||
+      ts.isAsExpression(n) ||
+      ts.isSatisfiesExpression(n) ||
+      ts.isNonNullExpression(n) ||
+      ts.isTypeAssertionExpression(n)
+    )
+      n = n.expression;
     else return n;
   }
 }
@@ -466,14 +589,19 @@ function inner(n) {
  */
 function unscaledReading(node, clocks, seen = new Set()) {
   const n = inner(node);
-  if (isHrtimeRead(n, clocks) || ts.isBinaryExpression(n) || ts.isLiteralExpression(n)) return false;
-  if (ts.isPrefixUnaryExpression(n)) return n.operator === ts.SyntaxKind.PlusToken && unscaledReading(n.operand, clocks, seen); // +new Date()
+  if (isHrtimeRead(n, clocks) || ts.isBinaryExpression(n) || ts.isLiteralExpression(n))
+    return false;
+  if (ts.isPrefixUnaryExpression(n))
+    return n.operator === ts.SyntaxKind.PlusToken && unscaledReading(n.operand, clocks, seen); // +new Date()
   if (ts.isIdentifier(n)) {
     const s = symbolOf(n, clocks);
     if (!s || seen.has(s)) return true;
     seen.add(s);
     const values = valuesSet(n, clocks);
-    return !values.length || (values.every((v) => isZero(v) || unscaledReading(v, clocks, seen)) && !values.every(isZero));
+    return (
+      !values.length ||
+      (values.every((v) => isZero(v) || unscaledReading(v, clocks, seen)) && !values.every(isZero))
+    );
   }
   return true;
 }
@@ -489,17 +617,24 @@ function unscaledElapsed(node, clocks, raw, seen = new Set()) {
   const reading = (x) => unscaledReading(x, clocks);
   if (ts.isBinaryExpression(n)) {
     const op = n.operatorToken.kind;
-    const negated = (x) => ((x = skipParens(x)), ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken && reading(x.operand));
+    const negated = (x) => (
+      (x = skipParens(x)),
+      ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken && reading(x.operand)
+    );
     if (op === ts.SyntaxKind.MinusToken) return reading(n.left) && reading(n.right);
-    if (op === ts.SyntaxKind.PlusToken) return (negated(n.left) && reading(n.right)) || (negated(n.right) && reading(n.left));
+    if (op === ts.SyntaxKind.PlusToken)
+      return (negated(n.left) && reading(n.right)) || (negated(n.right) && reading(n.left));
     return false;
   }
   // Each of these, or 0 (a placeholder), and not all 0.
-  const elapsedOrZero = (values) => values.every((x) => isZero(x) || unscaledElapsed(x, clocks, raw, seen)) && !values.every(isZero);
+  const elapsedOrZero = (values) =>
+    values.every((x) => isZero(x) || unscaledElapsed(x, clocks, raw, seen)) &&
+    !values.every(isZero);
   if (ts.isConditionalExpression(n)) return elapsedOrZero([n.whenTrue, n.whenFalse]);
   if (ts.isCallExpression(n)) {
     const name = calleeName(n);
-    if (ROUNDS.includes(name)) return n.arguments.length === 1 && unscaledElapsed(n.arguments[0], clocks, raw, seen);
+    if (ROUNDS.includes(name))
+      return n.arguments.length === 1 && unscaledElapsed(n.arguments[0], clocks, raw, seen);
     return raw.has(name);
   }
   if (ts.isIdentifier(n)) {
@@ -542,27 +677,32 @@ function testCallKind(node) {
     parts.unshift(e.name.text);
     e = e.expression;
   }
-  if (!ts.isIdentifier(e) || e.text !== "test") return null;
-  if (parts.length === 0 || (parts.length === 1 && ["only", "fixme", "fail", "slow"].includes(parts[0]))) return "test";
-  if (parts[0] === "describe") return "describe";
+  if (!ts.isIdentifier(e) || e.text !== 'test') return null;
+  if (
+    parts.length === 0 ||
+    (parts.length === 1 && ['only', 'fixme', 'fail', 'slow'].includes(parts[0]))
+  )
+    return 'test';
+  if (parts[0] === 'describe') return 'describe';
   return null;
 }
 
 function titleOf(call, sf) {
   const arg = call.arguments[0];
-  return arg ? arg.getText(sf) : "";
+  return arg ? arg.getText(sf) : '';
 }
 
 function readSource(path) {
-  return existsSync(path) ? readFileSync(path, "utf8") : null;
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
 }
 
 /** A relative import's file under `root`: `spec` from `fromFile`, with .ts, .tsx or /index.ts; or null. */
 function resolveImport(spec, fromFile, read, root) {
-  if (!spec.startsWith(".")) return null;
+  if (!spec.startsWith('.')) return null;
   const base = resolve(dirname(fromFile), spec);
-  if (relative(root, base).startsWith("..")) return null;
-  for (const p of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts"), base]) if (/\.tsx?$/.test(p) && read(p) !== null) return p;
+  if (relative(root, base).startsWith('..')) return null;
+  for (const p of [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), base])
+    if (/\.tsx?$/.test(p) && read(p) !== null) return p;
   return null;
 }
 
@@ -585,19 +725,36 @@ function analyse(sf, fileName, read, root, cache) {
   };
   const reexports = new Map();
   for (const st of sf.statements) {
-    if (ts.isImportDeclaration(st) && ts.isStringLiteral(st.moduleSpecifier) && st.importClause && !st.importClause.isTypeOnly) {
+    if (
+      ts.isImportDeclaration(st) &&
+      ts.isStringLiteral(st.moduleSpecifier) &&
+      st.importClause &&
+      !st.importClause.isTypeOnly
+    ) {
       const exp = exportedFrom(st.moduleSpecifier.text);
       if (!exp.size) continue;
       const c = st.importClause;
-      if (c.name && exp.has("default")) addHelper(c.name.text, exp.get("default"));
+      if (c.name && exp.has('default')) addHelper(c.name.text, exp.get('default'));
       const b = c.namedBindings;
-      if (b && ts.isNamespaceImport(b)) for (const [e, isRaw] of exp) addHelper(`${b.name.text}.${e}`, isRaw);
-      else if (b) for (const el of b.elements) if (exp.has((el.propertyName ?? el.name).text)) addHelper(el.name.text, exp.get((el.propertyName ?? el.name).text));
-    } else if (ts.isExportDeclaration(st) && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier) && !st.isTypeOnly) {
+      if (b && ts.isNamespaceImport(b))
+        for (const [e, isRaw] of exp) addHelper(`${b.name.text}.${e}`, isRaw);
+      else if (b)
+        for (const el of b.elements)
+          if (exp.has((el.propertyName ?? el.name).text))
+            addHelper(el.name.text, exp.get((el.propertyName ?? el.name).text));
+    } else if (
+      ts.isExportDeclaration(st) &&
+      st.moduleSpecifier &&
+      ts.isStringLiteral(st.moduleSpecifier) &&
+      !st.isTypeOnly
+    ) {
       const exp = exportedFrom(st.moduleSpecifier.text);
       if (!st.exportClause) {
-        for (const [e, isRaw] of exp) if (e !== "default") reexports.set(e, isRaw);
-      } else if (ts.isNamedExports(st.exportClause)) for (const el of st.exportClause.elements) if (exp.has((el.propertyName ?? el.name).text)) reexports.set(el.name.text, exp.get((el.propertyName ?? el.name).text));
+        for (const [e, isRaw] of exp) if (e !== 'default') reexports.set(e, isRaw);
+      } else if (ts.isNamedExports(st.exportClause))
+        for (const el of st.exportClause.elements)
+          if (exp.has((el.propertyName ?? el.name).text))
+            reexports.set(el.name.text, exp.get((el.propertyName ?? el.name).text));
     }
   }
 
@@ -611,8 +768,13 @@ function analyse(sf, fileName, read, root, cache) {
   const collect = (n) => {
     if (ts.isFunctionDeclaration(n) && n.name && n.body) {
       fns.set(n.name.text, n.body);
-      if (isExported(n)) exported.set(isDefault(n) ? "default" : n.name.text, n.name.text);
-    } else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) {
+      if (isExported(n)) exported.set(isDefault(n) ? 'default' : n.name.text, n.name.text);
+    } else if (
+      ts.isVariableDeclaration(n) &&
+      ts.isIdentifier(n.name) &&
+      n.initializer &&
+      (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))
+    ) {
       fns.set(n.name.text, n.initializer.body);
       if (isExported(n)) exported.set(n.name.text, n.name.text);
     }
@@ -620,11 +782,18 @@ function analyse(sf, fileName, read, root, cache) {
   };
   collect(sf);
   for (const st of sf.statements) {
-    if (ts.isExportDeclaration(st) && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause))
-      for (const el of st.exportClause.elements) exported.set(el.name.text, (el.propertyName ?? el.name).text);
-    else if (ts.isExportAssignment(st) && !st.isExportEquals && ts.isIdentifier(st.expression)) exported.set("default", st.expression.text);
+    if (
+      ts.isExportDeclaration(st) &&
+      !st.moduleSpecifier &&
+      st.exportClause &&
+      ts.isNamedExports(st.exportClause)
+    )
+      for (const el of st.exportClause.elements)
+        exported.set(el.name.text, (el.propertyName ?? el.name).text);
+    else if (ts.isExportAssignment(st) && !st.isExportEquals && ts.isIdentifier(st.expression))
+      exported.set('default', st.expression.text);
   }
-  for (let grew = true; grew; ) {
+  for (let grew = true; grew;) {
     grew = false;
     for (const [name, body] of fns) {
       if (helpers.has(name) || !measures(body, helpers, clocks)) continue;
@@ -632,7 +801,7 @@ function analyse(sf, fileName, read, root, cache) {
       grew = true;
     }
   }
-  for (let grew = true; grew; ) {
+  for (let grew = true; grew;) {
     grew = false;
     for (const [name, body] of fns) {
       if (raw.has(name) || !helpers.has(name) || !returnsUnscaled(body, clocks, raw)) continue;
@@ -676,7 +845,13 @@ function measuringExports(path, read, root, cache) {
     cache.set(path, new Map());
     return cache.get(path);
   }
-  const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const sf = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
   const me = walk.stack.push(path) - 1;
   walk.low[me] = me;
   let exports = new Map();
@@ -701,15 +876,19 @@ function comments(node, sf) {
   const text = sf.text;
   const seen = new Map();
   const visit = (n) => {
-    for (const r of [...(ts.getLeadingCommentRanges(text, n.getFullStart()) ?? []), ...(ts.getTrailingCommentRanges(text, n.end) ?? [])])
-      if (r.pos >= node.getFullStart() && r.end <= node.end) seen.set(r.pos, text.slice(r.pos, r.end));
+    for (const r of [
+      ...(ts.getLeadingCommentRanges(text, n.getFullStart()) ?? []),
+      ...(ts.getTrailingCommentRanges(text, n.end) ?? []),
+    ])
+      if (r.pos >= node.getFullStart() && r.end <= node.end)
+        seen.set(r.pos, text.slice(r.pos, r.end));
     for (const c of n.getChildren(sf)) visit(c);
   };
   visit(node);
   return [...seen.values()];
 }
 
-const BOUNDS = ["toBeLessThan", "toBeLessThanOrEqual", "toBeGreaterThan"];
+const BOUNDS = ['toBeLessThan', 'toBeLessThanOrEqual', 'toBeGreaterThan'];
 const COARSE_MIN_MS = 1000;
 
 /** `expect(x)` (or expect.soft(x)) at the root of `call`'s matcher chain: its x, or null. */
@@ -727,12 +906,23 @@ function expected(call) {
 
 /** `expect(...)` or `expect.soft(...)` and the like: whether `callee` is expect's. */
 function isExpect(callee) {
-  return (ts.isIdentifier(callee) && callee.text === "expect") || (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === "expect");
+  return (
+    (ts.isIdentifier(callee) && callee.text === 'expect') ||
+    (ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === 'expect')
+  );
 }
 
 /** The node whose value is `n`'s: `n` past parentheses, await, `as`, `satisfies` and `!`. */
 function valueOf(n) {
-  const passes = (p) => ts.isParenthesizedExpression(p) || ts.isAwaitExpression(p) || ts.isAsExpression(p) || ts.isSatisfiesExpression(p) || ts.isNonNullExpression(p) || ts.isTypeAssertionExpression(p);
+  const passes = (p) =>
+    ts.isParenthesizedExpression(p) ||
+    ts.isAwaitExpression(p) ||
+    ts.isAsExpression(p) ||
+    ts.isSatisfiesExpression(p) ||
+    ts.isNonNullExpression(p) ||
+    ts.isTypeAssertionExpression(p);
   while (n.parent && passes(n.parent)) n = n.parent;
   return n;
 }
@@ -751,18 +941,41 @@ function coarseGuard(body, sf, helpers, raw, clocks) {
   if (!comments(body, sf).some((c) => c.includes(COARSE))) return false;
   const measured = new Set(); // variables set from a measure: const ms = await paint(page)
   const isMeasured = (n) => ts.isIdentifier(n) && measured.has(symbolOf(n, clocks));
-  const isTarget = (n) => (ts.isVariableDeclaration(n.parent) && n.parent.name === n) || (ts.isBinaryExpression(n.parent) && n.parent.left === n && n.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken);
+  const isTarget = (n) =>
+    (ts.isVariableDeclaration(n.parent) && n.parent.name === n) ||
+    (ts.isBinaryExpression(n.parent) &&
+      n.parent.left === n &&
+      n.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken);
   // Where a measured value goes: the variable it is set into, "bound", or null for anything else.
   const goesTo = (n) => {
     const v = valueOf(n);
     const p = v.parent;
-    if (ts.isVariableDeclaration(p) && p.initializer === v && ts.isIdentifier(p.name)) return p.name;
-    if (ts.isBinaryExpression(p) && p.right === v && p.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(p.left)) return p.left;
+    if (ts.isVariableDeclaration(p) && p.initializer === v && ts.isIdentifier(p.name))
+      return p.name;
+    if (
+      ts.isBinaryExpression(p) &&
+      p.right === v &&
+      p.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(p.left)
+    )
+      return p.left;
     if (ts.isCallExpression(p) && p.arguments[0] === v && isExpect(p.expression)) {
       const m = p.parent;
-      if (ts.isPropertyAccessExpression(m) && m.expression === p && BOUNDS.includes(m.name.text) && ts.isCallExpression(m.parent) && m.parent.expression === m) {
+      if (
+        ts.isPropertyAccessExpression(m) &&
+        m.expression === p &&
+        BOUNDS.includes(m.name.text) &&
+        ts.isCallExpression(m.parent) &&
+        m.parent.expression === m
+      ) {
         const b = m.parent.arguments[0] && skipParens(m.parent.arguments[0]);
-        if (b && ts.isNumericLiteral(b) && Number(b.text.replace(/_/g, "")) >= COARSE_MIN_MS && unscaledElapsed(n, clocks, raw)) return "bound";
+        if (
+          b &&
+          ts.isNumericLiteral(b) &&
+          Number(b.text.replace(/_/g, '')) >= COARSE_MIN_MS &&
+          unscaledElapsed(n, clocks, raw)
+        )
+          return 'bound';
       }
     }
     return null;
@@ -771,7 +984,7 @@ function coarseGuard(body, sf, helpers, raw, clocks) {
   const visit = (n) => {
     if (!isTarget(n) && (measureAt(n, helpers, clocks) || isMeasured(n))) {
       const u = goesTo(n);
-      if (u === "bound") bounds++;
+      if (u === 'bound') bounds++;
       else if (!u) ok = false;
       else if (symbolOf(u, clocks) && !isMeasured(u)) {
         measured.add(symbolOf(u, clocks));
@@ -794,7 +1007,11 @@ function coarseGuard(body, sf, helpers, raw, clocks) {
  * gives an imported file's source, or null (the file system by default); `cache` keeps what
  * the files imported measure, for specs under the same root.
  */
-export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirname(resolve(fileName)), read = readSource, cache = new Map(), tags = true } = {}) {
+export function untaggedTimingTests(
+  source,
+  fileName = 'spec.ts',
+  { root = dirname(resolve(fileName)), read = readSource, cache = new Map(), tags = true } = {},
+) {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const { helpers, raw, clocks } = analyse(sf, resolve(fileName), read, resolve(root), cache);
 
@@ -805,9 +1022,10 @@ export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirna
       const title = titleOf(n, sf);
       const isTagged = tags && (tagged || title.includes(TAG));
       const body = n.arguments[n.arguments.length - 1];
-      if (kind === "test") {
+      if (kind === 'test') {
         const coarse = body && coarseGuard(body, sf, helpers, raw, clocks);
-        if (!isTagged && !coarse && body && measures(body, helpers, clocks)) out.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, title });
+        if (!isTagged && !coarse && body && measures(body, helpers, clocks))
+          out.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, title });
         return;
       }
       for (const a of n.arguments.slice(1)) walk(a, isTagged);
@@ -825,194 +1043,574 @@ function selfTest() {
     parse(big);
     expect(Date.now() - started).toBeLessThan(1500);
   });`;
-  const untagged = tagged.replace(" @timing", "");
+  const untagged = tagged.replace(' @timing', '');
   const cases = [
-    ["tagged", tagged, 0],
-    ["untagged", untagged, 1],
-    ["tagged describe", `test.describe("big @timing", () => { ${untagged} });`, 0],
-    ["untagged, through a helper", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { expect(await paint()).toBeLessThan(2000); });`, 1],
-    ["a deadline, not a measure", `test("waits", async () => { const opened = Date.now(); await wait(opened + 3000 - Date.now()); });`, 0],
-    ["a deadline in a variable", `test("waits", async () => { const until = Date.now() + 3000; await wait(until - Date.now()); });`, 0],
-    ["end - start, both variables", `test("parses", () => { const start = Date.now(); parse(big); const end = Date.now(); expect(end - start).toBeLessThan(1500); });`, 1],
-    ["end - start, start reassigned", `test("parses", () => { let t0 = 0; t0 = Date.now(); parse(big); const end = Date.now(); expect(end - t0).toBeLessThan(1500); });`, 1],
-    ["new Date().getTime() - t0", `test("parses", () => { const t0 = new Date().getTime(); parse(big); expect(new Date().getTime() - t0).toBeLessThan(1500); });`, 1],
-    ["+new Date() - t0", `test("parses", () => { const t0 = +new Date(); parse(big); expect(+new Date() - t0).toBeLessThan(1500); });`, 1],
-    ["date arithmetic, not the clock", `test("dates", () => { const at = new Date(now()); expect(new Date(at).getTime() - at.getTime()).toBe(0); });`, 0],
-    ["coarse guard, marked", untagged.replace("parse(big);", `// ${COARSE}: a large regression still fails in the shards\n parse(big);`), 0],
-    ["coarse marker, tight budget", `test("parses", () => { const t0 = Date.now(); // ${COARSE}\n parse(big); expect(Date.now() - t0).toBeLessThan(50); });`, 1],
-    ["coarse marker in a string, not a comment", `test("parses", () => { const t0 = Date.now(); parse("${COARSE}"); expect(Date.now() - t0).toBeLessThan(1500); });`, 1],
-    ["coarse marker, budget through a helper", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 0],
-    ["coarse marker, tight budget in a variable", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`, 1],
-    ["a clock name from another function", `function a() { const start = Date.now(); return start; }\ntest("offsets", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
-    ["a clock name from another test", `test("a", () => { const start = Date.now(); expect(start).toBeGreaterThan(0); });\ntest("b", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
-    ["new Date() in plain date maths", `test("dates", () => { const d = new Date(); const other = new Date(2026, 0, 1); expect(d - other).toBeGreaterThan(0); });`, 0],
-    ["new Date() less another clock read", `test("parses", () => { const t0 = new Date(); parse(big); expect(new Date() - t0).toBeLessThan(1500); });`, 1],
-    ["new Date() less Date.now()", `test("parses", () => { const t0 = Date.now(); parse(big); const d = new Date(); expect(d - t0).toBeLessThan(1500); });`, 1],
-    ["a local clock wrapper", `test("parses", () => { const now = () => Date.now(); const a = now(); parse(big); expect(now() - a).toBeLessThan(1500); });`, 1],
-    ["a clock wrapper with a block body", `function now() { return Date.now(); }\ntest("parses", () => { const a = now(); parse(big); const b = now(); expect(b - a).toBeLessThan(1500); });`, 1],
-    ["-start + Date.now()", `test("parses", () => { const start = Date.now(); parse(big); expect(-start + Date.now()).toBeLessThan(1500); });`, 1],
-    ["Math.abs(start - Date.now())", `test("parses", () => { const start = Date.now(); parse(big); expect(Math.abs(start - Date.now())).toBeLessThan(1500); });`, 1],
-    ["coarse marker, no budget at all", `test("parses", () => { /* ${COARSE} */ const t0 = Date.now(); parse(big); expect(Date.now() - t0 < 50).toBe(true); });`, 1],
+    ['tagged', tagged, 0],
+    ['untagged', untagged, 1],
+    ['tagged describe', `test.describe("big @timing", () => { ${untagged} });`, 0],
+    [
+      'untagged, through a helper',
+      `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { expect(await paint()).toBeLessThan(2000); });`,
+      1,
+    ],
+    [
+      'a deadline, not a measure',
+      `test("waits", async () => { const opened = Date.now(); await wait(opened + 3000 - Date.now()); });`,
+      0,
+    ],
+    [
+      'a deadline in a variable',
+      `test("waits", async () => { const until = Date.now() + 3000; await wait(until - Date.now()); });`,
+      0,
+    ],
+    [
+      'end - start, both variables',
+      `test("parses", () => { const start = Date.now(); parse(big); const end = Date.now(); expect(end - start).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'end - start, start reassigned',
+      `test("parses", () => { let t0 = 0; t0 = Date.now(); parse(big); const end = Date.now(); expect(end - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'new Date().getTime() - t0',
+      `test("parses", () => { const t0 = new Date().getTime(); parse(big); expect(new Date().getTime() - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      '+new Date() - t0',
+      `test("parses", () => { const t0 = +new Date(); parse(big); expect(+new Date() - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'date arithmetic, not the clock',
+      `test("dates", () => { const at = new Date(now()); expect(new Date(at).getTime() - at.getTime()).toBe(0); });`,
+      0,
+    ],
+    [
+      'coarse guard, marked',
+      untagged.replace(
+        'parse(big);',
+        `// ${COARSE}: a large regression still fails in the shards\n parse(big);`,
+      ),
+      0,
+    ],
+    [
+      'coarse marker, tight budget',
+      `test("parses", () => { const t0 = Date.now(); // ${COARSE}\n parse(big); expect(Date.now() - t0).toBeLessThan(50); });`,
+      1,
+    ],
+    [
+      'coarse marker in a string, not a comment',
+      `test("parses", () => { const t0 = Date.now(); parse("${COARSE}"); expect(Date.now() - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse marker, budget through a helper',
+      `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      0,
+    ],
+    [
+      'coarse marker, tight budget in a variable',
+      `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`,
+      1,
+    ],
+    [
+      'a clock name from another function',
+      `function a() { const start = Date.now(); return start; }\ntest("offsets", () => { const start = 10; expect(start - 1).toBe(9); });`,
+      0,
+    ],
+    [
+      'a clock name from another test',
+      `test("a", () => { const start = Date.now(); expect(start).toBeGreaterThan(0); });\ntest("b", () => { const start = 10; expect(start - 1).toBe(9); });`,
+      0,
+    ],
+    [
+      'new Date() in plain date maths',
+      `test("dates", () => { const d = new Date(); const other = new Date(2026, 0, 1); expect(d - other).toBeGreaterThan(0); });`,
+      0,
+    ],
+    [
+      'new Date() less another clock read',
+      `test("parses", () => { const t0 = new Date(); parse(big); expect(new Date() - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'new Date() less Date.now()',
+      `test("parses", () => { const t0 = Date.now(); parse(big); const d = new Date(); expect(d - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'a local clock wrapper',
+      `test("parses", () => { const now = () => Date.now(); const a = now(); parse(big); expect(now() - a).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'a clock wrapper with a block body',
+      `function now() { return Date.now(); }\ntest("parses", () => { const a = now(); parse(big); const b = now(); expect(b - a).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      '-start + Date.now()',
+      `test("parses", () => { const start = Date.now(); parse(big); expect(-start + Date.now()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'Math.abs(start - Date.now())',
+      `test("parses", () => { const start = Date.now(); parse(big); expect(Math.abs(start - Date.now())).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse marker, no budget at all',
+      `test("parses", () => { /* ${COARSE} */ const t0 = Date.now(); parse(big); expect(Date.now() - t0 < 50).toBe(true); });`,
+      1,
+    ],
     // A coarse test with a 1500 ms decoy bound: every other use of a measured value is reported.
     ...[
-      ["the measure as the bound", "expect(50).toBeGreaterThan(Date.now() - t0);"],
-      ["the measure in a comparison", "expect(Date.now() - t0 < 50).toBe(true);"],
-      ["the measure assigned later", "let ms = 0; ms = Date.now() - t0; expect(ms).toBeLessThan(50);"],
-      ["a value derived from the measure", "const ms = Date.now() - t0; const s = ms / 1000; expect(s).toBeLessThan(0.05);"],
-      ["the measure in a throw", 'const ms = Date.now() - t0; if (ms > 50) throw new Error("slow");'],
-      ["the measure polled", "await expect.poll(() => Date.now() - t0).toBeLessThan(1500);"],
-    ].map(([name, extra]) => [`coarse decoy, ${name}`, `test("parses", async () => { // ${COARSE}\n const t0 = Date.now(); parse(big); expect(Date.now() - t0).toBeLessThan(1500); ${extra} });`, 1]),
-    ["coarse, the measure in a variable", `test("parses", () => { // ${COARSE}\n const t0 = Date.now(); parse(big); let ms = 0; ms = Date.now() - t0; expect(ms).toBeLessThan(1500); });`, 0],
-    ["coarse, walk-brief's copy", `async function shownFor(page) { const seen = await page.evaluate(() => [performance.now()]); return seen.length ? seen[seen.length - 1] - seen[0] : 0; }\ntest("5: shown for long", async ({ page }) => {\n // ${COARSE} (under load; the tight bound is the @timing test above)\n expect(await shownFor(page)).toBeLessThan(1500);\n });`, 0],
+      ['the measure as the bound', 'expect(50).toBeGreaterThan(Date.now() - t0);'],
+      ['the measure in a comparison', 'expect(Date.now() - t0 < 50).toBe(true);'],
+      [
+        'the measure assigned later',
+        'let ms = 0; ms = Date.now() - t0; expect(ms).toBeLessThan(50);',
+      ],
+      [
+        'a value derived from the measure',
+        'const ms = Date.now() - t0; const s = ms / 1000; expect(s).toBeLessThan(0.05);',
+      ],
+      [
+        'the measure in a throw',
+        'const ms = Date.now() - t0; if (ms > 50) throw new Error("slow");',
+      ],
+      ['the measure polled', 'await expect.poll(() => Date.now() - t0).toBeLessThan(1500);'],
+    ].map(([name, extra]) => [
+      `coarse decoy, ${name}`,
+      `test("parses", async () => { // ${COARSE}\n const t0 = Date.now(); parse(big); expect(Date.now() - t0).toBeLessThan(1500); ${extra} });`,
+      1,
+    ]),
+    [
+      'coarse, the measure in a variable',
+      `test("parses", () => { // ${COARSE}\n const t0 = Date.now(); parse(big); let ms = 0; ms = Date.now() - t0; expect(ms).toBeLessThan(1500); });`,
+      0,
+    ],
+    [
+      "coarse, walk-brief's copy",
+      `async function shownFor(page) { const seen = await page.evaluate(() => [performance.now()]); return seen.length ? seen[seen.length - 1] - seen[0] : 0; }\ntest("5: shown for long", async ({ page }) => {\n // ${COARSE} (under load; the tight bound is the @timing test above)\n expect(await shownFor(page)).toBeLessThan(1500);\n });`,
+      0,
+    ],
     // The clock against a deadline (a clock read plus or minus a budget).
-    ["the clock bounded by a deadline", `test("parses", () => { const deadline = Date.now() + 50; parse(big); expect(Date.now()).toBeLessThan(deadline); });`, 1],
-    ["the clock polled against a deadline", `test("parses", async () => { const deadline = Date.now() + 50; await expect.poll(() => Date.now()).toBeLessThan(deadline); });`, 1],
-    ["a deadline bounded by the clock", `test("parses", () => { const t0 = Date.now(); parse(big); expect(t0 + 50).toBeGreaterThan(Date.now()); });`, 1],
-    ["the clock past a deadline throws", `test("parses", () => { const deadline = Date.now() + 50; parse(big); if (Date.now() > deadline) throw new Error("slow"); });`, 1],
-    ["the clock and a deadline in an expect", `test("parses", () => { const deadline = Date.now() + 50; parse(big); expect(Date.now() < deadline).toBe(true); });`, 1],
-    ["a deadline that only stops a loop", `test("waits", async () => { const deadline = Date.now() + 5000; while (Date.now() < deadline) { if (await done()) break; await sleep(100); } expect(await done()).toBe(true); });`, 0],
-    ["a deadline that breaks a loop", `test("waits", async () => { const deadline = Date.now() + 5000; for (;;) { if (await done() || Date.now() > deadline) break; await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    [
+      'the clock bounded by a deadline',
+      `test("parses", () => { const deadline = Date.now() + 50; parse(big); expect(Date.now()).toBeLessThan(deadline); });`,
+      1,
+    ],
+    [
+      'the clock polled against a deadline',
+      `test("parses", async () => { const deadline = Date.now() + 50; await expect.poll(() => Date.now()).toBeLessThan(deadline); });`,
+      1,
+    ],
+    [
+      'a deadline bounded by the clock',
+      `test("parses", () => { const t0 = Date.now(); parse(big); expect(t0 + 50).toBeGreaterThan(Date.now()); });`,
+      1,
+    ],
+    [
+      'the clock past a deadline throws',
+      `test("parses", () => { const deadline = Date.now() + 50; parse(big); if (Date.now() > deadline) throw new Error("slow"); });`,
+      1,
+    ],
+    [
+      'the clock and a deadline in an expect',
+      `test("parses", () => { const deadline = Date.now() + 50; parse(big); expect(Date.now() < deadline).toBe(true); });`,
+      1,
+    ],
+    [
+      'a deadline that only stops a loop',
+      `test("waits", async () => { const deadline = Date.now() + 5000; while (Date.now() < deadline) { if (await done()) break; await sleep(100); } expect(await done()).toBe(true); });`,
+      0,
+    ],
+    [
+      'a deadline that breaks a loop',
+      `test("waits", async () => { const deadline = Date.now() + 5000; for (;;) { if (await done() || Date.now() > deadline) break; await sleep(100); } expect(await done()).toBe(true); });`,
+      0,
+    ],
     // More clocks.
-    ["process.hrtime.bigint()", `test("parses", () => { const t0 = process.hrtime.bigint(); parse(big); expect(Number(process.hrtime.bigint() - t0)).toBeLessThan(1.5e9); });`, 1],
-    ["process.hrtime(t0)", `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime(t0); expect(s).toBeLessThan(2); });`, 1],
-    ["an aliased clock", `test("parses", () => { const clock = Date.now; const t0 = clock(); parse(big); expect(clock() - t0).toBeLessThan(1500); });`, 1],
+    [
+      'process.hrtime.bigint()',
+      `test("parses", () => { const t0 = process.hrtime.bigint(); parse(big); expect(Number(process.hrtime.bigint() - t0)).toBeLessThan(1.5e9); });`,
+      1,
+    ],
+    [
+      'process.hrtime(t0)',
+      `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime(t0); expect(s).toBeLessThan(2); });`,
+      1,
+    ],
+    [
+      'an aliased clock',
+      `test("parses", () => { const clock = Date.now; const t0 = clock(); parse(big); expect(clock() - t0).toBeLessThan(1500); });`,
+      1,
+    ],
     // Other spellings of a clock read.
     ...[
-      ["const { now } = Date", "const { now } = Date;", "now()"],
-      ["const { now: clock } = performance", "const { now: clock } = performance;", "clock()"],
-      ["Date['now']()", "", 'Date["now"]()'],
-      ["globalThis.Date.now()", "", "globalThis.Date.now()"],
-      ["window.performance.now()", "", "window.performance.now()"],
-      ["const D = Date; D.now()", "const D = Date;", "D.now()"],
-      ["const D = globalThis.Date; new D().getTime()", "const D = globalThis.Date;", "new D().getTime()"],
-    ].map(([name, pre, read]) => [`the clock as ${name}`, `test("parses", () => { ${pre} const t0 = ${read}; parse(big); expect(${read} - t0).toBeLessThan(1500); });`, 1]),
-    ["a Date alias in plain date maths", `test("dates", () => { const D = Date; const a = new D(2026, 0, 1); expect(new D(2026, 0, 2) - a).toBe(864e5); });`, 0],
+      ['const { now } = Date', 'const { now } = Date;', 'now()'],
+      ['const { now: clock } = performance', 'const { now: clock } = performance;', 'clock()'],
+      ["Date['now']()", '', 'Date["now"]()'],
+      ['globalThis.Date.now()', '', 'globalThis.Date.now()'],
+      ['window.performance.now()', '', 'window.performance.now()'],
+      ['const D = Date; D.now()', 'const D = Date;', 'D.now()'],
+      [
+        'const D = globalThis.Date; new D().getTime()',
+        'const D = globalThis.Date;',
+        'new D().getTime()',
+      ],
+    ].map(([name, pre, read]) => [
+      `the clock as ${name}`,
+      `test("parses", () => { ${pre} const t0 = ${read}; parse(big); expect(${read} - t0).toBeLessThan(1500); });`,
+      1,
+    ]),
+    [
+      'a Date alias in plain date maths',
+      `test("dates", () => { const D = Date; const a = new D(2026, 0, 1); expect(new D(2026, 0, 2) - a).toBe(864e5); });`,
+      0,
+    ],
     // Deadlines made by a helper.
-    ["a deadline from a helper", `test("parses", () => { const by = (ms) => Date.now() + ms; parse(big); expect(Date.now()).toBeLessThan(by(50)); });`, 1],
-    ["a deadline from a helper, in a variable", `function after(ms) { return Date.now() + ms; }\ntest("parses", () => { const until = after(50); parse(big); if (Date.now() > until) throw new Error("slow"); });`, 1],
-    ["a deadline from a helper that only stops a loop", `const by = (ms) => Date.now() + ms;\ntest("waits", async () => { const until = by(5000); while (Date.now() < until) { if (await done()) break; await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    [
+      'a deadline from a helper',
+      `test("parses", () => { const by = (ms) => Date.now() + ms; parse(big); expect(Date.now()).toBeLessThan(by(50)); });`,
+      1,
+    ],
+    [
+      'a deadline from a helper, in a variable',
+      `function after(ms) { return Date.now() + ms; }\ntest("parses", () => { const until = after(50); parse(big); if (Date.now() > until) throw new Error("slow"); });`,
+      1,
+    ],
+    [
+      'a deadline from a helper that only stops a loop',
+      `const by = (ms) => Date.now() + ms;\ntest("waits", async () => { const until = by(5000); while (Date.now() < until) { if (await done()) break; await sleep(100); } expect(await done()).toBe(true); });`,
+      0,
+    ],
     // A flag set when the clock passes a deadline, then asserted.
-    ["a flag set past a deadline, then asserted", `test("parses", () => { const d = Date.now() + 50; let late = false; parse(big); if (Date.now() > d) late = true; expect(late).toBe(false); });`, 1],
-    ["a flag set in time, then asserted", `test("parses", () => { const d = Date.now() + 50; let ok = false; parse(big); if (Date.now() < d) { ok = true; } else { ok = false; } expect(ok).toBeTruthy(); });`, 1],
-    ["a flag set by ?:, then asserted", `test("parses", () => { const d = Date.now() + 50; parse(big); const late = Date.now() > d ? 1 : 0; expect(late).toBe(0); });`, 1],
-    ["a flag set past a deadline, then thrown on", `test("parses", () => { const d = Date.now() + 50; let late = false; parse(big); if (Date.now() > d) late = true; if (late) throw new Error("slow"); });`, 1],
-    ["a flag that only stops a poll", `test("waits", async () => { const d = Date.now() + 5000; let gaveUp = false; while (!gaveUp) { if (await done()) break; if (Date.now() > d) gaveUp = true; await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    [
+      'a flag set past a deadline, then asserted',
+      `test("parses", () => { const d = Date.now() + 50; let late = false; parse(big); if (Date.now() > d) late = true; expect(late).toBe(false); });`,
+      1,
+    ],
+    [
+      'a flag set in time, then asserted',
+      `test("parses", () => { const d = Date.now() + 50; let ok = false; parse(big); if (Date.now() < d) { ok = true; } else { ok = false; } expect(ok).toBeTruthy(); });`,
+      1,
+    ],
+    [
+      'a flag set by ?:, then asserted',
+      `test("parses", () => { const d = Date.now() + 50; parse(big); const late = Date.now() > d ? 1 : 0; expect(late).toBe(0); });`,
+      1,
+    ],
+    [
+      'a flag set past a deadline, then thrown on',
+      `test("parses", () => { const d = Date.now() + 50; let late = false; parse(big); if (Date.now() > d) late = true; if (late) throw new Error("slow"); });`,
+      1,
+    ],
+    [
+      'a flag that only stops a poll',
+      `test("waits", async () => { const d = Date.now() + 5000; let gaveUp = false; while (!gaveUp) { if (await done()) break; if (Date.now() > d) gaveUp = true; await sleep(100); } expect(await done()).toBe(true); });`,
+      0,
+    ],
     // A coarse bound counts only on an elapsed value in ms, as measured.
-    ["coarse, a helper that scales its measure", `async function paint() { const t0 = performance.now(); await draw(); return (performance.now() - t0) * 100; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
-    ["coarse, a scaled helper's measure in a variable", `async function paint() { const t0 = performance.now(); await draw(); const ms = performance.now() - t0; return ms / 0.01; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThan(1500); });`, 1],
-    ["coarse, a helper that returns no measure", `async function paint() { const t0 = performance.now(); await draw(); return 1; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
-    ["coarse, a helper that returns a timestamp", `async function paint() { await draw(); return performance.now(); }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
-    ["coarse, a timestamp bounded", `test("draws", async () => { // ${COARSE}\n await draw(); expect(performance.now()).toBeLessThan(1500); });`, 1],
-    ["coarse, nanoseconds bounded", `test("draws", async () => { // ${COARSE}\n const t0 = process.hrtime.bigint(); await draw(); const ns = process.hrtime.bigint() - t0; expect(ns).toBeLessThan(1500); });`, 1],
-    ["coarse, a helper's measure through another helper", `async function paint() { const t0 = Date.now(); await draw(); const ms = Date.now() - t0; return ms; }\nasync function twice() { return Math.round(await paint()); }\ntest("draws", async () => { // ${COARSE}\n expect(await twice()).toBeLessThan(1500); });`, 0],
+    [
+      'coarse, a helper that scales its measure',
+      `async function paint() { const t0 = performance.now(); await draw(); return (performance.now() - t0) * 100; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      "coarse, a scaled helper's measure in a variable",
+      `async function paint() { const t0 = performance.now(); await draw(); const ms = performance.now() - t0; return ms / 0.01; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, a helper that returns no measure',
+      `async function paint() { const t0 = performance.now(); await draw(); return 1; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, a helper that returns a timestamp',
+      `async function paint() { await draw(); return performance.now(); }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, a timestamp bounded',
+      `test("draws", async () => { // ${COARSE}\n await draw(); expect(performance.now()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, nanoseconds bounded',
+      `test("draws", async () => { // ${COARSE}\n const t0 = process.hrtime.bigint(); await draw(); const ns = process.hrtime.bigint() - t0; expect(ns).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      "coarse, a helper's measure through another helper",
+      `async function paint() { const t0 = Date.now(); await draw(); const ms = Date.now() - t0; return ms; }\nasync function twice() { return Math.round(await paint()); }\ntest("draws", async () => { // ${COARSE}\n expect(await twice()).toBeLessThan(1500); });`,
+      0,
+    ],
     // A deadline from an async helper, awaited.
-    ["await on a deadline helper", `async function by(ms) { return Date.now() + ms; }\ntest("parses", async () => { parse(big); if (Date.now() > await by(50)) throw new Error("slow"); });`, 1],
-    ["await on a deadline helper, in a variable", `async function after(ms) { return Date.now() + ms; }\ntest("parses", async () => { const until = await after(50); parse(big); expect(Date.now()).toBeLessThan(until); });`, 1],
+    [
+      'await on a deadline helper',
+      `async function by(ms) { return Date.now() + ms; }\ntest("parses", async () => { parse(big); if (Date.now() > await by(50)) throw new Error("slow"); });`,
+      1,
+    ],
+    [
+      'await on a deadline helper, in a variable',
+      `async function after(ms) { return Date.now() + ms; }\ntest("parses", async () => { const until = await after(50); parse(big); expect(Date.now()).toBeLessThan(until); });`,
+      1,
+    ],
     // A flag set through a property or pushed into an array, then asserted.
-    ["a flag set through a property past a deadline", `test("parses", () => { const t = Date.now() + 50; const state = { late: false }; parse(big); if (Date.now() > t) state.late = true; expect(state.late).toBe(false); });`, 1],
-    ["a flag set through a property by ?:", `test("parses", () => { const t = Date.now() + 50; const state = { late: 0 }; parse(big); state.late = Date.now() > t ? 1 : 0; expect(state.late).toBe(0); });`, 1],
-    ["a flag pushed into an array past a deadline", `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); if (Date.now() > t) late.push("parse"); expect(late).toEqual([]); });`, 1],
-    ["a flag pushed into an array by ?:", `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); late.push(Date.now() > t ? 1 : 0); expect(late).toEqual([0]); });`, 1],
-    ["a property flag that only stops a poll", `test("waits", async () => { const d = Date.now() + 5000; const state = { gaveUp: false }; while (!state.gaveUp) { if (await done()) break; if (Date.now() > d) state.gaveUp = true; await sleep(100); } expect(await done()).toBe(true); });`, 0],
-    ["a pushed flag never asserted", `test("waits", async () => { const d = Date.now() + 5000; const log = []; for (;;) { if (await done()) break; if (Date.now() > d) { log.push("gave up"); break; } await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    [
+      'a flag set through a property past a deadline',
+      `test("parses", () => { const t = Date.now() + 50; const state = { late: false }; parse(big); if (Date.now() > t) state.late = true; expect(state.late).toBe(false); });`,
+      1,
+    ],
+    [
+      'a flag set through a property by ?:',
+      `test("parses", () => { const t = Date.now() + 50; const state = { late: 0 }; parse(big); state.late = Date.now() > t ? 1 : 0; expect(state.late).toBe(0); });`,
+      1,
+    ],
+    [
+      'a flag pushed into an array past a deadline',
+      `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); if (Date.now() > t) late.push("parse"); expect(late).toEqual([]); });`,
+      1,
+    ],
+    [
+      'a flag pushed into an array by ?:',
+      `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); late.push(Date.now() > t ? 1 : 0); expect(late).toEqual([0]); });`,
+      1,
+    ],
+    [
+      'a property flag that only stops a poll',
+      `test("waits", async () => { const d = Date.now() + 5000; const state = { gaveUp: false }; while (!state.gaveUp) { if (await done()) break; if (Date.now() > d) state.gaveUp = true; await sleep(100); } expect(await done()).toBe(true); });`,
+      0,
+    ],
+    [
+      'a pushed flag never asserted',
+      `test("waits", async () => { const d = Date.now() + 5000; const log = []; for (;;) { if (await done()) break; if (Date.now() > d) { log.push("gave up"); break; } await sleep(100); } expect(await done()).toBe(true); });`,
+      0,
+    ],
     // A hidden offset inside a subtraction is no elapsed time as measured.
-    ["an offset inside the subtraction", `test("parses", () => { const start = Date.now(); parse(big); expect((Date.now() + 0) - start).toBeLessThan(1500); });`, 1],
-    ["coarse, an offset inside the subtraction", `test("parses", () => { // ${COARSE}\n const start = Date.now(); parse(big); expect((Date.now() + 0) - start).toBeLessThan(1500); });`, 1],
-    ["coarse, a helper with an offset inside its subtraction", `async function paint() { const t0 = performance.now(); await draw(); return (performance.now() + 1400) - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
-    ["coarse, a helper with an offset on its start", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - (t0 - 1400); }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
-    ["coarse, a helper whose start is moved", `async function paint() { let t0 = performance.now(); t0 -= 1400; await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
-    ["a deadline less the clock, inline", `test("waits", async () => { const opened = Date.now(); await wait((opened + 3000) - Date.now()); });`, 0],
+    [
+      'an offset inside the subtraction',
+      `test("parses", () => { const start = Date.now(); parse(big); expect((Date.now() + 0) - start).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, an offset inside the subtraction',
+      `test("parses", () => { // ${COARSE}\n const start = Date.now(); parse(big); expect((Date.now() + 0) - start).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, a helper with an offset inside its subtraction',
+      `async function paint() { const t0 = performance.now(); await draw(); return (performance.now() + 1400) - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, a helper with an offset on its start',
+      `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - (t0 - 1400); }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'coarse, a helper whose start is moved',
+      `async function paint() { let t0 = performance.now(); t0 -= 1400; await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'a deadline less the clock, inline',
+      `test("waits", async () => { const opened = Date.now(); await wait((opened + 3000) - Date.now()); });`,
+      0,
+    ],
     // Still more spellings of the clock.
-    ["const { hrtime } = process", `test("parses", () => { const { hrtime } = process; const t0 = hrtime(); parse(big); const [s] = hrtime(t0); expect(s).toBeLessThan(2); });`, 1],
-    ["const { bigint } = process.hrtime", `test("parses", () => { const { bigint } = process.hrtime; const t0 = bigint(); parse(big); expect(Number(bigint() - t0)).toBeLessThan(1.5e9); });`, 1],
-    ["a Date alias set after its use", `let D;\ntest("parses", () => { const t0 = D.now(); parse(big); expect(D.now() - t0).toBeLessThan(1500); });\nD = Date;`, 1],
-    ["Date.now.call(null)", `test("parses", () => { const t0 = Date.now.call(null); parse(big); expect(Date.now.call(null) - t0).toBeLessThan(1500); });`, 1],
-    ["Date.now.bind(null)()", `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.bind(null)() - t0).toBeLessThan(1500); });`, 1],
-    ["Date.now.apply(null)", `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.apply(null) - t0).toBeLessThan(1500); });`, 1],
-    ["process.hrtime.call(process, t0)", `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime.call(process, t0); expect(s).toBeLessThan(2); });`, 1],
+    [
+      'const { hrtime } = process',
+      `test("parses", () => { const { hrtime } = process; const t0 = hrtime(); parse(big); const [s] = hrtime(t0); expect(s).toBeLessThan(2); });`,
+      1,
+    ],
+    [
+      'const { bigint } = process.hrtime',
+      `test("parses", () => { const { bigint } = process.hrtime; const t0 = bigint(); parse(big); expect(Number(bigint() - t0)).toBeLessThan(1.5e9); });`,
+      1,
+    ],
+    [
+      'a Date alias set after its use',
+      `let D;\ntest("parses", () => { const t0 = D.now(); parse(big); expect(D.now() - t0).toBeLessThan(1500); });\nD = Date;`,
+      1,
+    ],
+    [
+      'Date.now.call(null)',
+      `test("parses", () => { const t0 = Date.now.call(null); parse(big); expect(Date.now.call(null) - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'Date.now.bind(null)()',
+      `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.bind(null)() - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'Date.now.apply(null)',
+      `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.apply(null) - t0).toBeLessThan(1500); });`,
+      1,
+    ],
+    [
+      'process.hrtime.call(process, t0)',
+      `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime.call(process, t0); expect(s).toBeLessThan(2); });`,
+      1,
+    ],
   ];
   // Imported helpers: a spec at /e2e/a.spec.ts and the files it imports.
   const files = {
-    "/e2e/clock.ts": `export async function paint(page) { const t0 = Date.now(); await page.goto("/"); return Date.now() - t0; }
+    '/e2e/clock.ts': `export async function paint(page) { const t0 = Date.now(); await page.goto("/"); return Date.now() - t0; }
       export const timed = async (fn) => { const t0 = new Date().getTime(); await fn(); return new Date().getTime() - t0; };
       function stamp() { const end = Date.now(); return end - started; }
       export { stamp as lap };
       export function open(page) { return page.goto("/"); }
       export async function scaled(page) { const t0 = Date.now(); await page.goto("/"); return (Date.now() - t0) * 100; }`,
-    "/e2e/again.ts": `export { paint, scaled } from "./clock";`,
-    "/e2e/vqa/a.spec.ts": "",
-    "/lib/mock.ts": `export function due(job) { return Date.now() - job.started >= 2000; }`,
+    '/e2e/again.ts': `export { paint, scaled } from "./clock";`,
+    '/e2e/vqa/a.spec.ts': '',
+    '/lib/mock.ts': `export function due(job) { return Date.now() - job.started >= 2000; }`,
     // An import cycle: viaA measures only through a.ts, which measures only through b.ts.
-    "/e2e/a.ts": `import { slow } from "./b"; export function timed() { return slow(); }`,
-    "/e2e/b.ts": `import { timed } from "./a"; export function slow() { const t0 = Date.now(); return Date.now() - t0; } export function viaA() { return timed(); }`,
+    '/e2e/a.ts': `import { slow } from "./b"; export function timed() { return slow(); }`,
+    '/e2e/b.ts': `import { timed } from "./a"; export function slow() { const t0 = Date.now(); return Date.now() - t0; } export function viaA() { return timed(); }`,
   };
   const read = (p) => files[p] ?? null;
-  const spec = (imp, call) => `${imp}\ntest("draws", async ({ page }) => { expect(await ${call}).toBeLessThan(2000); });`;
+  const spec = (imp, call) =>
+    `${imp}\ntest("draws", async ({ page }) => { expect(await ${call}).toBeLessThan(2000); });`;
   const imported = [
-    ["imported helper", spec(`import { paint } from "./clock";`, "paint(page)"), 1],
-    ["imported arrow helper", spec(`import { timed } from "./clock";`, "timed(() => 1)"), 1],
-    ["imported, renamed on export", spec(`import { lap } from "./clock";`, "lap()"), 1],
-    ["imported, renamed on import", spec(`import { paint as draw } from "./clock";`, "draw(page)"), 1],
-    ["imported through a namespace", spec(`import * as clock from "./clock";`, "clock.paint(page)"), 1],
-    ["imported through a re-export", spec(`import { paint } from "./again";`, "paint(page)"), 1],
-    ["imported helper that does not measure", spec(`import { open } from "./clock";`, "open(page)"), 0],
-    ["imported from a folder above", spec(`import { paint } from "../clock";`, "paint(page)"), 1, "/e2e/vqa/a.spec.ts"],
-    ["the mock API, not the test", spec(`import { due } from "../lib/mock";`, "due(job)"), 0],
-    ["imported helper, test tagged", spec(`import { paint } from "./clock";`, "paint(page)").replace('"draws"', '"draws @timing"'), 0],
-    ["coarse, an imported helper", spec(`import { paint } from "./clock";`, "paint(page)").replace("expect(", `// ${COARSE}\n expect(`).replace("2000", "1500"), 0],
-    ["coarse, an imported helper that scales", spec(`import { scaled } from "./clock";`, "scaled(page)").replace("expect(", `// ${COARSE}\n expect(`).replace("2000", "1500"), 1],
-    ["coarse, an imported, re-exported helper that scales", spec(`import { scaled as s } from "./again";`, "s(page)").replace("expect(", `// ${COARSE}\n expect(`).replace("2000", "1500"), 1],
+    ['imported helper', spec(`import { paint } from "./clock";`, 'paint(page)'), 1],
+    ['imported arrow helper', spec(`import { timed } from "./clock";`, 'timed(() => 1)'), 1],
+    ['imported, renamed on export', spec(`import { lap } from "./clock";`, 'lap()'), 1],
+    [
+      'imported, renamed on import',
+      spec(`import { paint as draw } from "./clock";`, 'draw(page)'),
+      1,
+    ],
+    [
+      'imported through a namespace',
+      spec(`import * as clock from "./clock";`, 'clock.paint(page)'),
+      1,
+    ],
+    ['imported through a re-export', spec(`import { paint } from "./again";`, 'paint(page)'), 1],
+    [
+      'imported helper that does not measure',
+      spec(`import { open } from "./clock";`, 'open(page)'),
+      0,
+    ],
+    [
+      'imported from a folder above',
+      spec(`import { paint } from "../clock";`, 'paint(page)'),
+      1,
+      '/e2e/vqa/a.spec.ts',
+    ],
+    ['the mock API, not the test', spec(`import { due } from "../lib/mock";`, 'due(job)'), 0],
+    [
+      'imported helper, test tagged',
+      spec(`import { paint } from "./clock";`, 'paint(page)').replace('"draws"', '"draws @timing"'),
+      0,
+    ],
+    [
+      'coarse, an imported helper',
+      spec(`import { paint } from "./clock";`, 'paint(page)')
+        .replace('expect(', `// ${COARSE}\n expect(`)
+        .replace('2000', '1500'),
+      0,
+    ],
+    [
+      'coarse, an imported helper that scales',
+      spec(`import { scaled } from "./clock";`, 'scaled(page)')
+        .replace('expect(', `// ${COARSE}\n expect(`)
+        .replace('2000', '1500'),
+      1,
+    ],
+    [
+      'coarse, an imported, re-exported helper that scales',
+      spec(`import { scaled as s } from "./again";`, 's(page)')
+        .replace('expect(', `// ${COARSE}\n expect(`)
+        .replace('2000', '1500'),
+      1,
+    ],
   ];
   const failed = [
-    ...cases.filter(([, src, want]) => untaggedTimingTests(src).length !== want).map(([name, src, want]) => [name, want, untaggedTimingTests(src).length]),
+    ...cases
+      .filter(([, src, want]) => untaggedTimingTests(src).length !== want)
+      .map(([name, src, want]) => [name, want, untaggedTimingTests(src).length]),
     ...imported
-      .map(([name, src, want, file = "/e2e/a.spec.ts"]) => [name, want, untaggedTimingTests(src, file, { root: "/e2e", read }).length])
+      .map(([name, src, want, file = '/e2e/a.spec.ts']) => [
+        name,
+        want,
+        untaggedTimingTests(src, file, { root: '/e2e', read }).length,
+      ])
       .filter(([, want, got]) => got !== want),
   ];
   // Specs sharing one cache: what a.spec.ts read of the cycle must not cut short what b's importer sees.
   const shared = new Map();
   for (const [name, src, want] of [
-    ["a cycle, entered from a.ts", spec(`import { timed } from "./a";`, "timed()"), 1],
-    ["a cycle, then b.ts from the cache", spec(`import { viaA } from "./b";`, "viaA()"), 1],
+    ['a cycle, entered from a.ts', spec(`import { timed } from "./a";`, 'timed()'), 1],
+    ['a cycle, then b.ts from the cache', spec(`import { viaA } from "./b";`, 'viaA()'), 1],
   ]) {
-    const got = untaggedTimingTests(src, "/e2e/a.spec.ts", { root: "/e2e", read, cache: shared }).length;
+    const got = untaggedTimingTests(src, '/e2e/a.spec.ts', {
+      root: '/e2e',
+      read,
+      cache: shared,
+    }).length;
     if (got !== want) failed.push([name, want, got]);
   }
   // A Vitest file outside *.timing.test.ts runs in parallel: a tag does not excuse it.
   for (const [name, src, want] of [
-    ["unit file, tagged", tagged, 1],
-    ["unit file, untimed", `test("parses @timing", () => { expect(parse("a")).toBe(1); });`, 0],
+    ['unit file, tagged', tagged, 1],
+    ['unit file, untimed', `test("parses @timing", () => { expect(parse("a")).toBe(1); });`, 0],
   ]) {
-    const got = untaggedTimingTests(src, "/lib/a.test.ts", { tags: false }).length;
+    const got = untaggedTimingTests(src, '/lib/a.test.ts', { tags: false }).length;
     if (got !== want) failed.push([name, want, got]);
   }
-  for (const [name, want, got] of failed) console.error(`self-test "${name}": want ${want} untagged, got ${got}`);
+  for (const [name, want, got] of failed)
+    console.error(`self-test "${name}": want ${want} untagged, got ${got}`);
   return failed.length === 0;
 }
 
-function specs(dir, ends = [".spec.ts"]) {
+function specs(dir, ends = ['.spec.ts']) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
     const p = join(dir, d.name);
-    if (d.isDirectory()) return d.name === "real" || d.name === "node_modules" ? [] : specs(p, ends);
+    if (d.isDirectory())
+      return d.name === 'real' || d.name === 'node_modules' ? [] : specs(p, ends);
     return ends.some((e) => d.name.endsWith(e)) ? [p] : [];
   });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!selfTest()) process.exit(1);
-  if (process.argv.includes("--self-test")) {
-    console.log("check-timing-tags: self-test passed");
+  if (process.argv.includes('--self-test')) {
+    console.log('check-timing-tags: self-test passed');
     process.exit(0);
   }
-  const web = join(fileURLToPath(import.meta.url), "..", "..");
+  const web = join(fileURLToPath(import.meta.url), '..', '..');
   const cache = new Map();
-  const bad = specs(join(web, "e2e")).flatMap((f) => untaggedTimingTests(readFileSync(f, "utf8"), f, { root: join(web, "e2e"), cache }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`));
-  const units = ["app", "components", "lib"].flatMap((d) => specs(join(web, d), [".test.ts", ".test.tsx"]));
-  const badUnits = units.flatMap((f) =>
-    untaggedTimingTests(readFileSync(f, "utf8"), f, { root: web, cache, tags: f.endsWith(".timing.test.ts") }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`),
+  const bad = specs(join(web, 'e2e')).flatMap((f) =>
+    untaggedTimingTests(readFileSync(f, 'utf8'), f, { root: join(web, 'e2e'), cache }).map(
+      (t) => `${relative(web, f)}:${t.line} ${t.title}`,
+    ),
   );
-  if (bad.length) console.error(`These tests measure elapsed time; add ${TAG} to their titles so they run alone in e2e-timing:\n${bad.join("\n")}`);
-  if (badUnits.length) console.error(`These Vitest tests measure elapsed time; move them to a *.timing.test.ts file beside their module and add ${TAG} to their titles, so they run alone in e2e-timing:\n${badUnits.join("\n")}`);
+  const units = ['app', 'components', 'lib'].flatMap((d) =>
+    specs(join(web, d), ['.test.ts', '.test.tsx']),
+  );
+  const badUnits = units.flatMap((f) =>
+    untaggedTimingTests(readFileSync(f, 'utf8'), f, {
+      root: web,
+      cache,
+      tags: f.endsWith('.timing.test.ts'),
+    }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`),
+  );
+  if (bad.length)
+    console.error(
+      `These tests measure elapsed time; add ${TAG} to their titles so they run alone in e2e-timing:\n${bad.join('\n')}`,
+    );
+  if (badUnits.length)
+    console.error(
+      `These Vitest tests measure elapsed time; move them to a *.timing.test.ts file beside their module and add ${TAG} to their titles, so they run alone in e2e-timing:\n${badUnits.join('\n')}`,
+    );
   if (bad.length || badUnits.length) process.exit(1);
-  console.log("check-timing-tags: every timing test is tagged @timing");
+  console.log('check-timing-tags: every timing test is tagged @timing');
 }

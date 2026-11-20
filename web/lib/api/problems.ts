@@ -1,6 +1,6 @@
-import { ApiError, unwrap, type Schemas } from "./client";
+import { ApiError, unwrap, type Schemas } from './client';
 
-export type Problem = Schemas["Problem"];
+export type Problem = Schemas['Problem'];
 
 /** A save the API rejected (422) with every problem found, e.g. a template or theme. */
 export class ProblemsError extends ApiError {
@@ -21,11 +21,12 @@ export async function unwrapProblems<T>(call: Promise<Result<T>>): Promise<T> {
   if (
     response.status === 422 &&
     error &&
-    typeof error === "object" &&
-    "problems" in error &&
+    typeof error === 'object' &&
+    'problems' in error &&
     Array.isArray(error.problems)
   ) {
-    const detail = "detail" in error && typeof error.detail === "string" ? error.detail : "Rejected.";
+    const detail =
+      'detail' in error && typeof error.detail === 'string' ? error.detail : 'Rejected.';
     throw new ProblemsError(detail, error.problems as Problem[]);
   }
   return unwrap(Promise.resolve(result));

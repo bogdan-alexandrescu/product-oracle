@@ -1,11 +1,11 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import type { RouteProps } from "@/lib/route-props";
+import type { RouteProps } from '@/lib/route-props';
 
-import { InterviewDetail } from "./_detail";
-import { PageSkeleton, PageTabsProvider } from "@/components/ds";
+import { InterviewDetail } from './_detail';
+import { PageSkeleton, PageTabsProvider } from '@/components/ds';
 
-async function Detail({ params }: { params: RouteProps<{ id: string }>["params"] }) {
+async function Detail({ params }: { params: RouteProps<{ id: string }>['params'] }) {
   const { id } = await params;
   // qa-work-44: one way back, "← Interviews": the Requests tabs are not drawn under the interview's name.
   return (

@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
-import { InfoTip, Page, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { InfoTip, Page, PageHeader, Panel } from '@/components/ds';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-import { NoReportYet } from "../_empty";
-import { GenerateDialog } from "../_generate";
+import { NoReportYet } from '../_empty';
+import { GenerateDialog } from '../_generate';
 
 /**
  * The Plan header's Alignment report (F6 AC14): opens the newest report. The header links
@@ -22,7 +22,9 @@ export default function LatestReportPage() {
   const router = useRouter();
   const { can, capsReady } = useMe();
   const [open, setOpen] = useState(false);
-  const q = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
+  const q = useQuery('alignment-reports|latest', () =>
+    unwrap(api.GET('/v1/alignment-reports', { params: { query: { limit: 1 } } })),
+  );
   const latest = q.data?.[0]?.id;
   const none = q.data != null && latest == null;
   // qa4-plan-36: ?latest keeps the Latest report link selected on the report it opened.
@@ -31,8 +33,11 @@ export default function LatestReportPage() {
   }, [router, latest]);
   // capsReady too: `can` is false until the capabilities load, so an owner must not be
   // shown the viewer's wording (and no button) for that brief window.
-  if (!none || !capsReady) return <div className="px-6 py-8">{q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}</div>;
-  const canGenerate = can("create_alignment_report");
+  if (!none || !capsReady)
+    return (
+      <div className="px-6 py-8">{q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}</div>
+    );
+  const canGenerate = can('create_alignment_report');
   return (
     <Page>
       {/* qa-plan-25: every Plan tab's page is titled "Plan", like the strip beneath it. */}
@@ -40,8 +45,8 @@ export default function LatestReportPage() {
         title="Plan"
         info={
           <InfoTip label="Reports" align="start" side="bottom">
-            Each week Oracle reports how the tracks stand against their milestones and posts it to Slack. A report
-            opens from here; the newest is also the Latest report link.
+            Each week Oracle reports how the tracks stand against their milestones and posts it to
+            Slack. A report opens from here; the newest is also the Latest report link.
           </InfoTip>
         }
       />

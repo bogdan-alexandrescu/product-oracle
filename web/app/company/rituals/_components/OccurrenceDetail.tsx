@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
-import { FindingCard } from "@/app/company/market/_components/FindingCard";
-import { MarkdownBody } from "@/components/MarkdownBody";
-import { Button, Chip, Icon, LinkButton, NotFoundPanel, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { forgetReads } from "@/lib/api/shared-reads";
-import { useCompanyZone } from "@/lib/dates";
-import { formatMoney, zoneName } from "@/lib/format";
-import { parseBlocks } from "@/lib/markdown";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { FindingCard } from '@/app/company/market/_components/FindingCard';
+import { MarkdownBody } from '@/components/MarkdownBody';
+import { Button, Chip, Icon, LinkButton, NotFoundPanel, Panel } from '@/components/ds';
+import { ErrorNote, INPUT, LoadError, Loading } from '@/components/ui';
+import { ApiError, api, unwrap, type Schemas } from '@/lib/api/client';
+import { forgetReads } from '@/lib/api/shared-reads';
+import { useCompanyZone } from '@/lib/dates';
+import { formatMoney, zoneName } from '@/lib/format';
+import { parseBlocks } from '@/lib/markdown';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import { CompanyHeader } from "../../_nav";
-import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from "./lib";
+import { CompanyHeader } from '../../_nav';
+import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from './lib';
 import {
   MetricsTable,
   PriorityChangesBlock,
@@ -30,12 +30,20 @@ import {
   type StaleItemRow,
   type TrackRow,
   type VarianceRow,
-} from "./MetricBlocks";
+} from './MetricBlocks';
 
 /** H5: the blocks drawn as their own cards across the page (the metrics review). */
-const WIDE = new Set(["metrics_table", "variances"]);
+const WIDE = new Set(['metrics_table', 'variances']);
 
-type Row = { text?: string; href?: string | null; method?: string; label?: string; finding_id?: string; summary?: string | null; untrusted?: boolean };
+type Row = {
+  text?: string;
+  href?: string | null;
+  method?: string;
+  label?: string;
+  finding_id?: string;
+  summary?: string | null;
+  untrusted?: boolean;
+};
 
 /** A row's text, with an untrusted summary (H7: a promoted web finding's title, kept out of the pre-read's text) shown as plain text. */
 const rowText = (r: Row) => (r.untrusted && r.summary ? `${r.text} · ${r.summary}` : r.text);
@@ -66,18 +74,28 @@ export function OccurrenceDetail({ id }: { id: string }) {
   const zone = useCompanyZone();
   // Read with the time it was read: the meeting has ended when the owner records it.
   const q = useQuery(`ritual-occurrence|${id}`, async () => {
-    const occ = await unwrap(api.GET("/v1/ritual-occurrences/{occurrence_id}", { params: { path: { occurrence_id: id } } })).catch((e: unknown) => {
+    const occ = await unwrap(
+      api.GET('/v1/ritual-occurrences/{occurrence_id}', {
+        params: { path: { occurrence_id: id } },
+      }),
+    ).catch((e: unknown) => {
       // An address whose id is not an id (a typo, a cut-off link) is the API's 422: not found too.
-      throw e instanceof ApiError && (e.status === 404 || e.status === 422) ? new ApiError(404, MEETING_MISSING) : e;
+      throw e instanceof ApiError && (e.status === 404 || e.status === 422)
+        ? new ApiError(404, MEETING_MISSING)
+        : e;
     });
     return { occ, at: Date.now() };
   });
   const occ = q.data?.occ;
   const reload = q.reload;
   // H5: a metrics review's variances, read live (their state moves after the pre-read is built).
-  const listsVariances = !!occ?.pre_read.blocks.some((b) => (b as { key?: string }).key === "variances");
+  const listsVariances = !!occ?.pre_read.blocks.some(
+    (b) => (b as { key?: string }).key === 'variances',
+  );
   const varianceQ = useQuery(`occurrence-variances|${id}|${listsVariances}`, () =>
-    listsVariances ? unwrap(api.GET("/v1/metric-variances")) : Promise.resolve([] as Schemas["VarianceOut"][]),
+    listsVariances
+      ? unwrap(api.GET('/v1/metric-variances'))
+      : Promise.resolve([] as Schemas['VarianceOut'][]),
   );
   const live = new Map((varianceQ.data ?? []).map((v) => [v.id, v]));
   const loaded = !!occ;
@@ -86,7 +104,11 @@ export function OccurrenceDetail({ id }: { id: string }) {
   // opened after the meeting is seen; a visit to the Inbox never marks either.
   useEffect(() => {
     if (!loaded) return;
-    void unwrap(api.POST("/v1/ritual-occurrences/{occurrence_id}/read", { params: { path: { occurrence_id: id } } }))
+    void unwrap(
+      api.POST('/v1/ritual-occurrences/{occurrence_id}/read', {
+        params: { path: { occurrence_id: id } },
+      }),
+    )
       .then(() => {
         invalidateWaiting();
         waitingChanged();
@@ -95,7 +117,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
   }, [loaded, id]);
 
   // While Oracle writes the summary, look again every second.
-  const running = occ?.summary_state === "running";
+  const running = occ?.summary_state === 'running';
   useEffect(() => {
     if (!running) return;
     const t = setInterval(() => void reload(), 1000);
@@ -123,15 +145,20 @@ export function OccurrenceDetail({ id }: { id: string }) {
     return (
       <>
         <CompanyHeader />
-        {q.error ? <LoadError what="this meeting" error={q.error} onRetry={() => void q.reload()} /> : <Loading />}
+        {q.error ? (
+          <LoadError what="this meeting" error={q.error} onRetry={() => void q.reload()} />
+        ) : (
+          <Loading />
+        )}
       </>
     );
   const blocks = rebuildShown(occ, occ.pre_read.blocks as unknown as Block[]);
   const isOwner = me?.user_id === occ.owner_id;
   const ended = q.data!.at >= Date.parse(occ.ends_at);
   // Held when its Simple review meeting ended, with nothing recorded yet: the owner still records it.
-  const heldByMeeting = occ.status === "held" && !occ.notes && occ.decision_ids.length === 0;
-  const recordable = isOwner && ((ended && (occ.status === "ready" || occ.status === "missed")) || heldByMeeting);
+  const heldByMeeting = occ.status === 'held' && !occ.notes && occ.decision_ids.length === 0;
+  const recordable =
+    isOwner && ((ended && (occ.status === 'ready' || occ.status === 'missed')) || heldByMeeting);
   // qa-company-35: the blocks' one "Data as of", said once under the heading when they share it.
   const asOfs = new Set(blocks.flatMap((b) => (b.as_of ? [localTime(b.as_of)] : [])));
   const sharedAsOf = asOfs.size === 1 && blocks.every((b) => b.as_of) ? [...asOfs][0] : null;
@@ -143,12 +170,17 @@ export function OccurrenceDetail({ id }: { id: string }) {
       <CompanyHeader />
       <div className="mb-1 flex flex-col gap-1" data-testid="occurrence-heading">
         {/* detailed-b 18: the same back-link component and icon as Runs, with a gap (not "←Rituals"). */}
-        <Link href="/company/rituals" className="inline-flex min-h-6 items-center gap-1 self-start text-sm text-text2 hover:text-text hover:underline">
+        <Link
+          href="/company/rituals"
+          className="inline-flex min-h-6 items-center gap-1 self-start text-sm text-text2 hover:text-text hover:underline"
+        >
           <Icon name="back" size={16} />
           Rituals
         </Link>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="min-w-0 font-display text-[22px] leading-7 font-bold tracking-heading break-words">{occ.title}</h2>
+          <h2 className="min-w-0 font-display text-[22px] leading-7 font-bold tracking-heading break-words">
+            {occ.title}
+          </h2>
           <Chip kind={STATE_KIND[occ.status]} dot data-testid="occurrence-state">
             {STATE_LABEL[occ.status]}
           </Chip>
@@ -163,7 +195,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
         <span>{occ.duration_min} min</span>
         <Sep />
         <span>
-          {occ.attendee_ids.length} {occ.attendee_ids.length === 1 ? "attendee" : "attendees"}
+          {occ.attendee_ids.length} {occ.attendee_ids.length === 1 ? 'attendee' : 'attendees'}
         </span>
         <Sep />
         {/* qa-company-21: the zone named once; the times on the page are in it. */}
@@ -176,12 +208,15 @@ export function OccurrenceDetail({ id }: { id: string }) {
         )}
       </p>
       <div className="flex flex-col gap-3">
-        {occ.kind === "baseline_rebuild" ? (
-          <RebuildCard occ={occ} blocks={blocks} canBuild={can("confirm_entity")} />
+        {occ.kind === 'baseline_rebuild' ? (
+          <RebuildCard occ={occ} blocks={blocks} canBuild={can('confirm_entity')} />
         ) : (
           <SummaryCard
             occ={occ}
-            canAsk={can("summarize_ritual_occurrence") && (occ.kind !== "metrics_review" || openVariances(blocks, live) > 0)}
+            canAsk={
+              can('summarize_ritual_occurrence') &&
+              (occ.kind !== 'metrics_review' || openVariances(blocks, live) > 0)
+            }
             onChanged={reload}
           />
         )}
@@ -192,15 +227,29 @@ export function OccurrenceDetail({ id }: { id: string }) {
         ) : (
           <div className="grid grid-cols-2 gap-3 max-[900px]:grid-cols-1">
             {blocks.map((b) =>
-              b.key === "competitor_web" ? (
-                <WebFindingsCard key={b.key} block={b} occurrenceId={occ.id} canDecide={can("promote_web_finding")} showAsOf={!sharedAsOf} />
+              b.key === 'competitor_web' ? (
+                <WebFindingsCard
+                  key={b.key}
+                  block={b}
+                  occurrenceId={occ.id}
+                  canDecide={can('promote_web_finding')}
+                  showAsOf={!sharedAsOf}
+                />
               ) : (
-                <BlockCard key={b.key} block={b} live={live} onChanged={varianceQ.reload} showAsOf={!sharedAsOf} />
+                <BlockCard
+                  key={b.key}
+                  block={b}
+                  live={live}
+                  onChanged={varianceQ.reload}
+                  showAsOf={!sharedAsOf}
+                />
               ),
             )}
           </div>
         )}
-        {(occ.status === "held" || occ.status === "skipped") && !recordable && <Recorded occ={occ} canEdit={isOwner} onChanged={reload} />}
+        {(occ.status === 'held' || occ.status === 'skipped') && !recordable && (
+          <Recorded occ={occ} canEdit={isOwner} onChanged={reload} />
+        )}
         {recordable && <RecordForm occ={occ} onChanged={reload} />}
       </div>
     </>
@@ -213,23 +262,32 @@ export function OccurrenceDetail({ id }: { id: string }) {
  * build yet") no longer describe the build as not started.
  */
 function rebuildShown(occ: Occurrence, blocks: Block[]): Block[] {
-  if (occ.kind !== "baseline_rebuild" || !occ.summary_run_id) return blocks;
+  if (occ.kind !== 'baseline_rebuild' || !occ.summary_run_id) return blocks;
   return blocks.map((b) =>
-    b.key !== "baseline_rebuild"
+    b.key !== 'baseline_rebuild'
       ? b
       : {
           ...b,
           rows: b.rows
-            .filter((r) => !(r.text ?? "").startsWith("Oracle starts the build") && !(r.text ?? "").startsWith("Not started") && r.href !== "/ground-truth?build=1")
-            .map((r) => (r.text === "No Ground Truth build yet" ? { ...r, text: "No earlier Ground Truth build" } : r)),
+            .filter(
+              (r) =>
+                !(r.text ?? '').startsWith('Oracle starts the build') &&
+                !(r.text ?? '').startsWith('Not started') &&
+                r.href !== '/ground-truth?build=1',
+            )
+            .map((r) =>
+              r.text === 'No Ground Truth build yet'
+                ? { ...r, text: 'No earlier Ground Truth build' }
+                : r,
+            ),
         },
   );
 }
 
 /** How many of the variances the pre-read lists nobody has answered yet. */
-function openVariances(blocks: Block[], live: Map<string, Schemas["VarianceOut"]>): number {
-  const rows = (blocks.find((b) => b.key === "variances")?.rows ?? []) as unknown as VarianceRow[];
-  return rows.filter((r) => (live.get(r.variance_id)?.status ?? r.status) === "open").length;
+function openVariances(blocks: Block[], live: Map<string, Schemas['VarianceOut']>): number {
+  const rows = (blocks.find((b) => b.key === 'variances')?.rows ?? []) as unknown as VarianceRow[];
+  return rows.filter((r) => (live.get(r.variance_id)?.status ?? r.status) === 'open').length;
 }
 
 function BlockCard({
@@ -239,7 +297,7 @@ function BlockCard({
   showAsOf,
 }: {
   block: Block;
-  live: Map<string, Schemas["VarianceOut"]>;
+  live: Map<string, Schemas['VarianceOut']>;
   onChanged: () => Promise<void>;
   /** Its own "Data as of", when the blocks do not all share one (qa-company-35). */
   showAsOf: boolean;
@@ -250,29 +308,35 @@ function BlockCard({
     <section
       data-testid="ritual-block"
       data-key={block.key}
-      className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${WIDE.has(block.key) ? "col-span-2 max-[900px]:col-span-1" : ""}`}
+      className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${WIDE.has(block.key) ? 'col-span-2 max-[900px]:col-span-1' : ''}`}
     >
       <header className="border-b border-line px-4 py-2.5">
         <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
-        {showAsOf && block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
+        {showAsOf && block.as_of && (
+          <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>
+        )}
       </header>
       {block.rows.length === 0 ? (
         <p className="px-4 py-3 text-sm text-text2">Nothing this time</p>
-      ) : block.key === "metrics_table" ? (
+      ) : block.key === 'metrics_table' ? (
         <MetricsTable rows={block.rows as unknown as MetricRow[]} />
-      ) : block.key === "variances" ? (
-        <VarianceCards rows={block.rows as unknown as VarianceRow[]} live={live} onChanged={onChanged} />
-      ) : block.key === "tracks" ? (
+      ) : block.key === 'variances' ? (
+        <VarianceCards
+          rows={block.rows as unknown as VarianceRow[]}
+          live={live}
+          onChanged={onChanged}
+        />
+      ) : block.key === 'tracks' ? (
         // detailed-b 7: each track and its "N at risk" link out; see MetricBlocks.tsx.
         <TracksBlock rows={block.rows as unknown as TrackRow[]} />
-      ) : block.key === "stale_items" ? (
+      ) : block.key === 'stale_items' ? (
         <StaleItemsBlock rows={block.rows as unknown as StaleItemRow[]} />
-      ) : block.key === "priority_changes" ? (
+      ) : block.key === 'priority_changes' ? (
         <PriorityChangesBlock rows={block.rows as unknown as PriorityChangeRow[]} />
-      ) : block.key === "suggested_next" ? (
+      ) : block.key === 'suggested_next' ? (
         <div className="flex flex-wrap gap-2 px-4 py-3">
           {block.rows.map((r) =>
-            r.method === "POST" && r.href ? (
+            r.method === 'POST' && r.href ? (
               <Button
                 key={r.text}
                 onClick={async () => {
@@ -280,8 +344,16 @@ function BlockCard({
                   try {
                     // A write outside the API client drops the shared reads itself (lib/api/shared-reads).
                     forgetReads();
-                    const res = await fetch(r.href!, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).finally(forgetReads);
-                    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Oracle could not start the run");
+                    const res = await fetch(r.href!, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: '{}',
+                    }).finally(forgetReads);
+                    if (!res.ok)
+                      throw new Error(
+                        (await res.json().catch(() => null))?.detail ??
+                          'Oracle could not start the run',
+                      );
                     const run = (await res.json()) as { id?: string };
                     if (run.id) router.push(`/runs/${run.id}`);
                   } catch (e) {
@@ -292,7 +364,7 @@ function BlockCard({
                 {r.label ?? r.text}
               </Button>
             ) : (
-              <LinkButton key={r.text} href={r.href ?? "#"}>
+              <LinkButton key={r.text} href={r.href ?? '#'}>
                 {r.label ?? r.text}
               </LinkButton>
             ),
@@ -325,11 +397,25 @@ function BlockCard({
  * Not vetted with its host and date, and Promote and Dismiss for approvers and owners. Rows
  * without a finding ("Web search is not set up") show as text.
  */
-function WebFindingsCard({ block, occurrenceId, canDecide, showAsOf }: { block: Block; occurrenceId: string; canDecide: boolean; showAsOf: boolean }) {
+function WebFindingsCard({
+  block,
+  occurrenceId,
+  canDecide,
+  showAsOf,
+}: {
+  block: Block;
+  occurrenceId: string;
+  canDecide: boolean;
+  showAsOf: boolean;
+}) {
   const q = useQuery(`occurrence-web-findings|${occurrenceId}`, async () => {
     const [open, promoted] = await Promise.all(
-      (["open", "promoted"] as const).map((status) =>
-        unwrap(api.GET("/v1/competitor-web-findings", { params: { query: { status, occurrence_id: occurrenceId, include_older: true } } })),
+      (['open', 'promoted'] as const).map((status) =>
+        unwrap(
+          api.GET('/v1/competitor-web-findings', {
+            params: { query: { status, occurrence_id: occurrenceId, include_older: true } },
+          }),
+        ),
       ),
     );
     return [...open, ...promoted];
@@ -337,21 +423,35 @@ function WebFindingsCard({ block, occurrenceId, canDecide, showAsOf }: { block: 
   const notes = block.rows.filter((r) => !r.finding_id);
   const findings = q.data ?? [];
   return (
-    <section data-testid="ritual-block" data-key={block.key} className="min-w-0 rounded-panel border border-line bg-surface shadow-panel">
+    <section
+      data-testid="ritual-block"
+      data-key={block.key}
+      className="min-w-0 rounded-panel border border-line bg-surface shadow-panel"
+    >
       <header className="border-b border-line px-4 py-2.5">
         <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
-        {showAsOf && block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
+        {showAsOf && block.as_of && (
+          <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>
+        )}
       </header>
       <div className="flex flex-col divide-y divide-line px-4">
         {q.error && <ErrorNote>{q.error}</ErrorNote>}
-        {q.data && findings.length === 0 && notes.length === 0 && <p className="py-3 text-sm text-text2">Nothing this time</p>}
+        {q.data && findings.length === 0 && notes.length === 0 && (
+          <p className="py-3 text-sm text-text2">Nothing this time</p>
+        )}
         {notes.map((r, i) => (
           <p key={i} className="py-3 text-sm text-text2">
             {r.text}
           </p>
         ))}
         {findings.map((f) => (
-          <FindingCard key={f.id} finding={f} canDecide={canDecide} onPromoted={() => void q.reload()} onDismissed={() => void q.reload()} />
+          <FindingCard
+            key={f.id}
+            finding={f}
+            canDecide={canDecide}
+            onPromoted={() => void q.reload()}
+            onDismissed={() => void q.reload()}
+          />
         ))}
       </div>
     </section>
@@ -369,34 +469,69 @@ const NO_CITATIONS = new Map();
  * Oracle". A metrics review's is Explain with Oracle (H5: its own run drafts each variance's
  * explanation); with no open variance the button is absent.
  */
-function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: boolean; onChanged: () => Promise<void> }) {
+function SummaryCard({
+  occ,
+  canAsk,
+  onChanged,
+}: {
+  occ: Occurrence;
+  canAsk: boolean;
+  onChanged: () => Promise<void>;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const digest = occ.kind === "competitive_digest";
+  const digest = occ.kind === 'competitive_digest';
   // H5: a metrics review's summary is Explain with Oracle (its own run drafts each variance's explanation).
-  const metrics = occ.kind === "metrics_review";
+  const metrics = occ.kind === 'metrics_review';
   // qa-company-31: what the button makes and what it costs, said before it is pressed.
-  const costQ = useQuery(canAsk ? "rituals|summaries" : "rituals|summaries|none", () => (canAsk ? unwrap(api.GET("/v1/rituals/summaries")) : Promise.resolve(undefined)));
+  const costQ = useQuery(canAsk ? 'rituals|summaries' : 'rituals|summaries|none', () =>
+    canAsk ? unwrap(api.GET('/v1/rituals/summaries')) : Promise.resolve(undefined),
+  );
   const estimate = costQ.data?.estimate;
-  const price = estimate && (estimate.rituals.find((r) => r.ritual_id === occ.ritual_id)?.per_summary_usd ?? estimate.per_summary_usd);
-  const cost = price !== undefined ? ` · one Oracle run, about ${formatMoney(price)}` : "";
+  const price =
+    estimate &&
+    (estimate.rituals.find((r) => r.ritual_id === occ.ritual_id)?.per_summary_usd ??
+      estimate.per_summary_usd);
+  const cost = price !== undefined ? ` · one Oracle run, about ${formatMoney(price)}` : '';
   const makes = digest
     ? "Oracle writes this week's digest from the findings below"
     : metrics
-      ? "Oracle drafts an explanation for each open unusual week below"
-      : "Oracle reads this pre-read and writes a short summary of it for the attendees";
+      ? 'Oracle drafts an explanation for each open unusual week below'
+      : 'Oracle reads this pre-read and writes a short summary of it for the attendees';
   const words = digest
-    ? { title: "Digest", ask: "Write the digest with Oracle", running: "Writing the digest…", failed: "Digest failed · Write the digest with Oracle to retry", none: "No digest" }
+    ? {
+        title: 'Digest',
+        ask: 'Write the digest with Oracle',
+        running: 'Writing the digest…',
+        failed: 'Digest failed · Write the digest with Oracle to retry',
+        none: 'No digest',
+      }
     : metrics
-      ? { title: "Summary", ask: "Explain with Oracle", running: "Writing…", failed: "Summary failed · Explain with Oracle to retry", none: "No summary" }
-      : { title: "Summary", ask: "Summarize with Oracle", running: "Writing the summary…", failed: "Summary failed · Summarize with Oracle to retry", none: "No summary" };
+      ? {
+          title: 'Summary',
+          ask: 'Explain with Oracle',
+          running: 'Writing…',
+          failed: 'Summary failed · Explain with Oracle to retry',
+          none: 'No summary',
+        }
+      : {
+          title: 'Summary',
+          ask: 'Summarize with Oracle',
+          running: 'Writing the summary…',
+          failed: 'Summary failed · Summarize with Oracle to retry',
+          none: 'No summary',
+        };
   // #556: every kind's summary is Markdown; it renders as the digest's does (links only where isSafeHref allows).
   const body = useMemo(() => (occ.summary ? parseBlocks(occ.summary) : null), [occ.summary]);
   const ask = async () => {
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/ritual-occurrences/{occurrence_id}/summary", { params: { path: { occurrence_id: occ.id } } }));
+      await unwrap(
+        api.POST('/v1/ritual-occurrences/{occurrence_id}/summary', {
+          params: { path: { occurrence_id: occ.id } },
+        }),
+      );
       await onChanged();
     } catch (e) {
       setError(errorMessage(e));
@@ -417,26 +552,38 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
     </>
   );
   return (
-    <section data-testid="occurrence-summary" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
+    <section
+      data-testid="occurrence-summary"
+      className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
+    >
       <h2 className="mb-1 font-display text-[17px] font-bold">{words.title}</h2>
-      {occ.summary_state === "ready" && occ.summary ? (
+      {occ.summary_state === 'ready' && occ.summary ? (
         <>
           <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
-            <MarkdownBody blocks={body ?? []} highlights={NO_HIGHLIGHTS} activeId={null} citations={NO_CITATIONS} onHighlightClick={() => {}} />
+            <MarkdownBody
+              blocks={body ?? []}
+              highlights={NO_HIGHLIGHTS}
+              activeId={null}
+              citations={NO_CITATIONS}
+              onHighlightClick={() => {}}
+            />
           </div>
           <p className="mt-1 text-[13px] text-text2">Written by Oracle</p>
         </>
-      ) : occ.summary_state === "running" ? (
+      ) : occ.summary_state === 'running' ? (
         <p className="text-sm text-text2">{words.running}</p>
-      ) : occ.summary_state === "failed" ? (
+      ) : occ.summary_state === 'failed' ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-crit">{words.failed}</p>
           {button}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          {occ.summary_state === "not_started" && <p className="text-sm text-text2">{occ.summary_note ?? `${words.title} not started`}</p>}
-          {button || (occ.summary_state === "none" && <p className="text-sm text-text2">{words.none}</p>)}
+          {occ.summary_state === 'not_started' && (
+            <p className="text-sm text-text2">{occ.summary_note ?? `${words.title} not started`}</p>
+          )}
+          {button ||
+            (occ.summary_state === 'none' && <p className="text-sm text-text2">{words.none}</p>)}
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -449,35 +596,55 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
  * started with its estimate (over $50 it says it waits for an owner's approval, P3), or why it
  * started none (Observe, a build under way) with B1's sheet one click away. Its proposals are reviewed as B1's are.
  */
-function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block[]; canBuild: boolean }) {
-  const estimate = blocks.flatMap((b) => b.rows.map((r) => r.text ?? "")).find((t) => t.startsWith("Estimate "));
+function RebuildCard({
+  occ,
+  blocks,
+  canBuild,
+}: {
+  occ: Occurrence;
+  blocks: Block[];
+  canBuild: boolean;
+}) {
+  const estimate = blocks
+    .flatMap((b) => b.rows.map((r) => r.text ?? ''))
+    .find((t) => t.startsWith('Estimate '));
   const run = occ.summary_run_id ? `/runs/${occ.summary_run_id}` : null;
-  const build = canBuild && <LinkButton href="/ground-truth?build=1">Build the Ground Truth</LinkButton>;
+  const build = canBuild && (
+    <LinkButton href="/ground-truth?build=1">Build the Ground Truth</LinkButton>
+  );
   return (
-    <section data-testid="occurrence-rebuild" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
+    <section
+      data-testid="occurrence-rebuild"
+      className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
+    >
       <h2 className="mb-1 font-display text-[17px] font-bold">Ground Truth build</h2>
-      {occ.summary_state === "running" && run ? (
+      {occ.summary_state === 'running' && run ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm">
-            Oracle started the Ground Truth build{estimate ? ` · ${estimate}` : ""}. {occ.summary_note ?? "Its proposals wait for your review."}
+            Oracle started the Ground Truth build{estimate ? ` · ${estimate}` : ''}.{' '}
+            {occ.summary_note ?? 'Its proposals wait for your review.'}
           </p>
           <LinkButton href={run}>Open run</LinkButton>
         </div>
-      ) : occ.summary_state === "ready" ? (
+      ) : occ.summary_state === 'ready' ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm">The build finished. Its proposals are on the Ground Truth page.</p>
           <LinkButton href="/ground-truth">Open the Ground Truth</LinkButton>
         </div>
-      ) : occ.summary_state === "failed" ? (
+      ) : occ.summary_state === 'failed' ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-crit">{occ.summary_note ?? "The Ground Truth build did not finish"}</p>
+          <p className="text-sm text-crit">
+            {occ.summary_note ?? 'The Ground Truth build did not finish'}
+          </p>
           {run && <LinkButton href={run}>Open run</LinkButton>}
           {build}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-text2">{occ.summary_note ?? "Oracle starts the build when the rebuild falls due."}</p>
-          {occ.summary_state === "not_started" && build}
+          <p className="text-sm text-text2">
+            {occ.summary_note ?? 'Oracle starts the build when the rebuild falls due.'}
+          </p>
+          {occ.summary_state === 'not_started' && build}
         </div>
       )}
     </section>
@@ -485,11 +652,19 @@ function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block
 }
 
 /** A held occurrence's notes, or a skipped one's reason: the owner edits the reason or undoes the skip (as the skip, theirs). */
-function Recorded({ occ, canEdit, onChanged }: { occ: Occurrence; canEdit: boolean; onChanged: () => Promise<void> }) {
-  const text = occ.status === "held" ? occ.notes : occ.skip_reason;
-  const skipped = occ.status === "skipped";
+function Recorded({
+  occ,
+  canEdit,
+  onChanged,
+}: {
+  occ: Occurrence;
+  canEdit: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const text = occ.status === 'held' ? occ.notes : occ.skip_reason;
+  const skipped = occ.status === 'skipped';
   const [editing, setEditing] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = { params: { path: { occurrence_id: occ.id } } };
@@ -509,19 +684,38 @@ function Recorded({ occ, canEdit, onChanged }: { occ: Occurrence; canEdit: boole
     }
   }
   return (
-    <section data-testid="occurrence-notes" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
-      <h2 className="mb-1 font-display text-[17px] font-bold">{occ.status === "held" ? "Notes" : "Skipped"}</h2>
+    <section
+      data-testid="occurrence-notes"
+      className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
+    >
+      <h2 className="mb-1 font-display text-[17px] font-bold">
+        {occ.status === 'held' ? 'Notes' : 'Skipped'}
+      </h2>
       {skipped && canEdit && editing ? (
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Why it was skipped
-            <input className={INPUT} maxLength={2000} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <input
+              className={INPUT}
+              maxLength={2000}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </label>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="solid"
               disabled={busy || !reason.trim()}
-              onClick={() => act(() => unwrap(api.PATCH("/v1/ritual-occurrences/{occurrence_id}/skip", { ...path, body: { reason: reason.trim() } })))}
+              onClick={() =>
+                act(() =>
+                  unwrap(
+                    api.PATCH('/v1/ritual-occurrences/{occurrence_id}/skip', {
+                      ...path,
+                      body: { reason: reason.trim() },
+                    }),
+                  ),
+                )
+              }
             >
               Save
             </Button>
@@ -532,19 +726,26 @@ function Recorded({ occ, canEdit, onChanged }: { occ: Occurrence; canEdit: boole
         </div>
       ) : (
         <div className="flex flex-wrap items-start gap-2">
-          <p className="min-w-0 flex-1 text-[15px] whitespace-pre-wrap">{text ? <span data-user-content>{text}</span> : "No notes"}</p>
+          <p className="min-w-0 flex-1 text-[15px] whitespace-pre-wrap">
+            {text ? <span data-user-content>{text}</span> : 'No notes'}
+          </p>
           {skipped && canEdit && (
             <>
               <Button
                 disabled={busy}
                 onClick={() => {
-                  setReason(occ.skip_reason ?? "");
+                  setReason(occ.skip_reason ?? '');
                   setEditing(true);
                 }}
               >
                 Edit
               </Button>
-              <Button disabled={busy} onClick={() => act(() => unwrap(api.DELETE("/v1/ritual-occurrences/{occurrence_id}/skip", path)))}>
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  act(() => unwrap(api.DELETE('/v1/ritual-occurrences/{occurrence_id}/skip', path)))
+                }
+              >
                 Undo skip
               </Button>
             </>
@@ -552,7 +753,7 @@ function Recorded({ occ, canEdit, onChanged }: { occ: Occurrence; canEdit: boole
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
-      {occ.status === "held" && occ.decisions.length > 0 && (
+      {occ.status === 'held' && occ.decisions.length > 0 && (
         <div data-testid="occurrence-decisions" className="mt-3">
           <h3 className="mb-1 text-sm font-semibold text-text2">Decisions</h3>
           <ul className="flex flex-col gap-1 text-sm">
@@ -572,9 +773,9 @@ function Recorded({ occ, canEdit, onChanged }: { occ: Occurrence; canEdit: boole
 
 /** After the meeting, the owner: notes, Record decision, Mark held or Skip (with a reason); no Skip once held. */
 function RecordForm({ occ, onChanged }: { occ: Occurrence; onChanged: () => Promise<void> }) {
-  const [notes, setNotes] = useState(occ.notes ?? "");
+  const [notes, setNotes] = useState(occ.notes ?? '');
   const [skipping, setSkipping] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = { params: { path: { occurrence_id: occ.id } } };
@@ -593,10 +794,18 @@ function RecordForm({ occ, onChanged }: { occ: Occurrence; onChanged: () => Prom
     }
   }
   return (
-    <section aria-label="Record the meeting" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
+    <section
+      aria-label="Record the meeting"
+      className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
+    >
       <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
         Notes
-        <textarea className={`${INPUT} min-h-32`} maxLength={NOTES_MAX} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <textarea
+          className={`${INPUT} min-h-32`}
+          maxLength={NOTES_MAX}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
       </label>
       {skipping && (
         <label className="mt-2 flex flex-col gap-1 text-sm font-semibold text-text2">
@@ -608,14 +817,32 @@ function RecordForm({ occ, onChanged }: { occ: Occurrence; onChanged: () => Prom
         <Button
           variant="solid"
           disabled={busy}
-          onClick={() => record(() => unwrap(api.POST("/v1/ritual-occurrences/{occurrence_id}/held", { ...path, body: { notes, decision_ids: occ.decision_ids } })))}
+          onClick={() =>
+            record(() =>
+              unwrap(
+                api.POST('/v1/ritual-occurrences/{occurrence_id}/held', {
+                  ...path,
+                  body: { notes, decision_ids: occ.decision_ids },
+                }),
+              ),
+            )
+          }
         >
           Mark held
         </Button>
-        {occ.status === "held" ? null : skipping ? (
+        {occ.status === 'held' ? null : skipping ? (
           <Button
             disabled={busy || !reason.trim()}
-            onClick={() => record(() => unwrap(api.POST("/v1/ritual-occurrences/{occurrence_id}/skip", { ...path, body: { reason: reason.trim() } })))}
+            onClick={() =>
+              record(() =>
+                unwrap(
+                  api.POST('/v1/ritual-occurrences/{occurrence_id}/skip', {
+                    ...path,
+                    body: { reason: reason.trim() },
+                  }),
+                ),
+              )
+            }
           >
             Skip with this reason
           </Button>
@@ -624,7 +851,11 @@ function RecordForm({ occ, onChanged }: { occ: Occurrence; onChanged: () => Prom
             Skip
           </Button>
         )}
-        <LinkButton href={`/company/decisions?propose=1&subject=ritual_occurrence:${occ.id}&ref=${encodeURIComponent(occ.title)}`}>Record decision</LinkButton>
+        <LinkButton
+          href={`/company/decisions?propose=1&subject=ritual_occurrence:${occ.id}&ref=${encodeURIComponent(occ.title)}`}
+        >
+          Record decision
+        </LinkButton>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
     </section>

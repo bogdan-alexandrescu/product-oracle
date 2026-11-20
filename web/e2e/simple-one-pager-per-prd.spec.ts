@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Train U follow-up 6 (#723): every mock PRD has its own one-pager state
@@ -17,58 +17,72 @@ import { expect, test, type Page } from "./test";
  * per-PRD reviewers.
  */
 
-const SEEDED = "/simple/prds/guided-setup";
-const OTHER = "/simple/one-pagers/annual-billing";
-const LINE_2 = "A setup checklist that shows the next step";
+const SEEDED = '/simple/prds/guided-setup';
+const OTHER = '/simple/one-pagers/annual-billing';
+const LINE_2 = 'A setup checklist that shows the next step';
 
 // vqa B-13, C-13: each PRD's one-pager is built from its own sections, so its first bet is its own.
-const OTHER_BET = "In scope: the plan page, the billing step and the order review page on web.";
+const OTHER_BET = 'In scope: the plan page, the billing step and the order review page on web.';
 
 async function editLine2(page: Page, text: string) {
   // The first bet's Edit names the line.
   await page.locator('[data-line="bets-1"]').hover();
-  await page.locator('[data-line="bets-1"]').getByRole("button", { name: /^Edit “/ }).click();
-  await page.getByLabel("New wording for").fill(text);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute("data-state", "edited");
+  await page
+    .locator('[data-line="bets-1"]')
+    .getByRole('button', { name: /^Edit “/ })
+    .click();
+  await page.getByLabel('New wording for').fill(text);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute('data-state', 'edited');
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
       test("a line edit on one PRD's one-pager shows on that PRD only", async ({ page }) => {
         await login(page);
         await page.goto(OTHER);
-        await expect(page.getByRole("heading", { level: 1, name: "Annual billing PRD" })).toBeVisible();
+        await expect(
+          page.getByRole('heading', { level: 1, name: 'Annual billing PRD' }),
+        ).toBeVisible();
         // The PRD's document id, read (never written) from the mock's saved state: a link that carries it.
         const otherId = await page.evaluate(() => {
-          const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!) as { documents: { id: string; slug: string }[] };
-          return db.documents.find((d) => d.slug === "annual-billing")!.id;
+          const db = JSON.parse(localStorage.getItem('po-mock-db-v2')!) as {
+            documents: { id: string; slug: string }[];
+          };
+          return db.documents.find((d) => d.slug === 'annual-billing')!.id;
         });
         await expect(page.locator('[data-line="bets-1"]')).toContainText(OTHER_BET);
-        await editLine2(page, "A checkout checklist with plan limits");
+        await editLine2(page, 'A checkout checklist with plan limits');
 
         await page.goto(SEEDED);
-        await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: 'Guided setup' })).toBeVisible();
         const line = page.locator('[data-line="bets-1"]');
-        await expect(line).toHaveAttribute("data-state", "published");
+        await expect(line).toHaveAttribute('data-state', 'published');
         await expect(line).toContainText(LINE_2);
-        await expect(page.getByRole("status", { name: "Working draft" })).toHaveCount(0);
-        await editLine2(page, "A setup checklist with the next two steps");
-        await expect(line).not.toContainText("plan limits");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        await expect(page.getByRole('status', { name: 'Working draft' })).toHaveCount(0);
+        await editLine2(page, 'A setup checklist with the next two steps');
+        await expect(line).not.toContainText('plan limits');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
 
         await page.goto(OTHER);
-        await expect(page.getByRole("heading", { level: 1, name: "Annual billing PRD" })).toBeVisible();
-        await expect(line).toContainText("A checkout checklist with plan limits");
-        await expect(line).not.toContainText("next two steps");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        await expect(
+          page.getByRole('heading', { level: 1, name: 'Annual billing PRD' }),
+        ).toBeVisible();
+        await expect(line).toContainText('A checkout checklist with plan limits');
+        await expect(line).not.toContainText('next two steps');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
 
         await page.goto(`/simple/one-pagers/${otherId}`);
-        await expect(page.getByRole("heading", { level: 1, name: "Annual billing PRD" })).toBeVisible();
-        await expect(line).toContainText("A checkout checklist with plan limits");
+        await expect(
+          page.getByRole('heading', { level: 1, name: 'Annual billing PRD' }),
+        ).toBeVisible();
+        await expect(line).toContainText('A checkout checklist with plan limits');
       });
     });
   }

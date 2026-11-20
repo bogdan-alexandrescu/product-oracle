@@ -5,16 +5,21 @@
  * step per tick) with canned items. Seeded on annual-billing v1 and v2 (synthetic
  * placeholders); every other PRD version reads `none`.
  */
-import type { Schemas } from "@/lib/api/client";
-import type { DraftRoadmapCheck, DraftRoadmapOut, DraftRoadmapStatus, DraftRoadmapSummary } from "@/lib/api/draft-roadmap";
+import type { Schemas } from '@/lib/api/client';
+import type {
+  DraftRoadmapCheck,
+  DraftRoadmapOut,
+  DraftRoadmapStatus,
+  DraftRoadmapSummary,
+} from '@/lib/api/draft-roadmap';
 
-import { stableUuid } from "./ids";
-import { readableRefusal } from "./refusal";
-import { finishDraftItemsRun, startDraftItemsRun, type RunsDb } from "./runs";
-import { reply } from "./typed";
+import { stableUuid } from './ids';
+import { readableRefusal } from './refusal';
+import { finishDraftItemsRun, startDraftItemsRun, type RunsDb } from './runs';
+import { reply } from './typed';
 
-type Item = Schemas["RoadmapItemOut"];
-type Role = "viewer" | "commenter" | "approver" | "owner";
+type Item = Schemas['RoadmapItemOut'];
+type Role = 'viewer' | 'commenter' | 'approver' | 'owner';
 type Doc = { id: string; slug: string; title: string; kind: string };
 type Version = {
   id: string;
@@ -28,14 +33,14 @@ type Member = { id: string; role: Role; status?: string | null };
 export interface DraftRow {
   document_id: string;
   version: number;
-  status: Exclude<DraftRoadmapStatus, "none">;
-  requested_via: "auto" | "derive";
+  status: Exclude<DraftRoadmapStatus, 'none'>;
+  requested_via: 'auto' | 'derive';
   requested_by: string | null;
   requested_at: string;
   run_id: string | null;
   ready_at: string | null;
   error: string | null;
-  depth: "quick" | "standard" | "deep";
+  depth: 'quick' | 'standard' | 'deep';
   check: DraftRoadmapCheck | null;
   items: Item[];
   /** approved-prd-roadmap: the Simple roadmap (slug) its items are for, when known. */
@@ -63,18 +68,19 @@ export interface DraftRoadmapContext {
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 // The API's text for a refused date (api/oracle/roadmap/schedule.py UNVERIFIED).
 const UNVERIFIED =
-  "a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (record one with POST /v1/schedule-bases); Oracle never invents dates";
-const CANNOT_START = "The person who imported this draft can no longer start runs. An approver can derive again.";
-const SEED_PRD = "annual-billing";
+  'a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (record one with POST /v1/schedule-bases); Oracle never invents dates';
+const CANNOT_START =
+  'The person who imported this draft can no longer start runs. An approver can derive again.';
+const SEED_PRD = 'annual-billing';
 
 const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 type ItemSeed = {
   key: string;
   title: string;
   outcome: string;
-  horizon: Item["horizon"];
+  horizon: Item['horizon'];
   section: string;
   rank: number;
   confidence: string;
@@ -93,21 +99,35 @@ function item(ctx: DraftRoadmapContext, doc: Doc, v: Version, s: ItemSeed, posit
     title: s.title,
     outcome: s.outcome,
     horizon: s.horizon,
-    milestone: (s.milestone ?? null) as Item["milestone"],
-    freshness: "fresh",
+    milestone: (s.milestone ?? null) as Item['milestone'],
+    freshness: 'fresh',
     stale_reasons: [],
     stale_since: null,
     caused_by_change_id: null,
     prd: {
-      document: { id: doc.id, slug: doc.slug, title: doc.title, version: v.number, approved: !!v.approved_at },
+      document: {
+        id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        version: v.number,
+        approved: !!v.approved_at,
+      },
       section_key: s.section,
       section_hash: section?.content_hash ?? null,
       link: `/documents/${doc.slug}/v/${v.number}#${s.section}`,
       reconciled_version: null,
       reconciled_section_hash: null,
-    } as Item["prd"],
+    } as Item['prd'],
     track_id: null,
-    feature: s.feature ? { id: stableUuid(`draft-feature/${s.feature.key}`), type: "feature", key: s.feature.key, title: s.feature.title, status: "confirmed" } : null,
+    feature: s.feature
+      ? {
+          id: stableUuid(`draft-feature/${s.feature.key}`),
+          type: 'feature',
+          key: s.feature.key,
+          title: s.feature.title,
+          status: 'confirmed',
+        }
+      : null,
     requirements: [],
     blockers: [],
     trace: [],
@@ -115,28 +135,67 @@ function item(ctx: DraftRoadmapContext, doc: Doc, v: Version, s: ItemSeed, posit
     depends_titles: {},
     validation_gates: [],
     economics: {},
-    priority: { rank: s.rank, score: null, explanation: null } as Item["priority"],
+    priority: { rank: s.rank, score: null, explanation: null } as Item['priority'],
     confidence: s.confidence,
     engineering: [],
     note: null,
   } as Item;
 }
 
-function checkOf(items: Item[], problems: DraftRoadmapCheck["problems"] = []): DraftRoadmapCheck {
+function checkOf(items: Item[], problems: DraftRoadmapCheck['problems'] = []): DraftRoadmapCheck {
   const n = (h: string) => items.filter((i) => i.horizon === h).length;
-  return { items: items.length, by_horizon: { now: n("now"), next: n("next"), later: n("later") }, problems };
+  return {
+    items: items.length,
+    by_horizon: { now: n('now'), next: n('next'), later: n('later') },
+    problems,
+  };
 }
 
-const CART: ItemSeed = { key: "cart-review", title: "Plan review shows the yearly price", outcome: "Admins see the yearly price before they pay", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Plan review shows the yearly price" } };
-const GUEST: ItemSeed = { key: "public-signup", title: "Public signup", outcome: "New admins sign up without talking to sales", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
+const CART: ItemSeed = {
+  key: 'cart-review',
+  title: 'Plan review shows the yearly price',
+  outcome: 'Admins see the yearly price before they pay',
+  horizon: 'now',
+  section: 's-5-1',
+  rank: 1,
+  confidence: 'high',
+  milestone: { name: 'Beta' },
+  feature: { key: 'F-41', title: 'Plan review shows the yearly price' },
+};
+const GUEST: ItemSeed = {
+  key: 'public-signup',
+  title: 'Public signup',
+  outcome: 'New admins sign up without talking to sales',
+  horizon: 'next',
+  section: 'scope',
+  rank: 3,
+  confidence: 'medium',
+};
 
 /** annual-billing v1: four items, no problems. */
 function seedV1(): ItemSeed[] {
   return [
     CART,
-    { key: "shipping-step", title: "Billing step on one screen", outcome: "Admins choose a billing option without leaving the step", horizon: "now", section: "s-5-2", rank: 2, confidence: "medium", milestone: { name: "Beta", date: "2026-11-30", date_source: "EST-1", basis_ids: [] } },
+    {
+      key: 'shipping-step',
+      title: 'Billing step on one screen',
+      outcome: 'Admins choose a billing option without leaving the step',
+      horizon: 'now',
+      section: 's-5-2',
+      rank: 2,
+      confidence: 'medium',
+      milestone: { name: 'Beta', date: '2026-11-30', date_source: 'EST-1', basis_ids: [] },
+    },
     GUEST,
-    { key: "wallet-pay", title: "One-tap wallet pay", outcome: "Returning buyers pay in one tap", horizon: "later", section: "scope", rank: 4, confidence: "low" },
+    {
+      key: 'wallet-pay',
+      title: 'One-tap wallet pay',
+      outcome: 'Returning buyers pay in one tap',
+      horizon: 'later',
+      section: 'scope',
+      rank: 4,
+      confidence: 'low',
+    },
   ];
 }
 
@@ -144,25 +203,44 @@ function seedV1(): ItemSeed[] {
 function seedV2(): ItemSeed[] {
   return [
     CART,
-    { ...GUEST, horizon: "now", rank: 2 },
-    { key: "shipping-step", title: "Billing step on one screen", outcome: "Admins choose a billing option without leaving the step", horizon: "now", section: "s-5-2", rank: 3, confidence: "medium", milestone: { name: "Beta" } },
+    { ...GUEST, horizon: 'now', rank: 2 },
     {
-      key: "bulk-import",
-      title: "Bulk import",
-      outcome: "Paying admins bring their seats in one file instead of typing them",
-      horizon: "next",
-      section: "s-5-3",
+      key: 'shipping-step',
+      title: 'Billing step on one screen',
+      outcome: 'Admins choose a billing option without leaving the step',
+      horizon: 'now',
+      section: 's-5-2',
+      rank: 3,
+      confidence: 'medium',
+      milestone: { name: 'Beta' },
+    },
+    {
+      key: 'bulk-import',
+      title: 'Bulk import',
+      outcome: 'Paying admins bring their seats in one file instead of typing them',
+      horizon: 'next',
+      section: 's-5-3',
       rank: 4,
-      confidence: "medium",
-      depends_on: ["shipping-step"],
-      milestone: { name: "GA", date: null, basis_ids: [], refused_date: "2026-12-15", refused: UNVERIFIED },
+      confidence: 'medium',
+      depends_on: ['shipping-step'],
+      milestone: {
+        name: 'GA',
+        date: null,
+        basis_ids: [],
+        refused_date: '2026-12-15',
+        refused: UNVERIFIED,
+      },
     },
   ];
 }
 
-const V2_PROBLEMS: DraftRoadmapCheck["problems"] = [
+const V2_PROBLEMS: DraftRoadmapCheck['problems'] = [
   // As the API's view words it (draft_items.readable_check): no item key, the date month first.
-  { code: "unverified_date", item: "bulk-import", message: "the Dec 15, 2026 date has no confirmed schedule behind it yet" },
+  {
+    code: 'unverified_date',
+    item: 'bulk-import',
+    message: 'the Dec 15, 2026 date has no confirmed schedule behind it yet',
+  },
 ];
 
 /** The seeded rows: annual-billing v1 and v2, ready. */
@@ -170,9 +248,9 @@ export function seedDraftRoadmaps(ctx: DraftRoadmapContext): DraftRoadmapDb {
   const db: DraftRoadmapDb = { rows: [], off: [] };
   const doc = ctx.documents.find((d) => d.slug === SEED_PRD);
   if (!doc) return db;
-  const seeds: [number, ItemSeed[], DraftRoadmapCheck["problems"], string, string][] = [
-    [1, seedV1(), [], "2026-10-16T14:06:00Z", "2026-10-16T14:12:00Z"],
-    [2, seedV2(), V2_PROBLEMS, "2026-10-17T09:21:00Z", "2026-10-17T09:28:00Z"],
+  const seeds: [number, ItemSeed[], DraftRoadmapCheck['problems'], string, string][] = [
+    [1, seedV1(), [], '2026-10-16T14:06:00Z', '2026-10-16T14:12:00Z'],
+    [2, seedV2(), V2_PROBLEMS, '2026-10-17T09:21:00Z', '2026-10-17T09:28:00Z'],
   ];
   for (const [n, seeds_, problems, requested, ready] of seeds) {
     const v = ctx.versions.find((x) => x.document_id === doc.id && x.number === n);
@@ -181,14 +259,14 @@ export function seedDraftRoadmaps(ctx: DraftRoadmapContext): DraftRoadmapDb {
     db.rows.push({
       document_id: doc.id,
       version: n,
-      status: "ready",
-      requested_via: "auto",
+      status: 'ready',
+      requested_via: 'auto',
       requested_by: null,
       requested_at: requested,
       run_id: null,
       ready_at: ready,
       error: null,
-      depth: "standard",
+      depth: 'standard',
       check: checkOf(items, problems),
       items,
     });
@@ -203,63 +281,103 @@ export function seedDraftRoadmaps(ctx: DraftRoadmapContext): DraftRoadmapDb {
  * outcome, rank or confidence), so only those changes show.
  */
 export function seedApprovedPlanDraft(ctx: DraftRoadmapContext, db: DraftRoadmapDb) {
-  const doc = ctx.documents.find((d) => d.slug === "usage-alerts");
+  const doc = ctx.documents.find((d) => d.slug === 'usage-alerts');
   const v = doc && ctx.versions.find((x) => x.document_id === doc.id && x.number === 2);
   if (!doc || !v) return;
-  const title = (key: string) => (v.sections.find((x) => x.section_key === key)?.heading ?? key).replace(/^[\d.]+\s+/, "");
-  const plain = (key: string, horizon: Item["horizon"], position: number): Item => ({
-    ...item(ctx, doc, v, { key: `item-${key}`, title: title(key), outcome: "", horizon, section: key, rank: 0, confidence: "" }, position),
+  const title = (key: string) =>
+    (v.sections.find((x) => x.section_key === key)?.heading ?? key).replace(/^[\d.]+\s+/, '');
+  const plain = (key: string, horizon: Item['horizon'], position: number): Item => ({
+    ...item(
+      ctx,
+      doc,
+      v,
+      {
+        key: `item-${key}`,
+        title: title(key),
+        outcome: '',
+        horizon,
+        section: key,
+        rank: 0,
+        confidence: '',
+      },
+      position,
+    ),
     outcome: null,
     priority: null,
     confidence: null,
-    milestone: (horizon === "now" || key === "behaviour" ? { name: "First release" } : null) as Item["milestone"],
+    milestone: (horizon === 'now' || key === 'behaviour'
+      ? { name: 'First release' }
+      : null) as Item['milestone'],
   });
-  const items = [plain("limits", "now", 0), plain("behaviour", "next", 1), plain("metrics", "next", 2)];
+  const items = [
+    plain('limits', 'now', 0),
+    plain('behaviour', 'next', 1),
+    plain('metrics', 'next', 2),
+  ];
   db.rows.push({
     document_id: doc.id,
     version: 2,
-    status: "ready",
-    requested_via: "auto",
+    status: 'ready',
+    requested_via: 'auto',
     requested_by: null,
-    requested_at: "2026-10-21T09:01:00Z",
+    requested_at: '2026-10-21T09:01:00Z',
     run_id: null,
-    ready_at: "2026-10-21T09:08:00Z",
+    ready_at: '2026-10-21T09:08:00Z',
     error: null,
-    depth: "standard",
+    depth: 'standard',
     check: checkOf(items),
     items,
   });
 }
 
 /** #561 review, the "stored-refusals" scenario: annual-billing v2's items failed on Oct 18 on a refusal stored before #403's wording. */
-export function seedStoredRefusalDraft(ctx: DraftRoadmapContext, db: DraftRoadmapDb, error: string) {
-  const doc = ctx.documents.find((d) => d.slug === "annual-billing");
+export function seedStoredRefusalDraft(
+  ctx: DraftRoadmapContext,
+  db: DraftRoadmapDb,
+  error: string,
+) {
+  const doc = ctx.documents.find((d) => d.slug === 'annual-billing');
   const r = doc && rowOf(db, doc.id, 2);
   if (!r) return;
-  Object.assign(r, { status: "failed", requested_at: "2026-10-18T23:12:00Z", ready_at: null, error, check: null, items: [] });
+  Object.assign(r, {
+    status: 'failed',
+    requested_at: '2026-10-18T23:12:00Z',
+    ready_at: null,
+    error,
+    check: null,
+    items: [],
+  });
 }
 
 /** Canned items for a derivation that finishes: the seed's for annual-billing v1/v2, else one per subsection. */
-function cannedItems(ctx: DraftRoadmapContext, doc: Doc, v: Version): { items: Item[]; problems: DraftRoadmapCheck["problems"] } {
+function cannedItems(
+  ctx: DraftRoadmapContext,
+  doc: Doc,
+  v: Version,
+): { items: Item[]; problems: DraftRoadmapCheck['problems'] } {
   if (doc.slug === SEED_PRD && (v.number === 1 || v.number === 2)) {
     const seeds = v.number === 1 ? seedV1() : seedV2();
-    return { items: seeds.map((s, i) => item(ctx, doc, v, s, i)), problems: v.number === 2 ? V2_PROBLEMS : [] };
+    return {
+      items: seeds.map((s, i) => item(ctx, doc, v, s, i)),
+      problems: v.number === 2 ? V2_PROBLEMS : [],
+    };
   }
   const picked = v.sections.filter((s) => s.level >= 2).slice(0, 3);
-  const horizons: Item["horizon"][] = ["now", "now", "next"];
+  const horizons: Item['horizon'][] = ['now', 'now', 'next'];
   const seeds = picked.map<ItemSeed>((s, i) => ({
     key: s.section_key,
-    title: s.heading.replace(/^[\d.]+\s*/, ""),
-    outcome: `What ${s.heading.replace(/^[\d.]+\s*/, "").toLowerCase()} delivers`,
+    title: s.heading.replace(/^[\d.]+\s*/, ''),
+    outcome: `What ${s.heading.replace(/^[\d.]+\s*/, '').toLowerCase()} delivers`,
     horizon: horizons[i],
     section: s.section_key,
     rank: i + 1,
-    confidence: "medium",
+    confidence: 'medium',
   }));
   return { items: seeds.map((s, i) => item(ctx, doc, v, s, i)), problems: [] };
 }
 
-const rowOf = (db: DraftRoadmapDb, docId: string, n: number) => db.rows.find((r) => r.document_id === docId && r.version === n);
+const rowOf = (db: DraftRoadmapDb, docId: string, n: number) =>
+  db.rows.find((r) => r.document_id === docId && r.version === n);
 
 /**
  * A new PRD version joins the queue (the API's version_imported handler): `skipped` for the
@@ -267,18 +385,25 @@ const rowOf = (db: DraftRoadmapDb, docId: string, n: number) => db.rows.find((r)
  * version only queued automatically is superseded (latest draft wins).
  */
 export function queueDraftRoadmap(
-  ctx: Pick<DraftRoadmapContext, "now">,
+  ctx: Pick<DraftRoadmapContext, 'now'>,
   db: DraftRoadmapDb,
   doc: Doc,
-  v: Pick<Version, "number">,
+  v: Pick<Version, 'number'>,
   by: string | null,
-  origin?: "skeleton",
+  origin?: 'skeleton',
 ) {
-  if (doc.kind !== "prd") return;
-  const status: DraftRow["status"] = origin === "skeleton" ? "skipped" : db.off.includes(doc.id) ? "off" : "queued";
-  if (status === "queued") {
+  if (doc.kind !== 'prd') return;
+  const status: DraftRow['status'] =
+    origin === 'skeleton' ? 'skipped' : db.off.includes(doc.id) ? 'off' : 'queued';
+  if (status === 'queued') {
     for (const r of db.rows) {
-      if (r.document_id === doc.id && r.version < v.number && r.status === "queued" && r.requested_via === "auto") r.status = "superseded";
+      if (
+        r.document_id === doc.id &&
+        r.version < v.number &&
+        r.status === 'queued' &&
+        r.requested_via === 'auto'
+      )
+        r.status = 'superseded';
     }
   }
   db.rows = db.rows.filter((r) => !(r.document_id === doc.id && r.version === v.number));
@@ -286,13 +411,13 @@ export function queueDraftRoadmap(
     document_id: doc.id,
     version: v.number,
     status,
-    requested_via: "auto",
+    requested_via: 'auto',
     requested_by: by,
     requested_at: ctx.now(),
     run_id: null,
     ready_at: null,
     error: null,
-    depth: "standard",
+    depth: 'standard',
     check: null,
     items: [],
   });
@@ -302,18 +427,28 @@ export function queueDraftRoadmap(
  * E1 part B ("Reuse items"), as the API's `draft_items.reusable`: a Build roadmap run reuses
  * the version's draft items when they are ready, with at least one item and no `wrong_prd`.
  */
-export function reusableDraftItems(db: DraftRoadmapDb, documentId: string, n: number): { version: number; ready_at: string | null } | null {
+export function reusableDraftItems(
+  db: DraftRoadmapDb,
+  documentId: string,
+  n: number,
+): { version: number; ready_at: string | null } | null {
   const r = rowOf(db, documentId, n);
-  if (!r || r.status !== "ready" || !r.items.length) return null;
-  if (r.check?.problems.some((p) => p.code === "wrong_prd")) return null;
+  if (!r || r.status !== 'ready' || !r.items.length) return null;
+  if (r.check?.problems.some((p) => p.code === 'wrong_prd')) return null;
   return { version: n, ready_at: r.ready_at };
 }
 
 /** VersionOut.draft_roadmap: PRD versions only. */
-export function draftRoadmapSummary(db: DraftRoadmapDb | undefined, doc: Doc | undefined, n: number): DraftRoadmapSummary | null {
-  if (!doc || doc.kind !== "prd") return null;
+export function draftRoadmapSummary(
+  db: DraftRoadmapDb | undefined,
+  doc: Doc | undefined,
+  n: number,
+): DraftRoadmapSummary | null {
+  if (!doc || doc.kind !== 'prd') return null;
   const r = db ? rowOf(db, doc.id, n) : undefined;
-  return r ? { status: r.status, items: r.items.length, problems: r.check?.problems.length ?? 0 } : { status: "none", items: 0, problems: 0 };
+  return r
+    ? { status: r.status, items: r.items.length, problems: r.check?.problems.length ?? 0 }
+    : { status: 'none', items: 0, problems: 0 };
 }
 
 /**
@@ -324,33 +459,41 @@ export function draftRoadmapSummary(db: DraftRoadmapDb | undefined, doc: Doc | u
  */
 /** As the API's draft_items.run_retried: a failed items run retried re-opens its own draft roadmap. */
 export function draftItemsRunRetried(db: DraftRoadmapDb, runId: string) {
-  const row = db.rows.find((r) => r.run_id === runId && r.status === "failed");
-  if (row) Object.assign(row, { status: "running", error: null });
+  const row = db.rows.find((r) => r.run_id === runId && r.status === 'failed');
+  if (row) Object.assign(row, { status: 'running', error: null });
 }
 
 export function tickDraftRoadmaps(ctx: DraftRoadmapContext, db: DraftRoadmapDb) {
   const busy = new Set<string>();
-  for (const r of db.rows.filter((x) => x.status === "running")) {
+  for (const r of db.rows.filter((x) => x.status === 'running')) {
     busy.add(r.document_id);
     const doc = ctx.documents.find((d) => d.id === r.document_id);
     const v = ctx.versions.find((x) => x.document_id === r.document_id && x.number === r.version);
     if (!doc || !v) continue;
     const { items, problems } = cannedItems(ctx, doc, v);
     finishDraftItemsRun(ctx.runs(), r.run_id, { uuid: ctx.uuid, now: ctx.now() });
-    Object.assign(r, { status: items.length ? "ready" : "failed", items, check: checkOf(items, problems), ready_at: ctx.now(), error: items.length ? null : "the items file lists no items" });
+    Object.assign(r, {
+      status: items.length ? 'ready' : 'failed',
+      items,
+      check: checkOf(items, problems),
+      ready_at: ctx.now(),
+      error: items.length ? null : 'the items file lists no items',
+    });
     // As the API's requested_at (the row's updated_at): a failure moves it to when it failed.
     if (!items.length) r.requested_at = ctx.now();
   }
-  const docs = new Set(db.rows.filter((r) => r.status === "queued").map((r) => r.document_id));
+  const docs = new Set(db.rows.filter((r) => r.status === 'queued').map((r) => r.document_id));
   for (const docId of docs) {
     if (busy.has(docId)) continue;
-    const r = db.rows.filter((x) => x.document_id === docId && x.status === "queued").sort((a, b) => b.version - a.version)[0];
+    const r = db.rows
+      .filter((x) => x.document_id === docId && x.status === 'queued')
+      .sort((a, b) => b.version - a.version)[0];
     const doc = ctx.documents.find((d) => d.id === docId);
     const v = ctx.versions.find((x) => x.document_id === docId && x.number === r.version);
     if (!doc || !v) continue;
     const who = r.requested_by ? ctx.members.find((m) => m.id === r.requested_by) : null;
-    if (r.requested_by && who && (who.status === "disabled" || RANK[who.role] < RANK.approver)) {
-      Object.assign(r, { status: "failed", error: CANNOT_START, requested_at: ctx.now() });
+    if (r.requested_by && who && (who.status === 'disabled' || RANK[who.role] < RANK.approver)) {
+      Object.assign(r, { status: 'failed', error: CANNOT_START, requested_at: ctx.now() });
       continue;
     }
     const run = startDraftItemsRun(ctx.runs(), {
@@ -358,86 +501,141 @@ export function tickDraftRoadmaps(ctx: DraftRoadmapContext, db: DraftRoadmapDb) 
       now: ctx.now(),
       createdBy: r.requested_by ?? ctx.userId,
       depth: r.depth,
-      source: { document_id: doc.id, slug: doc.slug, title: doc.title, kind: "prd", version: v.number, version_id: v.id, approved_at: v.approved_at ?? null },
+      source: {
+        document_id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        kind: 'prd',
+        version: v.number,
+        version_id: v.id,
+        approved_at: v.approved_at ?? null,
+      },
     });
-    Object.assign(r, { status: "running", run_id: run.id, error: null });
+    Object.assign(r, { status: 'running', run_id: run.id, error: null });
   }
 }
 
-function out(ctx: DraftRoadmapContext, db: DraftRoadmapDb, doc: Doc, v: Version, view: "full" | "brief"): DraftRoadmapOut {
+function out(
+  ctx: DraftRoadmapContext,
+  db: DraftRoadmapDb,
+  doc: Doc,
+  v: Version,
+  view: 'full' | 'brief',
+): DraftRoadmapOut {
   const r = rowOf(db, doc.id, v.number);
   const prev = db.rows
-    .filter((x) => x.document_id === doc.id && x.version < v.number && x.status === "ready")
+    .filter((x) => x.document_id === doc.id && x.version < v.number && x.status === 'ready')
     .sort((a, b) => b.version - a.version)[0];
   const items = r?.items ?? [];
   return {
-    prd: { id: doc.id, slug: doc.slug, title: doc.title, version: v.number, approved: !!v.approved_at },
-    status: r?.status ?? "none",
+    prd: {
+      id: doc.id,
+      slug: doc.slug,
+      title: doc.title,
+      version: v.number,
+      approved: !!v.approved_at,
+    },
+    status: r?.status ?? 'none',
     run_id: r?.run_id ?? null,
     requested_at: r?.requested_at ?? null,
     ready_at: r?.ready_at ?? null,
-    error: readableRefusal(r?.error ?? null, r?.status === "failed"),
+    error: readableRefusal(r?.error ?? null, r?.status === 'failed'),
     check: r?.check ?? null,
-    previous: prev ? { version: prev.version, status: prev.status, items: prev.items.length } : null,
+    previous: prev
+      ? { version: prev.version, status: prev.status, items: prev.items.length }
+      : null,
     auto: !db.off.includes(doc.id),
     view,
-    items: view === "brief" ? items.map((i) => ({ ...i, trace: [], validation_gates: [] })) : items,
+    items: view === 'brief' ? items.map((i) => ({ ...i, trace: [], validation_gates: [] })) : items,
   };
 }
 
 /** The four routes; null for anything else. */
-export async function routeDraftRoadmap(ctx: DraftRoadmapContext, db: DraftRoadmapDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "documents" || !p[2]) return null;
+export async function routeDraftRoadmap(
+  ctx: DraftRoadmapContext,
+  db: DraftRoadmapDb,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
+  if (p[1] !== 'documents' || !p[2]) return null;
   const m = req.method;
-  const itemsRoute = p[3] === "versions" && p[5] === "roadmap-items";
-  const settingsRoute = p.length === 5 && p[3] === "roadmap-items" && p[4] === "settings";
+  const itemsRoute = p[3] === 'versions' && p[5] === 'roadmap-items';
+  const settingsRoute = p.length === 5 && p[3] === 'roadmap-items' && p[4] === 'settings';
   if (!itemsRoute && !settingsRoute) return null;
   const doc = ctx.documents.find((d) => d.slug === p[2] || d.id === p[2]);
-  if (!doc) return json(404, { detail: "Document not found" });
-  if (doc.kind !== "prd") return json(422, { detail: `document '${doc.slug}' is not a PRD: only a PRD draft has roadmap items` });
+  if (!doc) return json(404, { detail: 'Document not found' });
+  if (doc.kind !== 'prd')
+    return json(422, {
+      detail: `document '${doc.slug}' is not a PRD: only a PRD draft has roadmap items`,
+    });
   const can = (role: Role) => RANK[ctx.role] >= RANK[role];
 
   if (settingsRoute) {
-    if (m === "GET") return reply("/v1/documents/{doc}/roadmap-items/settings", "get", { each_draft: !db.off.includes(doc.id) });
-    if (m === "PUT") {
-      if (!can("owner")) return json(403, { detail: "Requires the owner role" });
-      const input = JSON.parse((await req.text()) || "{}") as { each_draft?: boolean };
+    if (m === 'GET')
+      return reply('/v1/documents/{doc}/roadmap-items/settings', 'get', {
+        each_draft: !db.off.includes(doc.id),
+      });
+    if (m === 'PUT') {
+      if (!can('owner')) return json(403, { detail: 'Requires the owner role' });
+      const input = JSON.parse((await req.text()) || '{}') as { each_draft?: boolean };
       db.off = db.off.filter((id) => id !== doc.id);
       if (input.each_draft === false) db.off.push(doc.id);
-      return reply("/v1/documents/{doc}/roadmap-items/settings", "put", { each_draft: input.each_draft !== false });
+      return reply('/v1/documents/{doc}/roadmap-items/settings', 'put', {
+        each_draft: input.each_draft !== false,
+      });
     }
     return null;
   }
 
   const n = Number(p[4]);
   const v = ctx.versions.find((x) => x.document_id === doc.id && x.number === n);
-  if (!v) return json(404, { detail: "Version not found" });
-  const view = q.get("view") === "brief" ? "brief" : "full";
+  if (!v) return json(404, { detail: 'Version not found' });
+  const view = q.get('view') === 'brief' ? 'brief' : 'full';
 
-  if (p.length === 6 && m === "GET") return reply("/v1/documents/{doc}/versions/{n}/roadmap-items", "get", out(ctx, db, doc, v, view));
-  if (p.length === 7 && p[6] === "derive" && m === "POST") {
-    if (!can("approver")) return json(403, { detail: "Requires the approver role" });
-    const input = JSON.parse((await req.text()) || "{}") as { depth?: DraftRow["depth"] } | null;
+  if (p.length === 6 && m === 'GET')
+    return reply(
+      '/v1/documents/{doc}/versions/{n}/roadmap-items',
+      'get',
+      out(ctx, db, doc, v, view),
+    );
+  if (p.length === 7 && p[6] === 'derive' && m === 'POST') {
+    if (!can('approver')) return json(403, { detail: 'Requires the approver role' });
+    const input = JSON.parse((await req.text()) || '{}') as { depth?: DraftRow['depth'] } | null;
     const r = rowOf(db, doc.id, n);
-    if (r && (r.status === "queued" || r.status === "running")) return json(409, { detail: `Roadmap items for v${n} are already being derived` });
+    if (r && (r.status === 'queued' || r.status === 'running'))
+      return json(409, { detail: `Roadmap items for v${n} are already being derived` });
     // A person's request supersedes nothing and is never superseded; current items stay until new ones are stored.
     const row: DraftRow = r ?? {
       document_id: doc.id,
       version: n,
-      status: "queued",
-      requested_via: "derive",
+      status: 'queued',
+      requested_via: 'derive',
       requested_by: ctx.userId,
       requested_at: ctx.now(),
       run_id: null,
       ready_at: null,
       error: null,
-      depth: "standard",
+      depth: 'standard',
       check: null,
       items: [],
     };
-    Object.assign(row, { status: "queued", requested_via: "derive", requested_by: ctx.userId, requested_at: ctx.now(), run_id: null, error: null, depth: input?.depth ?? "standard" });
+    Object.assign(row, {
+      status: 'queued',
+      requested_via: 'derive',
+      requested_by: ctx.userId,
+      requested_at: ctx.now(),
+      run_id: null,
+      error: null,
+      depth: input?.depth ?? 'standard',
+    });
     if (!r) db.rows.push(row);
-    return reply("/v1/documents/{doc}/versions/{n}/roadmap-items/derive", "post", out(ctx, db, doc, v, "full"), 202);
+    return reply(
+      '/v1/documents/{doc}/versions/{n}/roadmap-items/derive',
+      'post',
+      out(ctx, db, doc, v, 'full'),
+      202,
+    );
   }
   return null;
 }

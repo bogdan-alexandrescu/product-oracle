@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Remind on a one-pager (owner, 2026-10-26), driven through the UI on the mock's invented
@@ -19,19 +19,24 @@ import { expect, test, type Page } from "./test";
  * no_claim = the API's 403 (api/tests/test_simple_one_pager_api.py).
  */
 
-const URL = "/simple/prds/guided-setup";
-const bar = (page: Page) => page.getByRole("status", { name: "Working draft" });
+const URL = '/simple/prds/guided-setup';
+const bar = (page: Page) => page.getByRole('status', { name: 'Working draft' });
 
 async function submitted(page: Page) {
   await login(page);
   await page.goto(URL);
-  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-  await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(bar(page)).toContainText("1 change");
-  await bar(page).getByRole("button", { name: "Send for approval…" }).click();
-  await page.getByTestId("send-for-approval").getByRole("button", { name: "Send for approval" }).click();
-  await expect(bar(page).getByTestId("draft-waits-on")).toContainText("Sent for approval · waiting on");
+  await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+  await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(bar(page)).toContainText('1 change');
+  await bar(page).getByRole('button', { name: 'Send for approval…' }).click();
+  await page
+    .getByTestId('send-for-approval')
+    .getByRole('button', { name: 'Send for approval' })
+    .click();
+  await expect(bar(page).getByTestId('draft-waits-on')).toContainText(
+    'Sent for approval · waiting on',
+  );
 }
 
 /** Switches people: the account menu lives in the desktop rail, so sign out there and come
@@ -45,41 +50,44 @@ async function switchTo(page: Page, email?: string) {
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
-      test("an owner reminds the waiting reviewer once a day", async ({ page }) => {
+      test('an owner reminds the waiting reviewer once a day', async ({ page }) => {
         await submitted(page);
-        await bar(page).getByRole("button", { name: "Remind" }).click();
-        await expect(bar(page).getByTestId("reminded-at")).toHaveText("Reminded just now");
-        await expect(bar(page).getByRole("button", { name: "Remind" })).toHaveCount(0);
-        await page.clock.fastForward("02:00:00");
+        await bar(page).getByRole('button', { name: 'Remind' }).click();
+        await expect(bar(page).getByTestId('reminded-at')).toHaveText('Reminded just now');
+        await expect(bar(page).getByRole('button', { name: 'Remind' })).toHaveCount(0);
+        await page.clock.fastForward('02:00:00');
         await page.reload();
-        await expect(bar(page).getByTestId("reminded-at")).toHaveText("Reminded 2h ago");
-        await expect(bar(page).getByRole("button", { name: "Remind" })).toHaveCount(0);
+        await expect(bar(page).getByTestId('reminded-at')).toHaveText('Reminded 2h ago');
+        await expect(bar(page).getByRole('button', { name: 'Remind' })).toHaveCount(0);
 
-        await switchTo(page, "approver@example.com");
-        await page.goto("/inbox");
+        await switchTo(page, 'approver@example.com');
+        await page.goto('/inbox');
         const nudge = page.getByText(/is waiting for your review of Guided setup/).first();
         await expect(nudge).toBeVisible();
         await page.goto(URL);
-        await expect(bar(page)).toContainText("Sent for approval · waiting on");
-        await expect(bar(page).getByRole("button", { name: "Remind" })).toHaveCount(0);
+        await expect(bar(page)).toContainText('Sent for approval · waiting on');
+        await expect(bar(page).getByRole('button', { name: 'Remind' })).toHaveCount(0);
 
         await switchTo(page);
-        await page.clock.fastForward("23:00:00");
+        await page.clock.fastForward('23:00:00');
         await page.goto(URL);
-        await expect(bar(page).getByRole("button", { name: "Remind" })).toBeVisible();
+        await expect(bar(page).getByRole('button', { name: 'Remind' })).toBeVisible();
       });
 
-      test("a commenter reads the bar without Remind", async ({ page }) => {
+      test('a commenter reads the bar without Remind', async ({ page }) => {
         await submitted(page);
-        await switchTo(page, "commenter@example.com");
+        await switchTo(page, 'commenter@example.com');
         await page.goto(URL);
-        await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Remind" })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "Send for approval…" })).toHaveCount(0);
+        await expect(page.getByRole('heading', { level: 1, name: 'Guided setup' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Remind' })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Send for approval…' })).toHaveCount(0);
       });
     });
   }

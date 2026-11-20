@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 /** Initials in a circle. `oracle` is the Oracle's own accent-soft avatar; `me` the signed-in user's. */
 /**
@@ -6,30 +6,30 @@ import type { ReactNode } from "react";
  * email's local part ("pat.lee@" -> "PL", "admin@" -> "AD"), never from the domain.
  */
 export function initialsOf(name: string): string {
-  const local = name.includes("@") ? name.slice(0, name.indexOf("@")) : name;
+  const local = name.includes('@') ? name.slice(0, name.indexOf('@')) : name;
   const parts = local.split(/[\s._-]+/).filter(Boolean);
-  const letters = parts.length >= 2 ? parts[0]![0]! + parts[1]![0]! : (parts[0] ?? "").slice(0, 2);
-  return letters.toUpperCase() || "?";
+  const letters = parts.length >= 2 ? parts[0]![0]! + parts[1]![0]! : (parts[0] ?? '').slice(0, 2);
+  return letters.toUpperCase() || '?';
 }
 
 export function Avatar({
   name,
   initials,
   size = 28,
-  tone = "default",
+  tone = 'default',
 }: {
   name: string;
   initials?: string;
   size?: 28 | 32 | 38;
-  tone?: "default" | "oracle" | "me";
+  tone?: 'default' | 'oracle' | 'me';
 }) {
   const ini = initials ?? initialsOf(name);
   const cls =
-    tone === "oracle"
-      ? "bg-accent-soft text-accent-ink"
-      : tone === "me"
-        ? "bg-accent text-on-accent"
-        : "border border-line bg-surface2 text-text";
+    tone === 'oracle'
+      ? 'bg-accent-soft text-accent-ink'
+      : tone === 'me'
+        ? 'bg-accent text-on-accent'
+        : 'border border-line bg-surface2 text-text';
   return (
     <span
       role="img"
@@ -43,7 +43,11 @@ export function Avatar({
   );
 }
 
-const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+const usdFmt = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+});
 
 /**
  * Cost (P3d: secondary). One small mono figure; `prominent` only on cost approvals
@@ -66,14 +70,14 @@ export function CostFigure({
   hero?: boolean;
 }) {
   if (usd == null) return <span className="text-[13px] text-text2">—</span>;
-  const text = `${usdFmt.format(usd)}${of != null ? ` / ${usdFmt.format(of)}` : ""}${est ? " est." : ""}`;
+  const text = `${usdFmt.format(usd)}${of != null ? ` / ${usdFmt.format(of)}` : ''}${est ? ' est.' : ''}`;
   if (prominent) {
     const over = of != null && usd > of;
     return (
       <span
         data-cost="prominent"
         className={`tnum inline-flex h-7 items-center rounded-lg px-2 text-[15px] font-medium whitespace-nowrap ${
-          over ? "bg-crit-bg text-crit" : "bg-warn-bg text-warn"
+          over ? 'bg-crit-bg text-crit' : 'bg-warn-bg text-warn'
         }`}
       >
         {text}
@@ -83,7 +87,7 @@ export function CostFigure({
   return (
     <span
       data-cost="small"
-      className={`tnum text-[13px] leading-none font-medium whitespace-nowrap ${hero ? "text-hero-text2" : "text-text2"}`}
+      className={`tnum text-[13px] leading-none font-medium whitespace-nowrap ${hero ? 'text-hero-text2' : 'text-text2'}`}
     >
       {text}
     </span>
@@ -96,19 +100,24 @@ export function Numeral({
   of,
   unit,
   tone,
-  size = "md",
+  size = 'md',
 }: {
   value: ReactNode;
   of?: ReactNode;
   unit?: ReactNode;
-  tone?: "crit" | "warn";
-  size?: "sm" | "md" | "lg";
+  tone?: 'crit' | 'warn';
+  size?: 'sm' | 'md' | 'lg';
 }) {
-  const sz = size === "lg" ? "text-[44px] leading-[46px]" : size === "sm" ? "text-[28px] leading-8" : "text-[34px] leading-9";
+  const sz =
+    size === 'lg'
+      ? 'text-[44px] leading-[46px]'
+      : size === 'sm'
+        ? 'text-[28px] leading-8'
+        : 'text-[34px] leading-9';
   return (
     <span
       className={`tnum font-display font-bold tracking-[-0.03em] ${sz} ${
-        tone === "crit" ? "text-crit" : tone === "warn" ? "text-warn" : ""
+        tone === 'crit' ? 'text-crit' : tone === 'warn' ? 'text-warn' : ''
       }`}
     >
       {value}
@@ -127,18 +136,26 @@ export type Kpi = {
   value: ReactNode;
   of?: ReactNode;
   unit?: ReactNode;
-  tone?: "crit" | "warn";
+  tone?: 'crit' | 'warn';
   /** Rendered after the label: an InfoTip, a ring. */
   extra?: ReactNode;
   testId?: string;
 };
 
 /** A strip of big numerals with one-to-three word labels (Baseline's count strip). */
-export function KpiStrip({ items, label, hero = false }: { items: Kpi[]; label?: string; hero?: boolean }) {
+export function KpiStrip({
+  items,
+  label,
+  hero = false,
+}: {
+  items: Kpi[];
+  label?: string;
+  hero?: boolean;
+}) {
   return (
     <dl
       aria-label={label}
-      className={`grid overflow-hidden ${hero ? "" : "rounded-panel border border-line bg-surface shadow-panel"}`}
+      className={`grid overflow-hidden ${hero ? '' : 'rounded-panel border border-line bg-surface shadow-panel'}`}
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
     >
       {items.map((k) => (
@@ -166,11 +183,14 @@ export function KpiStrip({ items, label, hero = false }: { items: Kpi[]; label?:
  * negative and may carry its currency and k/M/B ("$900k"). Zero reads "At target".
  */
 export function ToGo({ amount, unit }: { amount: number | string; unit?: string | null }) {
-  const u = unit === "%" ? " pts" : unit && unit !== "" ? ` ${unit}` : "";
-  if (amount === 0 || amount === "0") return <span className="font-semibold whitespace-nowrap text-pass">At target</span>;
+  const u = unit === '%' ? ' pts' : unit && unit !== '' ? ` ${unit}` : '';
+  if (amount === 0 || amount === '0')
+    return <span className="font-semibold whitespace-nowrap text-pass">At target</span>;
   return (
     <span className="font-semibold whitespace-nowrap">
-      <b className="tnum font-bold">{typeof amount === "number" ? Math.round(amount * 10) / 10 : amount}</b>
+      <b className="tnum font-bold">
+        {typeof amount === 'number' ? Math.round(amount * 10) / 10 : amount}
+      </b>
       {u} to go
     </span>
   );

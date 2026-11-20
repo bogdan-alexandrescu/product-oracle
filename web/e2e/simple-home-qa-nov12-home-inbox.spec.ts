@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Visual QA, Nov 12, 2026 (docs/qa/2026-11-12/simple-home.md), Simple's Home, Decisions'
@@ -21,78 +21,83 @@ async function open(page: Page, path: string) {
  * In-app tour) has none to show.
  */
 async function codedRows(page: Page, { broken }: { broken: boolean }) {
-  const rows = page.getByTestId("simple-page").getByTestId("waiting-item");
-  const health = rows.and(page.locator('[data-kind="date"]')).filter({ hasText: "Health log" });
-  await expect(health.locator(".simple-code")).toHaveText("F-03");
+  const rows = page.getByTestId('simple-page').getByTestId('waiting-item');
+  const health = rows.and(page.locator('[data-kind="date"]')).filter({ hasText: 'Health log' });
+  await expect(health.locator('.simple-code')).toHaveText('F-03');
   // The shared code-and-name (Named): its chip is the one every page draws, never a hand-built <code>.
-  await expect(health.locator("span.simple-code")).toHaveText("F-03");
-  await expect(health.locator("code")).toHaveCount(0);
+  await expect(health.locator('span.simple-code')).toHaveText('F-03');
+  await expect(health.locator('code')).toHaveCount(0);
   // Home lists broken links in their own card (named with their codes there), not among these rows.
   if (!broken) return;
   // Its two broken links wait as one row (simple-home-qa-nov12 #3), which names both.
-  const digest = rows.and(page.locator('[data-kind="broken_link"]')).filter({ hasText: "Weekly alert digest" });
+  const digest = rows
+    .and(page.locator('[data-kind="broken_link"]'))
+    .filter({ hasText: 'Weekly alert digest' });
   await expect(digest).toHaveCount(1);
-  await expect(digest).toHaveAttribute("data-breaks", "2");
-  await expect(digest.locator(".simple-code")).toHaveText("F-79");
+  await expect(digest).toHaveAttribute('data-breaks', '2');
+  await expect(digest.locator('.simple-code')).toHaveText('F-79');
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   /** #4: fails when "Broken link · Weekly alert digest" or "Dates to confirm · …" shows no code. */
   test("#4 Decisions' Waiting for you names each feature with its code", async ({ page }) => {
-    await open(page, "/simple/decisions");
-    await expect(page.getByRole("region", { name: "Waiting for you", exact: true })).toBeVisible();
+    await open(page, '/simple/decisions');
+    await expect(page.getByRole('region', { name: 'Waiting for you', exact: true })).toBeVisible();
     await codedRows(page, { broken: true });
   });
 
   /** #4: fails when Home's Also waiting for you names a feature without its code. */
   test("#4 Home's Also waiting for you names each feature with its code", async ({ page }) => {
-    await open(page, "/simple");
+    await open(page, '/simple');
     await codedRows(page, { broken: false });
   });
 
   /** #4: fails when an Inbox Dates row's feature shows no code. */
   test("#4 the Inbox's Dates rows name each feature with its code", async ({ page }) => {
-    await open(page, "/simple/inbox");
-    const names = page.locator('[data-testid="date-suggestion-context"]').locator("xpath=..").getByTestId("feature-name");
+    await open(page, '/simple/inbox');
+    const names = page
+      .locator('[data-testid="date-suggestion-context"]')
+      .locator('xpath=..')
+      .getByTestId('feature-name');
     await expect(names.first()).toBeVisible();
     const n = await names.count();
     for (let k = 0; k < Math.min(n, 5); k++) {
-      await expect(names.nth(k).locator("span.simple-code")).toHaveText(CODE);
-      await expect(names.nth(k).locator("code")).toHaveCount(0);
+      await expect(names.nth(k).locator('span.simple-code')).toHaveText(CODE);
+      await expect(names.nth(k).locator('code')).toHaveCount(0);
     }
   });
 
   /** #4: fails when Walk me through it's broken link step names the feature without its code. */
   test("#4 Walk me through it names a broken link's feature with its code", async ({ page }) => {
-    await open(page, "/simple");
-    const walk = page.getByRole("button", { name: "Walk me through it" });
-    await walk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await open(page, '/simple');
+    const walk = page.getByRole('button', { name: 'Walk me through it' });
+    await walk.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await walk.click();
     const step = page.locator('[data-testid="walk-step"][data-kind="broken_link"]');
     await expect(step).toBeVisible();
-    await expect(step.getByTestId("walk-step-title").locator(".simple-code")).toHaveText(CODE);
+    await expect(step.getByTestId('walk-step-title').locator('.simple-code')).toHaveText(CODE);
   });
 
   /** #18: fails when Simple's Inbox shows "N waiting" beside its title as well as Needs you's count. */
   test("#18 Simple's Inbox says its count once", async ({ page }) => {
-    await open(page, "/simple/inbox");
-    await expect(page.getByTestId("inbox-needs")).toBeVisible();
+    await open(page, '/simple/inbox');
+    await expect(page.getByTestId('inbox-needs')).toBeVisible();
     await expect(page.getByText(/^\d+ waiting$/)).toHaveCount(0);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   /** #6: fails when every Dates row prints its long why on a phone. */
   test("#6 on a phone a Dates row's why is behind its (i)", async ({ page }) => {
-    await open(page, "/simple/inbox");
-    await expect(page.getByTestId("date-suggestion-context").first()).toBeVisible();
-    await expect(page.getByTestId("date-suggestion-basis").first()).toBeHidden();
+    await open(page, '/simple/inbox');
+    await expect(page.getByTestId('date-suggestion-context').first()).toBeVisible();
+    await expect(page.getByTestId('date-suggestion-basis').first()).toBeHidden();
     await expect(page.getByText(/^It starts with/).filter({ visible: true })).toHaveCount(0);
-    const tip = page.getByTestId("date-suggestion-basis-tip").first();
+    const tip = page.getByTestId('date-suggestion-basis-tip').first();
     await expect(tip).toBeVisible();
   });
 });

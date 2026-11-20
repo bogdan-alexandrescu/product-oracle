@@ -1,8 +1,18 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type HTMLAttributes,
+  type ReactNode,
+  type Ref,
+} from 'react';
 
-import { Icon } from "./Icon";
+import { Icon } from './Icon';
 
 /**
  * A one-line strip that scrolls sideways (sections, tabs). When items overflow, a pair of
@@ -52,7 +62,7 @@ function reveal(s: HTMLElement) {
   s.scrollLeft = showing(s, items, span);
 }
 
-type StripProps = Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
+type StripProps = Omit<HTMLAttributes<HTMLDivElement>, 'className'> & {
   children: ReactNode;
   /** The wrapper (strip plus buttons). */
   className?: string;
@@ -69,11 +79,16 @@ type StripProps = Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
  */
 export function ScrollStrip({ wrap = false, ...props }: StripProps & { wrap?: boolean }) {
   if (!wrap) return <ScrollingStrip {...props} />;
-  const { children, className = "", stripClassName = "", itemsName, ref, ...rest } = props;
+  const { children, className = '', stripClassName = '', itemsName, ref, ...rest } = props;
   void itemsName;
   return (
     <div className={`flex min-w-0 items-stretch ${className}`}>
-      <div ref={ref} {...rest} data-wrap className={`flex min-w-0 flex-1 flex-wrap ${stripClassName}`}>
+      <div
+        ref={ref}
+        {...rest}
+        data-wrap
+        className={`flex min-w-0 flex-1 flex-wrap ${stripClassName}`}
+      >
         {children}
       </div>
     </div>
@@ -82,8 +97,8 @@ export function ScrollStrip({ wrap = false, ...props }: StripProps & { wrap?: bo
 
 function ScrollingStrip({
   children,
-  className = "",
-  stripClassName = "",
+  className = '',
+  stripClassName = '',
   itemsName,
   ref,
   ...rest
@@ -112,8 +127,8 @@ function ScrollingStrip({
       cutL = Math.min(cutL, cap);
       cutR = Math.min(cutR, cap);
     }
-    s.style.setProperty("--cut-l", `${Math.round(cutL)}px`);
-    s.style.setProperty("--cut-r", `${Math.round(cutR)}px`);
+    s.style.setProperty('--cut-l', `${Math.round(cutL)}px`);
+    s.style.setProperty('--cut-r', `${Math.round(cutR)}px`);
     setMore((m) => (m.left === left && m.right === right ? m : { left, right }));
   }, []);
 
@@ -151,18 +166,18 @@ function ScrollingStrip({
     const byReader = () => {
       moved.current = true;
     };
-    s.addEventListener("scroll", measure, { passive: true });
-    s.addEventListener("wheel", byReader, { passive: true });
-    s.addEventListener("touchstart", byReader, { passive: true });
-    s.addEventListener("pointerdown", byReader, { passive: true });
+    s.addEventListener('scroll', measure, { passive: true });
+    s.addEventListener('wheel', byReader, { passive: true });
+    s.addEventListener('touchstart', byReader, { passive: true });
+    s.addEventListener('pointerdown', byReader, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       mo.disconnect();
-      s.removeEventListener("scroll", measure);
-      s.removeEventListener("wheel", byReader);
-      s.removeEventListener("touchstart", byReader);
-      s.removeEventListener("pointerdown", byReader);
+      s.removeEventListener('scroll', measure);
+      s.removeEventListener('wheel', byReader);
+      s.removeEventListener('touchstart', byReader);
+      s.removeEventListener('pointerdown', byReader);
     };
   }, [measure]);
 
@@ -180,7 +195,7 @@ function ScrollingStrip({
 
   const setRef = (node: HTMLDivElement | null) => {
     el.current = node;
-    if (typeof ref === "function") ref(node);
+    if (typeof ref === 'function') ref(node);
     else if (ref) ref.current = node;
   };
   // Pages by whole items: right brings the first item cut at the right edge to the left
@@ -202,7 +217,7 @@ function ScrollingStrip({
       const at = prev && items.find(([a]) => a >= prev[1] - s.clientWidth - 0.5);
       target = prev ? Math.min(at ? at[0] : prev[0], prev[0]) : 0;
     }
-    s.scrollTo({ left: Math.max(0, Math.min(maxScroll(s), target)), behavior: "smooth" });
+    s.scrollTo({ left: Math.max(0, Math.min(maxScroll(s), target)), behavior: 'smooth' });
   };
   const autoId = useId();
   const id = rest.id ?? autoId;
@@ -214,16 +229,18 @@ function ScrollingStrip({
     return (
       <button
         type="button"
-        aria-label={`Scroll ${itemsName ? `${itemsName} ` : ""}${dir === 1 ? "right" : "left"}`}
+        aria-label={`Scroll ${itemsName ? `${itemsName} ` : ''}${dir === 1 ? 'right' : 'left'}`}
         aria-controls={id}
         aria-disabled={live ? undefined : true}
-        data-testid={dir === 1 ? "strip-more-right" : "strip-more-left"}
+        data-testid={dir === 1 ? 'strip-more-right' : 'strip-more-left'}
         onClick={() => live && page(dir)}
         className={`grid h-7 w-7 flex-none place-items-center self-center rounded-lg ${
-          live ? "text-text2 hover:bg-surface2 hover:text-text" : "cursor-default text-text2 opacity-40"
+          live
+            ? 'text-text2 hover:bg-surface2 hover:text-text'
+            : 'cursor-default text-text2 opacity-40'
         }`}
       >
-        <Icon name={dir === 1 ? "chevron-right" : "chevron-left"} size={16} />
+        <Icon name={dir === 1 ? 'chevron-right' : 'chevron-left'} size={16} />
       </button>
     );
   };
@@ -231,7 +248,7 @@ function ScrollingStrip({
   // cld-2: the spacer's own gap is taken back (a negative start margin as wide as the strip's
   // gap-N, a quarter rem each), so it adds its 1 px only.
   const gap = /(?:^|\s)gap(?:-x)?-(\d+(?:\.\d+)?)(?=\s|$)/.exec(stripClassName)?.[1];
-  const spacer = { "--strip-gap": gap ? `${Number(gap) * 0.25}rem` : "0px" } as CSSProperties;
+  const spacer = { '--strip-gap': gap ? `${Number(gap) * 0.25}rem` : '0px' } as CSSProperties;
 
   return (
     <div className={`flex min-w-0 items-stretch ${className}`}>

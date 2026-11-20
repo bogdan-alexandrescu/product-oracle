@@ -1,8 +1,8 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from 'react';
 
-import { PageTabsProvider } from "@/components/ds";
+import { PageTabsProvider } from '@/components/ds';
 
-import { PlanNav } from "../plan/_nav";
+import { PlanNav } from '../plan/_nav';
 
 /**
  * fix4 qa-plan-16: Launches and Changelog are opened from the Plan's tab strip, so they keep

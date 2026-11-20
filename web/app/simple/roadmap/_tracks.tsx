@@ -1,61 +1,78 @@
-"use client";
+'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Button, Sheet, toast } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useQuery } from "@/lib/use-query";
+import { Button, Sheet, toast } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useQuery } from '@/lib/use-query';
 
-import { ChangeFailed, propose, undo, type Item } from "./_lib";
+import { ChangeFailed, propose, undo, type Item } from './_lib';
 
-type Track = Schemas["SimpleTrackRow"];
-type Status = Track["status"];
+type Track = Schemas['SimpleTrackRow'];
+type Status = Track['status'];
 
-const STATE: Record<Status, string> = { active: "Active", paused: "Paused", closed: "Closed" };
-const FIELD = "h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-[15px] outline-none focus:border-accent";
+const STATE: Record<Status, string> = { active: 'Active', paused: 'Paused', closed: 'Closed' };
+const FIELD =
+  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-[15px] outline-none focus:border-accent';
 /** A field's name over it (the new-track form). */
-const LABELLED = "flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2";
-const PRIMARY = "inline-flex h-8 items-center gap-1 rounded-lg bg-accent px-3 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50";
-const ROW = "grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 py-1";
+const LABELLED = 'flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2';
+const PRIMARY =
+  'inline-flex h-8 items-center gap-1 rounded-lg bg-accent px-3 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50';
+const ROW = 'grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 py-1';
 
 /** What a proposal asks, as its toast names it ("Rename proposed · waits for …"). */
 function asking(after: Record<string, string | string[] | null>): string {
-  if ("to" in after) return "Move";
-  if ("title" in after) return "Rename";
-  if ("owner_id" in after) return "Owner change";
-  if ("goal_id" in after) return "Goal change";
-  if ("prd_id" in after || "prd_ids" in after || "add_prd_id" in after || "remove_prd_id" in after) return "PRD change";
-  return after.status === "paused" ? "Pause" : after.status === "closed" ? "Close" : "Resume";
+  if ('to' in after) return 'Move';
+  if ('title' in after) return 'Rename';
+  if ('owner_id' in after) return 'Owner change';
+  if ('goal_id' in after) return 'Goal change';
+  if ('prd_id' in after || 'prd_ids' in after || 'add_prd_id' in after || 'remove_prd_id' in after)
+    return 'PRD change';
+  return after.status === 'paused' ? 'Pause' : after.status === 'closed' ? 'Close' : 'Resume';
 }
 
 /** The proposer takes a proposal back (the Tracks sheet's toasts, the Removed list's too). */
 export async function withdraw(id: string): Promise<void> {
-  const { error } = await api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: id } } });
+  const { error } = await api.POST('/v1/simple/changes/{change_id}/withdraw', {
+    params: { path: { change_id: id } },
+  });
   const detail = (error as { detail?: unknown } | undefined)?.detail;
-  if (error) throw new ChangeFailed(typeof detail === "string" ? detail : "Oracle could not withdraw it", 409);
+  if (error)
+    throw new ChangeFailed(
+      typeof detail === 'string' ? detail : 'Oracle could not withdraw it',
+      409,
+    );
 }
 
 /** The nearest box that scrolls the element (the sheet's body). */
 function scroller(el: HTMLElement): HTMLElement | null {
-  for (let p = el.parentElement; p; p = p.parentElement) if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  for (let p = el.parentElement; p; p = p.parentElement)
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
   return null;
 }
 
-const features = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
+const features = (n: number) => `${n} ${n === 1 ? 'feature' : 'features'}`;
 /** The Move to Trash confirm: its live features, then the cut or merged ones it moves too, then
  * those the reader's draft moved off that are still on it in the published Roadmap. */
 const movesLine = (live: number, moves: number, off: number) => {
   const closed = moves - live - off;
   const elsewhere = `${features(off)} still on it in the published Roadmap`;
-  if (!live && !closed) return `${elsewhere} ${off === 1 ? "moves" : "move"} to No track.`;
-  const what = !closed ? features(live) : live ? `${features(live)} and ${closed} cut or merged` : `${closed} cut or merged ${closed === 1 ? "feature" : "features"}`;
-  return off ? `Its ${what}, and ${elsewhere}, move to No track.` : `Its ${what} ${moves === 1 ? "moves" : "move"} to No track.`;
+  if (!live && !closed) return `${elsewhere} ${off === 1 ? 'moves' : 'move'} to No track.`;
+  const what = !closed
+    ? features(live)
+    : live
+      ? `${features(live)} and ${closed} cut or merged`
+      : `${closed} cut or merged ${closed === 1 ? 'feature' : 'features'}`;
+  return off
+    ? `Its ${what}, and ${elsewhere}, move to No track.`
+    : `Its ${what} ${moves === 1 ? 'moves' : 'move'} to No track.`;
 };
 
 /** A short stamp of the roadmap's items: the sheet reads its tracks again when the roadmap reloads. */
 function stampOf(items: Item[]): string {
   let h = 0;
-  for (const i of items) for (const c of `${i.id}:${i.track?.id ?? ""}:${i.status};`) h = (h * 31 + c.charCodeAt(0)) | 0;
+  for (const i of items)
+    for (const c of `${i.id}:${i.track?.id ?? ''}:${i.status};`) h = (h * 31 + c.charCodeAt(0)) | 0;
   return `${items.length}.${h}`;
 }
 
@@ -65,12 +82,22 @@ function stampOf(items: Item[]): string {
  * Owner, State, Move up and Move down (track-order: the company's track order) and Move to Trash;
  * "+ Add track" in its head. One who does not decide proposes.
  */
-export function TracksButton({ items, canChange, onChanged }: { items: Item[]; canChange: boolean; onChanged: () => Promise<unknown> }) {
+export function TracksButton({
+  items,
+  canChange,
+  onChanged,
+}: {
+  items: Item[];
+  canChange: boolean;
+  onChanged: () => Promise<unknown>;
+}) {
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(0);
   // A track's count is the API's, over the whole roadmap: never the filtered items on screen.
   const stamp = useMemo(() => stampOf(items), [items]);
-  const q = useQuery(`simple-tracks:${n}:${stamp}`, () => unwrap(api.GET("/v1/simple/tracks")), { keepPrevious: true });
+  const q = useQuery(`simple-tracks:${n}:${stamp}`, () => unwrap(api.GET('/v1/simple/tracks')), {
+    keepPrevious: true,
+  });
   const [opened, setOpened] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -79,7 +106,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   // track moves: the sheet scrolls by the shift, and a blank above the list takes what it
   // cannot scroll, till the pointer or focus leaves the buttons.
   const list = useRef<HTMLUListElement>(null);
-  const held = useRef<{ id: string; to: "up" | "down"; top: number } | null>(null);
+  const held = useRef<{ id: string; to: 'up' | 'down'; top: number } | null>(null);
   const [lift, setLift] = useState(0);
   const settle = () => {
     held.current = null;
@@ -89,7 +116,8 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   const tracks = data?.tracks ?? [];
   useLayoutEffect(() => {
     const h = held.current;
-    const btn = h && list.current?.querySelector<HTMLButtonElement>(`[data-move="${h.id}:${h.to}"]`);
+    const btn =
+      h && list.current?.querySelector<HTMLButtonElement>(`[data-move="${h.id}:${h.to}"]`);
     if (!h || !btn) return;
     let shift = btn.getBoundingClientRect().top - h.top;
     const box = Math.abs(shift) >= 1 ? scroller(btn) : null;
@@ -105,92 +133,229 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
     setN((x) => x + 1);
     await onChanged();
   };
-  const failed = (fallback: string) => (e: unknown) => toast({ message: e instanceof ChangeFailed ? e.message : fallback });
+  const failed = (fallback: string) => (e: unknown) =>
+    toast({ message: e instanceof ChangeFailed ? e.message : fallback });
   const takeBack = async (id: string, title: string) => {
     const res = await undo(id);
     await refresh();
     // Undo of an add never deletes a track that holds something since: it goes to Trash.
-    if ((res.change.after as { in_trash?: boolean } | null)?.in_trash) toast({ message: `Moved ${title} to Trash, as it holds work now` });
+    if ((res.change.after as { in_trash?: boolean } | null)?.in_trash)
+      toast({ message: `Moved ${title} to Trash, as it holds work now` });
   };
-  const send = async (body: Schemas["SimpleChangeIn"], done: string, decider: string | null, asked = "Change", title = "") => {
+  const send = async (
+    body: Schemas['SimpleChangeIn'],
+    done: string,
+    decider: string | null,
+    asked = 'Change',
+    title = '',
+  ) => {
     try {
       const res = await propose(body);
       await refresh();
-      if (res.change.status === "applied")
-        toast({ message: done, action: res.change.can_undo ? { label: "Undo", onClick: () => void takeBack(res.change.id, title).catch(failed("Oracle could not undo it")) } : undefined });
+      if (res.change.status === 'applied')
+        toast({
+          message: done,
+          action: res.change.can_undo
+            ? {
+                label: 'Undo',
+                onClick: () =>
+                  void takeBack(res.change.id, title).catch(failed('Oracle could not undo it')),
+              }
+            : undefined,
+        });
       else
         toast({
-          message: `${asked} proposed · waits for ${decider ?? "an owner"}`,
-          action: { label: "Withdraw", onClick: () => void withdraw(res.change.id).then(() => (toast({ message: "Withdrawn" }), refresh()), failed("Oracle could not withdraw it")) },
+          message: `${asked} proposed · waits for ${decider ?? 'an owner'}`,
+          action: {
+            label: 'Withdraw',
+            onClick: () =>
+              void withdraw(res.change.id).then(
+                () => (toast({ message: 'Withdrawn' }), refresh()),
+                failed('Oracle could not withdraw it'),
+              ),
+          },
         });
       return true;
     } catch (e) {
-      toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not change the track" });
+      toast({
+        message: e instanceof ChangeFailed ? e.message : 'Oracle could not change the track',
+      });
       return false;
     }
   };
   const edit = (t: Track, after: Record<string, string | string[] | null>, done: string) =>
-    send({ op: "edit_track", target: { track_id: t.id }, before: {}, after } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, asking(after), t.title);
+    send(
+      {
+        op: 'edit_track',
+        target: { track_id: t.id },
+        before: {},
+        after,
+      } as Schemas['SimpleChangeIn'],
+      done,
+      t.decider_name ?? null,
+      asking(after),
+      t.title,
+    );
   // track-order: one step up or down the company's track order per press, as the One-pagers rows' PRD order.
-  const move = (t: Track, to: "up" | "down", el: HTMLElement) => {
+  const move = (t: Track, to: 'up' | 'down', el: HTMLElement) => {
     if (moving) return;
     held.current = { id: t.id, to, top: el.getBoundingClientRect().top };
     setMoving(true);
-    void send({ op: "move_track", target: { track_id: t.id }, before: {}, after: { to } } as Schemas["SimpleChangeIn"], `Moved ${t.title} ${to}.`, t.decider_name ?? null, "Move", t.title).finally(() => setMoving(false));
+    void send(
+      {
+        op: 'move_track',
+        target: { track_id: t.id },
+        before: {},
+        after: { to },
+      } as Schemas['SimpleChangeIn'],
+      `Moved ${t.title} ${to}.`,
+      t.decider_name ?? null,
+      'Move',
+      t.title,
+    ).finally(() => setMoving(false));
   };
   const toTrash = (t: Track) => {
     // Every feature on it moves, cut ones too: the API's count of what moves.
     const n = t.moves_count ?? 0;
-    const done = n ? `Moved ${t.title} to Trash · ${features(n)} now ${n === 1 ? "has" : "have"} no track` : `Moved ${t.title} to Trash`;
-    void send({ op: "delete_track", target: { track_id: t.id }, before: {}, after: {} } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, "Move to Trash", t.title).then((ok) => ok && (setOpened(null), setTrashing(null)));
+    const done = n
+      ? `Moved ${t.title} to Trash · ${features(n)} now ${n === 1 ? 'has' : 'have'} no track`
+      : `Moved ${t.title} to Trash`;
+    void send(
+      {
+        op: 'delete_track',
+        target: { track_id: t.id },
+        before: {},
+        after: {},
+      } as Schemas['SimpleChangeIn'],
+      done,
+      t.decider_name ?? null,
+      'Move to Trash',
+      t.title,
+    ).then((ok) => ok && (setOpened(null), setTrashing(null)));
   };
   return (
     <>
-      <Button className="!h-8" data-testid="tracks-open" aria-haspopup="dialog" onClick={() => (settle(), setOpen(true))}>
+      <Button
+        className="!h-8"
+        data-testid="tracks-open"
+        aria-haspopup="dialog"
+        onClick={() => (settle(), setOpen(true))}
+      >
         {/* at-followups: no count until the tracks are read (never "Tracks · 0" while they load). */}
-        {data ? `Tracks · ${tracks.length}` : "Tracks"}
+        {data ? `Tracks · ${tracks.length}` : 'Tracks'}
       </Button>
-      <Sheet open={open} title="Tracks" onClose={() => setOpen(false)} side testId="tracks-sheet" tools={canChange ? undefined : <span className="text-sm text-text2">View only</span>}>
+      <Sheet
+        open={open}
+        title="Tracks"
+        onClose={() => setOpen(false)}
+        side
+        testId="tracks-sheet"
+        tools={canChange ? undefined : <span className="text-sm text-text2">View only</span>}
+      >
         <div className="px-4 pb-4">
           {canChange && !adding && (
             <div className="mb-1 flex">
-              <button type="button" className={PRIMARY} onClick={() => setAdding(true)} data-testid="track-add">
-                {data?.can_add ? "+ Add track" : "+ Propose a track"}
+              <button
+                type="button"
+                className={PRIMARY}
+                onClick={() => setAdding(true)}
+                data-testid="track-add"
+              >
+                {data?.can_add ? '+ Add track' : '+ Propose a track'}
               </button>
             </div>
           )}
-          {adding && data && <AddTrack data={data} onCancel={() => setAdding(false)} onAdd={async (after) => (await send({ op: "add_track", target: {}, before: {}, after } as Schemas["SimpleChangeIn"], `Added ${after.title}`, data.add_decider_name ?? null, "New track", after.title)) && setAdding(false)} />}
+          {adding && data && (
+            <AddTrack
+              data={data}
+              onCancel={() => setAdding(false)}
+              onAdd={async (after) =>
+                (await send(
+                  { op: 'add_track', target: {}, before: {}, after } as Schemas['SimpleChangeIn'],
+                  `Added ${after.title}`,
+                  data.add_decider_name ?? null,
+                  'New track',
+                  after.title,
+                )) && setAdding(false)
+              }
+            />
+          )}
           <ul ref={list} className="flex flex-col" style={lift ? { paddingTop: lift } : undefined}>
             {tracks.map((t, n) => {
               const expanded = opened === t.id;
               const count = t.feature_count ?? 0;
               const moves = t.moves_count ?? 0;
               return (
-                <li key={t.id} data-testid="track-row" className={`border-b border-line py-2 ${expanded ? "-mx-2 rounded-lg bg-surface2 px-2" : ""}`}>
+                <li
+                  key={t.id}
+                  data-testid="track-row"
+                  className={`border-b border-line py-2 ${expanded ? '-mx-2 rounded-lg bg-surface2 px-2' : ''}`}
+                >
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className={`font-medium break-words ${t.status === "closed" ? "text-text2" : ""}`}>{t.title}</p>
+                      <p
+                        className={`font-medium break-words ${t.status === 'closed' ? 'text-text2' : ''}`}
+                      >
+                        {t.title}
+                      </p>
                       <p className="text-sm text-text2">
-                        {t.owner_name ?? "No owner"} · {features(count)}
-                        {t.status !== "active" ? ` · ${STATE[t.status]}` : ""}
+                        {t.owner_name ?? 'No owner'} · {features(count)}
+                        {t.status !== 'active' ? ` · ${STATE[t.status]}` : ''}
                       </p>
                     </div>
-                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : canChange ? "Change" : "Open"} ${t.title}`} onClick={() => (settle(), setOpened(expanded ? null : t.id), setTrashing(null))} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
-                      {expanded ? "Hide" : canChange ? "Change" : "Open"}
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-label={`${expanded ? 'Hide' : canChange ? 'Change' : 'Open'} ${t.title}`}
+                      onClick={() => (
+                        settle(),
+                        setOpened(expanded ? null : t.id),
+                        setTrashing(null)
+                      )}
+                      className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface"
+                    >
+                      {expanded ? 'Hide' : canChange ? 'Change' : 'Open'}
                     </button>
                   </div>
                   {expanded && (
                     <div className="mt-1">
-                      <TrackFields t={t} may={canChange} people={data?.people ?? []} prds={data?.prds ?? []} goals={data?.goals ?? []} onEdit={(after, done) => edit(t, after, done)} />
+                      <TrackFields
+                        t={t}
+                        may={canChange}
+                        people={data?.people ?? []}
+                        prds={data?.prds ?? []}
+                        goals={data?.goals ?? []}
+                        onEdit={(after, done) => edit(t, after, done)}
+                      />
                       {canChange && (tracks.length > 1 || (t.can_decide && trashing !== t.id)) && (
                         // Move to Trash at the line's far end, away from the move buttons.
                         <div className="mt-1 flex items-center gap-1.5">
                           {tracks.length > 1 && (
-                            <span className="flex gap-1.5" onPointerLeave={settle} onBlur={(e) => e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node) && settle()}>
-                              <Button className="!h-8" data-move={`${t.id}:up`} aria-disabled={moving || undefined} disabled={n === 0} onClick={(e) => move(t, "up", e.currentTarget)}>
+                            <span
+                              className="flex gap-1.5"
+                              onPointerLeave={settle}
+                              onBlur={(e) =>
+                                e.relatedTarget &&
+                                !e.currentTarget.contains(e.relatedTarget as Node) &&
+                                settle()
+                              }
+                            >
+                              <Button
+                                className="!h-8"
+                                data-move={`${t.id}:up`}
+                                aria-disabled={moving || undefined}
+                                disabled={n === 0}
+                                onClick={(e) => move(t, 'up', e.currentTarget)}
+                              >
                                 Move up
                               </Button>
-                              <Button className="!h-8" data-move={`${t.id}:down`} aria-disabled={moving || undefined} disabled={n === tracks.length - 1} onClick={(e) => move(t, "down", e.currentTarget)}>
+                              <Button
+                                className="!h-8"
+                                data-move={`${t.id}:down`}
+                                aria-disabled={moving || undefined}
+                                disabled={n === tracks.length - 1}
+                                onClick={(e) => move(t, 'down', e.currentTarget)}
+                              >
                                 Move down
                               </Button>
                             </span>
@@ -224,7 +389,9 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                       )}
                       {canChange && !t.can_decide && t.decider_name && (
                         <p className="mt-2">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-px text-sm font-medium text-text">Waits for {t.decider_name}</span>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-px text-sm font-medium text-text">
+                            Waits for {t.decider_name}
+                          </span>
                         </p>
                       )}
                     </div>
@@ -239,10 +406,24 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   );
 }
 
-function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: boolean; people: Schemas["SimplePerson"][]; prds: Schemas["SimpleTrackPrdChoice"][]; goals: Schemas["SimpleTrackGoal"][]; onEdit: (after: Record<string, string | string[] | null>, done: string) => Promise<boolean> }) {
+function TrackFields({
+  t,
+  may,
+  people,
+  prds,
+  goals,
+  onEdit,
+}: {
+  t: Track;
+  may: boolean;
+  people: Schemas['SimplePerson'][];
+  prds: Schemas['SimpleTrackPrdChoice'][];
+  goals: Schemas['SimpleTrackGoal'][];
+  onEdit: (after: Record<string, string | string[] | null>, done: string) => Promise<boolean>;
+}) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(t.title);
-  const word = t.can_decide ? "Save" : "Propose";
+  const word = t.can_decide ? 'Save' : 'Propose';
   const held = t.prds ?? [];
   const ids = held.map((p) => p.id);
   const offered = prds.filter((p) => !ids.includes(p.id));
@@ -258,7 +439,14 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
         <dd>
           {renaming ? (
             <div className="grid gap-1.5">
-              <input aria-label="Track name" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void rename()} className={FIELD} />
+              <input
+                aria-label="Track name"
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void rename()}
+                className={FIELD}
+              />
               <div className="flex gap-1.5">
                 <button type="button" className={PRIMARY} onClick={() => void rename()}>
                   {word}
@@ -269,7 +457,12 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
               </div>
             </div>
           ) : may ? (
-            <button type="button" aria-label={`Rename ${t.title}`} onClick={() => setRenaming(true)} className="text-left underline decoration-dotted underline-offset-4">
+            <button
+              type="button"
+              aria-label={`Rename ${t.title}`}
+              onClick={() => setRenaming(true)}
+              className="text-left underline decoration-dotted underline-offset-4"
+            >
               {t.title}
             </button>
           ) : (
@@ -281,7 +474,17 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
         <dt className="text-sm text-text2">Owner</dt>
         <dd>
           {may ? (
-            <select aria-label="Owner" value={t.owner_id ?? ""} onChange={(e) => void onEdit({ owner_id: e.target.value || null }, `${t.title}'s owner is now ${people.find((p) => p.id === e.target.value)?.name ?? "no one"}`)} className={FIELD}>
+            <select
+              aria-label="Owner"
+              value={t.owner_id ?? ''}
+              onChange={(e) =>
+                void onEdit(
+                  { owner_id: e.target.value || null },
+                  `${t.title}'s owner is now ${people.find((p) => p.id === e.target.value)?.name ?? 'no one'}`,
+                )
+              }
+              className={FIELD}
+            >
               <option value="">No owner</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -290,7 +493,7 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
               ))}
             </select>
           ) : (
-            (t.owner_name ?? "No owner")
+            (t.owner_name ?? 'No owner')
           )}
         </dd>
       </div>
@@ -298,13 +501,16 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
         <dt className="text-sm text-text2">State</dt>
         <dd className="flex gap-1">
           {may
-            ? (["active", "paused", "closed"] as const).map((s) => (
+            ? (['active', 'paused', 'closed'] as const).map((s) => (
                 <button
                   key={s}
                   type="button"
                   aria-pressed={t.status === s}
-                  onClick={() => t.status !== s && void onEdit({ status: s }, `${t.title} is ${STATE[s].toLowerCase()}`)}
-                  className={`rounded-lg border px-2.5 py-0.5 text-sm ${t.status === s ? "border-accent bg-accent-soft font-medium text-accent-ink" : "border-line"}`}
+                  onClick={() =>
+                    t.status !== s &&
+                    void onEdit({ status: s }, `${t.title} is ${STATE[s].toLowerCase()}`)
+                  }
+                  className={`rounded-lg border px-2.5 py-0.5 text-sm ${t.status === s ? 'border-accent bg-accent-soft font-medium text-accent-ink' : 'border-line'}`}
                 >
                   {STATE[s]}
                 </button>
@@ -319,16 +525,36 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
           {held.length === 0 && <span className="text-text2">No PRD</span>}
           {held.map((p) => (
             <span key={p.id} className="flex items-center gap-2" data-testid="track-prd">
-              <span className="min-w-0 flex-1 break-words" data-testid="track-prd-title">{p.title}</span>
+              <span className="min-w-0 flex-1 break-words" data-testid="track-prd-title">
+                {p.title}
+              </span>
               {may && (
-                <button type="button" aria-label={`Remove ${p.title} from ${t.title}`} onClick={() => void onEdit({ remove_prd_id: p.id }, `Removed ${p.title} from ${t.title}`)} className="h-7 rounded px-1.5 text-sm text-accent-ink hover:bg-surface">
+                <button
+                  type="button"
+                  aria-label={`Remove ${p.title} from ${t.title}`}
+                  onClick={() =>
+                    void onEdit({ remove_prd_id: p.id }, `Removed ${p.title} from ${t.title}`)
+                  }
+                  className="h-7 rounded px-1.5 text-sm text-accent-ink hover:bg-surface"
+                >
                   Remove
                 </button>
               )}
             </span>
           ))}
           {may && offered.length > 0 && (
-            <select aria-label="Add a PRD" value="" onChange={(e) => e.target.value && void onEdit({ add_prd_id: e.target.value }, `Added ${prds.find((p) => p.id === e.target.value)?.title ?? "a PRD"} to ${t.title}`)} className={FIELD}>
+            <select
+              aria-label="Add a PRD"
+              value=""
+              onChange={(e) =>
+                e.target.value &&
+                void onEdit(
+                  { add_prd_id: e.target.value },
+                  `Added ${prds.find((p) => p.id === e.target.value)?.title ?? 'a PRD'} to ${t.title}`,
+                )
+              }
+              className={FIELD}
+            >
               <option value="">Add a PRD</option>
               {offered.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -343,9 +569,19 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
         <dt className="text-sm text-text2">Goal</dt>
         <dd>
           {may ? (
-            <GoalSelect label="Goal" value={t.goal_id ?? ""} goals={goals} onChange={(v) => void onEdit({ goal_id: v || null }, `${t.title}'s goal is now ${goals.find((g) => g.id === v)?.name ?? "none"}`)} />
+            <GoalSelect
+              label="Goal"
+              value={t.goal_id ?? ''}
+              goals={goals}
+              onChange={(v) =>
+                void onEdit(
+                  { goal_id: v || null },
+                  `${t.title}'s goal is now ${goals.find((g) => g.id === v)?.name ?? 'none'}`,
+                )
+              }
+            />
           ) : (
-            (t.goal_name ?? "No goal")
+            (t.goal_name ?? 'No goal')
           )}
         </dd>
       </div>
@@ -354,9 +590,26 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
 }
 
 /** tracks-goal: "No goal" and the company's goals by their names. */
-function GoalSelect({ label, value, goals, onChange, className = "" }: { label: string; value: string; goals: Schemas["SimpleTrackGoal"][]; onChange: (v: string) => void; className?: string }) {
+function GoalSelect({
+  label,
+  value,
+  goals,
+  onChange,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  goals: Schemas['SimpleTrackGoal'][];
+  onChange: (v: string) => void;
+  className?: string;
+}) {
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={`${FIELD} ${className}`}>
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${FIELD} ${className}`}
+    >
       <option value="">No goal</option>
       {goals.map((g) => (
         <option key={g.id} value={g.id}>
@@ -367,20 +620,45 @@ function GoalSelect({ label, value, goals, onChange, className = "" }: { label: 
   );
 }
 
-function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; onAdd: (after: { title: string; prd_ids: string[]; owner_id: string | null; goal_id: string | null }) => Promise<unknown>; onCancel: () => void }) {
-  const [title, setTitle] = useState("");
+function AddTrack({
+  data,
+  onAdd,
+  onCancel,
+}: {
+  data: Schemas['SimpleTracks'];
+  onAdd: (after: {
+    title: string;
+    prd_ids: string[];
+    owner_id: string | null;
+    goal_id: string | null;
+  }) => Promise<unknown>;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState('');
   // tracks-goal: a track's PRD is optional; one already on a track is offered as "move from" it.
-  const [prd, setPrd] = useState(data.prds.find((p) => !p.track_id)?.id ?? "");
-  const [owner, setOwner] = useState("");
-  const [goal, setGoal] = useState("");
-  const why = title.trim() ? undefined : "Name the track";
+  const [prd, setPrd] = useState(data.prds.find((p) => !p.track_id)?.id ?? '');
+  const [owner, setOwner] = useState('');
+  const [goal, setGoal] = useState('');
+  const why = title.trim() ? undefined : 'Name the track';
   return (
     <div className="mb-2 grid gap-1.5 rounded-lg border border-line p-2" data-testid="track-new">
-      <input aria-label="New track name" autoFocus placeholder="Track name" value={title} onChange={(e) => setTitle(e.target.value)} className={FIELD} />
+      <input
+        aria-label="New track name"
+        autoFocus
+        placeholder="Track name"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className={FIELD}
+      />
       {/* QA Nov 12 #16: each choice has its name in view, as the Change form's rows do (PRDs, Goal, Owner). */}
       <label className={LABELLED}>
         PRD
-        <select aria-label="New track PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={`${FIELD} font-normal text-text`}>
+        <select
+          aria-label="New track PRD"
+          value={prd}
+          onChange={(e) => setPrd(e.target.value)}
+          className={`${FIELD} font-normal text-text`}
+        >
           <option value="">No PRD</option>
           {data.prds.map((p) => (
             <option key={p.id} value={p.id}>
@@ -391,11 +669,22 @@ function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; on
       </label>
       <label className={LABELLED}>
         Goal
-        <GoalSelect label="New track goal" value={goal} goals={data.goals ?? []} onChange={setGoal} className="font-normal text-text" />
+        <GoalSelect
+          label="New track goal"
+          value={goal}
+          goals={data.goals ?? []}
+          onChange={setGoal}
+          className="font-normal text-text"
+        />
       </label>
       <label className={LABELLED}>
         Owner
-        <select aria-label="New track owner" value={owner} onChange={(e) => setOwner(e.target.value)} className={`${FIELD} font-normal text-text`}>
+        <select
+          aria-label="New track owner"
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          className={`${FIELD} font-normal text-text`}
+        >
           <option value="">No owner</option>
           {data.people.map((p) => (
             <option key={p.id} value={p.id}>
@@ -405,8 +694,21 @@ function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; on
         </select>
       </label>
       <div className="flex gap-1.5">
-        <button type="button" className={PRIMARY} disabled={!!why} title={why} onClick={() => void onAdd({ title: title.trim(), prd_ids: prd ? [prd] : [], owner_id: owner || null, goal_id: goal || null })}>
-          {data.can_add ? "Add" : "Propose"}
+        <button
+          type="button"
+          className={PRIMARY}
+          disabled={!!why}
+          title={why}
+          onClick={() =>
+            void onAdd({
+              title: title.trim(),
+              prd_ids: prd ? [prd] : [],
+              owner_id: owner || null,
+              goal_id: goal || null,
+            })
+          }
+        >
+          {data.can_add ? 'Add' : 'Propose'}
         </button>
         <Button className="!h-8" onClick={onCancel}>
           Cancel

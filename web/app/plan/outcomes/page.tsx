@@ -1,67 +1,87 @@
-"use client";
+'use client';
 
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState, useSyncExternalStore } from 'react';
 
-import { DeleteMenu } from "@/components/ArtifactMenu";
-import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, type FilterChip, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
-import { Named, NOT_IN_GT, NotInGt } from "@/components/simple/FeatureName";
-import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
-import { formatDate, goalFigure } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { DeleteMenu } from '@/components/ArtifactMenu';
+import {
+  Button,
+  Chip,
+  type ChipKind,
+  type Column,
+  confirmInPage,
+  DataTable,
+  type FilterChip,
+  FilterChips,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Notice,
+  Page,
+  PageHeader,
+  PageSkeleton,
+  Panel,
+  Sheet,
+  Split,
+} from '@/components/ds';
+import { Named, NOT_IN_GT, NotInGt } from '@/components/simple/FeatureName';
+import { Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { CATEGORY_LABEL } from '@/app/intakes/[id]/_lib';
+import { formatDate, goalFigure } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-type Outcome = Schemas["OutcomeOut"];
-type Learning = Schemas["LearningOut"];
-type Prediction = Schemas["Prediction"];
+type Outcome = Schemas['OutcomeOut'];
+type Learning = Schemas['LearningOut'];
+type Prediction = Schemas['Prediction'];
 type State =
-  | "needs"
-  | "predicted"
-  | "measuring"
-  | "due"
-  | "held"
-  | "partially_held"
-  | "not_held"
-  | "inconclusive";
-type Filter = "due" | "measuring" | "needs" | "assessed" | "all";
+  | 'needs'
+  | 'predicted'
+  | 'measuring'
+  | 'due'
+  | 'held'
+  | 'partially_held'
+  | 'not_held'
+  | 'inconclusive';
+type Filter = 'due' | 'measuring' | 'needs' | 'assessed' | 'all';
 
 const STATE_LABEL: Record<State, string> = {
-  needs: "Needs prediction",
-  predicted: "Predicted",
-  measuring: "Measuring",
-  due: "Check due",
-  held: "Held",
-  partially_held: "Partly held",
-  not_held: "Not held",
-  inconclusive: "Inconclusive",
+  needs: 'Needs prediction',
+  predicted: 'Predicted',
+  measuring: 'Measuring',
+  due: 'Check due',
+  held: 'Held',
+  partially_held: 'Partly held',
+  not_held: 'Not held',
+  inconclusive: 'Inconclusive',
 };
 const STATE_KIND: Record<State, ChipKind> = {
-  needs: "warn",
-  predicted: "na",
-  measuring: "acc",
-  due: "warn",
-  held: "pass",
-  partially_held: "acc",
-  not_held: "crit",
-  inconclusive: "line",
+  needs: 'warn',
+  predicted: 'na',
+  measuring: 'acc',
+  due: 'warn',
+  held: 'pass',
+  partially_held: 'acc',
+  not_held: 'crit',
+  inconclusive: 'line',
 };
-const SIGNAL: Record<Schemas["ShipSignal"]["kind"], string> = {
-  tracker: "issues done",
-  milestone: "milestones done",
-  launch: "launched",
-  manual: "marked shipped",
+const SIGNAL: Record<Schemas['ShipSignal']['kind'], string> = {
+  tracker: 'issues done',
+  milestone: 'milestones done',
+  launch: 'launched',
+  manual: 'marked shipped',
 };
 const CAVEAT =
   "This compares the goal's value with the prediction. Goals move for many reasons; it does not prove the item caused it.";
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 function useIsPhone(): boolean {
@@ -73,10 +93,8 @@ function useIsPhone(): boolean {
 }
 
 function stateOf(o: Outcome): State {
-  if (o.status === "predicted")
-    return o.needs_prediction ? "needs" : "predicted";
-  if (o.status === "tracking")
-    return o.proposed_assessment ? "due" : "measuring";
+  if (o.status === 'predicted') return o.needs_prediction ? 'needs' : 'predicted';
+  if (o.status === 'tracking') return o.proposed_assessment ? 'due' : 'measuring';
   return o.status;
 }
 
@@ -105,7 +123,10 @@ function OutcomeName({ o }: { o: Outcome }) {
     <>
       <Named item={item} />
       {/* qa-nov17 plan 2: the flag wraps in the narrow Item column, never cut to "Not in the Gr…". */}
-      <NotInGt item={item} className="mt-1 h-auto! min-h-5 px-2! py-0.5! text-xs! leading-4! whitespace-normal! [&>span]:overflow-visible! [&>span]:whitespace-normal!" />
+      <NotInGt
+        item={item}
+        className="mt-1 h-auto! min-h-5 px-2! py-0.5! text-xs! leading-4! whitespace-normal! [&>span]:overflow-visible! [&>span]:whitespace-normal!"
+      />
     </>
   );
 }
@@ -117,13 +138,14 @@ const outcomeWords = (o: Outcome) => {
 };
 
 /** The API's word for a goal with no metric (quality.capture.UNSET): it has none to show behind an (i). */
-const UNSET = "Not set yet";
+const UNSET = 'Not set yet';
 
 /** "42%", "$1,200", "1 event": the goal figure every page and the API write. */
-const figure = (v: number | null | undefined, unit?: string | null) => (v == null ? null : goalFigure(v, unit));
+const figure = (v: number | null | undefined, unit?: string | null) =>
+  v == null ? null : goalFigure(v, unit);
 
 const sameUnit = (a?: string | null, b?: string | null) =>
-  (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+  (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
 
 /**
  * The prediction's own measure when its unit is not its goal's (an enabler predicted in
@@ -131,9 +153,9 @@ const sameUnit = (a?: string | null, b?: string | null) =>
  * either has none or it is a bare "%", so the line names the goal's metric.
  */
 function ownMeasure(unit?: string | null, goalUnit?: string | null): string | null {
-  const u = (unit ?? "").trim();
-  if (!u || !(goalUnit ?? "").trim() || sameUnit(u, goalUnit)) return null;
-  const rest = u.replace(/^%\s*/, "");
+  const u = (unit ?? '').trim();
+  if (!u || !(goalUnit ?? '').trim() || sameUnit(u, goalUnit)) return null;
+  const rest = u.replace(/^%\s*/, '');
   // A bare "%" names no measure of its own: the goal's metric stays on the line.
   if (!rest) return null;
   const name = rest.charAt(0).toUpperCase() + rest.slice(1);
@@ -144,14 +166,14 @@ function ownMeasure(unit?: string | null, goalUnit?: string | null): string | nu
 /** The predicted level: "at most 0 restrictions" for a hold bet (outcomes-edit). */
 const target = (p: Prediction) => {
   const to = figure(p.predicted_value, p.unit) ?? p.predicted;
-  return p.direction === "hold" ? `at most ${to}` : to;
+  return p.direction === 'hold' ? `at most ${to}` : to;
 };
 
 /** "38% → 42% by Dec 31", from the typed figures when there are any; `by: false` leaves the date out. */
 function predicted(p: Prediction, by = true): string {
   const from = figure(p.baseline_value, p.unit) ?? p.baseline;
   const to = target(p);
-  return `${from ? `${from} → ` : ""}${to}${by && p.by ? ` by ${formatDate(p.by)}` : ""}`;
+  return `${from ? `${from} → ` : ''}${to}${by && p.by ? ` by ${formatDate(p.by)}` : ''}`;
 }
 
 /** The table's Due: the check date, else the prediction's own date. */
@@ -163,22 +185,14 @@ function actual(o: Outcome): string | null {
   const value = last?.actual_value ?? o.proposed_assessment?.actual_value;
   const on = last?.measured_at ?? o.proposed_assessment?.measured_at;
   const text =
-    figure(value, o.prediction.unit) ??
-    last?.observed ??
-    o.proposed_assessment?.observed;
-  return text ? `${text}${on ? ` on ${formatDate(on)}` : ""}` : null;
+    figure(value, o.prediction.unit) ?? last?.observed ?? o.proposed_assessment?.observed;
+  return text ? `${text}${on ? ` on ${formatDate(on)}` : ''}` : null;
 }
 
 function StateChip({ o, hero = false }: { o: Outcome; hero?: boolean }) {
   const s = stateOf(o);
   return (
-    <Chip
-      kind={STATE_KIND[s]}
-      dot={!hero}
-      hero={hero}
-      data-testid="outcome-state"
-      data-state={s}
-    >
+    <Chip kind={STATE_KIND[s]} dot={!hero} hero={hero} data-testid="outcome-state" data-state={s}>
       {STATE_LABEL[s]}
     </Chip>
   );
@@ -200,84 +214,78 @@ export default function OutcomesPage() {
 
 function Outcomes() {
   // An Inbox row links here with ?outcome=<id>: that outcome opens, whatever its state.
-  const linked = useSearchParams().get("outcome");
-  const q = useQuery("outcomes", () =>
-    unwrap(api.GET("/v1/outcomes", { params: { query: { limit: 500 } } })),
+  const linked = useSearchParams().get('outcome');
+  const q = useQuery('outcomes', () =>
+    unwrap(api.GET('/v1/outcomes', { params: { query: { limit: 500 } } })),
   );
-  const goalsQ = useQuery("outcomes|goals", () =>
-    unwrap(
-      api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } }),
-    ),
+  const goalsQ = useQuery('outcomes|goals', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
   );
-  const recordQ = useQuery("outcomes|calibration", () =>
-    unwrap(api.GET("/v1/priorities/calibration")),
+  const recordQ = useQuery('outcomes|calibration', () =>
+    unwrap(api.GET('/v1/priorities/calibration')),
   );
   const { can } = useMe();
   // #370: tracking, shipping and assessing an outcome are the outcome routes' role.
-  const canApprove = can("update_outcome");
+  const canApprove = can('update_outcome');
   const phone = useIsPhone();
   const [filter, setFilter] = useState<Filter | null>(null);
   const [selected, setSelected] = useState<string | null>(linked);
   const [sheet, setSheet] = useState(linked != null);
   const [tracking, setTracking] = useState(false);
-  const learningsQ = useQuery("outcomes|learnings", () =>
-    unwrap(api.GET("/v1/learnings", { params: { query: { limit: 500 } } })),
+  const learningsQ = useQuery('outcomes|learnings', () =>
+    unwrap(api.GET('/v1/learnings', { params: { query: { limit: 500 } } })),
   );
 
   const rows = q.data ?? [];
   const goals = new Map((goalsQ.data ?? []).map((g) => [g.id, g.title]));
   const goalUnits = new Map(
-    (goalsQ.data ?? []).map((g) => [g.id, typeof g.attrs?.unit === "string" ? g.attrs.unit : null]),
+    (goalsQ.data ?? []).map((g) => [g.id, typeof g.attrs?.unit === 'string' ? g.attrs.unit : null]),
   );
   const inFilter = (o: Outcome, f: Filter) => {
     const s = stateOf(o);
-    if (f === "all") return true;
-    if (f === "assessed")
-      return ["held", "partially_held", "not_held", "inconclusive"].includes(s);
+    if (f === 'all') return true;
+    if (f === 'assessed') return ['held', 'partially_held', 'not_held', 'inconclusive'].includes(s);
     return s === f;
   };
   const count = (f: Filter) => rows.filter((o) => inFilter(o, f)).length;
   // Check due is the default while any check is due.
-  const current: Filter =
-    filter ?? (linked == null && count("due") > 0 ? "due" : "all");
+  const current: Filter = filter ?? (linked == null && count('due') > 0 ? 'due' : 'all');
   const shown = rows.filter((o) => inFilter(o, current));
   // Loaded, and nothing at all (not a filter that matches nothing).
   const none = q.data != null && rows.length === 0;
   const active =
-    shown.find((o) => o.id === selected) ??
-    rows.find((o) => o.id === selected) ??
-    shown[0];
+    shown.find((o) => o.id === selected) ?? rows.find((o) => o.id === selected) ?? shown[0];
 
   // A state with nothing in it is dimmed and cannot be picked. A read that failed counts
   // nothing: no 0 that reads as none (#1586).
   const tally = (n: number) => (q.error ? null : n);
   const filterItems: FilterChip<Filter>[] = [
-    { value: "due", label: "Check due", count: tally(count("due")), disabled: count("due") === 0 },
+    { value: 'due', label: 'Check due', count: tally(count('due')), disabled: count('due') === 0 },
     {
-      value: "measuring",
-      label: "Measuring",
-      count: tally(count("measuring")),
-      disabled: count("measuring") === 0,
+      value: 'measuring',
+      label: 'Measuring',
+      count: tally(count('measuring')),
+      disabled: count('measuring') === 0,
     },
     {
-      value: "needs",
-      label: "Needs prediction",
-      count: tally(count("needs")),
-      disabled: count("needs") === 0,
+      value: 'needs',
+      label: 'Needs prediction',
+      count: tally(count('needs')),
+      disabled: count('needs') === 0,
     },
     {
-      value: "assessed",
-      label: "Assessed",
-      count: tally(count("assessed")),
-      disabled: count("assessed") === 0,
+      value: 'assessed',
+      label: 'Assessed',
+      count: tally(count('assessed')),
+      disabled: count('assessed') === 0,
     },
-    { value: "all", label: "All", count: tally(rows.length) },
+    { value: 'all', label: 'All', count: tally(rows.length) },
   ];
   // A filter left with no rows names itself, with a way back to All (owner, Nov 13).
   const emptyFilter = (
     <span className="inline-flex flex-wrap items-center justify-center gap-2">
       No outcomes in {filterItems.find((f) => f.value === current)?.label}
-      <Button variant="ghost" onClick={() => setFilter("all")}>
+      <Button variant="ghost" onClick={() => setFilter('all')}>
         Show all
       </Button>
     </span>
@@ -288,9 +296,9 @@ function Outcomes() {
   // prediction leaves out its date when Due shows the same one.
   const columns: Column<Outcome>[] = [
     {
-      key: "item",
-      header: "Item",
-      phone: "title",
+      key: 'item',
+      header: 'Item',
+      phone: 'title',
       wrap: true,
       cell: (o) => (
         <span className="font-semibold">
@@ -299,22 +307,18 @@ function Outcomes() {
       ),
     },
     {
-      key: "goal",
-      header: "Goal",
-      width: "170px",
+      key: 'goal',
+      header: 'Goal',
+      width: '170px',
       hideOnPhone: true,
-      narrow: "laptop",
+      narrow: 'laptop',
       wrap: true,
-      cell: (o) => (
-        <span className="text-text2">
-          {goals.get(o.goal_id) ?? "Goal"}
-        </span>
-      ),
+      cell: (o) => <span className="text-text2">{goals.get(o.goal_id) ?? 'Goal'}</span>,
     },
     {
-      key: "predicted",
-      header: "Predicted",
-      width: "160px",
+      key: 'predicted',
+      header: 'Predicted',
+      width: '160px',
       hideOnPhone: true,
       wrap: true,
       cell: (o) => (
@@ -324,48 +328,44 @@ function Outcomes() {
       ),
     },
     {
-      key: "actual",
-      header: "Actual",
-      width: "120px",
+      key: 'actual',
+      header: 'Actual',
+      width: '120px',
       hideOnPhone: true,
       wrap: true,
-      cell: (o) => (
-        <span className="tnum text-text2">{actual(o) ?? "—"}</span>
-      ),
+      cell: (o) => <span className="tnum text-text2">{actual(o) ?? '—'}</span>,
     },
     {
-      key: "state",
-      header: "State",
-      width: "140px",
-      phone: "meta",
+      key: 'state',
+      header: 'State',
+      width: '140px',
+      phone: 'meta',
       cell: (o) => <StateChip o={o} />,
     },
     {
-      key: "due",
-      header: "Due",
-      width: "128px",
-      phone: "meta",
+      key: 'due',
+      header: 'Due',
+      width: '128px',
+      phone: 'meta',
       cell: (o) => {
         const due = dueOf(o);
         return (
           <span className="tnum whitespace-nowrap text-text2" data-testid="outcome-due">
-            {due ? formatDate(due) : "—"}
+            {due ? formatDate(due) : '—'}
           </span>
         );
       },
     },
   ];
 
-  const counted = new Map(
-    (recordQ.data?.goals ?? []).map((g) => [g.goal_id, g.n]),
-  );
+  const counted = new Map((recordQ.data?.goals ?? []).map((g) => [g.goal_id, g.n]));
   const inspector = active ? (
     <OutcomeInspector
       key={`${active.id}-${active.lock_version}-${active.status}-${active.assessments.length}`}
       o={active}
-      goal={goals.get(active.goal_id) ?? "its goal"}
+      goal={goals.get(active.goal_id) ?? 'its goal'}
       goalUnit={goalUnits.get(active.goal_id) ?? null}
-      goals={(goalsQ.data ?? []).filter((g) => g.status !== "rejected")}
+      goals={(goalsQ.data ?? []).filter((g) => g.status !== 'rejected')}
       counted={counted.get(active.goal_id) ?? null}
       canApprove={canApprove}
       onChanged={async () => {
@@ -382,18 +382,18 @@ function Outcomes() {
         title="Plan"
         info={
           <InfoTip label="Outcomes" align="start" side="bottom">
-            Approving a roadmap records what each item is expected to do for
-            its goal. When the item ships, Oracle waits for the goal to
-            move, then proposes whether the prediction held. A person
-            confirms it.
+            Approving a roadmap records what each item is expected to do for its goal. When the item
+            ships, Oracle waits for the goal to move, then proposes whether the prediction held. A
+            person confirms it.
           </InfoTip>
         }
         status={
           // qa4-plan-35: no "0 outcomes" chip beside the empty state that already says so.
-          q.data && rows.length > 0 && (
+          q.data &&
+          rows.length > 0 && (
             <>
               <Chip kind="acc">
-                {rows.length} {rows.length === 1 ? "outcome" : "outcomes"}
+                {rows.length} {rows.length === 1 ? 'outcome' : 'outcomes'}
               </Chip>
             </>
           )
@@ -401,12 +401,10 @@ function Outcomes() {
         action={
           // While the form is open its own submit tracks the outcome; fix4 qa-plan-15: with no
           // outcome yet, Track outcome is the empty state's only.
-          canApprove && !tracking && !none && (
-            <Button
-              variant="primary"
-              onClick={() => setTracking(true)}
-              data-testid="outcome-track"
-            >
+          canApprove &&
+          !tracking &&
+          !none && (
+            <Button variant="primary" onClick={() => setTracking(true)} data-testid="outcome-track">
               Track outcome
             </Button>
           )
@@ -421,7 +419,7 @@ function Outcomes() {
             onCancel={() => setTracking(false)}
             onTracked={async (o) => {
               setTracking(false);
-              setFilter("all");
+              setFilter('all');
               setSelected(o.id);
               await q.reload();
             }}
@@ -437,11 +435,8 @@ function Outcomes() {
                 // #1590: how outcomes are recorded sits behind the (i), in the head, so the
                 // empty state holds no button but its action.
                 <InfoTip label="how outcomes are recorded" align="end" testId="outcomes-empty-tip">
-                  Approving a roadmap records a prediction for each item that
-                  serves a goal.
-                  {canApprove
-                    ? " You can also track an outcome for an item yourself."
-                    : ""}
+                  Approving a roadmap records a prediction for each item that serves a goal.
+                  {canApprove ? ' You can also track an outcome for an item yourself.' : ''}
                 </InfoTip>
               ) : (
                 <FilterChips
@@ -459,34 +454,36 @@ function Outcomes() {
                 data-testid="outcomes-empty"
                 className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2"
               >
-                <p className="font-display text-lg font-bold text-text">
-                  No outcomes yet
-                </p>
+                <p className="font-display text-lg font-bold text-text">No outcomes yet</p>
                 {canApprove && !tracking && (
-                  <Button variant="primary" onClick={() => setTracking(true)} data-testid="outcome-track">
+                  <Button
+                    variant="primary"
+                    onClick={() => setTracking(true)}
+                    data-testid="outcome-track"
+                  >
                     Track outcome
                   </Button>
                 )}
               </div>
             ) : (
-            <DataTable<Outcome>
-              label="Outcomes"
-              testId="outcomes-table"
-              columns={columns}
-              rows={q.loading && !q.data ? undefined : shown}
-              rowKey={(o) => o.id}
-              selected={active?.id ?? null}
-              onSelect={(k) => {
-                setSelected(k);
-                if (phone) setSheet(true);
-              }}
-              loading={q.loading && !q.data}
-              empty={q.error ? null : emptyFilter}
-              rowProps={(o) => ({
-                "data-testid": "outcome-row",
-                "data-state": stateOf(o),
-              })}
-            />
+              <DataTable<Outcome>
+                label="Outcomes"
+                testId="outcomes-table"
+                columns={columns}
+                rows={q.loading && !q.data ? undefined : shown}
+                rowKey={(o) => o.id}
+                selected={active?.id ?? null}
+                onSelect={(k) => {
+                  setSelected(k);
+                  if (phone) setSheet(true);
+                }}
+                loading={q.loading && !q.data}
+                empty={q.error ? null : emptyFilter}
+                rowProps={(o) => ({
+                  'data-testid': 'outcome-row',
+                  'data-state': stateOf(o),
+                })}
+              />
             )}
           </Panel>
         </Split>
@@ -512,11 +509,11 @@ function Outcomes() {
   );
 }
 
-const num = (s: string) => (s.trim() === "" ? null : Number(s));
-type Direction = NonNullable<Prediction["direction"]>;
-type Confidence = NonNullable<Prediction["confidence"]>;
-const CONFIDENCES: Confidence[] = ["low", "medium", "high"];
-const CONFIDENCE_LABEL: Record<Confidence, string> = { low: "Low", medium: "Medium", high: "High" };
+const num = (s: string) => (s.trim() === '' ? null : Number(s));
+type Direction = NonNullable<Prediction['direction']>;
+type Confidence = NonNullable<Prediction['confidence']>;
+const CONFIDENCES: Confidence[] = ['low', 'medium', 'high'];
+const CONFIDENCE_LABEL: Record<Confidence, string> = { low: 'Low', medium: 'Medium', high: 'High' };
 
 function PredictionForm({
   o,
@@ -528,30 +525,22 @@ function PredictionForm({
   busy: boolean;
 }) {
   const p = o.prediction;
-  const [baseline, setBaseline] = useState(p.baseline_value?.toString() ?? "");
-  const [want, setWant] = useState(p.predicted_value?.toString() ?? "");
-  const [line, setLine] = useState(p.threshold_value?.toString() ?? "");
-  const [unit, setUnit] = useState(p.unit ?? "");
-  const [by, setBy] = useState(p.by ?? "");
-  const [confidence, setConfidence] = useState<Confidence | "">(p.confidence ?? "");
-  const [why, setWhy] = useState(p.why ?? "");
-  const [direction, setDirection] = useState<Direction>(
-    p.direction ?? "increase",
-  );
-  const field =
-    "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
-  const input = (
-    label: string,
-    value: string,
-    set: (v: string) => void,
-    type = "text",
-  ) => (
+  const [baseline, setBaseline] = useState(p.baseline_value?.toString() ?? '');
+  const [want, setWant] = useState(p.predicted_value?.toString() ?? '');
+  const [line, setLine] = useState(p.threshold_value?.toString() ?? '');
+  const [unit, setUnit] = useState(p.unit ?? '');
+  const [by, setBy] = useState(p.by ?? '');
+  const [confidence, setConfidence] = useState<Confidence | ''>(p.confidence ?? '');
+  const [why, setWhy] = useState(p.why ?? '');
+  const [direction, setDirection] = useState<Direction>(p.direction ?? 'increase');
+  const field = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
+  const input = (label: string, value: string, set: (v: string) => void, type = 'text') => (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-text2">{label}</span>
       <input
         className={field}
         type={type}
-        inputMode={type === "text" ? undefined : "decimal"}
+        inputMode={type === 'text' ? undefined : 'decimal'}
         value={value}
         onChange={(e) => set(e.target.value)}
       />
@@ -589,10 +578,10 @@ function PredictionForm({
         save();
       }}
     >
-      {input("Baseline", baseline, setBaseline, "number")}
-      {input("Predicted", want, setWant, "number")}
-      {input("Partly held at", line, setLine, "number")}
-      {input("Unit", unit, setUnit)}
+      {input('Baseline', baseline, setBaseline, 'number')}
+      {input('Predicted', want, setWant, 'number')}
+      {input('Partly held at', line, setLine, 'number')}
+      {input('Unit', unit, setUnit)}
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-text2">Direction</span>
         <select
@@ -605,14 +594,14 @@ function PredictionForm({
           <option value="hold">Hold at most</option>
         </select>
       </label>
-      {input("By", by, setBy, "date")}
+      {input('By', by, setBy, 'date')}
       {/* outcomes-edit: how sure, and why in one line; Confidence feeds the track record. */}
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-text2">Confidence</span>
         <select
           className={field}
           value={confidence}
-          onChange={(e) => setConfidence(e.target.value as Confidence | "")}
+          onChange={(e) => setConfidence(e.target.value as Confidence | '')}
         >
           <option value="">—</option>
           {CONFIDENCES.map((c) => (
@@ -632,7 +621,12 @@ function PredictionForm({
         />
       </label>
       <div className="col-span-2">
-        <Button type="submit" variant="primary" disabled={busy || empty} title={empty ? "Add a predicted value first" : undefined}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy || empty}
+          title={empty ? 'Add a predicted value first' : undefined}
+        >
           Save prediction
         </Button>
       </div>
@@ -640,13 +634,8 @@ function PredictionForm({
   );
 }
 
-type Verdict = Schemas["AssessmentIn"]["verdict"];
-const VERDICTS: Verdict[] = [
-  "held",
-  "partially_held",
-  "not_held",
-  "inconclusive",
-];
+type Verdict = Schemas['AssessmentIn']['verdict'];
+const VERDICTS: Verdict[] = ['held', 'partially_held', 'not_held', 'inconclusive'];
 
 /** Edit Oracle's proposal, or change a recorded verdict: what a person records instead. */
 function AssessmentForm({
@@ -665,21 +654,20 @@ function AssessmentForm({
     note?: string | null;
   };
   busy: boolean;
-  onSave: (a: Schemas["AssessmentIn"]) => void;
+  onSave: (a: Schemas['AssessmentIn']) => void;
   onCancel: () => void;
 }) {
-  const [verdict, setVerdict] = useState<Verdict | "">(from.verdict ?? "");
-  const [value, setValue] = useState(from.actual_value?.toString() ?? "");
-  const [on, setOn] = useState(from.measured_at ?? "");
-  const [note, setNote] = useState(from.note ?? "");
-  const field =
-    "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+  const [verdict, setVerdict] = useState<Verdict | ''>(from.verdict ?? '');
+  const [value, setValue] = useState(from.actual_value?.toString() ?? '');
+  const [on, setOn] = useState(from.measured_at ?? '');
+  const [note, setNote] = useState(from.note ?? '');
+  const field = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
   function save() {
     const v = num(value);
     if (!verdict) return;
     onSave({
       verdict,
-      observed: figure(v, o.prediction.unit) ?? "no value",
+      observed: figure(v, o.prediction.unit) ?? 'no value',
       actual_value: v,
       measured_at: on || null,
       note: note.trim() || null,
@@ -726,12 +714,7 @@ function AssessmentForm({
       </label>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-text2">Measured on</span>
-        <input
-          className={field}
-          type="date"
-          value={on}
-          onChange={(e) => setOn(e.target.value)}
-        />
+        <input className={field} type="date" value={on} onChange={(e) => setOn(e.target.value)} />
       </label>
       <label className="col-span-2 flex flex-col gap-1 text-sm">
         <span className="text-text2">Note</span>
@@ -798,24 +781,20 @@ function OutcomeInspector({
     }
   }
 
-  const record = (body: Schemas["AssessmentIn"]) =>
-    act(() =>
-      unwrap(
-        api.POST("/v1/outcomes/{outcome_id}/assessments", { ...path, body }),
-      ),
-    );
+  const record = (body: Schemas['AssessmentIn']) =>
+    act(() => unwrap(api.POST('/v1/outcomes/{outcome_id}/assessments', { ...path, body })));
   const assess = (verdict: Verdict) =>
     record({
       verdict,
-      observed: prop?.observed ?? "no value",
+      observed: prop?.observed ?? 'no value',
       evidence_ids: [],
       actual_value: prop?.actual_value ?? null,
       measured_at: prop?.measured_at ?? null,
     });
-  const decide = (index: number, decision: "keep" | "skip") =>
+  const decide = (index: number, decision: 'keep' | 'skip') =>
     act(() =>
       unwrap(
-        api.POST("/v1/outcomes/{outcome_id}/learnings/{index}", {
+        api.POST('/v1/outcomes/{outcome_id}/learnings/{index}', {
           params: { path: { outcome_id: o.id, index } },
           body: { decision },
         }),
@@ -842,7 +821,7 @@ function OutcomeInspector({
           title={o.title}
           op="delete_outcome"
           dependents={async () => ({
-            root: { type: "outcome", id: o.id, title: o.title, kind: "outcome" },
+            root: { type: 'outcome', id: o.id, title: o.title, kind: 'outcome' },
             items: [],
             published: false,
             working_runs: [],
@@ -851,7 +830,7 @@ function OutcomeInspector({
           })}
           remove={(query) =>
             unwrap(
-              api.DELETE("/v1/outcomes/{outcome_id}", {
+              api.DELETE('/v1/outcomes/{outcome_id}', {
                 params: { path: { outcome_id: o.id }, query: { reason: query.reason } },
               }),
             )
@@ -871,9 +850,12 @@ function OutcomeInspector({
       <InspectorSection label="Prediction">
         <p className="tnum text-sm">
           {/* qa4-plan-48: an unknown starting value said in words, never a bare "?". */}
-          Predicted {figure(p.baseline_value, p.unit) ?? p.baseline ?? "from today's value (not measured yet)"} →{" "}
-          {target(p)}
-          {now ? ` · Now ${now}` : ""}
+          Predicted{' '}
+          {figure(p.baseline_value, p.unit) ??
+            p.baseline ??
+            "from today's value (not measured yet)"}{' '}
+          → {target(p)}
+          {now ? ` · Now ${now}` : ''}
         </p>
         <InspectorRow
           value={
@@ -890,7 +872,7 @@ function OutcomeInspector({
                   const goal_id = e.target.value;
                   void act(() =>
                     unwrap(
-                      api.PATCH("/v1/outcomes/{outcome_id}", {
+                      api.PATCH('/v1/outcomes/{outcome_id}', {
                         ...path,
                         body: { goal_id, lock_version: o.lock_version },
                       }),
@@ -905,7 +887,10 @@ function OutcomeInspector({
                 ))}
               </select>
             ) : (
-              <span className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words" title={goal}>
+              <span
+                className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words"
+                title={goal}
+              >
                 {goal}
               </span>
             )
@@ -920,13 +905,21 @@ function OutcomeInspector({
             own ? (
               // A prediction in its own unit names its own measure; the goal's is behind the (i).
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words" title={own} data-testid="outcome-metric">
+                <span
+                  className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words"
+                  title={own}
+                  data-testid="outcome-metric"
+                >
                   {own}
                 </span>
                 {p.metric !== UNSET && <InfoTip label="Goal metric">{p.metric}</InfoTip>}
               </span>
             ) : (
-              <span className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words" title={p.metric} data-testid="outcome-metric">
+              <span
+                className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words"
+                title={p.metric}
+                data-testid="outcome-metric"
+              >
                 {p.metric}
               </span>
             )
@@ -935,20 +928,12 @@ function OutcomeInspector({
           Metric
         </InspectorRow>
         {p.threshold_value != null && (
-          <InspectorRow
-            value={
-              <span className="tnum">{figure(p.threshold_value, p.unit)}</span>
-            }
-          >
+          <InspectorRow value={<span className="tnum">{figure(p.threshold_value, p.unit)}</span>}>
             Partly held at
           </InspectorRow>
         )}
         {p.by && (
-          <InspectorRow
-            value={<span className="tnum">{formatDate(p.by)}</span>}
-          >
-            By
-          </InspectorRow>
+          <InspectorRow value={<span className="tnum">{formatDate(p.by)}</span>}>By</InspectorRow>
         )}
         {p.confidence && (
           <InspectorRow
@@ -969,43 +954,34 @@ function OutcomeInspector({
             Why
           </InspectorRow>
         )}
-        {canApprove &&
-          o.status === "predicted" &&
-          !editing &&
-          !o.needs_prediction && (
-            <Button
-              variant="secondary"
-              onClick={() => setEditing(true)}
-              data-testid="outcome-edit"
-            >
-              Edit
-            </Button>
-          )}
-        {canApprove &&
-          o.status === "predicted" &&
-          (editing || o.needs_prediction) && (
-            <PredictionForm
-              o={o}
-              busy={busy}
-              onSave={(prediction) =>
-                act(() =>
-                  unwrap(
-                    api.PATCH("/v1/outcomes/{outcome_id}", {
-                      ...path,
-                      body: { prediction, lock_version: o.lock_version },
-                    }),
-                  ),
-                )
-              }
-            />
-          )}
+        {canApprove && o.status === 'predicted' && !editing && !o.needs_prediction && (
+          <Button variant="secondary" onClick={() => setEditing(true)} data-testid="outcome-edit">
+            Edit
+          </Button>
+        )}
+        {canApprove && o.status === 'predicted' && (editing || o.needs_prediction) && (
+          <PredictionForm
+            o={o}
+            busy={busy}
+            onSave={(prediction) =>
+              act(() =>
+                unwrap(
+                  api.PATCH('/v1/outcomes/{outcome_id}', {
+                    ...path,
+                    body: { prediction, lock_version: o.lock_version },
+                  }),
+                ),
+              )
+            }
+          />
+        )}
       </InspectorSection>
       {signal && (
         <InspectorSection label="Shipped">
           <p className="text-sm" data-testid="outcome-shipped">
-            {signal.kind === "tracker" && signal.refs.length
+            {signal.kind === 'tracker' && signal.refs.length
               ? `${signal.refs.length} of ${signal.refs.length} ${SIGNAL.tracker}`
-              : SIGNAL[signal.kind]}{" "}
+              : SIGNAL[signal.kind]}{' '}
             · {formatDate(signal.at)}
           </p>
         </InspectorSection>
@@ -1015,30 +991,25 @@ function OutcomeInspector({
           label={prop.verdict ? "Oracle's proposal" : "Oracle's reading"}
           tools={
             <InfoTip label="How Oracle reads the actual">
-              The first goal value recorded on or after the prediction&apos;s
-              date, else the latest one. {CAVEAT}
+              The first goal value recorded on or after the prediction&apos;s date, else the latest
+              one. {CAVEAT}
             </InfoTip>
           }
         >
-          <div
-            data-testid="outcome-proposal"
-            className="flex flex-col gap-1.5 text-sm"
-          >
+          <div data-testid="outcome-proposal" className="flex flex-col gap-1.5 text-sm">
             {prop.verdict && (
               <span>
-                <Chip kind={STATE_KIND[prop.verdict]}>
-                  {STATE_LABEL[prop.verdict]}
-                </Chip>
+                <Chip kind={STATE_KIND[prop.verdict]}>{STATE_LABEL[prop.verdict]}</Chip>
               </span>
             )}
             <span className="text-text2">
               {now
-                ? `Goal value ${now}${prop.measured_at ? `, recorded ${formatDate(prop.measured_at)}` : ""}`
-                : "No readable goal value"}
-              {prop.note ? ` · ${prop.note}` : ""}
+                ? `Goal value ${now}${prop.measured_at ? `, recorded ${formatDate(prop.measured_at)}` : ''}`
+                : 'No readable goal value'}
+              {prop.note ? ` · ${prop.note}` : ''}
             </span>
           </div>
-          {canApprove && o.status === "tracking" && !assessing && (
+          {canApprove && o.status === 'tracking' && !assessing && (
             <div className="mt-2 flex flex-wrap gap-2">
               {prop.verdict && (
                 <Button
@@ -1051,24 +1022,24 @@ function OutcomeInspector({
                 </Button>
               )}
               <Button
-                variant={prop.verdict ? "secondary" : "primary"}
+                variant={prop.verdict ? 'secondary' : 'primary'}
                 disabled={busy}
                 onClick={() => setAssessing(true)}
                 data-testid="outcome-assess-edit"
               >
-                {prop.verdict ? "Edit" : "Record verdict"}
+                {prop.verdict ? 'Edit' : 'Record verdict'}
               </Button>
               <Button
                 variant="secondary"
                 disabled={busy}
-                onClick={() => assess("inconclusive")}
+                onClick={() => assess('inconclusive')}
                 data-testid="outcome-inconclusive"
               >
                 Inconclusive
               </Button>
             </div>
           )}
-          {canApprove && o.status === "tracking" && assessing && (
+          {canApprove && o.status === 'tracking' && assessing && (
             <AssessmentForm
               o={o}
               from={prop}
@@ -1084,20 +1055,19 @@ function OutcomeInspector({
           <ul className="space-y-1 text-sm" data-testid="outcome-history">
             {o.assessments.map((a, i) => (
               <li key={i}>
-                {STATE_LABEL[a.verdict]} · {a.observed} ·{" "}
-                {a.actor === "oracle" ? "Oracle" : "a person"} ·{" "}
-                {formatDate(a.assessed_at)}
+                {STATE_LABEL[a.verdict]} · {a.observed} ·{' '}
+                {a.actor === 'oracle' ? 'Oracle' : 'a person'} · {formatDate(a.assessed_at)}
                 {a.note && <span className="block text-text2">{a.note}</span>}
               </li>
             ))}
           </ul>
-          {last.verdict !== "inconclusive" && (
+          {last.verdict !== 'inconclusive' && (
             <p className="mt-1.5 text-sm text-text2">
               Counts toward track record: {goal}
-              {counted != null ? ` (${counted})` : ""}
+              {counted != null ? ` (${counted})` : ''}
             </p>
           )}
-          {canApprove && o.status !== "tracking" && !assessing && (
+          {canApprove && o.status !== 'tracking' && !assessing && (
             <Button
               variant="secondary"
               className="mt-2"
@@ -1108,7 +1078,7 @@ function OutcomeInspector({
               Change
             </Button>
           )}
-          {canApprove && o.status !== "tracking" && assessing && (
+          {canApprove && o.status !== 'tracking' && assessing && (
             <AssessmentForm
               o={o}
               from={last}
@@ -1130,27 +1100,19 @@ function OutcomeInspector({
                 data-state={d.state}
               >
                 <span>{d.statement}</span>
-                {d.state === "drafted" && canApprove ? (
+                {d.state === 'drafted' && canApprove ? (
                   <span className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => decide(i, "keep")}
-                    >
+                    <Button variant="secondary" disabled={busy} onClick={() => decide(i, 'keep')}>
                       Keep
                     </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => decide(i, "skip")}
-                    >
+                    <Button variant="secondary" disabled={busy} onClick={() => decide(i, 'skip')}>
                       Skip
                     </Button>
                   </span>
-                ) : d.state !== "drafted" ? (
+                ) : d.state !== 'drafted' ? (
                   <span>
-                    <Chip kind={d.state === "kept" ? "pass" : "line"}>
-                      {d.state === "kept" ? "Kept" : "Skipped"}
+                    <Chip kind={d.state === 'kept' ? 'pass' : 'line'}>
+                      {d.state === 'kept' ? 'Kept' : 'Skipped'}
                     </Chip>
                   </span>
                 ) : null}
@@ -1163,8 +1125,7 @@ function OutcomeInspector({
   );
 }
 
-const FIELD =
-  "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+const FIELD = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
 
 /** Track outcome: an approved roadmap item, its goal, the expected effect, a metric and a check date. */
 function TrackOutcomeForm({
@@ -1178,24 +1139,24 @@ function TrackOutcomeForm({
   onCancel: () => void;
   onTracked: (o: Outcome) => Promise<void>;
 }) {
-  const itemsQ = useQuery("outcomes|plan-items", () =>
-    unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })),
+  const itemsQ = useQuery('outcomes|plan-items', () =>
+    unwrap(api.GET('/v1/plan', { params: { query: { scope: 'approved' } } })),
   );
   const items = (itemsQ.data?.items ?? []).filter((i) => !tracked.has(i.id));
-  const [itemId, setItemId] = useState("");
-  const [goalId, setGoalId] = useState("");
-  const [effect, setEffect] = useState("");
-  const [metric, setMetric] = useState("");
+  const [itemId, setItemId] = useState('');
+  const [goalId, setGoalId] = useState('');
+  const [effect, setEffect] = useState('');
+  const [metric, setMetric] = useState('');
   // qa4-plan-48: the Metric follows the picked goal's own metric until the person types one.
   const [metricTyped, setMetricTyped] = useState(false);
-  const [by, setBy] = useState("");
+  const [by, setBy] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const item = items.find((i) => i.id === itemId);
   function pickGoal(id: string) {
     setGoalId(id);
     const own = goals.find((g) => g.id === id)?.attrs?.metric;
-    if (!metricTyped) setMetric(typeof own === "string" ? own : "");
+    if (!metricTyped) setMetric(typeof own === 'string' ? own : '');
   }
 
   async function save() {
@@ -1204,7 +1165,7 @@ function TrackOutcomeForm({
     setError(null);
     try {
       const o = await unwrap(
-        api.POST("/v1/outcomes", {
+        api.POST('/v1/outcomes', {
           body: {
             title: item.title,
             goal_id: goalId,
@@ -1233,7 +1194,7 @@ function TrackOutcomeForm({
         className="grid grid-cols-2 gap-2.5 max-[600px]:grid-cols-1"
         data-testid="track-outcome-form"
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
+          if (e.key === 'Escape') {
             e.preventDefault();
             onCancel();
           }
@@ -1262,15 +1223,11 @@ function TrackOutcomeForm({
               setItemId(e.target.value);
               // The item's first goal, when it serves one.
               const next = items.find((i) => i.id === e.target.value);
-              const first = next?.goal_ids.find((g) =>
-                goals.some((x) => x.id === g),
-              );
+              const first = next?.goal_ids.find((g) => goals.some((x) => x.id === g));
               if (first) pickGoal(first);
             }}
           >
-            <option value="">
-              {itemsQ.loading ? "Loading…" : "Choose an approved item"}
-            </option>
+            <option value="">{itemsQ.loading ? 'Loading…' : 'Choose an approved item'}</option>
             {/* outcomes-code: each item by its code and name ("F-21 Saved payment methods"); one with no code flagged. */}
             {items.map((i) => (
               <option key={i.id} value={i.id}>
@@ -1281,11 +1238,7 @@ function TrackOutcomeForm({
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-text2">Goal</span>
-          <select
-            className={FIELD}
-            value={goalId}
-            onChange={(e) => pickGoal(e.target.value)}
-          >
+          <select className={FIELD} value={goalId} onChange={(e) => pickGoal(e.target.value)}>
             <option value="">Choose a goal</option>
             {goals.map((g) => (
               <option key={g.id} value={g.id}>
@@ -1318,12 +1271,7 @@ function TrackOutcomeForm({
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-text2">Check date</span>
-          <input
-            className={FIELD}
-            type="date"
-            value={by}
-            onChange={(e) => setBy(e.target.value)}
-          />
+          <input className={FIELD} type="date" value={by} onChange={(e) => setBy(e.target.value)} />
         </label>
         <div className="col-span-full flex flex-wrap gap-2">
           <Button type="submit" variant="primary" disabled={busy || !ready}>
@@ -1339,49 +1287,49 @@ function TrackOutcomeForm({
 }
 
 // fix4 qa-plan-26: what a learning is attached to and what it asks, in plain words.
-const APPLIES_TO: Record<Learning["applies_to"], string> = {
-  module: "A part of Oracle",
-  question_category: "A kind of interview question",
-  criterion: "A quality check",
+const APPLIES_TO: Record<Learning['applies_to'], string> = {
+  module: 'A part of Oracle',
+  question_category: 'A kind of interview question',
+  criterion: 'A quality check',
 };
 /** Names for a learning's target: question categories, quality criteria and modules by their titles. */
 function useTargetNames() {
-  const criteria = useQuery("quality-criteria", () => unwrap(api.GET("/v1/quality/criteria")));
-  const modules = useQuery("module-catalog", () => unwrap(api.GET("/v1/module-catalog")));
-  const options: Record<Learning["applies_to"], { key: string; name: string }[]> = {
+  const criteria = useQuery('quality-criteria', () => unwrap(api.GET('/v1/quality/criteria')));
+  const modules = useQuery('module-catalog', () => unwrap(api.GET('/v1/module-catalog')));
+  const options: Record<Learning['applies_to'], { key: string; name: string }[]> = {
     question_category: Object.entries(CATEGORY_LABEL).map(([key, name]) => ({ key, name })),
     criterion: (criteria.data ?? []).map((c) => ({ key: c.key, name: c.title })),
     module: (modules.data ?? []).map((m) => ({ key: m.key, name: m.title })),
   };
   // When the list failed to load, there is nothing to pick from (its kind cannot be added
   // at all): type the key by hand instead.
-  const failed: Record<Learning["applies_to"], boolean> = {
+  const failed: Record<Learning['applies_to'], boolean> = {
     question_category: false,
     criterion: !!criteria.error,
     module: !!modules.error,
   };
-  const nameOf = (l: Pick<Learning, "applies_to" | "target">) =>
+  const nameOf = (l: Pick<Learning, 'applies_to' | 'target'>) =>
     options[l.applies_to].find((o) => o.key === l.target)?.name ?? humanize(l.target);
   return { options, failed, nameOf };
 }
 
 /** A key in words, for a target no list names: "success_metric" is "Success metric". */
 function humanize(key: string): string {
-  const words = key.replace(/[._-]+/g, " ").trim();
+  const words = key.replace(/[._-]+/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** The target field's label for each kind of learning. */
-const TARGET_WORD: Record<Learning["applies_to"], string> = {
-  module: "Which part",
-  question_category: "Which kind of question",
-  criterion: "Which check",
+const TARGET_WORD: Record<Learning['applies_to'], string> = {
+  module: 'Which part',
+  question_category: 'Which kind of question',
+  criterion: 'Which check',
 };
 /** What Oracle does with the learning next time. */
-const DIRECTION: Record<Learning["direction"], string> = {
-  recommend_more: "Suggest it more often",
-  recommend_less: "Suggest it less often",
-  note: "Just keep it in mind",
+const DIRECTION: Record<Learning['direction'], string> = {
+  recommend_more: 'Suggest it more often',
+  recommend_less: 'Suggest it less often',
+  note: 'Just keep it in mind',
 };
 
 /** Learnings: what outcomes taught, kept from a draft or added by hand; an approver retires one with a reason. */
@@ -1433,8 +1381,8 @@ function LearningsPanel({
           {/* #1590: how learnings get drafted sits behind the (i). */}
           <InfoTip label="how learnings get drafted" align="start" testId="outcomes-empty-tip">
             {canApprove
-              ? "When an outcome is checked, Oracle drafts one for you to keep. You can also add your own."
-              : "When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own."}
+              ? 'When an outcome is checked, Oracle drafts one for you to keep. You can also add your own.'
+              : 'When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own.'}
           </InfoTip>
         </p>
       ) : (
@@ -1463,12 +1411,10 @@ function LearningForm({
   onCancel: () => void;
   onAdded: () => Promise<void>;
 }) {
-  const [statement, setStatement] = useState("");
-  const [appliesTo, setAppliesTo] =
-    useState<Learning["applies_to"]>("question_category");
-  const [target, setTarget] = useState("");
-  const [direction, setDirection] =
-    useState<Learning["direction"]>("recommend_more");
+  const [statement, setStatement] = useState('');
+  const [appliesTo, setAppliesTo] = useState<Learning['applies_to']>('question_category');
+  const [target, setTarget] = useState('');
+  const [direction, setDirection] = useState<Learning['direction']>('recommend_more');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1477,7 +1423,7 @@ function LearningForm({
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/learnings", {
+        api.POST('/v1/learnings', {
           body: {
             statement: statement.trim(),
             applies_to: appliesTo,
@@ -1499,17 +1445,18 @@ function LearningForm({
       className="mb-3 grid grid-cols-3 gap-2.5 max-[600px]:grid-cols-1"
       data-testid="learning-form"
       onKeyDown={(e) => {
-        if (e.key !== "Escape") return;
+        if (e.key !== 'Escape') return;
         // Escape on an open select or listbox only closes it; it is not asking to
         // cancel the form, so typed text must not be dropped because of it.
         const target = e.target as HTMLElement;
-        if (e.defaultPrevented || target.tagName === "SELECT" || target.closest('[role="listbox"]')) return;
+        if (e.defaultPrevented || target.tagName === 'SELECT' || target.closest('[role="listbox"]'))
+          return;
         e.preventDefault();
         void (async () => {
           if (
             await confirmInPage({
-              action: "Discard learning",
-              message: "Discard this learning? What you typed will be lost.",
+              action: 'Discard learning',
+              message: 'Discard this learning? What you typed will be lost.',
               destructive: true,
             })
           )
@@ -1541,8 +1488,8 @@ function LearningForm({
           className={FIELD}
           value={appliesTo}
           onChange={(e) => {
-            setAppliesTo(e.target.value as Learning["applies_to"]);
-            setTarget("");
+            setAppliesTo(e.target.value as Learning['applies_to']);
+            setTarget('');
           }}
         >
           {Object.entries(APPLIES_TO).map(([v, label]) => (
@@ -1566,11 +1513,7 @@ function LearningForm({
             <span className="text-sm text-text2">The list did not load; type its key.</span>
           </>
         ) : (
-          <select
-            className={FIELD}
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-          >
+          <select className={FIELD} value={target} onChange={(e) => setTarget(e.target.value)}>
             <option value="">Pick one</option>
             {names.options[appliesTo].map((o) => (
               <option key={o.key} value={o.key}>
@@ -1585,9 +1528,7 @@ function LearningForm({
         <select
           className={FIELD}
           value={direction}
-          onChange={(e) =>
-            setDirection(e.target.value as Learning["direction"])
-          }
+          onChange={(e) => setDirection(e.target.value as Learning['direction'])}
         >
           {Object.entries(DIRECTION).map(([v, label]) => (
             <option key={v} value={v}>
@@ -1624,17 +1565,17 @@ function LearningRow({
   onChanged: () => Promise<void>;
 }) {
   const [retiring, setRetiring] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const active = l.status === "active";
+  const active = l.status === 'active';
 
   async function retire() {
     setBusy(true);
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/learnings/{learning_id}/retire", {
+        api.POST('/v1/learnings/{learning_id}/retire', {
           params: { path: { learning_id: l.id } },
           body: { reason: reason.trim() || null },
         }),
@@ -1654,8 +1595,8 @@ function LearningRow({
     >
       <div className="flex flex-wrap items-start gap-2">
         <span className="min-w-0 flex-1">{l.statement}</span>
-        <Chip kind={active ? "pass" : "line"} data-testid="learning-status">
-          {active ? "Active" : "Retired"}
+        <Chip kind={active ? 'pass' : 'line'} data-testid="learning-status">
+          {active ? 'Active' : 'Retired'}
         </Chip>
       </div>
       <span className="text-text2">
@@ -1663,8 +1604,8 @@ function LearningRow({
       </span>
       {!active && (
         <span className="text-text2">
-          Retired{l.retired_at ? ` ${formatDate(l.retired_at)}` : ""}
-          {l.retired_reason ? `: ${l.retired_reason}` : ""}
+          Retired{l.retired_at ? ` ${formatDate(l.retired_at)}` : ''}
+          {l.retired_reason ? `: ${l.retired_reason}` : ''}
         </span>
       )}
       {error && <Notice tone="error">{error}</Notice>}
@@ -1696,11 +1637,7 @@ function LearningRow({
             <Button type="submit" variant="primary" disabled={busy}>
               Retire learning
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setRetiring(false)}
-            >
+            <Button type="button" variant="secondary" onClick={() => setRetiring(false)}>
               Cancel
             </Button>
           </span>

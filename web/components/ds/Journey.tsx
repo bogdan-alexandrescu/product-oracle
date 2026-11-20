@@ -1,14 +1,14 @@
 /** The nine steps of a PRD's journey (I3). */
 export const JOURNEY_STEPS = [
-  "Idea",
-  "Sources",
-  "Gaps",
-  "Composition",
-  "Research",
-  "Blockers",
-  "Draft run",
-  "Review",
-  "Publish",
+  'Idea',
+  'Sources',
+  'Gaps',
+  'Composition',
+  'Research',
+  'Blockers',
+  'Draft run',
+  'Review',
+  'Publish',
 ] as const;
 
 export type JourneyStep = (typeof JOURNEY_STEPS)[number];
@@ -21,15 +21,15 @@ export type JourneyStep = (typeof JOURNEY_STEPS)[number];
  */
 export function JourneyTrack({
   current,
-  variant = "pill",
+  variant = 'pill',
   steps = JOURNEY_STEPS,
 }: {
   current: number;
-  variant?: "pill" | "bar" | "dots";
+  variant?: 'pill' | 'bar' | 'dots';
   steps?: readonly string[];
 }) {
-  const state = (i: number) => (i + 1 < current ? "done" : i + 1 === current ? "current" : "todo");
-  const label = `Journey ${current} of ${steps.length}: ${steps[current - 1] ?? ""}`;
+  const state = (i: number) => (i + 1 < current ? 'done' : i + 1 === current ? 'current' : 'todo');
+  const label = `Journey ${current} of ${steps.length}: ${steps[current - 1] ?? ''}`;
   const dots = (
     // Fills its box up to 9 px dots, and shrinks the dots to fit a narrower one: all nine always show.
     <span
@@ -43,18 +43,18 @@ export function JourneyTrack({
           key={s}
           title={s}
           className={`aspect-square w-[min(9px,calc((100%_-_16px)/9))] flex-none rounded-full ${
-            state(i) === "done"
-              ? "bg-accent"
-              : state(i) === "current"
-                ? "bg-brand shadow-[0_0_0_2px_var(--on-brand)]"
-                : "bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]"
+            state(i) === 'done'
+              ? 'bg-accent'
+              : state(i) === 'current'
+                ? 'bg-brand shadow-[0_0_0_2px_var(--on-brand)]'
+                : 'bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]'
           }`}
         />
       ))}
     </span>
   );
-  if (variant === "dots") return dots;
-  if (variant === "bar") {
+  if (variant === 'dots') return dots;
+  if (variant === 'bar') {
     return (
       <div data-journey-current={current}>
         <div role="img" aria-label={label} className="grid grid-cols-9 gap-1">
@@ -63,20 +63,34 @@ export function JourneyTrack({
               key={s}
               title={s}
               className={`h-2.5 rounded-[5px] ${
-                state(i) === "done"
-                  ? "bg-accent"
-                  : state(i) === "current"
-                    ? "bg-brand shadow-[inset_0_0_0_2px_var(--on-brand)]"
-                    : "bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]"
+                state(i) === 'done'
+                  ? 'bg-accent'
+                  : state(i) === 'current'
+                    ? 'bg-brand shadow-[inset_0_0_0_2px_var(--on-brand)]'
+                    : 'bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]'
               }`}
             />
           ))}
         </div>
-        <div data-testid="journey-labels" className="mt-2 flex justify-between text-sm text-text2" aria-hidden>
+        <div
+          data-testid="journey-labels"
+          className="mt-2 flex justify-between text-sm text-text2"
+          aria-hidden
+        >
           {/* The current step once: at either end it is that end's name, highlighted (qa-plan-32). */}
-          {current <= 1 ? <b className="font-semibold text-text">{steps[0]}</b> : <span>{steps[0]}</span>}
-          {current > 1 && current < steps.length && <b className="font-semibold text-text">{steps[current - 1]}</b>}
-          {current >= steps.length ? <b className="font-semibold text-text">{steps.at(-1)}</b> : <span>{steps.at(-1)}</span>}
+          {current <= 1 ? (
+            <b className="font-semibold text-text">{steps[0]}</b>
+          ) : (
+            <span>{steps[0]}</span>
+          )}
+          {current > 1 && current < steps.length && (
+            <b className="font-semibold text-text">{steps[current - 1]}</b>
+          )}
+          {current >= steps.length ? (
+            <b className="font-semibold text-text">{steps.at(-1)}</b>
+          ) : (
+            <span>{steps.at(-1)}</span>
+          )}
         </div>
       </div>
     );
@@ -93,17 +107,21 @@ export function JourneyTrack({
           return (
             <li
               key={s}
-              aria-current={st === "current" ? "step" : undefined}
+              aria-current={st === 'current' ? 'step' : undefined}
               className={`flex items-center gap-[7px] rounded-full px-3 py-1.5 text-sm whitespace-nowrap ${
-                st === "current" ? "bg-hero font-semibold text-hero-text" : "font-medium text-text2"
+                st === 'current' ? 'bg-hero font-semibold text-hero-text' : 'font-medium text-text2'
               }`}
             >
               <i
                 className={`grid size-[22px] place-items-center rounded-full font-mono text-[13px] leading-[22px] not-italic ${
-                  st === "done" ? "bg-pass-bg text-pass" : st === "current" ? "bg-brand text-on-brand" : "bg-surface2 text-text2"
+                  st === 'done'
+                    ? 'bg-pass-bg text-pass'
+                    : st === 'current'
+                      ? 'bg-brand text-on-brand'
+                      : 'bg-surface2 text-text2'
                 }`}
               >
-                {st === "done" ? "✓" : i + 1}
+                {st === 'done' ? '✓' : i + 1}
               </i>
               {s}
             </li>

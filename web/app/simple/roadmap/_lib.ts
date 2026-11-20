@@ -2,18 +2,18 @@
  * Simple S4 (#723) roadmap, lane 1: what the timeline and the Gantt share. Days are ISO
  * strings (the API's), counted in UTC; a scale turns them into pixels.
  */
-import { api, type Schemas } from "@/lib/api/client";
-import { calendarDay, displayZone, todayIn, utcDay } from "@/lib/dates";
+import { api, type Schemas } from '@/lib/api/client';
+import { calendarDay, displayZone, todayIn, utcDay } from '@/lib/dates';
 
-export type Roadmap = Schemas["SimpleRoadmapOut"];
-export type Item = Schemas["SimpleRoadmapItem"];
-export type Flag = Schemas["SimpleFlag"];
-export type Change = Schemas["SimpleChangeOut"];
-export type ChangeResult = Schemas["SimpleChangeResult"];
-export type Draft = Schemas["SimpleDraftOut"];
-export type KeyDate = Schemas["SimpleKeyDate"];
-export type Format = "timeline" | "gantt" | "board" | "waterfall";
-export type GanttUnit = "day" | "week";
+export type Roadmap = Schemas['SimpleRoadmapOut'];
+export type Item = Schemas['SimpleRoadmapItem'];
+export type Flag = Schemas['SimpleFlag'];
+export type Change = Schemas['SimpleChangeOut'];
+export type ChangeResult = Schemas['SimpleChangeResult'];
+export type Draft = Schemas['SimpleDraftOut'];
+export type KeyDate = Schemas['SimpleKeyDate'];
+export type Format = 'timeline' | 'gantt' | 'board' | 'waterfall';
+export type GanttUnit = 'day' | 'week';
 
 export const DAY_MS = 86_400_000;
 export const ms = (day: string): number => Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
@@ -28,11 +28,17 @@ export const shortDay = (day: string): string => calendarDay(day);
  * shows its year only when that end's own year isn't this year's ("Dec 14 – Jan 15, 2027",
  * never "Dec 14, 2026 – Jan 15, 2027"). With no `today`, the year shows only when the two
  * ends fall in different years (a chat card's move). */
-export function spanWords(start: string, end: string, today: string = start, eachEnd = false): string {
+export function spanWords(
+  start: string,
+  end: string,
+  today: string = start,
+  eachEnd = false,
+): string {
   const [ys, ye, yt] = [start, end, today].map((d) => d.slice(0, 4));
   if (ys === ye && ys === yt) return `${shortDay(start)} – ${shortDay(end)}`;
   if (ys === ye) return `${shortDay(start)} – ${shortDay(end)}, ${ye}`;
-  if (eachEnd) return `${ys === yt ? shortDay(start) : `${shortDay(start)}, ${ys}`} – ${ye === yt ? shortDay(end) : `${shortDay(end)}, ${ye}`}`;
+  if (eachEnd)
+    return `${ys === yt ? shortDay(start) : `${shortDay(start)}, ${ys}`} – ${ye === yt ? shortDay(end) : `${shortDay(end)}, ${ye}`}`;
   return `${shortDay(start)}, ${ys} – ${shortDay(end)}, ${ye}`;
 }
 
@@ -46,13 +52,20 @@ export const setRoadmapToday = (day: string | null | undefined): void => {
 /** qa4-simple-roadmap-19: a span with its year whenever an end is not in this year (or it spans two).
  * "This year" is the company's (data.today, or the company's day by its zone before the
  * roadmap answers), never the browser clock's UTC year. */
-export const yearSpan = (start: string, end: string, sep = " – ", today: string = roadmapToday ?? todayIn(displayZone())): string =>
-  spanWords(start, end, today).replace(" – ", sep);
+export const yearSpan = (
+  start: string,
+  end: string,
+  sep = ' – ',
+  today: string = roadmapToday ?? todayIn(displayZone()),
+): string => spanWords(start, end, today).replace(' – ', sep);
 
 export function quarterOf(day: string): { start: string; label: string } {
   const d = new Date(ms(day));
   const q = Math.floor(d.getUTCMonth() / 3);
-  return { start: iso(Date.UTC(d.getUTCFullYear(), q * 3, 1)), label: `Q${q + 1} ${d.getUTCFullYear()}` };
+  return {
+    start: iso(Date.UTC(d.getUTCFullYear(), q * 3, 1)),
+    label: `Q${q + 1} ${d.getUTCFullYear()}`,
+  };
 }
 
 export function nextQuarter(start: string): string {
@@ -61,7 +74,10 @@ export function nextQuarter(start: string): string {
 }
 
 /** The quarters from the one holding `from` through the one holding `to`. */
-export function quarters(from: string, to: string): { start: string; end: string; label: string }[] {
+export function quarters(
+  from: string,
+  to: string,
+): { start: string; end: string; label: string }[] {
   const out: { start: string; end: string; label: string }[] = [];
   let q = quarterOf(from).start;
   while (q <= to && out.length < 40) {
@@ -98,30 +114,35 @@ export function scale(start: string, end: string, px: number): Scale {
 export const barSpan = (i: Item): [string, string] => [i.start.date, i.end.date];
 
 /** QA Nov 12 #6: an item with only Oracle's estimate (no date of its own on either end). */
-export const estimateOnly = (i: Pick<Item, "start" | "end">): boolean => i.start.estimated && i.end.estimated;
+export const estimateOnly = (i: Pick<Item, 'start' | 'end'>): boolean =>
+  i.start.estimated && i.end.estimated;
 
 /** QA Nov 12 #6: how an estimate-only item's dates read in every format and export: "No dates
  * yet · estimated Apr 1, 2027 – Oct 22, 2028" (each end with its year when not this year's). */
-export const estimateWords = (start: string, end: string, today: string = roadmapToday ?? todayIn(displayZone())): string => `No dates yet · estimated ${spanWords(start, end, today, true)}`;
+export const estimateWords = (
+  start: string,
+  end: string,
+  today: string = roadmapToday ?? todayIn(displayZone()),
+): string => `No dates yet · estimated ${spanWords(start, end, today, true)}`;
 
 /** What a bar looks like, in order: draft (dashed), estimated (hatched), dated (solid). */
-export function barKind(i: Item): "draft" | "estimated" | "dated" {
-  if (i.draft) return "draft";
-  if (i.estimated) return "estimated";
-  return "dated";
+export function barKind(i: Item): 'draft' | 'estimated' | 'dated' {
+  if (i.draft) return 'draft';
+  if (i.estimated) return 'estimated';
+  return 'dated';
 }
 
 /** A date's source, in plain words for a reader (not the API's enum value). Also used for a
  * bar's aria-label (_timeline.tsx, _lanes.tsx). */
-export const SOURCE_WORDS: Record<Schemas["SimpleDate"]["source"], string> = {
-  typed: "Dates set by you",
-  accepted: "Dates accepted from Oracle",
-  engineering: "Dates from engineering",
-  tracker: "Dates from the tracker",
-  estimated: "Estimated by Oracle",
+export const SOURCE_WORDS: Record<Schemas['SimpleDate']['source'], string> = {
+  typed: 'Dates set by you',
+  accepted: 'Dates accepted from Oracle',
+  engineering: 'Dates from engineering',
+  tracker: 'Dates from the tracker',
+  estimated: 'Estimated by Oracle',
 };
 
-export function sourceWord(source: Schemas["SimpleDate"]["source"]): string {
+export function sourceWord(source: Schemas['SimpleDate']['source']): string {
   return SOURCE_WORDS[source];
 }
 
@@ -130,54 +151,55 @@ export function sourceWord(source: Schemas["SimpleDate"]["source"]): string {
  * words of the approved roadmap version that set them ("Founder commitment"), else its date
  * source's (sourceWord).
  */
-export function datesFrom(item: Pick<Item, "date_basis" | "source">): string {
+export function datesFrom(item: Pick<Item, 'date_basis' | 'source'>): string {
   const basis = item.date_basis?.trim();
   return basis ? basis[0].toUpperCase() + basis.slice(1) : sourceWord(item.source);
 }
 
 /** An item's status, in plain words for a reader (not the API's `in_progress`-style enum
  * value). Also used for a bar's aria-label (_timeline.tsx, _lanes.tsx). */
-export const STATUS_WORDS: Record<Item["status"], string> = {
-  planned: "Planned",
-  in_progress: "In progress",
-  done: "Done",
-  cut: "Cut",
-  draft: "Draft",
-  merged: "Merged",
+export const STATUS_WORDS: Record<Item['status'], string> = {
+  planned: 'Planned',
+  in_progress: 'In progress',
+  done: 'Done',
+  cut: 'Cut',
+  draft: 'Draft',
+  merged: 'Merged',
 };
 
-export function statusWord(status: Item["status"]): string {
+export function statusWord(status: Item['status']): string {
   return STATUS_WORDS[status];
 }
 
 /** A confidence rating, in plain words (title-cased, not the API's lowercase value). */
-export const CONFIDENCE_WORDS: Record<"low" | "medium" | "high", string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
+export const CONFIDENCE_WORDS: Record<'low' | 'medium' | 'high', string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
 };
 
 export function confidenceWord(confidence: string): string {
-  return CONFIDENCE_WORDS[confidence as "low" | "medium" | "high"] ?? confidence;
+  return CONFIDENCE_WORDS[confidence as 'low' | 'medium' | 'high'] ?? confidence;
 }
 
 /** A phase's key (a gate or the waterfall's slice), in plain words. Also used for a bar's
  * aria-label (_timeline.tsx, _lanes.tsx); matches _timeline.tsx's PHASES labels. */
-export const PHASE_WORDS: Record<Item["phases"][number]["key"], string> = {
-  discover: "Discover",
-  build: "Build",
-  beta: "Beta",
-  launch: "Launch",
+export const PHASE_WORDS: Record<Item['phases'][number]['key'], string> = {
+  discover: 'Discover',
+  build: 'Build',
+  beta: 'Beta',
+  launch: 'Launch',
 };
 
-export function phaseWord(key: Item["phases"][number]["key"]): string {
+export function phaseWord(key: Item['phases'][number]['key']): string {
   return PHASE_WORDS[key] ?? key;
 }
 
 /** The item's stored dates (the change engine's `before` of move_dates): typed or accepted
  * dates are the item's own; any other source reads as none stored. */
 export function storedDates(i: Item): { start_date: string | null; end_date: string | null } {
-  const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
+  const own = (d: Schemas['SimpleDate']) =>
+    d.source === 'typed' || d.source === 'accepted' ? d.date : null;
   return { start_date: own(i.start), end_date: own(i.end) };
 }
 
@@ -187,7 +209,7 @@ export function shownDates(i: Item): { start_date: string | null; end_date: stri
 }
 
 /** The flags drawn red (not accepted as a risk). */
-export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "red");
+export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === 'red');
 
 /** The red flags that are a broken link: each with a one-click fix (an end past its milestone too),
  * as Home, the side menu and GET /v1/simple/roadmap/waiting count them (pre-demo QA S-5). */
@@ -200,15 +222,25 @@ export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => f.fixes.
  * the chart, Home and the side menu (GET /v1/simple/roadmap/waiting; web/lib/simple-home.ts
  * isBrokenLink): every red flag with a fix. A flag with none (a draft with no owner) is under
  * Other flags. */
-export function decisionCounts(items: Item[], proposals: Change[]): { broken: Item[]; links: number; dates: Item[]; proposals: Change[]; pulled: Change[]; total: number } {
+export function decisionCounts(
+  items: Item[],
+  proposals: Change[],
+): {
+  broken: Item[];
+  links: number;
+  dates: Item[];
+  proposals: Change[];
+  pulled: Change[];
+  total: number;
+} {
   const mine = proposals.filter((c) => c.can_decide);
   const linked = items.filter((i) => brokenLinks(i).length > 0);
   const out = {
     broken: linked,
     links: linked.reduce((n, i) => n + brokenLinks(i).length, 0),
     dates: items.filter((i) => !!i.suggestion?.can_decide),
-    proposals: mine.filter((c) => c.op !== "change_horizon"),
-    pulled: mine.filter((c) => c.op === "change_horizon"),
+    proposals: mine.filter((c) => c.op !== 'change_horizon'),
+    pulled: mine.filter((c) => c.op === 'change_horizon'),
   };
   return { ...out, total: out.links + out.dates.length + out.proposals.length + out.pulled.length };
 }
@@ -218,22 +250,36 @@ export function decisionCounts(items: Item[], proposals: Change[]): { broken: It
  * again on drop): the item starts on or before a dependency ends, or ends on or after a
  * dependent starts.
  */
-export function liveBreaks(items: Map<string, Item>, id: string, start: string, end: string): string[] {
+export function liveBreaks(
+  items: Map<string, Item>,
+  id: string,
+  start: string,
+  end: string,
+): string[] {
   const it = items.get(id);
   if (!it) return [];
   const out: string[] = [];
   for (const d of it.depends_on) {
     const dep = items.get(d);
     // roadmap-edit-fixes round 1 (constraints.check): a done dependency is met whatever its dates.
-    if (dep && dep.status !== "cut" && dep.status !== "done" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but ‘${dep.title}’ it depends on ends ${shortDay(dep.end.date)}`);
+    if (dep && dep.status !== 'cut' && dep.status !== 'done' && dep.end.date >= start)
+      out.push(
+        `Starts ${shortDay(start)}, but ‘${dep.title}’ it depends on ends ${shortDay(dep.end.date)}`,
+      );
   }
   for (const n of it.needed_by) {
     const next = items.get(n);
-    if (!next || next.status === "cut" || next.status === "done") continue;
+    if (!next || next.status === 'cut' || next.status === 'done') continue;
     // walkb-roadmap: a dependent's estimated start is no date to break; its real end is.
     if (next.start.estimated) {
-      if (!next.end.estimated && end >= next.end.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it ends ${shortDay(next.end.date)}`);
-    } else if (end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
+      if (!next.end.estimated && end >= next.end.date)
+        out.push(
+          `Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it ends ${shortDay(next.end.date)}`,
+        );
+    } else if (end >= next.start.date)
+      out.push(
+        `Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`,
+      );
   }
   return out;
 }
@@ -246,30 +292,32 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
 export type Lifted = { bar: SVGGElement; drop: () => void };
 export function liftBar(g: SVGGElement): Lifted {
   const svg = g.ownerSVGElement!;
-  const layer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  layer.setAttribute("width", svg.getAttribute("width") ?? "0");
-  layer.setAttribute("height", svg.getAttribute("height") ?? "0");
-  layer.setAttribute("aria-hidden", "true");
-  layer.dataset.testid = "drag-layer";
+  const layer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  layer.setAttribute('width', svg.getAttribute('width') ?? '0');
+  layer.setAttribute('height', svg.getAttribute('height') ?? '0');
+  layer.setAttribute('aria-hidden', 'true');
+  layer.dataset.testid = 'drag-layer';
   // The chart's svg sits at the top left of its box: the layer lies exactly over it.
-  layer.style.cssText = "position:absolute;left:0;top:0;overflow:visible;pointer-events:none;will-change:transform";
+  layer.style.cssText =
+    'position:absolute;left:0;top:0;overflow:visible;pointer-events:none;will-change:transform';
   const bar = g.cloneNode(true) as SVGGElement;
-  for (const a of ["data-testid", "data-bar-id", "tabindex", "role", "aria-label"]) bar.removeAttribute(a);
+  for (const a of ['data-testid', 'data-bar-id', 'tabindex', 'role', 'aria-label'])
+    bar.removeAttribute(a);
   layer.appendChild(bar);
   svg.after(layer);
-  g.style.visibility = "hidden";
+  g.style.visibility = 'hidden';
   return {
     bar,
     drop: () => {
       layer.remove();
-      g.style.visibility = "";
+      g.style.visibility = '';
     },
   };
 }
 
 /** The dragged bar's dates on the chart's own bar, written only when they change. */
 export function markDrag(g: SVGGElement, start: string, end: string, broken: boolean) {
-  const live = broken ? "broken" : "ok";
+  const live = broken ? 'broken' : 'ok';
   if (g.dataset.dragStart !== start) g.dataset.dragStart = start;
   if (g.dataset.dragEnd !== end) g.dataset.dragEnd = end;
   if (g.dataset.live !== live) g.dataset.live = live;
@@ -288,89 +336,124 @@ export class ChangeFailed extends Error {
 
 /** fix4 qa-simple-roadmap-21: a changed field in words ("its dates", never "start_date"). */
 const FIELD_WORDS: Record<string, string> = {
-  start_date: "dates",
-  end_date: "dates",
-  horizon: "horizon",
-  title: "title",
-  outcome: "outcome",
-  status: "status",
-  key_date: "key date",
-  kept_both: "merge choice",
-  milestone: "milestone",
-  order: "order",
+  start_date: 'dates',
+  end_date: 'dates',
+  horizon: 'horizon',
+  title: 'title',
+  outcome: 'outcome',
+  status: 'status',
+  key_date: 'key date',
+  kept_both: 'merge choice',
+  milestone: 'milestone',
+  order: 'order',
 };
-export const changedWords = (fields: string[]): string[] => [...new Set(fields.map((f) => FIELD_WORDS[f] ?? f.replace(/_/g, " ")))];
+export const changedWords = (fields: string[]): string[] => [
+  ...new Set(fields.map((f) => FIELD_WORDS[f] ?? f.replace(/_/g, ' '))),
+];
 
 function detailOf(error: unknown): string {
   const d = (error as { detail?: unknown } | undefined)?.detail;
-  if (typeof d === "string") return d;
-  if (d && typeof d === "object" && "message" in d) return String((d as { message: unknown }).message);
-  return "Oracle could not make this change";
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && 'message' in d)
+    return String((d as { message: unknown }).message);
+  return 'Oracle could not make this change';
 }
 
 /** The fields a 409's `current` names (flattened one level: an item's fields under its id). */
 function changedOf(error: unknown): string[] {
-  const cur = ((error as { detail?: unknown } | undefined)?.detail as { current?: unknown } | undefined)?.current;
-  if (!cur || typeof cur !== "object") return [];
-  return Object.entries(cur as Record<string, unknown>).flatMap(([k, v]) => (v && typeof v === "object" && !Array.isArray(v) && !(k in FIELD_WORDS) ? Object.keys(v) : [k]));
+  const cur = (
+    (error as { detail?: unknown } | undefined)?.detail as { current?: unknown } | undefined
+  )?.current;
+  if (!cur || typeof cur !== 'object') return [];
+  return Object.entries(cur as Record<string, unknown>).flatMap(([k, v]) =>
+    v && typeof v === 'object' && !Array.isArray(v) && !(k in FIELD_WORDS) ? Object.keys(v) : [k],
+  );
 }
 
 /** One change through the engine (POST /v1/simple/changes). */
-export async function propose(body: Schemas["SimpleChangeIn"]): Promise<ChangeResult> {
-  const { data, error, response } = await api.POST("/v1/simple/changes", { body });
-  if (!data) throw new ChangeFailed(detailOf(error), response.status, response.status === 409 ? changedOf(error) : []);
+export async function propose(body: Schemas['SimpleChangeIn']): Promise<ChangeResult> {
+  const { data, error, response } = await api.POST('/v1/simple/changes', { body });
+  if (!data)
+    throw new ChangeFailed(
+      detailOf(error),
+      response.status,
+      response.status === 409 ? changedOf(error) : [],
+    );
   return data;
 }
 
 export async function undo(id: string): Promise<ChangeResult> {
-  const { data, error, response } = await api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: id } } });
+  const { data, error, response } = await api.POST('/v1/simple/changes/{change_id}/undo', {
+    params: { path: { change_id: id } },
+  });
   if (!data) throw new ChangeFailed(detailOf(error), response.status);
   return data;
 }
 
-export async function decide(id: string, how: "accept" | "decline"): Promise<ChangeResult> {
+export async function decide(id: string, how: 'accept' | 'decline'): Promise<ChangeResult> {
   const path = { params: { path: { change_id: id } }, body: {} };
   const { data, error, response } =
-    how === "accept" ? await api.POST("/v1/simple/changes/{change_id}/accept", path) : await api.POST("/v1/simple/changes/{change_id}/decline", path);
+    how === 'accept'
+      ? await api.POST('/v1/simple/changes/{change_id}/accept', path)
+      : await api.POST('/v1/simple/changes/{change_id}/decline', path);
   if (!data) throw new ChangeFailed(detailOf(error), response.status);
   return data;
 }
 
-export async function suggestion(id: string, how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }): Promise<void> {
+export async function suggestion(
+  id: string,
+  how: 'accept' | 'edit' | 'dismiss',
+  dates?: { start_date: string; end_date: string },
+): Promise<void> {
   const path = { params: { path: { suggestion_id: id } } };
   const r =
-    how === "accept"
-      ? await api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/accept", path)
-      : how === "edit"
-        ? await api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit", { ...path, body: dates! })
-        : await api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss", path);
+    how === 'accept'
+      ? await api.POST('/v1/simple/roadmap/date-suggestions/{suggestion_id}/accept', path)
+      : how === 'edit'
+        ? await api.POST('/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit', {
+            ...path,
+            body: dates!,
+          })
+        : await api.POST('/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss', path);
   if (!r.data) {
     // qa-nov17: a suggestion accepted after the item got dates answers 409 "outdated: …": said in plain words.
     const words = detailOf(r.error);
-    throw new ChangeFailed(r.response.status === 409 && words.startsWith("outdated") ? OUTDATED_DATES : words, r.response.status);
+    throw new ChangeFailed(
+      r.response.status === 409 && words.startsWith('outdated') ? OUTDATED_DATES : words,
+      r.response.status,
+    );
   }
 }
 
 /** qa-nov17: what Accept of Oracle's dates says when the item's dates changed since. */
-export const OUTDATED_DATES = "Dates were changed since Oracle suggested these";
+export const OUTDATED_DATES = 'Dates were changed since Oracle suggested these';
 
 /** fix4 qa-simple-roadmap-21: who decides a proposal, by name ("Dana Lee", "Dana Lee or Sam
  * Ortiz"); with none named, the roadmap's owner. */
 export const deciderWords = (deciders: string[] | undefined): string =>
-  deciders?.length ? (deciders.length === 1 ? deciders[0] : `${deciders.slice(0, -1).join(", ")} or ${deciders.at(-1)}`) : "the roadmap's owner";
+  deciders?.length
+    ? deciders.length === 1
+      ? deciders[0]
+      : `${deciders.slice(0, -1).join(', ')} or ${deciders.at(-1)}`
+    : "the roadmap's owner";
 
 /** What a change says it did when applied, and, when the two read differently, what it asks
  * when it is only proposed ("remove the dependency of ‘A’ on ‘B’"). */
 export type ChangeWords = string | { applied: string; proposed: string };
 
 /** The words a change's result says: applied (undo) or proposed (to whom, and where it shows). */
-export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: string[], note?: string): string {
-  const done = typeof what === "string" ? what : what.applied;
+export function resultWords(
+  r: ChangeResult,
+  what: ChangeWords,
+  deciders?: string[],
+  note?: string,
+): string {
+  const done = typeof what === 'string' ? what : what.applied;
   // Review: nothing was done yet: a proposal says what it asks, then whom it waits for.
   const said =
-    r.change.status === "applied"
+    r.change.status === 'applied'
       ? `${done} in your working draft`
-      : typeof what !== "string"
+      : typeof what !== 'string'
         ? `Proposed: ${what.proposed}; it waits for ${deciderWords(deciders)} in Needs a decision`
         : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
   return note ? `${said}. ${note}` : said;
@@ -381,18 +464,18 @@ export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: strin
  * another goal or PRD, said at that moment: they stay on the roadmap, each with its own goal and
  * PRD ("Its 2 parts stay on the roadmap."). "" when it has none.
  */
-export function partsWords(n: number, how: "stay" | "goal" | "PRD"): string {
-  if (!n) return "";
-  const its = n === 1 ? "Its 1 part" : `Its ${n} parts`;
-  if (how === "stay") return `${its} ${n === 1 ? "stays" : "stay"} on the roadmap.`;
-  return `${its} ${n === 1 ? "keeps its" : "keep their"} own ${how}.`;
+export function partsWords(n: number, how: 'stay' | 'goal' | 'PRD'): string {
+  if (!n) return '';
+  const its = n === 1 ? 'Its 1 part' : `Its ${n} parts`;
+  if (how === 'stay') return `${its} ${n === 1 ? 'stays' : 'stay'} on the roadmap.`;
+  return `${its} ${n === 1 ? 'keeps its' : 'keep their'} own ${how}.`;
 }
 
-const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [
-  ["discover", 0.15],
-  ["build", 0.55],
-  ["beta", 0.2],
-  ["launch", 0.1],
+const PHASE_SPLIT: [Item['phases'][number]['key'], number][] = [
+  ['discover', 0.15],
+  ['build', 0.55],
+  ['beta', 0.2],
+  ['launch', 0.1],
 ];
 
 /**
@@ -401,7 +484,7 @@ const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [
  * gate's day; every other phase keeps its share of the bar and ends before the next dated
  * gate (they may bunch up). Drawn while a bar is dragged and until the change answers.
  */
-export function rephase(item: Item, start: string, end: string): Item["phases"] {
+export function rephase(item: Item, start: string, end: string): Item['phases'] {
   const named = new Map(item.phases.filter((p) => !p.estimated).map((p) => [p.key, p.end]));
   const total = daysBetween(start, end) + 1;
   let cursor = start;
@@ -409,7 +492,8 @@ export function rephase(item: Item, start: string, end: string): Item["phases"] 
   return PHASE_SPLIT.map(([key, part], i) => {
     share += part;
     const own = named.get(key);
-    let day = own ?? (i === PHASE_SPLIT.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
+    let day =
+      own ?? (i === PHASE_SPLIT.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
     if (!own) {
       const gate = PHASE_SPLIT.slice(i + 1)
         .map(([k]) => named.get(k))
@@ -427,17 +511,24 @@ export function rephase(item: Item, start: string, end: string): Item["phases"] 
 /** Roadmap-plus: the key dates of the item's roadmap it ends within 2 weeks of, in words; null when none. */
 export function nearWords(item: Item, keyDates: KeyDate[]): string | null {
   const near = keyDates
-    .filter((k) => k.roadmap.id === item.roadmap.id && Math.abs(daysBetween(item.end.date, k.date)) <= 14)
+    .filter(
+      (k) => k.roadmap.id === item.roadmap.id && Math.abs(daysBetween(item.end.date, k.date)) <= 14,
+    )
     .map((k) => {
       const n = daysBetween(item.end.date, k.date);
-      const when = n === 0 ? "ends that day" : n > 0 ? `ends ${n} day${n === 1 ? "" : "s"} before` : `ends ${-n} day${n === -1 ? "" : "s"} after`;
+      const when =
+        n === 0
+          ? 'ends that day'
+          : n > 0
+            ? `ends ${n} day${n === 1 ? '' : 's'} before`
+            : `ends ${-n} day${n === -1 ? '' : 's'} after`;
       return `${k.name} (${shortDay(k.date)}): ${when}`;
     });
-  return near.length ? near.join(" · ") : null;
+  return near.length ? near.join(' · ') : null;
 }
 
 /** S7: an item closed for the plan (cut, or a draft merged into another): drawn below the line. */
-export const closedItem = (i: Item): boolean => i.status === "cut" || i.status === "merged";
+export const closedItem = (i: Item): boolean => i.status === 'cut' || i.status === 'merged';
 
 /**
  * feature-parts (any depth, owner's answer Nov 5): lists of item ids (a view's groups, lanes or
@@ -446,7 +537,10 @@ export const closedItem = (i: Item): boolean => i.status === "cut" || i.status =
  * whose parent is not among the ids (filtered out, closed, in Trash) stays where it was, at the
  * top level, so no row is ever lost.
  */
-export function partsTree(lists: string[][], byId: Map<string, Item>): { id: string; depth: number }[][] {
+export function partsTree(
+  lists: string[][],
+  byId: Map<string, Item>,
+): { id: string; depth: number }[][] {
   const all = new Set(lists.flat());
   const parentOf = (id: string): string | null => {
     const i = byId.get(id);
@@ -478,7 +572,7 @@ export function partsTree(lists: string[][], byId: Map<string, Item>): { id: str
 /** panel-menu: "<code> <name>" of the feature a merged one went into, by the kept feature's
  * display code (never its key), as its panel reads it. */
 export function mergedName(i: Item, find: (id: string) => Item | undefined): string {
-  return i.merged_into ? `${find(i.merged_into.id)?.code ?? ""} ${i.merged_into.title}`.trim() : "";
+  return i.merged_into ? `${find(i.merged_into.id)?.code ?? ''} ${i.merged_into.title}`.trim() : '';
 }
 
 /** S7: a quarter as the change engine names it ("2026-Q4"). */
@@ -488,12 +582,16 @@ export function quarterValue(start: string): string {
 }
 
 /** S7: where a quick-added item goes: a quarter, a horizon, a goal or (tb-mk) a track band (data-add-where="kind:value"). */
-export type Where = { kind: "quarter" | "horizon" | "goal" | "track"; value: string; label: string };
-export const whereAttr = (kind: Where["kind"], value: string): string => `${kind}:${value}`;
+export type Where = {
+  kind: 'quarter' | 'horizon' | 'goal' | 'track';
+  value: string;
+  label: string;
+};
+export const whereAttr = (kind: Where['kind'], value: string): string => `${kind}:${value}`;
 
 /** roadmap-gantt: what the rows sit under (Goal by default; Milestone is read from the items' slices). */
-export type Lane = "goal" | "milestone" | "track" | "prd";
-export type Slice = Schemas["SimpleSlice"];
+export type Lane = 'goal' | 'milestone' | 'track' | 'prd';
+export type Slice = Schemas['SimpleSlice'];
 
 /**
  * walkc-roadmap-tasks 2: an item's dated slices, drawn where the item now is. The plan's
@@ -504,7 +602,9 @@ export type Slice = Schemas["SimpleSlice"];
  * move gives it dates), so it keeps the plan's dates.
  */
 export function placedSlices(i: Item): Slice[] {
-  const d = i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
+  const d = i.slices
+    .filter((x) => x.start_date && x.end_date)
+    .sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
   if (!d.length || !i.start.date || !i.end.date || i.estimated) return d;
   const s0 = d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b));
   const s1 = d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b));
@@ -512,59 +612,95 @@ export function placedSlices(i: Item): Slice[] {
   if (s0 === start && s1 === end) return d;
   const was = daysBetween(s0, s1);
   const now = daysBetween(start, end);
-  const at = (day: string) => addDays(start, was > 0 ? Math.round((daysBetween(s0, day) * now) / was) : 0);
-  return d.map((x) => ({ ...x, start_date: at(x.start_date!), end_date: was > 0 ? at(x.end_date!) : end }));
+  const at = (day: string) =>
+    addDays(start, was > 0 ? Math.round((daysBetween(s0, day) * now) / was) : 0);
+  return d.map((x) => ({
+    ...x,
+    start_date: at(x.start_date!),
+    end_date: was > 0 ? at(x.end_date!) : end,
+  }));
 }
-export type Milestone = Roadmap["milestones"][number];
+export type Milestone = Roadmap['milestones'][number];
 /** A goal milestone of a roadmap (its own, or a PRD's): what a feature is placed in from its panel. */
-export type GoalMilestone = Roadmap["goal_milestones"][number];
+export type GoalMilestone = Roadmap['goal_milestones'][number];
 
 /**
  * item-milestone: the milestones a roadmap's feature can be placed in, in order: the roadmap's
  * own first, then each PRD's in the one PRD order (`prdOrder`), each by its code (M1, M2, M10).
  * A goal's own target date (milestone-kinds, goal_target) is never one: its features are the goal's.
  */
-export function placeable(all: readonly GoalMilestone[], roadmapId: string, prdOrder?: (a: { slug?: string | null; id?: string | null; title: string }, b: { slug?: string | null; id?: string | null; title: string }) => number): GoalMilestone[] {
+export function placeable(
+  all: readonly GoalMilestone[],
+  roadmapId: string,
+  prdOrder?: (
+    a: { slug?: string | null; id?: string | null; title: string },
+    b: { slug?: string | null; id?: string | null; title: string },
+  ) => number,
+): GoalMilestone[] {
   return all
     .filter((m) => m.roadmap_id === roadmapId && !m.goal_target)
     .sort(
       (a, b) =>
         Number(!!a.prd) - Number(!!b.prd) ||
-        (a.prd && b.prd && a.prd.id !== b.prd.id ? (prdOrder?.(a.prd, b.prd) ?? a.prd.title.localeCompare(b.prd.title)) : 0) ||
-        (a.roadmap_code ?? a.code).localeCompare(b.roadmap_code ?? b.code, undefined, { numeric: true }),
+        (a.prd && b.prd && a.prd.id !== b.prd.id
+          ? (prdOrder?.(a.prd, b.prd) ?? a.prd.title.localeCompare(b.prd.title))
+          : 0) ||
+        (a.roadmap_code ?? a.code).localeCompare(b.roadmap_code ?? b.code, undefined, {
+          numeric: true,
+        }),
     );
 }
 
 /** item-milestone: a goal milestone's words, its code and name, with its PRD when the roadmap's come from several ("M1 Load measured (Scale)"). */
 export function goalMilestoneWords(m: GoalMilestone, all: readonly GoalMilestone[]): string {
-  const prds = new Set(all.filter((x) => x.roadmap_id === m.roadmap_id && x.prd).map((x) => x.prd!.id));
-  return `${milestoneWords(`${m.roadmap_code ?? m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ""}`;
+  const prds = new Set(
+    all.filter((x) => x.roadmap_id === m.roadmap_id && x.prd).map((x) => x.prd!.id),
+  );
+  return `${milestoneWords(`${m.roadmap_code ?? m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ''}`;
 }
 
 /** A milestone's colour, by its code (M1, M2, M3, then round again). */
-const MILESTONE_INKS = ["var(--accent)", "var(--pass)", "var(--warn)", "var(--na)"];
+const MILESTONE_INKS = ['var(--accent)', 'var(--pass)', 'var(--warn)', 'var(--na)'];
 export function milestoneInk(code: string): string {
-  const n = Number(code.replace(/\D/g, "")) || 1;
+  const n = Number(code.replace(/\D/g, '')) || 1;
   return MILESTONE_INKS[(n - 1) % MILESTONE_INKS.length];
 }
 
 /** A milestone's words, its code with its name ("M2 Scale volume", never "M2 · Scale volume"). */
-export const milestoneWords = (name: string): string => name.replace(/\s*·\s*/, " ");
+export const milestoneWords = (name: string): string => name.replace(/\s*·\s*/, ' ');
 
 /** QA Nov 12 #5: an end past its milestone names the milestone by its code and name ("M1 Beta"),
  * as the Timeline and the board do: the goal milestone it was picked from, else the roadmap's one
  * holding it. Every place that shows a flag's reason reads it through this. */
-export function codedFlag(i: Item, f: Flag, milestones: readonly GoalMilestone[] = [], planned: readonly Milestone[] = []): Flag {
-  if (f.kind !== "outside_milestone" || !f.subject) return f;
+export function codedFlag(
+  i: Item,
+  f: Flag,
+  milestones: readonly GoalMilestone[] = [],
+  planned: readonly Milestone[] = [],
+): Flag {
+  if (f.kind !== 'outside_milestone' || !f.subject) return f;
   const gm = i.milestone?.id ? milestones.find((m) => m.id === i.milestone!.id) : undefined;
-  const tm = gm ? undefined : planned.find((m) => m.roadmap_code && (m.item_ids.includes(i.id) || m.id === i.milestone?.record_id) && m.name === f.subject);
-  const words = gm ? goalMilestoneWords(gm, milestones) : tm ? milestoneWords(`${tm.roadmap_code} ${tm.name}`) : null;
+  const tm = gm
+    ? undefined
+    : planned.find(
+        (m) =>
+          m.roadmap_code &&
+          (m.item_ids.includes(i.id) || m.id === i.milestone?.record_id) &&
+          m.name === f.subject,
+      );
+  const words = gm
+    ? goalMilestoneWords(gm, milestones)
+    : tm
+      ? milestoneWords(`${tm.roadmap_code} ${tm.name}`)
+      : null;
   return words ? { ...f, reason: f.reason.replace(`‘${f.subject}’`, `‘${words}’`) } : f;
 }
 
 /** The plan's dated milestones (a start and an end), in date order. */
 export const planMilestones = (data: Roadmap): Milestone[] =>
-  data.milestones.filter((m) => m.start_date && m.end_date).sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
+  data.milestones
+    .filter((m) => m.start_date && m.end_date)
+    .sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
 
 /**
  * roadmap-keydates: the key dates the charts draw: the roadmap's own, and a PRD's milestone
@@ -573,11 +709,26 @@ export const planMilestones = (data: Roadmap): Milestone[] =>
  */
 export function drawnKeyDates(data: Roadmap): KeyDate[] {
   const code = (name: string) => name.split(/[\s·]/)[0];
-  const words = (name: string) => name.replace(/^[A-Z][A-Z0-9]*-?\d+[a-z]?\s*[·:.\-–—]?\s*/, "").trim().toLowerCase();
+  const words = (name: string) =>
+    name
+      .replace(/^[A-Z][A-Z0-9]*-?\d+[a-z]?\s*[·:.\-–—]?\s*/, '')
+      .trim()
+      .toLowerCase();
   const drawn = new Set(
-    data.milestones.flatMap((m) => [m.end_date, m.date].filter(Boolean).flatMap((d) => [`${code(m.name)}|${d}`, `~${words(m.name)}|${d}`])),
+    data.milestones.flatMap((m) =>
+      [m.end_date, m.date]
+        .filter(Boolean)
+        .flatMap((d) => [`${code(m.name)}|${d}`, `~${words(m.name)}|${d}`]),
+    ),
   );
-  return (data.key_dates ?? []).filter((k) => !k.prd || !(drawn.has(`${code(k.name)}|${k.date}`) || (!!words(k.name) && drawn.has(`~${words(k.name)}|${k.date}`))));
+  return (data.key_dates ?? []).filter(
+    (k) =>
+      !k.prd ||
+      !(
+        drawn.has(`${code(k.name)}|${k.date}`) ||
+        (!!words(k.name) && drawn.has(`~${words(k.name)}|${k.date}`))
+      ),
+  );
 }
 
 /** The milestone a person is in now: the one running today, else the next one, else the last. */
@@ -588,14 +739,20 @@ export function currentMilestone(data: Roadmap): Milestone | null {
 
 /** The PRDs the plan's items come from (slug -> title), in the order first seen. */
 export function planPrds(data: Roadmap): Map<string, string> {
-  return new Map(data.items.flatMap((i) => (i.slices.length && i.prd ? [[i.prd.slug, i.prd.title] as [string, string]] : [])));
+  return new Map(
+    data.items.flatMap((i) =>
+      i.slices.length && i.prd ? [[i.prd.slug, i.prd.title] as [string, string]] : [],
+    ),
+  );
 }
 
 /** A dated milestone's PRD: the PRD of the planned items it names, else of its track's (null: none). */
 export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title: string } | null {
   const ids = new Set(m.item_ids);
   const planned = data.items.filter((i) => i.slices.length && i.prd);
-  const prd = (planned.find((i) => ids.has(i.id)) ?? planned.find((i) => i.track?.id === m.track_id))?.prd;
+  const prd = (
+    planned.find((i) => ids.has(i.id)) ?? planned.find((i) => i.track?.id === m.track_id)
+  )?.prd;
   return prd ? { slug: prd.slug, title: prd.title } : null;
 }
 
@@ -619,7 +776,7 @@ export function planGoal(item: Item | undefined): string | null {
  * ("No milestone" last); Track and PRD: the API's.
  */
 export function lanes(data: Roadmap, by: Lane): Roadmap {
-  if (by === "track" || by === "prd") return data;
+  if (by === 'track' || by === 'prd') return data;
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const out = new Map<string, { key: string; title: string; item_ids: string[] }>();
   const order = new Map<string, [string, string]>();
@@ -628,23 +785,31 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
     g.item_ids.push(id);
     out.set(key, g);
   };
-  if (by === "goal") {
+  if (by === 'goal') {
     for (const g of data.groups)
       for (const id of g.item_ids) {
         // walkb-roadmap review 5c: a planned item sits under its PRD's goal (the one its slices
         // name most), never under another goal its feature also supports.
         const goal = planGoal(byId.get(id));
-        const named = goal ? data.groups.find((x) => x.key !== "none" && x.title === goal) : undefined;
+        const named = goal
+          ? data.groups.find((x) => x.key !== 'none' && x.title === goal)
+          : undefined;
         if (named) put(named.key, named.title, id);
         else if (goal) put(`plan-goal:${goal}`, goal, id);
         else put(g.key, g.title, id);
       }
   } else {
     const many = planPrds(data).size > 1;
-    const tracked = data.milestones.filter((m) => m.date && !(m.start_date && m.end_date)).sort((a, b) => (a.date! < b.date! ? -1 : 1));
+    const tracked = data.milestones
+      .filter((m) => m.date && !(m.start_date && m.end_date))
+      .sort((a, b) => (a.date! < b.date! ? -1 : 1));
     const leadsTo = (i: Item): Milestone | undefined =>
       tracked.find((m) => m.item_ids.includes(i.id)) ??
-      (i.milestone?.name ? tracked.find((m) => m.name === i.milestone!.name && (!i.track || m.track_id === i.track.id)) : undefined) ??
+      (i.milestone?.name
+        ? tracked.find(
+            (m) => m.name === i.milestone!.name && (!i.track || m.track_id === i.track.id),
+          )
+        : undefined) ??
       tracked.find((m) => !!i.track && m.track_id === i.track.id && i.end.date <= m.date!);
     // item-milestone: a feature placed in a goal milestone from its panel goes in that one's lane.
     const placed = new Map((data.goal_milestones ?? []).map((m) => [m.id, m]));
@@ -655,29 +820,36 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
         const first = item?.slices[0];
         const tm = item && !first ? leadsTo(item) : undefined;
         if (picked) {
-          const key = picked.prd ? `milestone:${picked.prd.slug}:${picked.code}` : `goal-milestone:${picked.id}`;
-          order.set(key, [picked.code, picked.prd?.title ?? ""]);
+          const key = picked.prd
+            ? `milestone:${picked.prd.slug}:${picked.code}`
+            : `goal-milestone:${picked.id}`;
+          order.set(key, [picked.code, picked.prd?.title ?? '']);
           put(key, goalMilestoneWords(picked, data.goal_milestones), id);
         } else if (first) {
           const prd = item!.prd;
-          const key = `milestone:${prd?.slug ?? ""}:${first.milestone}`;
-          order.set(key, [first.milestone, prd?.title ?? ""]);
-          put(key, `${first.milestone} ${first.milestone_name}${many && prd ? ` (${prd.title})` : ""}`, id);
+          const key = `milestone:${prd?.slug ?? ''}:${first.milestone}`;
+          order.set(key, [first.milestone, prd?.title ?? '']);
+          put(
+            key,
+            `${first.milestone} ${first.milestone_name}${many && prd ? ` (${prd.title})` : ''}`,
+            id,
+          );
         } else if (tm) {
           const key = `track-milestone:${tm.id}`;
           // After the plan's coded milestones, in date order.
-          order.set(key, [`\uffff${tm.date}`, ""]);
+          order.set(key, [`\uffff${tm.date}`, '']);
           put(key, `${tm.name} (${shortDay(tm.date!)})`, id);
-        } else put("none", "No milestone", id);
+        } else put('none', 'No milestone', id);
       }
   }
   const groups = [...out.values()];
-  if (by === "milestone")
+  if (by === 'milestone')
     groups.sort((a, b) => {
-      if (a.key === "none" || b.key === "none") return Number(a.key === "none") - Number(b.key === "none");
+      if (a.key === 'none' || b.key === 'none')
+        return Number(a.key === 'none') - Number(b.key === 'none');
       const [ac, ap] = order.get(a.key)!;
       const [bc, bp] = order.get(b.key)!;
-      const [at, bt] = [ac.startsWith("\uffff"), bc.startsWith("\uffff")];
+      const [at, bt] = [ac.startsWith('\uffff'), bc.startsWith('\uffff')];
       if (at !== bt) return Number(at) - Number(bt);
       return ac.localeCompare(bc, undefined, { numeric: true }) || ap.localeCompare(bp);
     });
@@ -685,8 +857,8 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
     // goal-order: the goals in the API's order (the one goal order), whichever item came first;
     // a plan goal the API does not group by comes after them, No goal last.
     const rank = (key: string) => {
-      const n = data.groups.findIndex((x) => x.key === key && x.key !== "none");
-      return key === "none" ? Infinity : n < 0 ? data.groups.length : n;
+      const n = data.groups.findIndex((x) => x.key === key && x.key !== 'none');
+      return key === 'none' ? Infinity : n < 0 ? data.groups.length : n;
     };
     groups.sort((a, b) => rank(a.key) - rank(b.key));
   }

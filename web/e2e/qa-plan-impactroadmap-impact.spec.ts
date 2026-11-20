@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * QA plan findings on the Impact explorer (qa-plan-10, 58, 59, 60, 61), on the mock API.
@@ -15,111 +15,163 @@ const scenario = (page: Page, name: string) =>
 /** The checkout PRD's v2 Impact screen, opened from the version's toolbar. */
 async function openVersionImpact(page: Page) {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  await page.getByRole("link", { name: "Impact", exact: true }).click();
+  await page.goto('/documents/annual-billing/v/2');
+  await page.getByRole('link', { name: 'Impact', exact: true }).click();
   await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 /** The recorded change behind the Bulk import tech brief, opened from its inspector. */
 async function openRecordedChange(page: Page) {
   await openVersionImpact(page);
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Bulk import tech brief").click();
-  await page.getByRole("complementary", { name: /Bulk import tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
+  await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Table' }).click();
+  await page
+    .getByRole('grid', { name: 'Affected outputs' })
+    .getByText('Bulk import tech brief')
+    .click();
+  await page
+    .getByRole('complementary', { name: /Bulk import tech brief/ })
+    .getByRole('link', { name: 'Recorded change' })
+    .click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
 }
 
-const SUBJECT = "Annual billing PRD v2 › Success metrics section edited";
+const SUBJECT = 'Annual billing PRD v2 › Success metrics section edited';
 
-test("qa-plan-10/61: a recorded change is named in words, in the heading and the lineage, with no internal refs", async ({ page }) => {
-  await scenario(page, "impact");
+test('qa-plan-10/61: a recorded change is named in words, in the heading and the lineage, with no internal refs', async ({
+  page,
+}) => {
+  await scenario(page, 'impact');
   await openRecordedChange(page);
   // qa4-plan-45: the back link above names the version, so the heading does not repeat it.
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Impact: Success metrics section edited");
-  const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-subject")).toContainText(SUBJECT);
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Success metrics" })).toBeVisible();
-  const main = page.locator("main");
-  await expect(main).not.toContainText("annual-billing@2");
-  await expect(main).not.toContainText("#metrics");
-  await expect(main).not.toContainText("section metrics changed");
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Impact: Success metrics section edited',
+  );
+  const graph = page.getByRole('region', { name: 'Lineage' });
+  await expect(graph.getByTestId('lineage-subject')).toContainText(SUBJECT);
+  await expect(
+    graph.getByTestId('lineage-upstream').filter({ hasText: 'Success metrics' }),
+  ).toBeVisible();
+  const main = page.locator('main');
+  await expect(main).not.toContainText('annual-billing@2');
+  await expect(main).not.toContainText('#metrics');
+  await expect(main).not.toContainText('section metrics changed');
 
   // The table's inspector: the reason in words, and no code-font chips.
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Bulk import tech brief").click();
-  const inspector = page.getByRole("complementary", { name: /Bulk import tech brief/ });
-  await expect(inspector.getByText("The “Success metrics” section changed in Annual billing PRD")).toBeVisible();
-  await expect(inspector.getByTestId("dependency")).toContainText("Annual billing PRD v1 · Success metrics");
-  await expect(inspector.locator("code")).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Regeneration plan" }).locator("code")).toHaveCount(0);
+  await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Table' }).click();
+  await page
+    .getByRole('grid', { name: 'Affected outputs' })
+    .getByText('Bulk import tech brief')
+    .click();
+  const inspector = page.getByRole('complementary', { name: /Bulk import tech brief/ });
+  await expect(
+    inspector.getByText('The “Success metrics” section changed in Annual billing PRD'),
+  ).toBeVisible();
+  await expect(inspector.getByTestId('dependency')).toContainText(
+    'Annual billing PRD v1 · Success metrics',
+  );
+  await expect(inspector.locator('code')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Regeneration plan' }).locator('code')).toHaveCount(
+    0,
+  );
 });
 
-test("qa-plan-58: the section a change reached names the same version as the change", async ({ page }) => {
-  await scenario(page, "impact");
+test('qa-plan-58: the section a change reached names the same version as the change', async ({
+  page,
+}) => {
+  await scenario(page, 'impact');
   await openRecordedChange(page);
-  const graph = page.getByRole("region", { name: "Lineage" });
-  const sub = graph.getByTestId("lineage-upstream").filter({ hasText: "Success metrics" }).getByTestId("lineage-upstream-sub");
-  await expect(sub).toHaveText("Section of Annual billing PRD v2");
+  const graph = page.getByRole('region', { name: 'Lineage' });
+  const sub = graph
+    .getByTestId('lineage-upstream')
+    .filter({ hasText: 'Success metrics' })
+    .getByTestId('lineage-upstream-sub');
+  await expect(sub).toHaveText('Section of Annual billing PRD v2');
   // The version the outputs were built on is said on hover, not as a second, clashing version.
-  await expect(sub).toHaveAttribute("title", "Section of Annual billing PRD v2. Outputs were built on v1.");
+  await expect(sub).toHaveAttribute(
+    'title',
+    'Section of Annual billing PRD v2. Outputs were built on v1.',
+  );
 });
 
-test("qa-plan-59: a recorded change leads back to its version, with PRDs highlighted", async ({ page }) => {
-  await scenario(page, "impact");
+test('qa-plan-59: a recorded change leads back to its version, with PRDs highlighted', async ({
+  page,
+}) => {
+  await scenario(page, 'impact');
   await openRecordedChange(page);
-  const nav = page.getByRole("navigation", { name: "Oracle" });
-  await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
+  const nav = page.getByRole('navigation', { name: 'Oracle' });
+  await expect(nav.getByTestId('nav-prds')).toHaveAttribute('aria-current', 'page');
   // The what-if page it was opened from may still be mounted, hidden; the shown header is the change's.
-  const back = page.getByTestId("impact-back").filter({ visible: true });
+  const back = page.getByTestId('impact-back').filter({ visible: true });
   // qa-plan-12: opened from v2's Impact, it leads back there.
-  await expect(back).toHaveText("‹ Impact of Annual billing PRD v2");
+  await expect(back).toHaveText('‹ Impact of Annual billing PRD v2');
   await expect(back).toBeVisible();
   await back.click();
   await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 });
 
-test("qa-plan-59/61: a Ground Truth item's what-if reads 'Impact: Setup checklist' and leads back to Ground Truth", async ({ page }) => {
-  await scenario(page, "impact");
+test("qa-plan-59/61: a Ground Truth item's what-if reads 'Impact: Setup checklist' and leads back to Ground Truth", async ({
+  page,
+}) => {
+  await scenario(page, 'impact');
   await login(page);
-  await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
-  await page.getByRole("dialog", { name: "Setup checklist" }).getByRole("link", { name: "What if it changed?" }).click();
+  await page.goto('/ground-truth');
+  await page.getByTestId('feature-F-01').getByRole('button', { name: 'Setup checklist' }).click();
+  await page
+    .getByRole('dialog', { name: 'Setup checklist' })
+    .getByRole('link', { name: 'What if it changed?' })
+    .click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Impact: Setup checklist");
-  const nav = page.getByRole("navigation", { name: "Oracle" });
-  await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
-  await page.getByTestId("impact-back").click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Impact: Setup checklist');
+  const nav = page.getByRole('navigation', { name: 'Oracle' });
+  await expect(nav.getByTestId('nav-baseline')).toHaveAttribute('aria-current', 'page');
+  await page.getByTestId('impact-back').click();
   await expect(page).toHaveURL(/\/ground-truth$/);
 });
 
-test("qa-plan-10: the plan names sections by their headings, not their keys", async ({ page }) => {
-  await scenario(page, "impact");
+test('qa-plan-10: the plan names sections by their headings, not their keys', async ({ page }) => {
+  await scenario(page, 'impact');
   await openVersionImpact(page);
-  await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Checkout flow" }).click();
-  const plan = page.getByRole("complementary", { name: "Regeneration plan" });
-  const row = plan.getByTestId("plan-row").filter({ hasText: "Checkout flow" });
-  await expect(row.getByTestId("plan-sections")).toHaveText("Scope");
-  await row.getByTestId("propose-version-tip").filter({ visible: true }).first().click();
-  await expect(page.getByRole("tooltip").filter({ hasText: "covering only the “Scope” section", visible: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(plan.locator("code")).toHaveCount(0);
-  const roadmap = plan.getByTestId("plan-row").filter({ hasText: "Usage alerts roadmap" });
-  await expect(roadmap).not.toContainText("prd_to_roadmap");
+  await page
+    .getByRole('region', { name: 'Lineage' })
+    .getByTestId('lineage-output')
+    .filter({ hasText: 'Checkout flow' })
+    .click();
+  const plan = page.getByRole('complementary', { name: 'Regeneration plan' });
+  const row = plan.getByTestId('plan-row').filter({ hasText: 'Checkout flow' });
+  await expect(row.getByTestId('plan-sections')).toHaveText('Scope');
+  await row.getByTestId('propose-version-tip').filter({ visible: true }).first().click();
+  await expect(
+    page
+      .getByRole('tooltip')
+      .filter({ hasText: 'covering only the “Scope” section', visible: true }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(plan.locator('code')).toHaveCount(0);
+  const roadmap = plan.getByTestId('plan-row').filter({ hasText: 'Usage alerts roadmap' });
+  await expect(roadmap).not.toContainText('prd_to_roadmap');
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("qa-plan-60: on a phone the lineage says how big the plan is and to tap an output", async ({ page }) => {
-    await scenario(page, "impact");
+  test('qa-plan-60: on a phone the lineage says how big the plan is and to tap an output', async ({
+    page,
+  }) => {
+    await scenario(page, 'impact');
     await login(page);
-    await page.goto("/documents/annual-billing/v/2/impact");
-    const list = page.getByRole("region", { name: "Affected outputs" });
-    await expect(list.getByTestId("impact-phone-hint")).toHaveText(
-      "The regeneration plan has 6 proposals. Tap an output to see its proposal and act on it.",
+    await page.goto('/documents/annual-billing/v/2/impact');
+    const list = page.getByRole('region', { name: 'Affected outputs' });
+    await expect(list.getByTestId('impact-phone-hint')).toHaveText(
+      'The regeneration plan has 6 proposals. Tap an output to see its proposal and act on it.',
     );
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-    await list.getByRole("button", { name: /Checkout flow/ }).click();
-    await expect(page.getByRole("dialog", { name: /Checkout flow/ }).getByText("1 · Settle staleness")).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+    await list.getByRole('button', { name: /Checkout flow/ }).click();
+    await expect(
+      page.getByRole('dialog', { name: /Checkout flow/ }).getByText('1 · Settle staleness'),
+    ).toBeVisible();
   });
 });

@@ -1,6 +1,6 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { ConsentScreen } from "./ConsentScreen";
+import { ConsentScreen } from './ConsentScreen';
 
 export default function ConsentPage() {
   return (

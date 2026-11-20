@@ -1,4 +1,4 @@
-"use client";
+'use client';
 // RP2 'Draft layer on roadmap' (the owner's pick, Nov 4): each PRD whose run dated items that are
 // not approved yet shows above the roadmap's chart, one card per PRD, its items hatched on the
 // card's own month axis (GET /v1/simple/roadmap/draft-prds, api/oracle/simple/roadmap_drafts.py).
@@ -7,24 +7,32 @@
 // review meeting's Roadmap step does, never the roadmap. Approving the PRD puts its items on the
 // roadmap's working draft and they leave the layer.
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MutableRefObject, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
 
-import { Button, confirmInPage, Icon, InfoTip } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, confirmInPage, Icon, InfoTip } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { calendarDay } from '@/lib/dates';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { DatesForm, HATCH, months, movedWords } from "../meetings/[id]/_draft";
+import { DatesForm, HATCH, months, movedWords } from '../meetings/[id]/_draft';
 
-export type DraftPrd = Schemas["SimpleRoadmapDraftPrd"];
-export type DraftItem = DraftPrd["items"][number];
+export type DraftPrd = Schemas['SimpleRoadmapDraftPrd'];
+export type DraftItem = DraftPrd['items'][number];
 
-const PHONE_TAP = "max-[600px]:min-h-11";
+const PHONE_TAP = 'max-[600px]:min-h-11';
 const at = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00Z`);
 export const draftSpan = (i: DraftItem) => `${calendarDay(i.start)} – ${calendarDay(i.end)}`;
 
 // Show drafts, remembered per person in this browser (as the Plan's scope, lib/preferences.ts).
-const SHOW_KEY = "oracle-roadmap-drafts";
+const SHOW_KEY = 'oracle-roadmap-drafts';
 const unsaved = new Map<string, boolean>();
 const listeners = new Set<() => void>();
 const subscribe = (l: () => void) => {
@@ -35,7 +43,7 @@ function readShow(userId: string): boolean {
   const held = unsaved.get(userId);
   if (held !== undefined) return held;
   try {
-    return localStorage.getItem(`${SHOW_KEY}:${userId}`) !== "off";
+    return localStorage.getItem(`${SHOW_KEY}:${userId}`) !== 'off';
   } catch {
     return true;
   }
@@ -52,7 +60,7 @@ export function useShowDrafts(userId: string | null | undefined): [boolean, (on:
       if (!userId) return;
       unsaved.delete(userId);
       try {
-        localStorage.setItem(`${SHOW_KEY}:${userId}`, on ? "on" : "off");
+        localStorage.setItem(`${SHOW_KEY}:${userId}`, on ? 'on' : 'off');
       } catch {
         unsaved.set(userId, on);
       }
@@ -65,7 +73,11 @@ export function useShowDrafts(userId: string | null | undefined): [boolean, (on:
 
 /** Resolves when the page is idle (the chart drawn and nothing else to do), or after 1.5 s at most. */
 const idle = () =>
-  new Promise<void>((r) => (typeof requestIdleCallback === "function" ? void requestIdleCallback(() => r(), { timeout: 1500 }) : void setTimeout(r, 200)));
+  new Promise<void>((r) =>
+    typeof requestIdleCallback === 'function'
+      ? void requestIdleCallback(() => r(), { timeout: 1500 })
+      : void setTimeout(r, 200),
+  );
 
 /**
  * Reads the draft PRDs off the roadmap's first draw: the roadmap mounts it once its own data is
@@ -73,8 +85,18 @@ const idle = () =>
  * were, or the page waits on it (`needed`: a saved or picked PRD may be a draft PRD's), so no
  * draft PRD re-renders nothing (e2e-timing: the 500-item roadmap's draw).
  */
-export function DraftPrdsRead({ needed, onRead, reloadRef }: { needed: boolean; onRead: (r: { data: DraftPrd[]; error: boolean }) => void; reloadRef: MutableRefObject<(() => Promise<unknown>) | null> }) {
-  const q = useQuery("simple-roadmap-draft-prds", () => idle().then(() => unwrap(api.GET("/v1/simple/roadmap/draft-prds"))));
+export function DraftPrdsRead({
+  needed,
+  onRead,
+  reloadRef,
+}: {
+  needed: boolean;
+  onRead: (r: { data: DraftPrd[]; error: boolean }) => void;
+  reloadRef: MutableRefObject<(() => Promise<unknown>) | null>;
+}) {
+  const q = useQuery('simple-roadmap-draft-prds', () =>
+    idle().then(() => unwrap(api.GET('/v1/simple/roadmap/draft-prds'))),
+  );
   const { reload } = q;
   useEffect(() => {
     reloadRef.current = reload;
@@ -101,12 +123,25 @@ function DraftKey({ children }: { children: ReactNode }) {
 }
 
 /** A draft PRD's items as hatched bars over its months, each as wide as its days. */
-function DraftBars({ prd, items, picked, onOpen }: { prd: DraftPrd["prd"]; items: DraftItem[]; picked: string | null; onOpen: (i: DraftItem) => void }) {
+function DraftBars({
+  prd,
+  items,
+  picked,
+  onOpen,
+}: {
+  prd: DraftPrd['prd'];
+  items: DraftItem[];
+  picked: string | null;
+  onOpen: (i: DraftItem) => void;
+}) {
   const { first, end, cols } = months(items);
   const x = (d: string) => ((at(d) - first) / (end - first)) * 100;
   return (
     <div role="group" aria-label={`${prd.title} draft timeline`} className="mt-2 min-w-0">
-      <div className="grid border-b border-line text-[13px] text-text2" style={{ gridTemplateColumns: cols.map((c) => `${c.days}fr`).join(" ") }}>
+      <div
+        className="grid border-b border-line text-[13px] text-text2"
+        style={{ gridTemplateColumns: cols.map((c) => `${c.days}fr`).join(' ') }}
+      >
         {cols.map((c, n) => (
           <span key={n} className="border-l border-line px-1.5 py-1 first:border-l-0">
             {c.name}
@@ -122,8 +157,12 @@ function DraftBars({ prd, items, picked, onOpen }: { prd: DraftPrd["prd"]; items
               aria-label={`${i.title}, ${draftSpan(i)}, draft, not approved`}
               title={`${i.title}: ${draftSpan(i)} (draft, not approved)`}
               onClick={() => onOpen(i)}
-              className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-[13px] font-medium whitespace-nowrap text-text ${picked === i.id ? "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]" : ""}`}
-              style={{ left: `${x(i.start)}%`, width: `${Math.max(x(i.end) - x(i.start), 2)}%`, ...HATCH }}
+              className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-[13px] font-medium whitespace-nowrap text-text ${picked === i.id ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]' : ''}`}
+              style={{
+                left: `${x(i.start)}%`,
+                width: `${Math.max(x(i.end) - x(i.start), 2)}%`,
+                ...HATCH,
+              }}
             >
               <span className="truncate">{i.title}</span>
             </button>
@@ -140,7 +179,13 @@ function DraftList({ items, onOpen }: { items: DraftItem[]; onOpen: (i: DraftIte
     <ul className="mt-2 divide-y divide-line">
       {items.map((i) => (
         <li key={i.id}>
-          <button type="button" data-draft-item={i.key} aria-label={`${i.title}, ${draftSpan(i)}, draft, not approved`} onClick={() => onOpen(i)} className="flex w-full items-center gap-2 py-2 text-left">
+          <button
+            type="button"
+            data-draft-item={i.key}
+            aria-label={`${i.title}, ${draftSpan(i)}, draft, not approved`}
+            onClick={() => onOpen(i)}
+            className="flex w-full items-center gap-2 py-2 text-left"
+          >
             <span aria-hidden className="h-5 w-2 flex-none rounded-sm" style={HATCH} />
             <span className="min-w-0 flex-1">
               <strong className="block">{i.title}</strong>
@@ -176,7 +221,12 @@ export function DraftLayer({
   if (!drafts.length) return null;
   const toggle = (
     <label className="inline-flex items-center gap-2 text-base">
-      <input type="checkbox" checked={show} onChange={(e) => onShow(e.target.checked)} className="size-4 accent-[var(--accent)]" />
+      <input
+        type="checkbox"
+        checked={show}
+        onChange={(e) => onShow(e.target.checked)}
+        className="size-4 accent-[var(--accent)]"
+      />
       Show drafts
     </label>
   );
@@ -184,7 +234,7 @@ export function DraftLayer({
     return (
       <section aria-label="Draft plans" className="simple-card" data-testid="draft-layer">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <DraftKey>{`${drafts.length} PRD${drafts.length === 1 ? "" : "s"} not approved yet, hidden`}</DraftKey>
+          <DraftKey>{`${drafts.length} PRD${drafts.length === 1 ? '' : 's'} not approved yet, hidden`}</DraftKey>
           <span className="flex-1" />
           {toggle}
         </div>
@@ -197,31 +247,51 @@ export function DraftLayer({
         <div className="mb-2 flex items-center gap-1.5">
           <p className="simple-small" role="status">{`Showing ${onlyPrd.prd.title} only`}</p>
           <InfoTip label={`${onlyPrd.prd.title} draft`} align="start">
-            {`Its ${onlyPrd.items.length} item${onlyPrd.items.length === 1 ? " is" : "s are"} a draft, hatched until the PRD is approved. Nothing of it is on the approved roadmap yet.`}
+            {`Its ${onlyPrd.items.length} item${onlyPrd.items.length === 1 ? ' is' : 's are'} a draft, hatched until the PRD is approved. Nothing of it is on the approved roadmap yet.`}
           </InfoTip>
         </div>
       )}
       {drafts.map((d, n) => {
         const open = !closed.has(d.prd.id);
         return (
-          <div key={d.prd.id} data-draft-prd={d.prd.slug} className={`flex flex-col gap-[var(--simple-gap)] ${n ? "border-t border-line pt-[var(--simple-gap)]" : ""}`}>
+          <div
+            key={d.prd.id}
+            data-draft-prd={d.prd.slug}
+            className={`flex flex-col gap-[var(--simple-gap)] ${n ? 'border-t border-line pt-[var(--simple-gap)]' : ''}`}
+          >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="simple-h2">
                 <button
                   type="button"
                   aria-expanded={open}
-                  onClick={() => setClosed((c) => (c.delete(d.prd.id) ? new Set(c) : new Set(c).add(d.prd.id)))}
+                  onClick={() =>
+                    setClosed((c) => (c.delete(d.prd.id) ? new Set(c) : new Set(c).add(d.prd.id)))
+                  }
                   className="inline-flex items-center gap-1.5 text-left"
                 >
                   {`${d.prd.title} · draft`}
-                  <Icon name={open ? "chevron-down" : "chevron-right"} size={16} className="text-text2" />
+                  <Icon
+                    name={open ? 'chevron-down' : 'chevron-right'}
+                    size={16}
+                    className="text-text2"
+                  />
                 </button>
               </h2>
               <DraftKey>Not approved yet</DraftKey>
               <span className="flex-1" />
               {n === 0 && toggle}
             </div>
-            {open && (phone ? <DraftList items={d.items} onOpen={(i) => onOpen(i, d)} /> : <DraftBars prd={d.prd} items={d.items} picked={picked} onOpen={(i) => onOpen(i, d)} />)}
+            {open &&
+              (phone ? (
+                <DraftList items={d.items} onOpen={(i) => onOpen(i, d)} />
+              ) : (
+                <DraftBars
+                  prd={d.prd}
+                  items={d.items}
+                  picked={picked}
+                  onOpen={(i) => onOpen(i, d)}
+                />
+              ))}
           </div>
         );
       })}
@@ -230,7 +300,19 @@ export function DraftLayer({
 }
 
 /** A draft item in the feature panel: its Draft line, and Change dates / Leave out on the run's draft. */
-export function DraftDetails({ item, prd, canChange, onChanged, onClose }: { item: DraftItem; prd: DraftPrd["prd"]; canChange: boolean; onChanged: (said: string) => Promise<unknown>; onClose: () => void }) {
+export function DraftDetails({
+  item,
+  prd,
+  canChange,
+  onChanged,
+  onClose,
+}: {
+  item: DraftItem;
+  prd: DraftPrd['prd'];
+  canChange: boolean;
+  onChanged: (said: string) => Promise<unknown>;
+  onClose: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -254,17 +336,26 @@ export function DraftDetails({ item, prd, canChange, onChanged, onClose }: { ite
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <strong className="text-lg">{item.title}</strong>
-          <span className="rounded-full border border-accent px-2 text-sm text-accent-ink">Draft</span>
+          <span className="rounded-full border border-accent px-2 text-sm text-accent-ink">
+            Draft
+          </span>
         </div>
-        <button type="button" aria-label="Close" onClick={onClose} className="flex size-8 flex-none items-center justify-center rounded-md text-text2 hover:bg-surface2">
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="flex size-8 flex-none items-center justify-center rounded-md text-text2 hover:bg-surface2"
+        >
           <Icon name="x" size={18} />
         </button>
       </div>
       <div className="mt-1 flex items-center gap-1.5">
-        <p className="text-base">{item.owner_name ? `${draftSpan(item)} · ${item.owner_name}` : draftSpan(item)}</p>
+        <p className="text-base">
+          {item.owner_name ? `${draftSpan(item)} · ${item.owner_name}` : draftSpan(item)}
+        </p>
         {/* Where the dates come from, behind its (i) (the prose guard). */}
         <InfoTip label="these dates" align="start" side="bottom">
-          {`Dates from ${prd.title.endsWith("s") ? `${prd.title}'` : `${prd.title}'s`} run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.`}
+          {`Dates from ${prd.title.endsWith('s') ? `${prd.title}'` : `${prd.title}'s`} run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.`}
         </InfoTip>
       </div>
       {canChange && !editing && (
@@ -276,8 +367,21 @@ export function DraftDetails({ item, prd, canChange, onChanged, onClose }: { ite
             className={`${PHONE_TAP} text-crit`}
             disabled={busy}
             onClick={async () => {
-              const yes = await confirmInPage({ action: "Leave out", message: `Leave ${item.title} out? It does not go on the roadmap.`, destructive: true });
-              if (yes) await act(() => unwrap(api.POST("/v1/simple/roadmap/draft-prds/items/{item_id}/leave-out", { params: { path } })), `Left out ${item.title}: it does not go on the roadmap.`);
+              const yes = await confirmInPage({
+                action: 'Leave out',
+                message: `Leave ${item.title} out? It does not go on the roadmap.`,
+                destructive: true,
+              });
+              if (yes)
+                await act(
+                  () =>
+                    unwrap(
+                      api.POST('/v1/simple/roadmap/draft-prds/items/{item_id}/leave-out', {
+                        params: { path },
+                      }),
+                    ),
+                  `Left out ${item.title}: it does not go on the roadmap.`,
+                );
             }}
           >
             Leave out
@@ -291,7 +395,19 @@ export function DraftDetails({ item, prd, canChange, onChanged, onClose }: { ite
             busy={busy}
             onCancel={() => setEditing(false)}
             onSave={async (start, end) => {
-              if (await act(() => unwrap(api.POST("/v1/simple/roadmap/draft-prds/items/{item_id}/dates", { params: { path }, body: { start, end } })), movedWords(item.title, item.start, start))) setEditing(false);
+              if (
+                await act(
+                  () =>
+                    unwrap(
+                      api.POST('/v1/simple/roadmap/draft-prds/items/{item_id}/dates', {
+                        params: { path },
+                        body: { start, end },
+                      }),
+                    ),
+                  movedWords(item.title, item.start, start),
+                )
+              )
+                setEditing(false);
             }}
           />
         </div>

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import type { ReactNode } from "react";
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
+import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
 import {
   Chip,
   CodeChip,
@@ -17,13 +17,13 @@ import {
   LinkButton,
   Meter,
   type Column,
-} from "@/components/ds";
-import { LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type DocumentSummary, type Schemas, type VersionOut } from "@/lib/api/client";
-import { plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { docLabel, runLabel } from "@/lib/labels";
-import { useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type DocumentSummary, type Schemas, type VersionOut } from '@/lib/api/client';
+import { plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { docLabel, runLabel } from '@/lib/labels';
+import { useQuery } from '@/lib/use-query';
 
 import {
   CHECKPOINT_LABEL,
@@ -34,7 +34,7 @@ import {
   SEGMENT_STATUS_LABEL,
   type RunOut,
   type RunSummary,
-} from "../runs/_lib";
+} from '../runs/_lib';
 
 /** A goal a row serves: its G tag, and whether the goal is still proposed. */
 export type RowGoal = { id: string; tag: string; title: string; proposed: boolean };
@@ -44,24 +44,27 @@ export type RowGoal = { id: string; tag: string; title: string; proposed: boolea
  * comes from the documents and runs lists (a run's `progress`), so the table costs no call
  * per row; goal tags, blockers and segments load in the inspector, for the selected row only.
  */
-export type Flight = { kind: "prd"; key: string; doc: DocumentSummary } | { kind: "run"; key: string; run: RunSummary };
+export type Flight =
+  | { kind: 'prd'; key: string; doc: DocumentSummary }
+  | { kind: 'run'; key: string; run: RunSummary };
 
 /** Goal id -> the goal's tag and title, as Home's goals strip tags them. */
 export type GoalIndex = Map<string, RowGoal>;
 
 /** A PRD in review stands at the journey's Review step. */
-const REVIEW_STEP = JOURNEY_STEPS.indexOf("Review") + 1;
+const REVIEW_STEP = JOURNEY_STEPS.indexOf('Review') + 1;
 
 /** What waits on a person before the run goes on: the checkpoint, the cost approval, or the overrun; null while it runs. */
 function runWait(run: RunSummary): string | null {
   if (run.waiting_on) return CHECKPOINT_LABEL[run.waiting_on];
-  if (run.status === "awaiting_approval") return "Cost approval";
-  if (run.status === "paused_overrun") return "Resume or cancel";
+  if (run.status === 'awaiting_approval') return 'Cost approval';
+  if (run.status === 'paused_overrun') return 'Resume or cancel';
   return null;
 }
 
 /** The segment a run is on (1-based): the one after those done, never past the last. */
-const segmentAt = (d: { done: number; total: number }) => Math.max(1, Math.min(d.done + 1, d.total));
+const segmentAt = (d: { done: number; total: number }) =>
+  Math.max(1, Math.min(d.done + 1, d.total));
 
 /**
  * qa-company-9: what comes after where the run stands now. A person's step it waits on; while
@@ -72,9 +75,9 @@ function runNext(run: RunSummary): string {
   const wait = runWait(run);
   if (wait) return wait;
   const d = run.progress;
-  if (!d || d.total === 0) return "–";
+  if (!d || d.total === 0) return '–';
   const after = segmentAt(d) + 1;
-  return after > d.total ? "Finish" : `Segment ${after} of ${d.total}`;
+  return after > d.total ? 'Finish' : `Segment ${after} of ${d.total}`;
 }
 
 /** The run's document, by slug, among the PRDs Home lists. */
@@ -83,38 +86,38 @@ const runDoc = (run: RunSummary, docs: DocumentSummary[] | undefined) =>
 
 /** A row by its human name (qa-shell-32): the PRD's title, or the run's document and flow, never a slug or an id. */
 function title(f: Flight, docs?: DocumentSummary[]) {
-  return f.kind === "prd" ? docLabel(f.doc) : runLabel(f.run, runDoc(f.run, docs)?.title);
+  return f.kind === 'prd' ? docLabel(f.doc) : runLabel(f.run, runDoc(f.run, docs)?.title);
 }
 
 /** "Step 8 of 9": where a PRD in review stands on the journey, said as a step so it is not read as sections done. */
 const STEP_TEXT = `Step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}`;
 /** qa-company-9: the journey's step after Review, what a PRD in review goes to next. */
-const AFTER_REVIEW = JOURNEY_STEPS[REVIEW_STEP] ?? "–";
+const AFTER_REVIEW = JOURNEY_STEPS[REVIEW_STEP] ?? '–';
 
 export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]): Column<Flight>[] {
   return [
     {
-      key: "name",
+      key: 'name',
       header: phoneHeader,
-      phone: "title",
+      phone: 'title',
       cell: (f) => (
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span className="truncate font-medium" title={title(f, docs)}>
             {title(f, docs)}
           </span>
-          {f.kind === "prd" && f.doc.latest_version != null && (
+          {f.kind === 'prd' && f.doc.latest_version != null && (
             <span className="tnum flex-none text-sm text-text2">v{f.doc.latest_version}</span>
           )}
         </span>
       ),
     },
     {
-      key: "status",
-      header: "Status",
-      width: "180px",
-      phone: "meta",
+      key: 'status',
+      header: 'Status',
+      width: '180px',
+      phone: 'meta',
       cell: (f) =>
-        f.kind === "prd" ? (
+        f.kind === 'prd' ? (
           <DocStatusChip status={f.doc.status} dot />
         ) : (
           <Chip kind={runStatusKind(f.run)} dot>
@@ -123,33 +126,41 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
         ),
     },
     {
-      key: "next",
-      header: "Next",
-      width: "19%",
-      phone: "hide",
+      key: 'next',
+      header: 'Next',
+      width: '19%',
+      phone: 'hide',
       // QA Nov 12 #12: a long next step ("Confirm the Ground Truth") wraps to a second line, not cut.
       wrap: true,
       cell: (f) =>
         // qa-company-31, -9: one style for every row: what comes after the current step, in plain words.
-        f.kind === "prd" ? (
+        f.kind === 'prd' ? (
           <span data-testid="flight-next" className="line-clamp-2 break-words" title={AFTER_REVIEW}>
             {AFTER_REVIEW}
           </span>
         ) : (
-          <span data-testid="flight-next" className="line-clamp-2 break-words" title={runNext(f.run)}>
+          <span
+            data-testid="flight-next"
+            className="line-clamp-2 break-words"
+            title={runNext(f.run)}
+          >
             {runNext(f.run)}
           </span>
         ),
     },
     {
-      key: "done",
-      header: "Progress",
-      width: "210px",
-      phone: "meta",
+      key: 'done',
+      header: 'Progress',
+      width: '210px',
+      phone: 'meta',
       cell: (f) => {
-        if (f.kind === "prd") {
+        if (f.kind === 'prd') {
           return (
-            <span className="flex min-w-0 items-center gap-2" data-testid="row-journey" title={`Journey step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}: Review`}>
+            <span
+              className="flex min-w-0 items-center gap-2"
+              data-testid="row-journey"
+              title={`Journey step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}: Review`}
+            >
               <JourneyTrack current={REVIEW_STEP} variant="dots" />
               <b className="tnum flex-none font-semibold whitespace-nowrap">{STEP_TEXT}</b>
             </span>
@@ -158,16 +169,25 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
         const d = f.run.progress;
         // qa-company-43: a run paused over budget is not finished, whatever its segments say.
         // qa-company-8: every row says its unit: "Step 8 of 9", "Segment 1 of 4".
-        if (f.run.status === "paused_overrun") {
+        if (f.run.status === 'paused_overrun') {
           return (
-            <span className="tnum font-semibold whitespace-nowrap text-crit" data-testid="row-paused" title={d ? `Paused after ${d.done} of ${plural(d.total, "segment")}` : "Paused"}>
-              Paused{d && d.total > 0 ? ` at segment ${segmentAt(d)} of ${d.total}` : ""}
+            <span
+              className="tnum font-semibold whitespace-nowrap text-crit"
+              data-testid="row-paused"
+              title={d ? `Paused after ${d.done} of ${plural(d.total, 'segment')}` : 'Paused'}
+            >
+              Paused{d && d.total > 0 ? ` at segment ${segmentAt(d)} of ${d.total}` : ''}
             </span>
           );
         }
         return d && d.total > 0 ? (
           <span className="block min-w-0" data-testid="row-segments">
-            <Meter value={d.done} max={d.total} label="Segments done" text={`Segment ${segmentAt(d)} of ${d.total}`} />
+            <Meter
+              value={d.done}
+              max={d.total}
+              label="Segments done"
+              text={`Segment ${segmentAt(d)} of ${d.total}`}
+            />
           </span>
         ) : (
           <span className="text-text2">–</span>
@@ -181,25 +201,38 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
  * qa4-company-52: a section not reviewed yet is a filled grey swatch, as the others are filled;
  * an outlined square read as a checkbox one could tick.
  */
-const NOT_REVIEWED = "bg-line-strong";
+const NOT_REVIEWED = 'bg-line-strong';
 
 const VERDICT_BAR: Record<string, string> = {
-  approved: "bg-pass",
-  changes_requested: "bg-warn",
-  rejected: "bg-crit",
+  approved: 'bg-pass',
+  changes_requested: 'bg-warn',
+  rejected: 'bg-crit',
 };
 
-type TracedGoals = { goals: RowGoal[] | undefined; error: string | null; reload: () => Promise<void> };
+type TracedGoals = {
+  goals: RowGoal[] | undefined;
+  error: string | null;
+  reload: () => Promise<void>;
+};
 
 /**
  * The goals a document's latest version traces to, tagged as Home tags them; loaded for the selected row only.
  * #1586: a failed read keeps its reason, never reads as "no goals".
  */
-function useTracedGoals(slug: string | null | undefined, n: number | null | undefined, goals: GoalIndex): TracedGoals {
+function useTracedGoals(
+  slug: string | null | undefined,
+  n: number | null | undefined,
+  goals: GoalIndex,
+): TracedGoals {
   const trace = useQuery(`home|trace|${slug}@${n}`, () =>
-    !slug || n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/trace", { params: { path: { doc: slug, n } } })),
+    !slug || n == null
+      ? Promise.resolve(null)
+      : unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}/trace', { params: { path: { doc: slug, n } } }),
+        ),
   );
-  if (trace.loading || trace.error) return { goals: undefined, error: trace.error, reload: trace.reload };
+  if (trace.loading || trace.error)
+    return { goals: undefined, error: trace.error, reload: trace.reload };
   const ids = [...new Set(trace.data?.sections.flatMap((s) => s.goals.map((g) => g.id)) ?? [])];
   const traced = ids
     .map((id) => goals.get(id))
@@ -230,31 +263,52 @@ function GoalsSection({ traced: { goals, error, reload } }: { traced: TracedGoal
 }
 
 /** The selected PRD: journey, blockers, sections reviewed, open feedback, its sections and blockers. */
-function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: "prd" }>; openItems: number | undefined; goalIndex: GoalIndex }) {
+function PrdInspector({
+  f,
+  openItems,
+  goalIndex,
+}: {
+  f: Extract<Flight, { kind: 'prd' }>;
+  openItems: number | undefined;
+  goalIndex: GoalIndex;
+}) {
   const d = f.doc;
   const n = d.latest_version;
   const traced = useTracedGoals(d.slug, n, goalIndex);
   const version = useQuery(`home|version|${d.slug}|${n}`, () =>
-    n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: d.slug, n } } })),
+    n == null
+      ? Promise.resolve(null)
+      : unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}', { params: { path: { doc: d.slug, n } } }),
+        ),
   );
   // Readiness needs a composition; without one the blockers stay unknown, never zero.
   // #1586: a failed read says so and why (the Blockers section), never "no blockers".
   const readiness = useQuery(`home|readiness|${d.slug}|${n}`, () =>
-    n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc: d.slug, n } } })),
+    n == null
+      ? Promise.resolve(null)
+      : unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}/readiness', {
+            params: { path: { doc: d.slug, n } },
+          }),
+        ),
   );
   const v: VersionOut | null | undefined = version.data;
   const sections = v?.sections ?? [];
-  const count = (k: string | null) => sections.filter((s) => (s.verdict?.verdict ?? null) === k).length;
-  const approved = count("approved");
-  const r: Schemas["ReadinessDashboard"] | null | undefined = readiness.data;
+  const count = (k: string | null) =>
+    sections.filter((s) => (s.verdict?.verdict ?? null) === k).length;
+  const approved = count('approved');
+  const r: Schemas['ReadinessDashboard'] | null | undefined = readiness.data;
   const failing = r ? r.items.filter((i) => r.blocking.includes(i.key)) : [];
   // qa-company-45: the critical-blockers check names its blockers by id; read their statements,
   // only when the check is failing, so each line names a blocker, never the check's heading.
   const ids = failing.flatMap((i) => i.evidence_ids ?? []);
-  const named = useQuery(`home|blockers|${d.id}|${ids.join(",")}`, (): Promise<Schemas["BlockerSummary"][]> =>
-    ids.length === 0
-      ? Promise.resolve([])
-      : unwrap(api.GET("/v1/blockers", { params: { query: { document_id: d.id } } })),
+  const named = useQuery(
+    `home|blockers|${d.id}|${ids.join(',')}`,
+    (): Promise<Schemas['BlockerSummary'][]> =>
+      ids.length === 0
+        ? Promise.resolve([])
+        : unwrap(api.GET('/v1/blockers', { params: { query: { document_id: d.id } } })),
   );
   // #1586: blockers whose names could not be read say so, never a line per check's heading.
   const blockersFailed = readiness.error ? readiness : ids.length > 0 && named.error ? named : null;
@@ -262,15 +316,29 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
   const statement = new Map((named.data ?? []).map((b) => [b.id, b.statement]));
   // QA pass D-5: each line opens its blocker (as Publish's Resolve does); a check with no named
   // blocker opens the PRD's Publish page, where its blocks are listed.
-  const blockerHref = (id: string) => `/ground-truth?tab=blockers&blocker=${encodeURIComponent(id)}`;
-  const blockers: { key: string; title: string; hard: boolean; href: string }[] = failing.flatMap((i) => {
-    const each = (i.evidence_ids ?? []).flatMap((id) =>
-      statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, hard: i.hard, href: blockerHref(id) }] : [],
-    );
-    return each.length > 0 ? each : [{ key: i.key, title: i.title, hard: i.hard, href: `/documents/${d.slug}/publish` }];
-  });
+  const blockerHref = (id: string) =>
+    `/ground-truth?tab=blockers&blocker=${encodeURIComponent(id)}`;
+  const blockers: { key: string; title: string; hard: boolean; href: string }[] = failing.flatMap(
+    (i) => {
+      const each = (i.evidence_ids ?? []).flatMap((id) =>
+        statement.has(id)
+          ? [
+              {
+                key: `${i.key}:${id}`,
+                title: statement.get(id)!,
+                hard: i.hard,
+                href: blockerHref(id),
+              },
+            ]
+          : [],
+      );
+      return each.length > 0
+        ? each
+        : [{ key: i.key, title: i.title, hard: i.hard, href: `/documents/${d.slug}/publish` }];
+    },
+  );
   const { can } = useMe();
-  const mayResolve = can("set_blocker_status", true);
+  const mayResolve = can('set_blocker_status', true);
 
   return (
     <Inspector
@@ -291,21 +359,29 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
       }
       stats={[
         {
-          label: "Blockers",
-          value: r ? r.blocking.length : "–",
-          tone: r && r.blocking.length > 0 ? "crit" : undefined,
-          testId: "stat-blockers",
+          label: 'Blockers',
+          value: r ? r.blocking.length : '–',
+          tone: r && r.blocking.length > 0 ? 'crit' : undefined,
+          testId: 'stat-blockers',
         },
         // qa-company-26: a label that fits the stat's room ("Sections approved" was cut).
-        { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
+        {
+          label: 'Approved',
+          value: v ? approved : '–',
+          of: v ? sections.length : undefined,
+          testId: 'stat-sections',
+        },
         // qa-shell-22: the PRD's open review feedback (the Inbox's count), as the review panel names it;
         // the Sections legend below counts sections not yet reviewed, another thing.
         // qa4-company-53: the Inbox counts the feedback waiting on the signed-in person, so the
         // label says it is theirs (an owner and a viewer read different numbers for one PRD).
-        { label: "Your open feedback", value: openItems ?? 0, testId: "stat-open" },
+        { label: 'Your open feedback', value: openItems ?? 0, testId: 'stat-open' },
       ]}
     >
-      <InspectorSection testId="inspector-journey" label={`Journey: step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}, ${JOURNEY_STEPS[REVIEW_STEP - 1]}`}>
+      <InspectorSection
+        testId="inspector-journey"
+        label={`Journey: step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}, ${JOURNEY_STEPS[REVIEW_STEP - 1]}`}
+      >
         <JourneyTrack current={REVIEW_STEP} variant="bar" />
       </InspectorSection>
       {v && sections.length > 0 && (
@@ -315,16 +391,24 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tools={
             <span className="flex flex-wrap items-center gap-2.5 font-medium text-text">
               <Legend cls="bg-pass" label="Approved" n={approved} />
-              <Legend cls="bg-warn" label="Changes" n={count("changes_requested") + count("rejected")} />
+              <Legend
+                cls="bg-warn"
+                label="Changes"
+                n={count('changes_requested') + count('rejected')}
+              />
               <Legend cls={NOT_REVIEWED} label="Not reviewed" n={count(null)} />
             </span>
           }
         >
-          <div role="img" aria-label={`${approved} of ${sections.length} sections approved`} className="flex gap-1">
+          <div
+            role="img"
+            aria-label={`${approved} of ${sections.length} sections approved`}
+            className="flex gap-1"
+          >
             {sections.map((s) => (
               <i
                 key={s.section_key}
-                title={`${s.heading}${s.verdict ? ` · ${s.verdict.verdict.replace("_", " ")}` : ""}`}
+                title={`${s.heading}${s.verdict ? ` · ${s.verdict.verdict.replace('_', ' ')}` : ''}`}
                 className={`h-2.5 min-w-1 flex-1 rounded-[3px] ${
                   s.verdict ? VERDICT_BAR[s.verdict.verdict] : NOT_REVIEWED
                 }`}
@@ -335,7 +419,11 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
       )}
       {blockersFailed ? (
         <InspectorSection label="Blockers" testId="inspector-blockers">
-          <LoadError what="the blockers" error={blockersFailed.error!} onRetry={() => void blockersFailed.reload()} />
+          <LoadError
+            what="the blockers"
+            error={blockersFailed.error!}
+            onRetry={() => void blockersFailed.reload()}
+          />
         </InspectorSection>
       ) : naming ? (
         <InspectorSection label="Blockers" testId="inspector-blockers">
@@ -346,17 +434,33 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           <InspectorSection
             label="Blockers"
             testId="inspector-blockers"
-            tools={<Chip kind="crit">{blockers.filter((b) => b.hard).length || blockers.length} critical</Chip>}
+            tools={
+              <Chip kind="crit">
+                {blockers.filter((b) => b.hard).length || blockers.length} critical
+              </Chip>
+            }
           >
             {blockers.map((b) => (
-              <div key={b.key} className="flex min-h-8 min-w-0 items-center gap-2 py-1" data-testid="inspector-blocker-row">
+              <div
+                key={b.key}
+                className="flex min-h-8 min-w-0 items-center gap-2 py-1"
+                data-testid="inspector-blocker-row"
+              >
                 {/* qa-company-25: a long blocker wraps to two lines, then ends in an ellipsis (the title holds it all). */}
-                <span className="inline-flex min-w-0 items-start gap-2.5" title={b.title} data-testid="inspector-blocker">
+                <span
+                  className="inline-flex min-w-0 items-start gap-2.5"
+                  title={b.title}
+                  data-testid="inspector-blocker"
+                >
                   <Icon name="alert" size={16} className="mt-[3px] flex-none text-crit" />
                   <span className="line-clamp-2 min-w-0 break-words">{b.title}</span>
                 </span>
-                <LinkButton href={b.href} className="ml-auto flex-none" aria-label={`${mayResolve ? "Resolve" : "Open"} ${b.title}`}>
-                  {mayResolve ? "Resolve" : "Open"}
+                <LinkButton
+                  href={b.href}
+                  className="ml-auto flex-none"
+                  aria-label={`${mayResolve ? 'Resolve' : 'Open'} ${b.title}`}
+                >
+                  {mayResolve ? 'Resolve' : 'Open'}
                 </LinkButton>
               </div>
             ))}
@@ -379,11 +483,21 @@ function Legend({ cls, label, n }: { cls: string; label: string; n: number }) {
 }
 
 /** The selected run: segments done, what it waits on, its segments; cost as one small figure (P3d). */
-function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run" }>; docs: DocumentSummary[]; goalIndex: GoalIndex }) {
+function RunInspector({
+  f,
+  docs,
+  goalIndex,
+}: {
+  f: Extract<Flight, { kind: 'run' }>;
+  docs: DocumentSummary[];
+  goalIndex: GoalIndex;
+}) {
   const run = f.run;
   const d = run.progress;
   // The run's segments and checkpoints: one call, for the selected run only.
-  const detailQ = useQuery(`home|run|${run.id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: run.id } } })));
+  const detailQ = useQuery(`home|run|${run.id}`, () =>
+    unwrap(api.GET('/v1/runs/{run_id}', { params: { path: { run_id: run.id } } })),
+  );
   const detail: RunOut | undefined = detailQ.data;
   const doc = runDoc(run, docs);
   const traced = useTracedGoals(doc?.slug, doc?.latest_version, goalIndex);
@@ -405,8 +519,11 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
         </LinkButton>
       }
       stats={[
-        { label: "Segments done", value: d ? d.done : "–", of: d?.total, testId: "stat-segments" },
-        { label: "Checkpoints", value: detail ? detail.checkpoints.filter((c) => c.status === "pending").length : "–" },
+        { label: 'Segments done', value: d ? d.done : '–', of: d?.total, testId: 'stat-segments' },
+        {
+          label: 'Checkpoints',
+          value: detail ? detail.checkpoints.filter((c) => c.status === 'pending').length : '–',
+        },
       ]}
     >
       {/* qa-onboarding-30: the segment under way is said once, in Segments; Next only for what
@@ -419,20 +536,30 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
       {detail && detail.segments.length > 0 && (
         <InspectorSection label="Segments" testId="inspector-segments">
           {detail.segments.map((s) => (
-            <InspectorRow key={s.seq} value={<Chip kind={SEGMENT_STATUS_KIND[s.status]}>{SEGMENT_STATUS_LABEL[s.status]}</Chip>}>
+            <InspectorRow
+              key={s.seq}
+              value={
+                <Chip kind={SEGMENT_STATUS_KIND[s.status]}>{SEGMENT_STATUS_LABEL[s.status]}</Chip>
+              }
+            >
               {s.title}
             </InspectorRow>
           ))}
         </InspectorSection>
       )}
       <InspectorSection label="Cost">
-        <InspectorRow value={<RunCost run={run} />}>{run.status === "awaiting_approval" ? "Estimate" : "Spent"}</InspectorRow>
+        <InspectorRow value={<RunCost run={run} />}>
+          {run.status === 'awaiting_approval' ? 'Estimate' : 'Spent'}
+        </InspectorRow>
       </InspectorSection>
       <GoalsSection traced={traced} />
       {run.document_slug && run.document_id && (
         <InspectorSection>
-          <Link href={`/documents/${run.document_slug}`} className="font-medium text-accent-ink hover:underline">
-            {doc ? docLabel(doc) : runLabel({ ...run, flow_title: "" }).replace(/ · $/, "")}
+          <Link
+            href={`/documents/${run.document_slug}`}
+            className="font-medium text-accent-ink hover:underline"
+          >
+            {doc ? docLabel(doc) : runLabel({ ...run, flow_title: '' }).replace(/ · $/, '')}
           </Link>
         </InspectorSection>
       )}
@@ -451,7 +578,7 @@ export function FlightInspector({
   docs: DocumentSummary[];
   goalIndex: GoalIndex;
 }) {
-  return f.kind === "prd" ? (
+  return f.kind === 'prd' ? (
     <PrdInspector key={f.key} f={f} openItems={openItems.get(f.doc.id)} goalIndex={goalIndex} />
   ) : (
     <RunInspector key={f.key} f={f} docs={docs} goalIndex={goalIndex} />
@@ -475,7 +602,7 @@ export function FlightTable({
   docs?: DocumentSummary[];
 }) {
   // Each row's PRD is in `rows` too: a run of a PRD in review is named by that PRD's title.
-  const named = docs ?? rows?.flatMap((f) => (f.kind === "prd" ? [f.doc] : []));
+  const named = docs ?? rows?.flatMap((f) => (f.kind === 'prd' ? [f.doc] : []));
   return (
     <DataTable
       label="In flight"
@@ -487,7 +614,11 @@ export function FlightTable({
       selected={selected}
       // Enter selects as a click does; the inspector's Open opens the row.
       onSelect={(k) => onSelect(k)}
-      rowProps={(f) => ({ "data-testid": "flight-row", "data-kind": f.kind, "data-document": (f.kind === "prd" ? f.doc.slug : f.run.document_slug) ?? undefined })}
+      rowProps={(f) => ({
+        'data-testid': 'flight-row',
+        'data-kind': f.kind,
+        'data-document': (f.kind === 'prd' ? f.doc.slug : f.run.document_slug) ?? undefined,
+      })}
     />
   );
 }

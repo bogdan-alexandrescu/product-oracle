@@ -1,29 +1,44 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from 'next/link';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
-import { useFeatureDelete } from "@/components/simple/FeatureDelete";
-import { FeatureName } from "@/components/simple/FeatureName";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { LoadError, Loading } from "@/components/ui";
-import { useFitViewport } from "@/lib/fit-viewport";
-import { FlowPanel, subjectOf, type FlowSubject } from "@/components/simple/FlowVisual";
-import { FlowDiagram, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
-import { flagKey } from "@/components/simple/chat/ChatCard";
-import { ItemTalk } from "@/components/simple/chat/ItemTalk";
-import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from "@/lib/api/simple-chat";
-import { DecidedWho } from "@/components/simple/DecidedWho";
-import { useMe } from "@/lib/me";
-import { useScreenSubject } from "@/lib/screen-subject";
-import { errorMessage } from "@/lib/use-query";
+import {
+  Button,
+  confirmInPage,
+  SegmentedControl,
+  toast as dsToast,
+  type ToastAsk,
+} from '@/components/ds';
+import { useFeatureDelete } from '@/components/simple/FeatureDelete';
+import { FeatureName } from '@/components/simple/FeatureName';
+import { InfoTip } from '@/components/ds/InfoTip';
+import { LoadError, Loading } from '@/components/ui';
+import { useFitViewport } from '@/lib/fit-viewport';
+import { FlowPanel, subjectOf, type FlowSubject } from '@/components/simple/FlowVisual';
+import { FlowDiagram, Icon, ICONS, Tabs } from '@/components/simple/FlowViews';
+import { flagKey } from '@/components/simple/chat/ChatCard';
+import { ItemTalk } from '@/components/simple/chat/ItemTalk';
+import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from '@/lib/api/simple-chat';
+import { DecidedWho } from '@/components/simple/DecidedWho';
+import { useMe } from '@/lib/me';
+import { useScreenSubject } from '@/lib/screen-subject';
+import { errorMessage } from '@/lib/use-query';
 
-import { HORIZONS, type Horizon } from "./_board";
-import { NameEdit, PanelFields } from "./_fields";
-import { itemName } from "./_gtflag";
-import { CutBy } from "./_removed";
-import { TasksPart } from "./_tasks";
+import { HORIZONS, type Horizon } from './_board';
+import { NameEdit, PanelFields } from './_fields';
+import { itemName } from './_gtflag';
+import { CutBy } from './_removed';
+import { TasksPart } from './_tasks';
 import {
   closedItem,
   milestoneInk,
@@ -37,35 +52,41 @@ import {
   type Milestone,
   yearSpan,
   codedFlag,
-} from "./_lib";
+} from './_lib';
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (
-  what: import("./_lib").ChangeWords,
-  body: Parameters<typeof import("./_lib").propose>[0],
+  what: import('./_lib').ChangeWords,
+  body: Parameters<typeof import('./_lib').propose>[0],
   // What else it means, said after it ("Its 2 parts stay on the roadmap.").
   note?: string,
 ) => Promise<void>;
 
-const FIX_WORDS: Record<Flag["fixes"][number], string> = {
-  shift_dependents: "Move the dependents",
-  move_dependency: "Move the dependency",
-  accept_risk: "Accept as risk",
-  restore: "Bring it back",
-  remove_dependency: "Remove the dependency",
+const FIX_WORDS: Record<Flag['fixes'][number], string> = {
+  shift_dependents: 'Move the dependents',
+  move_dependency: 'Move the dependency',
+  accept_risk: 'Accept as risk',
+  restore: 'Bring it back',
+  remove_dependency: 'Remove the dependency',
 };
 
 /** fix4 qa-simple-roadmap-18: a reader who may not decide the item (a commenter) only
  * proposes the fix, and its button says so ("Propose: move the dependents"). */
-const fixWords = (f: Flag["fixes"][number], decides: boolean): string =>
+const fixWords = (f: Flag['fixes'][number], decides: boolean): string =>
   decides ? FIX_WORDS[f] : `Propose: ${FIX_WORDS[f][0].toLowerCase()}${FIX_WORDS[f].slice(1)}`;
 
 /** How many fixes a flag offers, a cut item's Remove the dependency counted once per dependent. */
-export const fixCount = (flag: Flag): number => flag.fixes.reduce((n, f) => n + (f === "remove_dependency" ? Math.max(1, flag.dependents?.length ?? 0) : 1), 0);
+export const fixCount = (flag: Flag): number =>
+  flag.fixes.reduce(
+    (n, f) => n + (f === 'remove_dependency' ? Math.max(1, flag.dependents?.length ?? 0) : 1),
+    0,
+  );
 
 /** Review: a fix proposed already and waiting on its decider: who it waits for ("Avery Stone"),
  * or null. The roadmap page answers it from its open proposals. */
-export const ProposedFixes = createContext<(op: Flag["fixes"][number], itemId: string, subject: string) => string | null>(() => null);
+export const ProposedFixes = createContext<
+  (op: Flag['fixes'][number], itemId: string, subject: string) => string | null
+>(() => null);
 
 /** Review: opens an item's feature panel from a name in a fix's line (the page's own card), or null. */
 export const OpenItem = createContext<((itemId: string) => void) | null>(null);
@@ -96,21 +117,30 @@ export function FixButtons({
   // every live dependent the API names, one a filter hides too.
   const live = flag.dependents ?? [];
   const restore = () =>
-    void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
-  // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
-  const unlink = (n: Flag["dependents"][number]) =>
-    void act({ applied: `Removed the dependency of ‘${n.title}’ on ‘${item.title}’`, proposed: `remove the dependency of ‘${n.title}’ on ‘${item.title}’` }, {
-      op: "remove_dependency",
-      target: { item_id: n.id, subject: item.id },
-      before: {},
-      after: {},
+    void act(`Brought back '${item.title}'`, {
+      op: 'restore',
+      target: { item_id: item.id },
+      before: { cut: true },
+      after: { cut: false },
     });
-  const fix = (kind: "shift_dependents" | "move_dependency") => {
+  // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
+  const unlink = (n: Flag['dependents'][number]) =>
+    void act(
+      {
+        applied: `Removed the dependency of ‘${n.title}’ on ‘${item.title}’`,
+        proposed: `remove the dependency of ‘${n.title}’ on ‘${item.title}’`,
+      },
+      {
+        op: 'remove_dependency',
+        target: { item_id: n.id, subject: item.id },
+        before: {},
+        after: {},
+      },
+    );
+  const fix = (kind: 'shift_dependents' | 'move_dependency') => {
     if (!dep) return;
     void act(
-      kind === "shift_dependents"
-        ? `Moved what depends on '${dep.title}'`
-        : `Moved '${dep.title}'`,
+      kind === 'shift_dependents' ? `Moved what depends on '${dep.title}'` : `Moved '${dep.title}'`,
       {
         op: kind,
         target: { item_id: item.id, subject: dep.id },
@@ -122,16 +152,12 @@ export function FixButtons({
   if (note !== null)
     return (
       <form
-        className={
-          inline
-            ? "flex items-center gap-1.5"
-            : "mt-1 flex flex-wrap items-center gap-2"
-        }
+        className={inline ? 'flex items-center gap-1.5' : 'mt-1 flex flex-wrap items-center gap-2'}
         onSubmit={(e) => {
           e.preventDefault();
           if (!note.trim()) return;
-          void act("Accepted as a risk", {
-            op: "accept_risk",
+          void act('Accepted as a risk', {
+            op: 'accept_risk',
             target: {
               item_id: item.id,
               flag: flag.kind,
@@ -150,18 +176,14 @@ export function FixButtons({
           value={note}
           maxLength={500}
           onChange={(e) => setNote(e.target.value)}
-          className={`${inline ? "h-6 w-56" : "h-8 min-w-0 flex-1"} rounded-lg border border-line-strong bg-surface px-2 text-sm`}
+          className={`${inline ? 'h-6 w-56' : 'h-8 min-w-0 flex-1'} rounded-lg border border-line-strong bg-surface px-2 text-sm`}
         />
-        <Button
-          type="submit"
-          variant="solid"
-          className={inline ? "!h-6 !px-2 !text-xs" : ""}
-        >
-          {item.can_decide ? "Save the risk" : "Propose the risk"}
+        <Button type="submit" variant="solid" className={inline ? '!h-6 !px-2 !text-xs' : ''}>
+          {item.can_decide ? 'Save the risk' : 'Propose the risk'}
         </Button>
         <Button
           variant="ghost"
-          className={inline ? "!h-6 !px-2 !text-xs" : ""}
+          className={inline ? '!h-6 !px-2 !text-xs' : ''}
           onClick={() => setNote(null)}
         >
           Cancel
@@ -170,52 +192,66 @@ export function FixButtons({
     );
   return (
     <div
-      className={inline ? "flex flex-wrap gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
+      className={inline ? 'flex flex-wrap gap-1.5' : 'mt-1 flex flex-wrap gap-1.5'}
       data-testid="fixes"
     >
       {flag.fixes.map((f) =>
-        f === "accept_risk" ? (
+        f === 'accept_risk' ? (
           <Button
             key={f}
-            className={inline ? "!h-6 !px-2 !text-xs" : ""}
-            onClick={() => setNote("")}
+            className={inline ? '!h-6 !px-2 !text-xs' : ''}
+            onClick={() => setNote('')}
           >
             {fixWords(f, item.can_decide)}
           </Button>
-        ) : f === "restore" ? (
-          <Button key={f} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={restore}>
+        ) : f === 'restore' ? (
+          <Button key={f} className={inline ? '!h-6 !px-2 !text-xs' : ''} onClick={restore}>
             {fixWords(f, item.can_decide)}
           </Button>
-        ) : f === "remove_dependency" ? (
+        ) : f === 'remove_dependency' ? (
           live.map((n) => {
             // Review: proposed already, it says who it waits for and is not offered again.
             const waits = proposed(f, n.id, item.id);
             return waits !== null ? (
-              <span key={`${f}-${n.id}`} data-testid="fix-proposed" className="self-center text-sm text-text2">
+              <span
+                key={`${f}-${n.id}`}
+                data-testid="fix-proposed"
+                className="self-center text-sm text-text2"
+              >
                 {/* Review: the dependent's name opens its feature panel, as other item names do. */}
-                Removing the dependency of{" "}
+                Removing the dependency of{' '}
                 {openItem ? (
-                  <button type="button" className="font-medium text-accent-ink underline-offset-2 hover:underline" onClick={() => openItem(n.id)}>
+                  <button
+                    type="button"
+                    className="font-medium text-accent-ink underline-offset-2 hover:underline"
+                    onClick={() => openItem(n.id)}
+                  >
                     ‘{n.title}’
                   </button>
                 ) : (
                   `‘${n.title}’`
                 )}
-                {waits ? `: proposed, waits for ${waits}` : ": proposed"}
+                {waits ? `: proposed, waits for ${waits}` : ': proposed'}
               </span>
             ) : (
               // A long name wraps inside its button rather than run past a phone's edge.
-              <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : "!h-auto min-h-8 max-w-full py-1 text-left !whitespace-normal"} onClick={() => unlink(n)}>
-                {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
+              <Button
+                key={`${f}-${n.id}`}
+                className={
+                  inline
+                    ? '!h-6 !px-2 !text-xs'
+                    : '!h-auto min-h-8 max-w-full py-1 text-left !whitespace-normal'
+                }
+                onClick={() => unlink(n)}
+              >
+                {live.length > 1
+                  ? `${fixWords(f, n.can_decide)} of ‘${n.title}’`
+                  : fixWords(f, n.can_decide)}
               </Button>
             );
           })
         ) : dep ? (
-          <Button
-            key={f}
-            className={inline ? "!h-6 !px-2 !text-xs" : ""}
-            onClick={() => fix(f)}
-          >
+          <Button key={f} className={inline ? '!h-6 !px-2 !text-xs' : ''} onClick={() => fix(f)}>
             {fixWords(f, item.can_decide)}
           </Button>
         ) : null,
@@ -230,13 +266,11 @@ export function FlagLine({ flag }: { flag: Flag }) {
     <p
       data-testid="flag-reason"
       data-state={flag.state}
-      className={`text-sm ${flag.state === "red" ? "text-crit" : "text-warn"}`}
+      className={`text-sm ${flag.state === 'red' ? 'text-crit' : 'text-warn'}`}
     >
-      {flag.state === "red" ? "⚠ " : "Accepted risk: "}
+      {flag.state === 'red' ? '⚠ ' : 'Accepted risk: '}
       {flag.reason}
-      {flag.risk_note && (
-        <span className="text-text2"> · “{flag.risk_note}”</span>
-      )}
+      {flag.risk_note && <span className="text-text2"> · “{flag.risk_note}”</span>}
     </p>
   );
 }
@@ -286,7 +320,9 @@ export function Callout({
     // it whole rather than staying right with its sentence cut at the chart's edge.
     const span = words.current;
     // A capped (wrapped) callout keeps the whole width it last measured uncapped.
-    const whole = Math.max(ref.current?.offsetWidth ?? 0, ref.current?.scrollWidth ?? 0) + (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0);
+    const whole =
+      Math.max(ref.current?.offsetWidth ?? 0, ref.current?.scrollWidth ?? 0) +
+      (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0);
     if (cap == null) natural.current = whole;
     const w = Math.min(natural.current || whole, Math.max(160, maxX - 8));
     // Right of the bar when it fits; else left of the bar; else (walkb-review-5b) on the side
@@ -310,7 +346,7 @@ export function Callout({
       data-testid="broken-callout"
       data-item={item.key}
       style={{ left, top: y + 3, minHeight: h - 6, maxWidth: cap ?? Math.max(160, maxX - 8) }}
-      className={`pointer-events-none absolute z-10 flex ${cap != null ? "flex-wrap" : "flex-nowrap"} items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto`}
+      className={`pointer-events-none absolute z-10 flex ${cap != null ? 'flex-wrap' : 'flex-nowrap'} items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto`}
     >
       {/* fix4 review (qa-simple-roadmap-6): a phone has no hover for a cut reason's full
        * words, so there the reason wraps inside the callout instead. qa4-simple-roadmap-24: on
@@ -320,20 +356,13 @@ export function Callout({
         ref={words}
         tabIndex={compact ? undefined : 0}
         data-testid="broken-callout-reason"
-        className={`min-w-0 text-sm text-crit ${compact ? "max-w-[220px] leading-[18px] break-words" : "pointer-events-auto truncate rounded outline-none hover:whitespace-normal focus:whitespace-normal focus-visible:ring-2 focus-visible:ring-crit"}`}
+        className={`min-w-0 text-sm text-crit ${compact ? 'max-w-[220px] leading-[18px] break-words' : 'pointer-events-auto truncate rounded outline-none hover:whitespace-normal focus:whitespace-normal focus-visible:ring-2 focus-visible:ring-crit'}`}
         title={flag.reason}
       >
         ⚠ {flag.reason}
       </span>
       {!compact && (
-        <FixButtons
-          item={item}
-          flag={flag}
-          items={items}
-          act={act}
-          canChange={canChange}
-          inline
-        />
+        <FixButtons item={item} flag={flag} items={items} act={act} canChange={canChange} inline />
       )}
     </div>
   );
@@ -372,14 +401,14 @@ export function SuggestionBody({
       <p className="text-sm font-semibold">
         {named && (
           <>
-            <FeatureName item={item} />:{" "}
+            <FeatureName item={item} />:{' '}
           </>
         )}
         Oracle suggests {yearSpan(s.start_date, s.end_date)}
         {/* qa-nov17: how Oracle reached these dates, behind the (i). */}
         {s.basis && (
           <>
-            {" "}
+            {' '}
             <InfoTip label="Oracle's dates" align="start" testId="suggestion-basis-tip">
               {s.basis}
             </InfoTip>
@@ -420,9 +449,7 @@ export function SuggestionBody({
       ) : (
         canAct && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Button onClick={onAccept}>
-              {s.can_decide ? "Accept" : "Propose these dates"}
-            </Button>
+            <Button onClick={onAccept}>{s.can_decide ? 'Accept' : 'Propose these dates'}</Button>
             <Button onClick={() => setEditing(true)}>Edit dates</Button>
             {s.can_decide && (
               <Button variant="ghost" onClick={onDismiss}>
@@ -475,11 +502,19 @@ export function SuggestionPopover({
       role="dialog"
       aria-label="Oracle's date suggestion"
       data-testid="suggestion-popover"
-      data-side={flip != null ? "above" : "below"}
+      data-side={flip != null ? 'above' : 'below'}
       style={flip != null ? { ...style, top: flip } : style}
       className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
     >
-      <SuggestionBody item={item} canAct={canAct} onAccept={onAccept} onEdit={onEdit} onDismiss={onDismiss} onEditing={setEditing} named />
+      <SuggestionBody
+        item={item}
+        canAct={canAct}
+        onAccept={onAccept}
+        onEdit={onEdit}
+        onDismiss={onDismiss}
+        onEditing={setEditing}
+        named
+      />
       <button
         type="button"
         aria-label="Close"
@@ -493,41 +528,41 @@ export function SuggestionPopover({
 }
 
 const OP_WORDS: Record<string, string> = {
-  move_dates: "Move the dates",
-  change_horizon: "Change the horizon",
-  cut: "Cut it",
-  restore: "Restore it",
-  edit_title: "Rename it",
-  edit_outcome: "Change the outcome",
-  edit_note: "Change the notes",
+  move_dates: 'Move the dates',
+  change_horizon: 'Change the horizon',
+  cut: 'Cut it',
+  restore: 'Restore it',
+  edit_title: 'Rename it',
+  edit_outcome: 'Change the outcome',
+  edit_note: 'Change the notes',
   accept_date_suggestion: "Accept Oracle's dates",
-  accept_risk: "Accept a risk",
-  shift_dependents: "Move the dependents",
-  move_dependency: "Move the dependency",
-  add_key_date: "Add a key date",
-  edit_key_date: "Change a key date",
-  remove_key_date: "Remove a key date",
-  edit_goal_milestone: "Change a milestone",
-  add_item: "Add an item",
-  merge_item: "Merge it into another",
-  keep_both: "Keep both",
-  confirm_item: "Confirm the draft",
-  cut_with_dependents: "Cut it and its dependents",
-  set_confidence: "Change the confidence",
-  set_track: "Change the track",
-  set_prd: "Change the PRD",
-  set_goal: "Change the goal",
-  set_depends: "Change what it depends on",
-  set_parent: "Change what it is part of",
-  set_code: "Give it a code",
-  set_status: "Change the status",
-  set_goals: "Move it to another goal",
-  remove_dependency: "Remove the dependency",
-  set_owner: "Change the owner",
-  set_goal_measure: "Change how its goal is measured",
+  accept_risk: 'Accept a risk',
+  shift_dependents: 'Move the dependents',
+  move_dependency: 'Move the dependency',
+  add_key_date: 'Add a key date',
+  edit_key_date: 'Change a key date',
+  remove_key_date: 'Remove a key date',
+  edit_goal_milestone: 'Change a milestone',
+  add_item: 'Add an item',
+  merge_item: 'Merge it into another',
+  keep_both: 'Keep both',
+  confirm_item: 'Confirm the draft',
+  cut_with_dependents: 'Cut it and its dependents',
+  set_confidence: 'Change the confidence',
+  set_track: 'Change the track',
+  set_prd: 'Change the PRD',
+  set_goal: 'Change the goal',
+  set_depends: 'Change what it depends on',
+  set_parent: 'Change what it is part of',
+  set_code: 'Give it a code',
+  set_status: 'Change the status',
+  set_goals: 'Move it to another goal',
+  remove_dependency: 'Remove the dependency',
+  set_owner: 'Change the owner',
+  set_goal_measure: 'Change how its goal is measured',
 };
 
-const cornerToast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
+const cornerToast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
 type FeatureRef = { id: string; code: string; title: string };
 
@@ -535,12 +570,20 @@ type FeatureRef = { id: string; code: string; title: string };
 function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => void }) {
   const words = (
     <>
-      {f.code && <><span className="simple-code mr-px">{f.code}</span>{" "}</>}
+      {f.code && (
+        <>
+          <span className="simple-code mr-px">{f.code}</span>{' '}
+        </>
+      )}
       {f.title}
     </>
   );
   return onOpen && f.id ? (
-    <button type="button" className="font-semibold text-accent-ink hover:underline" onClick={() => onOpen(f.id)}>
+    <button
+      type="button"
+      className="font-semibold text-accent-ink hover:underline"
+      onClick={() => onOpen(f.id)}
+    >
       {words}
     </button>
   ) : (
@@ -550,7 +593,17 @@ function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => vo
 
 /** feature-parts: a feature's parts, each with its own parts nested under it (any depth); a cut
  * part says so. Each opens its own panel. */
-function PartsList({ parts, items, onOpen, seen }: { parts: Item["parts"]; items: Map<string, Item>; onOpen?: (id: string) => void; seen: Set<string> }) {
+function PartsList({
+  parts,
+  items,
+  onOpen,
+  seen,
+}: {
+  parts: Item['parts'];
+  items: Map<string, Item>;
+  onOpen?: (id: string) => void;
+  seen: Set<string>;
+}) {
   return (
     <ul className="mt-0.5 space-y-0.5">
       {parts.map((x) => {
@@ -561,7 +614,12 @@ function PartsList({ parts, items, onOpen, seen }: { parts: Item["parts"]; items
             {x.cut && <span className="ml-1 text-text2">(cut)</span>}
             {sub.length > 0 && (
               <div className="ml-2 border-l border-line pl-3">
-                <PartsList parts={sub} items={items} onOpen={onOpen} seen={new Set([...seen, x.id])} />
+                <PartsList
+                  parts={sub}
+                  items={items}
+                  onOpen={onOpen}
+                  seen={new Set([...seen, x.id])}
+                />
               </div>
             )}
           </li>
@@ -576,48 +634,70 @@ function PartsList({ parts, items, onOpen, seen }: { parts: Item["parts"]; items
  * dependencies and dependents) or Part of… (set_parent: it sits under the one picked). Another
  * open feature of the same roadmap, by code and name; who may not decide proposes it.
  */
-function PickFeature({ kind, item, items, act, done }: { kind: "merge" | "parent"; item: Item; items: Map<string, Item>; act: Act; done: () => void }) {
-  const merge = kind === "merge";
+function PickFeature({
+  kind,
+  item,
+  items,
+  act,
+  done,
+}: {
+  kind: 'merge' | 'parent';
+  item: Item;
+  items: Map<string, Item>;
+  act: Act;
+  done: () => void;
+}) {
+  const merge = kind === 'merge';
   // Any open feature of the roadmap; for Part of, one of its own parts at any depth is shown
   // but cannot be picked (a feature is never its own ancestor), with the API's words.
-  const options = [...items.values()].filter((i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i));
-  const [to, setTo] = useState(merge ? "" : (item.part_of?.id ?? ""));
-  const name = (i: Item) => [i.code, i.title].filter(Boolean).join(" ");
-  const loop = (i: Item) => (!merge && i.part_path.some((p) => p.id === item.id) ? `${name(item)} cannot be part of ${name(i)}: ${name(i)} is already one of its parts` : undefined);
+  const options = [...items.values()].filter(
+    (i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i),
+  );
+  const [to, setTo] = useState(merge ? '' : (item.part_of?.id ?? ''));
+  const name = (i: Item) => [i.code, i.title].filter(Boolean).join(' ');
+  const loop = (i: Item) =>
+    !merge && i.part_path.some((p) => p.id === item.id)
+      ? `${name(item)} cannot be part of ${name(i)}: ${name(i)} is already one of its parts`
+      : undefined;
   const picked = to ? items.get(to) : undefined;
-  const same = !merge && to === (item.part_of?.id ?? "");
-  const verb = merge ? "Merge" : "Save";
+  const same = !merge && to === (item.part_of?.id ?? '');
+  const verb = merge ? 'Merge' : 'Save';
   return (
     <form
       className="mt-2 flex flex-wrap items-center gap-2"
-      data-testid={merge ? "card-merge-edit" : "card-parent-edit"}
+      data-testid={merge ? 'card-merge-edit' : 'card-parent-edit'}
       onSubmit={(e) => {
         e.preventDefault();
         if (merge && picked) {
           void act(`Merged '${item.title}' into ${name(picked)}`, {
-            op: "merge_item",
+            op: 'merge_item',
             target: { item_id: item.id, into_id: picked.id },
             before: {},
             after: {},
           });
         } else if (!merge && !same) {
-          void act(picked ? `Made '${item.title}' part of ${name(picked)}` : `Took '${item.title}' out of ${item.part_of ? `${item.part_of.code} ${item.part_of.title}`.trim() : "its feature"}`, {
-            op: "set_parent",
-            target: { item_id: item.id },
-            before: { parent_key: item.parent_key ?? null },
-            after: { parent_key: picked?.key ?? null },
-          });
+          void act(
+            picked
+              ? `Made '${item.title}' part of ${name(picked)}`
+              : `Took '${item.title}' out of ${item.part_of ? `${item.part_of.code} ${item.part_of.title}`.trim() : 'its feature'}`,
+            {
+              op: 'set_parent',
+              target: { item_id: item.id },
+              before: { parent_key: item.parent_key ?? null },
+              after: { parent_key: picked?.key ?? null },
+            },
+          );
         }
         done();
       }}
     >
       <select
-        aria-label={merge ? "Merge into" : "Part of"}
+        aria-label={merge ? 'Merge into' : 'Part of'}
         value={to}
         onChange={(e) => setTo(e.target.value)}
         className="h-8 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-2 text-sm"
       >
-        <option value="">{merge ? "Pick a feature" : "Not a part of another feature"}</option>
+        <option value="">{merge ? 'Pick a feature' : 'Not a part of another feature'}</option>
         {options.map((i) => (
           <option key={i.id} value={i.id} disabled={!!loop(i)} title={loop(i)}>
             {name(i)}
@@ -636,15 +716,7 @@ function PickFeature({ kind, item, items, act, done }: { kind: "merge" | "parent
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
  * (merge_item, keep_both through the change engine: editors apply, others propose). */
-export function LooksLike({
-  item,
-  act,
-  canChange,
-}: {
-  item: Item;
-  act: Act;
-  canChange: boolean;
-}) {
+export function LooksLike({ item, act, canChange }: { item: Item; act: Act; canChange: boolean }) {
   if (!item.looks_like.length) return null;
   return (
     <div className="mt-2 space-y-1.5" data-testid="looks-like">
@@ -662,18 +734,15 @@ export function LooksLike({
             <Button
               className="!h-7"
               onClick={() =>
-                void act(
-                  `Merged '${item.title}' into ${m.title}`,
-                  {
-                    op: "merge_item",
-                    target:
-                      m.kind === "item"
-                        ? { item_id: item.id, into_id: m.id }
-                        : { item_id: item.id, feature_id: m.id },
-                    before: {},
-                    after: {},
-                  },
-                )
+                void act(`Merged '${item.title}' into ${m.title}`, {
+                  op: 'merge_item',
+                  target:
+                    m.kind === 'item'
+                      ? { item_id: item.id, into_id: m.id }
+                      : { item_id: item.id, feature_id: m.id },
+                  before: {},
+                  after: {},
+                })
               }
             >
               {/* qa4-simple-roadmap-39: says what happens: the draft goes into that item. */}
@@ -687,15 +756,12 @@ export function LooksLike({
           className="!h-7"
           variant="ghost"
           onClick={() =>
-            void act(
-              `Kept '${item.title}' and ${item.looks_like.map((m) => m.title).join(", ")}`,
-              {
-                op: "keep_both",
-                target: { item_id: item.id },
-                before: { kept_both: false },
-                after: {},
-              },
-            )
+            void act(`Kept '${item.title}' and ${item.looks_like.map((m) => m.title).join(', ')}`, {
+              op: 'keep_both',
+              target: { item_id: item.id },
+              before: { kept_both: false },
+              after: {},
+            })
           }
         >
           Keep both
@@ -705,8 +771,7 @@ export function LooksLike({
   );
 }
 
-export const opWords = (op: string): string =>
-  OP_WORDS[op] ?? op.replace(/_/g, " ");
+export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, ' ');
 
 /** fix5-cut-dependents: a draft's change-list row; a cut with its dependents names every item it cut
  * ("Cut Alert rules engine and its dependents Weekly alert digest and Mobile alert push"). */
@@ -715,9 +780,13 @@ export function changeRowWords(c: { op: string; titles?: string[] }, title?: str
   // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list;
   // roadmap-decide: the change's own titles name it when the page does not show the item.
   const named = title ?? first;
-  if (c.op !== "cut_with_dependents" || !first) return named ? `${opWords(c.op)}: ${named}` : opWords(c.op);
-  const names = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}` : (rest[0] ?? "");
-  return `Cut ${first} and its dependents${names ? ` ${names}` : ""}`;
+  if (c.op !== 'cut_with_dependents' || !first)
+    return named ? `${opWords(c.op)}: ${named}` : opWords(c.op);
+  const names =
+    rest.length > 1
+      ? `${rest.slice(0, -1).join(', ')} and ${rest[rest.length - 1]}`
+      : (rest[0] ?? '');
+  return `Cut ${first} and its dependents${names ? ` ${names}` : ''}`;
 }
 
 /** Whether a proposal is for a new flow or feature (a draft item, D15's): only those carry
@@ -728,8 +797,8 @@ export const featureProposal = (c: Change, items: Map<string, Item>): boolean =>
 /** A flow thumbnail (S10 draws the flows): opens the flow by widening the card in place. */
 function FlowThumb({
   onOpen,
-  label = "Open the flow",
-  testId = "flow-thumb",
+  label = 'Open the flow',
+  testId = 'flow-thumb',
 }: {
   onOpen: () => void;
   label?: string;
@@ -744,33 +813,9 @@ function FlowThumb({
       className="flex h-9 w-12 flex-none items-center justify-center rounded border border-line bg-surface2"
     >
       <svg width="34" height="20" viewBox="0 0 34 20" aria-hidden>
-        <rect
-          x="1"
-          y="6"
-          width="8"
-          height="8"
-          rx="2"
-          fill="none"
-          stroke="var(--line-strong)"
-        />
-        <rect
-          x="13"
-          y="6"
-          width="8"
-          height="8"
-          rx="2"
-          fill="none"
-          stroke="var(--line-strong)"
-        />
-        <rect
-          x="25"
-          y="6"
-          width="8"
-          height="8"
-          rx="2"
-          fill="none"
-          stroke="var(--line-strong)"
-        />
+        <rect x="1" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
+        <rect x="13" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
+        <rect x="25" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
         <path d="M9 10 H13 M21 10 H25" stroke="var(--line-strong)" />
       </svg>
     </button>
@@ -780,30 +825,56 @@ function FlowThumb({
 /** One of the card's parts ("WHY", "FLOW"): the mock-up's small-capitals heading over its body. */
 
 /** "F-12 Weekly alert digest": a feature's code, then its name. */
-const codeName = (i: Pick<Item, "code" | "title">) => (i.code ? `${i.code} ${i.title}` : i.title);
+const codeName = (i: Pick<Item, 'code' | 'title'>) => (i.code ? `${i.code} ${i.title}` : i.title);
 
 /** "A, B and C". */
-const andWords = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const andWords = (xs: string[]) =>
+  xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
 
 /** pm2 'List what points at it': what the Delete confirm lists, one row each. */
 export function pointsAt(item: Item, items: Map<string, Item>): { label: string; value: string }[] {
-  const named = (ids: string[]) => ids.map((id) => items.get(id)).filter((i): i is Item => !!i).map(codeName);
+  const named = (ids: string[]) =>
+    ids
+      .map((id) => items.get(id))
+      .filter((i): i is Item => !!i)
+      .map(codeName);
   const needed = named(item.needed_by);
   const deps = named(item.depends_on);
   const decisions = item.open_decisions.length + item.decided_in.length;
   const tasks = item.tasks.length;
   return [
-    { label: "Needed by", value: needed.length ? `${andWords(needed)} ${needed.length === 1 ? "loses" : "lose"} this link` : "Nothing" },
-    { label: "Depends on", value: deps.length ? andWords(deps) : "Nothing" },
-    { label: "Decisions", value: decisions ? `${decisions === 1 ? "1 decision names" : `${decisions} decisions name`} it; they stay` : "None" },
-    { label: "Milestone", value: item.milestone?.name ?? "None" },
-    { label: "Goal", value: item.goal?.title ?? "None" },
-    { label: "Key result", value: item.goal?.metric ?? "None" },
-    { label: "Tasks", value: tasks ? `${tasks === 1 ? "1 task goes" : `${tasks} tasks go`} with it` : "None" },
+    {
+      label: 'Needed by',
+      value: needed.length
+        ? `${andWords(needed)} ${needed.length === 1 ? 'loses' : 'lose'} this link`
+        : 'Nothing',
+    },
+    { label: 'Depends on', value: deps.length ? andWords(deps) : 'Nothing' },
+    {
+      label: 'Decisions',
+      value: decisions
+        ? `${decisions === 1 ? '1 decision names' : `${decisions} decisions name`} it; they stay`
+        : 'None',
+    },
+    { label: 'Milestone', value: item.milestone?.name ?? 'None' },
+    { label: 'Goal', value: item.goal?.title ?? 'None' },
+    { label: 'Key result', value: item.goal?.metric ?? 'None' },
+    {
+      label: 'Tasks',
+      value: tasks ? `${tasks === 1 ? '1 task goes' : `${tasks} tasks go`} with it` : 'None',
+    },
   ];
 }
 
-function Part({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
+function Part({
+  title,
+  children,
+  testId,
+}: {
+  title: string;
+  children: React.ReactNode;
+  testId?: string;
+}) {
   return (
     <section className="mt-3" data-testid={testId}>
       <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
@@ -822,14 +893,16 @@ function useTalkPlace(on: boolean, ref: React.RefObject<HTMLDivElement | null>):
   useLayoutEffect(() => {
     if (!on) return;
     const read = () => {
-      const r = document.querySelector("main")?.getBoundingClientRect();
+      const r = document.querySelector('main')?.getBoundingClientRect();
       const el = ref.current;
-      const edge = el ? el.getBoundingClientRect().right + (parseFloat(getComputedStyle(el).right) || 0) : window.innerWidth;
+      const edge = el
+        ? el.getBoundingClientRect().right + (parseFloat(getComputedStyle(el).right) || 0)
+        : window.innerWidth;
       setRight(r ? Math.max(8, Math.round(edge - r.right) + 22) : 22);
     };
     read();
-    window.addEventListener("resize", read);
-    return () => window.removeEventListener("resize", read);
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
   }, [on, ref]);
   return right;
 }
@@ -879,7 +952,10 @@ export function FloatingCard({
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
   /** home-waiting-one-list: Oracle's open dates for the item, acted on in the panel. */
-  onSuggestion?: (how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => void;
+  onSuggestion?: (
+    how: 'accept' | 'edit' | 'dismiss',
+    dates?: { start_date: string; end_date: string },
+  ) => void;
   /** home-waiting-one-list: opened from a "waiting for you" row: what waits (a broken link's
    * fixes, Oracle's dates, a proposal) is scrolled into view. */
   focus?: boolean;
@@ -894,7 +970,7 @@ export function FloatingCard({
   style: React.CSSProperties;
   act: Act;
   canChange: boolean;
-  onDecide: (c: Change, how: "accept" | "decline") => void;
+  onDecide: (c: Change, how: 'accept' | 'decline') => void;
   onClose: () => void;
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
@@ -916,13 +992,16 @@ export function FloatingCard({
   const ref = useRef<HTMLDivElement>(null);
   // home-waiting-one-list: the card opened from a waiting row (?item=): scroll its fix into view.
   useEffect(() => {
-    if (focus) ref.current?.querySelector("[data-waits]")?.scrollIntoView({ block: "center" });
+    if (focus) ref.current?.querySelector('[data-waits]')?.scrollIntoView({ block: 'center' });
   }, [focus]);
   // fix4 qa-simple-roadmap-16: the changes waiting in the item's talk (cards not yet applied,
   // proposed or discarded) are proposals on it too: one source, the talk's own thread, read
   // when the card opens and kept as the talk changes.
   const [talkCards, setTalkCards] = useState<{ id: string; cards: ChatCard[] } | null>(null);
-  const onTalkCards = useCallback((cards: ChatCard[]) => setTalkCards({ id: item.id, cards }), [item.id]);
+  const onTalkCards = useCallback(
+    (cards: ChatCard[]) => setTalkCards({ id: item.id, cards }),
+    [item.id],
+  );
   // #1586 review: a talk that could not be read says why, never "No proposals waiting" while its cards may wait.
   const [talkFailed, setTalkFailed] = useState<{ id: string; error: string } | null>(null);
   const [talkTry, setTalkTry] = useState(0);
@@ -940,33 +1019,38 @@ export function FloatingCard({
     };
   }, [item.id, onTalkCards, talkTry]);
   const talkRead = !!talkCards && talkCards.id === item.id;
-  const waiting = talkRead ? talkCards.cards.filter((c) => c.status === "open") : [];
+  const waiting = talkRead ? talkCards.cards.filter((c) => c.status === 'open') : [];
   const talkError = !talkRead && talkFailed?.id === item.id ? talkFailed.error : null;
   // qa4-simple-roadmap-41: the red flags on the roadmap now; the talk's change cards list only the ones a change brings.
   const known = useMemo(
-    () => new Set([...items.values()].flatMap((i) => i.flags.filter((f) => f.state === "red").map((f) => flagKey(i.id, f.kind, f.subject)))),
+    () =>
+      new Set(
+        [...items.values()].flatMap((i) =>
+          i.flags.filter((f) => f.state === 'red').map((f) => flagKey(i.id, f.kind, f.subject)),
+        ),
+      ),
     [items],
   );
   // qa4-simple-roadmap-13: a cut item sits below the line; its old date and milestone flags
   // (and their fixes) no longer apply. Only "others still depend on it" stays.
-  const cut = item.status === "cut";
-  const flags = cut ? item.flags.filter((f) => f.kind === "cut_with_dependents") : item.flags;
+  const cut = item.status === 'cut';
+  const flags = cut ? item.flags.filter((f) => f.kind === 'cut_with_dependents') : item.flags;
   useScreenSubject(
-    { kind: "roadmap_item", subject: { item_id: item.id, key: item.key } },
+    { kind: 'roadmap_item', subject: { item_id: item.id, key: item.key } },
     item.title,
   );
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
     // Opening an item never scrolls the page: the clicked row stays where it was.
     ref.current?.focus({ preventScroll: true });
-    return () => window.removeEventListener("keydown", onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside, ref);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
   const [left, setLeft] = useState<number | null>(null);
-  const baseLeft = typeof style.left === "number" ? style.left : null;
+  const baseLeft = typeof style.left === 'number' ? style.left : null;
   useLayoutEffect(() => {
     const el = ref.current;
     const parent = el?.offsetParent as HTMLElement | null;
@@ -978,49 +1062,95 @@ export function FloatingCard({
   // BGD (Nov 10): the floating card fits the viewport (below its bar, above it, or as high as it
   // needs), its details scrolling under the header.
   const float = !phone && !beside;
-  const barOf = useCallback(() => document.querySelector(`[data-bar-id="${CSS.escape(item.id)}"]`), [item.id]);
+  const barOf = useCallback(
+    () => document.querySelector(`[data-bar-id="${CSS.escape(item.id)}"]`),
+    [item.id],
+  );
   const fit = useFitViewport(ref, {
     on: float,
-    top: style.position !== "relative" && typeof style.top === "number" ? style.top : undefined,
+    top: style.position !== 'relative' && typeof style.top === 'number' ? style.top : undefined,
     anchor: barOf,
-    follow: style.position === "relative",
+    follow: style.position === 'relative',
   });
   const place = phone
     ? wide
-      ? "fixed inset-0 z-50 flex h-dvh flex-col"
+      ? 'fixed inset-0 z-50 flex h-dvh flex-col'
       : `fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t h-[85dvh]`
     : beside
-      ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
-      : `absolute z-40 flex flex-col rounded-xl border ${wide ? "w-[760px]" : "w-[380px]"}`;
+      ? 'fixed z-40 flex w-[840px] flex-col rounded-xl border'
+      : `absolute z-40 flex flex-col rounded-xl border ${wide ? 'w-[760px]' : 'w-[380px]'}`;
   const placeStyle: React.CSSProperties | undefined = phone
     ? // A part-height sheet (the Timeline's) keeps the marked row in sight above it.
-      !wide && style.height ? { height: style.height } : undefined
+      !wide && style.height
+      ? { height: style.height }
+      : undefined
     : beside
       ? { top: 16, bottom: 16, right: talkRight }
-      : { ...style, ...(left == null ? {} : { left }), ...(fit.top == null ? {} : { top: fit.top }), maxHeight: fit.maxHeight };
+      : {
+          ...style,
+          ...(left == null ? {} : { left }),
+          ...(fit.top == null ? {} : { top: fit.top }),
+          maxHeight: fit.maxHeight,
+        };
 
   const [renaming, setRenaming] = useState(false);
   const [menu, setMenu] = useState(false);
   // panel-menu: Merge into… or Part of…, picked from the menu, open under the heading.
-  const [pick, setPick] = useState<"merge" | "parent" | null>(null);
+  const [pick, setPick] = useState<'merge' | 'parent' | null>(null);
   // panel-menu: Delete to Trash, as a row's Delete; in Trash, the panel closes.
-  const remove = useFeatureDelete(async () => sendCardChanged(), cornerToast, () => onClose());
+  const remove = useFeatureDelete(
+    async () => sendCardChanged(),
+    cornerToast,
+    () => onClose(),
+  );
   const neededBy = item.needed_by.map((id) => items.get(id)).filter((i): i is Item => !!i);
   const cutIt = async () => {
-    const parts = partsWords(item.parts.length, "stay");
-    const rows = [{ label: "Needed by", value: neededBy.length ? `${andWords(neededBy.map(codeName))} ${neededBy.length === 1 ? "loses" : "lose"} it` : "Nothing" }];
+    const parts = partsWords(item.parts.length, 'stay');
+    const rows = [
+      {
+        label: 'Needed by',
+        value: neededBy.length
+          ? `${andWords(neededBy.map(codeName))} ${neededBy.length === 1 ? 'loses' : 'lose'} it`
+          : 'Nothing',
+      },
+    ];
     // Who may not decide on it is asked to propose the cut, not to cut.
-    const ask = item.can_decide ? { action: "Cut", title: `Cut ${item.title}?` } : { action: "Propose", title: `Propose cutting ${item.title}?` };
-    if (!(await confirmInPage({ ...ask, message: parts, rows, cancel: "Cancel" }))) return;
-    await act({ applied: `Cut ${item.title} from the roadmap`, proposed: `cut ${item.title} from the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "cut" } }, parts || undefined);
+    const ask = item.can_decide
+      ? { action: 'Cut', title: `Cut ${item.title}?` }
+      : { action: 'Propose', title: `Propose cutting ${item.title}?` };
+    if (!(await confirmInPage({ ...ask, message: parts, rows, cancel: 'Cancel' }))) return;
+    await act(
+      {
+        applied: `Cut ${item.title} from the roadmap`,
+        proposed: `cut ${item.title} from the roadmap`,
+      },
+      {
+        op: 'set_status',
+        target: { item_id: item.id },
+        before: { status: item.status },
+        after: { status: 'cut' },
+      },
+      parts || undefined,
+    );
   };
   const restore = () =>
-    act({ applied: `Restored ${item.title} to the roadmap`, proposed: `restore ${item.title} to the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "planned" } });
+    act(
+      {
+        applied: `Restored ${item.title} to the roadmap`,
+        proposed: `restore ${item.title} to the roadmap`,
+      },
+      {
+        op: 'set_status',
+        target: { item_id: item.id },
+        before: { status: item.status },
+        after: { status: 'planned' },
+      },
+    );
   const menuItem = (label: string, run: () => void, warn = false) => (
     <button
       type="button"
       role="menuitem"
-      className={`block w-full rounded-md px-2 py-1 text-left text-[15px] hover:bg-surface2 ${warn ? "text-warn" : ""}`}
+      className={`block w-full rounded-md px-2 py-1 text-left text-[15px] hover:bg-surface2 ${warn ? 'text-warn' : ''}`}
       onClick={() => {
         setMenu(false);
         run();
@@ -1032,15 +1162,22 @@ export function FloatingCard({
   const head = (
     <div className="flex items-start gap-2">
       {/* BGD (Nov 4): the code chip before the name; the heading itself is the name. */}
-      <div className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words" data-testid="card-name">
+      <div
+        className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words"
+        data-testid="card-name"
+      >
         {renaming ? (
           <NameEdit item={item} act={act} done={() => setRenaming(false)} />
         ) : (
           <>
-            {item.code && <><span className="simple-code mr-0.5">{item.code}</span>{" "}</>}
+            {item.code && (
+              <>
+                <span className="simple-code mr-0.5">{item.code}</span>{' '}
+              </>
+            )}
             <h2 className="inline">
               {item.title}
-              {item.draft && item.status !== "merged" && (
+              {item.draft && item.status !== 'merged' && (
                 <span
                   className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
                   data-testid="draft-tag"
@@ -1073,19 +1210,37 @@ export function FloatingCard({
             ⋯
           </button>
           {menu && (
-            <div role="menu" className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip">
-              {menuItem("Rename", () => setRenaming(true))}
+            <div
+              role="menu"
+              className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip"
+            >
+              {menuItem('Rename', () => setRenaming(true))}
               {/* A cut feature stays a part, and can still be taken out (or put under another). */}
-              {item.status !== "merged" && menuItem("Part of…", () => setPick("parent"))}
-              {!closedItem(item) && menuItem("Merge into…", () => setPick("merge"))}
+              {item.status !== 'merged' && menuItem('Part of…', () => setPick('parent'))}
+              {!closedItem(item) && menuItem('Merge into…', () => setPick('merge'))}
               {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
-              {item.status === "cut"
-                ? menuItem(item.can_decide ? "Restore to the roadmap" : "Propose: restore", () => void restore())
-                : item.status !== "merged" && menuItem(item.can_decide ? "Cut from the roadmap" : "Propose: cut", () => void cutIt())}
+              {item.status === 'cut'
+                ? menuItem(
+                    item.can_decide ? 'Restore to the roadmap' : 'Propose: restore',
+                    () => void restore(),
+                  )
+                : item.status !== 'merged' &&
+                  menuItem(
+                    item.can_decide ? 'Cut from the roadmap' : 'Propose: cut',
+                    () => void cutIt(),
+                  )}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
               {menuItem(
-                item.can_decide ? "Move to Trash…" : "Propose: move to Trash…",
-                () => void remove({ id: item.id, title: itemName(item), parts: item.parts, rows: pointsAt(item, items), propose: !item.can_decide, deciders: item.deciders }),
+                item.can_decide ? 'Move to Trash…' : 'Propose: move to Trash…',
+                () =>
+                  void remove({
+                    id: item.id,
+                    title: itemName(item),
+                    parts: item.parts,
+                    rows: pointsAt(item, items),
+                    propose: !item.can_decide,
+                    deciders: item.deciders,
+                  }),
                 true,
               )}
             </div>
@@ -1104,9 +1259,9 @@ export function FloatingCard({
   );
 
   // A draft's own flow (S7): its draft_item visual, opened in the widened card as a proposal's is.
-  const draftFlow = subjectOf(item.flow) ?? { kind: "draft_item", id: item.id };
+  const draftFlow = subjectOf(item.flow) ?? { kind: 'draft_item', id: item.id };
   const flowPart = item.draft ? (
-    item.status !== "merged" && (
+    item.status !== 'merged' && (
       <Part title="Flow">
         <div className="mt-1 flex items-center gap-2">
           {item.flow ? (
@@ -1152,11 +1307,11 @@ export function FloatingCard({
         key={`row-${item.id}`}
         row
         subject={
-          item.flow?.subject_kind === "one_pager_line" && item.flow.subject_id
-            ? { kind: "one_pager_line", id: item.flow.subject_id }
-            : { kind: "feature", id: item.id }
+          item.flow?.subject_kind === 'one_pager_line' && item.flow.subject_id
+            ? { kind: 'one_pager_line', id: item.flow.subject_id }
+            : { kind: 'feature', id: item.id }
         }
-        documentId={item.flow?.subject_kind === "one_pager_line" ? item.prd?.id : undefined}
+        documentId={item.flow?.subject_kind === 'one_pager_line' ? item.prd?.id : undefined}
         openLabel="Open the item's flow"
         code={null}
         name={item.title}
@@ -1170,31 +1325,50 @@ export function FloatingCard({
   const details = (
     <>
       {item.drafting && (
-        <p
-          className="mt-1 text-sm text-accent-ink"
-          role="status"
-          data-testid="item-drafting"
-        >
+        <p className="mt-1 text-sm text-accent-ink" role="status" data-testid="item-drafting">
           Oracle is drafting…
         </p>
       )}
       {/* removed-tracks: a cut feature's head says who cut it and when (the Removed list's row). */}
-      {cut && <CutBy id={item.id} onRestore={canChange ? () => void restore() : undefined} restoreLabel={item.can_decide ? "Restore" : "Propose: restore"} />}
-      {pick && <PickFeature key={pick} kind={pick} item={item} items={items} act={act} done={() => setPick(null)} />}
+      {cut && (
+        <CutBy
+          id={item.id}
+          onRestore={canChange ? () => void restore() : undefined}
+          restoreLabel={item.can_decide ? 'Restore' : 'Propose: restore'}
+        />
+      )}
+      {pick && (
+        <PickFeature
+          key={pick}
+          kind={pick}
+          item={item}
+          items={items}
+          act={act}
+          done={() => setPick(null)}
+        />
+      )}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
           {/* The kept feature's display code, never its key. */}
-          Merged into <FeatureLink f={{ ...item.merged_into, code: items.get(item.merged_into.id)?.code ?? "" }} onOpen={onOpen} />
+          Merged into{' '}
+          <FeatureLink
+            f={{ ...item.merged_into, code: items.get(item.merged_into.id)?.code ?? '' }}
+            onOpen={onOpen}
+          />
         </p>
       )}
       {item.part_path.length > 0 && (
         <p className="mt-1 text-sm text-text2" data-testid="card-part-of">
           {/* feature-parts: the whole path from the top ("Part of F-01 Alerts > F-02 Rules"). */}
-          Part of{" "}
+          Part of{' '}
           {item.part_path.map((x, n) => (
             <span key={x.id}>
-              {n > 0 && " > "}
-              {x.in_trash ? <b className="font-semibold text-text">{x.title} (in Trash)</b> : <FeatureLink f={x} onOpen={onOpen} />}
+              {n > 0 && ' > '}
+              {x.in_trash ? (
+                <b className="font-semibold text-text">{x.title} (in Trash)</b>
+              ) : (
+                <FeatureLink f={x} onOpen={onOpen} />
+              )}
             </span>
           ))}
         </p>
@@ -1206,100 +1380,123 @@ export function FloatingCard({
         </div>
       )}
       <LooksLike item={item} act={act} canChange={canChange} />
-      <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
+      <div className={wide && !phone ? 'grid grid-cols-2 gap-4' : ''}>
         <div>
           {!canChange && (
             // build-feature-panel (AN PR 1204): who may only read says so, with a way to suggest a change.
-            <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="card-read-only">
-              You can read this feature. Its owner and approvers can change it.{" "}
-              <button type="button" onClick={() => setTalk(true)} className="font-medium text-accent-ink underline">
+            <p
+              className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2"
+              data-testid="card-read-only"
+            >
+              You can read this feature. Its owner and approvers can change it.{' '}
+              <button
+                type="button"
+                onClick={() => setTalk(true)}
+                className="font-medium text-accent-ink underline"
+              >
                 Suggest a change
               </button>
             </p>
           )}
-          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} planned={planned} served={served} noHorizon={!!onHorizon} />
+          <PanelFields
+            item={item}
+            items={items}
+            act={act}
+            canChange={canChange}
+            onOpen={onOpen}
+            milestones={milestones}
+            planned={planned}
+            served={served}
+            noHorizon={!!onHorizon}
+          />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-          {item.slices.length > 0 && (
-            <>
-              {/* item-milestone: the Milestone row is one of the panel's fields (PanelFields), for every item. */}
-              <dt className="text-text2">Slices</dt>
-              <dd>
-                <ul className="space-y-1" data-testid="card-slices">
-                  {item.slices.map((x) => (
-                    <li
-                      key={x.code}
-                      data-testid="card-slice"
-                      className="flex gap-2"
-                    >
-                      <span
-                        aria-hidden
-                        className="mt-1.5 h-2.5 w-2.5 flex-none rounded-sm"
-                        style={{ background: milestoneInk(x.milestone) }}
-                      />
-                      <span>
-                        <b className="font-semibold">{x.name}</b>
-                        <span className="block text-sm text-text2">
-                          {x.milestone} {x.milestone_name}
-                          {x.start_date && x.end_date
-                            ? ` · ${shortDay(x.start_date)} – ${shortDay(x.end_date)}`
-                            : " · not dated yet"}
-                          {x.pm_owned || x.effort_weeks == null
-                            ? " · PM-owned"
-                            : ` · ${x.effort_weeks} engineer-week${x.effort_weeks === 1 ? "" : "s"}`}
-                          {x.estimated ? " · placed by Oracle" : ""}
+            {item.slices.length > 0 && (
+              <>
+                {/* item-milestone: the Milestone row is one of the panel's fields (PanelFields), for every item. */}
+                <dt className="text-text2">Slices</dt>
+                <dd>
+                  <ul className="space-y-1" data-testid="card-slices">
+                    {item.slices.map((x) => (
+                      <li key={x.code} data-testid="card-slice" className="flex gap-2">
+                        <span
+                          aria-hidden
+                          className="mt-1.5 h-2.5 w-2.5 flex-none rounded-sm"
+                          style={{ background: milestoneInk(x.milestone) }}
+                        />
+                        <span>
+                          <b className="font-semibold">{x.name}</b>
+                          <span className="block text-sm text-text2">
+                            {x.milestone} {x.milestone_name}
+                            {x.start_date && x.end_date
+                              ? ` · ${shortDay(x.start_date)} – ${shortDay(x.end_date)}`
+                              : ' · not dated yet'}
+                            {x.pm_owned || x.effort_weeks == null
+                              ? ' · PM-owned'
+                              : ` · ${x.effort_weeks} engineer-week${x.effort_weeks === 1 ? '' : 's'}`}
+                            {x.estimated ? ' · placed by Oracle' : ''}
+                          </span>
                         </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </>
-          )}
-          {near && (
-            <>
-              <dt className="text-text2">Near</dt>
-              <dd data-testid="card-near">{near}</dd>
-            </>
-          )}
-          {onHorizon && (
-            <>
-              <dt className="self-center text-text2">Horizon</dt>
-              <dd data-testid="card-horizon">
-                <SegmentedControl<Horizon>
-                  label="Horizon"
-                  size="sm"
-                  value={item.horizon}
-                  onChange={(h) => h !== item.horizon && onHorizon(h)}
-                  items={HORIZONS.map((h) => ({
-                    value: h.key,
-                    label: h.label,
-                  }))}
-                />
-              </dd>
-            </>
-          )}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </>
+            )}
+            {near && (
+              <>
+                <dt className="text-text2">Near</dt>
+                <dd data-testid="card-near">{near}</dd>
+              </>
+            )}
+            {onHorizon && (
+              <>
+                <dt className="self-center text-text2">Horizon</dt>
+                <dd data-testid="card-horizon">
+                  <SegmentedControl<Horizon>
+                    label="Horizon"
+                    size="sm"
+                    value={item.horizon}
+                    onChange={(h) => h !== item.horizon && onHorizon(h)}
+                    items={HORIZONS.map((h) => ({
+                      value: h.key,
+                      label: h.label,
+                    }))}
+                  />
+                </dd>
+              </>
+            )}
           </dl>
         </div>
         <div>
           {/* qa-nov17: one estimate only: a suggestion other than the estimate shown (a dependency moved it) is not offered. */}
-          {item.suggestion?.status === "open" && onSuggestion && !(item.estimated && (item.suggestion.start_date !== item.start.date || item.suggestion.end_date !== item.end.date)) && (
-            <section className="mt-3 rounded-lg border border-line p-2" data-testid="card-suggestion" data-waits>
-              <SuggestionBody
-                item={item}
-                canAct={can("accept_date_suggestion")}
-                onAccept={() => onSuggestion("accept")}
-                onEdit={(start_date, end_date) => onSuggestion("edit", { start_date, end_date })}
-                onDismiss={() => onSuggestion("dismiss")}
-              />
-            </section>
-          )}
+          {item.suggestion?.status === 'open' &&
+            onSuggestion &&
+            !(
+              item.estimated &&
+              (item.suggestion.start_date !== item.start.date ||
+                item.suggestion.end_date !== item.end.date)
+            ) && (
+              <section
+                className="mt-3 rounded-lg border border-line p-2"
+                data-testid="card-suggestion"
+                data-waits
+              >
+                <SuggestionBody
+                  item={item}
+                  canAct={can('accept_date_suggestion')}
+                  onAccept={() => onSuggestion('accept')}
+                  onEdit={(start_date, end_date) => onSuggestion('edit', { start_date, end_date })}
+                  onDismiss={() => onSuggestion('dismiss')}
+                />
+              </section>
+            )}
           {flags.length > 0 && (
             <section className="mt-3 space-y-1" data-testid="card-flags" data-waits>
               {flags.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
                   {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
                   <FlagLine flag={codedFlag(item, f, milestones, planned)} />
-                  {f.state === "red" && (
+                  {f.state === 'red' && (
                     <FixButtons
                       item={item}
                       flag={f}
@@ -1314,10 +1511,7 @@ export function FloatingCard({
           )}
           <Part title="Why">
             {item.reasons.length ? (
-              <ul
-                className="mt-1 list-disc pl-[18px]"
-                data-testid="card-reasons"
-              >
+              <ul className="mt-1 list-disc pl-[18px]" data-testid="card-reasons">
                 {item.reasons.slice(0, 3).map((r) => (
                   <li key={r}>{r}</li>
                 ))}
@@ -1369,7 +1563,11 @@ export function FloatingCard({
                 item={item}
                 act={act}
                 canChange={canChange}
-                title={(words) => <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">{words}</h3>}
+                title={(words) => (
+                  <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
+                    {words}
+                  </h3>
+                )}
               />
             </section>
           )}
@@ -1378,9 +1576,13 @@ export function FloatingCard({
             {waiting.length > 0 && (
               <ul className="mt-1 space-y-1" data-testid="card-talk-proposals">
                 {waiting.map((c) => (
-                  <li key={c.id} className="flex items-center gap-2" data-testid="card-talk-proposal">
+                  <li
+                    key={c.id}
+                    className="flex items-center gap-2"
+                    data-testid="card-talk-proposal"
+                  >
                     <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                      {c.summary} ·{" "}
+                      {c.summary} ·{' '}
                       <span className="text-text2">waiting in your talk with Oracle</span>
                     </span>
                     {!talk && (
@@ -1393,7 +1595,11 @@ export function FloatingCard({
               </ul>
             )}
             {proposalsFailed ? (
-              <LoadError what="the proposals" error={proposalsFailed.error} onRetry={proposalsFailed.retry} />
+              <LoadError
+                what="the proposals"
+                error={proposalsFailed.error}
+                onRetry={proposalsFailed.retry}
+              />
             ) : proposals.length ? (
               <ul className="mt-1 space-y-2" data-testid="card-proposals" data-waits>
                 {proposals.map((c) => (
@@ -1401,28 +1607,25 @@ export function FloatingCard({
                     {featureProposal(c, items) && (
                       <FlowThumb
                         onOpen={() =>
-                          openFlow(
-                            wide?.id === c.id
-                              ? null
-                              : { kind: "change", id: c.id },
-                          )
+                          openFlow(wide?.id === c.id ? null : { kind: 'change', id: c.id })
                         }
                       />
                     )}
                     <span className="min-w-0 flex-1">
-                      {opWords(c.op)} ·{" "}
-                      <span className="text-text2">{c.by_name}</span>
-                      {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
+                      {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
+                      {c.from_meeting && (
+                        <span
+                          className="block text-sm text-text2"
+                          data-testid="proposal-from-meeting"
+                        >
+                          Asked for by the meeting {c.from_meeting.title}
+                        </span>
+                      )}
                     </span>
                     {c.can_decide && (
                       <>
-                        <Button onClick={() => onDecide(c, "accept")}>
-                          Accept
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => onDecide(c, "decline")}
-                        >
+                        <Button onClick={() => onDecide(c, 'accept')}>Accept</Button>
+                        <Button variant="ghost" onClick={() => onDecide(c, 'decline')}>
                           Decline
                         </Button>
                       </>
@@ -1433,7 +1636,11 @@ export function FloatingCard({
             ) : proposalsLoading ? (
               <Loading />
             ) : talkError ? (
-              <LoadError what="your talk with Oracle" error={talkError} onRetry={() => setTalkTry((n) => n + 1)} />
+              <LoadError
+                what="your talk with Oracle"
+                error={talkError}
+                onRetry={() => setTalkTry((n) => n + 1)}
+              />
             ) : !talkRead ? (
               <Loading />
             ) : (
@@ -1442,13 +1649,8 @@ export function FloatingCard({
           </Part>
         </div>
         {wide && (
-          <section
-            data-testid="flow-view"
-            className={`mt-3 ${phone ? "" : "col-span-2"}`}
-          >
-            <h3 className="font-semibold">
-              The flow and the screen it touches
-            </h3>
+          <section data-testid="flow-view" className={`mt-3 ${phone ? '' : 'col-span-2'}`}>
+            <h3 className="font-semibold">The flow and the screen it touches</h3>
             <FlowPanel
               key={`${wide.kind}-${wide.id}`}
               subject={wide}
@@ -1459,7 +1661,7 @@ export function FloatingCard({
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
         <Link
-          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}&roadmap=${encodeURIComponent(item.roadmap.slug)}`}
+          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ''}&roadmap=${encodeURIComponent(item.roadmap.slug)}`}
           className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap hover:bg-surface2"
         >
           Open the detailed view
@@ -1489,7 +1691,7 @@ export function FloatingCard({
        * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
        * clicking it closes the card like the close button. */}
       {/* The Timeline's side panel sits in the page's flow and dims nothing. */}
-      {!phone && style.position !== "relative" && (
+      {!phone && style.position !== 'relative' && (
         <div
           aria-hidden
           data-testid="floating-card-backdrop"
@@ -1500,7 +1702,11 @@ export function FloatingCard({
             // links still goes there (not only closes the card).
             const link = document
               .elementsFromPoint(e.clientX, e.clientY)
-              .map((el) => el.closest<HTMLElement>('[data-testid="simple-nav"] a, [data-testid="simple-nav"] button'))
+              .map((el) =>
+                el.closest<HTMLElement>(
+                  '[data-testid="simple-nav"] a, [data-testid="simple-nav"] button',
+                ),
+              )
               .find(Boolean);
             onClose();
             link?.click();
@@ -1513,76 +1719,77 @@ export function FloatingCard({
         role="dialog"
         aria-label={item.title}
         data-testid="floating-card"
-        data-sheet={phone ? "bottom" : "float"}
-        data-wide={wide ? "true" : "false"}
-        data-talk={talk ? "true" : "false"}
-        data-flow-open={flowOpen ? "true" : "false"}
+        data-sheet={phone ? 'bottom' : 'float'}
+        data-wide={wide ? 'true' : 'false'}
+        data-talk={talk ? 'true' : 'false'}
+        data-flow-open={flowOpen ? 'true' : 'false'}
         style={placeStyle}
-        data-backdrop={phone && wide ? "" : undefined}
-        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${float ? "overflow-hidden" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
+        data-backdrop={phone && wide ? '' : undefined}
+        className={`${place} ${phone ? 'max-w-none overflow-hidden' : 'max-w-[calc(100vw-16px)]'} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${float ? 'overflow-hidden' : ''} ${flowOpen && !phone ? 'pointer-events-none opacity-0' : ''}`}
       >
-      {phone ? (
-        <>
-          {!wide && (
-            <span
-              aria-hidden
-              className="mx-auto mt-2 mb-1 block h-1 w-10 flex-none rounded-sm bg-line-strong opacity-60"
-            />
-          )}
-          <div
-            className={`flex-none border-b border-line px-4 pb-2.5 ${wide ? "pt-3.5" : "pt-1.5"}`}
-          >
-            {head}
-            <Tabs
-              label="The item"
-              className="panel-tabs mt-2.5"
-              value={talk ? "talk" : "details"}
-              onChange={(t) => setTalk(t === "talk")}
-              items={[
-                { value: "details", label: "Details" },
-                { value: "talk", label: "Talk to Oracle" },
-              ]}
-            />
-          </div>
-          {talk ? (
+        {phone ? (
+          <>
+            {!wide && (
+              <span
+                aria-hidden
+                className="mx-auto mt-2 mb-1 block h-1 w-10 flex-none rounded-sm bg-line-strong opacity-60"
+              />
+            )}
             <div
-              role="tabpanel"
-              aria-label="Talk to Oracle"
-              className="flex min-h-0 flex-1 flex-col"
+              className={`flex-none border-b border-line px-4 pb-2.5 ${wide ? 'pt-3.5' : 'pt-1.5'}`}
             >
-              {talkPanel}
+              {head}
+              <Tabs
+                label="The item"
+                className="panel-tabs mt-2.5"
+                value={talk ? 'talk' : 'details'}
+                onChange={(t) => setTalk(t === 'talk')}
+                items={[
+                  { value: 'details', label: 'Details' },
+                  { value: 'talk', label: 'Talk to Oracle' },
+                ]}
+              />
             </div>
-          ) : (
+            {talk ? (
+              <div
+                role="tabpanel"
+                aria-label="Talk to Oracle"
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                {talkPanel}
+              </div>
+            ) : (
+              <div
+                role="tabpanel"
+                aria-label="Details"
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
+              >
+                {details}
+              </div>
+            )}
+          </>
+        ) : beside ? (
+          <>
+            <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">{head}</div>
+            <div className="grid min-h-0 flex-1 grid-cols-[390px_minmax(0,1fr)]">
+              <div className="min-h-0 overflow-y-auto border-r border-line px-4 pt-1 pb-3">
+                {details}
+              </div>
+              <div className="flex min-h-0 min-w-0 flex-col">{talkPanel}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex-none px-4 pt-4">{head}</div>
             <div
-              role="tabpanel"
-              aria-label="Details"
+              data-fit-body=""
               className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
             >
               {details}
             </div>
-          )}
-        </>
-      ) : beside ? (
-        <>
-          <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">
-            {head}
-          </div>
-          <div className="grid min-h-0 flex-1 grid-cols-[390px_minmax(0,1fr)]">
-            <div className="min-h-0 overflow-y-auto border-r border-line px-4 pt-1 pb-3">
-              {details}
-            </div>
-            <div className="flex min-h-0 min-w-0 flex-col">{talkPanel}</div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="flex-none px-4 pt-4">{head}</div>
-          <div data-fit-body="" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
-            {details}
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
     </>
   );
 }

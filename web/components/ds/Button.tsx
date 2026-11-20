@@ -1,12 +1,12 @@
-import Link from "next/link";
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
+import Link from 'next/link';
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react';
 
-import { Icon, type IconName } from "./Icon";
+import { Icon, type IconName } from './Icon';
 
-export type ButtonVariant = "primary" | "secondary" | "solid" | "ghost" | "danger" | "hero";
+export type ButtonVariant = 'primary' | 'secondary' | 'solid' | 'ghost' | 'danger' | 'hero';
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-colors disabled:cursor-not-allowed aria-disabled:cursor-not-allowed";
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-colors disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
 
 /*
  * Disabled reads as disabled (qa-settings-6): a filled button turns to a muted neutral fill,
@@ -21,9 +21,9 @@ const BASE =
  * enabled secondary one (a solid outline on the page's fill).
  */
 const DISABLED_FILL =
-  "disabled:border disabled:border-dashed disabled:border-line-strong aria-disabled:border aria-disabled:border-dashed aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100";
+  'disabled:border disabled:border-dashed disabled:border-line-strong aria-disabled:border aria-disabled:border-dashed aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100';
 const DISABLED_OUTLINE =
-  "disabled:border-line disabled:text-text2 disabled:hover:bg-surface aria-disabled:border-line aria-disabled:text-text2 aria-disabled:hover:bg-surface";
+  'disabled:border-line disabled:text-text2 disabled:hover:bg-surface aria-disabled:border-line aria-disabled:text-text2 aria-disabled:hover:bg-surface';
 
 const VARIANT: Record<ButtonVariant, string> = {
   // One per screen, top-right (I3 rule 3).
@@ -33,41 +33,56 @@ const VARIANT: Record<ButtonVariant, string> = {
   // A form's submit inside a panel: filled like primary, at row size; never a row action.
   solid: `h-8 rounded-lg px-3 text-sm bg-accent text-on-accent hover:brightness-110 ${DISABLED_FILL}`,
   ghost:
-    "h-8 rounded-lg px-2.5 text-sm font-medium text-text2 hover:bg-surface2 hover:text-text disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text2 aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-text2",
+    'h-8 rounded-lg px-2.5 text-sm font-medium text-text2 hover:bg-surface2 hover:text-text disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text2 aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-text2',
   danger: `h-8 rounded-lg px-3 text-sm border border-crit bg-surface text-crit hover:bg-crit-bg ${DISABLED_OUTLINE}`,
   // Secondary action in an Inspector head ("Open").
-  hero: "h-8 rounded-lg px-3 text-sm border border-hero-text2 bg-transparent text-hero-text hover:bg-hero-2",
+  hero: 'h-8 rounded-lg px-3 text-sm border border-hero-text2 bg-transparent text-hero-text hover:bg-hero-2',
 };
 
-type Common = { variant?: ButtonVariant; icon?: IconName; children?: ReactNode; className?: string };
+type Common = {
+  variant?: ButtonVariant;
+  icon?: IconName;
+  children?: ReactNode;
+  className?: string;
+};
 
 export function Button({
-  variant = "secondary",
+  variant = 'secondary',
   icon,
-  className = "",
+  className = '',
   children,
-  type = "button",
+  type = 'button',
   ...props
 }: Common & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type={type} data-variant={variant} {...props} className={`${BASE} ${VARIANT[variant]} ${className}`}>
-      {icon && <Icon name={icon} size={variant === "primary" ? 20 : 16} />}
+    <button
+      type={type}
+      data-variant={variant}
+      {...props}
+      className={`${BASE} ${VARIANT[variant]} ${className}`}
+    >
+      {icon && <Icon name={icon} size={variant === 'primary' ? 20 : 16} />}
       {children}
     </button>
   );
 }
 
 export function LinkButton({
-  variant = "secondary",
+  variant = 'secondary',
   icon,
-  className = "",
+  className = '',
   children,
   href,
   ...props
-}: Common & { href: string } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
+}: Common & { href: string } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
   return (
-    <Link href={href} data-variant={variant} {...props} className={`${BASE} ${VARIANT[variant]} ${className}`}>
-      {icon && <Icon name={icon} size={variant === "primary" ? 20 : 16} />}
+    <Link
+      href={href}
+      data-variant={variant}
+      {...props}
+      className={`${BASE} ${VARIANT[variant]} ${className}`}
+    >
+      {icon && <Icon name={icon} size={variant === 'primary' ? 20 : 16} />}
       {children}
     </Link>
   );

@@ -6,83 +6,122 @@
  * request or a regeneration answers with a draft run id). Same role checks as the API:
  * viewers read, commenters comment, approvers request, regenerate and decide.
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import { reply, rawReply } from "./typed";
+import { reply, rawReply } from './typed';
 
-type Role = Schemas["Me"]["role"];
-type Spec = Schemas["SpecOut"];
-type Design = Schemas["DesignArtifactOut"];
+type Role = Schemas['Me']['role'];
+type Spec = Schemas['SpecOut'];
+type Design = Schemas['DesignArtifactOut'];
 
-const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
+const RANK: Role[] = ['viewer', 'commenter', 'approver', 'owner'];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
-const AT = "2026-10-19T12:00:00Z";
+const AT = '2026-10-19T12:00:00Z';
 const CSP =
   "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox";
 
 const I = {
-  request: "c3000000-0000-4000-8000-000000000001",
-  flowRequest: "c3000000-0000-4000-8000-000000000002",
-  wireRequest: "c3000000-0000-4000-8000-000000000003",
-  specVersion: "c3000000-0000-4000-8000-000000000011",
-  flowVersion: "c3000000-0000-4000-8000-000000000012",
-  wireVersion: "c3000000-0000-4000-8000-000000000013",
+  request: 'c3000000-0000-4000-8000-000000000001',
+  flowRequest: 'c3000000-0000-4000-8000-000000000002',
+  wireRequest: 'c3000000-0000-4000-8000-000000000003',
+  specVersion: 'c3000000-0000-4000-8000-000000000011',
+  flowVersion: 'c3000000-0000-4000-8000-000000000012',
+  wireVersion: 'c3000000-0000-4000-8000-000000000013',
   /** The wireframes' v1: approved, until an approval of v2 supersedes it. */
-  wireVersionOld: "c3000000-0000-4000-8000-000000000014",
-  docVersion: "c3000000-0000-4000-8000-000000000021",
-  document: "c3000000-0000-4000-8000-000000000022",
-  run: "c3000000-0000-4000-8000-000000000031",
-  requirement: "c3000000-0000-4000-8000-000000000041",
-  specDependency: "c3000000-0000-4000-8000-000000000051",
+  wireVersionOld: 'c3000000-0000-4000-8000-000000000014',
+  docVersion: 'c3000000-0000-4000-8000-000000000021',
+  document: 'c3000000-0000-4000-8000-000000000022',
+  run: 'c3000000-0000-4000-8000-000000000031',
+  requirement: 'c3000000-0000-4000-8000-000000000041',
+  specDependency: 'c3000000-0000-4000-8000-000000000051',
   /** qa4-docs-8: the full engineering spec's request, version, document and run. */
-  fullRequest: "c3000000-0000-4000-8000-000000000004",
-  fullVersion: "c3000000-0000-4000-8000-000000000015",
-  fullDocVersion: "c3000000-0000-4000-8000-000000000023",
-  fullDocument: "c3000000-0000-4000-8000-000000000024",
-  fullRun: "c3000000-0000-4000-8000-000000000032",
+  fullRequest: 'c3000000-0000-4000-8000-000000000004',
+  fullVersion: 'c3000000-0000-4000-8000-000000000015',
+  fullDocVersion: 'c3000000-0000-4000-8000-000000000023',
+  fullDocument: 'c3000000-0000-4000-8000-000000000024',
+  fullRun: 'c3000000-0000-4000-8000-000000000032',
 };
 
 /** A spec version's dependency on the PRD section that changed (#481: Reconcile names it by its heading). */
-function prdSectionDependency(id: string): Schemas["TraceDependency"] {
+function prdSectionDependency(id: string): Schemas['TraceDependency'] {
   return {
-    id, freshness: "potentially_stale", caused_by_change_id: null, stale_since: AT, reconciled_by: null, reconciled_at: null, note: null,
-    upstream: { document_slug: "annual-billing", document_kind: "prd", version_number: 1, section_key: "s-5-2", deleted: false },
-    reasons: ["section s-5-2 changed in annual-billing"],
+    id,
+    freshness: 'potentially_stale',
+    caused_by_change_id: null,
+    stale_since: AT,
+    reconciled_by: null,
+    reconciled_at: null,
+    note: null,
+    upstream: {
+      document_slug: 'annual-billing',
+      document_kind: 'prd',
+      version_number: 1,
+      section_key: 's-5-2',
+      deleted: false,
+    },
+    reasons: ['section s-5-2 changed in annual-billing'],
   };
 }
 
 // #396: why a spec version that may be stale is not approved (api/oracle/wording.py STALE).
 const STALE =
-  "may be stale: the PRD it rests on changed since it was written (the reasons are beside its Potentially stale label). Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile) before approving";
+  'may be stale: the PRD it rests on changed since it was written (the reasons are beside its Potentially stale label). Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile) before approving';
 
-const FRESH_ORDER: Schemas["ArtifactVersionOut"]["freshness"][] = ["fresh", "reconciled", "under_review", "potentially_stale"];
+const FRESH_ORDER: Schemas['ArtifactVersionOut']['freshness'][] = [
+  'fresh',
+  'reconciled',
+  'under_review',
+  'potentially_stale',
+];
 
 /**
  * #481: the trace's staleness actions (POST /v1/trace/staleness/actions, api/oracle/trace/staleness.py
  * act) on a spec's version or its flow's, as the Plan inspector's; null when the output is not one of them.
  */
-export async function specStalenessAction(ctx: SpecsContext, req: Request): Promise<Response | null> {
-  const a = (await req.clone().json()) as Schemas["StalenessAction"];
-  const spec = ctx.db.specs.find((s) => s.stale.some((v) => v.artifact_version_id && v.artifact_version_id === a.artifact_version_id));
+export async function specStalenessAction(
+  ctx: SpecsContext,
+  req: Request,
+): Promise<Response | null> {
+  const a = (await req.clone().json()) as Schemas['StalenessAction'];
+  const spec = ctx.db.specs.find((s) =>
+    s.stale.some((v) => v.artifact_version_id && v.artifact_version_id === a.artifact_version_id),
+  );
   const view = spec?.stale.find((v) => v.artifact_version_id === a.artifact_version_id);
   if (!spec || !view) return null;
-  if (!atLeast(ctx.role, "approver")) return fail(403, "Requires the approver role");
-  if (a.action === "reconcile" && !a.reason?.trim()) return fail(422, "reconciling needs a reason");
-  const from = a.action === "review" ? ["potentially_stale"] : ["potentially_stale", "under_review"];
-  if (!from.includes(view.freshness)) return fail(409, `nothing to ${a.action.replace("_", " ")}: ${view.freshness}`);
-  const to = a.action === "reconcile" ? "reconciled" : "under_review";
+  if (!atLeast(ctx.role, 'approver')) return fail(403, 'Requires the approver role');
+  if (a.action === 'reconcile' && !a.reason?.trim()) return fail(422, 'reconciling needs a reason');
+  const from =
+    a.action === 'review' ? ['potentially_stale'] : ['potentially_stale', 'under_review'];
+  if (!from.includes(view.freshness))
+    return fail(409, `nothing to ${a.action.replace('_', ' ')}: ${view.freshness}`);
+  const to = a.action === 'reconcile' ? 'reconciled' : 'under_review';
   view.freshness = to;
-  view.dependencies = view.dependencies.map((d) => (from.includes(d.freshness) ? { ...d, freshness: to, note: a.reason ?? d.note } : d));
-  for (const v of spec.versions) if (v.artifact_version.id === view.artifact_version_id) v.artifact_version = { ...v.artifact_version, freshness: to };
-  for (const d of spec.design ?? []) if (d.version.id === view.artifact_version_id) d.version = { ...d.version, freshness: to };
-  spec.freshness = spec.versions.map((v) => v.artifact_version.freshness).reduce((x, y) => (FRESH_ORDER.indexOf(y) > FRESH_ORDER.indexOf(x) ? y : x), "fresh");
-  return reply("/v1/trace/staleness/actions", "post", view);
+  view.dependencies = view.dependencies.map((d) =>
+    from.includes(d.freshness) ? { ...d, freshness: to, note: a.reason ?? d.note } : d,
+  );
+  for (const v of spec.versions)
+    if (v.artifact_version.id === view.artifact_version_id)
+      v.artifact_version = { ...v.artifact_version, freshness: to };
+  for (const d of spec.design ?? [])
+    if (d.version.id === view.artifact_version_id) d.version = { ...d.version, freshness: to };
+  spec.freshness = spec.versions
+    .map((v) => v.artifact_version.freshness)
+    .reduce((x, y) => (FRESH_ORDER.indexOf(y) > FRESH_ORDER.indexOf(x) ? y : x), 'fresh');
+  return reply('/v1/trace/staleness/actions', 'post', view);
 }
 
 /** The refusal of Approve on a spec document's version whose spec version may be stale (api/oracle/specs/service.py). */
-export function staleSpecRefusal(db: SpecsDb | undefined, slug: string, n: number): { detail: string; refs: Record<string, string> } | null {
-  const av = db?.specs.find((s) => s.document_slug === slug)?.versions.find((x) => x.document_version === n)?.artifact_version;
-  return av?.freshness === "potentially_stale" ? { detail: `this spec version ${STALE} its approach`, refs: { artifact_version: av.id } } : null;
+export function staleSpecRefusal(
+  db: SpecsDb | undefined,
+  slug: string,
+  n: number,
+): { detail: string; refs: Record<string, string> } | null {
+  const av = db?.specs
+    .find((s) => s.document_slug === slug)
+    ?.versions.find((x) => x.document_version === n)?.artifact_version;
+  return av?.freshness === 'potentially_stale'
+    ? { detail: `this spec version ${STALE} its approach`, refs: { artifact_version: av.id } }
+    : null;
 }
 
 export interface SpecsDb {
@@ -118,11 +157,14 @@ export interface SpecsContext {
   /** A tech brief (F5-1) by its version id: its PRD's slug and status. */
   techBrief?: (id: string) => { prd: string; status: string } | null;
   /** Drafts the prd_to_spec run (POST /v1/runs): its id, or the refusal. */
-  draftRun?: (input: Schemas["RunCreate"]) => Promise<string | Response>;
+  draftRun?: (input: Schemas['RunCreate']) => Promise<string | Response>;
 }
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
 
@@ -139,60 +181,168 @@ const wireframe = (n: number) =>
   // Oracle's sanitiser writes each annotation's label into the footer (api/oracle/specs/sanitize.py).
   `<aside class="oracle-annotations"><ol><li><strong>1.</strong> The quote shows before the address step.</li></ol></aside></body></html>\n`;
 
-function version(id: string, requestId: string, freshness: Schemas["ArtifactVersionOut"]["freshness"], number = 1): Schemas["ArtifactVersionOut"] {
+function version(
+  id: string,
+  requestId: string,
+  freshness: Schemas['ArtifactVersionOut']['freshness'],
+  number = 1,
+): Schemas['ArtifactVersionOut'] {
   return {
-    id, request_id: requestId, number, status: "in_review", freshness, source_version_id: null, composition_revision: null,
-    content_hash: null, summary: null, created_by: null, approved_by: null, approved_at: null, created_at: AT,
-    provenance: { origin: "run", run_id: I.run, prompt_version: "prd_to_spec/1", runner_profile: "claude-code", prd_version: 1, requirement_ids: [I.requirement] },
+    id,
+    request_id: requestId,
+    number,
+    status: 'in_review',
+    freshness,
+    source_version_id: null,
+    composition_revision: null,
+    content_hash: null,
+    summary: null,
+    created_by: null,
+    approved_by: null,
+    approved_at: null,
+    created_at: AT,
+    provenance: {
+      origin: 'run',
+      run_id: I.run,
+      prompt_version: 'prd_to_spec/1',
+      runner_profile: 'claude-code',
+      prd_version: 1,
+      requirement_ids: [I.requirement],
+    },
   };
 }
 
-function request(id: string, kind: Schemas["ArtifactRequestOut"]["kind"], title: string, params: Record<string, unknown>): Schemas["ArtifactRequestOut"] {
+function request(
+  id: string,
+  kind: Schemas['ArtifactRequestOut']['kind'],
+  title: string,
+  params: Record<string, unknown>,
+): Schemas['ArtifactRequestOut'] {
   return {
-    id, kind, title, source_document_id: "a1000000-0000-4000-8000-000000000001", source_version_id: null,
-    requirement_ids: [I.requirement], section_keys: ["s-5-2"], params, status: "succeeded", run_id: I.run,
-    requested_by: null, lock_version: 1, created_at: AT, updated_at: AT,
+    id,
+    kind,
+    title,
+    source_document_id: 'a1000000-0000-4000-8000-000000000001',
+    source_version_id: null,
+    requirement_ids: [I.requirement],
+    section_keys: ['s-5-2'],
+    params,
+    status: 'succeeded',
+    run_id: I.run,
+    requested_by: null,
+    lock_version: 1,
+    created_at: AT,
+    updated_at: AT,
   };
 }
 
-const note = (target: string): Schemas["AnnotationOut"] => ({
-  id: "cost-early", target, note: "The quote shows before the address step.", section_key: "s-5-2", requirement_ids: [I.requirement], reviews: [],
+const note = (target: string): Schemas['AnnotationOut'] => ({
+  id: 'cost-early',
+  target,
+  note: 'The quote shows before the address step.',
+  section_key: 's-5-2',
+  requirement_ids: [I.requirement],
+  reviews: [],
 });
-const guestNote: Schemas["AnnotationOut"] = {
-  id: "guest-path", target: "cart", note: "Guests skip the bulk-imports branch.", section_key: null, requirement_ids: [], reviews: [],
+const guestNote: Schemas['AnnotationOut'] = {
+  id: 'guest-path',
+  target: 'cart',
+  note: 'Guests skip the bulk-imports branch.',
+  section_key: null,
+  requirement_ids: [],
+  reviews: [],
 };
 
-function design(kind: "user_flow" | "wireframe", versionId = kind === "user_flow" ? I.flowVersion : I.wireVersion, number = 1): Design {
-  const flow = kind === "user_flow";
-  const outputs: Schemas["DesignOutputOut"][] = flow
-    ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote"), guestNote], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
-    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Plan page ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<blink> element (content kept)"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
+function design(
+  kind: 'user_flow' | 'wireframe',
+  versionId = kind === 'user_flow' ? I.flowVersion : I.wireVersion,
+  number = 1,
+): Design {
+  const flow = kind === 'user_flow';
+  const outputs: Schemas['DesignOutputOut'][] = flow
+    ? [
+        {
+          name: 'checkout-flow.svg',
+          title: 'Checkout with an early quote',
+          screen: null,
+          media_type: 'image/svg+xml',
+          size_bytes: FLOW_SVG.length,
+          sha256: '0'.repeat(64),
+          section_keys: ['s-5-2'],
+          requirement_ids: [I.requirement],
+          annotations: [note('quote'), guestNote],
+          removed: [],
+          content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg`,
+        },
+      ]
+    : [1, 2].map((n) => ({
+        name: `cart-${n}.html`,
+        title: `Plan page ${n}`,
+        screen: `cart-${n}`,
+        media_type: 'text/html',
+        size_bytes: wireframe(n).length,
+        sha256: '0'.repeat(64),
+        section_keys: ['s-5-2'],
+        requirement_ids: [I.requirement],
+        annotations: [note('cost')],
+        removed: n === 2 ? ['<blink> element (content kept)'] : [],
+        content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html`,
+      }));
   return {
     request_id: flow ? I.flowRequest : I.wireRequest,
     kind,
-    title: flow ? "Early yearly price: user flows" : "Early yearly price: wireframes",
-    version: version(versionId, flow ? I.flowRequest : I.wireRequest, flow ? "potentially_stale" : "fresh", number),
+    title: flow ? 'Early yearly price: user flows' : 'Early yearly price: wireframes',
+    version: version(
+      versionId,
+      flow ? I.flowRequest : I.wireRequest,
+      flow ? 'potentially_stale' : 'fresh',
+      number,
+    ),
     outputs,
     reviews: [],
     lineage: null,
   };
 }
 
-const DECIDED = "Decided · from the approved PRD";
-const PROPOSED = "Proposed · until an engineering approver approves this version";
-const APPROVED = "Decided · approved by an engineering approver";
-const ADDED = "Proposed · added in an edit";
-const PROPOSED_AC = "Proposed · not a product requirement until the PRD adopts it";
+const DECIDED = 'Decided · from the approved PRD';
+const PROPOSED = 'Proposed · until an engineering approver approves this version';
+const APPROVED = 'Decided · approved by an engineering approver';
+const ADDED = 'Proposed · added in an edit';
+const PROPOSED_AC = 'Proposed · not a product requirement until the PRD adopts it';
 /** Oracle's label that starts the proposed acceptance criteria. */
-export const ACCEPTANCE_PROPOSED_LABEL = "Proposed by this spec (not product requirements until the PRD adopts them):";
+export const ACCEPTANCE_PROPOSED_LABEL =
+  'Proposed by this spec (not product requirements until the PRD adopts them):';
 /** The spec template's sections a technical brief has (api/oracle/specs/contract.py SECTIONS). */
-const BRIEF_TEMPLATE_KEYS = new Set(["summary", "requirements", "approach", "open-decisions", "acceptance-criteria", "assumptions", "sources"]);
+const BRIEF_TEMPLATE_KEYS = new Set([
+  'summary',
+  'requirements',
+  'approach',
+  'open-decisions',
+  'acceptance-criteria',
+  'assumptions',
+  'sources',
+]);
 /** ... and a full engineering spec. */
 const TEMPLATE_KEYS = new Set([
-  ...BRIEF_TEMPLATE_KEYS, "user-flows", "inputs-outputs", "architecture", "apis-data", "dependencies", "failure-modes",
-  "security-privacy-performance", "test-strategy", "release-flags", "migration-rollback",
+  ...BRIEF_TEMPLATE_KEYS,
+  'user-flows',
+  'inputs-outputs',
+  'architecture',
+  'apis-data',
+  'dependencies',
+  'failure-modes',
+  'security-privacy-performance',
+  'test-strategy',
+  'release-flags',
+  'migration-rollback',
 ]);
-const ADDED_STATE: Schemas["SpecPartState"] = { label: ADDED, decided: false, added: true, half: null, starts_at: null };
+const ADDED_STATE: Schemas['SpecPartState'] = {
+  label: ADDED,
+  decided: false,
+  added: true,
+  half: null,
+  starts_at: null,
+};
 /** E1: a citation an edit added to a spec version, as the API's `CitationOut.state_label`. */
 export const ADDED_CITATION_LABEL = ADDED;
 
@@ -201,172 +351,347 @@ export const ADDED_CITATION_LABEL = ADDED;
  * proposed. A template section a technical brief does not have (e.g. Architecture), added
  * in an edit, is an added section too (owner, 2026-10-20).
  */
-export function specStates(key: string, body: string, approved: boolean, depth: "brief" | "full" = "full"): Schemas["SpecPartState"][] {
-  if (key === "spec" || key === "full") return [];
-  if (key === "acceptance-criteria") {
-    const out: Schemas["SpecPartState"][] = [{ label: DECIDED, decided: true, added: false, half: "decided", starts_at: null }];
+export function specStates(
+  key: string,
+  body: string,
+  approved: boolean,
+  depth: 'brief' | 'full' = 'full',
+): Schemas['SpecPartState'][] {
+  if (key === 'spec' || key === 'full') return [];
+  if (key === 'acceptance-criteria') {
+    const out: Schemas['SpecPartState'][] = [
+      { label: DECIDED, decided: true, added: false, half: 'decided', starts_at: null },
+    ];
     if (body.includes(`\n\n${ACCEPTANCE_PROPOSED_LABEL}\n`)) {
-      out.push({ label: PROPOSED_AC, decided: false, added: false, half: "proposed", starts_at: ACCEPTANCE_PROPOSED_LABEL });
+      out.push({
+        label: PROPOSED_AC,
+        decided: false,
+        added: false,
+        half: 'proposed',
+        starts_at: ACCEPTANCE_PROPOSED_LABEL,
+      });
     }
     return out;
   }
-  if (key === "requirements" || key === "sources") return [{ label: DECIDED, decided: true, added: false, half: null, starts_at: null }];
-  if (!(depth === "brief" ? BRIEF_TEMPLATE_KEYS : TEMPLATE_KEYS).has(key)) return [ADDED_STATE];
-  return [{ label: approved ? APPROVED : PROPOSED, decided: approved, added: false, half: null, starts_at: null }];
+  if (key === 'requirements' || key === 'sources')
+    return [{ label: DECIDED, decided: true, added: false, half: null, starts_at: null }];
+  if (!(depth === 'brief' ? BRIEF_TEMPLATE_KEYS : TEMPLATE_KEYS).has(key)) return [ADDED_STATE];
+  return [
+    {
+      label: approved ? APPROVED : PROPOSED,
+      decided: approved,
+      added: false,
+      half: null,
+      starts_at: null,
+    },
+  ];
 }
 
 /**
  * The seeded spec. `approver` approved the wireframes' v1 (v2 waits for review); `named` are
  * the spec's engineering approvers (none by default: any approver decides).
  */
-export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; named?: SpecPerson[] } = {}): SpecsDb {
-  const parts: [string, string, string, Schemas["SpecSectionOut"]["part"]][] = [
-    ["spec", "Early yearly price: technical brief", "brief", "context"],
-    ["summary", "Summary", "brief", "context"],
-    ["requirements", "Product requirements", "brief", "product_requirement"],
-    ["approach", "Proposed engineering approach", "brief", "engineering_approach"],
-    ["open-decisions", "Open engineering decisions", "brief", "open_decision"],
-    ["full", "Full version", "detail", "context"],
-    ["acceptance-criteria", "Acceptance criteria", "detail", "product_requirement"],
-    ["assumptions", "Assumptions", "detail", "assumption"],
-    ["sources", "Sources and data points", "detail", "context"],
+export function seedSpecs({
+  approver,
+  named = [],
+}: { approver?: SpecPerson; named?: SpecPerson[] } = {}): SpecsDb {
+  const parts: [string, string, string, Schemas['SpecSectionOut']['part']][] = [
+    ['spec', 'Early yearly price: technical brief', 'brief', 'context'],
+    ['summary', 'Summary', 'brief', 'context'],
+    ['requirements', 'Product requirements', 'brief', 'product_requirement'],
+    ['approach', 'Proposed engineering approach', 'brief', 'engineering_approach'],
+    ['open-decisions', 'Open engineering decisions', 'brief', 'open_decision'],
+    ['full', 'Full version', 'detail', 'context'],
+    ['acceptance-criteria', 'Acceptance criteria', 'detail', 'product_requirement'],
+    ['assumptions', 'Assumptions', 'detail', 'assumption'],
+    ['sources', 'Sources and data points', 'detail', 'context'],
   ];
   const spec: Spec = {
-    request: request(I.request, "tech_brief", "Early yearly price: technical brief", {
-      document_slug: "annual-billing-early-yearly-price-spec", depth: "brief", design: true, screens: 2,
-      engineering_approver_ids: named.map((x) => x.id), document_id: I.document, design_request_ids: { user_flow: I.flowRequest, wireframe: I.wireRequest },
+    request: request(I.request, 'tech_brief', 'Early yearly price: technical brief', {
+      document_slug: 'annual-billing-early-yearly-price-spec',
+      depth: 'brief',
+      design: true,
+      screens: 2,
+      engineering_approver_ids: named.map((x) => x.id),
+      document_id: I.document,
+      design_request_ids: { user_flow: I.flowRequest, wireframe: I.wireRequest },
     }),
-    document_slug: "annual-billing-early-yearly-price-spec",
+    document_slug: 'annual-billing-early-yearly-price-spec',
     document_id: I.document,
     prd: null,
-    depth: "brief",
+    depth: 'brief',
     latest_version: 1,
-    approach_status: "proposed",
-    freshness: "potentially_stale",
-    requirements: [{ id: I.requirement, key: "req-yearly-price", title: "Show the yearly price up front", status: "confirmed", section_keys: ["s-5-2"], missing: false }],
-    section_keys: ["s-5-2"],
+    approach_status: 'proposed',
+    freshness: 'potentially_stale',
+    requirements: [
+      {
+        id: I.requirement,
+        key: 'req-yearly-price',
+        title: 'Show the yearly price up front',
+        status: 'confirmed',
+        section_keys: ['s-5-2'],
+        missing: false,
+      },
+    ],
+    section_keys: ['s-5-2'],
     engineering_approver_ids: named.map((x) => x.id),
     engineering_approvers: named.map(({ id, name }) => ({ id, name })),
-    code_capability_map: "unavailable",
-    versions: [{ artifact_version: version(I.specVersion, I.request, "potentially_stale"), document_version: 1, document_version_id: I.docVersion, approach_status: "proposed", approved_by: null, approved_at: null, origin: "run" }],
+    code_capability_map: 'unavailable',
+    versions: [
+      {
+        artifact_version: version(I.specVersion, I.request, 'potentially_stale'),
+        document_version: 1,
+        document_version_id: I.docVersion,
+        approach_status: 'proposed',
+        approved_by: null,
+        approved_at: null,
+        origin: 'run',
+      },
+    ],
     // E1: only what Oracle locks is decided; the acceptance criteria read as two halves.
-    sections: parts.flatMap(([key, heading, layer, part]): Schemas["SpecSectionOut"][] => {
-      const oracle = ["spec", "requirements", "full", "acceptance-criteria", "sources"].includes(key);
-      const state = { key, heading, layer, part, decided: oracle, half: null, added: false, label: oracle ? DECIDED : PROPOSED };
-      if (key !== "acceptance-criteria") return [state];
+    sections: parts.flatMap(([key, heading, layer, part]): Schemas['SpecSectionOut'][] => {
+      const oracle = ['spec', 'requirements', 'full', 'acceptance-criteria', 'sources'].includes(
+        key,
+      );
+      const state = {
+        key,
+        heading,
+        layer,
+        part,
+        decided: oracle,
+        half: null,
+        added: false,
+        label: oracle ? DECIDED : PROPOSED,
+      };
+      if (key !== 'acceptance-criteria') return [state];
       return [
-        { ...state, half: "decided" },
-        { ...state, part: "proposed", decided: false, half: "proposed", label: "Proposed · not a product requirement until the PRD adopts it" },
+        { ...state, half: 'decided' },
+        {
+          ...state,
+          part: 'proposed',
+          decided: false,
+          half: 'proposed',
+          label: 'Proposed · not a product requirement until the PRD adopts it',
+        },
       ];
     }),
-    design: [design("user_flow"), design("wireframe", I.wireVersion, 2)],
+    design: [design('user_flow'), design('wireframe', I.wireVersion, 2)],
     stale: [
-      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in annual-billing"] },
-      { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in annual-billing"] },
+      {
+        kind: 'artifact_version',
+        category: 'engineering_spec',
+        artifact_kind: 'tech_brief',
+        document_kind: null,
+        artifact_version_id: I.specVersion,
+        request_id: I.request,
+        document_version_id: null,
+        document_id: null,
+        document_slug: null,
+        number: 1,
+        title: 'Early yearly price: technical brief',
+        status: 'in_review',
+        approved: false,
+        freshness: 'potentially_stale',
+        dependencies: [prdSectionDependency(I.specDependency)],
+        reasons: ['section s-5-2 changed in annual-billing'],
+      },
+      {
+        kind: 'artifact_version',
+        category: 'wireframe',
+        artifact_kind: 'user_flow',
+        document_kind: null,
+        artifact_version_id: I.flowVersion,
+        request_id: I.flowRequest,
+        document_version_id: null,
+        document_id: null,
+        document_slug: null,
+        number: 1,
+        title: 'Early yearly price: user flows',
+        status: 'in_review',
+        approved: false,
+        freshness: 'potentially_stale',
+        dependencies: [],
+        reasons: ['section s-5-2 changed in annual-billing'],
+      },
     ],
     run_id: I.run,
-    run_status: "succeeded",
+    run_status: 'succeeded',
     regeneration_run_id: null,
-    state: "stale",
+    state: 'stale',
     feature_id: null,
     tech_brief_version_id: null,
   };
-  const v1 = design("wireframe", I.wireVersionOld, 1);
-  v1.version = { ...v1.version, status: "approved", approved_by: approver?.id ?? null, approved_at: AT };
+  const v1 = design('wireframe', I.wireVersionOld, 1);
+  v1.version = {
+    ...v1.version,
+    status: 'approved',
+    approved_by: approver?.id ?? null,
+    approved_at: AT,
+  };
   v1.reviews = approver
-    ? [{ id: "c3000000-0000-4000-8000-000000000061", version_id: v1.version.id, kind: "approved", body: null, actor: `user:${approver.id}`, actor_name: approver.name, data: {}, created_at: AT }]
+    ? [
+        {
+          id: 'c3000000-0000-4000-8000-000000000061',
+          version_id: v1.version.id,
+          kind: 'approved',
+          body: null,
+          actor: `user:${approver.id}`,
+          actor_name: approver.name,
+          data: {},
+          created_at: AT,
+        },
+      ]
     : [];
   // qa4-docs-8: the full engineering spec document has its spec request, as in the API (a
   // spec document is only ever written by one), so the PRD lists it under Engineering specs.
-  const fullSlug = "annual-billing-early-yearly-price-engineering-spec";
+  const fullSlug = 'annual-billing-early-yearly-price-engineering-spec';
   const fullRequest = {
-    ...request(I.fullRequest, "engineering_spec", "Early yearly price: engineering spec", {
-      document_slug: fullSlug, depth: "full", design: false, screens: 0, engineering_approver_ids: named.map((x) => x.id), document_id: I.fullDocument,
+    ...request(I.fullRequest, 'engineering_spec', 'Early yearly price: engineering spec', {
+      document_slug: fullSlug,
+      depth: 'full',
+      design: false,
+      screens: 0,
+      engineering_approver_ids: named.map((x) => x.id),
+      document_id: I.fullDocument,
     }),
     requirement_ids: [],
     run_id: I.fullRun,
-    created_at: "2026-10-20T10:00:00Z",
-    updated_at: "2026-10-20T10:00:00Z",
+    created_at: '2026-10-20T10:00:00Z',
+    updated_at: '2026-10-20T10:00:00Z',
   };
   const full: Spec = {
     ...spec,
     request: fullRequest,
     document_slug: fullSlug,
     document_id: I.fullDocument,
-    depth: "full",
+    depth: 'full',
     latest_version: 1,
-    freshness: "fresh",
+    freshness: 'fresh',
     requirements: [],
-    versions: [{ artifact_version: { ...version(I.fullVersion, I.fullRequest, "fresh"), created_at: "2026-10-20T10:00:00Z" }, document_version: 1, document_version_id: I.fullDocVersion, approach_status: "proposed", approved_by: null, approved_at: null, origin: "run" }],
+    versions: [
+      {
+        artifact_version: {
+          ...version(I.fullVersion, I.fullRequest, 'fresh'),
+          created_at: '2026-10-20T10:00:00Z',
+        },
+        document_version: 1,
+        document_version_id: I.fullDocVersion,
+        approach_status: 'proposed',
+        approved_by: null,
+        approved_at: null,
+        origin: 'run',
+      },
+    ],
     design: [],
     stale: [],
     run_id: I.fullRun,
-    state: "in_review",
+    state: 'in_review',
   };
   return {
     specs: [spec, full],
     history: [v1],
     files: {
-      [`${I.wireVersionOld}/cart-1.html`]: { media_type: "text/html", content: wireframe(1) },
-      [`${I.wireVersionOld}/cart-2.html`]: { media_type: "text/html", content: wireframe(2) },
-      [`${I.flowVersion}/checkout-flow.svg`]: { media_type: "image/svg+xml", content: FLOW_SVG },
-      [`${I.wireVersion}/cart-1.html`]: { media_type: "text/html", content: wireframe(1) },
-      [`${I.wireVersion}/cart-2.html`]: { media_type: "text/html", content: wireframe(2) },
+      [`${I.wireVersionOld}/cart-1.html`]: { media_type: 'text/html', content: wireframe(1) },
+      [`${I.wireVersionOld}/cart-2.html`]: { media_type: 'text/html', content: wireframe(2) },
+      [`${I.flowVersion}/checkout-flow.svg`]: { media_type: 'image/svg+xml', content: FLOW_SVG },
+      [`${I.wireVersion}/cart-1.html`]: { media_type: 'text/html', content: wireframe(1) },
+      [`${I.wireVersion}/cart-2.html`]: { media_type: 'text/html', content: wireframe(2) },
     },
   };
 }
 
-const RUN_ENDED = ["succeeded", "failed", "cancelled"];
+const RUN_ENDED = ['succeeded', 'failed', 'cancelled'];
 
 /** F5 lane 3, as the API's specs.service._state: Requested, Drafting, In review, Approved, Stale or Run failed. */
-function stateOf(s: Spec): Schemas["SpecSummary"]["state"] {
+function stateOf(s: Spec): Schemas['SpecSummary']['state'] {
   const latest = s.versions.at(-1);
   if (latest) {
-    if (latest.artifact_version.freshness === "potentially_stale") return "stale";
-    return latest.approach_status === "approved" ? "approved" : "in_review";
+    if (latest.artifact_version.freshness === 'potentially_stale') return 'stale';
+    return latest.approach_status === 'approved' ? 'approved' : 'in_review';
   }
-  const status = s.run_status ?? "draft";
-  if (status === "draft" || status === "awaiting_approval") return "requested";
-  return RUN_ENDED.includes(status) ? "failed" : "drafting";
+  const status = s.run_status ?? 'draft';
+  if (status === 'draft' || status === 'awaiting_approval') return 'requested';
+  return RUN_ENDED.includes(status) ? 'failed' : 'drafting';
 }
 
-function summary(s: Spec): Schemas["SpecSummary"] {
-  const { request, document_slug, document_id, prd, depth, latest_version, approach_status, freshness } = s;
-  const params = request.params as { feature_id?: string | null; tech_brief_version_id?: string | null };
+function summary(s: Spec): Schemas['SpecSummary'] {
+  const {
+    request,
+    document_slug,
+    document_id,
+    prd,
+    depth,
+    latest_version,
+    approach_status,
+    freshness,
+  } = s;
+  const params = request.params as {
+    feature_id?: string | null;
+    tech_brief_version_id?: string | null;
+  };
   return {
-    request, document_slug, document_id, prd, depth, latest_version, approach_status, freshness,
-    state: stateOf(s), feature_id: params.feature_id ?? null, tech_brief_version_id: params.tech_brief_version_id ?? null,
+    request,
+    document_slug,
+    document_id,
+    prd,
+    depth,
+    latest_version,
+    approach_status,
+    freshness,
+    state: stateOf(s),
+    feature_id: params.feature_id ?? null,
+    tech_brief_version_id: params.tech_brief_version_id ?? null,
   };
 }
 
-const slugify = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+const slugify = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
 
 function findDesign(db: SpecsDb, versionId: string): Design | null {
-  for (const s of db.specs) for (const d of s.design ?? []) if (d.version.id === versionId) return d;
+  for (const s of db.specs)
+    for (const d of s.design ?? []) if (d.version.id === versionId) return d;
   return db.history?.find((d) => d.version.id === versionId) ?? null;
 }
 
 /** The specs routes; null when the path is not one of them. */
-export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function routeSpecs(
+  ctx: SpecsContext,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
   const m = req.method;
-  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
-  const need = (role: Role) => (atLeast(ctx.role, role) ? null : fail(403, `Requires the ${role} role`));
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
+  const need = (role: Role) =>
+    atLeast(ctx.role, role) ? null : fail(403, `Requires the ${role} role`);
 
-  if (p[1] === "spec-requests") {
-    if (!p[2] && m === "GET") {
-      const prd = q.get("prd");
+  if (p[1] === 'spec-requests') {
+    if (!p[2] && m === 'GET') {
+      const prd = q.get('prd');
       const doc = prd ? ctx.documents?.find((d) => d.slug === prd || d.id === prd) : undefined;
       return reply(
-        "/v1/spec-requests",
-        "get",
-        ctx.db.specs.filter((s) => !prd || s.request.source_document_id === (doc?.id ?? prd) || s.document_slug?.startsWith(`${prd}-`)).map((s) => ({ ...summary(s), state: stateOf(s) })),
+        '/v1/spec-requests',
+        'get',
+        ctx.db.specs
+          .filter(
+            (s) =>
+              !prd ||
+              s.request.source_document_id === (doc?.id ?? prd) ||
+              s.document_slug?.startsWith(`${prd}-`),
+          )
+          .map((s) => ({ ...summary(s), state: stateOf(s) })),
       );
     }
-    if (!p[2] && m === "POST") {
-      const denied = need("approver");
+    if (!p[2] && m === 'POST') {
+      const denied = need('approver');
       if (denied) return denied;
-      const data = await body<Schemas["SpecRequestCreate"]>();
-      if (!data?.requirement_ids?.length) return fail(422, "requirement_ids: at least one requirement");
+      const data = await body<Schemas['SpecRequestCreate']>();
+      if (!data?.requirement_ids?.length)
+        return fail(422, 'requirement_ids: at least one requirement');
       const base = ctx.db.specs[0];
       const prd = ctx.documents?.find((d) => d.slug === data.prd || d.id === data.prd);
       if (ctx.documents && !prd) return fail(422, `document '${data.prd}' not found`);
@@ -377,133 +702,216 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
         if (data.prd_version != null) {
           const v = own.find((x) => x.number === data.prd_version);
           if (!v) return fail(422, `version ${data.prd_version} of '${prd.slug}' not found`);
-          if (!v.approved_at) return fail(422, `version ${data.prd_version} of '${prd.slug}' is not approved: a spec is built from an approved PRD version`);
+          if (!v.approved_at)
+            return fail(
+              422,
+              `version ${data.prd_version} of '${prd.slug}' is not approved: a spec is built from an approved PRD version`,
+            );
           sourceVersion = v.number;
         } else {
           const approved = own.filter((v) => v.approved_at).sort((a, b) => b.number - a.number)[0];
-          if (!approved) return fail(422, `'${prd.slug}' has no approved version: approve the PRD first`);
+          if (!approved)
+            return fail(422, `'${prd.slug}' has no approved version: approve the PRD first`);
           sourceVersion = approved.number;
         }
       }
       // F5 lane 3, as the API: an approved tech brief of this PRD from an Engineering check.
       if (data.tech_brief_version_id) {
         const brief = ctx.techBrief?.(data.tech_brief_version_id);
-        if (!brief) return fail(422, "tech_brief_version_id is not a tech brief from an Engineering check");
-        if (prd && brief.prd !== prd.slug) return fail(422, `that tech brief is of another PRD, not ${prd.slug}`);
-        if (brief.status !== "approved") return fail(422, "that tech brief is not approved: only an approved brief feeds a spec");
+        if (!brief)
+          return fail(422, 'tech_brief_version_id is not a tech brief from an Engineering check');
+        if (prd && brief.prd !== prd.slug)
+          return fail(422, `that tech brief is of another PRD, not ${prd.slug}`);
+        if (brief.status !== 'approved')
+          return fail(422, 'that tech brief is not approved: only an approved brief feeds a spec');
       }
-      const subject = (data.feature_id && ctx.entityTitle?.(data.feature_id)) || base.requirements[0]?.title || "Spec";
-      const noun = data.depth === "full" ? "engineering spec" : "technical brief";
+      const subject =
+        (data.feature_id && ctx.entityTitle?.(data.feature_id)) ||
+        base.requirements[0]?.title ||
+        'Spec';
+      const noun = data.depth === 'full' ? 'engineering spec' : 'technical brief';
       const slug = data.document ?? `${prd?.slug ?? data.prd}-${slugify(subject)}-spec`;
       // A3: no approvers named, the engineering leads who may approve (an empty list: any approver).
       const approvers = data.engineering_approver_ids ?? ctx.leadApprovers?.() ?? [];
       const id = ctx.uuid();
       let runId = ctx.uuid();
       if (ctx.draftRun && prd) {
-        const run = await ctx.draftRun({ flow: "prd_to_spec", document: slug, source: prd.slug, source_version: sourceVersion, knobs: data.knobs } as Schemas["RunCreate"]);
+        const run = await ctx.draftRun({
+          flow: 'prd_to_spec',
+          document: slug,
+          source: prd.slug,
+          source_version: sourceVersion,
+          knobs: data.knobs,
+        } as Schemas['RunCreate']);
         if (run instanceof Response) return run;
         runId = run;
       }
       const spec: Spec = {
         ...base,
         request: {
-          ...base.request, id, kind: data.depth === "full" ? "engineering_spec" : "tech_brief", title: data.title ?? `${subject}: ${noun}`,
-          source_document_id: prd?.id ?? base.request.source_document_id, requirement_ids: data.requirement_ids, status: "queued", run_id: runId,
+          ...base.request,
+          id,
+          kind: data.depth === 'full' ? 'engineering_spec' : 'tech_brief',
+          title: data.title ?? `${subject}: ${noun}`,
+          source_document_id: prd?.id ?? base.request.source_document_id,
+          requirement_ids: data.requirement_ids,
+          status: 'queued',
+          run_id: runId,
           params: {
-            document_slug: slug, depth: data.depth ?? "brief", design: data.design ?? true, screens: data.screens ?? 3,
-            feature_id: data.feature_id ?? null, engineering_approver_ids: approvers, tech_brief_version_id: data.tech_brief_version_id ?? null,
+            document_slug: slug,
+            depth: data.depth ?? 'brief',
+            design: data.design ?? true,
+            screens: data.screens ?? 3,
+            feature_id: data.feature_id ?? null,
+            engineering_approver_ids: approvers,
+            tech_brief_version_id: data.tech_brief_version_id ?? null,
           },
-          created_at: ctx.now(), updated_at: ctx.now(),
+          created_at: ctx.now(),
+          updated_at: ctx.now(),
         },
-        document_slug: slug, document_id: null, depth: data.depth ?? "brief", engineering_approver_ids: approvers,
-        latest_version: null, approach_status: null, freshness: null, versions: [], sections: [], design: [], stale: [],
-        run_id: runId, run_status: "draft", regeneration_run_id: null, state: "requested",
-        feature_id: data.feature_id ?? null, tech_brief_version_id: data.tech_brief_version_id ?? null,
+        document_slug: slug,
+        document_id: null,
+        depth: data.depth ?? 'brief',
+        engineering_approver_ids: approvers,
+        latest_version: null,
+        approach_status: null,
+        freshness: null,
+        versions: [],
+        sections: [],
+        design: [],
+        stale: [],
+        run_id: runId,
+        run_status: 'draft',
+        regeneration_run_id: null,
+        state: 'requested',
+        feature_id: data.feature_id ?? null,
+        tech_brief_version_id: data.tech_brief_version_id ?? null,
       };
       ctx.db.specs.unshift(spec);
-      return reply("/v1/spec-requests", "post", { spec, run_id: runId }, 201);
+      return reply('/v1/spec-requests', 'post', { spec, run_id: runId }, 201);
     }
     const spec = ctx.db.specs.find((s) => s.request.id === p[2]);
-    if (!spec) return fail(404, "spec request not found");
-    if (!p[3] && m === "GET") return reply("/v1/spec-requests/{request_id}", "get", { ...spec, ...summary(spec) });
-    if (p[3] === "regenerate" && m === "POST") {
-      const denied = need("approver");
+    if (!spec) return fail(404, 'spec request not found');
+    if (!p[3] && m === 'GET')
+      return reply('/v1/spec-requests/{request_id}', 'get', { ...spec, ...summary(spec) });
+    if (p[3] === 'regenerate' && m === 'POST') {
+      const denied = need('approver');
       if (denied) return denied;
       // #481: as the API, no second regeneration while one has not ended.
-      if (spec.regeneration_run_id) return fail(409, `this spec's run has not ended (it is ${spec.run_status}): let it finish, or cancel it on its run page, first`);
-      const out: Schemas["RegenerationOut"] = {
-        request_id: spec.request.id, run_id: ctx.uuid(), prd_version: 1, section_keys: spec.section_keys,
-        dropped_section_keys: [], reasons: spec.stale.flatMap((s) => s.reasons ?? []),
+      if (spec.regeneration_run_id)
+        return fail(
+          409,
+          `this spec's run has not ended (it is ${spec.run_status}): let it finish, or cancel it on its run page, first`,
+        );
+      const out: Schemas['RegenerationOut'] = {
+        request_id: spec.request.id,
+        run_id: ctx.uuid(),
+        prd_version: 1,
+        section_keys: spec.section_keys,
+        dropped_section_keys: [],
+        reasons: spec.stale.flatMap((s) => s.reasons ?? []),
       };
       spec.run_id = out.run_id;
-      spec.run_status = "draft";
+      spec.run_status = 'draft';
       // #481: proposing it settles nothing; the versions stay as stale as they were.
       spec.regeneration_run_id = out.run_id;
-      return reply("/v1/spec-requests/{request_id}/regenerate", "post", out, 201);
+      return reply('/v1/spec-requests/{request_id}/regenerate', 'post', out, 201);
     }
     return null;
   }
 
-  if (p[1] === "design-artifacts" && p[2]) {
+  if (p[1] === 'design-artifacts' && p[2]) {
     const d = findDesign(ctx.db, p[2]);
-    if (!d) return fail(404, "design artifact version not found");
-    if (!p[3] && m === "GET") return reply("/v1/design-artifacts/{version_id}", "get", d);
-    if (p[3] === "outputs" && p[4] && m === "GET") {
+    if (!d) return fail(404, 'design artifact version not found');
+    if (!p[3] && m === 'GET') return reply('/v1/design-artifacts/{version_id}', 'get', d);
+    if (p[3] === 'outputs' && p[4] && m === 'GET') {
       const file = ctx.db.files[`${p[2]}/${p[4]}`];
       if (!file) return fail(404, `output '${p[4]}' not found`);
       return rawReply(
-        "/v1/design-artifacts/{version_id}/outputs/{name}",
-        "get",
+        '/v1/design-artifacts/{version_id}/outputs/{name}',
+        'get',
         new Response(file.content, {
           status: 200,
-          headers: { "Content-Type": `${file.media_type}; charset=utf-8`, "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff" },
+          headers: {
+            'Content-Type': `${file.media_type}; charset=utf-8`,
+            'Content-Security-Policy': CSP,
+            'X-Content-Type-Options': 'nosniff',
+          },
         }),
       );
     }
-    if (p[3] === "reviews" && m === "POST") {
-      const denied = need("commenter");
+    if (p[3] === 'reviews' && m === 'POST') {
+      const denied = need('commenter');
       if (denied) return denied;
-      const data = await body<Schemas["DesignReviewIn"]>();
+      const data = await body<Schemas['DesignReviewIn']>();
       // In the API's order (api/oracle/specs/service.py review_design).
-      let target: Schemas["AnnotationOut"] | undefined;
+      let target: Schemas['AnnotationOut'] | undefined;
       if (data.annotation_id != null || data.output != null) {
-        if (data.annotation_id == null || data.output == null) return fail(422, "name both the output and the annotation_id");
-        target = d.outputs.find((o) => o.name === data.output)?.annotations?.find((a) => a.id === data.annotation_id);
+        if (data.annotation_id == null || data.output == null)
+          return fail(422, 'name both the output and the annotation_id');
+        target = d.outputs
+          .find((o) => o.name === data.output)
+          ?.annotations?.find((a) => a.id === data.annotation_id);
         if (!target) return fail(422, `no annotation '${data.annotation_id}' on '${data.output}'`);
       }
-      if (data.kind !== "comment") {
-        if (target) return fail(422, "a verdict is on the version: approve, reject or request changes on it");
+      if (data.kind !== 'comment') {
+        if (target)
+          return fail(422, 'a verdict is on the version: approve, reject or request changes on it');
         const spec = ctx.db.specs.find((s) => s.design?.some((x) => x.request_id === d.request_id));
         const named = spec?.engineering_approver_ids ?? [];
-        const may = ctx.role === "owner" || (atLeast(ctx.role, "approver") && (named.length === 0 || named.includes(ctx.userId)));
-        if (!may) return fail(403, "only the spec's engineering approvers (or an owner) decide on it");
-        if (d.version.status === "superseded" || d.version.status === "rejected") return fail(409, `version ${d.version.number} is ${d.version.status}`);
-        if (data.kind === "approved" && d.version.freshness === "potentially_stale") {
-          return json(409, { detail: `this version ${STALE} it`, refs: { artifact_version: d.version.id } });
+        const may =
+          ctx.role === 'owner' ||
+          (atLeast(ctx.role, 'approver') && (named.length === 0 || named.includes(ctx.userId)));
+        if (!may)
+          return fail(403, "only the spec's engineering approvers (or an owner) decide on it");
+        if (d.version.status === 'superseded' || d.version.status === 'rejected')
+          return fail(409, `version ${d.version.number} is ${d.version.status}`);
+        if (data.kind === 'approved' && d.version.freshness === 'potentially_stale') {
+          return json(409, {
+            detail: `this version ${STALE} it`,
+            refs: { artifact_version: d.version.id },
+          });
         }
-        if ((data.kind === "changes_requested" || data.kind === "rejected") && !data.body?.trim()) {
-          return fail(422, "Add a note to request changes or reject.");
+        if ((data.kind === 'changes_requested' || data.kind === 'rejected') && !data.body?.trim()) {
+          return fail(422, 'Add a note to request changes or reject.');
         }
-      } else if (!data.body?.trim()) return fail(422, "a comment needs a body");
-      const event: Schemas["DesignReviewEventOut"] = {
-        id: ctx.uuid(), version_id: d.version.id, kind: data.kind, body: data.body ?? null, actor: `user:${ctx.userId}`,
+      } else if (!data.body?.trim()) return fail(422, 'a comment needs a body');
+      const event: Schemas['DesignReviewEventOut'] = {
+        id: ctx.uuid(),
+        version_id: d.version.id,
+        kind: data.kind,
+        body: data.body ?? null,
+        actor: `user:${ctx.userId}`,
         actor_name: ctx.name(ctx.userId),
-        data: target ? { output: data.output, annotation_id: data.annotation_id } : {}, created_at: ctx.now(),
+        data: target ? { output: data.output, annotation_id: data.annotation_id } : {},
+        created_at: ctx.now(),
       };
       if (target) target.reviews = [...(target.reviews ?? []), event];
       else d.reviews = [...(d.reviews ?? []), event];
-      if (data.kind === "approved") {
-        d.version = { ...d.version, status: "approved", approved_by: ctx.userId, approved_at: ctx.now() };
+      if (data.kind === 'approved') {
+        d.version = {
+          ...d.version,
+          status: 'approved',
+          approved_by: ctx.userId,
+          approved_at: ctx.now(),
+        };
         // As lineage.supersede_approved: the artifact's earlier approved and open versions are superseded.
         const others = [...(ctx.db.history ?? []), ...ctx.db.specs.flatMap((s) => s.design ?? [])];
         for (const o of others) {
           const earlier = o.request_id === d.request_id && o.version.number < d.version.number;
-          if (earlier && ["approved", "draft", "in_review"].includes(o.version.status)) o.version = { ...o.version, status: "superseded" };
+          if (earlier && ['approved', 'draft', 'in_review'].includes(o.version.status))
+            o.version = { ...o.version, status: 'superseded' };
         }
       }
-      if (data.kind === "rejected") d.version = { ...d.version, status: "rejected" };
-      if (data.kind === "changes_requested" && d.version.status === "draft") d.version = { ...d.version, status: "in_review" };
-      return reply("/v1/design-artifacts/{version_id}/reviews", "post", { event, version: d.version }, 201);
+      if (data.kind === 'rejected') d.version = { ...d.version, status: 'rejected' };
+      if (data.kind === 'changes_requested' && d.version.status === 'draft')
+        d.version = { ...d.version, status: 'in_review' };
+      return reply(
+        '/v1/design-artifacts/{version_id}/reviews',
+        'post',
+        { event, version: d.version },
+        201,
+      );
     }
   }
   return null;

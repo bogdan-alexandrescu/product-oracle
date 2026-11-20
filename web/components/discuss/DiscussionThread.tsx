@@ -1,35 +1,58 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
+import { useRouter } from 'next/navigation';
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 
-import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
-import { Button, Chip, confirmInPage, CostFigure, Icon, InfoTip, Notice, useFocusTrap } from "@/components/ds";
-import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
-import { INPUT, Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { openStream } from "@/lib/stream";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { findPeople, PersonPicker, type Person } from '@/components/PersonPicker';
+import {
+  Button,
+  Chip,
+  confirmInPage,
+  CostFigure,
+  Icon,
+  InfoTip,
+  Notice,
+  useFocusTrap,
+} from '@/components/ds';
+import { InlineError, Menu, TEXTAREA } from '@/components/review/parts';
+import { INPUT, Loading } from '@/components/ui';
+import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
+import { formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { openStream } from '@/lib/stream';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { ChangesCard } from "./ChangesCard";
-import { type Cite, ReplyBody } from "./cited";
-import { plural } from "./DiscussionList";
+import { ChangesCard } from './ChangesCard';
+import { type Cite, ReplyBody } from './cited';
+import { plural } from './DiscussionList';
 
-type Discussion = Schemas["DiscussionOut"];
-type Message = Schemas["DiscussionMessageOut"];
-type Channel = Schemas["NotificationChannelOut"];
+type Discussion = Schemas['DiscussionOut'];
+type Message = Schemas['DiscussionMessageOut'];
+type Channel = Schemas['NotificationChannelOut'];
 type Counts = { messages: number; people: number };
-type Loaded = { kind: "ok"; d: Discussion; messages: Message[] } | { kind: "private" } | { kind: "error"; message: string };
+type Loaded =
+  | { kind: 'ok'; d: Discussion; messages: Message[] }
+  | { kind: 'private' }
+  | { kind: 'error'; message: string };
 
-const STARTER_ADDS = "Only the starter can add people to a private discussion";
-const SHARE_TO_ADD = "Share this finding at Summary or above to add people";
-const VISIBILITY_TIP = { open: "Everyone who can see this can read it", private: "Only the people in it can read it" } as const;
+const STARTER_ADDS = 'Only the starter can add people to a private discussion';
+const SHARE_TO_ADD = 'Share this finding at Summary or above to add people';
+const VISIBILITY_TIP = {
+  open: 'Everyone who can see this can read it',
+  private: 'Only the people in it can read it',
+} as const;
 // G8 Slack bridge copy (spec 3.1, 3.4).
-const PRIVATE_STAYS = "Private discussions stay in Oracle";
-const OWNER_CONNECTS = "An owner connects Oracle to Slack in Settings";
+const PRIVATE_STAYS = 'Private discussions stay in Oracle';
+const OWNER_CONNECTS = 'An owner connects Oracle to Slack in Settings';
 const mirrorConfirm = (channel: string) =>
   `Everything posted in this discussion from now on, Oracle's replies included, will be visible to everyone in #${channel}, including people who are not in Oracle.`;
 const privateStopsMirror = (channel: string) =>
@@ -38,18 +61,24 @@ const privateStopsMirror = (channel: string) =>
 async function load(id: string): Promise<Loaded> {
   try {
     const [d, page] = await Promise.all([
-      unwrap(api.GET("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: id } } })),
-      unwrap(api.GET("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: id }, query: { limit: 200 } } })),
+      unwrap(
+        api.GET('/v1/discussions/{discussion_id}', { params: { path: { discussion_id: id } } }),
+      ),
+      unwrap(
+        api.GET('/v1/discussions/{discussion_id}/messages', {
+          params: { path: { discussion_id: id }, query: { limit: 200 } },
+        }),
+      ),
     ]);
-    return { kind: "ok", d, messages: page.items };
+    return { kind: 'ok', d, messages: page.items };
   } catch (e) {
-    if (e instanceof ApiError && e.status === 403) return { kind: "private" };
-    return { kind: "error", message: errorMessage(e) };
+    if (e instanceof ApiError && e.status === 403) return { kind: 'private' };
+    return { kind: 'error', message: errorMessage(e) };
   }
 }
 
 /** #710: as the API's replies.OFF_HERE; the reply's prompt says the same. */
-export const LIVE_OFF = "Live reads are off: others can read this discussion.";
+export const LIVE_OFF = 'Live reads are off: others can read this discussion.';
 
 /**
  * Under the composer (#710): what Oracle may read live of the reader's own sources when
@@ -57,23 +86,23 @@ export const LIVE_OFF = "Live reads are off: others can read this discussion.";
  * that live reads are off. Nothing for a reader with no live source (or live reads turned off).
  */
 function LiveReadsNotice({ alone }: { alone: boolean }) {
-  const sources = useQuery("live-sources", () => unwrap(api.GET("/v1/live/sources")));
+  const sources = useQuery('live-sources', () => unwrap(api.GET('/v1/live/sources')));
   const labels = (sources.data ?? []).map((s) => s.label);
   if (labels.length === 0) return null;
   return (
     <p className="flex items-center gap-1.5 text-[13px] text-text2" data-testid="live-reads-notice">
-      <Icon name={alone ? "sources" : "lock"} size={16} />
-      {alone ? `Oracle may read live: ${labels.join(", ")}` : LIVE_OFF}
+      <Icon name={alone ? 'sources' : 'lock'} size={16} />
+      {alone ? `Oracle may read live: ${labels.join(', ')}` : LIVE_OFF}
     </p>
   );
 }
 
 /** "Make this discussion open? …": the counts the API gave, redrawn when they move (409). */
 export function makeOpenWarning(subject: string, c: Counts): string {
-  return `Make this discussion open? Everyone who can see ${subject} will read its ${plural(c.messages, "message", "messages")} from ${plural(
+  return `Make this discussion open? Everyone who can see ${subject} will read its ${plural(c.messages, 'message', 'messages')} from ${plural(
     c.people,
-    "person",
-    "people",
+    'person',
+    'people',
   )}, including what was written while it was private.`;
 }
 
@@ -81,13 +110,17 @@ export function makeOpenWarning(subject: string, c: Counts): string {
 function Body({ m }: { m: Message }) {
   if (m.mentions.length === 0) return <>{m.body}</>;
   const names = [...new Set(m.mentions.map((x) => x.name))].sort((a, b) => b.length - a.length);
-  const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const parts = m.body.split(new RegExp(`(@(?:${escaped.join("|")}))`, "g"));
+  const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const parts = m.body.split(new RegExp(`(@(?:${escaped.join('|')}))`, 'g'));
   return (
     <>
       {parts.map((part, i) =>
-        part.startsWith("@") && names.includes(part.slice(1)) ? (
-          <span key={i} data-testid="mention-chip" className="rounded-md bg-accent-soft px-1 font-semibold text-accent-ink">
+        part.startsWith('@') && names.includes(part.slice(1)) ? (
+          <span
+            key={i}
+            data-testid="mention-chip"
+            className="rounded-md bg-accent-soft px-1 font-semibold text-accent-ink"
+          >
             {part}
           </span>
         ) : (
@@ -161,10 +194,20 @@ function MakeOpenWarning({
  * while it streams (Stop for the person who asked), citations as chips, an amber "Oracle
  * pushes back" label, and a failed or stopped reply's copy with Retry.
  */
-function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussionId: string; asker: boolean; onEnded?: () => void }) {
+function OracleReply({
+  m,
+  discussionId,
+  asker,
+  onEnded,
+}: {
+  m: Message;
+  discussionId: string;
+  asker: boolean;
+  onEnded?: () => void;
+}) {
   const [msg, setMsg] = useState<Message>(m);
   const [text, setText] = useState(m.body);
-  const [live, setLive] = useState(m.status === "pending" || m.status === "streaming");
+  const [live, setLive] = useState(m.status === 'pending' || m.status === 'streaming');
   const [error, setError] = useState<string | null>(m.error ?? null);
   const [run, setRun] = useState(0);
   const { can } = useMe();
@@ -187,11 +230,11 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
       onDelta: (t) => {
         const first = fresh;
         fresh = false;
-        setText((x) => (first ? "" : x) + t);
-        setMsg((x) => (x.status === "pending" ? { ...x, status: "streaming" } : x));
+        setText((x) => (first ? '' : x) + t);
+        setMsg((x) => (x.status === 'pending' ? { ...x, status: 'streaming' } : x));
       },
       // Sent as each marker completes, so it shows as a chip while the reply streams.
-      onCitations: (cites) => setMsg((x) => ({ ...x, citations: cites as Message["citations"] })),
+      onCitations: (cites) => setMsg((x) => ({ ...x, citations: cites as Message['citations'] })),
       onDone: (out) => {
         const done = out as Message;
         setMsg(done);
@@ -203,7 +246,7 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
       onChanges: () => ended.current?.(),
       onError: (e) => {
         if (abort.signal.aborted) return;
-        setMsg((x) => ({ ...x, status: "failed", error_reason: e.reason }));
+        setMsg((x) => ({ ...x, status: 'failed', error_reason: e.reason }));
         setError(e.message || "Oracle can't reply right now.");
         setLive(false);
       },
@@ -213,7 +256,11 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
 
   const stop = async () => {
     try {
-      await unwrap(api.POST("/v1/discussions/{discussion_id}/messages/{reply_id}/cancel", { params: { path: { discussion_id: discussionId, reply_id: m.id } } }));
+      await unwrap(
+        api.POST('/v1/discussions/{discussion_id}/messages/{reply_id}/cancel', {
+          params: { path: { discussion_id: discussionId, reply_id: m.id } },
+        }),
+      );
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -221,10 +268,12 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
   const retry = async () => {
     try {
       const out = await unwrap(
-        api.POST("/v1/discussions/{discussion_id}/messages/{reply_id}/retry", { params: { path: { discussion_id: discussionId, reply_id: m.id } } }),
+        api.POST('/v1/discussions/{discussion_id}/messages/{reply_id}/retry', {
+          params: { path: { discussion_id: discussionId, reply_id: m.id } },
+        }),
       );
       setMsg(out);
-      setText("");
+      setText('');
       setError(null);
       setLive(true);
       setRun((r) => r + 1);
@@ -232,29 +281,40 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
       setError(errorMessage(e));
     }
   };
-  const canRetry = can("retry_discussion_reply", asker);
+  const canRetry = can('retry_discussion_reply', asker);
   const citations = (msg.citations ?? []) as unknown as Cite[];
   const thinking = live && !text;
   return (
-    <div className="flex min-w-0 flex-col gap-1" data-testid="oracle-reply" data-status={msg.status}>
+    <div
+      className="flex min-w-0 flex-col gap-1"
+      data-testid="oracle-reply"
+      data-status={msg.status}
+    >
       {msg.pushback && (
         <span data-testid="oracle-pushback">
           <Chip kind="warn">Oracle pushes back</Chip>
         </span>
       )}
-      <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text" data-testid="oracle-reply-text">
+      <p
+        className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text"
+        data-testid="oracle-reply-text"
+      >
         {thinking ? (
           <span className="text-text2 italic">Oracle is thinking…</span>
         ) : live ? (
           <>
             <ReplyBody text={text} citations={citations} live />
-            <span aria-hidden className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-text align-middle" data-testid="oracle-caret" />
+            <span
+              aria-hidden
+              className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-text align-middle"
+              data-testid="oracle-caret"
+            />
           </>
         ) : (
           <ReplyBody text={text} citations={citations} />
         )}
       </p>
-      {msg.status === "failed" && error && (
+      {msg.status === 'failed' && error && (
         <p className="text-sm text-text2" data-testid="oracle-reply-error">
           {error}
         </p>
@@ -265,7 +325,7 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
             Stop
           </Button>
         )}
-        {!live && (msg.status === "failed" || msg.status === "cancelled") && canRetry && (
+        {!live && (msg.status === 'failed' || msg.status === 'cancelled') && canRetry && (
           <Button variant="ghost" onClick={() => void retry()}>
             Retry
           </Button>
@@ -279,16 +339,28 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
  * Mirror to Slack… (G8): a channel the Oracle app is in, found by search, then the confirm
  * copy naming who will see the discussion from now on; Mirror links it.
  */
-function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string; onDone: () => void; onCancel: () => void }) {
+function MirrorDialog({
+  discussionId,
+  onDone,
+  onCancel,
+}: {
+  discussionId: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const title = useId();
   useFocusTrap(ref, true, onCancel);
-  const channels = useQuery("slack-channels|mirror", () => unwrap(api.GET("/v1/company-integrations/slack/channels", { params: { query: { mirror: true } } })));
-  const [query, setQuery] = useState("");
+  const channels = useQuery('slack-channels|mirror', () =>
+    unwrap(
+      api.GET('/v1/company-integrations/slack/channels', { params: { query: { mirror: true } } }),
+    ),
+  );
+  const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Channel | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const q = query.trim().replace(/^#/, "").toLowerCase();
+  const q = query.trim().replace(/^#/, '').toLowerCase();
   const shown = (channels.data ?? []).filter((c) => c.name.toLowerCase().includes(q));
 
   const mirror = async () => {
@@ -296,7 +368,12 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/discussions/{discussion_id}/slack", { params: { path: { discussion_id: discussionId } }, body: { channel_id: picked.id } }));
+      await unwrap(
+        api.POST('/v1/discussions/{discussion_id}/slack', {
+          params: { path: { discussion_id: discussionId } },
+          body: { channel_id: picked.id },
+        }),
+      );
       onDone();
     } catch (e) {
       setError(errorMessage(e));
@@ -341,8 +418,14 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
             {channels.error && <InlineError>{channels.error}</InlineError>}
             {channels.loading && !channels.data && <Loading />}
             {channels.data && (
-              <ul role="listbox" aria-label="Channels" className="flex max-h-60 min-w-0 flex-col gap-0.5 overflow-y-auto">
-                {shown.length === 0 && <li className="px-2 py-1.5 text-sm text-text2">No channel matches</li>}
+              <ul
+                role="listbox"
+                aria-label="Channels"
+                className="flex max-h-60 min-w-0 flex-col gap-0.5 overflow-y-auto"
+              >
+                {shown.length === 0 && (
+                  <li className="px-2 py-1.5 text-sm text-text2">No channel matches</li>
+                )}
                 {shown.map((c) => (
                   <li key={c.id} className="min-w-0">
                     <button
@@ -353,16 +436,23 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
                       className="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-surface2"
                     >
                       <span className="min-w-0 truncate font-semibold text-text">#{c.name}</span>
-                      {c.is_private && <span className="flex-none text-[13px] text-text2">private</span>}
+                      {c.is_private && (
+                        <span className="flex-none text-[13px] text-text2">private</span>
+                      )}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-            <p className="text-[13px] text-text2">Invite @Product Oracle to a channel to see it here.</p>
+            <p className="text-[13px] text-text2">
+              Invite @Product Oracle to a channel to see it here.
+            </p>
           </div>
         ) : (
-          <p className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4" data-testid="mirror-confirm">
+          <p
+            className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4"
+            data-testid="mirror-confirm"
+          >
             {mirrorConfirm(picked.name)}
           </p>
         )}
@@ -377,7 +467,12 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
               <Button variant="ghost" onClick={() => (setPicked(null), setError(null))}>
                 Back
               </Button>
-              <Button variant="primary" data-autofocus disabled={busy} onClick={() => void mirror()}>
+              <Button
+                variant="primary"
+                data-autofocus
+                disabled={busy}
+                onClick={() => void mirror()}
+              >
                 Mirror to #{picked.name}
               </Button>
             </>
@@ -419,10 +514,13 @@ function Composer({
   onSaid?: (shown: ReactNode) => void;
 }) {
   const { me } = useMe();
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   // B6 Goals interview's discussions start with "Ask Oracle" on (the entity's interview flag).
   const [askOracle, setAskOracle] = useState(!!(d.subject as { interview?: unknown }).interview);
-  const others = new Set([...d.participants.map((p) => p.user_id), ...messages.flatMap((x) => (x.author_kind === "person" && x.author ? [x.author.user_id] : []))]);
+  const others = new Set([
+    ...d.participants.map((p) => p.user_id),
+    ...messages.flatMap((x) => (x.author_kind === 'person' && x.author ? [x.author.user_id] : [])),
+  ]);
   if (me?.user_id) others.delete(me.user_id);
   const solo = others.size === 0;
   const [mentions, setMentions] = useState<Draft[]>([]);
@@ -432,7 +530,11 @@ function Composer({
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const inIt = new Set(d.participants.map((p) => p.user_id));
-  const blockedWhy = d.author_only ? SHARE_TO_ADD : d.visibility === "private" && !d.me.can_manage ? STARTER_ADDS : null;
+  const blockedWhy = d.author_only
+    ? SHARE_TO_ADD
+    : d.visibility === 'private' && !d.me.can_manage
+      ? STARTER_ADDS
+      : null;
   const blocked = (m: Draft) => !!blockedWhy && !inIt.has(m.user_id);
   const anyBlocked = mentions.some(blocked);
 
@@ -456,7 +558,11 @@ function Composer({
     const caret = box.current?.selectionStart ?? text.length;
     const before = text.slice(0, caret).replace(/@([\w.+-]*)$/, `@${p.name} `);
     setText(before + text.slice(caret));
-    setMentions((all) => (all.some((m) => m.user_id === p.user_id) ? all : [...all, { user_id: p.user_id, name: p.name }]));
+    setMentions((all) =>
+      all.some((m) => m.user_id === p.user_id)
+        ? all
+        : [...all, { user_id: p.user_id, name: p.name }],
+    );
     setQuery(null);
     box.current?.focus();
   };
@@ -465,9 +571,13 @@ function Composer({
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/discussions/{discussion_id}/messages", {
+        api.POST('/v1/discussions/{discussion_id}/messages', {
           params: { path: { discussion_id: d.id } },
-          body: { body, mention_oracle: askOracle, mentions: picked.filter((m) => body.includes(`@${m.name}`)).map((m) => m.user_id) },
+          body: {
+            body,
+            mention_oracle: askOracle,
+            mentions: picked.filter((m) => body.includes(`@${m.name}`)).map((m) => m.user_id),
+          },
         }),
       );
       return true;
@@ -489,7 +599,7 @@ function Composer({
         });
         if (shown !== null) {
           onSaid?.(shown);
-          setText("");
+          setText('');
           return;
         }
       } catch (e) {
@@ -500,7 +610,7 @@ function Composer({
       }
     }
     if (!(await post(text.trim(), mentions))) return;
-    setText("");
+    setText('');
     setMentions([]);
     await onSent();
   };
@@ -511,7 +621,7 @@ function Composer({
     mention: () => {
       const next = text && !/\s$/.test(text) ? `${text} @` : `${text}@`;
       setText(next);
-      setQuery("");
+      setQuery('');
       requestAnimationFrame(() => {
         box.current?.focus();
         box.current?.setSelectionRange(next.length, next.length);
@@ -556,20 +666,26 @@ function Composer({
         aria-label="Message"
         rows={3}
         maxLength={8000}
-        placeholder={d.visibility === "private" ? "Reply to Oracle" : "Reply to Oracle and the team"}
+        placeholder={
+          d.visibility === 'private' ? 'Reply to Oracle' : 'Reply to Oracle and the team'
+        }
         value={text}
         onChange={(e) => onChange(e.target.value, e.target.selectionStart)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
-          if (e.key === "Escape") setQuery(null);
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send();
+          if (e.key === 'Escape') setQuery(null);
         }}
         className={TEXTAREA}
       />
       {mentions.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Mentions">
           {mentions.map((m) => (
-            <li key={m.user_id} data-testid="draft-mention" data-blocked={blocked(m) ? "true" : "false"}>
-              <Chip kind={blocked(m) ? "warn" : "acc"}>
+            <li
+              key={m.user_id}
+              data-testid="draft-mention"
+              data-blocked={blocked(m) ? 'true' : 'false'}
+            >
+              <Chip kind={blocked(m) ? 'warn' : 'acc'}>
                 @{m.name}
                 <button
                   type="button"
@@ -577,7 +693,7 @@ function Composer({
                   className="ml-1 font-bold"
                   onClick={() => {
                     setMentions((all) => all.filter((x) => x.user_id !== m.user_id));
-                    setText((t) => t.replace(`@${m.name} `, "").replace(`@${m.name}`, ""));
+                    setText((t) => t.replace(`@${m.name} `, '').replace(`@${m.name}`, ''));
                   }}
                 >
                   ×
@@ -596,15 +712,19 @@ function Composer({
         {/* qa-shell-14: just you and Oracle, Oracle always replies: no box to tick (open too, qa-nov17 ask 2). */}
         {!solo && (
           <label className="inline-flex items-center gap-1.5 text-sm text-text">
-            <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={askOracle}
+              onChange={(e) => setAskOracle(e.target.checked)}
+            />
             Ask Oracle
           </label>
         )}
         <span className="text-[13px] text-text2" data-testid="oracle-rule">
-          {solo || askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
+          {solo || askOracle ? 'Oracle will reply' : 'Oracle replies when you @mention it'}
         </span>
       </div>
-      <LiveReadsNotice alone={solo && d.visibility === "private"} />
+      <LiveReadsNotice alone={solo && d.visibility === 'private'} />
     </form>
   );
 }
@@ -621,21 +741,31 @@ function EscapeClosesMenu({ close }: { close: () => void }) {
     shut.current = close;
   });
   useEffect(() => {
-    const button = here.current?.closest("div.relative")?.querySelector<HTMLElement>("button[aria-expanded]");
+    const button = here.current
+      ?.closest('div.relative')
+      ?.querySelector<HTMLElement>('button[aria-expanded]');
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       e.stopPropagation();
       shut.current();
       button?.focus();
     };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, []);
   return <span ref={here} hidden />;
 }
 
-function MenuItem({ onClick, disabled = false, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
+function MenuItem({
+  onClick,
+  disabled = false,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -659,7 +789,7 @@ function MenuItem({ onClick, disabled = false, children }: { onClick: () => void
 export function DiscussionThread({
   id,
   onBack,
-  backLabel = "All feedback",
+  backLabel = 'All feedback',
   onChanged,
   refreshKey = 0,
   belowHeader,
@@ -696,8 +826,8 @@ export function DiscussionThread({
   const myId = me?.user_id ?? null;
   const [state, setState] = useState<Loaded | null>(null);
   const [showPeople, setShowPeople] = useState(false);
-  const [editing, setEditing] = useState<"title" | "summary" | null>(null);
-  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<'title' | 'summary' | null>(null);
+  const [draft, setDraft] = useState('');
   const [warning, setWarning] = useState<Counts | null>(null);
   // The People list's own refusal (#710's 409 live_reads_in_chat), shown where the person was picked.
   const [peopleError, setPeopleError] = useState<string | null>(null);
@@ -711,10 +841,14 @@ export function DiscussionThread({
   const router = useRouter();
   // G8: the starter or an approver may mirror an open discussion; they need the install's state.
   // A G7 panel chat never is (Share as discussion opens it), so it shows no Slack at all.
-  const shownD = state?.kind === "ok" ? state.d : null;
-  const mayMirror = !!shownD && shownD.status === "open" && shownD.origin !== "panel" && can("mirror_discussion_to_slack", shownD.me.can_manage);
-  const slackStatus = useQuery(mayMirror ? "slack-status" : "slack-status|none", () =>
-    mayMirror ? unwrap(api.GET("/v1/company-integrations/slack/status")) : Promise.resolve(null),
+  const shownD = state?.kind === 'ok' ? state.d : null;
+  const mayMirror =
+    !!shownD &&
+    shownD.status === 'open' &&
+    shownD.origin !== 'panel' &&
+    can('mirror_discussion_to_slack', shownD.me.can_manage);
+  const slackStatus = useQuery(mayMirror ? 'slack-status' : 'slack-status|none', () =>
+    mayMirror ? unwrap(api.GET('/v1/company-integrations/slack/status')) : Promise.resolve(null),
   );
 
   const reload = async () => {
@@ -730,7 +864,8 @@ export function DiscussionThread({
     };
   }, [id, refreshKey]);
   // G2 §4: while a research run is under way, look again now and then for its answer.
-  const researching = state?.kind === "ok" && state.messages.some((x) => x.research?.status === "running");
+  const researching =
+    state?.kind === 'ok' && state.messages.some((x) => x.research?.status === 'running');
   useEffect(() => {
     if (!researching) return;
     // Backs off from 10 s to a minute, and stops after RESEARCH_POLLS looks (a reload looks again).
@@ -738,24 +873,30 @@ export function DiscussionThread({
     let timer: ReturnType<typeof setTimeout>;
     const next = () => {
       if (polls >= RESEARCH_POLLS) return;
-      timer = setTimeout(() => {
-        polls += 1;
-        void load(id).then(setState);
-        next();
-      }, Math.min(RESEARCH_POLL_MS * 2 ** polls, RESEARCH_POLL_MAX_MS));
+      timer = setTimeout(
+        () => {
+          polls += 1;
+          void load(id).then(setState);
+          next();
+        },
+        Math.min(RESEARCH_POLL_MS * 2 ** polls, RESEARCH_POLL_MAX_MS),
+      );
     };
     next();
     return () => clearTimeout(timer);
   }, [researching, id]);
   // Reading the thread marks it read to its last message: the Inbox's invitation and
   // mentions read past are done (G6), and the rail's count reads again.
-  const lastId = state?.kind === "ok" ? state.messages.at(-1)?.id : undefined;
+  const lastId = state?.kind === 'ok' ? state.messages.at(-1)?.id : undefined;
   const readTo = useRef<string | null>(null);
   useEffect(() => {
     if (!lastId || readTo.current === lastId) return;
     readTo.current = lastId;
     void api
-      .POST("/v1/discussions/{discussion_id}/read", { params: { path: { discussion_id: id } }, body: { message_id: lastId } })
+      .POST('/v1/discussions/{discussion_id}/read', {
+        params: { path: { discussion_id: id } },
+        body: { message_id: lastId },
+      })
       .then(({ response }) => {
         if (!response.ok) return;
         invalidateWaiting();
@@ -769,11 +910,11 @@ export function DiscussionThread({
     </Button>
   );
   if (!state) return <Loading />;
-  if (state.kind !== "ok") {
+  if (state.kind !== 'ok') {
     return (
       <div className="flex flex-col gap-3" data-testid="discussion-thread-unavailable">
         {back && <div>{back}</div>}
-        {state.kind === "private" ? (
+        {state.kind === 'private' ? (
           <Notice testId="discussion-private">
             <span className="inline-flex items-center gap-1.5">
               <Icon name="lock" size={16} />
@@ -798,21 +939,24 @@ export function DiscussionThread({
           ]
         : [],
     );
-  const open = d.status === "open";
-  const priv = d.visibility === "private";
+  const open = d.status === 'open';
+  const priv = d.visibility === 'private';
   const starter = d.me.can_manage;
   // #370: the starter or an approver closes it. PATCH /v1/discussions is open to every reader
   // and its capability does not mark the approver check, so the approvers' decision on feedback
   // (PATCH /v1/feedback, approver) stands for it.
-  const canClose = starter || can("update_feedback");
-  const canMakeOpen = starter && priv && d.origin !== "panel" && !d.author_only;
+  const canClose = starter || can('update_feedback');
+  const canMakeOpen = starter && priv && d.origin !== 'panel' && !d.author_only;
 
-  const patch = async (body: Omit<Schemas["DiscussionPatch"], "lock_version">) => {
+  const patch = async (body: Omit<Schemas['DiscussionPatch'], 'lock_version'>) => {
     setBusy(true);
     setError(null);
     try {
       await unwrap(
-        api.PATCH("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: d.id } }, body: { ...body, lock_version: d.lock_version } }),
+        api.PATCH('/v1/discussions/{discussion_id}', {
+          params: { path: { discussion_id: d.id } },
+          body: { ...body, lock_version: d.lock_version },
+        }),
       );
       await reload();
       onChanged?.();
@@ -829,9 +973,9 @@ export function DiscussionThread({
   const makeOpen = async (counts: Counts) => {
     setBusy(true);
     setError(null);
-    const { response, error: body } = await api.PATCH("/v1/discussions/{discussion_id}", {
+    const { response, error: body } = await api.PATCH('/v1/discussions/{discussion_id}', {
       params: { path: { discussion_id: d.id } },
-      body: { visibility: "open", exposes: counts, lock_version: d.lock_version },
+      body: { visibility: 'open', exposes: counts, lock_version: d.lock_version },
     });
     setBusy(false);
     if (response.ok) {
@@ -840,26 +984,34 @@ export function DiscussionThread({
       onChanged?.();
       return;
     }
-    const conflict = body as Partial<Schemas["DiscussionExposureConflict"]> | undefined;
-    if (response.status === 409 && typeof conflict?.messages === "number" && typeof conflict.people === "number") {
+    const conflict = body as Partial<Schemas['DiscussionExposureConflict']> | undefined;
+    if (
+      response.status === 409 &&
+      typeof conflict?.messages === 'number' &&
+      typeof conflict.people === 'number'
+    ) {
       // Someone wrote since the warning was drawn: draw it again with what it exposes now.
       setWarning({ messages: conflict.messages, people: conflict.people });
       await reload();
       return;
     }
-    setError(typeof (body as { detail?: unknown })?.detail === "string" ? (body as { detail: string }).detail : "Could not make it open");
+    setError(
+      typeof (body as { detail?: unknown })?.detail === 'string'
+        ? (body as { detail: string }).detail
+        : 'Could not make it open',
+    );
     await reload();
   };
 
   const makePrivate = async () => {
     const n = d.participants.length;
     const yes = await confirmInPage({
-      action: "Make private",
-      message: `${d.slack ? `${privateStopsMirror(d.slack.channel_name)} ` : ""}Make private? The ${plural(n, "person", "people")} in it keep${
-        n === 1 ? "s" : ""
+      action: 'Make private',
+      message: `${d.slack ? `${privateStopsMirror(d.slack.channel_name)} ` : ''}Make private? The ${plural(n, 'person', 'people')} in it keep${
+        n === 1 ? 's' : ''
       } reading it. Everyone else will see only that a private discussion exists.`,
     });
-    if (yes) await patch({ visibility: "private" });
+    if (yes) await patch({ visibility: 'private' });
   };
 
   const leave = async () => {
@@ -867,11 +1019,13 @@ export function DiscussionThread({
     setBusy(true);
     try {
       await unwrap(
-        api.DELETE("/v1/discussions/{discussion_id}/participants/{user_id}", { params: { path: { discussion_id: d.id, user_id: myId } } }),
+        api.DELETE('/v1/discussions/{discussion_id}/participants/{user_id}', {
+          params: { path: { discussion_id: d.id, user_id: myId } },
+        }),
       );
       const next = await reload();
       onChanged?.();
-      if (next.kind !== "ok") onBack?.();
+      if (next.kind !== 'ok') onBack?.();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -882,24 +1036,34 @@ export function DiscussionThread({
   const follow = async () => {
     if (!myId) return;
     try {
-      await unwrap(api.POST("/v1/discussions/{discussion_id}/participants", { params: { path: { discussion_id: d.id } }, body: { user_ids: [myId] } }));
+      await unwrap(
+        api.POST('/v1/discussions/{discussion_id}/participants', {
+          params: { path: { discussion_id: d.id } },
+          body: { user_ids: [myId] },
+        }),
+      );
       await reload();
     } catch (e) {
       setError(errorMessage(e));
     }
   };
 
-  const people = async (op: "add" | "remove", userId: string) => {
+  const people = async (op: 'add' | 'remove', userId: string) => {
     setError(null);
     setPeopleError(null);
     try {
-      if (op === "add")
+      if (op === 'add')
         await unwrap(
-          api.POST("/v1/discussions/{discussion_id}/participants", { params: { path: { discussion_id: d.id } }, body: { user_ids: [userId] } }),
+          api.POST('/v1/discussions/{discussion_id}/participants', {
+            params: { path: { discussion_id: d.id } },
+            body: { user_ids: [userId] },
+          }),
         );
       else
         await unwrap(
-          api.DELETE("/v1/discussions/{discussion_id}/participants/{user_id}", { params: { path: { discussion_id: d.id, user_id: userId } } }),
+          api.DELETE('/v1/discussions/{discussion_id}/participants/{user_id}', {
+            params: { path: { discussion_id: d.id, user_id: userId } },
+          }),
         );
       await reload();
     } catch (e) {
@@ -908,11 +1072,17 @@ export function DiscussionThread({
   };
 
   const remove = async (m: Message) => {
-    const yes = await confirmInPage({ action: "Delete message", message: "Delete this message? It will read “Message deleted”.", destructive: true });
+    const yes = await confirmInPage({
+      action: 'Delete message',
+      message: 'Delete this message? It will read “Message deleted”.',
+      destructive: true,
+    });
     if (!yes) return;
     try {
       await unwrap(
-        api.DELETE("/v1/discussions/{discussion_id}/messages/{message_id}", { params: { path: { discussion_id: d.id, message_id: m.id } } }),
+        api.DELETE('/v1/discussions/{discussion_id}/messages/{message_id}', {
+          params: { path: { discussion_id: d.id, message_id: m.id } },
+        }),
       );
       await reload();
     } catch (e) {
@@ -923,7 +1093,7 @@ export function DiscussionThread({
   const stopMirroring = async () => {
     if (!d.slack) return;
     const yes = await confirmInPage({
-      action: "Stop mirroring",
+      action: 'Stop mirroring',
       message:
         // No thread yet (or a failed mirror): nothing was posted, and no closing line goes.
         !d.slack.thread_url
@@ -933,7 +1103,11 @@ export function DiscussionThread({
     if (!yes) return;
     setError(null);
     try {
-      await unwrap(api.DELETE("/v1/discussions/{discussion_id}/slack", { params: { path: { discussion_id: d.id } } }));
+      await unwrap(
+        api.DELETE('/v1/discussions/{discussion_id}/slack', {
+          params: { path: { discussion_id: d.id } },
+        }),
+      );
       await reload();
       onChanged?.();
     } catch (e) {
@@ -942,45 +1116,81 @@ export function DiscussionThread({
   };
 
   const items: { label: string; run: () => void; disabled?: boolean; tip?: string }[] = [];
-  if (open && starter) items.push({ label: "Rename", run: () => (setDraft(d.title), setEditing("title")) });
-  if (open && starter && !priv) items.push({ label: "Make private", run: () => void makePrivate() });
-  if (open && canMakeOpen) items.push({ label: "Make open", run: () => setWarning(d.exposure ?? { messages: d.message_count, people: 0 }) });
-  if (starter && priv) items.push({ label: "People", run: () => setShowPeople(true) });
-  if (open && starter) items.push({ label: d.summary ? "Edit summary" : "Write summary", run: () => (setDraft(d.summary ?? ""), setEditing("summary")) });
+  if (open && starter)
+    items.push({ label: 'Rename', run: () => (setDraft(d.title), setEditing('title')) });
+  if (open && starter && !priv)
+    items.push({ label: 'Make private', run: () => void makePrivate() });
+  if (open && canMakeOpen)
+    items.push({
+      label: 'Make open',
+      run: () => setWarning(d.exposure ?? { messages: d.message_count, people: 0 }),
+    });
+  if (starter && priv) items.push({ label: 'People', run: () => setShowPeople(true) });
+  if (open && starter)
+    items.push({
+      label: d.summary ? 'Edit summary' : 'Write summary',
+      run: () => (setDraft(d.summary ?? ''), setEditing('summary')),
+    });
   if (open && starter && priv && d.summary)
     items.push(
       d.summary_shared
-        ? { label: "Stop sharing summary", run: () => void patch({ summary_shared: false }) }
-        : { label: "Share summary with everyone", run: () => void patch({ summary_shared: true }) },
+        ? { label: 'Stop sharing summary', run: () => void patch({ summary_shared: false }) }
+        : { label: 'Share summary with everyone', run: () => void patch({ summary_shared: true }) },
     );
   // G8 Mirror to Slack: never for a private discussion (an info tip says why instead).
   const slack = slackStatus.data ?? null;
-  const owner = can("install_slack_notifications");
+  const owner = can('install_slack_notifications');
   let slackTip: string | null = null;
   if (mayMirror && slack) {
-    if (d.slack) items.push({ label: "Stop mirroring", run: () => void stopMirroring() });
+    if (d.slack) items.push({ label: 'Stop mirroring', run: () => void stopMirroring() });
     else if (priv) slackTip = PRIVATE_STAYS;
-    else if (slack.mirroring) items.push({ label: "Mirror to Slack…", run: () => setMirroring(true) });
+    else if (slack.mirroring)
+      items.push({ label: 'Mirror to Slack…', run: () => setMirroring(true) });
     else if (owner)
-      items.push({ label: slack.needs_reconnect ? "Reconnect Slack…" : "Connect Oracle to Slack…", run: () => router.push("/settings/notifications") });
-    else items.push({ label: "Mirror to Slack", run: () => undefined, disabled: true, tip: OWNER_CONNECTS });
+      items.push({
+        label: slack.needs_reconnect ? 'Reconnect Slack…' : 'Connect Oracle to Slack…',
+        run: () => router.push('/settings/notifications'),
+      });
+    else
+      items.push({
+        label: 'Mirror to Slack',
+        run: () => undefined,
+        disabled: true,
+        tip: OWNER_CONNECTS,
+      });
   }
-  if (canClose) items.push({ label: open ? "Close" : "Reopen", run: () => void patch({ status: open ? "closed" : "open" }) });
-  if (myId && !d.me.participant && !priv && open) items.push({ label: "Follow", run: () => void follow() });
-  if (myId && d.me.participant && !(priv && starter)) items.push({ label: priv ? "Leave" : "Unfollow", run: () => void leave() });
+  if (canClose)
+    items.push({
+      label: open ? 'Close' : 'Reopen',
+      run: () => void patch({ status: open ? 'closed' : 'open' }),
+    });
+  if (myId && !d.me.participant && !priv && open)
+    items.push({ label: 'Follow', run: () => void follow() });
+  if (myId && d.me.participant && !(priv && starter))
+    items.push({ label: priv ? 'Leave' : 'Unfollow', run: () => void leave() });
 
   return (
-    <div className="flex min-w-0 flex-col gap-3" data-testid="discussion-thread" data-discussion-id={d.id}>
+    <div
+      className="flex min-w-0 flex-col gap-3"
+      data-testid="discussion-thread"
+      data-discussion-id={d.id}
+    >
       {back && <div>{back}</div>}
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <h3 className="min-w-0 flex-1 font-display text-[17px] leading-6 font-bold tracking-heading break-words">{d.title}</h3>
+          <h3 className="min-w-0 flex-1 font-display text-[17px] leading-6 font-bold tracking-heading break-words">
+            {d.title}
+          </h3>
           {(items.length > 0 || slackTip) && (
             <Menu label="Discussion actions" icon="more" iconOnly>
               {(close) => (
                 <span className="flex min-w-44 flex-col gap-0.5">
                   <EscapeClosesMenu close={close} />
-                  <span role="menu" aria-label="Discussion actions" className="flex flex-col gap-0.5">
+                  <span
+                    role="menu"
+                    aria-label="Discussion actions"
+                    className="flex flex-col gap-0.5"
+                  >
                     {items.map((it) =>
                       it.tip ? (
                         <span key={it.label} className="flex items-center gap-1.5" title={it.tip}>
@@ -1006,7 +1216,10 @@ export function DiscussionThread({
                     )}
                   </span>
                   {slackTip && (
-                    <span className="flex h-9 items-center gap-1.5 px-2.5 text-sm text-text2" data-testid="slack-private-tip">
+                    <span
+                      className="flex h-9 items-center gap-1.5 px-2.5 text-sm text-text2"
+                      data-testid="slack-private-tip"
+                    >
                       Slack
                       <InfoTip label="Slack" side="bottom">
                         {slackTip}
@@ -1021,8 +1234,12 @@ export function DiscussionThread({
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-text2">
           {/* qa-nov17 ask 4: a closed discussion shows one state, Closed, not "Open" beside it. */}
           {open && (
-            <span title={VISIBILITY_TIP[d.visibility]} data-testid="discussion-visibility" className="inline-flex">
-              <Chip kind={priv ? "warn" : "line"}>{priv ? "Private" : "Open"}</Chip>
+            <span
+              title={VISIBILITY_TIP[d.visibility]}
+              data-testid="discussion-visibility"
+              className="inline-flex"
+            >
+              <Chip kind={priv ? 'warn' : 'line'}>{priv ? 'Private' : 'Open'}</Chip>
             </span>
           )}
           <button
@@ -1033,18 +1250,32 @@ export function DiscussionThread({
             className="group inline-flex items-center rounded-full text-[13px] font-medium text-text"
           >
             {/* The sheet's 44 px touch target is the button; the pill stays chip height (ask-phone QA row 6). */}
-            <span data-testid="discussion-people-pill" className="rounded-full border border-line-strong px-2 py-0.5 group-hover:bg-surface2">
-              {plural(d.participants.length, "person", "people")}
+            <span
+              data-testid="discussion-people-pill"
+              className="rounded-full border border-line-strong px-2 py-0.5 group-hover:bg-surface2"
+            >
+              {plural(d.participants.length, 'person', 'people')}
             </span>
           </button>
           {!open && <Chip kind="na">Closed</Chip>}
           {d.slack &&
             (d.slack.thread_url ? (
-              <a href={d.slack.thread_url} target="_blank" rel="noreferrer" data-testid="discussion-slack" title="Open the Slack thread" className="inline-flex">
+              <a
+                href={d.slack.thread_url}
+                target="_blank"
+                rel="noreferrer"
+                data-testid="discussion-slack"
+                title="Open the Slack thread"
+                className="inline-flex"
+              >
                 <Chip kind="acc">#{d.slack.channel_name}</Chip>
               </a>
             ) : (
-              <span data-testid="discussion-slack" title={d.slack.status === "failed" ? "Slack mirror failed" : "Mirrored to Slack"} className="inline-flex">
+              <span
+                data-testid="discussion-slack"
+                title={d.slack.status === 'failed' ? 'Slack mirror failed' : 'Mirrored to Slack'}
+                className="inline-flex"
+              >
                 <Chip kind="acc">#{d.slack.channel_name}</Chip>
               </span>
             ))}
@@ -1061,18 +1292,37 @@ export function DiscussionThread({
           className="flex flex-col gap-2"
           onSubmit={async (e) => {
             e.preventDefault();
-            const ok = await patch(editing === "title" ? { title: draft.trim() } : { summary: draft.trim() });
+            const ok = await patch(
+              editing === 'title' ? { title: draft.trim() } : { summary: draft.trim() },
+            );
             if (ok) setEditing(null);
           }}
         >
           {/* qa-nov17 ask 7: a title is one line; Enter saves it. */}
-          {editing === "title" ? (
-            <input aria-label="Title" maxLength={200} value={draft} onChange={(e) => setDraft(e.target.value)} className={`${TEXTAREA} h-10`} />
+          {editing === 'title' ? (
+            <input
+              aria-label="Title"
+              maxLength={200}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className={`${TEXTAREA} h-10`}
+            />
           ) : (
-            <textarea aria-label="Summary" rows={3} maxLength={1200} value={draft} onChange={(e) => setDraft(e.target.value)} className={TEXTAREA} />
+            <textarea
+              aria-label="Summary"
+              rows={3}
+              maxLength={1200}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className={TEXTAREA}
+            />
           )}
           <div className="flex gap-2">
-            <Button type="submit" variant="solid" disabled={busy || (editing === "title" && !draft.trim())}>
+            <Button
+              type="submit"
+              variant="solid"
+              disabled={busy || (editing === 'title' && !draft.trim())}
+            >
               Save
             </Button>
             <Button variant="ghost" onClick={() => setEditing(null)}>
@@ -1083,14 +1333,22 @@ export function DiscussionThread({
       )}
 
       {showPeople && (
-        <div className="flex flex-col gap-2 rounded-lg border border-line p-3" data-testid="discussion-people-list">
+        <div
+          className="flex flex-col gap-2 rounded-lg border border-line p-3"
+          data-testid="discussion-people-list"
+        >
           <ul className="flex flex-col gap-1">
             {d.participants.map((p) => (
               <li key={p.user_id} className="flex min-w-0 items-center gap-2 text-sm">
                 <span className="min-w-0 truncate font-semibold">{p.name}</span>
-                <span className="text-text2">{p.can_write ? p.role : "can read"}</span>
+                <span className="text-text2">{p.can_write ? p.role : 'can read'}</span>
                 {starter && priv && p.user_id !== d.started_by.user_id && open && (
-                  <Button variant="ghost" className="ml-auto" onClick={() => void people("remove", p.user_id)} aria-label={`Remove ${p.name}`}>
+                  <Button
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => void people('remove', p.user_id)}
+                    aria-label={`Remove ${p.name}`}
+                  >
                     Remove
                   </Button>
                 )}
@@ -1098,76 +1356,113 @@ export function DiscussionThread({
             ))}
           </ul>
           {starter && priv && open && !d.author_only && (
-            <PersonPicker writersOnly={false} exclude={d.participants.map((p) => p.user_id)} onPick={(p) => void people("add", p.user_id)} />
+            <PersonPicker
+              writersOnly={false}
+              exclude={d.participants.map((p) => p.user_id)}
+              onPick={(p) => void people('add', p.user_id)}
+            />
           )}
           {peopleError && <InlineError>{peopleError}</InlineError>}
         </div>
       )}
 
-      {d.slack?.status === "failing" && d.started_by.user_id === myId && (
+      {d.slack?.status === 'failing' && d.started_by.user_id === myId && (
         <Notice tone="warn" testId="slack-failing">
-          Slack mirror failing: {d.slack.error ?? "Slack did not take the last post"}
+          Slack mirror failing: {d.slack.error ?? 'Slack did not take the last post'}
         </Notice>
       )}
-      {d.slack?.status === "failed" && d.started_by.user_id === myId && (
+      {d.slack?.status === 'failed' && d.started_by.user_id === myId && (
         <Notice tone="warn" testId="slack-failed">
-          Slack mirror failed: {d.slack.error ?? "Slack did not take the first post"}. Stop mirroring to mirror it again.
+          Slack mirror failed: {d.slack.error ?? 'Slack did not take the first post'}. Stop
+          mirroring to mirror it again.
         </Notice>
       )}
 
       {error && <InlineError>{error}</InlineError>}
 
       <ol className="flex min-w-0 flex-col gap-3" aria-label="Messages">
-        {messages.length === 0 && !said.length && <li className="text-sm text-text2">No messages yet</li>}
+        {messages.length === 0 && !said.length && (
+          <li className="text-sm text-text2">No messages yet</li>
+        )}
         {saidAfter(null)}
         {messages.flatMap((m) => [
-
-          m.author_kind === "system" && m.research ? (
+          m.author_kind === 'system' && m.research ? (
             <ResearchLine key={m.id} m={m} />
-          ) : m.author_kind === "system" ? (
-            <li key={m.id} data-testid="discussion-system-line" className="text-center text-[13px] text-text2">
+          ) : m.author_kind === 'system' ? (
+            <li
+              key={m.id}
+              data-testid="discussion-system-line"
+              className="text-center text-[13px] text-text2"
+            >
               {m.body}
             </li>
           ) : (
-            <li key={m.id} data-testid="discussion-message" data-author-kind={m.author_kind} className="min-w-0">
+            <li
+              key={m.id}
+              data-testid="discussion-message"
+              data-author-kind={m.author_kind}
+              className="min-w-0"
+            >
               <p className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-text2">
-                <span className="font-semibold text-text">{m.author?.name ?? "Oracle"}</span>
+                <span className="font-semibold text-text">{m.author?.name ?? 'Oracle'}</span>
                 <span className="tnum">{formatDateTime(m.created_at)}</span>
                 {m.edited_at && !m.deleted && <span>edited</span>}
-                {m.via === "slack" && (
+                {m.via === 'slack' && (
                   <span data-testid="via-slack" className="text-[12px]">
                     via Slack
                   </span>
                 )}
-                {m.author_kind === "oracle" && m.research && (
+                {m.author_kind === 'oracle' && m.research && (
                   <span data-testid="research-answer">
                     <Chip>From research</Chip>
                   </span>
                 )}
               </p>
-              {m.author_kind === "oracle" && !m.deleted ? (
+              {m.author_kind === 'oracle' && !m.deleted ? (
                 <OracleReply
                   m={m}
                   discussionId={d.id}
-                  asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)}
+                  asker={
+                    !!myId &&
+                    messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)
+                  }
                   onEnded={() => setChangesKey((k) => k + 1)}
                 />
               ) : (
                 <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
-                  {m.deleted ? <span className="text-text2 italic">Message deleted</span> : <Body m={m} />}
+                  {m.deleted ? (
+                    <span className="text-text2 italic">Message deleted</span>
+                  ) : (
+                    <Body m={m} />
+                  )}
                 </p>
               )}
               {/* qa4-shell-12: Edit, Delete and Research this share one row (an open form takes its own). */}
               <div className="flex flex-wrap items-start gap-x-1 empty:hidden">
-                {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
-                  <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
-                )}
                 {!m.deleted &&
                   open &&
-                  m.author_kind === "person" &&
-                  can("research_discussion_message", d.me.can_research) &&
-                  !messages.some((x) => x.reply_to === m.id && x.research?.status === "running") && (
-                    <ResearchThis m={m} d={d} onStarted={() => void reload().then(() => onChanged?.())} />
+                  d.me.can_write &&
+                  m.author_kind === 'person' &&
+                  m.author?.user_id && (
+                    <OwnMessageActions
+                      m={m}
+                      discussionId={d.id}
+                      onDelete={() => void remove(m)}
+                      onSaved={() => void reload()}
+                    />
+                  )}
+                {!m.deleted &&
+                  open &&
+                  m.author_kind === 'person' &&
+                  can('research_discussion_message', d.me.can_research) &&
+                  !messages.some(
+                    (x) => x.reply_to === m.id && x.research?.status === 'running',
+                  ) && (
+                    <ResearchThis
+                      m={m}
+                      d={d}
+                      onStarted={() => void reload().then(() => onChanged?.())}
+                    />
                   )}
               </div>
               {renderAfter?.(m, { d, messages })}
@@ -1179,8 +1474,12 @@ export function DiscussionThread({
 
       {d.me.private_findings && (
         <Notice testId="private-findings-notice">
-          {d.me.private_findings.count} of your private findings bear on this. Share them to let Oracle use them here.{" "}
-          <a className="font-semibold text-accent-ink hover:underline" href={`/intakes/${d.me.private_findings.intake_id}`}>
+          {d.me.private_findings.count} of your private findings bear on this. Share them to let
+          Oracle use them here.{' '}
+          <a
+            className="font-semibold text-accent-ink hover:underline"
+            href={`/intakes/${d.me.private_findings.intake_id}`}
+          >
             Review sharing
           </a>
         </Notice>
@@ -1194,7 +1493,9 @@ export function DiscussionThread({
           messages={messages}
           handle={composer}
           say={say}
-          onSaid={(node) => setSaid((all) => [...all, { after: messages.at(-1)?.id ?? null, node }])}
+          onSaid={(node) =>
+            setSaid((all) => [...all, { after: messages.at(-1)?.id ?? null, node }])
+          }
           onSent={async () => {
             await reload();
             onChanged?.();
@@ -1256,7 +1557,12 @@ function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarte
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/discussions/{discussion_id}/research", { params: { path: { discussion_id: d.id } }, body: { message_id: m.id } }));
+      await unwrap(
+        api.POST('/v1/discussions/{discussion_id}/research', {
+          params: { path: { discussion_id: d.id } },
+          body: { message_id: m.id },
+        }),
+      );
       setAsking(false);
       onStarted();
     } catch (e) {
@@ -1274,7 +1580,12 @@ function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarte
       </span>
     );
   return (
-    <div className="mt-1 flex w-full flex-col gap-2 rounded-button border border-line bg-surface p-3" role="group" aria-label="Research this" data-testid="research-confirm">
+    <div
+      className="mt-1 flex w-full flex-col gap-2 rounded-button border border-line bg-surface p-3"
+      role="group"
+      aria-label="Research this"
+      data-testid="research-confirm"
+    >
       <p className="text-sm text-text">
         One research run · <CostFigure usd={d.me.research_usd} est />
       </p>
@@ -1296,16 +1607,20 @@ function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarte
 function ResearchLine({ m }: { m: Message }) {
   const r = m.research!;
   const where =
-    r.status === "running"
-      ? "Oracle is researching…"
-      : r.status === "done"
-        ? "Research done"
+    r.status === 'running'
+      ? 'Oracle is researching…'
+      : r.status === 'done'
+        ? 'Research done'
         : r.error
           ? `Research didn't start: ${r.error} Research this to try again.`
           : "Research didn't finish. Research this to try again.";
   return (
-    <li data-testid="research-line" data-status={r.status} className="text-center text-[13px] text-text2">
-      {m.body} · {where} ·{" "}
+    <li
+      data-testid="research-line"
+      data-status={r.status}
+      className="text-center text-[13px] text-text2"
+    >
+      {m.body} · {where} ·{' '}
       <a className="font-semibold text-accent-ink hover:underline" href={`/runs/${r.run_id}`}>
         See the run
       </a>
@@ -1348,7 +1663,7 @@ function OwnMessageActions({
         e.preventDefault();
         try {
           await unwrap(
-            api.PATCH("/v1/discussions/{discussion_id}/messages/{message_id}", {
+            api.PATCH('/v1/discussions/{discussion_id}/messages/{message_id}', {
               params: { path: { discussion_id: discussionId, message_id: m.id } },
               body: { body: text },
             }),
@@ -1360,7 +1675,14 @@ function OwnMessageActions({
         }
       }}
     >
-      <textarea aria-label="Edit message" rows={2} maxLength={8000} value={text} onChange={(e) => setText(e.target.value)} className={TEXTAREA} />
+      <textarea
+        aria-label="Edit message"
+        rows={2}
+        maxLength={8000}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        className={TEXTAREA}
+      />
       {error && <InlineError>{error}</InlineError>}
       <span className="flex gap-2">
         <Button type="submit" variant="solid" disabled={!text.trim()}>

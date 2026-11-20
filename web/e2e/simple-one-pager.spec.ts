@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Simple S5 (#723): the one-pager, the owner's pick "A · Paper", driven through the UI on
@@ -27,93 +27,133 @@ import { expect, test, type Page } from "./test";
  * edit applies, the owner cannot accept, or a viewer can edit; no_claim = Slack or email.
  */
 
-const URL = "/simple/prds/guided-setup";
+const URL = '/simple/prds/guided-setup';
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 900 },
+        colorScheme: scheme,
+      });
 
       /** The margin notes: the right margin on a desktop, under their line on a phone. */
-      const notes = (page: Page) => page.getByRole("note");
+      const notes = (page: Page) => page.getByRole('note');
 
-      test("reads the page, presents, exports and links to the detailed view", async ({ page }) => {
-        await login(page, "viewer@example.com");
+      test('reads the page, presents, exports and links to the detailed view', async ({ page }) => {
+        await login(page, 'viewer@example.com');
         await page.goto(URL);
-        await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
-        await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3");
-        await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3 · Oct 20, 2026");
-        for (const title of ["Problem and who has it", "What we will build", "Outcomes and how we measure them", "Not doing", "Risks and open decisions", "Timeline"]) {
-          await expect(page.getByRole("region", { name: title })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: 'Guided setup' })).toBeVisible();
+        await expect(page.getByTestId('one-pager-meta')).toContainText('Version 3');
+        await expect(page.getByTestId('one-pager-meta')).toContainText('Version 3 · Oct 20, 2026');
+        for (const title of [
+          'Problem and who has it',
+          'What we will build',
+          'Outcomes and how we measure them',
+          'Not doing',
+          'Risks and open decisions',
+          'Timeline',
+        ]) {
+          await expect(page.getByRole('region', { name: title })).toBeVisible();
         }
-        await expect(page.getByRole("region", { name: "Outcomes and how we measure them" })).toContainText("48% → 65%");
-        await expect(page.getByLabel("Timeline strip")).toContainText("M1 · 12 roadmap items");
-        await expect(page.getByRole("button", { name: /^Edit “|Propose wording/ })).toHaveCount(0);
-        await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
-        const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
-        await expect(sources.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", "/documents/guided-setup#build");
-        await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/guided-setup");
-        const download = page.waitForEvent("download");
-        await page.getByRole("button", { name: "Export PDF" }).click();
-        expect((await download).suggestedFilename()).toBe("Guided setup v3 one-pager.pdf");
-        await page.getByRole("button", { name: "Present" }).click();
-        await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-        await page.getByRole("button", { name: "Stop presenting" }).click();
-        await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
+        await expect(
+          page.getByRole('region', { name: 'Outcomes and how we measure them' }),
+        ).toContainText('48% → 65%');
+        await expect(page.getByLabel('Timeline strip')).toContainText('M1 · 12 roadmap items');
+        await expect(page.getByRole('button', { name: /^Edit “|Propose wording/ })).toHaveCount(0);
+        await page
+          .getByRole('button', { name: /A setup checklist that shows the next step/ })
+          .click();
+        const sources = page.getByRole('region', {
+          name: 'Sources of “A setup checklist that shows',
+        });
+        await expect(sources.getByRole('link', { name: 'Open the detailed view' })).toHaveAttribute(
+          'href',
+          '/documents/guided-setup#build',
+        );
+        await expect(page.getByRole('link', { name: 'Open in Detailed' })).toHaveAttribute(
+          'href',
+          '/documents/guided-setup',
+        );
+        const download = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'Export PDF' }).click();
+        expect((await download).suggestedFilename()).toBe('Guided setup v3 one-pager.pdf');
+        await page.getByRole('button', { name: 'Present' }).click();
+        await expect(page.getByTestId('one-pager')).toHaveAttribute('data-presenting', 'true');
+        await page.getByRole('button', { name: 'Stop presenting' }).click();
+        await expect(page.getByTestId('one-pager')).not.toHaveAttribute('data-presenting', 'true');
       });
 
-      test("an owner edits a line into the working draft and undoes it", async ({ page }) => {
+      test('an owner edits a line into the working draft and undoes it', async ({ page }) => {
         await login(page);
         await page.goto(URL);
-        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-        await page.getByRole("button", { name: "Save" }).click();
+        await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+        await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+        await page.getByRole('button', { name: 'Save' }).click();
         const line = page.locator('[data-line="bets-1"]');
-        await expect(line).toHaveAttribute("data-state", "edited");
-        await expect(line).toContainText("A setup checklist with the next two steps");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("published v3 stays live until approved");
-        const note = notes(page).filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true });
+        await expect(line).toHaveAttribute('data-state', 'edited');
+        await expect(line).toContainText('A setup checklist with the next two steps');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText(
+          'published v3 stays live until approved',
+        );
+        const note = notes(page)
+          .filter({ hasText: 'You changed “A setup checklist' })
+          .filter({ visible: true });
         await expect(note).toBeVisible();
-        await note.getByRole("button", { name: "See before/after" }).click();
-        await expect(note.getByLabel("Before and after")).not.toContainText("In “What we will build”");  // qa4-simple-prd-18: the line's before/after once, no repeat box
-        await expect(note.getByLabel("Before and after")).toContainText("A setup checklist with the next two steps");
-        await note.getByRole("button", { name: "Undo" }).click();
-        await expect(line).toHaveAttribute("data-state", "published");
-        await expect(line).toContainText("A setup checklist that shows the next step");
+        await note.getByRole('button', { name: 'See before/after' }).click();
+        await expect(note.getByLabel('Before and after')).not.toContainText(
+          'In “What we will build”',
+        ); // qa4-simple-prd-18: the line's before/after once, no repeat box
+        await expect(note.getByLabel('Before and after')).toContainText(
+          'A setup checklist with the next two steps',
+        );
+        await note.getByRole('button', { name: 'Undo' }).click();
+        await expect(line).toHaveAttribute('data-state', 'published');
+        await expect(line).toContainText('A setup checklist that shows the next step');
       });
 
-      test("an edited metric line shows its new numbers", async ({ page }) => {
+      test('an edited metric line shows its new numbers', async ({ page }) => {
         await login(page);
         await page.goto(URL);
-        await page.getByRole("button", { name: "Edit “Teammate invited in week one" }).click();
-        await page.getByLabel("New wording for").fill("Teammate invited in week one from 48% to 70%");
-        await page.getByRole("button", { name: "Save" }).click();
+        await page.getByRole('button', { name: 'Edit “Teammate invited in week one' }).click();
+        await page
+          .getByLabel('New wording for')
+          .fill('Teammate invited in week one from 48% to 70%');
+        await page.getByRole('button', { name: 'Save' }).click();
         const line = page.locator('[data-line="outcomes-1"]');
-        await expect(line).toHaveAttribute("data-state", "edited");
-        await expect(line).toContainText("48% → 70%");
-        await expect(line).not.toContainText("65%");
+        await expect(line).toHaveAttribute('data-state', 'edited');
+        await expect(line).toContainText('48% → 70%');
+        await expect(line).not.toContainText('65%');
       });
 
       test("a line's sources show the section's text", async ({ page }) => {
-        await login(page, "viewer@example.com");
+        await login(page, 'viewer@example.com');
         await page.goto(URL);
-        await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
-        const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
-        await expect(sources).toContainText("What we will build");
+        await page
+          .getByRole('button', { name: /A setup checklist that shows the next step/ })
+          .click();
+        const sources = page.getByRole('region', {
+          name: 'Sources of “A setup checklist that shows',
+        });
+        await expect(sources).toContainText('What we will build');
         await expect(sources).toContainText("Invite suggestions from the admin's calendar");
       });
 
       if (!phone) {
-        test("a margin note sits beside its line", async ({ page }) => {
+        test('a margin note sits beside its line', async ({ page }) => {
           await login(page);
           await page.goto(URL);
-          await page.getByRole("button", { name: "Edit “Calendar access may scare admins" }).click();
-          await page.getByLabel("New wording for").fill("Calendar access may worry admins");
-          await page.getByRole("button", { name: "Save" }).click();
+          await page
+            .getByRole('button', { name: 'Edit “Calendar access may scare admins' })
+            .click();
+          await page.getByLabel('New wording for').fill('Calendar access may worry admins');
+          await page.getByRole('button', { name: 'Save' }).click();
           const line = page.locator('[data-line="risks-1"]');
-          await expect(line).toHaveAttribute("data-state", "edited");
-          const note = page.getByRole("complementary", { name: "Changes and proposals" }).getByRole("note", { name: "Change to “Calendar access may scare admins" });
+          await expect(line).toHaveAttribute('data-state', 'edited');
+          const note = page
+            .getByRole('complementary', { name: 'Changes and proposals' })
+            .getByRole('note', { name: 'Change to “Calendar access may scare admins' });
           await expect(note).toBeVisible();
           await expect(async () => {
             const a = (await line.boundingBox())!;
@@ -124,16 +164,23 @@ for (const phone of [false, true]) {
         });
       }
 
-      test("a commenter proposes, the owner accepts after opening the flow", async ({ page }) => {
-        await login(page, "commenter@example.com");
+      test('a commenter proposes, the owner accepts after opening the flow', async ({ page }) => {
+        await login(page, 'commenter@example.com');
         await page.goto(URL);
-        await page.getByRole("button", { name: "Propose wording for “Invite suggestions from the admin's" }).click();
-        await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
-        await page.getByRole("button", { name: "Propose", exact: true }).click();
-        await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
-        const mine = notes(page).filter({ hasText: "You proposed new wording for “Invite suggestions" }).filter({ visible: true });
+        await page
+          .getByRole('button', { name: "Propose wording for “Invite suggestions from the admin's" })
+          .click();
+        await page.getByLabel('New wording for').fill('Invite suggestions from shared contacts');
+        await page.getByRole('button', { name: 'Propose', exact: true }).click();
+        await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute(
+          'data-state',
+          'proposal',
+        );
+        const mine = notes(page)
+          .filter({ hasText: 'You proposed new wording for “Invite suggestions' })
+          .filter({ visible: true });
         await expect(mine).toBeVisible();
-        await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
+        await expect(mine.getByRole('button', { name: 'Accept' })).toHaveCount(0);
         // The account menu lives in the desktop rail: switch people there, then back to
         // the phone's width for the owner's part.
         const size = page.viewportSize()!;
@@ -142,16 +189,22 @@ for (const phone of [false, true]) {
         await login(page);
         await page.setViewportSize(size);
         await page.goto(URL);
-        const note = notes(page).filter({ hasText: "proposed new wording for “Invite suggestions" }).filter({ visible: true });
-        await note.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
-        await expect(note).toHaveAttribute("data-widened", "true");
+        const note = notes(page)
+          .filter({ hasText: 'proposed new wording for “Invite suggestions' })
+          .filter({ visible: true });
+        await note
+          .getByRole('button', { name: "Flow for “Invite suggestions from the admin's" })
+          .click();
+        await expect(note).toHaveAttribute('data-widened', 'true');
         // S10: Oracle drafted the bet's visual with the proposal.
-        await expect(note.getByLabel("User flow").getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await note.getByRole("button", { name: "Close" }).click();
-        await note.getByRole("button", { name: "Accept" }).click();
+        await expect(note.getByLabel('User flow').getByTestId('flow-version')).toHaveText(
+          'Version 1 of 1',
+        );
+        await note.getByRole('button', { name: 'Close' }).click();
+        await note.getByRole('button', { name: 'Accept' }).click();
         const line = page.locator('[data-line="bets-2"]');
-        await expect(line).toContainText("Invite suggestions from shared contacts");
-        await expect(line).toHaveAttribute("data-state", "edited");
+        await expect(line).toContainText('Invite suggestions from shared contacts');
+        await expect(line).toHaveAttribute('data-state', 'edited');
       });
     });
   }

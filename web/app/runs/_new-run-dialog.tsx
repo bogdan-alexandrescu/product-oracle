@@ -1,43 +1,62 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
-import { Button, Icon, InfoTip } from "@/components/ds";
-import { GoalPicker } from "@/components/NewDraft";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { prdsFirst, usePrds } from "@/lib/prd-order";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, Icon, InfoTip } from '@/components/ds';
+import { GoalPicker } from '@/components/NewDraft';
+import { ErrorNote, INPUT, Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { prdsFirst, usePrds } from '@/lib/prd-order';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { EstimateSummary, RunsWhere, STOP_HELP, stopLabel, usd, type EstimateOut, type FlowCatalog } from "./_lib";
+import {
+  EstimateSummary,
+  RunsWhere,
+  STOP_HELP,
+  stopLabel,
+  usd,
+  type EstimateOut,
+  type FlowCatalog,
+} from './_lib';
 
-type Flow = FlowCatalog["flows"][number];
-type Depth = "quick" | "standard" | "deep";
+type Flow = FlowCatalog['flows'][number];
+type Depth = 'quick' | 'standard' | 'deep';
 
 /** Where a page opens the dialog on one flow, with its document filled in (#255). */
 /** `features`: the Ground Truth features a Ground Truth to PRD run adds to its PRD (the Engineering check's "Add it to a PRD"). */
-export type RunStart = { flow: Flow["key"]; document: string; title: string; features?: { id: string; title: string }[] };
+export type RunStart = {
+  flow: Flow['key'];
+  document: string;
+  title: string;
+  features?: { id: string; title: string }[];
+};
 
 /** Pick a flow and its knobs, see the estimate, then start the run. */
-export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => void; start?: RunStart }) {
+export function NewRunDialog({
+  onClose,
+  start: startFrom,
+}: {
+  onClose: () => void;
+  start?: RunStart;
+}) {
   const router = useRouter();
   const { can } = useMe();
-  const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
-  const documents = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
+  const catalog = useQuery('flows', () => unwrap(api.GET('/v1/flows')));
+  const documents = useQuery('documents', () => unwrap(api.GET('/v1/documents')));
   const prds = usePrds();
 
-  const [flowKey, setFlowKey] = useState<Flow["key"]>(startFrom?.flow ?? "baseline_to_prd");
-  const [document, setDocument] = useState(startFrom?.document ?? "");
-  const [depth, setDepth] = useState<Depth>("standard");
+  const [flowKey, setFlowKey] = useState<Flow['key']>(startFrom?.flow ?? 'baseline_to_prd');
+  const [document, setDocument] = useState(startFrom?.document ?? '');
+  const [depth, setDepth] = useState<Depth>('standard');
   const [roles, setRoles] = useState<Record<string, string[]>>({});
   const [checkpoints, setCheckpoints] = useState<Record<string, boolean>>({});
-  const [budget, setBudget] = useState("");
+  const [budget, setBudget] = useState('');
   // #260: the confirmed goals a Baseline to PRD run serves.
   const [goals, setGoals] = useState<string[]>([]);
-  const [draft, setDraft] = useState<{ id: string; flow: Flow["key"] } | null>(null);
+  const [draft, setDraft] = useState<{ id: string; flow: Flow['key'] } | null>(null);
   const [estimate, setEstimate] = useState<EstimateOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,15 +66,20 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
   // instead. Opened from a page on one flow, the dialog offers only that flow.
   const onlyFlow = startFrom?.flow;
   const flows = useMemo(
-    () => catalog.data?.flows.filter((f) => (onlyFlow ? f.key === onlyFlow : f.in_new_run_dialog)) ?? [],
+    () =>
+      catalog.data?.flows.filter((f) => (onlyFlow ? f.key === onlyFlow : f.in_new_run_dialog)) ??
+      [],
     [catalog.data, onlyFlow],
   );
-  const pointers = useMemo(() => (onlyFlow ? [] : (catalog.data?.flows.filter((f) => f.starts_from) ?? [])), [catalog.data, onlyFlow]);
+  const pointers = useMemo(
+    () => (onlyFlow ? [] : (catalog.data?.flows.filter((f) => f.starts_from) ?? [])),
+    [catalog.data, onlyFlow],
+  );
   const flow = flows.find((f) => f.key === flowKey) ?? flows[0];
 
   // Choices on top of the flow's defaults; a new flow starts from its defaults again.
-  const segmentRoles = (s: Flow["segments"][number]) => roles[s.name] ?? s.roles;
-  const selectFlow = (key: Flow["key"]) => {
+  const segmentRoles = (s: Flow['segments'][number]) => roles[s.name] ?? s.roles;
+  const selectFlow = (key: Flow['key']) => {
     setFlowKey(key);
     setRoles({});
     setCheckpoints({});
@@ -64,29 +88,39 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
 
   useEffect(() => {
     // A field that handled Escape itself (closing its suggestions) marks it handled.
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !e.defaultPrevented && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   const adds = startFrom?.features;
   const knobs = useMemo(
     () => ({
       depth,
-      roles: Object.fromEntries((flow?.segments ?? []).map((s) => [s.name, roles[s.name] ?? s.roles])),
-      checkpoints: Object.fromEntries((flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [[s.checkpoint, checkpoints[s.checkpoint] ?? true]] : []))),
+      roles: Object.fromEntries(
+        (flow?.segments ?? []).map((s) => [s.name, roles[s.name] ?? s.roles]),
+      ),
+      checkpoints: Object.fromEntries(
+        (flow?.segments ?? []).flatMap((s) =>
+          s.checkpoint ? [[s.checkpoint, checkpoints[s.checkpoint] ?? true]] : [],
+        ),
+      ),
       budget_usd: budget.trim() ? Number(budget) : null,
-      ...(flow?.key === "baseline_to_prd" ? { goals, ...(adds?.length ? { features: adds.map((f) => f.id) } : {}) } : {}),
+      ...(flow?.key === 'baseline_to_prd'
+        ? { goals, ...(adds?.length ? { features: adds.map((f) => f.id) } : {}) }
+        : {}),
     }),
     [flow, depth, roles, checkpoints, budget, goals, adds],
   );
 
-  const change = <T,>(set: (v: T) => void) => (v: T) => {
-    set(v);
-    setEstimate(null);
-  };
+  const change =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      set(v);
+      setEstimate(null);
+    };
 
-  const toggleRole = (s: Flow["segments"][number], role: string) => {
+  const toggleRole = (s: Flow['segments'][number], role: string) => {
     const current = segmentRoles(s);
     change(setRoles)({
       ...roles,
@@ -102,10 +136,16 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
       // A draft's flow is fixed: a different flow gets a fresh draft.
       const run =
         draft && draft.flow === flow?.key
-          ? await unwrap(api.PATCH("/v1/runs/{run_id}", { params: { path: { run_id: draft.id } }, body }))
-          : await unwrap(api.POST("/v1/runs", { body: { flow: flow!.key, ...body } }));
+          ? await unwrap(
+              api.PATCH('/v1/runs/{run_id}', { params: { path: { run_id: draft.id } }, body }),
+            )
+          : await unwrap(api.POST('/v1/runs', { body: { flow: flow!.key, ...body } }));
       setDraft({ id: run.id, flow: run.flow });
-      setEstimate(await unwrap(api.POST("/v1/runs/{run_id}/estimate", { params: { path: { run_id: run.id } } })));
+      setEstimate(
+        await unwrap(
+          api.POST('/v1/runs/{run_id}/estimate', { params: { path: { run_id: run.id } } }),
+        ),
+      );
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -119,9 +159,9 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
     setError(null);
     try {
       const path = { params: { path: { run_id: draft.id } } };
-      await unwrap(api.POST("/v1/runs/{run_id}/start", path));
+      await unwrap(api.POST('/v1/runs/{run_id}/start', path));
       // #259: an owner approves their own run's cost here rather than on the run page.
-      if (ownerApproves) await unwrap(api.POST("/v1/runs/{run_id}/approve", path));
+      if (ownerApproves) await unwrap(api.POST('/v1/runs/{run_id}/approve', path));
       router.push(`/runs/${draft.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -129,17 +169,21 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
     }
   }
 
-  const ownerApproves = can("approve_run") && !!estimate?.needs_approval;
+  const ownerApproves = can('approve_run') && !!estimate?.needs_approval;
   // qa-work-7: with no flow to start here, the dialog is a guide to where each run starts:
   // its lines and Close, no Estimate or Start run that could never be used.
   const guide = !!catalog.data && !flow;
   // prd-order: the PRDs in the company PRD order, then the roadmaps and other documents.
   const docOptions = prdsFirst(prds.data, documents.data);
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
-  const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
+  const legendCls =
+    'mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2';
 
   return (
-    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -148,7 +192,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
           <h2 id="new-run-title" className="font-display text-xl font-bold tracking-heading">
-            {startFrom?.title ?? (guide ? "Where to start a run" : "New run")}
+            {startFrom?.title ?? (guide ? 'Where to start a run' : 'New run')}
           </h2>
           {catalog.data && (
             <InfoTip label="where runs execute" align="start" side="bottom">
@@ -164,7 +208,8 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
           {guide && (
             <>
               <p className="text-text2" data-testid="flow-guide">
-                Each kind of run starts from the page it works on. Open one of these to start it there.
+                Each kind of run starts from the page it works on. Open one of these to start it
+                there.
               </p>
               <FlowPointers flows={pointers} />
             </>
@@ -173,11 +218,14 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
             <>
               {!!startFrom?.features?.length && (
                 <p className="font-semibold" data-testid="run-adds">
-                  Adds {startFrom.features.map((f) => f.title).join(", ")}
+                  Adds {startFrom.features.map((f) => f.title).join(', ')}
                 </p>
               )}
               {catalog.data.runtime_notes.length > 0 && (
-                <ul className="space-y-1 rounded-button bg-accent-soft px-3 py-2 text-sm text-accent-ink" data-testid="runtime-notes">
+                <ul
+                  className="space-y-1 rounded-button bg-accent-soft px-3 py-2 text-sm text-accent-ink"
+                  data-testid="runtime-notes"
+                >
                   {catalog.data.runtime_notes.map((n) => (
                     <li key={n}>{n}</li>
                   ))}
@@ -190,7 +238,9 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                     <label
                       key={f.key}
                       className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-button border px-3 py-2 ${
-                        f.key === flow.key ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line-strong hover:bg-surface2"
+                        f.key === flow.key
+                          ? 'border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]'
+                          : 'border-line-strong hover:bg-surface2'
                       }`}
                     >
                       <input
@@ -211,7 +261,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
 
               <div>
                 <span id="run-document-label" className={legendCls}>
-                  {flow.requires_document ? "PRD or roadmap to revise" : "PRD document"}
+                  {flow.requires_document ? 'PRD or roadmap to revise' : 'PRD document'}
                 </span>
                 {flow.requires_document ? (
                   <select
@@ -224,7 +274,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                     {docOptions.map((d) => (
                       <option key={d.id} value={d.slug}>
                         {d.title}
-                        {d.kind === "roadmap" ? " (roadmap)" : ""}
+                        {d.kind === 'roadmap' ? ' (roadmap)' : ''}
                       </option>
                     ))}
                   </select>
@@ -233,17 +283,27 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                     className={inputCls}
                     value={document}
                     onChange={change(setDocument)}
-                    options={docOptions.filter((d) => d.kind === "prd")}
+                    options={docOptions.filter((d) => d.kind === 'prd')}
                   />
                 )}
               </div>
 
-              {flow.key === "baseline_to_prd" && <GoalPicker value={goals} onChange={change(setGoals)} legend="Goals this PRD serves" />}
+              {flow.key === 'baseline_to_prd' && (
+                <GoalPicker
+                  value={goals}
+                  onChange={change(setGoals)}
+                  legend="Goals this PRD serves"
+                />
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className={legendCls}>Depth</span>
-                  <select className={inputCls} value={depth} onChange={(e) => change(setDepth)(e.target.value as Depth)}>
+                  <select
+                    className={inputCls}
+                    value={depth}
+                    onChange={(e) => change(setDepth)(e.target.value as Depth)}
+                  >
                     {Object.entries(catalog.data.depths).map(([k, mult]) => (
                       <option key={k} value={k}>
                         {k.charAt(0).toUpperCase() + k.slice(1)} (×{mult})
@@ -269,7 +329,8 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                 <legend className={legendCls}>
                   Segments
                   <InfoTip label="segments" align="start">
-                    Each segment runs the agent roles picked here, then stops for its checkpoint if it is on.
+                    Each segment runs the agent roles picked here, then stops for its checkpoint if
+                    it is on.
                   </InfoTip>
                 </legend>
                 <ol className="divide-y divide-line rounded-panel border border-line">
@@ -279,9 +340,21 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                         <span className="min-w-0 truncate font-semibold">
                           <span className="tnum">{i + 1}</span>. {s.title}
                         </span>
-                        {s.checkpoint && <StopToggle label={stopLabel(s)} on={checkpoints[s.checkpoint] ?? true} onChange={(on) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint!]: on })} />}
+                        {s.checkpoint && (
+                          <StopToggle
+                            label={stopLabel(s)}
+                            on={checkpoints[s.checkpoint] ?? true}
+                            onChange={(on) =>
+                              change(setCheckpoints)({ ...checkpoints, [s.checkpoint!]: on })
+                            }
+                          />
+                        )}
                       </div>
-                      {STOP_HELP[s.name] && <p className="text-sm text-text2" data-testid="stop-help">{STOP_HELP[s.name]}</p>}
+                      {STOP_HELP[s.name] && (
+                        <p className="text-sm text-text2" data-testid="stop-help">
+                          {STOP_HELP[s.name]}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5">
                         {catalog.data!.roles.map((r) => {
                           const on = segmentRoles(s).includes(r.key);
@@ -293,7 +366,9 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                               title={`${r.description} · ${usd(r.base_usd)} at standard depth`}
                               onClick={() => toggleRole(s, r.key)}
                               className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[13px] font-semibold ${
-                                on ? "border-accent bg-accent text-on-accent" : "border-line-strong text-text2 hover:bg-surface2"
+                                on
+                                  ? 'border-accent bg-accent text-on-accent'
+                                  : 'border-line-strong text-text2 hover:bg-surface2'
                               }`}
                             >
                               {r.title}
@@ -326,15 +401,25 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                 Cancel
               </Button>
               <Button onClick={runEstimate} disabled={busy || !flow}>
-                {estimate ? "Re-estimate" : "Estimate"}
+                {estimate ? 'Re-estimate' : 'Estimate'}
               </Button>
               <Button
                 variant="primary"
                 onClick={start}
                 disabled={busy || !estimate || !estimate.within_budget}
-                title={!estimate ? "Estimate the run first" : !estimate.within_budget ? "Over the budget: lower the depth or roles, or raise the budget" : undefined}
+                title={
+                  !estimate
+                    ? 'Estimate the run first'
+                    : !estimate.within_budget
+                      ? 'Over the budget: lower the depth or roles, or raise the budget'
+                      : undefined
+                }
               >
-                {ownerApproves ? `Approve ${usd(estimate!.total_usd)} and start` : estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
+                {ownerApproves
+                  ? `Approve ${usd(estimate!.total_usd)} and start`
+                  : estimate?.needs_approval
+                    ? 'Ask an owner to approve'
+                    : 'Start run'}
               </Button>
             </>
           )}
@@ -348,7 +433,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
  * A flow whose door is on every document (Build next draft) has no screen of its own: its line
  * opens the documents list, where the PRD or roadmap is picked (qa-work-7: every line a link).
  */
-const DOCUMENTS_HREF = "/documents";
+const DOCUMENTS_HREF = '/documents';
 
 /** Where the flows with their own door start: one link each. */
 function FlowPointers({ flows }: { flows: Flow[] }) {
@@ -359,7 +444,10 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
         const start = f.starts_from!;
         return (
           <li key={f.key} className="flex items-center gap-1.5" data-testid="flow-pointer">
-            <Link href={start.href ?? DOCUMENTS_HREF} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+            <Link
+              href={start.href ?? DOCUMENTS_HREF}
+              className="font-semibold text-accent-ink underline-offset-2 hover:underline"
+            >
               {start.label}
             </Link>
           </li>
@@ -370,7 +458,15 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
 }
 
 /** A segment's stop, on or off (a segment without a stop shows none). */
-function StopToggle({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
+function StopToggle({
+  label,
+  on,
+  onChange,
+}: {
+  label: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+}) {
   return (
     <label className="flex items-center gap-1.5 text-sm text-text2">
       <input
@@ -404,7 +500,10 @@ function DocumentField({
   const [active, setActive] = useState(-1);
   const q = value.trim().toLowerCase();
   const matches = options
-    .filter((d) => d.slug !== value && (d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)))
+    .filter(
+      (d) =>
+        d.slug !== value && (d.slug.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)),
+    )
     .slice(0, 8);
   const shown = open && matches.length > 0;
 
@@ -415,16 +514,16 @@ function DocumentField({
   };
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape" && shown) {
+    if (e.key === 'Escape' && shown) {
       e.preventDefault();
       setOpen(false);
       setActive(-1);
-    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (!shown) return setOpen(true);
-      const step = e.key === "ArrowDown" ? 1 : -1;
+      const step = e.key === 'ArrowDown' ? 1 : -1;
       setActive((a) => (a + step + matches.length) % matches.length);
-    } else if (e.key === "Enter" && shown && active >= 0 && matches[active]) {
+    } else if (e.key === 'Enter' && shown && active >= 0 && matches[active]) {
       e.preventDefault();
       pick(matches[active].slug);
     }
@@ -466,7 +565,7 @@ function DocumentField({
               id={`run-document-${i}`}
               role="option"
               aria-selected={i === active}
-              className={`flex min-w-0 cursor-pointer items-baseline gap-2 px-3 py-1.5 ${i === active ? "bg-surface2" : "hover:bg-surface2"}`}
+              className={`flex min-w-0 cursor-pointer items-baseline gap-2 px-3 py-1.5 ${i === active ? 'bg-surface2' : 'hover:bg-surface2'}`}
               // Keep focus in the field so the click lands before blur closes the list.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(d.slug)}

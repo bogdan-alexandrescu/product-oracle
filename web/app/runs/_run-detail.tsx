@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
-import { decisionSentence, runLabel } from "@/lib/labels";
-import { SourceLink } from "@/components/BuildRoadmap";
-import { RoadmapRead } from "./_roadmap-read";
+import { DeleteDialog, DeleteMenu } from '@/components/ArtifactMenu';
+import { decisionSentence, runLabel } from '@/lib/labels';
+import { SourceLink } from '@/components/BuildRoadmap';
+import { RoadmapRead } from './_roadmap-read';
 import {
   Button,
   Chip,
@@ -29,23 +29,23 @@ import {
   Sheet,
   Split,
   type ChipKind,
-} from "@/components/ds";
-import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
-import { DiscussSubject } from "@/components/discuss/StartDiscussion";
-import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
-import { RawFileSheet } from "@/components/review/RawFileSheet";
-import { StagingBar } from "@/components/staging/StagingBar";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText, useNames, type Names } from "@/lib/codes";
-import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
-import { useMe, type Operation } from "@/lib/me";
+} from '@/components/ds';
+import { LinkedDiscussion } from '@/components/discuss/LinkedDiscussion';
+import { DiscussSubject } from '@/components/discuss/StartDiscussion';
+import { VagueGoalsLine } from '@/components/discuss/VagueGoalsLine';
+import { RawFileSheet } from '@/components/review/RawFileSheet';
+import { StagingBar } from '@/components/staging/StagingBar';
+import { ErrorNote, INPUT, Loading } from '@/components/ui';
+import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
+import { named, namedText, useNames, type Names } from '@/lib/codes';
+import { failedAt, formatDateTime, formatDay, formatTime, plural } from '@/lib/format';
+import { useMe, type Operation } from '@/lib/me';
 
-import { NewRunDialog, type RunStart } from "./_new-run-dialog";
-import { QueueWaitNote } from "./_queue-wait";
-import { useScreenSubject } from "@/lib/screen-subject";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { NewRunDialog, type RunStart } from './_new-run-dialog';
+import { QueueWaitNote } from './_queue-wait';
+import { useScreenSubject } from '@/lib/screen-subject';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
 import {
   briefsCheck,
@@ -81,8 +81,8 @@ import {
   type ConsoleAnswer,
   type RunOut,
   type SegmentOut,
-} from "./_lib";
-import { openText, reviewCounts } from "./[id]/review/[checkpoint]/_items-lib";
+} from './_lib';
+import { openText, reviewCounts } from './[id]/review/[checkpoint]/_items-lib';
 
 const POLL_MS = 5000;
 // D8: a pending checkpoint's shared draft is read again this often while the page shows.
@@ -90,14 +90,19 @@ const DRAFT_POLL_MS = 10_000;
 // The note to the agents is saved this long after the last keystroke.
 const NOTE_SAVE_MS = 800;
 /** The decision row's other buttons beside its filled primary: the primary's height, so the row is one height. */
-const DECIDE_ROW = "h-10!";
+const DECIDE_ROW = 'h-10!';
 
-type CheckpointReview = Schemas["CheckpointReview"];
-type WaitInfo = Schemas["WaitInfo"];
-type ActionIn = Schemas["ActionIn"];
+type CheckpointReview = Schemas['CheckpointReview'];
+type WaitInfo = Schemas['WaitInfo'];
+type ActionIn = Schemas['ActionIn'];
 
 /** A run still at work cannot go to Trash: cancel it first (#482). */
-const WORKING = new Set<string>(["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"]);
+const WORKING = new Set<string>([
+  'awaiting_approval',
+  'running',
+  'awaiting_checkpoint',
+  'paused_overrun',
+]);
 
 /** `revision`: the shared draft's the decider saw (D8); `onChanged` hears it changed since. */
 type Decide = (
@@ -112,7 +117,7 @@ type Decide = (
  * D1: a Roadmap items stop is decided on its review screen; the run page shows its summary.
  * A console answer keeps its panel and Confirm here (W5), held to the same gate (D3).
  */
-const decidedOnScreen = (cp: CheckpointOut) => cp.kind === "roadmap_items" && !cp.console;
+const decidedOnScreen = (cp: CheckpointOut) => cp.kind === 'roadmap_items' && !cp.console;
 
 /**
  * cld-7: the Roadmap items line's Review items is the page's one filled primary: on a stop decided
@@ -120,17 +125,24 @@ const decidedOnScreen = (cp: CheckpointOut) => cp.kind === "roadmap_items" && !c
  * then an outline row action). A console answer to confirm keeps Confirm as the primary.
  */
 const reviewItemsPrimary = (cp: CheckpointOut) =>
-  cp.kind === "roadmap_items" && cp.can_decide && (decidedOnScreen(cp) || cp.console?.needs === "redo_or_continue");
+  cp.kind === 'roadmap_items' &&
+  cp.can_decide &&
+  (decidedOnScreen(cp) || cp.console?.needs === 'redo_or_continue');
 
 /** qa-work-54: a run's depth in words. */
-const DEPTH_WORDS: Record<string, string> = { quick: "Quick pass", standard: "Standard", deep: "Deep dive", thorough: "Thorough" };
+const DEPTH_WORDS: Record<string, string> = {
+  quick: 'Quick pass',
+  standard: 'Standard',
+  deep: 'Deep dive',
+  thorough: 'Thorough',
+};
 
 /** The decision panel (#decide): scrolled to and focused, so the keyboard continues from it. */
 function toDecision() {
-  const panel = document.getElementById("decide");
+  const panel = document.getElementById('decide');
   if (!panel) return;
-  window.history.replaceState(window.history.state, "", "#decide");
-  panel.scrollIntoView({ block: "start" });
+  window.history.replaceState(window.history.state, '', '#decide');
+  panel.scrollIntoView({ block: 'start' });
   panel.focus({ preventScroll: true });
 }
 
@@ -139,7 +151,7 @@ const RUN_MISSING = "This run doesn't exist or was deleted.";
 
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () =>
-    unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })).catch((e) => {
+    unwrap(api.GET('/v1/runs/{run_id}', { params: { path: { run_id: id } } })).catch((e) => {
       throw e instanceof ApiError && e.status === 404 ? new ApiError(404, RUN_MISSING) : e;
     }),
   );
@@ -152,15 +164,19 @@ export function RunDetail({ id }: { id: string }) {
   const run = q.data;
   const { reload } = q;
   // G7 3.3: the panel is about the waiting checkpoint, else the run's page.
-  const pendingCp = run?.checkpoints.find((c) => c.status === "pending") ?? null;
+  const pendingCp = run?.checkpoints.find((c) => c.status === 'pending') ?? null;
   useScreenSubject(
-    run && pendingCp ? { kind: "checkpoint", subject: { run_id: run.id, checkpoint_id: pendingCp.id } } : null,
-    run && pendingCp ? `${run.flow_title} · ${CHECKPOINT_LABEL[pendingCp.kind as keyof typeof CHECKPOINT_LABEL] ?? pendingCp.kind}` : null,
+    run && pendingCp
+      ? { kind: 'checkpoint', subject: { run_id: run.id, checkpoint_id: pendingCp.id } }
+      : null,
+    run && pendingCp
+      ? `${run.flow_title} · ${CHECKPOINT_LABEL[pendingCp.kind as keyof typeof CHECKPOINT_LABEL] ?? pendingCp.kind}`
+      : null,
   );
 
   // Agents work in the background: re-read while the run is moving, and while a recorded
   // decision is still being delivered to it (Oracle sends it again on every tick).
-  const moving = run?.status === "running" || !!run?.checkpoints.some((c) => c.delivery);
+  const moving = run?.status === 'running' || !!run?.checkpoints.some((c) => c.delivery);
   useEffect(() => {
     if (!moving) return;
     const t = setInterval(() => void reload(), POLL_MS);
@@ -173,17 +189,20 @@ export function RunDetail({ id }: { id: string }) {
   useEffect(() => {
     if (!ready || arrived.current) return;
     arrived.current = true;
-    if (window.location.hash === "#decide") toDecision();
+    if (window.location.hash === '#decide') toDecision();
   }, [ready]);
 
   /** `recover`: for a call that may have changed the run though it failed; it re-reads the run
    * and says whether the page now shows what happened (then no error is shown). */
-  async function act(call: () => Promise<RunOut | unknown>, recover?: (e: unknown) => Promise<boolean>) {
+  async function act(
+    call: () => Promise<RunOut | unknown>,
+    recover?: (e: unknown) => Promise<boolean>,
+  ) {
     setBusy(true);
     setError(null);
     try {
       const out = await call();
-      if (out && typeof out === "object" && "segments" in out) q.setData(() => out as RunOut);
+      if (out && typeof out === 'object' && 'segments' in out) q.setData(() => out as RunOut);
       else await q.reload();
     } catch (e) {
       if (!(recover && (await recover(e)))) setError(errorMessage(e));
@@ -202,7 +221,10 @@ export function RunDetail({ id }: { id: string }) {
   const mayManage = (op: Operation) => can(op, run?.created_by === me?.user_id);
   const back = (
     // rirs-25: a 24 px tap target on a phone.
-    <Link href="/runs" className="inline-flex min-h-6 items-center gap-1 hover:text-text hover:underline">
+    <Link
+      href="/runs"
+      className="inline-flex min-h-6 items-center gap-1 hover:text-text hover:underline"
+    >
       <Icon name="back" size={16} />
       Runs
     </Link>
@@ -243,28 +265,43 @@ export function RunDetail({ id }: { id: string }) {
     act(
       () =>
         unwrap(
-          api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+          api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide', {
             params: { path: { run_id: id, checkpoint_id: cp.id } },
             body: { decision, note: note || null, expected_revision: revision ?? null },
           }),
         ),
       async (e) => {
-        const after = await unwrap(api.GET("/v1/runs/{run_id}", path)).catch(() => null);
+        const after = await unwrap(api.GET('/v1/runs/{run_id}', path)).catch(() => null);
         if (after) q.setData(() => after);
-        if (e instanceof ApiError && e.code === "review_changed" && onChanged) {
+        if (e instanceof ApiError && e.code === 'review_changed' && onChanged) {
           onChanged(e.message);
           return true;
         }
-        return e instanceof ApiError && e.status === 503 && !!after?.checkpoints.some((c) => c.id === cp.id && c.delivery);
+        return (
+          e instanceof ApiError &&
+          e.status === 503 &&
+          !!after?.checkpoints.some((c) => c.id === cp.id && c.delivery)
+        );
       },
     );
   // Imports a segment's refused draft again (the review still waits for a person).
   const retryImport = (seq: number) =>
-    act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
+    act(() =>
+      unwrap(
+        api.POST('/v1/runs/{run_id}/segments/{seq}/retry-draft-import', {
+          params: { path: { run_id: id, seq } },
+        }),
+      ),
+    );
   // A failed run runs again from the segment it stopped at; a refusal is said at that segment.
   const retrySegment = (seq: number, onError: (message: string) => void) =>
     act(
-      () => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry", { params: { path: { run_id: id, seq } } })),
+      () =>
+        unwrap(
+          api.POST('/v1/runs/{run_id}/segments/{seq}/retry', {
+            params: { path: { run_id: id, seq } },
+          }),
+        ),
       async (e) => {
         onError(errorMessage(e));
         void reload();
@@ -272,13 +309,16 @@ export function RunDetail({ id }: { id: string }) {
       },
     );
   // A segment reused from earlier (skipped as reused) counts as done, as the API's progress counts it.
-  const done = run.segments.filter((s) => s.status === "succeeded" || s.status === "skipped").length;
-  const decideCp = run.checkpoints.find((c) => c.status === "pending" && c.can_decide);
+  const done = run.segments.filter(
+    (s) => s.status === 'succeeded' || s.status === 'skipped',
+  ).length;
+  const decideCp = run.checkpoints.find((c) => c.status === 'pending' && c.can_decide);
   const deciding = !!decideCp;
   // D1: Decide opens the Roadmap items review screen.
-  const decideHref = decideCp && decidedOnScreen(decideCp) ? reviewHref({ ...decideCp, run_id: run.id }) : null;
-  const open = !FINAL_STATUSES.includes(run.status) && run.status !== "draft";
-  const mayCancel = mayManage("cancel_run") && WORKING.has(run.status);
+  const decideHref =
+    decideCp && decidedOnScreen(decideCp) ? reviewHref({ ...decideCp, run_id: run.id }) : null;
+  const open = !FINAL_STATUSES.includes(run.status) && run.status !== 'draft';
+  const mayCancel = mayManage('cancel_run') && WORKING.has(run.status);
 
   return (
     <Page>
@@ -304,14 +344,21 @@ export function RunDetail({ id }: { id: string }) {
               (run.document_id ? (
                 <span className="inline-flex min-h-6 items-center gap-1 text-sm text-text2">
                   For
-                  <Link href={`/documents/${run.document_slug}`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline" data-testid="run-document">
+                  <Link
+                    href={`/documents/${run.document_slug}`}
+                    className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline"
+                    data-testid="run-document"
+                  >
                     {runDocTitle(run)}
                   </Link>
                 </span>
               ) : (
                 // qa-work-20: the same "For <document>" as a run on a document that exists; the
                 // document has no page until this run imports its first version, so no link yet.
-                <span className="inline-flex min-h-6 items-center gap-1 text-sm text-text2" title="This run writes the first version of this document">
+                <span
+                  className="inline-flex min-h-6 items-center gap-1 text-sm text-text2"
+                  title="This run writes the first version of this document"
+                >
                   For
                   <span className="font-medium text-text" data-testid="run-document">
                     {runDocTitle(run)} (written by this run)
@@ -332,14 +379,18 @@ export function RunDetail({ id }: { id: string }) {
             {/* #260: the goals a PRD run serves. */}
             {!!run.knobs.goals?.length && (
               <Chip kind="line" wrap data-testid="run-goals">
-                Serves {run.knobs.goals.map((g) => g.title).join(", ")}
+                Serves {run.knobs.goals.map((g) => g.title).join(', ')}
               </Chip>
             )}
             {/* H1: the stops this run had approved or sent back, in the decision log. */}
             {/* rirs-17: set apart from the document; rirs-25: a 24 px tap target. */}
             {/* qa-work-20: the separator wraps with its link, never left at a line's end; a phone's wrapping row has none. */}
             <span className="inline-flex min-h-6 items-center gap-2 whitespace-nowrap">
-              <span aria-hidden className="text-sm text-text2 max-[600px]:hidden" data-testid="run-header-sep">
+              <span
+                aria-hidden
+                className="text-sm text-text2 max-[600px]:hidden"
+                data-testid="run-header-sep"
+              >
                 ·
               </span>
               <Link
@@ -354,8 +405,12 @@ export function RunDetail({ id }: { id: string }) {
         }
         action={
           <>
-            {can("approve_run") && run.status === "awaiting_approval" && (
-              <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/approve", path)))}>
+            {can('approve_run') && run.status === 'awaiting_approval' && (
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => act(() => unwrap(api.POST('/v1/runs/{run_id}/approve', path)))}
+              >
                 Approve {usd(run.estimate_usd)} and start
               </Button>
             )}
@@ -363,7 +418,7 @@ export function RunDetail({ id }: { id: string }) {
               (decideHref ? (
                 // qa-work-26: a stop decided on its review screen has one action, its line's
                 // Review items; the header adds no second Decide to the same screen.
-                decideCp?.kind === "roadmap_items" ? null : (
+                decideCp?.kind === 'roadmap_items' ? null : (
                   <LinkButton href={decideHref} variant="primary" icon="flag">
                     Decide
                   </LinkButton>
@@ -372,12 +427,20 @@ export function RunDetail({ id }: { id: string }) {
                 // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
                 // rirs-21: it goes to the one decision below (no second decision of its own).
                 // qa4-work-26: a jump to the decision, not a menu: no chevron.
-                <Button onClick={toDecision} title="Go to the decision below" data-testid="run-go-decide">
+                <Button
+                  onClick={toDecision}
+                  title="Go to the decision below"
+                  data-testid="run-go-decide"
+                >
                   Decide
                 </Button>
               ))}
-            {can("resume_run") && run.status === "paused_overrun" && (
-              <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/resume", path)))}>
+            {can('resume_run') && run.status === 'paused_overrun' && (
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => act(() => unwrap(api.POST('/v1/runs/{run_id}/resume', path)))}
+              >
                 Resume
               </Button>
             )}
@@ -389,8 +452,14 @@ export function RunDetail({ id }: { id: string }) {
                 disabled={busy}
                 data-testid="run-cancel"
                 onClick={async () => {
-                  if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
-                    void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
+                  if (
+                    await confirmInPage({
+                      destructive: true,
+                      action: 'Cancel run',
+                      message: 'Cancel this run? Agents still working are stopped.',
+                    })
+                  ) {
+                    void act(() => unwrap(api.POST('/v1/runs/{run_id}/cancel', path)));
                   }
                 }}
               >
@@ -404,10 +473,29 @@ export function RunDetail({ id }: { id: string }) {
                 // qa-onboarding-16: the dialog names the run, not its flow: "Delete the Team onboarding PRD run".
                 title={`the ${runName(run)} run`}
                 // Deleting a run removes its record only, never the document it wrote.
-                what={`This removes the run's record: its steps, decisions and spend.${run.document_id ? ` ${runDocName(run)} stays as it is.` : ""}`}
-                dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [], feeds: [], feeds_going: [] })}
-                remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
-                onDeleted={() => router.push("/runs")}
+                what={`This removes the run's record: its steps, decisions and spend.${run.document_id ? ` ${runDocName(run)} stays as it is.` : ''}`}
+                dependents={async () => ({
+                  root: {
+                    type: 'run',
+                    id: run.id,
+                    slug: null,
+                    title: run.flow_title,
+                    kind: run.flow,
+                  },
+                  items: [],
+                  published: false,
+                  working_runs: WORKING.has(run.status) ? [run.id] : [],
+                  feeds: [],
+                  feeds_going: [],
+                })}
+                remove={(query) =>
+                  unwrap(
+                    api.DELETE('/v1/runs/{run_id}', {
+                      params: { path: { run_id: run.id }, query: { reason: query.reason } },
+                    }),
+                  )
+                }
+                onDeleted={() => router.push('/runs')}
               />
             )}
           </>
@@ -417,14 +505,18 @@ export function RunDetail({ id }: { id: string }) {
         {error && <ErrorNote>{error}</ErrorNote>}
         {run.error && (
           <ErrorNote>
-            {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
+            {run.status === 'failed' && run.finished_at && (
+              <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>
+            )}
             {run.error}
             {/* As the API: a failed run over its ceiling is not retried. */}
-            {run.status === "failed" && run.overrun_ceiling_usd != null && (run.spent_usd ?? 0) > run.overrun_ceiling_usd && (
-              <span className="block" data-testid="budget-stopped">
-                This run stopped at its budget; start it again with a new estimate.
-              </span>
-            )}
+            {run.status === 'failed' &&
+              run.overrun_ceiling_usd != null &&
+              (run.spent_usd ?? 0) > run.overrun_ceiling_usd && (
+                <span className="block" data-testid="budget-stopped">
+                  This run stopped at its budget; start it again with a new estimate.
+                </span>
+              )}
           </ErrorNote>
         )}
         {run.stuck && (
@@ -432,53 +524,80 @@ export function RunDetail({ id }: { id: string }) {
             testId="run-stuck"
             action={
               <>
-                {run.can_retry && mayManage("retry_run") && (
+                {run.can_retry && mayManage('retry_run') && (
                   <Button
                     disabled={busy}
                     onClick={async () => {
-                      if (await confirmInPage({ action: "Retry", message: RETRY_CONFIRM })) {
-                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry", path)));
+                      if (await confirmInPage({ action: 'Retry', message: RETRY_CONFIRM })) {
+                        void act(() => unwrap(api.POST('/v1/runs/{run_id}/retry', path)));
                       }
                     }}
                   >
                     Retry
                   </Button>
                 )}
-                {run.can_stop_cancelling && mayManage("stop_cancelling_run") && (
+                {run.can_stop_cancelling && mayManage('stop_cancelling_run') && (
                   <Button
                     disabled={busy}
                     onClick={async () => {
-                      if (await confirmInPage({ destructive: true, action: "Stop cancelling", message: STOP_CANCELLING_CONFIRM })) {
-                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/stop-cancelling", path)));
+                      if (
+                        await confirmInPage({
+                          destructive: true,
+                          action: 'Stop cancelling',
+                          message: STOP_CANCELLING_CONFIRM,
+                        })
+                      ) {
+                        void act(() => unwrap(api.POST('/v1/runs/{run_id}/stop-cancelling', path)));
                       }
                     }}
                   >
                     Stop cancelling
                   </Button>
                 )}
-                {run.can_retry_lookup && mayManage("retry_lookup_run") && (
-                  <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path)))}>
+                {run.can_retry_lookup && mayManage('retry_lookup_run') && (
+                  <Button
+                    disabled={busy}
+                    onClick={() =>
+                      void act(() => unwrap(api.POST('/v1/runs/{run_id}/retry-lookup', path)))
+                    }
+                  >
                     Retry lookup
                   </Button>
                 )}
-                {mayManage("cancel_again_run") && (run.cancel_again ?? []).map((wid, _, all) => (
-                  <Button
-                    key={wid}
-                    disabled={busy}
-                    onClick={async () => {
-                      if (await confirmInPage({ destructive: true, action: "Cancel again", message: CANCEL_AGAIN_CONFIRM })) {
-                        void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel-again", { ...path, body: { workflow_id: wid } })));
-                      }
-                    }}
-                  >
-                    {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
-                  </Button>
-                ))}
-                {run.can_dismiss_overrun && mayManage("dismiss_overrun_run") && (
+                {mayManage('cancel_again_run') &&
+                  (run.cancel_again ?? []).map((wid, _, all) => (
+                    <Button
+                      key={wid}
+                      disabled={busy}
+                      onClick={async () => {
+                        if (
+                          await confirmInPage({
+                            destructive: true,
+                            action: 'Cancel again',
+                            message: CANCEL_AGAIN_CONFIRM,
+                          })
+                        ) {
+                          void act(() =>
+                            unwrap(
+                              api.POST('/v1/runs/{run_id}/cancel-again', {
+                                ...path,
+                                body: { workflow_id: wid },
+                              }),
+                            ),
+                          );
+                        }
+                      }}
+                    >
+                      {all.length > 1 ? `Cancel again ${wid}` : 'Cancel again'}
+                    </Button>
+                  ))}
+                {run.can_dismiss_overrun && mayManage('dismiss_overrun_run') && (
                   <Button
                     variant="ghost"
                     disabled={busy}
-                    onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/dismiss-overrun", path)))}
+                    onClick={() =>
+                      void act(() => unwrap(api.POST('/v1/runs/{run_id}/dismiss-overrun', path)))
+                    }
                   >
                     Dismiss
                   </Button>
@@ -494,9 +613,14 @@ export function RunDetail({ id }: { id: string }) {
             tone="error"
             testId="run-import-failed"
             action={
-              can("retry_import_run") &&
+              can('retry_import_run') &&
               run.can_retry_import && (
-                <Button disabled={busy} onClick={() => void act(() => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path)))}>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void act(() => unwrap(api.POST('/v1/runs/{run_id}/retry-import', path)))
+                  }
+                >
                   Retry
                 </Button>
               )
@@ -511,24 +635,27 @@ export function RunDetail({ id }: { id: string }) {
             <span className="inline-flex items-center gap-2">
               Agents may read Oracle, not write to it
               <InfoTip label="read-only agents" align="start" side="bottom">
-                A checkpoint wait is open in SwarmCloud (or its answer is not read or does not count yet, or a lost submission
-                is unresolved), so the run&apos;s agents may read Oracle but their writes are refused.
+                A checkpoint wait is open in SwarmCloud (or its answer is not read or does not count
+                yet, or a lost submission is unresolved), so the run&apos;s agents may read Oracle
+                but their writes are refused.
               </InfoTip>
             </span>
           </Notice>
         )}
         {/* detailed-b 20: who may resume has the pill and Resume / Cancel run; the line is for the rest. */}
-        {run.status === "paused_overrun" && !can("resume_run") && <OverrunHeld mayResume={false} mayCancel={mayCancel} />}
+        {run.status === 'paused_overrun' && !can('resume_run') && (
+          <OverrunHeld mayResume={false} mayCancel={mayCancel} />
+        )}
         {checked && (
           <Notice testId="tick-result">
             {!checked.lead && checked.text}
             {/* run-progress: each run the check could not read, named with why, and a link to it; this run first. */}
             {checked.unchecked.map((u, i) => (
               <span key={u.run_id} data-testid="tick-unchecked">
-                {checked.lead && i === 0 ? null : " "}
+                {checked.lead && i === 0 ? null : ' '}
                 <Link href={`/runs/${u.run_id}`} className="underline">
-                  {u.run_id === run.id ? "This run" : u.title}
-                </Link>{" "}
+                  {u.run_id === run.id ? 'This run' : u.title}
+                </Link>{' '}
                 could not be checked: {u.reason}.
               </span>
             ))}
@@ -541,7 +668,7 @@ export function RunDetail({ id }: { id: string }) {
           tools={
             <>
               {/* qa-work-5: a run paused over budget is not done, whatever its segments finished. */}
-              {run.status === "paused_overrun" ? (
+              {run.status === 'paused_overrun' ? (
                 <span className="tnum text-sm font-semibold text-warn" data-testid="segments-done">
                   Paused: {done} of {run.segments.length} finished, over budget
                 </span>
@@ -551,13 +678,13 @@ export function RunDetail({ id }: { id: string }) {
                 </span>
               )}
               {/* qa-onboarding-31, rirs-20: only once agents have started; Cancel run and Delete sit in the header. */}
-              {can("tick") && open && run.segments.some((s) => s.status !== "pending") && (
+              {can('tick') && open && run.segments.some((s) => s.status !== 'pending') && (
                 <Button
                   disabled={busy}
                   onClick={() => {
                     setChecked(null);
                     void act(async () => {
-                      const out = await unwrap(api.POST("/v1/internal/tick"));
+                      const out = await unwrap(api.POST('/v1/internal/tick'));
                       setChecked(tickResult(out, run, !!decideCp));
                       return out;
                     });
@@ -582,9 +709,12 @@ export function RunDetail({ id }: { id: string }) {
           <ol data-testid="segment-timeline">
             {run.segments.map((s) => (
               <Fragment key={s.id}>
-                {run.waiting_for && s.name === "eng_dates" && s.status === "pending" && (
+                {run.waiting_for && s.name === 'eng_dates' && s.status === 'pending' && (
                   // F4 lane B: the Engineering dates read the draft's Now items, derived after the PRD review.
-                  <li className="flex items-center gap-2 border-t border-line px-4 py-2 pl-[56px] text-text2 max-[600px]:pl-[44px]" data-testid="waiting-for">
+                  <li
+                    className="flex items-center gap-2 border-t border-line px-4 py-2 pl-[56px] text-text2 max-[600px]:pl-[44px]"
+                    data-testid="waiting-for"
+                  >
                     <Icon name="clock" size={16} />
                     Waiting for v{run.waiting_for.version}&apos;s roadmap items
                   </li>
@@ -625,7 +755,11 @@ function limitText(run: RunOut): string | null {
  * allows and the limit sit behind the Overrun (i) in the inspector.
  */
 function OverrunHeld({ mayResume, mayCancel }: { mayResume: boolean; mayCancel: boolean }) {
-  const next = mayResume ? (mayCancel ? "Resume or cancel it." : "Resume it to go on.") : "An owner can resume it.";
+  const next = mayResume
+    ? mayCancel
+      ? 'Resume or cancel it.'
+      : 'Resume it to go on.'
+    : 'An owner can resume it.';
   return <Notice testId="run-overrun-held">{`Paused: over budget. ${next}`}</Notice>;
 }
 
@@ -633,11 +767,13 @@ function OverrunHeld({ mayResume, mayCancel }: { mayResume: boolean; mayCancel: 
 function resumeAllows(run: RunOut): string | null {
   // A resumed run may spend half its estimate more before it pauses again (the 1.5× rule).
   const allowance = run.estimate_usd != null ? run.estimate_usd * 0.5 : null;
-  return allowance != null ? `Resuming lets it spend up to ${usd((run.spent_usd ?? 0) + allowance)} in total, ${usd(allowance)} more.` : null;
+  return allowance != null
+    ? `Resuming lets it spend up to ${usd((run.spent_usd ?? 0) + allowance)} in total, ${usd(allowance)} more.`
+    : null;
 }
 
 /** ``lead``: this run could not be checked, so the result leads with it (``unchecked`` first, then ``text``). */
-type TickResult = { text: string; unchecked: Schemas["TickUnchecked"][]; lead?: boolean };
+type TickResult = { text: string; unchecked: Schemas['TickUnchecked'][]; lead?: boolean };
 
 /**
  * #258: what "Refresh progress" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
@@ -645,39 +781,53 @@ type TickResult = { text: string; unchecked: Schemas["TickUnchecked"][]; lead?: 
  * now; the run is waiting for your review." run-progress: only the runs at work are counted; each
  * run the check could not read is named after it, with why (the API's ``unchecked``).
  */
-function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): TickResult {
+function tickResult(out: Schemas['TickOut'], run: RunOut, mine: boolean): TickResult {
   const at = formatTime(new Date().toISOString());
   // artifact-skip-refused: a file this run's step needs that SwarmCloud refused is said in
   // words ("run <id>: SwarmCloud refused to send ..."), not only counted.
   const prefix = `run ${run.id}: SwarmCloud refused to send `;
-  const own = out.errors.filter((e) => e.startsWith(prefix)).map((e) => `${e.slice(`run ${run.id}: `.length)}.`);
-  const said = own.length ? ` ${own.join(" ")}` : "";
+  const own = out.errors
+    .filter((e) => e.startsWith(prefix))
+    .map((e) => `${e.slice(`run ${run.id}: `.length)}.`);
+  const said = own.length ? ` ${own.join(' ')}` : '';
   const unchecked = out.unchecked;
   // This run is not at work (it waits on a person, or between segments): say so, whatever other runs the check read.
-  if (run.status !== "running" || (out.active_runs === 0 && unchecked.length === 0)) {
+  if (run.status !== 'running' || (out.active_runs === 0 && unchecked.length === 0)) {
     const why =
-      run.status === "awaiting_checkpoint"
+      run.status === 'awaiting_checkpoint'
         ? mine
-          ? "the run is waiting for your review"
-          : "the run is waiting for a review"
-        : run.status === "awaiting_approval"
-          ? "the run is waiting for its cost to be approved"
-          : run.status === "paused_overrun"
-            ? "the run is paused over its budget"
-            : "the run is between segments";
+          ? 'the run is waiting for your review'
+          : 'the run is waiting for a review'
+        : run.status === 'awaiting_approval'
+          ? 'the run is waiting for its cost to be approved'
+          : run.status === 'paused_overrun'
+            ? 'the run is paused over its budget'
+            : 'the run is between segments';
     // fix-work review: the check's own trouble stays in view, whatever this run is waiting on.
-    const failed = unchecked.length ? ` Checked at ${at}:` : "";
+    const failed = unchecked.length ? ` Checked at ${at}:` : '';
     return { text: `No agents are working right now; ${why}.${failed}${said}`, unchecked };
   }
-  const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
-  if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);
+  const parts = [
+    out.segments_finished
+      ? `${plural(out.segments_finished, 'segment')} finished`
+      : 'no segment finished yet',
+  ];
+  if (out.runs_paused) parts.push(`${plural(out.runs_paused, 'run')} paused over budget`);
   // run-progress review: this run could not be checked: said first, then what else the check read.
   if (unchecked.some((u) => u.run_id === run.id)) {
-    const first = [...unchecked.filter((u) => u.run_id === run.id), ...unchecked.filter((u) => u.run_id !== run.id)];
-    const others = out.active_runs ? ` ${plural(out.active_runs, "other active run")} at ${at}: ${parts.join(", ")}` : ` at ${at}`;
+    const first = [
+      ...unchecked.filter((u) => u.run_id === run.id),
+      ...unchecked.filter((u) => u.run_id !== run.id),
+    ];
+    const others = out.active_runs
+      ? ` ${plural(out.active_runs, 'other active run')} at ${at}: ${parts.join(', ')}`
+      : ` at ${at}`;
     return { text: ` Checked${others}.${said}`, unchecked: first, lead: true };
   }
-  return { text: `Checked ${plural(out.active_runs, "active run")} at ${at}: ${parts.join(", ")}.${said}`, unchecked };
+  return {
+    text: `Checked ${plural(out.active_runs, 'active run')} at ${at}: ${parts.join(', ')}.${said}`,
+    unchecked,
+  };
 }
 
 /**
@@ -686,22 +836,24 @@ function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): TickRe
  */
 function RunInspector({ run }: { run: RunOut }) {
   const current =
-    run.segments.find((s) => s.status === "running") ??
-    run.segments.find((s) => run.checkpoints.some((c) => c.segment_seq === s.seq && c.status === "pending")) ??
-    [...run.segments].reverse().find((s) => s.status !== "pending") ??
+    run.segments.find((s) => s.status === 'running') ??
+    run.segments.find((s) =>
+      run.checkpoints.some((c) => c.segment_seq === s.seq && c.status === 'pending'),
+    ) ??
+    [...run.segments].reverse().find((s) => s.status !== 'pending') ??
     run.segments[0];
   const waiting = run.waiting_on;
-  const approval = run.status === "awaiting_approval";
-  const overrun = run.status === "paused_overrun";
+  const approval = run.status === 'awaiting_approval';
+  const overrun = run.status === 'paused_overrun';
   const roleName = useRoleNames();
   const { can } = useMe();
   // qa-work-27: a run no segment of which has started says so, not "Segment 1 of 4".
-  const started = run.segments.some((s) => s.status !== "pending");
+  const started = run.segments.some((s) => s.status !== 'pending');
   return (
     <Inspector
       label="Run"
       // qa4-work-28: the state as the header's tag says it, in sentence case.
-      eyebrow={waiting ? "Checkpoint · Waiting" : `Run · ${runStatusLabel(run)}`}
+      eyebrow={waiting ? 'Checkpoint · Waiting' : `Run · ${runStatusLabel(run)}`}
       title={waiting ? CHECKPOINT_LABEL[waiting] : (runDocTitle(run) ?? run.flow_title)}
       chips={
         <>
@@ -728,13 +880,18 @@ function RunInspector({ run }: { run: RunOut }) {
       {(approval || overrun) && (
         <InspectorSection
           testId="run-cost-section"
-          label={approval ? "Cost approval" : "Overrun"}
+          label={approval ? 'Cost approval' : 'Overrun'}
           tools={
             <InfoTip label="cost" side="bottom">
-              {approval && <span className="block">The estimate is over $50, so an owner approves the cost before any agent starts.</span>}
+              {approval && (
+                <span className="block">
+                  The estimate is over $50, so an owner approves the cost before any agent starts.
+                </span>
+              )}
               {overrun && (
                 <span className="block">
-                  Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
+                  Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes
+                  the run or cancels it.
                 </span>
               )}
               {overrun && resumeAllows(run) && (
@@ -742,8 +899,12 @@ function RunInspector({ run }: { run: RunOut }) {
                   {resumeAllows(run)}
                 </span>
               )}
-              {run.overrun_ceiling_usd != null && <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>}
-              {run.knobs.budget_usd != null && <span className="block">Budget {usd(run.knobs.budget_usd)}.</span>}
+              {run.overrun_ceiling_usd != null && (
+                <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>
+              )}
+              {run.knobs.budget_usd != null && (
+                <span className="block">Budget {usd(run.knobs.budget_usd)}.</span>
+              )}
             </InfoTip>
           }
         >
@@ -757,7 +918,7 @@ function RunInspector({ run }: { run: RunOut }) {
           {approval && (
             // qa-onboarding-13: who approves, for everyone; the owner's Approve is in the header.
             <p className="mt-1.5 text-sm text-text" data-testid="run-approval-who">
-              {can("approve_run")
+              {can('approve_run')
                 ? `Waiting for your approval of ${usd(run.estimate_usd)}. No agent starts until you approve it.`
                 : `Waiting for an owner to approve ${usd(run.estimate_usd)}. No agent starts until then: ask an owner of your company to approve it.`}
             </p>
@@ -772,15 +933,17 @@ function RunInspector({ run }: { run: RunOut }) {
               // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
               // qa-work-23: the value's weight and colour, as every other Details value.
               <span data-testid="run-cost" data-cost="small" className="tnum">
-                {run.status === "running" && run.spent_usd == null ? (
+                {run.status === 'running' && run.spent_usd == null ? (
                   <>
-                    Cost not reported yet{run.estimate_usd != null && <> · {usd(run.estimate_usd)} estimated</>}
+                    Cost not reported yet
+                    {run.estimate_usd != null && <> · {usd(run.estimate_usd)} estimated</>}
                   </>
                 ) : run.estimate_usd == null ? (
                   costText(run)
                 ) : (
                   <>
-                    <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} estimated
+                    <span data-testid="run-spent">{usd(run.spent_usd)}</span> of{' '}
+                    {usd(run.estimate_usd)} estimated
                   </>
                 )}
               </span>
@@ -790,14 +953,18 @@ function RunInspector({ run }: { run: RunOut }) {
           </InspectorRow>
         )}
         {/* qa-work-54: plain words for the run's depth, its proposals and where it runs. */}
-        <InspectorRow value={DEPTH_WORDS[run.knobs.depth] ?? run.knobs.depth}>How thorough</InspectorRow>
+        <InspectorRow value={DEPTH_WORDS[run.knobs.depth] ?? run.knobs.depth}>
+          How thorough
+        </InspectorRow>
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
         <ProposalsRow run={run} />
-        {run.snapshot_as_of && <InspectorRow value={formatDateTime(run.snapshot_as_of)}>Sources as of</InspectorRow>}
+        {run.snapshot_as_of && (
+          <InspectorRow value={formatDateTime(run.snapshot_as_of)}>Sources as of</InspectorRow>
+        )}
         <InspectorRow
           value={
             <span className="inline-flex items-center gap-2">
-              {run.runtime === "fake" ? "On this server (test mode)" : "SwarmCloud"}
+              {run.runtime === 'fake' ? 'On this server (test mode)' : 'SwarmCloud'}
               <InfoTip label="the runtime" side="top">
                 <RunsWhere runtime={run.runtime} />
                 {run.notes.length > 0 && (
@@ -831,13 +998,16 @@ function ProposalsRow({ run }: { run: RunOut }) {
           <span data-testid="run-proposals">
             {open > 0 ? (
               <>
-                {open} to review ·{" "}
-                <Link href={`/ground-truth?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
+                {open} to review ·{' '}
+                <Link
+                  href={`/ground-truth?tab=proposals&run=${run.id}`}
+                  className="text-accent-ink hover:underline"
+                >
                   Review
                 </Link>
               </>
             ) : (
-              "None waiting"
+              'None waiting'
             )}
           </span>
         }
@@ -851,16 +1021,19 @@ function ProposalsRow({ run }: { run: RunOut }) {
 /** D11: what people decided at the run's checkpoints, in the words its agents read. */
 function RunDecisions({ run }: { run: RunOut }) {
   // Read again whenever a checkpoint of the run is decided or delivered.
-  const states = run.checkpoints.map((c) => `${c.id}:${c.status}:${c.delivery ? 1 : 0}`).join(",");
+  const states = run.checkpoints.map((c) => `${c.id}:${c.status}:${c.delivery ? 1 : 0}`).join(',');
   const q = useQuery(
     `run-decisions|${run.id}|${states}`,
-    () => unwrap(api.GET("/v1/runs/{run_id}/decisions", { params: { path: { run_id: run.id } } })),
+    () => unwrap(api.GET('/v1/runs/{run_id}/decisions', { params: { path: { run_id: run.id } } })),
     { keepPrevious: true },
   );
   // Who decided, as the API names them: a confirmed console answer is its author's, not the confirmer's.
-  const said = (d: Schemas["RunDecision"]) => {
+  const said = (d: Schemas['RunDecision']) => {
     const name = d.decided_by_name;
-    const checkpoint = d.kind === "baseline_confirm" ? "The Ground Truth" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
+    const checkpoint =
+      d.kind === 'baseline_confirm'
+        ? 'The Ground Truth'
+        : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? 'This checkpoint');
     return decisionSentence(d, checkpoint, name);
   };
   return (
@@ -869,8 +1042,8 @@ function RunDecisions({ run }: { run: RunOut }) {
       testId="run-decisions"
       tools={
         <InfoTip label="decisions" side="bottom">
-          What people decided at this run&apos;s checkpoints. The run&apos;s agents read the same list before they start, so an
-          approval note reaches the segments that follow it.
+          What people decided at this run&apos;s checkpoints. The run&apos;s agents read the same
+          list before they start, so an approval note reaches the segments that follow it.
         </InfoTip>
       }
     >
@@ -886,10 +1059,19 @@ function RunDecisions({ run }: { run: RunOut }) {
             <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
               {said(d)}
               {d.answers?.length ? (
-                <ul aria-label={`Answered at ${CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "this checkpoint"}`} className="mt-1 ml-4 list-disc space-y-0.5 text-text2">
+                <ul
+                  aria-label={`Answered at ${CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? 'this checkpoint'}`}
+                  className="mt-1 ml-4 list-disc space-y-0.5 text-text2"
+                >
                   {d.answers.map((a, i) => (
                     <li key={i} data-testid="run-decision-answer">
-                      {[`${a.feature_title ? `${a.feature_title}: ` : ""}${a.question} → ${a.answer}`, a.answered_by_name, a.answered_at ? formatDateTime(a.answered_at) : null].filter(Boolean).join(" · ")}
+                      {[
+                        `${a.feature_title ? `${a.feature_title}: ` : ''}${a.question} → ${a.answer}`,
+                        a.answered_by_name,
+                        a.answered_at ? formatDateTime(a.answered_at) : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </li>
                   ))}
                 </ul>
@@ -902,14 +1084,15 @@ function RunDecisions({ run }: { run: RunOut }) {
   );
 }
 
-const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
-  pending: "warn",
-  approved: "pass",
-  changes_requested: "warn",
-  skipped: "na",
+const CP_KIND: Record<CheckpointOut['status'], ChipKind> = {
+  pending: 'warn',
+  approved: 'pass',
+  changes_requested: 'warn',
+  skipped: 'na',
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
-const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
+const WRAP_CHIP =
+  'h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]';
 /** "45s", "12m", "1h 05m", "20 days" (F-78: over 48 hours in days): a duration for a running agent. */
 function duration(ms: number): string {
   const sec = Math.max(0, Math.floor(ms / 1000));
@@ -917,18 +1100,18 @@ function duration(ms: number): string {
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m`;
   if (min >= 48 * 60) return `${Math.floor(min / 1440)} days`;
-  return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m`;
+  return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`;
 }
 
 /**
  * run-progress: an agent's latest sign of work: its heartbeat, SwarmCloud's last event on its
  * task, or the proposals the run wrote ("12 proposals written, last 30s ago").
  */
-function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): string {
+function lastWork(a: Schemas['SegmentAgent'], since: (at: string) => string): string {
   const at = a.last_work_at ?? a.heartbeat_at;
-  if (!at) return "no sign of work yet";
-  if (a.last_work === "proposals") return `last proposal ${since(at)} ago`;
-  if (a.last_work === "event") return `last activity ${since(at)} ago`;
+  if (!at) return 'no sign of work yet';
+  if (a.last_work === 'proposals') return `last proposal ${since(at)} ago`;
+  if (a.last_work === 'event') return `last activity ${since(at)} ago`;
   // F-78: "last update", not "heartbeat".
   return `last update ${since(at)} ago`;
 }
@@ -942,7 +1125,9 @@ const STALE_MS = 6 * 3600_000;
  * never the check's own time, which each tick resets. With no agent, when the step started.
  */
 function lastNews(s: SegmentOut): string | null {
-  const times = s.agents.map((a) => a.last_work_at ?? a.started_at).filter((at): at is string => !!at);
+  const times = s.agents
+    .map((a) => a.last_work_at ?? a.started_at)
+    .filter((at): at is string => !!at);
   if (times.length === 0) return s.started_at ?? null;
   return times.reduce((a, b) => (new Date(b).getTime() > new Date(a).getTime() ? b : a));
 }
@@ -964,11 +1149,17 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
         {/* run-progress, #1572: a cost only once SwarmCloud reports one (null until then); until then, say so. */}
-        <span data-testid="segment-cost">{s.cost_usd != null ? `${usd(s.cost_usd)} spent so far` : "Cost not reported yet"}</span> ·{" "}
+        <span data-testid="segment-cost">
+          {s.cost_usd != null ? `${usd(s.cost_usd)} spent so far` : 'Cost not reported yet'}
+        </span>{' '}
+        ·{' '}
         {/* run-progress review: the run's proposals are counted once for the step, not on each agent. */}
         {s.checked_at && s.proposals_written > 0 && (
           <>
-            <span data-testid="segment-proposals">{plural(s.proposals_written, "proposal")} written</span> ·{" "}
+            <span data-testid="segment-proposals">
+              {plural(s.proposals_written, 'proposal')} written
+            </span>{' '}
+            ·{' '}
           </>
         )}
         {s.checked_at ? (
@@ -989,7 +1180,8 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
           </p>
           {/* Round 1: the page's own Refresh progress and Cancel run, named, not repeated here. */}
           <InfoTip label="no news" align="start">
-            The agents have sent nothing for over six hours, so this step may be stuck. Refresh progress above asks again; Cancel run stops it.
+            The agents have sent nothing for over six hours, so this step may be stuck. Refresh
+            progress above asks again; Cancel run stops it.
           </InfoTip>
         </div>
       )}
@@ -999,11 +1191,13 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
             {s.agents.map((a, i) => (
               <li key={i} data-testid="segment-agent" className="tnum">
                 <span data-testid="agent-role" className="font-medium text-text">
-                  {a.role ? roleName(a.role) : "Agent"}
-                </span>{" "}
-                · {a.state.charAt(0).toUpperCase() + a.state.slice(1)} ·{" "}
-                <span data-testid="agent-elapsed">{a.started_at ? `${since(a.started_at)} elapsed` : "start not read"}</span> ·{" "}
-                <span data-testid="agent-heartbeat">{lastWork(a, since)}</span>
+                  {a.role ? roleName(a.role) : 'Agent'}
+                </span>{' '}
+                · {a.state.charAt(0).toUpperCase() + a.state.slice(1)} ·{' '}
+                <span data-testid="agent-elapsed">
+                  {a.started_at ? `${since(a.started_at)} elapsed` : 'start not read'}
+                </span>{' '}
+                · <span data-testid="agent-heartbeat">{lastWork(a, since)}</span>
                 {!!a.cost_usd && <> · {usd(a.cost_usd)}</>}
               </li>
             ))}
@@ -1015,7 +1209,12 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
   );
 }
 
-const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
+const CP_LABEL = {
+  pending: 'Waiting',
+  approved: 'Approved',
+  changes_requested: 'Changes requested',
+  skipped: 'Skipped',
+} as const;
 
 function SegmentItem({
   run,
@@ -1042,11 +1241,14 @@ function SegmentItem({
   const { me, can } = useMe();
   const roleName = useRoleNames();
   // B6: once the baseline is approved, Oracle offers a goals interview on the goals still vague.
-  const vague = can("start_goal_interview")
-    ? (checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as { vague_goals?: number | null } | undefined)?.vague_goals ?? 0
+  const vague = can('start_goal_interview')
+    ? ((
+        checkpoints.find((c) => c.kind === 'baseline_confirm' && c.status === 'approved') as
+          { vague_goals?: number | null } | undefined
+      )?.vague_goals ?? 0)
     : 0;
   // D8: the waiting checkpoint's shared draft, for every member who can see the run.
-  const waitingCp = checkpoints.find((c) => c.status === "pending") ?? null;
+  const waitingCp = checkpoints.find((c) => c.status === 'pending') ?? null;
   const draft = useDraft(run.id, waitingCp?.id ?? null);
   const shared = draft.review && draft.review.checkpoint_id === waitingCp?.id ? draft.review : null;
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -1074,19 +1276,21 @@ function SegmentItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionKey]);
   // F4: a stop with its own review screen (the Engineering check, the Engineering dates) is opened from a line here.
-  const screened = checkpoints.find((c) => c.status === "pending" && screenedStop(c)) ?? null;
+  const screened = checkpoints.find((c) => c.status === 'pending' && screenedStop(c)) ?? null;
   // The Waiting chip counts every stop waiting for me, the screened one included.
-  const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
+  const mine = checkpoints.filter((c) => c.status === 'pending' && c.can_decide);
   const deciding = mine.filter((c) => c !== screened);
   // The screened stop is said once, on its line: never again as a chip.
-  const compact = checkpoints.filter((c) => c !== screened && !(c.status === "pending" && c.can_decide));
-  const waiting = checkpoints.some((c) => c.status === "pending");
+  const compact = checkpoints.filter(
+    (c) => c !== screened && !(c.status === 'pending' && c.can_decide),
+  );
+  const waiting = checkpoints.some((c) => c.status === 'pending');
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
   // D4: the structured reviews sent back from this segment's checkpoints.
-  const sentReviews = checkpoints.filter((c) => c.status === "changes_requested" && c.review);
+  const sentReviews = checkpoints.filter((c) => c.status === 'changes_requested' && c.review);
   // D7: approved with the reviewer's edits applied by Oracle; the agents' file is kept.
-  const editedBy = checkpoints.filter((c) => c.status === "approved" && c.review?.kind === "edits");
+  const editedBy = checkpoints.filter((c) => c.status === 'approved' && c.review?.kind === 'edits');
   const details =
     sentReviews.length > 0 ||
     editedBy.length > 0 ||
@@ -1101,7 +1305,7 @@ function SegmentItem({
     deciding.length > 0 ||
     !!screened ||
     delivering.length > 0 ||
-    s.status === "running" ||
+    s.status === 'running' ||
     vague > 0 ||
     !!shared;
   const rejected = !!s.draft_import?.error;
@@ -1110,14 +1314,17 @@ function SegmentItem({
   const noteFields = useRef<Record<string, HTMLTextAreaElement | null>>({});
   // The shared note as last read: a new one (another approver's, a reload) replaces what
   // the field shows unless I changed it since (my edit is being saved).
-  const serverNote = shared?.note ?? "";
-  const [synced, setSynced] = useState<{ cp: string | null; note: string }>({ cp: null, note: "" });
+  const serverNote = shared?.note ?? '';
+  const [synced, setSynced] = useState<{ cp: string | null; note: string }>({ cp: null, note: '' });
   if (shared && (synced.cp !== shared.checkpoint_id || synced.note !== serverNote)) {
-    const had = synced.cp === shared.checkpoint_id ? synced.note : "";
+    const had = synced.cp === shared.checkpoint_id ? synced.note : '';
     setSynced({ cp: shared.checkpoint_id, note: serverNote });
-    if ((notes[shared.checkpoint_id] ?? "") === had) setNotes({ ...notes, [shared.checkpoint_id]: serverNote });
+    if ((notes[shared.checkpoint_id] ?? '') === had)
+      setNotes({ ...notes, [shared.checkpoint_id]: serverNote });
   }
-  const draftPath = (cpId: string) => ({ params: { path: { run_id: run.id, checkpoint_id: cpId } } });
+  const draftPath = (cpId: string) => ({
+    params: { path: { run_id: run.id, checkpoint_id: cpId } },
+  });
   async function write(call: () => Promise<CheckpointReview>) {
     setDraftError(null);
     try {
@@ -1130,47 +1337,83 @@ function SegmentItem({
   // shared draft to stage it on, nothing is waived and the form says so.
   const waive = async (body: ActionIn) => {
     if (!shared) throw new ApiError(0, NO_SHARED_DRAFT);
-    draft.accept(await unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body })));
+    draft.accept(
+      await unwrap(
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions', {
+          ...draftPath(shared.checkpoint_id),
+          body,
+        }),
+      ),
+    );
   };
   const draftActs: DraftActs | undefined = shared
     ? {
         review: shared,
         meId: me?.user_id ?? null,
         error: draftError,
-        act: (body) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body }))),
+        act: (body) =>
+          write(() =>
+            unwrap(
+              api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions', {
+                ...draftPath(shared.checkpoint_id),
+                body,
+              }),
+            ),
+          ),
         waive,
         stage: (actionId) =>
           write(() =>
             unwrap(
-              api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", {
-                params: { path: { run_id: run.id, checkpoint_id: shared.checkpoint_id, action_id: actionId } },
+              api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage', {
+                params: {
+                  path: {
+                    run_id: run.id,
+                    checkpoint_id: shared.checkpoint_id,
+                    action_id: actionId,
+                  },
+                },
               }),
             ),
           ),
         undo: (actionId) =>
           write(() =>
             unwrap(
-              api.DELETE("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}", {
-                params: { path: { run_id: run.id, checkpoint_id: shared.checkpoint_id, action_id: actionId } },
+              api.DELETE('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}', {
+                params: {
+                  path: {
+                    run_id: run.id,
+                    checkpoint_id: shared.checkpoint_id,
+                    action_id: actionId,
+                  },
+                },
               }),
             ),
           ),
       }
     : undefined;
   const saveNote = async (cpId: string, text: string) => {
-    draft.accept(await unwrap(api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", { ...draftPath(cpId), body: { note: text || null } })));
+    draft.accept(
+      await unwrap(
+        api.PUT('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note', {
+          ...draftPath(cpId),
+          body: { note: text || null },
+        }),
+      ),
+    );
   };
   // Send back to writer (Nov 3): requests changes at this segment's review with what Oracle
   // refused, which the API sends to the writer with the note written so far (if any); the next
   // attempt starts. The segment's own stop (its kind), never another stop that waits on it.
-  const review = deciding.find((cp) => cp.kind === kind && cp.console?.needs !== "redo_or_continue");
+  const review = deciding.find(
+    (cp) => cp.kind === kind && cp.console?.needs !== 'redo_or_continue',
+  );
   const [sending, setSending] = useState(false);
   const sendBack =
     rejected && review
       ? async () => {
           setSending(true);
           try {
-            await onDecide(review, "changes_requested", (notes[review.id] ?? "").trim(), null);
+            await onDecide(review, 'changes_requested', (notes[review.id] ?? '').trim(), null);
           } finally {
             setSending(false);
           }
@@ -1178,7 +1421,7 @@ function SegmentItem({
       : undefined;
   return (
     <li
-      className={`border-t border-line ${waiting ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]" : ""}`}
+      className={`border-t border-line ${waiting ? 'bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]' : ''}`}
       data-testid={`segment-${s.name}`}
     >
       <div className="grid min-h-12 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 px-4 py-1.5 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3">
@@ -1186,7 +1429,11 @@ function SegmentItem({
         {/* qa-work-45: on a phone the attempt chip sits under the name, which keeps the row's width. */}
         <span className="flex min-w-0 items-center gap-2 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-1">
           {/* qa-work-24: the segment's name wraps rather than being cut. */}
-          <span className="min-w-0 font-medium break-words" title={s.title} data-testid="segment-title">
+          <span
+            className="min-w-0 font-medium break-words"
+            title={s.title}
+            data-testid="segment-title"
+          >
             {s.title}
           </span>
           {s.attempts.length > 1 && (
@@ -1224,7 +1471,7 @@ function SegmentItem({
             </Chip>
           ) : (
             <Chip kind={SEGMENT_STATUS_KIND[s.status]}>
-              {s.status === "succeeded" && <Icon name="check" size={16} />}
+              {s.status === 'succeeded' && <Icon name="check" size={16} />}
               <span data-testid="segment-state">{SEGMENT_STATUS_LABEL[s.status]}</span>
             </Chip>
           )}
@@ -1232,9 +1479,14 @@ function SegmentItem({
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             kind &&
-            (s.checkpoint_on && run.status === "paused_overrun" && s.status === "succeeded" ? (
+            (s.checkpoint_on && run.status === 'paused_overrun' && s.status === 'succeeded' ? (
               // qa-work-5: the stop the overrun holds: its state, not a stop still to come.
-              <Chip kind="warn" title={`${CHECKPOINT_LABEL[kind]} is held until the run is resumed`} className={WRAP_CHIP} data-testid="segment-checkpoint">
+              <Chip
+                kind="warn"
+                title={`${CHECKPOINT_LABEL[kind]} is held until the run is resumed`}
+                className={WRAP_CHIP}
+                data-testid="segment-checkpoint"
+              >
                 <Icon name="clock" size={16} />
                 <span>
                   <span className="sr-only">{CHECKPOINT_LABEL[kind]}: </span>
@@ -1243,10 +1495,17 @@ function SegmentItem({
               </Chip>
             ) : s.checkpoint_on ? (
               // qa-work-21: a stop still to come is plain text, not a pill that looks like a button.
-              <span title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className="min-w-0 text-[13px] text-text2 break-words" data-testid="segment-checkpoint">
+              <span
+                title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`}
+                className="min-w-0 text-[13px] text-text2 break-words"
+                data-testid="segment-checkpoint"
+              >
                 {/* qa4-work-31: on a phone the column has no header, so the prefix shows. */}
-                <span className="sr-only max-[600px]:not-sr-only" data-testid="segment-checkpoint-prefix">
-                  Stops for:{" "}
+                <span
+                  className="sr-only max-[600px]:not-sr-only"
+                  data-testid="segment-checkpoint-prefix"
+                >
+                  Stops for:{' '}
                 </span>
                 {CHECKPOINT_LABEL[kind]}
               </span>
@@ -1254,37 +1513,57 @@ function SegmentItem({
               // rirs-15: in words, with why on hover.
               <Chip
                 kind="na"
-                title={`${CHECKPOINT_LABEL[kind]} was turned off when the run started, so the run ${s.status === "pending" || s.status === "running" ? "will not stop here to ask anyone" : "went on without asking anyone"}.`}
+                title={`${CHECKPOINT_LABEL[kind]} was turned off when the run started, so the run ${s.status === 'pending' || s.status === 'running' ? 'will not stop here to ask anyone' : 'went on without asking anyone'}.`}
                 className={WRAP_CHIP}
                 data-testid="segment-checkpoint"
               >
                 <span className="sr-only">{CHECKPOINT_LABEL[kind]}: </span>
-                {s.status === "pending" || s.status === "running" ? "Won't ask (checkpoint off)" : "Not asked (checkpoint skipped)"}
+                {s.status === 'pending' || s.status === 'running'
+                  ? "Won't ask (checkpoint off)"
+                  : 'Not asked (checkpoint skipped)'}
               </Chip>
             ))}
           {mine.length > 0 && (
             // The decision panel below and the inspector name the checkpoint; the row shows its
             // state. qa-work-28: a label, not a link dressed as a button (the actions are below).
             <span data-testid="checkpoint-waiting" className="inline-flex max-w-full">
-              <Chip kind="warn" title={`Waiting: ${mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
+              <Chip
+                kind="warn"
+                title={`Waiting: ${mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(', ')}`}
+              >
                 <Icon name="clock" size={16} />
                 <span>
-                  Waiting<span className="sr-only">: {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+                  Waiting
+                  <span className="sr-only">
+                    : {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(', ')}
+                  </span>
                 </span>
               </Chip>
             </span>
           )}
           {compact.map((cp) => (
-            <span key={cp.id} data-testid={`checkpoint-${cp.kind}`} className="inline-flex max-w-full">
+            <span
+              key={cp.id}
+              data-testid={`checkpoint-${cp.kind}`}
+              className="inline-flex max-w-full"
+            >
               <Chip
                 kind={CP_KIND[cp.status]}
-                title={[CHECKPOINT_LABEL[cp.kind], cp.decided_at && formatDateTime(cp.decided_at), cp.note].filter(Boolean).join(" · ")}
+                title={[
+                  CHECKPOINT_LABEL[cp.kind],
+                  cp.decided_at && formatDateTime(cp.decided_at),
+                  cp.note,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               >
                 <span className="sr-only">{CHECKPOINT_LABEL[cp.kind]}: </span>
-                {cp.status === "approved" && !cp.delivery && <Icon name="check" size={16} />}
-                {(cp.status === "pending" || cp.delivery) && <Icon name="clock" size={16} />}
+                {cp.status === 'approved' && !cp.delivery && <Icon name="check" size={16} />}
+                {(cp.status === 'pending' || cp.delivery) && <Icon name="clock" size={16} />}
                 {CP_LABEL[cp.status]}
-                {cp.status === "pending" && <span className="sr-only"> for an {cp.approver_role} or above</span>}
+                {cp.status === 'pending' && (
+                  <span className="sr-only"> for an {cp.approver_role} or above</span>
+                )}
                 {cp.delivery && <span className="sr-only">, not delivered to the run yet</span>}
               </Chip>
               {cp.console && (
@@ -1293,7 +1572,7 @@ function SegmentItem({
                   kind="warn"
                   className="ml-1.5"
                   data-testid="console-answer"
-                  title={`Answered in SwarmCloud by ${cp.console.answered_by ?? "someone"}: ${CONSOLE_NEEDS[cp.console.needs]}`}
+                  title={`Answered in SwarmCloud by ${cp.console.answered_by ?? 'someone'}: ${CONSOLE_NEEDS[cp.console.needs]}`}
                 >
                   SwarmCloud answer
                 </Chip>
@@ -1306,15 +1585,19 @@ function SegmentItem({
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && s.error !== run.error && (
             <p className="text-crit">
-              {s.status === "failed" && s.finished_at && <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>}
+              {s.status === 'failed' && s.finished_at && (
+                <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>
+              )}
               {s.error}
             </p>
           )}
           {s.can_retry && (
             <div className="space-y-1.5" data-testid="segment-retry">
-              <p className="text-text2">Retry this step. It runs again from here; the steps before it stay approved.</p>
+              <p className="text-text2">
+                Retry this step. It runs again from here; the steps before it stay approved.
+              </p>
               <Button disabled={busy} onClick={() => void retry()}>
-                {retrying ? "Retrying…" : "Retry"}
+                {retrying ? 'Retrying…' : 'Retry'}
               </Button>
             </div>
           )}
@@ -1324,12 +1607,15 @@ function SegmentItem({
               <QueueWaitNote wait={s.queue_wait} testId="segment-queue-wait" />
             </p>
           )}
-          {s.status === "running" && <SegmentProgress segment={s} />}
+          {s.status === 'running' && <SegmentProgress segment={s} />}
           {s.autonomy_note && (
             // H11: the baseline's level changed this segment's merge.
             <p data-testid="autonomy-note" className="text-text2">
-              {s.autonomy_note}.{" "}
-              <Link href="/settings/autonomy" className="font-medium text-accent-ink hover:underline">
+              {s.autonomy_note}.{' '}
+              <Link
+                href="/settings/autonomy"
+                className="font-medium text-accent-ink hover:underline"
+              >
                 Settings, Autonomy
               </Link>
             </p>
@@ -1337,13 +1623,21 @@ function SegmentItem({
           {s.items_check &&
             (waitingCp && decidedOnScreen(waitingCp) ? (
               // D1 (#542): the items are decided on the review screen; here, the counts only.
-              <ItemsCheckLine check={s.items_check} summary open={shared ? reviewCounts(shared) : undefined} />
+              <ItemsCheckLine
+                check={s.items_check}
+                summary
+                open={shared ? reviewCounts(shared) : undefined}
+              />
             ) : (
               <ItemsCheckLine check={s.items_check} draft={draftActs} />
             ))}
           {/* G4: everything staged at the waiting checkpoint, from rows and discussions. */}
-          {waitingCp && shared && <StagingBar runId={run.id} checkpointId={waitingCp.id} revision={shared.revision} />}
-          {shared && deciding.length === 0 && <SharedDraftLine review={shared} canDecide={!!waitingCp?.can_decide} />}
+          {waitingCp && shared && (
+            <StagingBar runId={run.id} checkpointId={waitingCp.id} revision={shared.revision} />
+          )}
+          {shared && deciding.length === 0 && (
+            <SharedDraftLine review={shared} canDecide={!!waitingCp?.can_decide} />
+          )}
           {sentReviews.map((cp) => (
             <SentReviewLine key={cp.id} runId={run.id} cp={cp} />
           ))}
@@ -1351,7 +1645,7 @@ function SegmentItem({
             <AppliedEditsLine key={cp.id} cp={cp} />
           ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
-          {waitingCp?.kind === "roadmap_items" && reviewHref(waitingCp) && (
+          {waitingCp?.kind === 'roadmap_items' && reviewHref(waitingCp) && (
             <ItemsReviewLine
               run={run}
               cp={waitingCp}
@@ -1359,7 +1653,7 @@ function SegmentItem({
               anchor={deciding.includes(waitingCp) && decidedOnScreen(waitingCp)}
             />
           )}
-          {waitingCp?.kind === "feature_set" && !deciding.includes(waitingCp) && (
+          {waitingCp?.kind === 'feature_set' && !deciding.includes(waitingCp) && (
             // C7: commenters suggest and viewers read on the review screen too: this run's
             // feature set, by the run on screen (as every other review link here).
             <p className="mt-2" data-testid="review-link">
@@ -1376,8 +1670,12 @@ function SegmentItem({
                 runDocName(
                   s.draft_import.slug === run.document_slug
                     ? run
-                    : { flow_title: run.flow_title, document_slug: s.draft_import.slug ?? null, document_kind: run.document_kind },
-                ) ?? "the document"
+                    : {
+                        flow_title: run.flow_title,
+                        document_slug: s.draft_import.slug ?? null,
+                        document_kind: run.document_kind,
+                      },
+                ) ?? 'the document'
               }
               busy={busy}
               sentBack={s.sent_back}
@@ -1388,8 +1686,8 @@ function SegmentItem({
               // A finished run's refused draft (#583 review): a new run drafts it again, and its
               // import clears the Inbox's No document row.
               newRun={
-                run.status === "succeeded" && can("create_run", true) && run.document_slug
-                  ? { flow: run.flow, document: run.document_slug, title: "Start a new run" }
+                run.status === 'succeeded' && can('create_run', true) && run.document_slug
+                  ? { flow: run.flow, document: run.document_slug, title: 'Start a new run' }
                   : undefined
               }
             />
@@ -1406,33 +1704,38 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
-          <VagueGoalsLine count={vague} href={`/ground-truth?tab=proposals&run=${run.id}&interview=vague`} />
+          <VagueGoalsLine
+            count={vague}
+            href={`/ground-truth?tab=proposals&run=${run.id}&interview=vague`}
+          />
           {screened && <ReviewScreenLine run={run} cp={screened} />}
-          {deciding.filter((cp) => !decidedOnScreen(cp)).map((cp, i) =>
-            // D10: a PRD or roadmap review with its draft imported is decided in the version;
-            // a refused draft and a console answer stay here.
-            cp.review_link && !cp.console && !cp.cannot_approve ? (
-              <RunReviewSummary key={cp.id} cp={cp} anchor={i === 0} />
-            ) : (
-            <CheckpointRow
-              key={cp.id}
-              cp={cp}
-              run={run}
-              busy={busy}
-              onDecide={onDecide}
-              anchor={i === 0}
-              note={notes[cp.id] ?? ""}
-              onNote={(text) => setNotes((n) => ({ ...n, [cp.id]: text }))}
-              review={shared?.checkpoint_id === cp.id ? shared : null}
-              onSaveNote={(text) => saveNote(cp.id, text)}
-              onReload={draft.reload}
-              onWaive={waitingCp?.id === cp.id ? waive : undefined}
-              noteRef={(el) => {
-                noteFields.current[cp.id] = el;
-              }}
-            />
-            ),
-          )}
+          {deciding
+            .filter((cp) => !decidedOnScreen(cp))
+            .map((cp, i) =>
+              // D10: a PRD or roadmap review with its draft imported is decided in the version;
+              // a refused draft and a console answer stay here.
+              cp.review_link && !cp.console && !cp.cannot_approve ? (
+                <RunReviewSummary key={cp.id} cp={cp} anchor={i === 0} />
+              ) : (
+                <CheckpointRow
+                  key={cp.id}
+                  cp={cp}
+                  run={run}
+                  busy={busy}
+                  onDecide={onDecide}
+                  anchor={i === 0}
+                  note={notes[cp.id] ?? ''}
+                  onNote={(text) => setNotes((n) => ({ ...n, [cp.id]: text }))}
+                  review={shared?.checkpoint_id === cp.id ? shared : null}
+                  onSaveNote={(text) => saveNote(cp.id, text)}
+                  onReload={draft.reload}
+                  onWaive={waitingCp?.id === cp.id ? waive : undefined}
+                  noteRef={(el) => {
+                    noteFields.current[cp.id] = el;
+                  }}
+                />
+              ),
+            )}
         </div>
       )}
     </li>
@@ -1445,11 +1748,21 @@ function SegmentItem({
  * decided) and the Raw file. qa-work-26: the one Review items action (the header adds no
  * second Decide to the same screen).
  */
-function ItemsReviewLine({ run, cp, open, anchor }: { run: RunOut; cp: CheckpointOut; open: { blocking: number; toConfirm: number }; anchor: boolean }) {
+function ItemsReviewLine({
+  run,
+  cp,
+  open,
+  anchor,
+}: {
+  run: RunOut;
+  cp: CheckpointOut;
+  open: { blocking: number; toConfirm: number };
+  anchor: boolean;
+}) {
   const [raw, setRaw] = useState(false);
   return (
     <div
-      id={anchor ? "decide" : undefined}
+      id={anchor ? 'decide' : undefined}
       tabIndex={anchor ? -1 : undefined}
       className="mt-2 flex flex-wrap items-center gap-2"
       data-testid="items-review-line"
@@ -1458,13 +1771,22 @@ function ItemsReviewLine({ run, cp, open, anchor }: { run: RunOut; cp: Checkpoin
         {openText(open)}
       </span>
       {/* A console answer to confirm is decided in the row below, whose Confirm is then the page's one primary (cld-7). */}
-      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={reviewItemsPrimary(cp) ? "primary" : "secondary"}>
+      <LinkButton
+        href={reviewHref({ ...cp, run_id: run.id })!}
+        icon="flag"
+        variant={reviewItemsPrimary(cp) ? 'primary' : 'secondary'}
+      >
         Review items
       </LinkButton>
       <Button icon="doc" onClick={() => setRaw(true)}>
         Raw file
       </Button>
-      <RawFileSheet open={raw ? "file" : null} onClose={() => setRaw(false)} runId={run.id} seq={cp.segment_seq ?? 1} />
+      <RawFileSheet
+        open={raw ? 'file' : null}
+        onClose={() => setRaw(false)}
+        runId={run.id}
+        seq={cp.segment_seq ?? 1}
+      />
     </div>
   );
 }
@@ -1473,30 +1795,38 @@ function ItemsReviewLine({ run, cp, open, anchor }: { run: RunOut; cp: Checkpoin
 function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
   const check = briefsCheck(cp);
   const dates = datesCheck(cp);
-  const blocking = (cp.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  const blocking = (cp.gate?.left ?? []).filter((x) => x.code === 'blocking_question').length;
   const toDecide = datesToDecide(cp);
   // The architect's briefs could not be read (file-level problems): nothing to decide, only Send back.
   const unreadable = !!check && check.problems.length > 0;
   return (
-    <div id="decide" tabIndex={-1} className="flex flex-wrap items-center gap-2" data-testid="review-screen-line">
+    <div
+      id="decide"
+      tabIndex={-1}
+      className="flex flex-wrap items-center gap-2"
+      data-testid="review-screen-line"
+    >
       <span className="font-semibold">
-        {unreadable && "The briefs could not be read"}
-        {check && !unreadable && plural(check.features.length, "feature")}
+        {unreadable && 'The briefs could not be read'}
+        {check && !unreadable && plural(check.features.length, 'feature')}
         {check && !unreadable && blocking > 0 && ` · ${blocking} blocking`}
-        {dates && plural(dates.items.length, "Now item")}
+        {dates && plural(dates.items.length, 'Now item')}
         {dates && ` · ${toDecide} to decide`}
       </span>
       <span className="text-text2">
         {unreadable
           ? cp.can_decide
-            ? "Send them back to the architect"
-            : "The engineering lead sends them back to the architect"
+            ? 'Send them back to the architect'
+            : 'The engineering lead sends them back to the architect'
           : cp.can_decide
-            ? "Waiting for you"
-            : "Waits for the engineering lead"}
+            ? 'Waiting for you'
+            : 'Waits for the engineering lead'}
       </span>
-      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant={cp.can_decide ? "primary" : "secondary"}>
-        {cp.can_decide ? "Review" : "View"}
+      <LinkButton
+        href={reviewHref({ ...cp, run_id: run.id })!}
+        variant={cp.can_decide ? 'primary' : 'secondary'}
+      >
+        {cp.can_decide ? 'Review' : 'View'}
       </LinkButton>
     </div>
   );
@@ -1505,15 +1835,17 @@ function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
 /** D10: a run review decided in its version: how far the review got, and a link to it. */
 function RunReviewSummary({ cp, anchor }: { cp: CheckpointOut; anchor?: boolean }) {
   const imp = (cp.payload as { import?: { slug?: string; version?: number } }).import ?? {};
-  const doc = imp.slug ?? "";
+  const doc = imp.slug ?? '';
   const n = imp.version ?? 0;
   const q = useQuery(`run-review|${doc}|${n}|${cp.id}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/run-review", { params: { path: { doc, n } } })),
+    unwrap(
+      api.GET('/v1/documents/{doc}/versions/{n}/run-review', { params: { path: { doc, n } } }),
+    ),
   );
   const sections = q.data?.sections;
   return (
     <div
-      id={anchor ? "decide" : undefined}
+      id={anchor ? 'decide' : undefined}
       tabIndex={anchor ? -1 : undefined}
       role="group"
       aria-label={`Decide: ${CHECKPOINT_LABEL[cp.kind]}`}
@@ -1526,7 +1858,7 @@ function RunReviewSummary({ cp, anchor }: { cp: CheckpointOut; anchor?: boolean 
         Waiting for review of v{n}
         {sections && (
           <>
-            {" "}
+            {' '}
             · {sections.reviewed}/{sections.total} sections reviewed
           </>
         )}
@@ -1544,10 +1876,10 @@ function DeliveryLine({ cp }: { cp: CheckpointOut }) {
     <p className="flex items-start gap-2 text-text" data-testid="checkpoint-delivering">
       <Icon name="clock" size={16} className="mt-1 flex-none text-warn" />
       <span className="min-w-0 break-words">
-        {deliveryText(cp)}{" "}
+        {deliveryText(cp)}{' '}
         <InfoTip label="delivering the decision" align="start">
-          The decision is recorded and final: nobody needs to decide again. SwarmCloud has not taken it yet, so Oracle sends it
-          again on every tick until it does.
+          The decision is recorded and final: nobody needs to decide again. SwarmCloud has not taken
+          it yet, so Oracle sends it again on every tick until it does.
         </InfoTip>
       </span>
     </p>
@@ -1565,7 +1897,7 @@ function DraftImportLine({
   retryRefused,
   newRun,
 }: {
-  imp: NonNullable<SegmentOut["draft_import"]>;
+  imp: NonNullable<SegmentOut['draft_import']>;
   /** The document's name in words ("Annual billing PRD"). */
   docName: string;
   /** A finished run imported a version already: why this draft stays refused (owner, 2026-10-25). */
@@ -1598,21 +1930,28 @@ function DraftImportLine({
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
-        Imported as{" "}
-        <Link href={`/documents/${imp.slug}/v/${imp.version}`} className="font-medium text-accent-ink underline-offset-2 hover:underline">
+        Imported as{' '}
+        <Link
+          href={`/documents/${imp.slug}/v/${imp.version}`}
+          className="font-medium text-accent-ink underline-offset-2 hover:underline"
+        >
           {docName} v{imp.version}
         </Link>
       </span>
       {imp.created === false && <Chip kind="na">Same content</Chip>}
-      {imp.warnings.length > 0 && <Chip kind="warn" title={imp.warnings.join(", ")}>{imp.warnings.length} warning{imp.warnings.length === 1 ? "" : "s"}</Chip>}
+      {imp.warnings.length > 0 && (
+        <Chip kind="warn" title={imp.warnings.join(', ')}>
+          {imp.warnings.length} warning{imp.warnings.length === 1 ? '' : 's'}
+        </Chip>
+      )}
       {imp.prd_links && (
         <span data-testid="prd-links" className="inline-flex flex-wrap items-center gap-2">
           <Chip kind="acc">
-            {imp.prd_links.resolved} link{imp.prd_links.resolved === 1 ? "" : "s"} to PRD sections
+            {imp.prd_links.resolved} link{imp.prd_links.resolved === 1 ? '' : 's'} to PRD sections
           </Chip>
           {imp.prd_links.unresolved.length > 0 && (
-            <Chip kind="warn" title={imp.prd_links.unresolved.join(", ")}>
-              {imp.prd_links.unresolved.length} not found: {imp.prd_links.unresolved.join(", ")}
+            <Chip kind="warn" title={imp.prd_links.unresolved.join(', ')}>
+              {imp.prd_links.unresolved.length} not found: {imp.prd_links.unresolved.join(', ')}
             </Chip>
           )}
         </span>
@@ -1636,7 +1975,7 @@ function DraftRejected({
   retryRefused,
   newRun,
 }: {
-  imp: NonNullable<SegmentOut["draft_import"]>;
+  imp: NonNullable<SegmentOut['draft_import']>;
   busy: boolean;
   sentBack?: boolean;
   onRetry?: () => void;
@@ -1651,16 +1990,16 @@ function DraftRejected({
   const problems = imp.problems ?? [];
   const n = problems.length;
   const listId = useId();
-  const testId = sentBack ? "draft-sent-back" : "draft-rejected";
+  const testId = sentBack ? 'draft-sent-back' : 'draft-rejected';
   return (
     <div className="flex flex-col items-start gap-2" data-testid={testId}>
-      <p className={sentBack ? "text-text" : "text-crit"} data-testid={`${testId}-summary`}>
+      <p className={sentBack ? 'text-text' : 'text-crit'} data-testid={`${testId}-summary`}>
         {imp.summary ?? `Draft not imported: ${imp.error}`}
       </p>
       {sentBack && (
         <p className="text-text2">
-          Oracle sent the draft back to the writer to fix this. Nothing needs you yet: the revision is imported when the writer is done, and only a draft
-          still refused comes to the Inbox.
+          Oracle sent the draft back to the writer to fix this. Nothing needs you yet: the revision
+          is imported when the writer is done, and only a draft still refused comes to the Inbox.
         </p>
       )}
       {n > 0 && (
@@ -1672,7 +2011,7 @@ function DraftRejected({
             onClick={() => setOpen((o) => !o)}
             className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            {open ? "Hide the problems" : `Show all ${n} problem${n === 1 ? "" : "s"}`}
+            {open ? 'Hide the problems' : `Show all ${n} problem${n === 1 ? '' : 's'}`}
           </button>
           {open && (
             <ul
@@ -1710,7 +2049,7 @@ function DraftRejected({
         <div className="flex flex-wrap gap-2">
           {onSendBack && (
             <Button disabled={busy} onClick={onSendBack}>
-              {sending ? "Sending back…" : "Send back to writer"}
+              {sending ? 'Sending back…' : 'Send back to writer'}
             </Button>
           )}
           {onRetry && (
@@ -1725,15 +2064,15 @@ function DraftRejected({
 }
 
 /** O4b: the check of roadmap_items.yaml, counts by horizon and every problem found. */
-type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
-type ItemReason = ItemsCheck["reasons"][number];
+type ItemsCheck = NonNullable<SegmentOut['items_check']>;
+type ItemReason = ItemsCheck['reasons'][number];
 
 /** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Add a date source". */
 function fixText(reason: ItemReason): string | null {
   const labels = reason.fixes.map((f) => f.label);
   if (labels.length === 0) return null;
   const last = labels.pop()!;
-  return `Fix: ${labels.length ? `${labels.join(", ")} or ${last}` : last}`;
+  return `Fix: ${labels.length ? `${labels.join(', ')} or ${last}` : last}`;
 }
 
 /** Reasons per item, in the order given (item position, blocking first). */
@@ -1750,31 +2089,31 @@ function byItem(reasons: ItemReason[]): { item: string; title: string; reasons: 
   return out;
 }
 
-type Resolution = NonNullable<ItemsCheck["resolution"]>;
-type ResolutionEntry = Resolution["entries"][number];
+type Resolution = NonNullable<ItemsCheck['resolution']>;
+type ResolutionEntry = Resolution['entries'][number];
 
 /** D6: "Attempt 2: 3 of 5 entries done · 1 declined · 1 not applied · 1 unrequested change". */
 function resolutionSummary(r: Resolution): string {
   const c = r.counts;
   const parts = [
-    `${c.done} of ${r.entries.length} entr${r.entries.length === 1 ? "y" : "ies"} done`,
+    `${c.done} of ${r.entries.length} entr${r.entries.length === 1 ? 'y' : 'ies'} done`,
     c.declined > 0 && `${c.declined} declined`,
     c.not_applied > 0 && `${c.not_applied} not applied`,
-    c.unrequested > 0 && `${c.unrequested} unrequested change${c.unrequested === 1 ? "" : "s"}`,
+    c.unrequested > 0 && `${c.unrequested} unrequested change${c.unrequested === 1 ? '' : 's'}`,
   ].filter(Boolean);
-  return `${r.attempt ? `Attempt ${r.attempt}: ` : ""}${parts.join(" · ")}`;
+  return `${r.attempt ? `Attempt ${r.attempt}: ` : ''}${parts.join(' · ')}`;
 }
 
 /** D6: how the attempt answered the item's review entry, as a chip (a decline with its note in full). */
 function ResolutionChip({ entry }: { entry: ResolutionEntry }) {
-  if (entry.outcome === "declined") {
+  if (entry.outcome === 'declined') {
     return (
       <Chip kind="warn" className={REASON_CHIP} data-testid="resolution-chip">
         Declined: {entry.note}
       </Chip>
     );
   }
-  if (entry.outcome === "not_applied") {
+  if (entry.outcome === 'not_applied') {
     return (
       <Chip kind="crit" className={REASON_CHIP} data-testid="resolution-chip">
         Not applied
@@ -1792,7 +2131,7 @@ function ResolutionChip({ entry }: { entry: ResolutionEntry }) {
 }
 
 // Reason chips wrap instead of cutting their label short (a phone is 390 px wide).
-const REASON_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left";
+const REASON_CHIP = 'h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left';
 
 /** D8: the waiting checkpoint's shared draft as the items check uses it. */
 interface DraftActs {
@@ -1805,34 +2144,37 @@ interface DraftActs {
   stage: (actionId: string) => Promise<void>;
   undo: (actionId: string) => Promise<void>;
 }
-type DraftAction = CheckpointReview["items"][number]["actions"][number];
-type FixAction = ItemReason["fixes"][number]["action"];
+type DraftAction = CheckpointReview['items'][number]['actions'][number];
+type FixAction = ItemReason['fixes'][number]['action'];
 
 // Fixes that need a person's input (a section, a title) wait for the items review (D1).
-const NEEDS_INPUT = ["horizon", "title", "outcome", "milestone_name", "prd_section"];
-const complete = (a: FixAction) => !(a.kind === "edit" && NEEDS_INPUT.includes(a.field ?? "") && a.value == null);
+const NEEDS_INPUT = ['horizon', 'title', 'outcome', 'milestone_name', 'prd_section'];
+const complete = (a: FixAction) =>
+  !(a.kind === 'edit' && NEEDS_INPUT.includes(a.field ?? '') && a.value == null);
 const sameSlot = (a: { item_key: string; kind: string; field?: string | null }, b: FixAction) =>
   a.item_key === b.item && a.kind === b.kind && (a.field ?? null) === (b.field ?? null);
 
 const ACTION_WORDS: Record<string, string> = {
-  accept: "Accept",
-  drop: "Drop",
-  restore: "Keep",
-  split: "Split",
-  merge: "Merge",
-  waive: "Waive",
-  question: "Ask",
-  look_again: "Look again",
-  add: "Add",
+  accept: 'Accept',
+  drop: 'Drop',
+  restore: 'Keep',
+  split: 'Split',
+  merge: 'Merge',
+  waive: 'Waive',
+  question: 'Ask',
+  look_again: 'Look again',
+  add: 'Add',
 };
 
 /** An action in the words of the fix it applies, else of its kind. */
 function actionLabel(a: DraftAction, reasons: ItemReason[]): string {
-  const same = (f: FixAction) => sameSlot(a, f) && JSON.stringify(f.value ?? null) === JSON.stringify(a.value ?? null);
+  const same = (f: FixAction) =>
+    sameSlot(a, f) && JSON.stringify(f.value ?? null) === JSON.stringify(a.value ?? null);
   const fix = reasons.flatMap((r) => r.fixes).find((f) => same(f.action));
   if (fix) return fix.label;
-  if (a.kind === "edit") return `Edit ${(a.field ?? "").replace("clear:", "clear ").replace("_", " ")}`;
-  if (a.kind === "waive") return waiveLabel(a, reasons);
+  if (a.kind === 'edit')
+    return `Edit ${(a.field ?? '').replace('clear:', 'clear ').replace('_', ' ')}`;
+  if (a.kind === 'waive') return waiveLabel(a, reasons);
   return ACTION_WORDS[a.kind] ?? a.kind;
 }
 
@@ -1841,9 +2183,9 @@ function waiveLabel(a: DraftAction, reasons: ItemReason[]): string {
   const own = reasons.filter((r) => r.item === a.item_key);
   const feature = namedText(named(own[0]?.item_title || a.item_key, a.item_key));
   // An answer is the reason's code, or its own ref (the code, "~", a hash).
-  const codes = (a.answers ?? []).map((x) => x.split("~")[0]);
+  const codes = (a.answers ?? []).map((x) => x.split('~')[0]);
   const labels = [...new Set(own.filter((r) => codes.includes(r.code)).map((r) => r.label))];
-  return labels.length ? `Waive ${labels.join(", ")} on ${feature}` : `Waive ${feature}`;
+  return labels.length ? `Waive ${labels.join(', ')} on ${feature}` : `Waive ${feature}`;
 }
 
 /** `summary`: the counts without the per-item reasons (a Roadmap items stop decided on its review screen). */
@@ -1866,22 +2208,27 @@ function ItemsCheckLine({
   const boxed = reasons.length > 0 ? check.problems.filter((p) => !p.item) : check.problems;
   const resolution = check.resolution ?? null;
   // qa-work-4: on a stop decided on its review screen, its counts in its words (items, not reasons).
-  const tally = summary ? (open ?? checkCounts(reasons)) : { blocking: check.blocking, toConfirm: check.to_confirm };
-  const counts = [tally.blocking > 0 && `${tally.blocking} blocking`, tally.toConfirm > 0 && `${tally.toConfirm} to confirm`].filter(Boolean);
+  const tally = summary
+    ? (open ?? checkCounts(reasons))
+    : { blocking: check.blocking, toConfirm: check.to_confirm };
+  const counts = [
+    tally.blocking > 0 && `${tally.blocking} blocking`,
+    tally.toConfirm > 0 && `${tally.toConfirm} to confirm`,
+  ].filter(Boolean);
   return (
     <div data-testid="items-check">
       <p className="flex flex-wrap items-center gap-2">
         <span className="tnum" data-testid="items-check-summary">
-          {check.items} roadmap item{check.items === 1 ? "" : "s"}
-          {horizons.length > 0 && `: ${horizons.join(", ")}`}
-          {counts.map((c) => ` · ${c}`).join("")}
+          {check.items} roadmap item{check.items === 1 ? '' : 's'}
+          {horizons.length > 0 && `: ${horizons.join(', ')}`}
+          {counts.map((c) => ` · ${c}`).join('')}
         </span>
         {check.problems.length === 0 && reasons.length === 0 ? (
           <Chip kind="pass">No problems</Chip>
         ) : (
           boxed.length > 0 && (
             <Chip kind="warn">
-              {boxed.length} problem{boxed.length === 1 ? "" : "s"}
+              {boxed.length} problem{boxed.length === 1 ? '' : 's'}
             </Chip>
           )
         )}
@@ -1892,7 +2239,9 @@ function ItemsCheckLine({
         </p>
       )}
       {check.reasons_partial && !summary && (
-        <p className="mt-1 text-sm text-text2">Only the rule problems are listed: Oracle could not load what the other reasons read.</p>
+        <p className="mt-1 text-sm text-text2">
+          Only the rule problems are listed: Oracle could not load what the other reasons read.
+        </p>
       )}
       {reasons.length > 0 && !summary && (
         <ul className="mt-1.5 space-y-2" data-testid="items-reasons">
@@ -1902,13 +2251,25 @@ function ItemsCheckLine({
                 <span className="font-medium break-words">{g.title}</span>
                 {resolution?.entries
                   .filter((e) => e.id === g.item)
-                  .map((e, i) => <ResolutionChip key={`${e.action}-${i}`} entry={e} />)}
+                  .map((e, i) => (
+                    <ResolutionChip key={`${e.action}-${i}`} entry={e} />
+                  ))}
               </p>
               <ul className="mt-1 space-y-1.5">
                 {g.reasons.map((r, i) => (
                   // data-ref: the gate's name for the reason (a roadmap item's is its code), as the gate's rows carry it.
-                  <li key={`${r.code}-${i}`} className="flex min-w-0 flex-col items-start gap-0.5 text-sm" data-testid="item-reason" data-code={r.code} data-ref={r.code}>
-                    <Chip kind={r.severity === "blocking" ? "crit" : "warn"} className={REASON_CHIP} data-testid="reason-chip">
+                  <li
+                    key={`${r.code}-${i}`}
+                    className="flex min-w-0 flex-col items-start gap-0.5 text-sm"
+                    data-testid="item-reason"
+                    data-code={r.code}
+                    data-ref={r.code}
+                  >
+                    <Chip
+                      kind={r.severity === 'blocking' ? 'crit' : 'warn'}
+                      className={REASON_CHIP}
+                      data-testid="reason-chip"
+                    >
                       {r.label}
                     </Chip>
                     <span className="break-words" data-testid="reason-text">
@@ -1925,32 +2286,41 @@ function ItemsCheckLine({
                         {r.fixes
                           .filter((f) => complete(f.action))
                           .map((f) =>
-                            f.action.kind === "waive" ? (
+                            f.action.kind === 'waive' ? (
                               <WaiveFix
                                 key={f.label}
                                 label={f.label}
                                 reason={r.label}
-                                onWaive={(text) => draft.waive({ item_key: f.action.item, kind: "waive", answers: [r.code], value: { reason: text } })}
+                                onWaive={(text) =>
+                                  draft.waive({
+                                    item_key: f.action.item,
+                                    kind: 'waive',
+                                    answers: [r.code],
+                                    value: { reason: text },
+                                  })
+                                }
                               />
                             ) : (
-                            <Button
-                              key={f.label}
-                              className="h-8 px-2.5 text-sm"
-                              title={`${draft.review.can_stage ? "Stage" : "Suggest"}: ${f.label}`}
-                              onClick={() => {
-                                const had = allActions(draft.review).find((a) => sameSlot(a, f.action));
-                                const answers = f.action.item === r.item ? [r.code] : [];
-                                void draft.act({
-                                  item_key: f.action.item,
-                                  kind: f.action.kind,
-                                  field: f.action.field ?? null,
-                                  value: f.action.value ?? null,
-                                  answers: [...new Set([...(had?.answers ?? []), ...answers])],
-                                });
-                              }}
-                            >
-                              {f.label}
-                            </Button>
+                              <Button
+                                key={f.label}
+                                className="h-8 px-2.5 text-sm"
+                                title={`${draft.review.can_stage ? 'Stage' : 'Suggest'}: ${f.label}`}
+                                onClick={() => {
+                                  const had = allActions(draft.review).find((a) =>
+                                    sameSlot(a, f.action),
+                                  );
+                                  const answers = f.action.item === r.item ? [r.code] : [];
+                                  void draft.act({
+                                    item_key: f.action.item,
+                                    kind: f.action.kind,
+                                    field: f.action.field ?? null,
+                                    value: f.action.value ?? null,
+                                    answers: [...new Set([...(had?.answers ?? []), ...answers])],
+                                  });
+                                }}
+                              >
+                                {f.label}
+                              </Button>
                             ),
                           )}
                       </span>
@@ -1969,7 +2339,10 @@ function ItemsCheckLine({
         </p>
       )}
       {boxed.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn" data-testid="items-check-problems">
+        <ul
+          className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn"
+          data-testid="items-check-problems"
+        >
           {boxed.map((p, i) => (
             <li key={i} className="break-words">
               {p.message}
@@ -1984,20 +2357,33 @@ function ItemsCheckLine({
 const allActions = (review: CheckpointReview) => review.items.flatMap((i) => i.actions);
 
 /** D8: what people staged or suggested on one item, who, and Stage / Undo for those who may. */
-function DraftActions({ draft, item, reasons }: { draft: DraftActs; item: string; reasons: ItemReason[] }) {
+function DraftActions({
+  draft,
+  item,
+  reasons,
+}: {
+  draft: DraftActs;
+  item: string;
+  reasons: ItemReason[];
+}) {
   const actions = draft.review.items.find((i) => i.key === item)?.actions ?? [];
   if (actions.length === 0) return null;
   return (
     <ul className="mt-1.5 space-y-1" data-testid="draft-actions">
       {actions.map((a) => {
-        const who = a.created_by?.name ?? "someone";
+        const who = a.created_by?.name ?? 'someone';
         const mine = !!draft.meId && a.created_by?.id === draft.meId;
         return (
-          <li key={a.id} data-testid="draft-action" data-state={a.state} className="flex flex-wrap items-center gap-2 text-sm">
-            <Chip kind={a.state === "staged" ? "acc" : "line"} className={REASON_CHIP}>
-              {actionLabel(a, reasons)} · {a.state === "staged" ? "Staged" : "Suggested"} by {who}
+          <li
+            key={a.id}
+            data-testid="draft-action"
+            data-state={a.state}
+            className="flex flex-wrap items-center gap-2 text-sm"
+          >
+            <Chip kind={a.state === 'staged' ? 'acc' : 'line'} className={REASON_CHIP}>
+              {actionLabel(a, reasons)} · {a.state === 'staged' ? 'Staged' : 'Suggested'} by {who}
             </Chip>
-            {a.state === "suggested" && draft.review.can_stage && (
+            {a.state === 'suggested' && draft.review.can_stage && (
               <Button className="h-8 px-2.5 text-sm" onClick={() => void draft.stage(a.id)}>
                 Stage
               </Button>
@@ -2016,15 +2402,15 @@ function DraftActions({ draft, item, reasons }: { draft: DraftActs; item: string
 
 /** D8: the waiting checkpoint's time left, in the decision's header. */
 function WaitChip({ wait, forYou, role }: { wait: WaitInfo; forYou: boolean; role: string }) {
-  if (wait.state === "none") return null;
-  if (wait.state === "ended") {
+  if (wait.state === 'none') return null;
+  if (wait.state === 'ended') {
     return (
       <Chip kind="na" className={REASON_CHIP} data-testid="wait-chip">
         Wait ended · deciding continues the run as a new workflow
       </Chip>
     );
   }
-  const lead = forYou ? "Waiting for you" : `Waiting for an ${role} or above`;
+  const lead = forYou ? 'Waiting for you' : `Waiting for an ${role} or above`;
   const s = wait.seconds_left;
   if (s == null) {
     return (
@@ -2033,9 +2419,14 @@ function WaitChip({ wait, forYou, role }: { wait: WaitInfo; forYou: boolean; rol
       </Chip>
     );
   }
-  const left = s >= 3600 ? `${Math.floor(s / 3600)} h left` : `${Math.max(1, Math.floor(s / 60))} min left`;
+  const left =
+    s >= 3600 ? `${Math.floor(s / 3600)} h left` : `${Math.max(1, Math.floor(s / 60))} min left`;
   return (
-    <Chip kind={s < 600 ? "crit" : s < 3600 ? "warn" : "line"} className={REASON_CHIP} data-testid="wait-chip">
+    <Chip
+      kind={s < 600 ? 'crit' : s < 3600 ? 'warn' : 'line'}
+      className={REASON_CHIP}
+      data-testid="wait-chip"
+    >
       <Icon name="clock" size={16} />
       {lead} · {left}
     </Chip>
@@ -2054,16 +2445,18 @@ function SharedDraftLine({ review, canDecide }: { review: CheckpointReview; canD
       <p className="flex flex-wrap items-center gap-2" data-testid="shared-who">
         <Chip kind="line" data-testid="checkpoint-who">
           <Icon name="user" size={16} />
-          {WHO_DECIDES[review.approver_role] ?? "Owners can decide"}
+          {WHO_DECIDES[review.approver_role] ?? 'Owners can decide'}
         </Chip>
         {/* The stop's own can_decide: a stop waiting for this person (one with its own review
             screen) never tells them they can't decide it. */}
         <span className="text-text2" data-testid="shared-you">
-          {canDecide ? "It waits for you: you can decide it." : "You can read it; you can't decide it."}
+          {canDecide
+            ? 'It waits for you: you can decide it.'
+            : "You can read it; you can't decide it."}
         </span>
       </p>
       <p className="break-words text-text2" data-testid="shared-note">
-        {review.note ? `Note for the agents: ${review.note}` : "No note for the agents yet."}
+        {review.note ? `Note for the agents: ${review.note}` : 'No note for the agents yet.'}
       </p>
     </div>
   );
@@ -2075,47 +2468,58 @@ function SharedDraftLine({ review, canDecide }: { review: CheckpointReview; canD
  * answer; an answer older than the one shown is ignored.
  */
 function useDraft(runId: string, cpId: string | null) {
-  const q = useQuery(`draft|${runId}|${cpId ?? ""}`, () =>
+  const q = useQuery(`draft|${runId}|${cpId ?? ''}`, () =>
     cpId
-      ? unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", { params: { path: { run_id: runId, checkpoint_id: cpId } } }))
+      ? unwrap(
+          api.GET('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review', {
+            params: { path: { run_id: runId, checkpoint_id: cpId } },
+          }),
+        )
       : Promise.resolve(null),
   );
   const { reload, setData } = q;
   const accept = useCallback(
     (out: CheckpointReview) =>
-      setData((prev) => (!prev || prev.checkpoint_id !== out.checkpoint_id || out.revision >= prev.revision || out.status !== prev.status ? out : prev)),
+      setData((prev) =>
+        !prev ||
+        prev.checkpoint_id !== out.checkpoint_id ||
+        out.revision >= prev.revision ||
+        out.status !== prev.status
+          ? out
+          : prev,
+      ),
     [setData],
   );
   useEffect(() => {
     if (!cpId) return;
     const read = () => {
-      if (document.visibilityState === "visible") void reload();
+      if (document.visibilityState === 'visible') void reload();
     };
     const t = setInterval(read, DRAFT_POLL_MS);
-    document.addEventListener("visibilitychange", read);
+    document.addEventListener('visibilitychange', read);
     return () => {
       clearInterval(t);
-      document.removeEventListener("visibilitychange", read);
+      document.removeEventListener('visibilitychange', read);
     };
   }, [cpId, reload]);
   return { review: q.data ?? null, accept, reload };
 }
 
 const FEATURE_FLAG_LABEL: Record<string, string> = {
-  serves_no_goal: "serves no goal",
-  low_confidence: "low confidence",
-  linked_blocker: "linked blocker",
-  new_feature: "new feature",
-  duplicate_of_existing: "duplicate of existing",
+  serves_no_goal: 'serves no goal',
+  low_confidence: 'low confidence',
+  linked_blocker: 'linked blocker',
+  new_feature: 'new feature',
+  duplicate_of_existing: 'duplicate of existing',
 };
 
 /** C6: the check of feature_set.yaml, counts on one line; every problem in full and the flags per feature behind it. */
-function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature_set_check"]> }) {
+function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut['feature_set_check']> }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
   const n = check.problems.length;
-  const counts = `Feature set: ${plural(check.features, "feature")}, ${plural(check.requirements, "requirement")}, ${check.excluded} left out`;
-  const problems = n === 0 ? "No problems" : plural(n, "problem");
+  const counts = `Feature set: ${plural(check.features, 'feature')}, ${plural(check.requirements, 'requirement')}, ${check.excluded} left out`;
+  const problems = n === 0 ? 'No problems' : plural(n, 'problem');
   const flagged = Object.entries(check.flags ?? {}).filter(([, f]) => f.length > 0);
   return (
     <div data-testid="feature-set-check">
@@ -2128,13 +2532,16 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
         className="flex max-w-full flex-wrap items-center gap-2 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <span className="tnum">{counts}</span>
-        <Chip kind={n === 0 ? "pass" : "warn"}>{problems}</Chip>
-        <Icon name={open ? "chevron-up" : "chevron-down"} size={16} className="text-text2" />
+        <Chip kind={n === 0 ? 'pass' : 'warn'}>{problems}</Chip>
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} className="text-text2" />
       </button>
       {open && (
         <div id={listId}>
           {n > 0 && (
-            <ul data-testid="feature-set-problems" className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn">
+            <ul
+              data-testid="feature-set-problems"
+              className="mt-1.5 space-y-0.5 rounded-button bg-warn-bg px-3 py-1.5 text-sm text-warn"
+            >
               {check.problems.map((p, i) => (
                 <li key={i} className="break-words">
                   {p.message}
@@ -2146,7 +2553,8 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
             <ul data-testid="feature-set-flags" className="mt-1.5 space-y-0.5 text-sm text-text2">
               {flagged.map(([key, flags]) => (
                 <li key={key} className="break-words">
-                  <span className="font-mono text-[13px] text-text">{key}</span>: {flags.map((f) => FEATURE_FLAG_LABEL[f] ?? f.replaceAll("_", " ")).join(", ")}
+                  <span className="font-mono text-[13px] text-text">{key}</span>:{' '}
+                  {flags.map((f) => FEATURE_FLAG_LABEL[f] ?? f.replaceAll('_', ' ')).join(', ')}
                 </li>
               ))}
             </ul>
@@ -2159,10 +2567,10 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
 
 /** rirs-6: who may decide a checkpoint, by the least role it needs. */
 const WHO_DECIDES: Record<string, string> = {
-  viewer: "Anyone in the company can decide",
-  commenter: "Commenters, approvers and owners can decide",
-  approver: "Approvers and owners can decide",
-  owner: "Owners can decide",
+  viewer: 'Anyone in the company can decide',
+  commenter: 'Commenters, approvers and owners can decide',
+  approver: 'Approvers and owners can decide',
+  owner: 'Owners can decide',
 };
 
 /**
@@ -2170,32 +2578,42 @@ const WHO_DECIDES: Record<string, string> = {
  * rirs-22: with none for this person, "Open the baseline (nothing flagged for you)".
  */
 function FromRunLink({ runId }: { runId: string }) {
-  const q = useQuery(`baseline-from-run:${runId}`, () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })));
+  const q = useQuery(`baseline-from-run:${runId}`, () =>
+    unwrap(api.GET('/v1/baseline/from-run/{run_id}', { params: { path: { run_id: runId } } })),
+  );
   return (
     <p className="mt-2">
       {/* qa-work-45: a long label wraps inside the card's padding on a phone. */}
-      <LinkButton href={`/ground-truth?run=${runId}`} icon="baseline" className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!" data-testid="from-run-link">
+      <LinkButton
+        href={`/ground-truth?run=${runId}`}
+        icon="baseline"
+        className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!"
+        data-testid="from-run-link"
+      >
         {q.data && q.data.summary.need_you === 0
-          ? "Open the Ground Truth (nothing flagged for you)"
-          : `Review in Ground Truth${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
+          ? 'Open the Ground Truth (nothing flagged for you)'
+          : `Review in Ground Truth${q.data ? ` · ${q.data.summary.need_you} need you` : ''}`}
       </LinkButton>
     </p>
   );
 }
 
 /** D7: the file an approval with edits changed (the API's review names it; roadmap items' otherwise). */
-const editedFile = (cp: CheckpointOut) => (typeof cp.review?.file === "string" ? cp.review.file : "roadmap_items.yaml");
+const editedFile = (cp: CheckpointOut) =>
+  typeof cp.review?.file === 'string' ? cp.review.file : 'roadmap_items.yaml';
 
 /** D7: "Approved with 3 edits · View": what Oracle applied to the agents' file, opened in place. */
 function AppliedEditsLine({ cp }: { cp: CheckpointOut }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
-  const applied = Array.isArray(cp.review?.applied) ? (cp.review.applied as { id?: string; text?: string }[]) : [];
-  const n = typeof cp.review?.edits === "number" ? cp.review.edits : applied.length;
+  const applied = Array.isArray(cp.review?.applied)
+    ? (cp.review.applied as { id?: string; text?: string }[])
+    : [];
+  const n = typeof cp.review?.edits === 'number' ? cp.review.edits : applied.length;
   return (
     <div data-testid="approved-edits">
       <p className="text-text2">
-        Approved with {plural(n, "edit")} ·{" "}
+        Approved with {plural(n, 'edit')} ·{' '}
         <button
           type="button"
           className="font-medium text-accent-ink hover:underline"
@@ -2207,7 +2625,11 @@ function AppliedEditsLine({ cp }: { cp: CheckpointOut }) {
         </button>
       </p>
       {open && (
-        <ul id={listId} className="mt-1 list-disc space-y-0.5 pl-5 text-sm" data-testid="applied-edits">
+        <ul
+          id={listId}
+          className="mt-1 list-disc space-y-0.5 pl-5 text-sm"
+          data-testid="applied-edits"
+        >
           {applied.map((a, i) => (
             <li key={i} className="break-words">
               {a.text ?? a.id}
@@ -2225,37 +2647,51 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
   const entries = Array.isArray(cp.review?.items) ? cp.review.items.length : 0;
   async function toggle() {
     if (text != null) return setText(null);
-    setText("Loading…");
-    const { data, response } = await api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml", {
-      params: { path: { run_id: runId, checkpoint_id: cp.id } },
-      parseAs: "text",
-    });
-    setText(response.ok ? (data as string) : "Could not load the review. Try again.");
+    setText('Loading…');
+    const { data, response } = await api.GET(
+      '/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml',
+      {
+        params: { path: { run_id: runId, checkpoint_id: cp.id } },
+        parseAs: 'text',
+      },
+    );
+    setText(response.ok ? (data as string) : 'Could not load the review. Try again.');
   }
   return (
     <div data-testid="sent-review">
-      {cp.kind === "baseline_confirm" && cp.note && (
+      {cp.kind === 'baseline_confirm' && cp.note && (
         // B2: the structured note the agents got (3.1 (7)).
-        <pre className="mb-1.5 font-sans whitespace-pre-wrap text-text2" data-testid="sent-back-note">
+        <pre
+          className="mb-1.5 font-sans whitespace-pre-wrap text-text2"
+          data-testid="sent-back-note"
+        >
           {cp.note}
         </pre>
       )}
       <p className="text-text2">
         {/* A send-back without entries says what was sent back (its note), never "0 entries". */}
-        Sent back ·{" "}
+        Sent back ·{' '}
         {entries > 0 ? (
-          `${entries} ${entries === 1 ? "entry" : "entries"} · `
-        ) : cp.kind !== "baseline_confirm" && cp.note ? (
+          `${entries} ${entries === 1 ? 'entry' : 'entries'} · `
+        ) : cp.kind !== 'baseline_confirm' && cp.note ? (
           <span className="text-text" data-testid="sent-back-what">
-            {cp.note} ·{" "}
+            {cp.note} ·{' '}
           </span>
         ) : null}
-        <button type="button" className="font-medium text-accent-ink hover:underline" aria-expanded={text != null} onClick={() => void toggle()}>
+        <button
+          type="button"
+          className="font-medium text-accent-ink hover:underline"
+          aria-expanded={text != null}
+          onClick={() => void toggle()}
+        >
           View review
         </button>
       </p>
       {text != null && (
-        <pre className="mt-1.5 max-h-96 overflow-auto rounded-button border border-line bg-surface2 p-2.5 font-mono text-[13px] whitespace-pre-wrap" data-testid="sent-review-yaml">
+        <pre
+          className="mt-1.5 max-h-96 overflow-auto rounded-button border border-line bg-surface2 p-2.5 font-mono text-[13px] whitespace-pre-wrap"
+          data-testid="sent-review-yaml"
+        >
           {text}
         </pre>
       )}
@@ -2279,21 +2715,26 @@ function Artifacts({
 }) {
   // The open file: its name and, for the previous attempt's files, that attempt's number; or
   // the agents' original of an edited file.
-  const [open, setOpen] = useState<{ name: string; attempt: number | null; agents?: boolean } | null>(null);
-  const [content, setContent] = useState<string>("");
-  const isOpen = (name: string, attempt: number | null, agents = false) => open?.name === name && open.attempt === attempt && !!open.agents === agents;
+  const [open, setOpen] = useState<{
+    name: string;
+    attempt: number | null;
+    agents?: boolean;
+  } | null>(null);
+  const [content, setContent] = useState<string>('');
+  const isOpen = (name: string, attempt: number | null, agents = false) =>
+    open?.name === name && open.attempt === attempt && !!open.agents === agents;
   async function show(name: string, attempt: number | null, agents = false) {
     if (isOpen(name, attempt, agents)) return setOpen(null);
     setOpen({ name, attempt, agents });
-    setContent("Loading…");
+    setContent('Loading…');
     const query = agents ? { agents: true } : attempt == null ? {} : { attempt };
-    const { data, response } = await api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", {
+    const { data, response } = await api.GET('/v1/runs/{run_id}/segments/{seq}/artifacts/{name}', {
       params: { path: { run_id: runId, seq, name }, query },
-      parseAs: "text",
+      parseAs: 'text',
     });
     setContent(response.ok ? (data as string) : `Could not load ${fileLabel(name)}. Try again.`);
   }
-  const rawLabel = names.length + edited.length === 1 ? "Raw file" : "Raw files";
+  const rawLabel = names.length + edited.length === 1 ? 'Raw file' : 'Raw files';
   const file = (name: string, attempt: number | null) => {
     const on = isOpen(name, attempt);
     return (
@@ -2305,7 +2746,9 @@ function Artifacts({
         // qa-work-8: the file in words ("Roadmap items"); its name on hover, said as a file name.
         title={`File: ${name}`}
         className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
-          on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
+          on
+            ? 'border-accent bg-accent-soft text-accent-ink'
+            : 'border-line-strong bg-surface text-text hover:bg-surface2'
         }`}
       >
         <Icon name="doc" size={16} />
@@ -2318,7 +2761,12 @@ function Artifacts({
       {names.length > 0 && (
         // qa-work-19: the files open as the agents wrote them (raw text), said before them as the
         // review page's Raw file does; the imported version above is the draft read as a document.
-        <div role="group" aria-label={rawLabel} className="flex flex-wrap items-center gap-1.5" data-testid="artifacts-current">
+        <div
+          role="group"
+          aria-label={rawLabel}
+          className="flex flex-wrap items-center gap-1.5"
+          data-testid="artifacts-current"
+        >
           <span className="text-[13px] text-text2" data-testid="artifacts-raw-label">
             {rawLabel}:
           </span>
@@ -2332,7 +2780,9 @@ function Artifacts({
               aria-expanded={isOpen(n, null, true)}
               title={`${fileLabel(n)} as the agents wrote it, before the approver's edits`}
               className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
-                isOpen(n, null, true) ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
+                isOpen(n, null, true)
+                  ? 'border-accent bg-accent-soft text-accent-ink'
+                  : 'border-line-strong bg-surface text-text hover:bg-surface2'
               }`}
             >
               <Icon name="doc" size={16} />
@@ -2349,7 +2799,9 @@ function Artifacts({
           className="mt-2 flex flex-wrap items-center gap-1.5"
           data-testid="artifacts-previous"
         >
-          <span className="text-[13px] text-text2">Previous attempt (attempt {previous.attempt}):</span>
+          <span className="text-[13px] text-text2">
+            Previous attempt (attempt {previous.attempt}):
+          </span>
           {previous.artifacts.map((n) => file(n, previous.attempt))}
         </div>
       )}
@@ -2397,14 +2849,14 @@ function CheckpointRow({
   const noteId = useId();
   const { can } = useMe();
   // D8: the note is saved to the shared draft as I type; the line under it says how it went.
-  const saved = review?.note ?? "";
+  const saved = review?.note ?? '';
   const canSave = !!review?.can_stage;
-  const [save, setSave] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [save, setSave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const saveNow = useCallback(() => {
-    setSave("saving");
+    setSave('saving');
     onSaveNote(note).then(
-      () => setSave("saved"),
-      () => setSave("failed"),
+      () => setSave('saved'),
+      () => setSave('failed'),
     );
   }, [note, onSaveNote]);
   useEffect(() => {
@@ -2414,17 +2866,27 @@ function CheckpointRow({
     // onSaveNote is a new function on every render: the note and what is saved decide.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note, saved, canSave]);
-  const status = save === "failed" ? "failed" : note !== saved ? (save === "saving" ? "saving" : null) : save === "saved" ? "saved" : null;
+  const status =
+    save === 'failed'
+      ? 'failed'
+      : note !== saved
+        ? save === 'saving'
+          ? 'saving'
+          : null
+        : save === 'saved'
+          ? 'saved'
+          : null;
   // The draft changed since I loaded it: my decision was refused (nothing decided).
   const [changed, setChanged] = useState<string | null>(null);
-  const decideWith = (decision: CheckpointChoice) => onDecide(cp, decision, note, review?.revision ?? null, setChanged);
+  const decideWith = (decision: CheckpointChoice) =>
+    onDecide(cp, decision, note, review?.revision ?? null, setChanged);
   const answer = cp.console;
   // A counted console change request the workflow went on past: Redo or Continue only.
-  const redoOrContinue = answer?.needs === "redo_or_continue";
+  const redoOrContinue = answer?.needs === 'redo_or_continue';
   // cld-7: Continue is the page's primary unless the Roadmap items line's Review items is.
   const continuePrimary = redoOrContinue && !reviewItemsPrimary(cp);
   // D4: a send-back carries the staged actions as a structured review; with none, the note.
-  const staged = !!review?.items.some((i) => i.actions.some((a) => a.state === "staged"));
+  const staged = !!review?.items.some((i) => i.actions.some((a) => a.state === 'staged'));
   // Redo carries the console's findings, else the note: the API refuses it without either.
   const redoBlocked = !answer?.can_redo && !note.trim();
   // D3: the approve gate, the draft's read first (it moves as soon as a waiver is staged).
@@ -2432,20 +2894,27 @@ function CheckpointRow({
   const closed = gate && !gate.open ? gate : null;
   const left = closed ? closed.blocking_open + closed.file_problems : 0;
   // Any other refusal (the draft was not imported, the feature set's problems) as the API says it.
-  const other = cp.cannot_approve && cp.cannot_approve !== gateMessage(cp.gate) ? cp.cannot_approve : null;
+  const other =
+    cp.cannot_approve && cp.cannot_approve !== gateMessage(cp.gate) ? cp.cannot_approve : null;
   // D7: with edits staged, Approve applies them and re-checks the file, so the gate is Oracle's
   // to read again then; a split, merge or open question needs the agents, so Approve waits.
-  const label = cp.approve_label ?? "Approve";
-  const withEdits = label !== "Approve";
+  const label = cp.approve_label ?? 'Approve';
+  const withEdits = label !== 'Approve';
   const agentsOnly = needsAgentsText(cp.needs_agents ?? []);
   const refusal = other ?? (closed && !withEdits ? gateMessage(closed) : null);
-  const approveBlocked = refusal ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.` : agentsOnly;
-  const confirmBlocked = other ? approveBlocked : closed ? `${plural(left, "blocking problem")} left` : null;
+  const approveBlocked = refusal
+    ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.`
+    : agentsOnly;
+  const confirmBlocked = other
+    ? approveBlocked
+    : closed
+      ? `${plural(left, 'blocking problem')} left`
+      : null;
   // G1: talk the checkpoint through with the team before deciding, in a sheet.
   const [discussing, setDiscussing] = useState(false);
   return (
     <div
-      id={anchor ? "decide" : undefined}
+      id={anchor ? 'decide' : undefined}
       // Decide in the header focuses it; the keyboard continues from here.
       tabIndex={anchor ? -1 : undefined}
       role="group"
@@ -2463,17 +2932,22 @@ function CheckpointRow({
         {/* rirs-6: who decides, in words. */}
         <Chip kind="line" data-testid="checkpoint-who">
           <Icon name="user" size={16} />
-          {WHO_DECIDES[cp.approver_role] ?? "Owners can decide"}
+          {WHO_DECIDES[cp.approver_role] ?? 'Owners can decide'}
         </Chip>
         {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
-      {cp.kind === "baseline_confirm" && <FromRunLink runId={run.id} />}
+      {cp.kind === 'baseline_confirm' && <FromRunLink runId={run.id} />}
       {cp.note && (
         <p className="mt-1.5 text-text2">
           <CodeText text={cp.note} />
         </p>
       )}
-      {answer && <ConsolePanel answer={answer} held={answer.needs === "confirm" && answer.verdict === "MERGE" && !!closed} />}
+      {answer && (
+        <ConsolePanel
+          answer={answer}
+          held={answer.needs === 'confirm' && answer.verdict === 'MERGE' && !!closed}
+        />
+      )}
       {other && (
         <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
           {approveBlocked}
@@ -2484,7 +2958,7 @@ function CheckpointRow({
           {agentsOnly}
         </p>
       )}
-      {cp.kind === "feature_set" && cp.status === "pending" && (
+      {cp.kind === 'feature_set' && cp.status === 'pending' && (
         // C7: the feature set is reviewed row by row on its own screen (this run's, by the run on
         // screen); the raw files stay below.
         <p className="mt-2">
@@ -2502,10 +2976,18 @@ function CheckpointRow({
         </p>
       )}
       {/* qa4-work-30: a visible label above the box, with whether the note is needed; it stays as I type. */}
-      <label htmlFor={noteId} className="mt-2.5 block text-[13px] leading-4 font-semibold text-text2" data-testid="note-label">
-        Note for the agents{" "}
+      <label
+        htmlFor={noteId}
+        className="mt-2.5 block text-[13px] leading-4 font-semibold text-text2"
+        data-testid="note-label"
+      >
+        Note for the agents{' '}
         <span className="font-normal">
-          {redoOrContinue ? "(optional, added to the findings)" : staged ? "(optional with staged changes)" : "(required to request changes)"}
+          {redoOrContinue
+            ? '(optional, added to the findings)'
+            : staged
+              ? '(optional with staged changes)'
+              : '(required to request changes)'}
         </span>
       </label>
       <textarea
@@ -2517,12 +2999,16 @@ function CheckpointRow({
         className={`${INPUT} mt-1.5 placeholder:text-text2`}
       />
       {status && (
-        <p className={`mt-1 text-sm ${status === "failed" ? "text-crit" : "text-text2"}`} data-testid="note-status" aria-live="polite">
-          {status === "saved" && "Saved"}
-          {status === "saving" && "Saving…"}
-          {status === "failed" && (
+        <p
+          className={`mt-1 text-sm ${status === 'failed' ? 'text-crit' : 'text-text2'}`}
+          data-testid="note-status"
+          aria-live="polite"
+        >
+          {status === 'saved' && 'Saved'}
+          {status === 'saving' && 'Saving…'}
+          {status === 'failed' && (
             <>
-              Not saved:{" "}
+              Not saved:{' '}
               <button type="button" className="font-medium underline" onClick={saveNow}>
                 retry
               </button>
@@ -2531,9 +3017,16 @@ function CheckpointRow({
         </p>
       )}
       {changed && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" data-testid="review-changed" role="alert">
+        <div
+          className="mt-2 flex flex-wrap items-center gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+          data-testid="review-changed"
+          role="alert"
+        >
           <span className="min-w-0 flex-1 break-words">{changed}</span>
-          <Button className="h-8 px-2.5 text-sm" onClick={() => void onReload().then(() => setChanged(null))}>
+          <Button
+            className="h-8 px-2.5 text-sm"
+            onClick={() => void onReload().then(() => setChanged(null))}
+          >
             Reload
           </Button>
         </div>
@@ -2542,19 +3035,19 @@ function CheckpointRow({
         {redoOrContinue ? (
           <>
             <Button
-              variant={continuePrimary ? "primary" : "secondary"}
+              variant={continuePrimary ? 'primary' : 'secondary'}
               icon="check"
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}
-              onClick={() => decideWith("continue")}
+              onClick={() => decideWith('continue')}
             >
               Continue
             </Button>
             <Button
-              className={continuePrimary ? DECIDE_ROW : ""}
+              className={continuePrimary ? DECIDE_ROW : ''}
               disabled={busy || redoBlocked}
-              title={redoBlocked ? "No findings were recorded: write a note to redo" : undefined}
-              onClick={() => decideWith("redo")}
+              title={redoBlocked ? 'No findings were recorded: write a note to redo' : undefined}
+              onClick={() => decideWith('redo')}
             >
               Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)}, one more segment)
             </Button>
@@ -2562,44 +3055,57 @@ function CheckpointRow({
         ) : (
           <>
             {/* Confirming Oracle's console answer is then the page's one filled primary (fix3-minors review). */}
-            {answer?.needs === "confirm" && (
+            {answer?.needs === 'confirm' && (
               <Button
                 variant="primary"
                 icon="check"
-                disabled={busy || (answer.verdict === "MERGE" && !!confirmBlocked)}
-                title={answer.verdict === "MERGE" ? (confirmBlocked ?? undefined) : undefined}
-                onClick={() => decideWith("confirm")}
+                disabled={busy || (answer.verdict === 'MERGE' && !!confirmBlocked)}
+                title={answer.verdict === 'MERGE' ? (confirmBlocked ?? undefined) : undefined}
+                onClick={() => decideWith('confirm')}
               >
-                Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
+                Confirm {answer.verdict === 'MERGE' ? 'approval' : 'change request'}
               </Button>
             )}
             {/* cld-5: Approve and continue is the page's one filled primary (the header's Decide only goes here). */}
             <Button
-              variant={answer?.needs === "confirm" ? "secondary" : "primary"}
-              icon={answer?.needs === "confirm" ? undefined : "check"}
+              variant={answer?.needs === 'confirm' ? 'secondary' : 'primary'}
+              icon={answer?.needs === 'confirm' ? undefined : 'check'}
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}
-              className={answer?.needs === "confirm" ? DECIDE_ROW : ""}
-              onClick={() => decideWith("approved")}
+              className={answer?.needs === 'confirm' ? DECIDE_ROW : ''}
+              onClick={() => decideWith('approved')}
             >
-              {withEdits ? label : "Approve and continue"}
+              {withEdits ? label : 'Approve and continue'}
             </Button>
             <Button
               className={DECIDE_ROW}
               disabled={busy || (!note.trim() && !staged)}
-              title={!note.trim() && !staged ? "Stage a change, ask a question, or write a note to send back." : undefined}
-              onClick={() => decideWith("changes_requested")}
+              title={
+                !note.trim() && !staged
+                  ? 'Stage a change, ask a question, or write a note to send back.'
+                  : undefined
+              }
+              onClick={() => decideWith('changes_requested')}
             >
               Request changes
             </Button>
-            {(answer?.needs === "unreadable" || answer?.needs === "unread") && (
-              <Button className={DECIDE_ROW} disabled={busy || redoBlocked} onClick={() => decideWith("redo")}>
+            {(answer?.needs === 'unreadable' || answer?.needs === 'unread') && (
+              <Button
+                className={DECIDE_ROW}
+                disabled={busy || redoBlocked}
+                onClick={() => decideWith('redo')}
+              >
                 Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
               </Button>
             )}
           </>
         )}
-        <Button variant="ghost" icon="comment" className={redoOrContinue && !continuePrimary ? "" : DECIDE_ROW} onClick={() => setDiscussing(true)}>
+        <Button
+          variant="ghost"
+          icon="comment"
+          className={redoOrContinue && !continuePrimary ? '' : DECIDE_ROW}
+          onClick={() => setDiscussing(true)}
+        >
           Discuss
         </Button>
       </div>
@@ -2608,19 +3114,26 @@ function CheckpointRow({
           gate={closed}
           message={
             withEdits && !other
-              ? `${plural(left, "blocking problem")} open before your edits: Oracle checks the file again once it applies them.`
+              ? `${plural(left, 'blocking problem')} open before your edits: Oracle checks the file again once it applies them.`
               : approveBlocked!
           }
           // A shared draft not read yet still offers Waive… to whoever may stage: its form then says nothing was waived.
-          onWaive={(review ? review.can_stage : can("stage_checkpoint_action")) ? onWaive : undefined}
+          onWaive={
+            (review ? review.can_stage : can('stage_checkpoint_action')) ? onWaive : undefined
+          }
         />
       )}
-      <Sheet open={discussing} title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`} onClose={() => setDiscussing(false)} testId="sheet-discuss">
+      <Sheet
+        open={discussing}
+        title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`}
+        onClose={() => setDiscussing(false)}
+        testId="sheet-discuss"
+      >
         <div className="px-4 py-3">
           <DiscussSubject
             subjectKey={`checkpoint:${run.id}:${cp.kind}`}
             subject={{
-              kind: "checkpoint",
+              kind: 'checkpoint',
               subject: { run_id: run.id, checkpoint_id: cp.id },
               label: `${run.flow_title} · ${CHECKPOINT_LABEL[cp.kind]}`,
             }}
@@ -2631,30 +3144,44 @@ function CheckpointRow({
   );
 }
 
-const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
+const CONSOLE_NEEDS: Record<ConsoleAnswer['needs'], string> = {
   confirm:
     "It does not count on its own: an approver confirms it or decides otherwise. Until then the run's agents may read Oracle but not write to it.",
   redo_or_continue:
-    "The workflow had no revision step here and went on regardless. Redo runs this segment again as a new workflow with the findings; Continue keeps what ran.",
-  unreadable: "Oracle could not read the recorded verdict. Approving follows the workflow; Redo runs the segment again.",
+    'The workflow had no revision step here and went on regardless. Redo runs this segment again as a new workflow with the findings; Continue keeps what ran.',
+  unreadable:
+    'Oracle could not read the recorded verdict. Approving follows the workflow; Redo runs the segment again.',
   unread:
     "Oracle has not read the answer yet and reads it again each minute. Until then the run's agents may read Oracle but not write to it.",
 };
 
 /** D7: what needs the agents, one sentence each ("Split on budget-caps needs the agents: …"). */
-function needsAgentsText(list: NonNullable<CheckpointOut["needs_agents"]>): string | null {
+function needsAgentsText(list: NonNullable<CheckpointOut['needs_agents']>): string | null {
   if (list.length === 0) return null;
-  return list.map((x) => `${x.kind.charAt(0).toUpperCase()}${x.kind.slice(1)} on ${x.item} needs the agents: send back, or remove it to approve.`).join(" ");
+  return list
+    .map(
+      (x) =>
+        `${x.kind.charAt(0).toUpperCase()}${x.kind.slice(1)} on ${x.item} needs the agents: send back, or remove it to approve.`,
+    )
+    .join(' ');
 }
 
 /** As oracle.runs.gate.message: why Approve is refused while the gate is closed (D3). */
-function gateMessage(gate: CheckpointOut["gate"] | undefined): string | null {
+function gateMessage(gate: CheckpointOut['gate'] | undefined): string | null {
   if (!gate || gate.open) return null;
-  return `${plural(gate.blocking_open + gate.file_problems, "blocking problem")} left: fix or waive them, or send back to the agents`;
+  return `${plural(gate.blocking_open + gate.file_problems, 'blocking problem')} left: fix or waive them, or send back to the agents`;
 }
 
 /** D3: the blocking reasons still open under the decision, each waivable one with Waive…. */
-function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut["gate"]>; message: string; onWaive?: (body: ActionIn) => Promise<void> }) {
+function GateList({
+  gate,
+  message,
+  onWaive,
+}: {
+  gate: NonNullable<CheckpointOut['gate']>;
+  message: string;
+  onWaive?: (body: ActionIn) => Promise<void>;
+}) {
   // Each problem by its own ref: two of the same code on one feature are two rows, each with its own Waive….
   const seen = new Set<string>();
   const rows = gate.left.filter((x) => {
@@ -2679,7 +3206,10 @@ function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut[
  * A reason's feature as a person reads it (detailed-b 2): its code and name ("F-2 Usage alerts"),
  * the name from the reason or else the company's features; a bare key only when neither has it.
  */
-function gateItem(x: { item: string; item_title?: string | null }, names: Names | undefined): string {
+function gateItem(
+  x: { item: string; item_title?: string | null },
+  names: Names | undefined,
+): string {
   const title = x.item_title ?? names?.byKey.get(x.item)?.title;
   return title ? namedText(named(title, x.item)) : x.item;
 }
@@ -2687,7 +3217,13 @@ function gateItem(x: { item: string; item_title?: string | null }, names: Names 
 const gateKey = (x: { item: string; code: string; ref?: string }) => `${x.item}|${x.ref || x.code}`;
 
 /** One blocking reason: its own reason box, text and Waive, so waiving it waives it alone. */
-function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"][number]; onWaive?: (body: ActionIn) => Promise<void> }) {
+function GateRow({
+  x,
+  onWaive,
+}: {
+  x: NonNullable<CheckpointOut['gate']>['left'][number];
+  onWaive?: (body: ActionIn) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const names = useNames();
   return (
@@ -2710,7 +3246,14 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
       {open && onWaive && (
         <WaiveForm
           reason={x.label}
-          onWaive={(text) => onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: text } })}
+          onWaive={(text) =>
+            onWaive({
+              item_key: x.item,
+              kind: 'waive',
+              answers: [x.ref || x.code],
+              value: { reason: text },
+            })
+          }
           onDone={() => setOpen(false)}
         />
       )}
@@ -2719,7 +3262,15 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
 }
 
 /** A reason row's Waive…: opens the waiver's reason box under it, where a refusal is said too. */
-function WaiveFix({ label, reason, onWaive }: { label: string; reason: string; onWaive: (text: string) => Promise<void> }) {
+function WaiveFix({
+  label,
+  reason,
+  onWaive,
+}: {
+  label: string;
+  reason: string;
+  onWaive: (text: string) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   if (open) return <WaiveForm reason={reason} onWaive={onWaive} onDone={() => setOpen(false)} />;
   return (
@@ -2732,11 +3283,20 @@ function WaiveFix({ label, reason, onWaive }: { label: string; reason: string; o
 /** The API's words as a sentence: its refusals start lowercase ("this checkpoint is decided"). */
 const asSentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-const NO_SHARED_DRAFT = "This stop's shared review could not be read, so nothing was waived. Reload the page and try again.";
+const NO_SHARED_DRAFT =
+  "This stop's shared review could not be read, so nothing was waived. Reload the page and try again.";
 
 /** D3: a waiver's reason and Waive. A refused waiver keeps its form and reason, with the API's words under it. */
-function WaiveForm({ reason: label, onWaive, onDone }: { reason: string; onWaive: (text: string) => Promise<void>; onDone: () => void }) {
-  const [reason, setReason] = useState("");
+function WaiveForm({
+  reason: label,
+  onWaive,
+  onDone,
+}: {
+  reason: string;
+  onWaive: (text: string) => Promise<void>;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -2775,14 +3335,21 @@ function WaiveForm({ reason: label, onWaive, onDone }: { reason: string; onWaive
 /** Who answered in SwarmCloud's console and what Oracle still needs; the why sits in the (i). */
 function ConsolePanel({ answer: c, held = false }: { answer: ConsoleAnswer; held?: boolean }) {
   return (
-    <div className="mt-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" data-testid="console-answer">
+    <div
+      className="mt-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+      data-testid="console-answer"
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
         <span>
-          Answered in SwarmCloud by <span className="font-semibold">{c.answered_by ?? "someone"}</span>
+          Answered in SwarmCloud by{' '}
+          <span className="font-semibold">{c.answered_by ?? 'someone'}</span>
           {c.via && ` via ${c.via}`}
           {c.verdict && (
             <>
-              : <span className="font-semibold">{c.verdict === "MERGE" ? "approved" : "changes requested"}</span>
+              :{' '}
+              <span className="font-semibold">
+                {c.verdict === 'MERGE' ? 'approved' : 'changes requested'}
+              </span>
             </>
           )}
         </span>
@@ -2820,7 +3387,14 @@ function DeleteButton(props: Parameters<typeof DeleteMenu>[0] & { what?: string 
       </Button>
       {open &&
         createPortal(
-          <DeleteDialog title={props.title} what={props.what} dependents={props.dependents} remove={props.remove} onClose={() => setOpen(false)} onDeleted={props.onDeleted} />,
+          <DeleteDialog
+            title={props.title}
+            what={props.what}
+            dependents={props.dependents}
+            remove={props.remove}
+            onClose={() => setOpen(false)}
+            onDeleted={props.onDeleted}
+          />,
           document.body,
         )}
     </>

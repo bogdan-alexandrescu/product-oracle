@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * fix4 shell, Simple's Roadmap (desktop and phone, mock-backed, through the UI only), on the
@@ -17,107 +17,138 @@ import { expect, test, type Page } from "./test";
  * no_claim: the API's company day (api/oracle/company_time.py, its own pytest).
  */
 
-const URL = "/simple/roadmap?roadmap=onboarding-roadmap";
+const URL = '/simple/roadmap?roadmap=onboarding-roadmap';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
 async function open(page: Page) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan-lanes"] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      'simple-plan-lanes',
+    ] as const);
   await login(page);
   await page.goto(URL);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'timeline');
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1366, height: 820 } });
 
   // Moved: the Timeline's own key (above the chart) carries Today's day now.
-  test("qa-shell-6: on a Pacific evening the Timeline key's Today is the company's day", async ({ page }) => {
-    await page.clock.setFixedTime(new Date("2026-10-30T02:00:00Z"));
+  test("qa-shell-6: on a Pacific evening the Timeline key's Today is the company's day", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-10-30T02:00:00Z'));
     await open(page);
-    const today = page.getByTestId("timeline-key").locator('[data-key="today"]');
-    await expect(today).toHaveText("Today Oct 29");
+    const today = page.getByTestId('timeline-key').locator('[data-key="today"]');
+    await expect(today).toHaveText('Today Oct 29');
   });
 
-  test("qa-shell-21: the roadmap writes its days month first, as Detailed does", async ({ page }) => {
+  test('qa-shell-21: the roadmap writes its days month first, as Detailed does', async ({
+    page,
+  }) => {
     await open(page);
-    await expect(page.getByTestId("timeline-key").locator('[data-key="today"]')).toHaveText("Today Oct 22");
+    await expect(page.getByTestId('timeline-key').locator('[data-key="today"]')).toHaveText(
+      'Today Oct 22',
+    );
     // The milestone ends and the holidays' key are the Gantt's.
-    await page.getByTestId("format-gantt").click();
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
-    await expect(page.getByTestId("milestone-end-label").first()).toHaveText("M1 ends Nov 27");
-    await expect(page.getByTestId("legend")).toContainText("Holidays year-end break");
-    await expect(page.getByTestId("legend")).not.toContainText(/\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/);
+    await page.getByTestId('format-gantt').click();
+    await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'gantt');
+    await expect(page.getByTestId('milestone-end-label').first()).toHaveText('M1 ends Nov 27');
+    await expect(page.getByTestId('legend')).toContainText('Holidays year-end break');
+    await expect(page.getByTestId('legend')).not.toContainText(
+      /\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/,
+    );
   });
 
   // Moved: the desktop Timeline groups by goal; each goal's heading names it and its count.
   // tb-mk: the Timeline's bands are now the tracks; the Waterfall keeps the goal lanes and their counts.
-  test("qa-shell-25: each goal lane is named by its goal and its count", async ({ page }) => {
+  test('qa-shell-25: each goal lane is named by its goal and its count', async ({ page }) => {
     await open(page);
-    await page.getByTestId("format-waterfall").click();
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+    await page.getByTestId('format-waterfall').click();
+    await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'waterfall');
     // Track everywhere (owner Nov 10): the Waterfall starts in track bands; its goal lanes are a Group by Goal away.
-    await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
-    await page.getByTestId("group-goal").click();
-    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
-    const lanes = page.getByTestId("chart-group");
+    await expect(page.getByTestId('group-track')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('chart-group').first()).toContainText(/track/i);
+    await page.getByTestId('group-goal').click();
+    await expect(page.getByTestId('group-goal')).toHaveAttribute('aria-pressed', 'true');
+    const lanes = page.getByTestId('chart-group');
     await expect(lanes.first()).toBeVisible();
     const n = await lanes.count();
     expect(n).toBeGreaterThan(1);
     for (let i = 0; i < n; i++) {
-      await expect(lanes.nth(i).locator("span").first()).toHaveText(/^\S/);
-      await expect(lanes.nth(i).getByTestId("lane-count")).toHaveText(/^\d+ items?$/);
+      await expect(lanes.nth(i).locator('span').first()).toHaveText(/^\S/);
+      await expect(lanes.nth(i).getByTestId('lane-count')).toHaveText(/^\d+ items?$/);
     }
   });
 
-  test("qa-shell-21: the PRDs list says when each changed month first", async ({ page }) => {
+  test('qa-shell-21: the PRDs list says when each changed month first', async ({ page }) => {
     await login(page);
-    await page.goto("/simple/one-pagers");
-    const updated = page.getByTestId("one-pager-row").first().getByText(/^Updated /);
-    await expect(updated).toHaveText(/^Updated (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}$/);
+    await page.goto('/simple/one-pagers');
+    const updated = page
+      .getByTestId('one-pager-row')
+      .first()
+      .getByText(/^Updated /);
+    await expect(updated).toHaveText(
+      /^Updated (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}$/,
+    );
   });
 });
 
-test.describe("narrow desktop", () => {
+test.describe('narrow desktop', () => {
   test.use({ viewport: { width: 1024, height: 768 } });
 
   test("qa-shell-24: the quick add's placeholder fits its box", async ({ page }) => {
     await open(page);
-    const input = page.getByLabel("Add an item");
+    const input = page.getByLabel('Add an item');
     await expect(input).toBeVisible();
     const room = await input.evaluate((el) => {
       const box = el as HTMLInputElement;
       const cs = getComputedStyle(box);
-      const ctx = document.createElement("canvas").getContext("2d")!;
+      const ctx = document.createElement('canvas').getContext('2d')!;
       ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-      return { text: ctx.measureText(box.placeholder).width, width: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) };
+      return {
+        text: ctx.measureText(box.placeholder).width,
+        width: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+      };
     });
     expect(room.text).toBeLessThanOrEqual(room.width);
     // Its full words stay on the box.
-    await expect(input).toHaveAttribute("title", "Type a title, then drag it onto a quarter, a column or a goal");
+    await expect(input).toHaveAttribute(
+      'title',
+      'Type a title, then drag it onto a quarter, a column or a goal',
+    );
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use(PHONE);
 
-  test("qa-shell-24: the pickers sit behind one Filters button", async ({ page }) => {
+  test('qa-shell-24: the pickers sit behind one Filters button', async ({ page }) => {
     await open(page);
-    const toggle = page.getByTestId("filters-toggle");
-    await expect(toggle).toHaveText("Filters · 1");
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByRole("combobox", { name: "To", exact: true })).toHaveCount(0);
+    const toggle = page.getByTestId('filters-toggle');
+    await expect(toggle).toHaveText('Filters · 1');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('combobox', { name: 'To', exact: true })).toHaveCount(0);
     // The Timeline always groups by goal, so it has no Group by; on the Gantt Group by stays at hand beside the button.
-    await expect(page.getByTestId("filters").getByRole("group", { name: "Group by" })).toHaveCount(0);
-    await page.getByTestId("format-gantt").click();
-    await expect(page.getByTestId("filters").getByRole("group", { name: "Group by" })).toBeVisible();
+    await expect(page.getByTestId('filters').getByRole('group', { name: 'Group by' })).toHaveCount(
+      0,
+    );
+    await page.getByTestId('format-gantt').click();
+    await expect(
+      page.getByTestId('filters').getByRole('group', { name: 'Group by' }),
+    ).toBeVisible();
     await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    const pickers = page.getByTestId("filter-pickers");
-    for (const name of ["Roadmap", "PRD", "Goal", "Track", "From", "To"]) await expect(pickers.getByRole("combobox", { name, exact: true })).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const pickers = page.getByTestId('filter-pickers');
+    for (const name of ['Roadmap', 'PRD', 'Goal', 'Track', 'From', 'To'])
+      await expect(pickers.getByRole('combobox', { name, exact: true })).toBeVisible();
     // One picker per line: none sits alone at the end of a wrapped row.
-    const xs = await pickers.locator("label").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
+    const xs = await pickers
+      .locator('label')
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
     expect(new Set(xs.map((x) => Math.round(x))).size).toBe(1);
     await toggle.click();
     await expect(pickers).toHaveCount(0);
@@ -126,27 +157,31 @@ test.describe("phone", () => {
   // Moved: a phone's Timeline is a list by quarter.
   test("qa-shell-21: the phone Timeline's list writes its days month first", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("timeline-list").getByTestId("timeline-row").first()).toContainText(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} – (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/);
+    await expect(
+      page.getByTestId('timeline-list').getByTestId('timeline-row').first(),
+    ).toContainText(
+      /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} – (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/,
+    );
   });
 
-  test("review: the Filters panel closes on Escape and on a tap outside it", async ({ page }) => {
+  test('review: the Filters panel closes on Escape and on a tap outside it', async ({ page }) => {
     await open(page);
-    const toggle = page.getByTestId("filters-toggle");
-    const pickers = page.getByTestId("filter-pickers");
+    const toggle = page.getByTestId('filters-toggle');
+    const pickers = page.getByTestId('filter-pickers');
     await toggle.click();
     await expect(pickers).toBeVisible();
     // A pick inside the panel keeps it open.
-    await pickers.getByRole("combobox", { name: "Track", exact: true }).selectOption({ index: 1 });
+    await pickers.getByRole('combobox', { name: 'Track', exact: true }).selectOption({ index: 1 });
     await expect(pickers).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.keyboard.press('Escape');
     await expect(pickers).toHaveCount(0);
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await expect(toggle).toBeFocused();
 
     await toggle.click();
     await expect(pickers).toBeVisible();
-    await page.getByTestId("simple-chart").tap({ position: { x: 5, y: 5 } });
+    await page.getByTestId('simple-chart').tap({ position: { x: 5, y: 5 } });
     await expect(pickers).toHaveCount(0);
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 });

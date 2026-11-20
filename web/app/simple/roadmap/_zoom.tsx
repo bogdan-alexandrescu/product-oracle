@@ -1,11 +1,11 @@
-"use client";
+'use client';
 // mk-qa4-roadmap, the owner's picks (Nov 1): the Timeline zooms around today (QR1 A), each
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
-import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
-import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from "./_mk";
-import { TrackHead } from "./_trackbands";
+import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from './_milestones';
+import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from './_mk';
+import { TrackHead } from './_trackbands';
 import {
   Fragment,
   memo,
@@ -19,14 +19,14 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-} from "react";
+} from 'react';
 
-import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { addMonths, calendarDay, utcDay } from "@/lib/dates";
-import { useMe } from "@/lib/me";
+import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
+import { InfoTip } from '@/components/ds/InfoTip';
+import { addMonths, calendarDay, utcDay } from '@/lib/dates';
+import { useMe } from '@/lib/me';
 
-import { FixButtons, fixCount, type Act } from "./_card";
+import { FixButtons, fixCount, type Act } from './_card';
 import {
   addDays,
   barSpan,
@@ -50,45 +50,31 @@ import {
   type Item,
   type Roadmap,
   whereAttr,
-} from "./_lib";
-import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline";
-import { itemName, NotInGt } from "./_gtflag";
-import { joinedNames, joinedWords } from "@/lib/milestone-code";
+} from './_lib';
+import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from './_timeline';
+import { itemName, NotInGt } from './_gtflag';
+import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
-type Zoom = "3m" | "6m" | "1y" | "all";
+type Zoom = '3m' | '6m' | '1y' | 'all';
 /** Days in sight at each zoom (All fits the whole plan). */
-const ZOOM_DAYS: Record<Exclude<Zoom, "all">, number> = { "3m": 91, "6m": 182, "1y": 365 };
+const ZOOM_DAYS: Record<Exclude<Zoom, 'all'>, number> = { '3m': 91, '6m': 182, '1y': 365 };
 /** The owner (Nov 9): every zoom reaches at least this day, item or not. */
-const Q1_2027_END = "2027-03-31";
+const Q1_2027_END = '2027-03-31';
 /** The zoom each person picked on this visit (the page's own, gone on a reload), by who is
  * signed in: someone else signing in on the same tab opens on 3 months, not on its pick. */
 const visit = new Map<string, Zoom>();
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-const monthWord = (day: string) =>
-  `${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthWord = (day: string) => `${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
 const quarterWords = (q: { start: string; end: string }) =>
   `${MONTHS[Number(q.start.slice(5, 7)) - 1]} – ${MONTHS[Number(q.end.slice(5, 7)) - 1]} ${q.start.slice(0, 4)}`;
 
 /** Today's own colour (QR2 A): purple, never the red of a broken link. */
-const TODAY = "var(--today)";
+const TODAY = 'var(--today)';
 
 type Row =
-  | { kind: "lane"; key: string; title: string; count: number }
-  | { kind: "item"; item: Item; depth?: number };
+  | { kind: 'lane'; key: string; title: string; count: number }
+  | { kind: 'item'; item: Item; depth?: number };
 
 /** Items by goal (a lane per goal, then No goal, then Below the line), each item its own row.
  * The lanes are the data's goal groups (oneLane(lanes(data, "goal"))), as the goal cards, the
@@ -109,34 +95,31 @@ function rowsOf(data: Roadmap): Row[] {
       if (!lanes.has(g.key)) lanes.set(g.key, { title: g.title, items: [] });
       lanes.get(g.key)!.items.push(i);
     }
-  const order = [...lanes.entries()].sort(([a], [b]) =>
-    a === "none" ? 1 : b === "none" ? -1 : 0,
-  );
+  const order = [...lanes.entries()].sort(([a], [b]) => (a === 'none' ? 1 : b === 'none' ? -1 : 0));
   const out: Row[] = [];
   for (const [k, l] of order) {
-    out.push({ kind: "lane", key: k, title: l.title, count: l.items.length });
+    out.push({ kind: 'lane', key: k, title: l.title, count: l.items.length });
     const sorted = [...l.items].sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
     // feature-parts: every part, at any depth, right under its parent (in its top parent's
     // lane, oneLane), drawn as a tree; one whose parent is not shown keeps its own place.
-    for (const x of partsTree([sorted.map((i) => i.id)], byId)[0]) out.push({ kind: "item", item: byId.get(x.id)!, depth: x.depth });
+    for (const x of partsTree([sorted.map((i) => i.id)], byId)[0])
+      out.push({ kind: 'item', item: byId.get(x.id)!, depth: x.depth });
   }
   if (below.length) {
     out.push({
-      kind: "lane",
-      key: "below",
-      title: "Below the line",
+      kind: 'lane',
+      key: 'below',
+      title: 'Below the line',
       count: below.length,
     });
-    for (const i of below) out.push({ kind: "item", item: i });
+    for (const i of below) out.push({ kind: 'item', item: i });
   }
   return out;
 }
 
 /** The open broken link of a live item (red means this and nothing else). */
 export function brokenFlag(i: Item): Flag | undefined {
-  return closedItem(i)
-    ? undefined
-    : broken(i).find((f) => f.kind === "dependency_order");
+  return closedItem(i) ? undefined : broken(i).find((f) => f.kind === 'dependency_order');
 }
 
 /** QR2 A: how a bar shows its state. */
@@ -147,31 +130,28 @@ type Look = {
   mark?: boolean;
 };
 const HATCH =
-  "repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, color-mix(in srgb, var(--accent) 35%, transparent) 3px 6px)";
+  'repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, color-mix(in srgb, var(--accent) 35%, transparent) 3px 6px)';
 const DATED: CSSProperties = {
-  background: "var(--accent-soft)",
-  border: "1.5px solid var(--accent)",
+  background: 'var(--accent-soft)',
+  border: '1.5px solid var(--accent)',
 };
 const DRAFT: CSSProperties = {
-  background: "var(--surface)",
-  border: "1.5px dashed var(--line-strong)",
+  background: 'var(--surface)',
+  border: '1.5px dashed var(--line-strong)',
 };
 const BROKEN: CSSProperties = {
-  background: "var(--accent-soft)",
-  border: "2px solid var(--crit)",
+  background: 'var(--accent-soft)',
+  border: '2px solid var(--crit)',
 };
 function lookOf(i: Item): Look {
-  const base: CSSProperties = i.estimated
-    ? { ...DATED, background: HATCH }
-    : DATED;
-  if (i.draft) return { bar: DRAFT, chip: "Draft" };
+  const base: CSSProperties = i.estimated ? { ...DATED, background: HATCH } : DATED;
+  if (i.draft) return { bar: DRAFT, chip: 'Draft' };
   if (closedItem(i))
     return {
-      bar: { background: "var(--surface2)", border: "1.5px solid var(--line)" },
-      name: { textDecoration: "line-through", color: "var(--text2)" },
+      bar: { background: 'var(--surface2)', border: '1.5px solid var(--line)' },
+      name: { textDecoration: 'line-through', color: 'var(--text2)' },
     };
-  if (brokenFlag(i))
-    return { bar: { ...base, border: BROKEN.border }, mark: true };
+  if (brokenFlag(i)) return { bar: { ...base, border: BROKEN.border }, mark: true };
   return { bar: base };
 }
 
@@ -179,31 +159,29 @@ function lookOf(i: Item): Look {
 function Key({ data }: { data: Roadmap }) {
   const has = (f: (i: Item) => boolean) => data.items.some(f);
   const sw = (s: CSSProperties) => (
-    <i
-      aria-hidden
-      className="inline-block h-3 w-7 flex-none rounded-sm"
-      style={s}
-    />
+    <i aria-hidden className="inline-block h-3 w-7 flex-none rounded-sm" style={s} />
   );
-  const e: [string, ReactNode, string][] = [["dated", sw(DATED), "Dated"]];
-  if (has((i) => i.estimated))
-    e.push(["est", sw({ ...DATED, background: HATCH }), "Estimated"]);
-  if (has((i) => i.draft)) e.push(["draft", sw(DRAFT), "Draft"]);
-  if (has((i) => !!brokenFlag(i)))
-    e.push(["broken", sw(BROKEN), "⚠ Broken link"]);
+  const e: [string, ReactNode, string][] = [['dated', sw(DATED), 'Dated']];
+  if (has((i) => i.estimated)) e.push(['est', sw({ ...DATED, background: HATCH }), 'Estimated']);
+  if (has((i) => i.draft)) e.push(['draft', sw(DRAFT), 'Draft']);
+  if (has((i) => !!brokenFlag(i))) e.push(['broken', sw(BROKEN), '⚠ Broken link']);
   if (has(closedItem))
     e.push([
-      "cut",
+      'cut',
       <span key="c" className="text-sm text-text2 line-through">
         Cut
       </span>,
-      "Cut, below the line",
+      'Cut, below the line',
     ]);
   // QA Nov 14 #2: the key dates the Timeline draws have their entry, as the Gantt's key does.
   if (drawnKeyDates(data).length)
-    e.push(["key", <i key="k" aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, "Key date"]);
+    e.push([
+      'key',
+      <i key="k" aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />,
+      'Key date',
+    ]);
   e.push([
-    "today",
+    'today',
     <i
       key="t"
       aria-hidden
@@ -250,12 +228,7 @@ export interface TimelineProps extends Common {
   onKeyEnd: (item: Item) => void;
   onKeyCancel: (item: Item) => void;
   /** The item card (FloatingCard), placed by `style`; `sheet`: a phone's bottom sheet. */
-  card: (
-    item: Item,
-    style: CSSProperties,
-    sheet: boolean,
-    onClose: () => void,
-  ) => ReactNode;
+  card: (item: Item, style: CSSProperties, sheet: boolean, onClose: () => void) => ReactNode;
 }
 
 const LABEL_W = 232;
@@ -267,7 +240,7 @@ const MS_FIT_W = 180;
 const MS_FIT_STEP = 120;
 /** qa-nov17 #4: how far (px) a label may sit right of its day at All 3 years: beside its own line. */
 const MS_BESIDE = 24;
-const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
+const fullDay = (d: string) => calendarDay(d, { month: 'short', day: 'numeric', year: 'numeric' });
 const ROW_H = 34;
 
 /** The Timeline (QR1 A): three months from just before today, one row per item, names fixed on the left;
@@ -275,9 +248,7 @@ const ROW_H = 34;
  * sits in a panel at its right (a sheet on a phone). */
 export function ZoomTimeline(props: TimelineProps) {
   const { data, phone, openKey, onOpen } = props;
-  const openItem = openKey
-    ? (data.items.find((i) => i.key === openKey) ?? null)
-    : null;
+  const openItem = openKey ? (data.items.find((i) => i.key === openKey) ?? null) : null;
   const side = !phone && !!openItem;
   // qa-nov17 #9: an item opening in the side panel brings the chart's top into view (as the other
   // formats do), so the panel opens full height, never a short strip at the foot of the screen.
@@ -285,7 +256,7 @@ export function ZoomTimeline(props: TimelineProps) {
   useEffect(() => {
     const el = row.current;
     if (!side || !el) return;
-    if (el.getBoundingClientRect().top > 12) el.scrollIntoView({ block: "start" });
+    if (el.getBoundingClientRect().top > 12) el.scrollIntoView({ block: 'start' });
   }, [side, openKey]);
   return (
     // The page reads its chart (and its format) by simple-chart, as the other formats give it.
@@ -295,7 +266,7 @@ export function ZoomTimeline(props: TimelineProps) {
           <Key data={data} />
         </div>
         <ConflictPanel {...props} onShow={onOpen} />
-        <div ref={row} className={`scroll-mt-3 ${side ? "flex items-start gap-3" : ""}`}>
+        <div ref={row} className={`scroll-mt-3 ${side ? 'flex items-start gap-3' : ''}`}>
           {/* The chart's bars, date words and today line stack inside its own context (isolate),
            * so they never paint over the item's panel, nor its talk widened over the chart. */}
           <div className="isolate min-w-0 flex-1">
@@ -310,12 +281,12 @@ export function ZoomTimeline(props: TimelineProps) {
               {props.card(
                 openItem,
                 {
-                  position: "relative",
+                  position: 'relative',
                   left: 0,
                   top: 0,
-                  width: "100%",
+                  width: '100%',
                   border: 0,
-                  boxShadow: "none",
+                  boxShadow: 'none',
                 },
                 false,
                 () => onOpen(null),
@@ -323,9 +294,7 @@ export function ZoomTimeline(props: TimelineProps) {
             </aside>
           )}
         </div>
-        {phone &&
-          openItem &&
-          props.card(openItem, { height: "52dvh" }, true, () => onOpen(null))}
+        {phone && openItem && props.card(openItem, { height: '52dvh' }, true, () => onOpen(null))}
       </div>
     </div>
   );
@@ -334,15 +303,17 @@ export function ZoomTimeline(props: TimelineProps) {
 /** qa-nov17: a broken link's words after its feature's coded name: its own name dropped from
  * their front, the other features they name by code and name ("‘F-12 Alert rules engine’"). */
 const REASON_WORDS: Record<string, string> = {
-  dependency_order: "starts before what it depends on ends",
-  outside_milestone: "ends after its milestone",
-  cut_with_dependents: "is cut, others depend on it",
+  dependency_order: 'starts before what it depends on ends',
+  outside_milestone: 'ends after its milestone',
+  cut_with_dependents: 'is cut, others depend on it',
 };
 
 export function shortReason(i: Item, f: Flag, items: ReadonlyMap<string, Item>): string {
   const own = `‘${i.title}’ `;
   let r = f.reason.startsWith(own) ? f.reason.slice(own.length) : f.reason;
-  for (const o of items.values()) if (o.id !== i.id && o.code && r.includes(`‘${o.title}’`)) r = r.replace(`‘${o.title}’`, `‘${itemName(o)}’`);
+  for (const o of items.values())
+    if (o.id !== i.id && o.code && r.includes(`‘${o.title}’`))
+      r = r.replace(`‘${o.title}’`, `‘${itemName(o)}’`);
   return r;
 }
 
@@ -377,17 +348,23 @@ export function ConflictPanel({
         key={`${i.id}-${f.kind}-${f.subject}`}
         data-testid="conflict"
         data-item={i.key}
-        className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
+        className={`flex px-3 py-2 ${stacked ? 'flex-col gap-1' : 'flex-wrap items-center gap-3'}`}
       >
         {/* qa-nov17: every row one form: the feature by its code and name (it opens it), then its
             reason in short words, other features by code too; an end past its milestone (pre-demo
             QA S-5) is said as a link is. QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
-        <span className={`text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
-          <button type="button" onClick={() => onShow(i.key)} className="text-left font-semibold hover:underline">
+        <span className={`text-sm text-text ${stacked ? '' : 'min-w-[16rem] flex-1'}`}>
+          <button
+            type="button"
+            onClick={() => onShow(i.key)}
+            className="text-left font-semibold hover:underline"
+          >
             {itemName(i)}
-          </button>{" "}
+          </button>{' '}
           {/* qa-nov17: a few words in sight, the whole reason behind its (i) (prose guard). */}
-          <span data-testid="conflict-short">{REASON_WORDS[f.kind] ?? "has a broken link"}</span>{" "}
+          <span data-testid="conflict-short">
+            {REASON_WORDS[f.kind] ?? 'has a broken link'}
+          </span>{' '}
           <InfoTip label="what is broken" align="start" testId="conflict-reason-tip">
             {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
           </InfoTip>
@@ -410,9 +387,16 @@ export function ConflictPanel({
   // when the whole roadmap holds more than these filters show.
   const elsewhere = all !== undefined && all !== list.length && !!onAll;
   const showAll = elsewhere ? (
-    <span className="flex flex-none items-center gap-2 text-sm font-normal text-text2" data-testid="conflicts-all">
+    <span
+      className="flex flex-none items-center gap-2 text-sm font-normal text-text2"
+      data-testid="conflicts-all"
+    >
       {all} in all
-      <button type="button" onClick={onAll} className="font-semibold text-accent-ink hover:underline">
+      <button
+        type="button"
+        onClick={onAll}
+        className="font-semibold text-accent-ink hover:underline"
+      >
         Clear filters
       </button>
     </span>
@@ -423,29 +407,35 @@ export function ConflictPanel({
         data-testid="conflicts"
         className="mb-2 flex flex-wrap items-center gap-x-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text2"
       >
-        {elsewhere ? "No broken links here," : "No broken links"}
+        {elsewhere ? 'No broken links here,' : 'No broken links'}
         {showAll}
       </div>
     );
   return (
-    <section
-      data-testid="conflicts"
-      className="mb-2 rounded-xl border border-crit bg-surface"
-    >
+    <section data-testid="conflicts" className="mb-2 rounded-xl border border-crit bg-surface">
       <div className="flex w-full flex-wrap items-center gap-x-2 px-3 py-2 text-sm">
         <button
           type="button"
           aria-expanded={!shut}
           onClick={() => setShut(!shut)}
-          className={`flex min-w-0 items-center gap-2 text-left font-semibold text-crit ${elsewhere ? "" : "flex-1"}`}
+          className={`flex min-w-0 items-center gap-2 text-left font-semibold text-crit ${elsewhere ? '' : 'flex-1'}`}
         >
-          ⚠ {list.length} broken {list.length === 1 ? "link" : "links"}
-          {elsewhere ? " here," : <span className="ml-auto font-normal text-text2">{shut ? "Show" : "Hide"}</span>}
+          ⚠ {list.length} broken {list.length === 1 ? 'link' : 'links'}
+          {elsewhere ? (
+            ' here,'
+          ) : (
+            <span className="ml-auto font-normal text-text2">{shut ? 'Show' : 'Hide'}</span>
+          )}
         </button>
         {showAll}
         {elsewhere && (
-          <button type="button" aria-expanded={!shut} onClick={() => setShut(!shut)} className="ml-auto text-text2">
-            {shut ? "Show" : "Hide"}
+          <button
+            type="button"
+            aria-expanded={!shut}
+            onClick={() => setShut(!shut)}
+            className="ml-auto text-text2"
+          >
+            {shut ? 'Show' : 'Hide'}
           </button>
         )}
       </div>
@@ -456,8 +446,15 @@ export function ConflictPanel({
               one(g[0])
             ) : (
               // Pre-demo QA S-14, as on Home: an item's second break sits under its first, ruled together.
-              <li key={g[0].i.id} data-testid="conflict-group" data-item={g[0].i.key} className="py-1">
-                <ul className="ml-3 divide-y divide-line border-l-2 border-crit/40">{g.map(one)}</ul>
+              <li
+                key={g[0].i.id}
+                data-testid="conflict-group"
+                data-item={g[0].i.key}
+                className="py-1"
+              >
+                <ul className="ml-3 divide-y divide-line border-l-2 border-crit/40">
+                  {g.map(one)}
+                </ul>
               </li>
             ),
           )}
@@ -479,14 +476,14 @@ function DayChart(props: TimelineProps) {
   // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit
   // (back from the Gantt too), never stored: a new visit opens on 3 months again.
   const { me } = useMe();
-  const who = me?.user_id ?? me?.token_id ?? "";
+  const who = me?.user_id ?? me?.token_id ?? '';
   const [, redraw] = useState(0);
-  const zoom = visit.get(who) ?? "3m";
+  const zoom = visit.get(who) ?? '3m';
   const setZoom = (z: Zoom) => {
     visit.set(who, z);
     redraw((n) => n + 1);
   };
-  const fit = zoom === "all";
+  const fit = zoom === 'all';
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1000);
   const [sl, setSl] = useState(0);
@@ -504,7 +501,7 @@ function DayChart(props: TimelineProps) {
     .flatMap((i) => [i.start.date, i.end.date])
     .concat(data.today)
     .sort();
-  const t0 = addDays(days[0].slice(0, 8) + "01", 0);
+  const t0 = addDays(days[0].slice(0, 8) + '01', 0);
   const last = addDays(days[days.length - 1], 20);
   const t1 = last > Q1_2027_END ? last : Q1_2027_END;
   const span = daysBetween(t0, t1);
@@ -532,20 +529,17 @@ function DayChart(props: TimelineProps) {
   // edge while the next month's label is not in its way.
   const cutAt = fit ? -1 : months.findIndex((m) => x(m.day) >= sl - 2) - 1;
   const pinned =
-    cutAt >= 0 &&
-    (cutAt + 1 >= months.length || x(months[cutAt + 1].day) - sl > 80)
+    cutAt >= 0 && (cutAt + 1 >= months.length || x(months[cutAt + 1].day) - sl > 80)
       ? months[cutAt].day
       : undefined;
   // Owner (Nov 4): 3 months marks each week, a line and its Monday's day in the months' row,
   // between the month names. A month that starts on a Monday keeps only its month line.
   const weeks: string[] = [];
-  if (zoom === "3m")
+  if (zoom === '3m')
     for (let d = addDays(t0, (8 - new Date(ms(t0)).getUTCDay()) % 7); d <= t1; d = addDays(d, 7))
-      if (d.slice(8, 10) !== "01") weeks.push(d);
+      if (d.slice(8, 10) !== '01') weeks.push(d);
   // The first month in sight carries its year.
-  const firstSeen = fit
-    ? months[0]?.day
-    : (pinned ?? months.find((m) => x(m.day) >= sl - 2)?.day);
+  const firstSeen = fit ? months[0]?.day : (pinned ?? months.find((m) => x(m.day) >= sl - 2)?.day);
   // The week marks in sight, each read without a hover: a month's first one names the month
   // ("Nov 9"), the rest give the day ("16"). A mark gives way to a month's name, or to the mark
   // before it, where they would touch.
@@ -555,7 +549,7 @@ function DayChart(props: TimelineProps) {
     return [at, at + 12 + words.length * 7];
   });
   const weekMarks: { day: string; words: string }[] = [];
-  let lastMonth = "";
+  let lastMonth = '';
   let lastEnd = -Infinity;
   for (const d of weeks) {
     if (x(d) < sl + 2) continue;
@@ -600,9 +594,10 @@ function DayChart(props: TimelineProps) {
   // cut the one before folds into that one's "+N" chip, as the 3 months' crowded labels do.
   const needOf = (words: string) => (fit ? Math.min(16 + words.length * 7, MS_FIT_W) : 56);
   // qa-nov17 #4: where not even its code and name fit beside its day, its bare diamond (named in its tip), never a cut label.
-  const dotOnly = (bare: boolean, short: string, room: number) => bare || (fit && room < needOf(short));
+  const dotOnly = (bare: boolean, short: string, room: number) =>
+    bare || (fit && room < needOf(short));
   const marks = (data.milestones ?? [])
-    .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
+    .filter((m) => m.date && m.status !== 'dropped' && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
@@ -620,11 +615,24 @@ function DayChart(props: TimelineProps) {
       const bare = left0 - base > (fit ? MS_BESIDE : MS_FIT_STEP);
       const left = bare ? base - 8 : left0;
       const need = bare ? 16 : need0;
-      const next = [...gems, ...(pill ? [pill[0] + 12] : [])].sort((a, b) => a - b).find((g) => g - 12 >= left + 4);
+      const next = [...gems, ...(pill ? [pill[0] + 12] : [])]
+        .sort((a, b) => a - b)
+        .find((g) => g - 12 >= left + 4);
       // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.
-      return { m, at, words, short: joinedWords(m, joined), bare, left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
+      return {
+        m,
+        at,
+        words,
+        short: joinedWords(m, joined),
+        bare,
+        left,
+        need,
+        gems: next == null ? Infinity : next - 12 - (left + 4) - 2,
+        gone: !fit && at + 26 + words.length * 7 < sl,
+      };
     });
-  const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
+  const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] =
+    [];
   for (const k of marks) {
     if (k.gone) continue;
     const g = msGroups[msGroups.length - 1];
@@ -639,7 +647,10 @@ function DayChart(props: TimelineProps) {
   // QA Nov 14 #2: the key dates (the roadmap's own and a PRD's not drawn as a milestone), each a
   // blue line on its day and "◆ name" on the labels' row, as the Gantt draws them. Its name steps
   // past the milestone labels and the Today pill; with no room near its day, its diamond alone.
-  const taken: [number, number][] = msGroups.map(({ head, more, room }) => [head.left + 4, head.left + 4 + Math.min(head.need, room) + (more.length ? MS_CHIP_W : 0)]);
+  const taken: [number, number][] = msGroups.map(({ head, more, room }) => [
+    head.left + 4,
+    head.left + 4 + Math.min(head.need, room) + (more.length ? MS_CHIP_W : 0),
+  ]);
   if (pill) taken.push(pill);
   // qa-nov17 #4: a name never lies under a goal milestone's diamond ("…eting"); its own small
   // diamond may sit by one.
@@ -650,14 +661,20 @@ function DayChart(props: TimelineProps) {
     .map((k) => {
       const at = x(k.date);
       const need = Math.min(24 + k.name.length * 7.5, 160);
-      const free = (a0: number, b0: number, also: [number, number][] = []) => [...taken, ...also].every(([a, b]) => b + 2 <= a0 || a - 2 >= b0);
+      const free = (a0: number, b0: number, also: [number, number][] = []) =>
+        [...taken, ...also].every(([a, b]) => b + 2 <= a0 || a - 2 >= b0);
       let l = at + 2;
-      for (const [a, b] of [...taken, ...under].sort((p, q) => p[0] - q[0])) if (b + 2 > l && a - 2 < l + need) l = b + 2;
+      for (const [a, b] of [...taken, ...under].sort((p, q) => p[0] - q[0]))
+        if (b + 2 > l && a - 2 < l + need) l = b + 2;
       let w = need;
       if (l - at > 140 || l + need > trackW) {
         // Else on its day, cut ("Customer conf…", whole in its tip) to the room before the next label.
         l = at + 2;
-        w = Math.min(need, trackW - l, ...[...taken, ...under].filter(([a]) => a >= l).map(([a]) => a - 4 - l));
+        w = Math.min(
+          need,
+          trackW - l,
+          ...[...taken, ...under].filter(([a]) => a >= l).map(([a]) => a - 4 - l),
+        );
       }
       const named = w >= 60 && free(l, l + w, under);
       // Its diamond alone where its name has no room; none over another label or the Today pill.
@@ -682,12 +699,12 @@ function DayChart(props: TimelineProps) {
   useEffect(() => {
     if (!msCard && !msList) return;
     const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       if (msCard) closeMs();
       else setMsList(null);
     };
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
   });
   // The card takes the focus as it opens (a chip's list it came from closes), without scrolling
   // the chart: a tall card on a short chart would slide the month header out of sight.
@@ -717,12 +734,13 @@ function DayChart(props: TimelineProps) {
   // The other names of the joined milestone, each once ("Also: M1 Measured").
   const alsoOf = (m: { roadmap_code?: string | null }) => {
     const a = m.roadmap_code ? joined.get(m.roadmap_code)?.also : undefined;
-    return a?.length ? `Also: ${a.join(", ")}` : null;
+    return a?.length ? `Also: ${a.join(', ')}` : null;
   };
-  const msWords = (m: (typeof marks)[number]["m"]) =>
-    `${joinedWords(m, joined)}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
+  const msWords = (m: (typeof marks)[number]['m']) =>
+    `${joinedWords(m, joined)}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join('; ')}` : ''}`;
   // A tip or a card stays inside the chart's view, right of the names column.
-  const inView = (l: number, width: number) => Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
+  const inView = (l: number, width: number) =>
+    Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
   const openMs = (id: string, from: HTMLElement | null) => {
     msBack.current = msCard === id ? null : from;
     setMsList(null);
@@ -738,7 +756,7 @@ function DayChart(props: TimelineProps) {
   const fixed = (i: Item) => !canChange || closedItem(i) || planned(i);
   const drag = useRef<{
     item: Item;
-    mode: "move" | "start" | "end";
+    mode: 'move' | 'start' | 'end';
     x0: number;
     start: string;
     end: string;
@@ -756,15 +774,15 @@ function DayChart(props: TimelineProps) {
     const d = drag.current;
     if (!d) return null;
     const n = Math.round(dx / ppd);
-    const a = d.mode === "end" ? d.start : addDays(d.start, n);
-    const b = d.mode === "start" ? d.end : addDays(d.end, n);
+    const a = d.mode === 'end' ? d.start : addDays(d.start, n);
+    const b = d.mode === 'start' ? d.end : addDays(d.end, n);
     return a > b ? [b, a] : [a, b];
   };
   const onDown = (e: ReactPointerEvent<HTMLButtonElement>, i: Item) => {
     if (e.button !== 0 || fixed(i)) return;
     const [start, end] = moved[i.id] ?? barSpan(i);
     const mode = grabAt(e.currentTarget.getBoundingClientRect(), e.clientX);
-    const touch = e.pointerType === "touch";
+    const touch = e.pointerType === 'touch';
     const d = {
       item: i,
       mode,
@@ -893,10 +911,10 @@ function DayChart(props: TimelineProps) {
     [],
   );
   const zooms: [Zoom, string][] = [
-    ["3m", "3 months"],
-    ["6m", "6 months"],
-    ["1y", "1 year"],
-    ["all", "All 3 years"],
+    ['3m', '3 months'],
+    ['6m', '6 months'],
+    ['1y', '1 year'],
+    ['all', 'All 3 years'],
   ];
   return (
     <div className="rounded-xl border border-line bg-surface">
@@ -914,7 +932,7 @@ function DayChart(props: TimelineProps) {
               data-testid={`zoom-${z}`}
               aria-pressed={zoom === z}
               onClick={() => setZoom(z)}
-              className={`px-3 py-1 text-sm font-semibold ${zoom === z ? "bg-accent text-on-accent" : "hover:bg-surface2"}`}
+              className={`px-3 py-1 text-sm font-semibold ${zoom === z ? 'bg-accent text-on-accent' : 'hover:bg-surface2'}`}
             >
               {words}
             </button>
@@ -926,7 +944,7 @@ function DayChart(props: TimelineProps) {
             onClick={() =>
               box.current?.scrollTo({
                 left: Math.max(0, xt - 60),
-                behavior: "smooth",
+                behavior: 'smooth',
               })
             }
             className="h-8 rounded-lg border border-line px-3 text-sm font-semibold hover:bg-surface2"
@@ -935,9 +953,7 @@ function DayChart(props: TimelineProps) {
           </button>
         )}
         {!fit && (
-          <span className="ml-auto text-sm text-text2">
-            Scroll sideways for earlier and later
-          </span>
+          <span className="ml-auto text-sm text-text2">Scroll sideways for earlier and later</span>
         )}
       </div>
       <div
@@ -960,9 +976,7 @@ function DayChart(props: TimelineProps) {
                 // A month that starts left of the view would peek out from under the names
                 // column cut short; the picked frames show only months that start in sight.
                 .filter((m) =>
-                  fit
-                    ? x(m.day) < trackW - 64
-                    : x(m.day) >= sl - 2 || m.day === pinned,
+                  fit ? x(m.day) < trackW - 64 : x(m.day) >= sl - 2 || m.day === pinned,
                 )
                 .map((m) => (
                   <span
@@ -991,10 +1005,18 @@ function DayChart(props: TimelineProps) {
           </div>
           {msBandH > 0 && (
             <div className="flex" style={{ height: msBandH }}>
-              <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>
+              <div
+                className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2"
+                style={{ width: labelW }}
+              >
                 Milestones
                 <span className="ml-1.5 font-normal">
-                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
+                  <InfoTip
+                    label="the milestone marks"
+                    align="start"
+                    side="bottom"
+                    testId="ms-legend-tip"
+                  >
                     <MkLegend />
                   </InfoTip>
                 </span>
@@ -1014,10 +1036,7 @@ function DayChart(props: TimelineProps) {
               data-keep-clear
               className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white"
               style={{
-                left: Math.max(
-                  labelW + sl + 2,
-                  Math.min(labelW + xt - 22, labelW + trackW - 56),
-                ),
+                left: Math.max(labelW + sl + 2, Math.min(labelW + xt - 22, labelW + trackW - 56)),
                 background: TODAY,
               }}
             >
@@ -1038,8 +1057,20 @@ function DayChart(props: TimelineProps) {
                 aria-label={msWords(m)}
                 // The label (or its chip) is the milestone's one Tab stop; the line keeps the pointer.
                 tabIndex={-1}
-                onPointerEnter={(e) => moveTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
-                onPointerMove={(e) => moveTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
+                onPointerEnter={(e) =>
+                  moveTip({
+                    id: m.id,
+                    left: labelW + at + 8,
+                    top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12,
+                  })
+                }
+                onPointerMove={(e) =>
+                  moveTip({
+                    id: m.id,
+                    left: labelW + at + 8,
+                    top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12,
+                  })
+                }
                 onPointerLeave={leaveTip}
                 onFocus={() => setMsTip({ id: m.id, left: labelW + at + 8, top: 48 })}
                 onBlur={leaveTip}
@@ -1063,23 +1094,31 @@ function DayChart(props: TimelineProps) {
                 data-day={m.date}
                 aria-label={msWords(m)}
                 aria-expanded={msCard === m.id}
-                onPointerEnter={(e) => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 + (e.currentTarget.offsetHeight - 18) })}
+                onPointerEnter={(e) =>
+                  setMsTip({
+                    id: m.id,
+                    left: labelW + left + 4,
+                    top: 42 + (e.currentTarget.offsetHeight - 18),
+                  })
+                }
                 onPointerLeave={() => setMsTip(null)}
                 onFocus={() => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 })}
                 onBlur={() => setMsTip(null)}
                 onClick={(e) => openMs(m.id, e.currentTarget)}
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-                style={{ maxWidth: room < Infinity && !dotOnly(bare, short, room) ? room : undefined }}
+                style={{
+                  maxWidth: room < Infinity && !dotOnly(bare, short, room) ? room : undefined,
+                }}
               >
                 {/* QA Nov 12 #8: never "M1 B…" at All 3 years: its code and name where its words would be cut. */}
-                {dotOnly(bare, short, room) ? "◆" : fit && room < needOf(words) ? short : words}
+                {dotOnly(bare, short, room) ? '◆' : fit && room < needOf(words) ? short : words}
               </button>
               {more.length > 0 && (
                 <div className="group relative flex-none">
                   <button
                     type="button"
                     data-testid="timeline-milestone-more"
-                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => joinedWords(k.m, joined)).join(", ")}`}
+                    aria-label={`${more.length} more ${more.length === 1 ? 'milestone' : 'milestones'}: ${more.map((k) => joinedWords(k.m, joined)).join(', ')}`}
                     aria-expanded={msList === m.id}
                     onClick={() => setMsList((l) => (l === m.id ? null : m.id))}
                     className="block cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -1087,7 +1126,9 @@ function DayChart(props: TimelineProps) {
                   >
                     +{more.length}
                   </button>
-                  <div className={`absolute top-full left-0 z-40 pt-1 ${msList === m.id ? "block" : "hidden group-focus-within:block group-hover:block"}`}>
+                  <div
+                    className={`absolute top-full left-0 z-40 pt-1 ${msList === m.id ? 'block' : 'hidden group-focus-within:block group-hover:block'}`}
+                  >
                     <ul
                       data-testid="timeline-milestone-list"
                       aria-label="More milestones here"
@@ -1100,7 +1141,14 @@ function DayChart(props: TimelineProps) {
                             data-testid="timeline-milestone-entry"
                             aria-label={msWords(k.m)}
                             onClick={(e) =>
-                              openMs(k.m.id, e.currentTarget.closest(".group")?.querySelector<HTMLElement>('[data-testid="timeline-milestone-more"]') ?? null)
+                              openMs(
+                                k.m.id,
+                                e.currentTarget
+                                  .closest('.group')
+                                  ?.querySelector<HTMLElement>(
+                                    '[data-testid="timeline-milestone-more"]',
+                                  ) ?? null,
+                              )
                             }
                             className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
                           >
@@ -1115,17 +1163,41 @@ function DayChart(props: TimelineProps) {
             </div>
           ))}
           {keyMarks.map(({ k, at, left, named, need, gem }) => (
-            <div key={`key-${k.id}`} data-testid="timeline-key-date" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} className="pointer-events-none">
-              <div aria-hidden className="absolute top-11 bottom-0 z-10 opacity-70" style={{ left: labelW + at, borderLeft: `1px ${k.in_draft ? "dashed" : "solid"} var(--accent-ink)` }} />
-              {(named || gem) && <span
-                data-testid="timeline-key-date-label"
-                title={`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}
-                className="pointer-events-auto absolute top-[21px] z-[24] flex items-center gap-1 rounded-full bg-surface px-1 text-xs leading-4 font-bold whitespace-nowrap text-accent-ink"
-                style={{ left: labelW + left, maxWidth: named ? need : 12 }}
-              >
-                <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" style={k.in_draft ? { background: "var(--surface)", border: "1px solid var(--accent-ink)" } : undefined} />
-                {named && <span className="min-w-0 truncate">{k.name}</span>}
-              </span>}
+            <div
+              key={`key-${k.id}`}
+              data-testid="timeline-key-date"
+              data-name={k.name}
+              data-date={k.date}
+              data-draft={k.in_draft ? 'true' : undefined}
+              className="pointer-events-none"
+            >
+              <div
+                aria-hidden
+                className="absolute top-11 bottom-0 z-10 opacity-70"
+                style={{
+                  left: labelW + at,
+                  borderLeft: `1px ${k.in_draft ? 'dashed' : 'solid'} var(--accent-ink)`,
+                }}
+              />
+              {(named || gem) && (
+                <span
+                  data-testid="timeline-key-date-label"
+                  title={`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ''} (${k.roadmap.title})`}
+                  className="pointer-events-auto absolute top-[21px] z-[24] flex items-center gap-1 rounded-full bg-surface px-1 text-xs leading-4 font-bold whitespace-nowrap text-accent-ink"
+                  style={{ left: labelW + left, maxWidth: named ? need : 12 }}
+                >
+                  <i
+                    aria-hidden
+                    className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink"
+                    style={
+                      k.in_draft
+                        ? { background: 'var(--surface)', border: '1px solid var(--accent-ink)' }
+                        : undefined
+                    }
+                  />
+                  {named && <span className="min-w-0 truncate">{k.name}</span>}
+                </span>
+              )}
             </div>
           ))}
           {msTip && msById.has(msTip.id) && (
@@ -1136,14 +1208,18 @@ function DayChart(props: TimelineProps) {
               style={{ left: inView(msTip.left, 240), top: msTip.top }}
             >
               {msWords(msById.get(msTip.id)!.m)}
-              {alsoOf(msById.get(msTip.id)!.m) && <span className="block">{alsoOf(msById.get(msTip.id)!.m)}</span>}
+              {alsoOf(msById.get(msTip.id)!.m) && (
+                <span className="block">{alsoOf(msById.get(msTip.id)!.m)}</span>
+              )}
             </span>
           )}
           {msCard &&
             msById.has(msCard) &&
             (() => {
               const { m, at } = msById.get(msCard)!;
-              const gates = m.item_ids.map((id) => data.items.find((i) => i.id === id)).filter((i) => i !== undefined);
+              const gates = m.item_ids
+                .map((id) => data.items.find((i) => i.id === id))
+                .filter((i) => i !== undefined);
               return (
                 <div
                   ref={msCardRef}
@@ -1155,7 +1231,9 @@ function DayChart(props: TimelineProps) {
                   style={{ left: inView(labelW + at + 4, 288) }}
                 >
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {joinedWords(m, joined)}</span>
+                    <span className="min-w-0 flex-1 font-semibold text-text">
+                      ◆ {joinedWords(m, joined)}
+                    </span>
                     <button
                       type="button"
                       aria-label="Close"
@@ -1166,8 +1244,14 @@ function DayChart(props: TimelineProps) {
                     </button>
                   </div>
                   <span className="text-text2">{fullDay(m.date as string)}</span>
-                  {alsoOf(m) && <span data-testid="timeline-milestone-also" className="text-text2">{alsoOf(m)}</span>}
-                  {m.done_when.length > 0 && <span className="text-text">Counts when {m.done_when.join("; ")}</span>}
+                  {alsoOf(m) && (
+                    <span data-testid="timeline-milestone-also" className="text-text2">
+                      {alsoOf(m)}
+                    </span>
+                  )}
+                  {m.done_when.length > 0 && (
+                    <span className="text-text">Counts when {m.done_when.join('; ')}</span>
+                  )}
                   {gates.length > 0 && (
                     <div className="flex flex-col gap-1">
                       <span className="text-xs font-semibold text-text2">Waits on</span>
@@ -1196,15 +1280,14 @@ function DayChart(props: TimelineProps) {
               <div
                 key={q.start}
                 data-testid="quarter-drop"
-                data-add-where={whereAttr("quarter", quarterValue(q.start))}
+                data-add-where={whereAttr('quarter', quarterValue(q.start))}
                 data-add-label={q.label}
                 className="absolute top-11 bottom-0"
                 style={{
                   left: labelW + Math.max(0, x(q.start)),
                   width: Math.max(
                     0,
-                    Math.min(trackW, x(addDays(q.end, 1))) -
-                      Math.max(0, x(q.start)),
+                    Math.min(trackW, x(addDays(q.end, 1))) - Math.max(0, x(q.start)),
                   ),
                 }}
               />
@@ -1230,33 +1313,39 @@ function DayChart(props: TimelineProps) {
             />
           ))}
           {rows.map((r) => {
-            if (r.kind === "lane")
+            if (r.kind === 'lane')
               return (
                 <div
                   key={`l-${r.key}`}
                   data-testid="timeline-lane"
                   className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
                 >
-                  {data.group === "track" && r.key !== "below" && r.key !== "none" ? (
+                  {data.group === 'track' && r.key !== 'below' && r.key !== 'none' ? (
                     // tb-mk: a quick add dropped on a track band's header lands on that track.
                     <div
-                      data-add-where={props.canChange && (data.tracks ?? []).some((t) => t.id === r.key) ? whereAttr("track", r.key) : undefined}
+                      data-add-where={
+                        props.canChange && (data.tracks ?? []).some((t) => t.id === r.key)
+                          ? whereAttr('track', r.key)
+                          : undefined
+                      }
                       data-add-label={r.title}
                       className="pointer-events-auto sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"
                     >
                       <TrackHead data={data} laneKey={r.key} title={r.title} />
                     </div>
                   ) : (
-                  <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
-                    {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
-                    {r.title}{" "}
-                    {/* tb-mk: "No track" reads with no count, as the track bands' headers. */}
-                    {!(data.group === "track" && r.key === "none") && (
-                      <span className="font-normal text-text2">
-                        · {r.count} {r.count === 1 ? "item" : "items"}
-                      </span>
-                    )}
-                  </div>
+                    <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
+                      {data.group === 'goal' && r.key !== 'none' && r.key !== 'below' && (
+                        <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />
+                      )}
+                      {r.title}{' '}
+                      {/* tb-mk: "No track" reads with no count, as the track bands' headers. */}
+                      {!(data.group === 'track' && r.key === 'none') && (
+                        <span className="font-normal text-text2">
+                          · {r.count} {r.count === 1 ? 'item' : 'items'}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -1296,7 +1385,11 @@ function DayChart(props: TimelineProps) {
             span={[labelW + sl, sl + w]}
             keepOff={msGroups.map(({ head, more, room }): [number, number] => [
               labelW + head.left + 4,
-              labelW + head.left + 4 + Math.min(room, 16 + head.words.length * 7) + (more.length ? MS_CHIP_W + 2 : 0),
+              labelW +
+                head.left +
+                4 +
+                Math.min(room, 16 + head.words.length * 7) +
+                (more.length ? MS_CHIP_W + 2 : 0),
             ])}
           />
         </div>
@@ -1306,22 +1399,66 @@ function DayChart(props: TimelineProps) {
 }
 
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
-function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; span: [number, number]; keepOff: [number, number][] }) {
+function TimelineMilestones({
+  rows,
+  moved,
+  x,
+  labelW,
+  trackW,
+  phone,
+  span,
+  keepOff,
+}: {
+  rows: Row[];
+  moved: Record<string, [string, string]>;
+  x: (d: string) => number;
+  labelW: number;
+  trackW: number;
+  phone: boolean;
+  span: [number, number];
+  keepOff: [number, number][];
+}) {
   let y = 44 + useMsBand(phone);
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
   for (const r of rows) {
-    if (r.kind === "lane") {
+    if (r.kind === 'lane') {
       lanes.push({ key: r.key, title: r.title, y0: y, y1: y + 32 });
       y += 32;
       continue;
     }
     const [s, e] = moved[r.item.id] ?? barSpan(r.item);
-    out.push({ id: r.item.id, title: itemName(r.item), lane: lanes[lanes.length - 1]?.key ?? "", y, h: ROW_H, start: s, end: e, closed: closedItem(r.item), guess: !moved[r.item.id] && estimateOnly(r.item) });
+    out.push({
+      id: r.item.id,
+      title: itemName(r.item),
+      lane: lanes[lanes.length - 1]?.key ?? '',
+      y,
+      h: ROW_H,
+      start: s,
+      end: e,
+      closed: closedItem(r.item),
+      guess: !moved[r.item.id] && estimateOnly(r.item),
+    });
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
-  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} bandTop={44} />;
+  return (
+    <MsLayer
+      view="timeline"
+      x={x}
+      left={labelW}
+      top={44}
+      axisY={33}
+      height={y}
+      width={labelW + trackW}
+      rows={out}
+      lanes={lanes}
+      phone={phone}
+      span={span}
+      keepOff={keepOff}
+      bandTop={44}
+    />
+  );
 }
 
 const NO_WARN: string[] = [];
@@ -1440,19 +1577,19 @@ const TimelineRow = memo(function TimelineRow({
         live
           ? undefined
           : {
-              contentVisibility: "auto",
+              contentVisibility: 'auto',
               containIntrinsicSize: `auto ${ROW_H}px`,
             }
       }
     >
       <div
-        className={`pointer-events-none relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`}
+        className={`pointer-events-none relative flex border-b border-line/60 ${sel ? 'bg-accent-soft/50' : ''}`}
         style={{ height: ROW_H }}
       >
         <button
           type="button"
           onClick={() => on.name(i, sel, bx, bw)}
-          className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 overflow-hidden border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
+          className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 overflow-hidden border-r border-line px-3 text-left text-sm ${sel ? 'bg-accent-soft' : 'bg-surface'} hover:underline`}
           style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
           title={itemName(i)}
         >
@@ -1465,10 +1602,18 @@ const TimelineRow = memo(function TimelineRow({
           {/* QA Nov 12 #1: the code before the name (F-06 Weekly alert digest), cut as the name was. */}
           {/* QA Nov 14 #1: the name has the row first, whole; the tags after it are cut instead. */}
           {/* qa-nov17 #8: its flags stay whole ("Draft", "Not in GT"); a long name is cut instead, whole in the row's title. */}
-          <span data-testid="timeline-row-name" className="max-w-full min-w-0 shrink truncate" style={lk.name}>
+          <span
+            data-testid="timeline-row-name"
+            className="max-w-full min-w-0 shrink truncate"
+            style={lk.name}
+          >
             {itemName(i)}
             {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
-            {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {mergedName(i, (id) => byId.get(id))}</span>}
+            {i.merged_into && (
+              <span data-testid="row-merged" className="ml-1 text-text2">
+                · Merged into {mergedName(i, (id) => byId.get(id))}
+              </span>
+            )}
           </span>
           {lk.chip && (
             <span
@@ -1503,30 +1648,30 @@ const TimelineRow = memo(function TimelineRow({
             data-testid="timeline-bar"
             data-start={ds}
             data-end={de}
-            data-live={live ? (liveWarn.length ? "broken" : "ok") : undefined}
-            data-estimate-only={guess ? "true" : undefined}
-            aria-label={`${itemName(i)}, ${words}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
+            data-live={live ? (liveWarn.length ? 'broken' : 'ok') : undefined}
+            data-estimate-only={guess ? 'true' : undefined}
+            aria-label={`${itemName(i)}, ${words}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ''}${still ? '' : '. Arrows move it a week, Shift+arrows a month; Escape cancels'}`}
             onClick={() => on.bar(i, sel)}
             onPointerDown={(e) => on.down(e, i)}
             onPointerMove={on.move}
             onPointerUp={on.up}
             onPointerCancel={on.cancel}
             onKeyDown={(e) => {
-              if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+              if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                 e.preventDefault();
-                on.keyMove(i, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
-              } else if (e.key === "Escape") on.keyCancel(i);
+                on.keyMove(i, e.key === 'ArrowRight' ? 1 : -1, e.shiftKey);
+              } else if (e.key === 'Escape') on.keyCancel(i);
             }}
             onBlur={() => on.keyEnd(i)}
-            className={`pointer-events-auto absolute rounded-full ${still ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} focus-visible:shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]`}
+            className={`pointer-events-auto absolute rounded-full ${still ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} focus-visible:shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]`}
             style={{
-              touchAction: still ? "auto" : "none",
+              touchAction: still ? 'auto' : 'none',
               ...lk.bar,
               left: bx,
               width: bw,
               top: 8,
               height: 18,
-              outline: sel ? "2px solid var(--accent-ink)" : undefined,
+              outline: sel ? '2px solid var(--accent-ink)' : undefined,
               outlineOffset: 2,
             }}
           />
@@ -1549,7 +1694,13 @@ const TimelineRow = memo(function TimelineRow({
             <span
               data-testid="bar-no-dates"
               className="pointer-events-none absolute top-[9px] z-[11] rounded bg-surface px-1 text-xs leading-4 whitespace-nowrap text-text2"
-              style={bx + bw + besideW <= trackW ? { left: bx + bw + 4 } : bx >= besideW ? { right: trackW - bx + 4 } : { left: Math.max(bx, 0) + 4 }}
+              style={
+                bx + bw + besideW <= trackW
+                  ? { left: bx + bw + 4 }
+                  : bx >= besideW
+                    ? { right: trackW - bx + 4 }
+                    : { left: Math.max(bx, 0) + 4 }
+              }
             >
               {words}
             </span>
@@ -1558,12 +1709,12 @@ const TimelineRow = memo(function TimelineRow({
             // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
             <span
               data-testid="drag-live"
-              data-state={liveWarn.length ? "broken" : "ok"}
+              data-state={liveWarn.length ? 'broken' : 'ok'}
               className="pointer-events-none absolute -top-5 z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
               style={{ left: Math.max(0, bx) }}
             >
               {shortDay(live.start)} – {shortDay(live.end)}
-              {liveWarn.length ? ` · ${liveWarn[0]}` : " · no broken links"}
+              {liveWarn.length ? ` · ${liveWarn[0]}` : ' · no broken links'}
             </span>
           )}
         </div>
@@ -1578,16 +1729,24 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
   const list = (ms?.band ?? []).filter((m) => from <= m.date! && m.date! <= to);
   if (!list.length) return null;
   return (
-    <ul data-testid="ms-quarter" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs">
+    <ul
+      data-testid="ms-quarter"
+      className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs"
+    >
       {list.map((m) => (
         // tb-mk: its kind's icon first and its status mark after its name, as the band's label; the reason in its tap text.
-        <li key={m.id} data-testid="ms-quarter-row" title={`${kindName(m.kind)} · ${MK_STATUS[m.status ?? "on_track"]}${m.status_reason ? `: ${m.status_reason}` : ""}`} className="flex items-center gap-1.5 py-0.5">
+        <li
+          key={m.id}
+          data-testid="ms-quarter-row"
+          title={`${kindName(m.kind)} · ${MK_STATUS[m.status ?? 'on_track']}${m.status_reason ? `: ${m.status_reason}` : ''}`}
+          className="flex items-center gap-1.5 py-0.5"
+        >
           <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
           <span className="min-w-0 truncate font-semibold" style={{ color: msInk(msCode(m)) }}>
             {msCode(m)} {ms?.joined.get(msCode(m))?.name ?? m.name}
           </span>
-          <span data-testid="ms-status" data-status={m.status ?? "on_track"} className="flex-none">
-            <MkStatusMark status={m.status ?? "on_track"} size={11} />
+          <span data-testid="ms-status" data-status={m.status ?? 'on_track'} className="flex-none">
+            <MkStatusMark status={m.status ?? 'on_track'} size={11} />
           </span>
           <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span>
         </li>
@@ -1600,7 +1759,10 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
  * this one, when it started before and runs on). */
 /** tb-mk: each item's band on the phone's list (its track's place, No track, then Below the line),
  * by id, read once for the list rather than once an item a sort compares. */
-function bandsOf(data: Roadmap): { rank: (i: Item) => number; of: (i: Item) => { key: string; title: string } | null } {
+function bandsOf(data: Roadmap): {
+  rank: (i: Item) => number;
+  of: (i: Item) => { key: string; title: string } | null;
+} {
   const at = new Map<string, number>();
   data.groups.forEach((g, n) => {
     for (const id of g.item_ids) if (!at.has(id)) at.set(id, n);
@@ -1608,7 +1770,7 @@ function bandsOf(data: Roadmap): { rank: (i: Item) => number; of: (i: Item) => {
   return {
     rank: (i) => (closedItem(i) ? 1e6 : (at.get(i.id) ?? 1e5)),
     of: (i) => {
-      if (closedItem(i)) return { key: "below", title: "Below the line" };
+      if (closedItem(i)) return { key: 'below', title: 'Below the line' };
       const g = data.groups[at.get(i.id) ?? -1];
       return g ? { key: g.key, title: g.title } : null;
     },
@@ -1651,9 +1813,9 @@ function QuarterList(props: TimelineProps) {
             className="rounded-xl border border-line bg-surface"
           >
             <h3 className="flex items-center gap-2 border-b border-line px-3 py-2 text-sm font-semibold">
-              {q.label}{" "}
+              {q.label}{' '}
               <span className="font-normal text-text2">
-                {quarterWords(q)} · {items.length} {items.length === 1 ? "item" : "items"}
+                {quarterWords(q)} · {items.length} {items.length === 1 ? 'item' : 'items'}
               </span>
               {q === tq && (
                 <span
@@ -1666,7 +1828,9 @@ function QuarterList(props: TimelineProps) {
             </h3>
             {/* approved-roadmap-to-simple: the quarter's milestones, as the desktop's dashed lines. */}
             {(data.milestones ?? [])
-              .filter((m) => m.date && m.status !== "dropped" && q.start <= m.date && m.date <= q.end)
+              .filter(
+                (m) => m.date && m.status !== 'dropped' && q.start <= m.date && m.date <= q.end,
+              )
               .map((m) => (
                 <p
                   key={m.id}
@@ -1674,7 +1838,7 @@ function QuarterList(props: TimelineProps) {
                   className="border-b border-line/60 px-3 py-1 text-xs text-text2"
                 >
                   ◆ {joinedWords(m, joined)} · {shortDay(m.date as string)}
-                  {m.done_when.length > 0 && ` · counts when ${m.done_when.join("; ")}`}
+                  {m.done_when.length > 0 && ` · counts when ${m.done_when.join('; ')}`}
                 </p>
               ))}
             <QuarterMilestones from={q.start} to={q.end} />
@@ -1682,67 +1846,68 @@ function QuarterList(props: TimelineProps) {
               {items.map((i, n) => {
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
-                const band = n === 0 || bands.rank(items[n - 1]) !== bands.rank(i) ? bands.of(i) : null;
+                const band =
+                  n === 0 || bands.rank(items[n - 1]) !== bands.rank(i) ? bands.of(i) : null;
                 return (
                   <Fragment key={i.id}>
-                  {band && (
-                    <li data-testid="timeline-band" className="bg-surface2/70 px-3 py-1 text-sm">
-                      {band.key === "below" || band.key === "none" ? <b className={band.key === "below" ? "text-text2" : ""}>{band.title}</b> : <TrackHead data={data} laneKey={band.key} title={band.title} />}
-                    </li>
-                  )}
-                  <li
-                    key={i.id}
-                    data-testid="timeline-row"
-                    data-item={i.key}
-                    data-depth={depth.get(i.id) || undefined}
-                    data-open={sel || undefined}
-                    style={{ paddingLeft: (depth.get(i.id) ?? 0) * 16 }}
-                  >
-                    <button
-                      type="button"
-                      data-bar-id={i.id}
-                      data-testid="timeline-bar"
-                      onClick={() => onOpen(sel ? null : i.key)}
-                      className={`flex w-full items-center gap-3 px-3 py-2 text-left ${sel ? "bg-accent-soft" : "hover:bg-surface2"}`}
-                    >
-                      <i
-                        aria-hidden
-                        className="h-3 w-6 flex-none rounded-full"
-                        style={lk.bar}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className="block text-sm font-semibold"
-                          style={lk.name}
-                        >
-                          {(depth.get(i.id) ?? 0) > 0 && (
-                            <span aria-hidden className="mr-1 font-normal text-text2">
-                              └
-                            </span>
-                          )}
-                          {itemName(i)}
-                          {lk.chip ? (
-                            <span
-                              data-testid="draft-tag"
-                              className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2"
-                            >
-                              {lk.chip}
-                            </span>
-                          ) : null}
-                        </span>
-                        <NotInGt item={i} className="mt-0.5 h-5! px-2! text-xs!" />
-                        <span data-testid="timeline-row-dates" className="block text-xs text-text2">
-                          {/* tb-mk: the dates only; the band's header names the track's goal. */}
-                          {estimateOnly(i) ? estimateWords(i.start.date, i.end.date, data.today) : spanWords(i.start.date, i.end.date, data.today)}
-                        </span>
-                        {brokenFlag(i) && (
-                          <span className="block text-xs text-crit">
-                            ⚠ Broken link
-                          </span>
+                    {band && (
+                      <li data-testid="timeline-band" className="bg-surface2/70 px-3 py-1 text-sm">
+                        {band.key === 'below' || band.key === 'none' ? (
+                          <b className={band.key === 'below' ? 'text-text2' : ''}>{band.title}</b>
+                        ) : (
+                          <TrackHead data={data} laneKey={band.key} title={band.title} />
                         )}
-                      </span>
-                    </button>
-                  </li>
+                      </li>
+                    )}
+                    <li
+                      key={i.id}
+                      data-testid="timeline-row"
+                      data-item={i.key}
+                      data-depth={depth.get(i.id) || undefined}
+                      data-open={sel || undefined}
+                      style={{ paddingLeft: (depth.get(i.id) ?? 0) * 16 }}
+                    >
+                      <button
+                        type="button"
+                        data-bar-id={i.id}
+                        data-testid="timeline-bar"
+                        onClick={() => onOpen(sel ? null : i.key)}
+                        className={`flex w-full items-center gap-3 px-3 py-2 text-left ${sel ? 'bg-accent-soft' : 'hover:bg-surface2'}`}
+                      >
+                        <i aria-hidden className="h-3 w-6 flex-none rounded-full" style={lk.bar} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold" style={lk.name}>
+                            {(depth.get(i.id) ?? 0) > 0 && (
+                              <span aria-hidden className="mr-1 font-normal text-text2">
+                                └
+                              </span>
+                            )}
+                            {itemName(i)}
+                            {lk.chip ? (
+                              <span
+                                data-testid="draft-tag"
+                                className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2"
+                              >
+                                {lk.chip}
+                              </span>
+                            ) : null}
+                          </span>
+                          <NotInGt item={i} className="mt-0.5 h-5! px-2! text-xs!" />
+                          <span
+                            data-testid="timeline-row-dates"
+                            className="block text-xs text-text2"
+                          >
+                            {/* tb-mk: the dates only; the band's header names the track's goal. */}
+                            {estimateOnly(i)
+                              ? estimateWords(i.start.date, i.end.date, data.today)
+                              : spanWords(i.start.date, i.end.date, data.today)}
+                          </span>
+                          {brokenFlag(i) && (
+                            <span className="block text-xs text-crit">⚠ Broken link</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
                   </Fragment>
                 );
               })}

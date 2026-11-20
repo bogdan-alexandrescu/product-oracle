@@ -1,30 +1,45 @@
-"use client";
+'use client';
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from 'react';
 
-import { Button, Notice } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, unwrap, type EdgeOut, type EntityDetail, type GraphOut, type Schemas } from "@/lib/api/client";
-import { namedText } from "@/lib/codes";
-import { goalTree } from "@/lib/goal-tree";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Notice } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import {
+  api,
+  unwrap,
+  type EdgeOut,
+  type EntityDetail,
+  type GraphOut,
+  type Schemas,
+} from '@/lib/api/client';
+import { namedText } from '@/lib/codes';
+import { goalTree } from '@/lib/goal-tree';
+import { errorMessage } from '@/lib/use-query';
 
-import { sourceKindLabel, titleOf } from "./common";
+import { sourceKindLabel, titleOf } from './common';
 
-const LABEL = "flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
+const LABEL = 'flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
 
 export const RELATIONS = [
-  { type: "depends_on", label: "Depends on" },
-  { type: "blocks", label: "Blocks" },
-  { type: "part_of", label: "Part of" },
+  { type: 'depends_on', label: 'Depends on' },
+  { type: 'blocks', label: 'Blocks' },
+  { type: 'part_of', label: 'Part of' },
 ] as const;
 
-type Relation = (typeof RELATIONS)[number]["type"];
+type Relation = (typeof RELATIONS)[number]['type'];
 
 /** What a person picks when adding a link: the far end, the type and (for a goal) the contribution. */
-export type NewLink = { dst_id: string; type: EdgeOut["type"]; attrs: Record<string, unknown> };
+export type NewLink = { dst_id: string; type: EdgeOut['type']; attrs: Record<string, unknown> };
 
-function FormButtons({ busy, submit, onCancel }: { busy: boolean; submit: string; onCancel: () => void }) {
+function FormButtons({
+  busy,
+  submit,
+  onCancel,
+}: {
+  busy: boolean;
+  submit: string;
+  onCancel: () => void;
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       <Button type="submit" variant="solid" disabled={busy}>
@@ -51,16 +66,18 @@ export function LinkToGoalForm({
   onCancel: () => void;
   onSave: (link: NewLink) => void;
 }) {
-  const linked = new Set(detail.edges_out.filter((e) => e.type === "supports").map((e) => e.dst_id));
+  const linked = new Set(
+    detail.edges_out.filter((e) => e.type === 'supports').map((e) => e.dst_id),
+  );
   // A goal or a subgoal (#345), in tree order; a subgoal's code (G-B.1) names its parent.
   const goals = goalTree(graph?.entities ?? []).filter((n) => !linked.has(n.goal.id));
-  const [goal, setGoal] = useState("");
-  const [contribution, setContribution] = useState("2");
+  const [goal, setGoal] = useState('');
+  const [contribution, setContribution] = useState('2');
   const [invalid, setInvalid] = useState(false);
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!goal) return setInvalid(true);
-    onSave({ dst_id: goal, type: "supports", attrs: { contribution: Number(contribution) } });
+    onSave({ dst_id: goal, type: 'supports', attrs: { contribution: Number(contribution) } });
   }
   return (
     <form aria-label="Link to goal" className="flex flex-col gap-3" onSubmit={submit}>
@@ -120,18 +137,18 @@ export function ContributionSelect({
 }
 
 const TYPE_GROUP: Record<string, string> = {
-  goal: "Goals",
-  product: "Products",
-  feature: "Features",
-  requirement: "Requirements",
-  constraint: "Constraints",
-  decision: "Decisions",
-  person: "People",
-  outcome: "Outcomes",
-  acceptance_criterion: "Acceptance criteria",
-  assumption: "Assumptions",
-  risk: "Risks",
-  strategy_choice: "Strategy choices",
+  goal: 'Goals',
+  product: 'Products',
+  feature: 'Features',
+  requirement: 'Requirements',
+  constraint: 'Constraints',
+  decision: 'Decisions',
+  person: 'People',
+  outcome: 'Outcomes',
+  acceptance_criterion: 'Acceptance criteria',
+  assumption: 'Assumptions',
+  risk: 'Risks',
+  strategy_choice: 'Strategy choices',
 };
 
 /** Add dependency: depends on, blocks or part of another entry, picked by kind. */
@@ -148,12 +165,17 @@ export function AddDependencyForm({
   onCancel: () => void;
   onSave: (link: NewLink) => void;
 }) {
-  const [relation, setRelation] = useState<Relation>("depends_on");
-  const [entry, setEntry] = useState("");
+  const [relation, setRelation] = useState<Relation>('depends_on');
+  const [entry, setEntry] = useState('');
   const [invalid, setInvalid] = useState(false);
-  const entries = (graph?.entities ?? []).filter((e) => e.id !== detail.id && e.status !== "rejected");
+  const entries = (graph?.entities ?? []).filter(
+    (e) => e.id !== detail.id && e.status !== 'rejected',
+  );
   const groups = Object.keys(TYPE_GROUP)
-    .map((type) => ({ type, items: entries.filter((e) => e.type === type).sort((a, b) => a.title.localeCompare(b.title)) }))
+    .map((type) => ({
+      type,
+      items: entries.filter((e) => e.type === type).sort((a, b) => a.title.localeCompare(b.title)),
+    }))
     .filter((g) => g.items.length > 0);
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -165,7 +187,11 @@ export function AddDependencyForm({
       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 max-[420px]:grid-cols-1">
         <label className={LABEL}>
           Relation
-          <select className={INPUT} value={relation} onChange={(e) => setRelation(e.target.value as Relation)}>
+          <select
+            className={INPUT}
+            value={relation}
+            onChange={(e) => setRelation(e.target.value as Relation)}
+          >
             {RELATIONS.map((r) => (
               <option key={r.type} value={r.type}>
                 {r.label}
@@ -195,7 +221,7 @@ export function AddDependencyForm({
   );
 }
 
-const plain = (snippet: string) => snippet.replace(/<\/?mark>/g, "");
+const plain = (snippet: string) => snippet.replace(/<\/?mark>/g, '');
 
 /** Cite a source item: search your own sources, then cite one hit. */
 export function CiteSourceForm({
@@ -205,10 +231,10 @@ export function CiteSourceForm({
 }: {
   busy: boolean;
   onCancel: () => void;
-  onCite: (item: Schemas["ItemOut"]) => void;
+  onCite: (item: Schemas['ItemOut']) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<Schemas["SearchHit"][] | null>(null);
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState<Schemas['SearchHit'][] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function search(e: FormEvent) {
@@ -217,7 +243,9 @@ export function CiteSourceForm({
     setSearching(true);
     setError(null);
     try {
-      const res = await unwrap(api.GET("/v1/search", { params: { query: { q: query.trim(), limit: 10 } } }));
+      const res = await unwrap(
+        api.GET('/v1/search', { params: { query: { q: query.trim(), limit: 10 } } }),
+      );
       setHits(res.hits);
     } catch (err) {
       setError(errorMessage(err));
@@ -230,7 +258,13 @@ export function CiteSourceForm({
       <div className="flex items-end gap-2">
         <label className={`${LABEL} flex-1`}>
           Search your sources
-          <input className={INPUT} type="search" value={query} autoFocus onChange={(e) => setQuery(e.target.value)} />
+          <input
+            className={INPUT}
+            type="search"
+            value={query}
+            autoFocus
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </label>
         <Button type="submit" disabled={searching || !query.trim()}>
           Search
@@ -252,7 +286,12 @@ export function CiteSourceForm({
                       {sourceKindLabel(h.item.source_kind)} · {plain(h.snippet)}
                     </span>
                   </span>
-                  <Button className="flex-none" disabled={busy} aria-label={`Cite ${name}`} onClick={() => onCite(h.item)}>
+                  <Button
+                    className="flex-none"
+                    disabled={busy}
+                    aria-label={`Cite ${name}`}
+                    onClick={() => onCite(h.item)}
+                  >
                     Cite
                   </Button>
                 </li>
@@ -285,7 +324,7 @@ export function ConfirmRemove({
   onBack: () => void;
   onRemove: (reason: string) => void;
 }) {
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
   const [invalid, setInvalid] = useState(false);
   return (
     <form
@@ -301,7 +340,13 @@ export function ConfirmRemove({
       {reason && (
         <label className={LABEL}>
           Reason
-          <textarea className={INPUT} rows={2} value={note} autoFocus onChange={(e) => setNote(e.target.value)} />
+          <textarea
+            className={INPUT}
+            rows={2}
+            value={note}
+            autoFocus
+            onChange={(e) => setNote(e.target.value)}
+          />
         </label>
       )}
       {invalid && <Notice tone="error">Say why it is removed.</Notice>}

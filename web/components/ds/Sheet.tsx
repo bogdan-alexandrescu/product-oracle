@@ -1,20 +1,23 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react';
 
-import { useScrollInside } from "@/lib/fit-viewport";
-import { Icon } from "./Icon";
+import { useScrollInside } from '@/lib/fit-viewport';
+import { Icon } from './Icon';
 
 /*
  * The control last pressed: a tap on some browsers (Safari) does not focus the button, so
  * the sheet it opens finds <body> focused and returns focus here instead.
  */
 let lastPressed: HTMLElement | null = null;
-if (typeof document !== "undefined") {
+if (typeof document !== 'undefined') {
   document.addEventListener(
-    "pointerdown",
+    'pointerdown',
     (e) => {
-      const el = e.target instanceof Element ? e.target.closest<HTMLElement>("button, a[href], [role=button], [tabindex]") : null;
+      const el =
+        e.target instanceof Element
+          ? e.target.closest<HTMLElement>('button, a[href], [role=button], [tabindex]')
+          : null;
       if (el) lastPressed = el;
     },
     true,
@@ -23,9 +26,10 @@ if (typeof document !== "undefined") {
 
 /** qa-docs-28: `side` wider than a phone: the right edge, full height, a readable width. */
 const SIDE =
-  "min-[601px]:h-dvh min-[601px]:max-h-dvh min-[601px]:w-[min(480px,100vw)] min-[601px]:rounded-none min-[601px]:rounded-l-inspector min-[601px]:border-t-0 min-[601px]:border-l";
+  'min-[601px]:h-dvh min-[601px]:max-h-dvh min-[601px]:w-[min(480px,100vw)] min-[601px]:rounded-none min-[601px]:rounded-l-inspector min-[601px]:border-t-0 min-[601px]:border-l';
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * A phone bottom sheet: a scrim, a handle, a title and a scrolling body. Escape, a tap on
@@ -86,23 +90,32 @@ export function Sheet({
     // Focus returns to what opened the sheet: the focused control, else the one just pressed.
     const opener = active && active !== document.body ? active : lastPressed;
     const p = panel.current;
-    (p?.querySelector<HTMLElement>("[data-autofocus]") ?? p)?.focus();
+    (p?.querySelector<HTMLElement>('[data-autofocus]') ?? p)?.focus();
     const onKey = (e: KeyboardEvent) => {
       // A dialog opened from the sheet (portalled outside it) handles its own keys: its
       // Escape asks before dropping typed work, and its Tab stays inside it.
       const at = document.activeElement;
-      if (p && at && at !== document.body && !p.contains(at) && at.closest('[role="dialog"], [role="alertdialog"]')) return;
-      if (e.key === "Escape") {
+      if (
+        p &&
+        at &&
+        at !== document.body &&
+        !p.contains(at) &&
+        at.closest('[role="dialog"], [role="alertdialog"]')
+      )
+        return;
+      if (e.key === 'Escape') {
         // qa4-docs-share-1: a part of the sheet that closes on Escape itself (a picker inside
         // it, marked data-own-escape) takes the key, and the sheet with its edits stays open.
-        if (p && at instanceof Element && p.contains(at) && at.closest("[data-own-escape]")) return;
+        if (p && at instanceof Element && p.contains(at) && at.closest('[data-own-escape]')) return;
         e.preventDefault();
         e.stopPropagation();
         close.current();
         return;
       }
-      if (e.key !== "Tab" || !p) return;
-      const els = [...p.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.checkVisibility());
+      if (e.key !== 'Tab' || !p) return;
+      const els = [...p.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) =>
+        el.checkVisibility(),
+      );
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
@@ -114,12 +127,12 @@ export function Sheet({
         first.focus();
       }
     };
-    document.addEventListener("keydown", onKey, true);
+    document.addEventListener('keydown', onKey, true);
     const html = document.documentElement;
     const overflow = html.style.overflow;
-    html.style.overflow = "hidden";
+    html.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener('keydown', onKey, true);
       html.style.overflow = overflow;
       if (opener?.isConnected) opener.focus();
     };
@@ -140,7 +153,7 @@ export function Sheet({
   };
   // `above`: a swipe anywhere; the pointer is captured only once it moves, so a tap still clicks.
   const onPanelDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (!above || drag.current || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (!above || drag.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
     drag.current = { y: e.clientY, dy: 0 };
   };
   const onPanelMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -157,19 +170,25 @@ export function Sheet({
   const onUp = () => {
     const d = drag.current;
     drag.current = null;
-    if (panel.current) panel.current.style.transform = "";
+    if (panel.current) panel.current.style.transform = '';
     if (d && d.dy > 60) onClose();
   };
 
   return (
     <div
-      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"} ${
-        side ? "min-[601px]:flex-row" : ""
-      } ${dialog ? "sm:items-center sm:justify-center sm:p-6" : ""}`}
+      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? 'bottom-[var(--phone-tab-bar)]' : 'bottom-0'} ${
+        side ? 'min-[601px]:flex-row' : ''
+      } ${dialog ? 'sm:items-center sm:justify-center sm:p-6' : ''}`}
       data-testid={testId}
       data-sheet=""
     >
-      <div data-backdrop="" data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
+      <div
+        data-backdrop=""
+        data-testid="sheet-scrim"
+        aria-hidden
+        className="absolute inset-0 bg-hero/50"
+        onClick={onClose}
+      />
       <div
         ref={panel}
         id={id}
@@ -183,9 +202,9 @@ export function Sheet({
         onPointerCancel={above ? onUp : undefined}
         className={
           bare
-            ? "relative flex h-dvh max-h-dvh min-h-0 flex-col bg-surface pt-[env(safe-area-inset-top)] text-text outline-none"
-            : `relative flex ${full ? "h-dvh max-h-dvh" : tall ? "h-[85dvh] max-h-[85dvh]" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none ${
-                side ? SIDE : ""
+            ? 'relative flex h-dvh max-h-dvh min-h-0 flex-col bg-surface pt-[env(safe-area-inset-top)] text-text outline-none'
+            : `relative flex ${full ? 'h-dvh max-h-dvh' : tall ? 'h-[85dvh] max-h-[85dvh]' : 'max-h-[85dvh]'} ${above ? 'touch-none' : ''} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none ${
+                side ? SIDE : ''
               }`
         }
       >
@@ -194,7 +213,7 @@ export function Sheet({
             <div
               data-testid="sheet-handle"
               aria-hidden
-              className={`${side ? "min-[601px]:hidden" : ""} flex h-6 flex-none cursor-grab touch-none items-center justify-center ${dialog ? "sm:hidden" : ""}`}
+              className={`${side ? 'min-[601px]:hidden' : ''} flex h-6 flex-none cursor-grab touch-none items-center justify-center ${dialog ? 'sm:hidden' : ''}`}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}
@@ -204,7 +223,9 @@ export function Sheet({
             </div>
             <div className="flex min-h-11 flex-none items-center gap-2 border-b border-line pr-1 pl-4">
               {/* A long title wraps onto a second line in bold, never cut (pc1-a-phone-390). */}
-              <h2 className="min-w-0 flex-1 py-2 font-display text-lg leading-snug font-bold tracking-heading break-words">{title}</h2>
+              <h2 className="min-w-0 flex-1 py-2 font-display text-lg leading-snug font-bold tracking-heading break-words">
+                {title}
+              </h2>
               {tools}
               <button
                 type="button"
@@ -218,8 +239,8 @@ export function Sheet({
           </>
         )}
         <div
-          data-fit-body={scroll ? "" : undefined}
-          className={`relative min-h-0 flex-1 pb-[env(safe-area-inset-bottom)] ${scroll ? "overflow-y-auto overscroll-contain" : "flex flex-col"}`}
+          data-fit-body={scroll ? '' : undefined}
+          className={`relative min-h-0 flex-1 pb-[env(safe-area-inset-bottom)] ${scroll ? 'overflow-y-auto overscroll-contain' : 'flex flex-col'}`}
         >
           {children}
         </div>

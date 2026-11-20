@@ -1,26 +1,41 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
-import { Button, Chip, type IconName } from "@/components/ds";
-import { FIELD_LABEL, InlineError, LockedChip, TEXTAREA, VERDICT_KIND, VerdictChip } from "@/components/review/parts";
-import type { Schemas, Verdict } from "@/lib/api/client";
-import { formatDateTime, VERDICT_LABEL } from "@/lib/format";
+import { Button, Chip, type IconName } from '@/components/ds';
+import {
+  FIELD_LABEL,
+  InlineError,
+  LockedChip,
+  TEXTAREA,
+  VERDICT_KIND,
+  VerdictChip,
+} from '@/components/review/parts';
+import type { Schemas, Verdict } from '@/lib/api/client';
+import { formatDateTime, VERDICT_LABEL } from '@/lib/format';
 
 const ACTIONS: { verdict: Verdict; label: string; icon: IconName }[] = [
-  { verdict: "approved", label: "Approve", icon: "check" },
-  { verdict: "changes_requested", label: "Request changes", icon: "comment" },
-  { verdict: "rejected", label: "Reject", icon: "x" },
+  { verdict: 'approved', label: 'Approve', icon: 'check' },
+  { verdict: 'changes_requested', label: 'Request changes', icon: 'comment' },
+  { verdict: 'rejected', label: 'Reject', icon: 'x' },
 ];
 
 /**
  * qa-docs-51: the same rule as the spec design review: Request changes and Reject need a note
  * saying what should change; Approve's note is optional.
  */
-const NOTE_REQUIRED: Record<Verdict, boolean> = { approved: false, changes_requested: true, rejected: true };
+const NOTE_REQUIRED: Record<Verdict, boolean> = {
+  approved: false,
+  changes_requested: true,
+  rejected: true,
+};
 
 /** qa4-docs-32: the send button under the note, not a second "Request changes" under the first. */
-const SUBMIT_LABEL: Record<Verdict, string> = { approved: "Approve", changes_requested: "Send request", rejected: "Reject" };
+const SUBMIT_LABEL: Record<Verdict, string> = {
+  approved: 'Approve',
+  changes_requested: 'Send request',
+  rejected: 'Reject',
+};
 
 /** Per-section verdict: approve, or request changes / reject with a note saying what should change. */
 export function SectionReviewBar({
@@ -31,14 +46,14 @@ export function SectionReviewBar({
   onSubmit,
 }: {
   heading: string;
-  verdict?: Schemas["SectionVerdict"] | null;
+  verdict?: Schemas['SectionVerdict'] | null;
   readOnly?: boolean;
   /** qa-docs-77: read-only, who may review instead (a short line beside the state). */
   readOnlyNote?: string;
   onSubmit: (verdict: Verdict, note: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Verdict | null>(null);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hintId = useId();
@@ -49,7 +64,7 @@ export function SectionReviewBar({
   // scroll padding), not left under them.
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (draft) formRef.current?.scrollIntoView({ block: "nearest" });
+    if (draft) formRef.current?.scrollIntoView({ block: 'nearest' });
   }, [draft]);
 
   async function save(e?: FormEvent) {
@@ -60,22 +75,26 @@ export function SectionReviewBar({
     try {
       await onSubmit(draft, note.trim());
       setDraft(null);
-      setNote("");
+      setNote('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the verdict.");
+      setError(err instanceof Error ? err.message : 'Could not save the verdict.');
     } finally {
       setSaving(false);
     }
   }
 
   // A lapsed approval (approver demoted or removed, token or grant revoked) never counts.
-  const lapsed = verdict?.verdict === "approved" && Boolean(verdict.lapsed_at);
-  const locked = verdict?.verdict === "approved" && !lapsed;
+  const lapsed = verdict?.verdict === 'approved' && Boolean(verdict.lapsed_at);
+  const locked = verdict?.verdict === 'approved' && !lapsed;
 
   const state = verdict ? (
     <>
       {lapsed ? (
-        <Chip kind="warn" data-testid="verdict-lapsed" title={verdict.lapse_reason ?? "This approval no longer counts"}>
+        <Chip
+          kind="warn"
+          data-testid="verdict-lapsed"
+          title={verdict.lapse_reason ?? 'This approval no longer counts'}
+        >
           Lapsed
         </Chip>
       ) : (
@@ -87,7 +106,10 @@ export function SectionReviewBar({
           “{verdict.note}”
         </span>
       )}
-      <span className="tnum flex-none text-[13px] whitespace-nowrap text-text2 max-[600px]:hidden" data-testid="verdict-date">
+      <span
+        className="tnum flex-none text-[13px] whitespace-nowrap text-text2 max-[600px]:hidden"
+        data-testid="verdict-date"
+      >
         {formatDateTime(verdict.created_at)}
       </span>
     </>
@@ -102,7 +124,10 @@ export function SectionReviewBar({
   // qa-docs-77: someone who may not review sees one compact status line, and who can.
   if (readOnly)
     return (
-      <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1" data-testid="review-bar">
+      <div
+        className="mt-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
+        data-testid="review-bar"
+      >
         <div className="flex min-w-0 items-center gap-2" data-testid="verdict-state">
           {state}
         </div>
@@ -119,7 +144,10 @@ export function SectionReviewBar({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
         {/* The state wraps within its own room (14rem at least, else the buttons go to the next
             line): never under the buttons. */}
-        <div className="flex min-w-0 flex-[1_1_14rem] flex-wrap items-center gap-x-2 gap-y-1" data-testid="verdict-state">
+        <div
+          className="flex min-w-0 flex-[1_1_14rem] flex-wrap items-center gap-x-2 gap-y-1"
+          data-testid="verdict-state"
+        >
           {pending ? (
             <>
               <Chip kind={VERDICT_KIND[pending]} data-testid="verdict-pending">
@@ -145,7 +173,7 @@ export function SectionReviewBar({
               <Button
                 key={a.verdict}
                 icon={a.icon}
-                variant={draft === a.verdict ? "solid" : "secondary"}
+                variant={draft === a.verdict ? 'solid' : 'secondary'}
                 aria-pressed={verdict?.verdict === a.verdict}
                 className="max-[600px]:min-w-0 max-[600px]:flex-auto max-[600px]:px-2 max-[600px]:[&>svg]:hidden"
                 onClick={() => setDraft((d) => (d === a.verdict ? null : a.verdict))}
@@ -157,9 +185,13 @@ export function SectionReviewBar({
         )}
       </div>
       {draft && (
-        <form ref={formRef} onSubmit={save} className="flex flex-col gap-2 border-t border-line px-3 py-2.5">
+        <form
+          ref={formRef}
+          onSubmit={save}
+          className="flex flex-col gap-2 border-t border-line px-3 py-2.5"
+        >
           <label className={FIELD_LABEL}>
-            {draft === "approved" ? "Note (optional)" : "What should change?"}
+            {draft === 'approved' ? 'Note (optional)' : 'What should change?'}
             <textarea
               autoFocus
               rows={2}
@@ -168,8 +200,8 @@ export function SectionReviewBar({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
-                if (e.key === "Escape") setDraft(null);
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+                if (e.key === 'Escape') setDraft(null);
               }}
               className={TEXTAREA}
             />
@@ -184,7 +216,7 @@ export function SectionReviewBar({
               disabled={saving || needsNote}
               data-testid="verdict-submit"
             >
-              {saving ? "Saving…" : SUBMIT_LABEL[draft]}
+              {saving ? 'Saving…' : SUBMIT_LABEL[draft]}
             </Button>
             <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel
@@ -195,7 +227,9 @@ export function SectionReviewBar({
                 Write a note first: the writer sees it
               </span>
             )}
-            <span className="ml-auto text-[13px] text-text2 max-[600px]:hidden">Ctrl/⌘ + Enter</span>
+            <span className="ml-auto text-[13px] text-text2 max-[600px]:hidden">
+              Ctrl/⌘ + Enter
+            </span>
           </div>
         </form>
       )}

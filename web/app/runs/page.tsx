@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import {
   Button,
@@ -18,14 +18,14 @@ import {
   Panel,
   Split,
   type Column,
-} from "@/components/ds";
-import { usePhone } from "@/components/ds/page-info";
-import { LoadError } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime, formatShortDate, plural } from "@/lib/format";
-import { docLabel } from "@/lib/labels";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { usePhone } from '@/components/ds/page-info';
+import { LoadError } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { formatDateTime, formatShortDate, plural } from '@/lib/format';
+import { docLabel } from '@/lib/labels';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
 import {
   CHECKPOINT_LABEL,
@@ -43,9 +43,9 @@ import {
   SENT_BACK_STATE,
   WAITING_STATUSES,
   type RunSummary,
-} from "./_lib";
-import { NewRunDialog } from "./_new-run-dialog";
-import { QueueWaitNote } from "./_queue-wait";
+} from './_lib';
+import { NewRunDialog } from './_new-run-dialog';
+import { QueueWaitNote } from './_queue-wait';
 
 type DocNamed = Parameters<typeof docLabel>[0];
 
@@ -54,7 +54,8 @@ type DocNamed = Parameters<typeof docLabel>[0];
  * ("Usage alerts PRD"), else the run's document in words (runName).
  */
 /** A header count as a toggle: outlined while the list shows only what it counts. */
-const COUNT_BUTTON = "rounded-full hover:underline aria-pressed:outline-2 aria-pressed:outline-offset-1 aria-pressed:outline-current";
+const COUNT_BUTTON =
+  'rounded-full hover:underline aria-pressed:outline-2 aria-pressed:outline-offset-1 aria-pressed:outline-current';
 
 function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
   const d = r.document_id ? docs.get(r.document_id) : undefined;
@@ -63,10 +64,10 @@ function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
 }
 
 export default function RunsPage() {
-  const q = useQuery("runs", () => unwrap(api.GET("/v1/runs")));
+  const q = useQuery('runs', () => unwrap(api.GET('/v1/runs')));
   // Document titles, to name each run by its document; the slug in words until they load.
   // #1586: titles that could not be read say so above the list; the runs stay.
-  const docsQ = useQuery("runs|documents", () => unwrap(api.GET("/v1/documents")));
+  const docsQ = useQuery('runs|documents', () => unwrap(api.GET('/v1/documents')));
   const docs = new Map<string, DocNamed>((docsQ.data ?? []).map((d) => [d.id, d]));
   const { can, capsReady } = useMe();
   const router = useRouter();
@@ -74,7 +75,7 @@ export default function RunsPage() {
   const [picked, setPicked] = useState<string | null>(null);
   // detailed-b 5: the header's count shows only the runs it counts; pressed again, every run.
   const [onlyWaiting, setOnlyWaiting] = useState(false);
-  const runs = (q.data ?? []).filter((r) => r.status !== "draft");
+  const runs = (q.data ?? []).filter((r) => r.status !== 'draft');
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
@@ -89,20 +90,23 @@ export default function RunsPage() {
    */
   const rowAction = (r: RunSummary): { label: string; go: () => void } | null => {
     if (isDelivering(r)) return null;
-    if (r.status === "awaiting_checkpoint" && can("decide_checkpoint", r.can_decide)) {
+    if (r.status === 'awaiting_checkpoint' && can('decide_checkpoint', r.can_decide)) {
       return {
-        label: r.waiting_on === "roadmap_items" ? "Review items" : "Decide",
+        label: r.waiting_on === 'roadmap_items' ? 'Review items' : 'Decide',
         go: () => {
           // D10: a PRD or roadmap review opens its version, where it is decided.
           if (r.review_link) return router.push(r.review_link);
           // D1: Roadmap items open their review screen (the waiting checkpoint is the run's).
-          if (r.waiting_on === "roadmap_items") return void openItemsReview(r.id);
+          if (r.waiting_on === 'roadmap_items') return void openItemsReview(r.id);
           router.push(`/runs/${r.id}#decide`);
         },
       };
     }
-    if ((r.status === "awaiting_approval" && can("approve_run")) || (r.status === "paused_overrun" && can("resume_run"))) {
-      return { label: "Open", go: () => router.push(`/runs/${r.id}`) };
+    if (
+      (r.status === 'awaiting_approval' && can('approve_run')) ||
+      (r.status === 'paused_overrun' && can('resume_run'))
+    ) {
+      return { label: 'Open', go: () => router.push(`/runs/${r.id}`) };
     }
     return null;
   };
@@ -112,8 +116,8 @@ export default function RunsPage() {
    * how much, where the action would be: "Owner approves $53.00", "Owner resumes".
    */
   const rowWaitsOn = (r: RunSummary): string | null => {
-    if (r.status === "awaiting_approval") return `Owner approves ${usd(r.estimate_usd)}`;
-    if (r.status === "paused_overrun") return "Owner resumes";
+    if (r.status === 'awaiting_approval') return `Owner approves ${usd(r.estimate_usd)}`;
+    if (r.status === 'paused_overrun') return 'Owner resumes';
     return null;
   };
 
@@ -125,9 +129,9 @@ export default function RunsPage() {
 
   const columns: Column<RunSummary>[] = [
     {
-      key: "for",
-      header: "For",
-      phone: "title",
+      key: 'for',
+      header: 'For',
+      phone: 'title',
       wrap: true,
       cell: (r) => {
         const name = runTitle(r, docs);
@@ -145,13 +149,13 @@ export default function RunsPage() {
       },
     },
     {
-      key: "flow",
-      header: "Flow",
-      width: "140px",
-      phone: "meta",
+      key: 'flow',
+      header: 'Flow',
+      width: '140px',
+      phone: 'meta',
       // qa-work-24/26: dropped first when the table is narrow (the selected run names it), so the
       // state stays on one line beside the Updated and action columns.
-      narrow: "wide",
+      narrow: 'wide',
       // qa-work-23: wide enough for the flows' names; one cut short shows in full on hover.
       cell: (r) => (
         <span className="block truncate" title={r.flow_title}>
@@ -160,22 +164,26 @@ export default function RunsPage() {
       ),
     },
     {
-      key: "state",
-      header: "State",
-      width: "366px",
-      phone: "meta",
+      key: 'state',
+      header: 'State',
+      width: '366px',
+      phone: 'meta',
       // qa-work-24: one line on a desktop (the cost a chip of the state chip's size); a phone wraps.
       cell: (r) => (
         <span className="flex min-w-0 flex-nowrap items-center gap-2 max-[600px]:flex-wrap max-[600px]:gap-y-1">
           <RunStatusBadge run={r} />
-          {r.waiting_on && !isDelivering(r) && <span className="min-w-0 truncate text-sm text-text2">{CHECKPOINT_LABEL[r.waiting_on]}</span>}
+          {r.waiting_on && !isDelivering(r) && (
+            <span className="min-w-0 truncate text-sm text-text2">
+              {CHECKPOINT_LABEL[r.waiting_on]}
+            </span>
+          )}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
           {r.sent_back && <SentBackChip summary={r.sent_back} />}
           {r.queue_wait && <QueueWaitNote wait={r.queue_wait} testId="run-queue-wait" />}
           {/* P3d Cost prominence: cost only where it needs a decision; on every size. */}
           {COST_DECISION_STATUSES.includes(r.status) && (
             <Chip
-              kind={r.status === "paused_overrun" ? "crit" : "warn"}
+              kind={r.status === 'paused_overrun' ? 'crit' : 'warn'}
               className="min-w-0"
               title={costText(r)}
               data-cost="prominent"
@@ -188,29 +196,33 @@ export default function RunsPage() {
     },
     {
       // qa-work-26: when each run last moved, in the company's time zone.
-      key: "updated",
-      header: "Updated",
-      width: "72px",
-      phone: "meta",
-      phoneLabel: "Updated",
-      narrow: "hide",
+      key: 'updated',
+      header: 'Updated',
+      width: '72px',
+      phone: 'meta',
+      phoneLabel: 'Updated',
+      narrow: 'hide',
       cell: (r) => {
         const at = r.finished_at ?? r.started_at ?? r.created_at;
         return (
-          <span className="tnum text-sm text-text2" title={formatDateTime(at)} data-testid="run-updated">
+          <span
+            className="tnum text-sm text-text2"
+            title={formatDateTime(at)}
+            data-testid="run-updated"
+          >
             {formatShortDate(at)}
           </span>
         );
       },
     },
     {
-      key: "act",
+      key: 'act',
       header: <span className="sr-only">Action</span>,
       // qa-work-24: one width whoever looks, narrow enough that the For column keeps each name on
       // one line; who decides wraps onto two short lines within the row's height instead.
-      width: "128px",
-      align: "right",
-      phone: "action",
+      width: '128px',
+      align: 'right',
+      phone: 'action',
       // qa-work-24: one button style, one width, right-aligned; who decides when it is not you.
       cell: (r) => {
         const a = rowAction(r);
@@ -228,7 +240,10 @@ export default function RunsPage() {
           );
         const who = rowWaitsOn(r);
         return who ? (
-          <span className="block text-[13px] leading-4 whitespace-normal text-text2" data-testid="run-waits-on">
+          <span
+            className="block text-[13px] leading-4 whitespace-normal text-text2"
+            data-testid="run-waits-on"
+          >
             {who}
           </span>
         ) : null;
@@ -237,8 +252,12 @@ export default function RunsPage() {
   ];
 
   async function openItemsReview(id: string) {
-    const run = await unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })).catch(() => null);
-    const cp = run?.checkpoints.find((c) => c.status === "pending" && c.kind === "roadmap_items" && !c.console);
+    const run = await unwrap(
+      api.GET('/v1/runs/{run_id}', { params: { path: { run_id: id } } }),
+    ).catch(() => null);
+    const cp = run?.checkpoints.find(
+      (c) => c.status === 'pending' && c.kind === 'roadmap_items' && !c.console,
+    );
     router.push((cp && reviewHref({ ...cp, run_id: id })) || `/runs/${id}`);
   }
 
@@ -254,22 +273,32 @@ export default function RunsPage() {
         status={
           // qa-work-10: one count, said once. Only the runs this person can decide count (qa-work-10); the rest wait on others.
           mine.length > 0 ? (
-            <button type="button" aria-pressed={onlyWaiting} onClick={() => setOnlyWaiting((o) => !o)} className={COUNT_BUTTON}>
+            <button
+              type="button"
+              aria-pressed={onlyWaiting}
+              onClick={() => setOnlyWaiting((o) => !o)}
+              className={COUNT_BUTTON}
+            >
               <Chip kind="warn" data-testid="runs-waiting">
-                {plural(mine.length, "run")} {mine.length === 1 ? "needs" : "need"} a decision
+                {plural(mine.length, 'run')} {mine.length === 1 ? 'needs' : 'need'} a decision
               </Chip>
             </button>
           ) : capsReady && others > 0 ? (
-            <button type="button" aria-pressed={onlyWaiting} onClick={() => setOnlyWaiting((o) => !o)} className={COUNT_BUTTON}>
+            <button
+              type="button"
+              aria-pressed={onlyWaiting}
+              onClick={() => setOnlyWaiting((o) => !o)}
+              className={COUNT_BUTTON}
+            >
               <Chip kind="na" data-testid="runs-waiting-others">
-                {plural(others, "run")} waiting on others
+                {plural(others, 'run')} waiting on others
               </Chip>
             </button>
           ) : null
         }
         action={
           // #370: an approver starts any run but an update draft (the run decides), as Plan does.
-          can("create_run", true) && (
+          can('create_run', true) && (
             // qa-work-7: it opens a dialog that starts a run (or says where each one starts).
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
               Start a run…
@@ -286,7 +315,13 @@ export default function RunsPage() {
         <LoadError what="your runs" error={q.error} onRetry={() => void q.reload()} />
       ) : (
         <>
-          {docsQ.error && <LoadError what="the document names" error={docsQ.error} onRetry={() => void docsQ.reload()} />}
+          {docsQ.error && (
+            <LoadError
+              what="the document names"
+              error={docsQ.error}
+              onRetry={() => void docsQ.reload()}
+            />
+          )}
           <Split
             byRoom
             inspector={
@@ -297,17 +332,16 @@ export default function RunsPage() {
               )
             }
           >
-            <Panel
-              title="Runs"
-              count={q.data ? shown.length : undefined}
-            >
+            <Panel title="Runs" count={q.data ? shown.length : undefined}>
               {q.data && runs.length === 0 ? (
                 <Empty testId="runs-empty">
-                  No runs yet.{" "}
-                  {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
+                  No runs yet.{' '}
+                  {can('create_run', true)
+                    ? 'Start one from Start a run… or from the page it works on.'
+                    : 'Runs show here once an approver starts one.'}{' '}
                   <InfoTip label="runs" align="start">
-                    Runs turn the Ground Truth into a PRD draft: each one plans the work, gathers evidence from your sources and
-                    writes a cited draft for review.
+                    Runs turn the Ground Truth into a PRD draft: each one plans the work, gathers
+                    evidence from your sources and writes a cited draft for review.
                   </InfoTip>
                 </Empty>
               ) : (
@@ -317,8 +351,8 @@ export default function RunsPage() {
                   onClick={(e) => {
                     if (!phone) return;
                     const t = e.target as HTMLElement;
-                    if (t.closest("a,button")) return;
-                    const key = t.closest<HTMLElement>("tr[data-key]")?.dataset.key;
+                    if (t.closest('a,button')) return;
+                    const key = t.closest<HTMLElement>('tr[data-key]')?.dataset.key;
                     if (key) router.push(`/runs/${key}`);
                   }}
                 >
@@ -332,7 +366,10 @@ export default function RunsPage() {
                     selected={selected?.id ?? null}
                     onSelect={(k) => setPicked(k)}
                     onActivate={(k) => router.push(`/runs/${k}`)}
-                    rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
+                    rowProps={(r) => ({
+                      'data-testid': 'run-row',
+                      'data-document': r.document_slug ?? undefined,
+                    })}
                   />
                 </div>
               )}
@@ -377,11 +414,19 @@ function RunInspector({ run, name }: { run: RunSummary; name: string }) {
         <InspectorRow value={run.flow_title}>Flow</InspectorRow>
         <InspectorRow value={<RunCost run={run} />}>Cost</InspectorRow>
         {/* qa-onboarding-24: who decides on the cost, said beside it. */}
-        {run.status === "awaiting_approval" && <InspectorRow value="An owner">Approves the cost</InspectorRow>}
-        {run.status === "paused_overrun" && <InspectorRow value="An owner">Resumes or stops it</InspectorRow>}
+        {run.status === 'awaiting_approval' && (
+          <InspectorRow value="An owner">Approves the cost</InspectorRow>
+        )}
+        {run.status === 'paused_overrun' && (
+          <InspectorRow value="An owner">Resumes or stops it</InspectorRow>
+        )}
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
-        {run.started_at && <InspectorRow value={formatDateTime(run.started_at)}>Started</InspectorRow>}
-        {run.finished_at && <InspectorRow value={formatDateTime(run.finished_at)}>Finished</InspectorRow>}
+        {run.started_at && (
+          <InspectorRow value={formatDateTime(run.started_at)}>Started</InspectorRow>
+        )}
+        {run.finished_at && (
+          <InspectorRow value={formatDateTime(run.finished_at)}>Finished</InspectorRow>
+        )}
       </InspectorSection>
     </Inspector>
   );

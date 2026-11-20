@@ -1,7 +1,7 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { AuthCard } from "@/app/login/_components/AuthCard";
-import { LoginForm, NoScriptNote } from "@/components/LoginForm";
+import { AuthCard } from '@/app/login/_components/AuthCard';
+import { LoginForm, NoScriptNote } from '@/components/LoginForm';
 
 export default function LoginPage() {
   return (

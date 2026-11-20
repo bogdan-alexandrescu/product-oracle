@@ -1,31 +1,37 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from 'next/navigation';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 
-import { AddEvidenceLink } from "@/components/AddEvidenceLink";
-import { AskTeammate } from "@/components/AskTeammate";
-import { Button, Chip } from "@/components/ds";
-import { EditSection } from "@/components/EditSection";
-import type { CodeIndex } from "@/lib/code-index";
-import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
-import { RefineSection } from "@/components/RefineSection";
-import { SectionReviewBar } from "@/components/SectionReviewBar";
-import { ownNumber, type SectionLook } from "@/components/PrdLook";
-import { LayerChip, Menu } from "@/components/review/parts";
-import { SpecStateBadge } from "@/components/ui";
-import { IGNORE_ATTR } from "@/lib/anchor";
-import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from "@/lib/api/client";
-import { blocksText, type Block } from "@/lib/markdown";
-import { useMe } from "@/lib/me";
+import { AddEvidenceLink } from '@/components/AddEvidenceLink';
+import { AskTeammate } from '@/components/AskTeammate';
+import { Button, Chip } from '@/components/ds';
+import { EditSection } from '@/components/EditSection';
+import type { CodeIndex } from '@/lib/code-index';
+import {
+  DateMarker,
+  MarkdownBody,
+  unplacedMarks,
+  type ExpandCtx,
+  type Highlight,
+} from '@/components/MarkdownBody';
+import { RefineSection } from '@/components/RefineSection';
+import { SectionReviewBar } from '@/components/SectionReviewBar';
+import { ownNumber, type SectionLook } from '@/components/PrdLook';
+import { LayerChip, Menu } from '@/components/review/parts';
+import { SpecStateBadge } from '@/components/ui';
+import { IGNORE_ATTR } from '@/lib/anchor';
+import type { CitationOut, DateMarkOut, EntityOut, SectionOut, Verdict } from '@/lib/api/client';
+import { blocksText, type Block } from '@/lib/markdown';
+import { useMe } from '@/lib/me';
 
 const HEADING_CLASS: Record<number, string> = {
-  1: "font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7",
-  2: "font-display text-xl leading-7 font-bold tracking-heading",
-  3: "font-display tracking-heading text-lg leading-6 font-bold",
+  1: 'font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7',
+  2: 'font-display text-xl leading-7 font-bold tracking-heading',
+  3: 'font-display tracking-heading text-lg leading-6 font-bold',
 };
 
-type Tool = "evidence" | "refine" | "ask" | "edit";
+type Tool = 'evidence' | 'refine' | 'ask' | 'edit';
 
 /**
  * One section of a version. The open section (one at a time) carries the review bar and a
@@ -103,32 +109,41 @@ export const SectionView = memo(function SectionView({
   /** PT1 a: the section's number, and the review bar kept out of sight off the section being read. */
   look?: SectionLook;
 }) {
-  const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
+  const Heading = `h${Math.min(section.level, 3)}` as 'h1' | 'h2' | 'h3';
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
   const states = section.spec_states;
   const topState = states?.[0];
   const markers = useMemo(() => {
     const m = new Map<number, ReactNode>();
     for (const st of states?.slice(1) ?? []) {
-      const at = st.starts_at ? blocks.findIndex((b) => b.t === "p" && blocksText([b]).startsWith(st.starts_at!)) : -1;
+      const at = st.starts_at
+        ? blocks.findIndex((b) => b.t === 'p' && blocksText([b]).startsWith(st.starts_at!))
+        : -1;
       if (at >= 0)
         m.set(
           at,
-          <p key={`state-${at}`} className="pt-2" data-testid="spec-state-marker" {...{ [IGNORE_ATTR]: "" }}>
+          <p
+            key={`state-${at}`}
+            className="pt-2"
+            data-testid="spec-state-marker"
+            {...{ [IGNORE_ATTR]: '' }}
+          >
             <SpecStateBadge state={st} />
           </p>,
         );
     }
     return m;
   }, [blocks, states]);
-  const locked = section.verdict?.verdict === "approved" && !section.verdict.lapsed_at;
+  const locked = section.verdict?.verdict === 'approved' && !section.verdict.lapsed_at;
   // The tool picked from the ⋯ menu, shown under the review bar; a new pick remounts it.
   const [tool, setTool] = useState<{ kind: Tool; n: number } | null>(null);
   // Preselect the baseline item the section names (heading first, then its text).
   const suggested = useMemo(() => {
     if (!evidenceTargets) return null;
     const named = (text: string) =>
-      evidenceTargets.find((e) => e.status !== "rejected" && text.toLowerCase().includes(e.title.toLowerCase()));
+      evidenceTargets.find(
+        (e) => e.status !== 'rejected' && text.toLowerCase().includes(e.title.toLowerCase()),
+      );
     return (named(section.heading) ?? named(section.body_text))?.id ?? null;
   }, [evidenceTargets, section.heading, section.body_text]);
   const canRefine = !!refine && !locked;
@@ -136,7 +151,7 @@ export const SectionView = memo(function SectionView({
   const { can } = useMe();
   const router = useRouter();
   // #370: proposing it is POST /v1/decisions.
-  const mayDecide = can("create_decision") && !!section.id;
+  const mayDecide = can('create_decision') && !!section.id;
   const unplaced = useMemo(() => unplacedMarks(blocks, dateMarks), [blocks, dateMarks]);
   const pick = (kind: Tool) => setTool((t) => ({ kind, n: (t?.n ?? 0) + 1 }));
   const close = () => setTool(null);
@@ -150,7 +165,7 @@ export const SectionView = memo(function SectionView({
       data-layer={section.layer}
       data-level={look ? section.level : undefined}
       className={`min-w-0 scroll-mt-6 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
-        nested ? "py-3" : "px-6 py-5 max-[600px]:px-4 max-[600px]:py-4"
+        nested ? 'py-3' : 'px-6 py-5 max-[600px]:px-4 max-[600px]:py-4'
       }`}
     >
       <div className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -159,11 +174,15 @@ export const SectionView = memo(function SectionView({
           className={`min-w-0 ${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-text`}
         >
           {look?.num && <span className="prd-num">{look.num}</span>}
-          {look?.num && " "}
-          {look?.num && ownNumber(section.heading)?.num === look.num ? ownNumber(section.heading)!.rest : section.heading}
+          {look?.num && ' '}
+          {look?.num && ownNumber(section.heading)?.num === look.num
+            ? ownNumber(section.heading)!.rest
+            : section.heading}
           {dateMarks
-            ?.filter((m) => m.label && m.where === "heading")
-            .map((m) => <DateMarker key={m.text} mark={m} />)}
+            ?.filter((m) => m.label && m.where === 'heading')
+            .map((m) => (
+              <DateMarker key={m.text} mark={m} />
+            ))}
         </Heading>
         <LayerChip layer={showLayer ? section.layer : null} />
         {changedLock && (
@@ -172,7 +191,10 @@ export const SectionView = memo(function SectionView({
           </span>
         )}
         {rereview && (
-          <span data-testid="rereview-chip" title="This section changed after it was approved; the review policy asks for its review again.">
+          <span
+            data-testid="rereview-chip"
+            title="This section changed after it was approved; the review policy asks for its review again."
+          >
             <Chip kind="warn">Re-review requested</Chip>
           </span>
         )}
@@ -191,13 +213,17 @@ export const SectionView = memo(function SectionView({
           {!nested && (evidenceTargets || edit || canRefine || ask || mayDecide || onDiscuss) && (
             <Menu label={`Actions for ${section.heading}`} icon="more" iconOnly>
               {(closeMenu) => (
-                <span role="menu" aria-label={`Actions for ${section.heading}`} className="flex min-w-44 flex-col gap-0.5">
+                <span
+                  role="menu"
+                  aria-label={`Actions for ${section.heading}`}
+                  className="flex min-w-44 flex-col gap-0.5"
+                >
                   {evidenceTargets && (
                     <MenuItem
                       label={`Add evidence link to ${section.heading}`}
                       onClick={() => {
                         closeMenu();
-                        pick("evidence");
+                        pick('evidence');
                       }}
                     >
                       Add evidence link
@@ -207,7 +233,7 @@ export const SectionView = memo(function SectionView({
                     <MenuItem
                       onClick={() => {
                         closeMenu();
-                        pick("edit");
+                        pick('edit');
                       }}
                     >
                       Edit the text yourself
@@ -217,7 +243,7 @@ export const SectionView = memo(function SectionView({
                     <MenuItem
                       onClick={() => {
                         closeMenu();
-                        pick("refine");
+                        pick('refine');
                       }}
                     >
                       Ask Oracle to rewrite
@@ -227,7 +253,7 @@ export const SectionView = memo(function SectionView({
                     <MenuItem
                       onClick={() => {
                         closeMenu();
-                        pick("ask");
+                        pick('ask');
                       }}
                     >
                       Ask a teammate a question
@@ -249,7 +275,9 @@ export const SectionView = memo(function SectionView({
                       onClick={() => {
                         closeMenu();
                         const subject = encodeURIComponent(`section:${section.id}`);
-                        router.push(`/company/decisions?subject=${subject}&ref=${encodeURIComponent(section.heading)}&propose=1`);
+                        router.push(
+                          `/company/decisions?subject=${subject}&ref=${encodeURIComponent(section.heading)}&propose=1`,
+                        );
                       }}
                     >
                       Record a decision
@@ -268,7 +296,7 @@ export const SectionView = memo(function SectionView({
       )}
       {unplaced.length > 0 && (
         <p className="mb-2 text-sm text-text2" data-testid="unplaced-date-marks">
-          Dates in this section:{" "}
+          Dates in this section:{' '}
           {unplaced.map((m) => (
             <span key={m.text} className="mr-2 whitespace-nowrap">
               {m.text}
@@ -283,9 +311,9 @@ export const SectionView = memo(function SectionView({
         </p>
       )}
       <div
-        className={`doc-body${placeholder ? " rounded-button border-2 border-warn bg-warn-bg px-4 py-3" : ""}`}
+        className={`doc-body${placeholder ? ' rounded-button border-2 border-warn bg-warn-bg px-4 py-3' : ''}`}
         data-section-body={section.section_key}
-        data-testid={placeholder ? "asks-placeholder" : undefined}
+        data-testid={placeholder ? 'asks-placeholder' : undefined}
       >
         <MarkdownBody
           blocks={blocks}
@@ -300,7 +328,7 @@ export const SectionView = memo(function SectionView({
         />
       </div>
       {!nested && (
-        <div hidden={look?.hideReview} className={look?.hideReview ? undefined : "contents"}>
+        <div hidden={look?.hideReview} className={look?.hideReview ? undefined : 'contents'}>
           <SectionReviewBar
             heading={section.heading}
             verdict={section.verdict}
@@ -310,10 +338,10 @@ export const SectionView = memo(function SectionView({
           />
         </div>
       )}
-      {!nested && tool?.kind === "evidence" && evidenceTargets && (
+      {!nested && tool?.kind === 'evidence' && evidenceTargets && (
         <div className="mt-3" data-testid="section-evidence">
           <AddEvidenceLink
-            key={`${suggested ?? ""}|${tool.n}`}
+            key={`${suggested ?? ''}|${tool.n}`}
             entities={evidenceTargets}
             suggested={suggested}
             context={section.heading}
@@ -322,18 +350,29 @@ export const SectionView = memo(function SectionView({
           />
         </div>
       )}
-      {!nested && tool?.kind === "ask" && ask && (
+      {!nested && tool?.kind === 'ask' && ask && (
         <AskTeammate
           key={tool.n}
-          subject={{ kind: "document_section", document_id: ask.documentId, section_key: section.section_key }}
+          subject={{
+            kind: 'document_section',
+            document_id: ask.documentId,
+            section_key: section.section_key,
+          }}
           context={section.heading}
           onClose={close}
         />
       )}
-      {!nested && tool?.kind === "edit" && edit && (
-        <EditSection key={tool.n} doc={edit.doc} n={edit.n} section={section} citations={citations} onClose={close} />
+      {!nested && tool?.kind === 'edit' && edit && (
+        <EditSection
+          key={tool.n}
+          doc={edit.doc}
+          n={edit.n}
+          section={section}
+          citations={citations}
+          onClose={close}
+        />
       )}
-      {!nested && tool?.kind === "refine" && canRefine && (
+      {!nested && tool?.kind === 'refine' && canRefine && (
         <RefineSection
           key={tool.n}
           doc={refine.doc}
@@ -349,7 +388,15 @@ export const SectionView = memo(function SectionView({
 });
 
 /** `label` names the item when its words alone would not say which section (the menu is named for it). */
-function MenuItem({ label, onClick, children }: { label?: string; onClick: () => void; children: ReactNode }) {
+function MenuItem({
+  label,
+  onClick,
+  children,
+}: {
+  label?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"

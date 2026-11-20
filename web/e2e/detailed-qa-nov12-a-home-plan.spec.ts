@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * Visual QA, Nov 12, 2026, Detailed Home and Plan (docs/qa/2026-11-12/detailed-a.md #12, #14,
@@ -24,26 +24,20 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 const scenario = (page: Page, s: string) =>
-  page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
-    MOCK_SCENARIO_KEY,
-    s,
-  ] as const);
-const links = (page: Page) =>
-  page.getByTestId("plan-links").filter({ visible: true });
-const action = (page: Page) =>
-  page.locator("[data-page-action]").filter({ visible: true });
+  page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, s] as const);
+const links = (page: Page) => page.getByTestId('plan-links').filter({ visible: true });
+const action = (page: Page) => page.locator('[data-page-action]').filter({ visible: true });
 
 /** Whether each element's text shows whole: not held on one cut line, nothing past its box. */
 async function whole(l: Locator) {
   return l.evaluateAll((els) =>
     els
-      .filter((el) => (el.textContent ?? "").trim() !== "")
+      .filter((el) => (el.textContent ?? '').trim() !== '')
       .map((el) => {
         const s = getComputedStyle(el);
         return {
-          text: (el.textContent ?? "").trim(),
-          oneCutLine:
-            s.whiteSpace === "nowrap" && s.textOverflow === "ellipsis",
+          text: (el.textContent ?? '').trim(),
+          oneCutLine: s.whiteSpace === 'nowrap' && s.textOverflow === 'ellipsis',
           wider: el.scrollWidth > el.clientWidth,
           taller: el.scrollHeight > el.clientHeight + 1,
         };
@@ -51,17 +45,13 @@ async function whole(l: Locator) {
   );
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
 
-  test("#12: at 1440 In flight's Next and Needs you's Kind are not cut", async ({
-    page,
-  }) => {
+  test("#12: at 1440 In flight's Next and Needs you's Kind are not cut", async ({ page }) => {
     await login(page);
-    await expect(page.getByTestId("flight-row").first()).toBeVisible();
-    const next = await whole(
-      page.getByTestId("home-in-flight-table").getByTestId("flight-next"),
-    );
+    await expect(page.getByTestId('flight-row').first()).toBeVisible();
+    const next = await whole(page.getByTestId('home-in-flight-table').getByTestId('flight-next'));
     expect(next.length).toBeGreaterThan(0);
     for (const n of next)
       expect(n, n.text).toEqual({
@@ -71,11 +61,9 @@ test.describe("desktop", () => {
         taller: false,
       });
 
-    const needs = page.getByTestId("home-needs-table");
-    await expect(needs.locator("tr[data-row]").first()).toBeVisible();
-    const kinds = await whole(
-      needs.locator("tr[data-row] td:first-child span.font-medium"),
-    );
+    const needs = page.getByTestId('home-needs-table');
+    await expect(needs.locator('tr[data-row]').first()).toBeVisible();
+    const kinds = await whole(needs.locator('tr[data-row] td:first-child span.font-medium'));
     expect(kinds.length).toBeGreaterThan(0);
     for (const k of kinds)
       expect(k, k.text).toEqual({
@@ -89,83 +77,73 @@ test.describe("desktop", () => {
   test("#14: Launches and Changelog have no header button to each other; the Plan strip's links go there", async ({
     page,
   }) => {
-    await scenario(page, "launches");
+    await scenario(page, 'launches');
     await login(page);
-    await page.goto("/plan");
-    await links(page).getByRole("link", { name: "Launches" }).click();
+    await page.goto('/plan');
+    await links(page).getByRole('link', { name: 'Launches' }).click();
     await expect(page).toHaveURL(/\/roadmap\/launches$/);
-    await expect(page.getByTestId("launch-row").first()).toBeVisible();
-    await expect(
-      action(page).getByRole("link", { name: "Changelog" }),
-    ).toHaveCount(0);
-    await expect(page.getByTestId("changelog-link")).toHaveCount(0);
+    await expect(page.getByTestId('launch-row').first()).toBeVisible();
+    await expect(action(page).getByRole('link', { name: 'Changelog' })).toHaveCount(0);
+    await expect(page.getByTestId('changelog-link')).toHaveCount(0);
 
-    await links(page).getByRole("link", { name: "Changelog" }).click();
+    await links(page).getByRole('link', { name: 'Changelog' }).click();
     await expect(page).toHaveURL(/\/roadmap\/changelog$/);
-    await expect(page.getByTestId("changelog-entry").first()).toBeVisible();
-    await expect(
-      action(page).getByRole("link", { name: "Launches" }),
-    ).toHaveCount(0);
-    await expect(page.getByTestId("launches-link")).toHaveCount(0);
+    await expect(page.getByTestId('changelog-entry').first()).toBeVisible();
+    await expect(action(page).getByRole('link', { name: 'Launches' })).toHaveCount(0);
+    await expect(page.getByTestId('launches-link')).toHaveCount(0);
 
-    await links(page).getByRole("link", { name: "Launches" }).click();
+    await links(page).getByRole('link', { name: 'Launches' }).click();
     await expect(page).toHaveURL(/\/roadmap\/launches$/);
   });
 
-  test("#14: Reports and Latest report say the same with no report yet", async ({
-    page,
-  }) => {
+  test('#14: Reports and Latest report say the same with no report yet', async ({ page }) => {
     await login(page);
-    await page.goto("/plan");
+    await page.goto('/plan');
     await page
-      .getByTestId("plan-tabs")
+      .getByTestId('plan-tabs')
       .filter({ visible: true })
-      .getByRole("link", { name: "Reports" })
+      .getByRole('link', { name: 'Reports' })
       .click();
     await expect(page).toHaveURL(/\/plan\/reports$/);
-    const list = page.getByTestId("reports-empty").filter({ visible: true });
+    const list = page.getByTestId('reports-empty').filter({ visible: true });
     await expect(list).toBeVisible();
-    const listText = (await list.locator("p").allInnerTexts()).join(" ").trim();
-    expect(listText).not.toBe("");
+    const listText = (await list.locator('p').allInnerTexts()).join(' ').trim();
+    expect(listText).not.toBe('');
 
-    await links(page).getByRole("link", { name: "Latest report" }).click();
+    await links(page).getByRole('link', { name: 'Latest report' }).click();
     await expect(page).toHaveURL(/\/plan\/reports\/latest$/);
-    const latest = page.getByTestId("no-report-yet").filter({ visible: true });
+    const latest = page.getByTestId('no-report-yet').filter({ visible: true });
     await expect(latest).toBeVisible();
-    const latestText = (await latest.locator("p").allInnerTexts())
-      .join(" ")
-      .trim();
+    const latestText = (await latest.locator('p').allInnerTexts()).join(' ').trim();
     expect(latestText).toBe(listText);
-    await expect(
-      latest.getByRole("button", { name: "Generate now" }),
-    ).toBeVisible();
+    await expect(latest.getByRole('button', { name: 'Generate now' })).toBeVisible();
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
-  test("#15: at 390 Changelog shows its name and its header buttons on one row", async ({
+  test('#15: at 390 Changelog shows its name and its header buttons on one row', async ({
     page,
   }) => {
-    await scenario(page, "launches");
+    await scenario(page, 'launches');
     await login(page);
-    await page.goto("/plan");
-    await links(page).getByRole("link", { name: "Changelog" }).click();
+    await page.goto('/plan');
+    await links(page).getByRole('link', { name: 'Changelog' }).click();
     await expect(page).toHaveURL(/\/roadmap\/changelog$/);
-    await expect(page.getByTestId("changelog-entry").first()).toBeVisible();
+    await expect(page.getByTestId('changelog-entry').first()).toBeVisible();
 
     const title = page
-      .getByRole("heading", { level: 1, name: "Changelog", exact: true })
+      .getByRole('heading', { level: 1, name: 'Changelog', exact: true })
       .filter({ visible: true });
     await expect(title).toBeVisible();
     expect(
       (await title.boundingBox())!.height,
-      "the name is drawn, not for screen readers only",
+      'the name is drawn, not for screen readers only',
     ).toBeGreaterThan(16);
 
     // The header's buttons stay on one row: the same top for each.
-    const buttons = action(page).locator("button, a");
+    const buttons = action(page).locator('button, a');
     await expect(buttons.first()).toBeVisible();
     const tops = await buttons.evaluateAll((els) =>
       els
@@ -173,35 +151,28 @@ test.describe("phone", () => {
         .map((el) => Math.round(el.getBoundingClientRect().top)),
     );
     expect(tops.length).toBeGreaterThan(0);
-    expect(
-      Math.max(...tops) - Math.min(...tops),
-      "header buttons on one row",
-    ).toBeLessThanOrEqual(2);
+    expect(Math.max(...tops) - Math.min(...tops), 'header buttons on one row').toBeLessThanOrEqual(
+      2,
+    );
     expect(
       await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth -
-          document.documentElement.clientWidth,
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBeLessThanOrEqual(0);
 
     // The exports are under More, and work from there.
-    await action(page).getByRole("button", { name: "More" }).click();
-    const more = page.getByRole("group", { name: "More actions" });
-    await expect(
-      more.getByRole("button", { name: "Export Markdown" }),
-    ).toBeVisible();
-    await expect(
-      more.getByRole("button", { name: "Export HTML" }),
-    ).toBeVisible();
-    await page.keyboard.press("Escape");
+    await action(page).getByRole('button', { name: 'More' }).click();
+    const more = page.getByRole('group', { name: 'More actions' });
+    await expect(more.getByRole('button', { name: 'Export Markdown' })).toBeVisible();
+    await expect(more.getByRole('button', { name: 'Export HTML' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(more).toHaveCount(0);
 
     // Launches, its sibling, names itself the same way.
-    await links(page).getByRole("link", { name: "Launches" }).click();
+    await links(page).getByRole('link', { name: 'Launches' }).click();
     await expect(page).toHaveURL(/\/roadmap\/launches$/);
     const launches = page
-      .getByRole("heading", { level: 1, name: "Launches", exact: true })
+      .getByRole('heading', { level: 1, name: 'Launches', exact: true })
       .filter({ visible: true });
     await expect(launches).toBeVisible();
     expect((await launches.boundingBox())!.height).toBeGreaterThan(16);

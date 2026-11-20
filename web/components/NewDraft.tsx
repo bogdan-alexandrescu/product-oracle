@@ -1,8 +1,17 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from 'react';
 
 import {
   Button,
@@ -20,102 +29,114 @@ import {
   PageHeader,
   Panel,
   Split,
-} from "@/components/ds";
-import { RequestsBehind } from "@/components/RequestsBehind";
-import { ThemeThumbnail } from "@/components/ThemePreview";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { namedText } from "@/lib/codes";
-import { sortGoals } from "@/lib/goal-order";
-import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
-import { assess, goalViews } from "@/app/home/_goals";
-import { useMe } from "@/lib/me";
-import { holdLeaving } from "@/lib/leave-guard";
-import { useLive } from "@/lib/use-live";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+} from '@/components/ds';
+import { RequestsBehind } from '@/components/RequestsBehind';
+import { ThemeThumbnail } from '@/components/ThemePreview';
+import { ErrorNote, INPUT, Loading } from '@/components/ui';
+import { ApiError, api, unwrap, type Schemas } from '@/lib/api/client';
+import { namedText } from '@/lib/codes';
+import { sortGoals } from '@/lib/goal-order';
+import { unwrapProblems, ProblemsError } from '@/lib/api/problems';
+import { assess, goalViews } from '@/app/home/_goals';
+import { useMe } from '@/lib/me';
+import { holdLeaving } from '@/lib/leave-guard';
+import { useLive } from '@/lib/use-live';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-type Kind = "prd" | "roadmap";
-type PrdAnswers = Schemas["PrdAnswers"];
-type RoadmapAnswers = Schemas["RoadmapAnswers"];
-type Choice = Schemas["Choice"];
+type Kind = 'prd' | 'roadmap';
+type PrdAnswers = Schemas['PrdAnswers'];
+type RoadmapAnswers = Schemas['RoadmapAnswers'];
+type Choice = Schemas['Choice'];
 
 // ---------------------------------------------------------------- questions
 
 type Option<V> = { value: V; label: string };
 const YES_NO: Option<boolean>[] = [
-  { value: true, label: "Yes" },
-  { value: false, label: "No" },
+  { value: true, label: 'Yes' },
+  { value: false, label: 'No' },
 ];
 
 const PRD_QUESTIONS = [
   {
-    field: "decision",
-    question: "What should this document decide?",
+    field: 'decision',
+    question: 'What should this document decide?',
     options: [
-      { value: "start_or_not", label: "Whether to start at all" },
-      { value: "commit_build", label: "Commit to building it" },
-      { value: "bet_fixed_time", label: "Bet a fixed amount of time" },
-      { value: "choose_between", label: "Choose between options" },
-      { value: "technical_design", label: "How to build it" },
+      { value: 'start_or_not', label: 'Whether to start at all' },
+      { value: 'commit_build', label: 'Commit to building it' },
+      { value: 'bet_fixed_time', label: 'Bet a fixed amount of time' },
+      { value: 'choose_between', label: 'Choose between options' },
+      { value: 'technical_design', label: 'How to build it' },
     ],
   },
   {
-    field: "size",
-    question: "How big and how new is it?",
+    field: 'size',
+    question: 'How big and how new is it?',
     options: [
-      { value: "small_change", label: "A small change" },
-      { value: "new_feature", label: "A new feature" },
-      { value: "new_product", label: "A new product or market" },
+      { value: 'small_change', label: 'A small change' },
+      { value: 'new_feature', label: 'A new feature' },
+      { value: 'new_product', label: 'A new product or market' },
     ],
   },
   {
-    field: "readers",
-    question: "Who reads and approves it?",
+    field: 'readers',
+    question: 'Who reads and approves it?',
     options: [
-      { value: "founder", label: "The founder" },
-      { value: "product_eng", label: "Product and engineering" },
-      { value: "leadership", label: "Leadership or the board" },
-      { value: "engineers_or_agents", label: "Engineers or coding agents" },
+      { value: 'founder', label: 'The founder' },
+      { value: 'product_eng', label: 'Product and engineering' },
+      { value: 'leadership', label: 'Leadership or the board' },
+      { value: 'engineers_or_agents', label: 'Engineers or coding agents' },
     ],
   },
-  { field: "model_driven", question: "Does its output come from a model or agent?", options: YES_NO },
+  {
+    field: 'model_driven',
+    question: 'Does its output come from a model or agent?',
+    options: YES_NO,
+  },
 ] as const satisfies { field: keyof PrdAnswers; question: string; options: Option<unknown>[] }[];
 
 const ROADMAP_QUESTIONS = [
   {
-    field: "audience",
-    question: "Who reads it first?",
+    field: 'audience',
+    question: 'Who reads it first?',
     options: [
-      { value: "board", label: "Board or investors" },
-      { value: "team", label: "The product team" },
-      { value: "engineering", label: "Engineering" },
-      { value: "public", label: "Customers (public)" },
-    ],
-  },
-  { field: "external_dates", question: "Are there real external dates (a launch, contract or event)?", options: YES_NO },
-  {
-    field: "horizon",
-    question: "How far ahead does it look?",
-    options: [
-      { value: "one_cycle", label: "One cycle" },
-      { value: "one_two_quarters", label: "One or two quarters" },
-      { value: "up_to_two_years", label: "Up to two years" },
+      { value: 'board', label: 'Board or investors' },
+      { value: 'team', label: 'The product team' },
+      { value: 'engineering', label: 'Engineering' },
+      { value: 'public', label: 'Customers (public)' },
     ],
   },
   {
-    field: "planning_style",
-    question: "How does the team plan?",
+    field: 'external_dates',
+    question: 'Are there real external dates (a launch, contract or event)?',
+    options: YES_NO,
+  },
+  {
+    field: 'horizon',
+    question: 'How far ahead does it look?',
     options: [
-      { value: "cycles", label: "Fixed cycles" },
-      { value: "sprints", label: "Sprints" },
-      { value: "continuous", label: "Continuous flow" },
+      { value: 'one_cycle', label: 'One cycle' },
+      { value: 'one_two_quarters', label: 'One or two quarters' },
+      { value: 'up_to_two_years', label: 'Up to two years' },
     ],
   },
-  { field: "tracker_connected", question: "Is an engineering tracker connected?", options: YES_NO },
-  { field: "show_capacity", question: "Show team capacity?", options: YES_NO },
-  { field: "public_version", question: "Also publish a public version?", options: YES_NO },
-] as const satisfies { field: keyof RoadmapAnswers; question: string; options: Option<unknown>[] }[];
+  {
+    field: 'planning_style',
+    question: 'How does the team plan?',
+    options: [
+      { value: 'cycles', label: 'Fixed cycles' },
+      { value: 'sprints', label: 'Sprints' },
+      { value: 'continuous', label: 'Continuous flow' },
+    ],
+  },
+  { field: 'tracker_connected', question: 'Is an engineering tracker connected?', options: YES_NO },
+  { field: 'show_capacity', question: 'Show team capacity?', options: YES_NO },
+  { field: 'public_version', question: 'Also publish a public version?', options: YES_NO },
+] as const satisfies {
+  field: keyof RoadmapAnswers;
+  question: string;
+  options: Option<unknown>[];
+}[];
 
 function Question<V extends string | boolean>({
   name,
@@ -130,7 +151,7 @@ function Question<V extends string | boolean>({
   value: V | null | undefined;
   onChange: (v: V | null) => void;
 }) {
-  const choices: Option<V | null>[] = [{ value: null, label: "Not sure" }, ...options];
+  const choices: Option<V | null>[] = [{ value: null, label: 'Not sure' }, ...options];
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-[15px] font-semibold text-text">{question}</legend>
@@ -142,15 +163,21 @@ function Question<V extends string | boolean>({
               key={String(o.value)}
               className={`inline-flex h-8 cursor-pointer items-center rounded-lg border px-3 text-sm font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${
                 checked && o.value === null
-                  ? "border-accent-mid bg-accent-soft text-accent-ink"
+                  ? 'border-accent-mid bg-accent-soft text-accent-ink'
                   : checked
-                  ? "border-accent bg-accent text-on-accent"
-                  : o.value === null
-                    ? "border-line bg-surface text-text2 hover:bg-surface2"
-                    : "border-line-strong bg-surface text-text hover:bg-surface2"
+                    ? 'border-accent bg-accent text-on-accent'
+                    : o.value === null
+                      ? 'border-line bg-surface text-text2 hover:bg-surface2'
+                      : 'border-line-strong bg-surface text-text hover:bg-surface2'
               }`}
             >
-              <input type="radio" name={name} className="sr-only" checked={checked} onChange={() => onChange(o.value)} />
+              <input
+                type="radio"
+                name={name}
+                className="sr-only"
+                checked={checked}
+                onChange={() => onChange(o.value)}
+              />
               {o.label}
             </label>
           );
@@ -178,12 +205,12 @@ function MultiQuestion({
   const chip = (on: boolean, none: boolean) =>
     `inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border px-3 text-sm font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${
       on && none
-        ? "border-accent-mid bg-accent-soft text-accent-ink"
+        ? 'border-accent-mid bg-accent-soft text-accent-ink'
         : on
-          ? "border-accent bg-accent text-on-accent"
+          ? 'border-accent bg-accent text-on-accent'
           : none
-            ? "border-line bg-surface text-text2 hover:bg-surface2"
-            : "border-line-strong bg-surface text-text hover:bg-surface2"
+            ? 'border-line bg-surface text-text2 hover:bg-surface2'
+            : 'border-line-strong bg-surface text-text hover:bg-surface2'
     }`;
   return (
     <fieldset className="min-w-0">
@@ -191,7 +218,13 @@ function MultiQuestion({
       <p className="-mt-1 mb-2 text-sm text-text2">Pick all that apply.</p>
       <div className="flex flex-wrap gap-1.5">
         <label className={chip(picked.length === 0, true)}>
-          <input type="checkbox" name={name} className="sr-only" checked={picked.length === 0} onChange={() => onChange(null)} />
+          <input
+            type="checkbox"
+            name={name}
+            className="sr-only"
+            checked={picked.length === 0}
+            onChange={() => onChange(null)}
+          />
           Not sure
         </label>
         {options.map((o) => {
@@ -205,7 +238,9 @@ function MultiQuestion({
                 checked={on}
                 onChange={() => {
                   // Kept in the questions' order, whatever order they were ticked in.
-                  const next = options.map((x) => x.value).filter((v) => (v === o.value ? !on : picked.includes(v)));
+                  const next = options
+                    .map((x) => x.value)
+                    .filter((v) => (v === o.value ? !on : picked.includes(v)));
                   onChange(next.length ? next : null);
                 }}
               />
@@ -220,16 +255,24 @@ function MultiQuestion({
 }
 
 /** The four PRD questions; who reads and approves it takes several answers. */
-function PrdQuestions({ name, prd, onAnswer }: { name: string; prd: PrdAnswers; onAnswer: <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => void }) {
+function PrdQuestions({
+  name,
+  prd,
+  onAnswer,
+}: {
+  name: string;
+  prd: PrdAnswers;
+  onAnswer: <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => void;
+}) {
   return PRD_QUESTIONS.map((q) =>
-    q.field === "readers" ? (
+    q.field === 'readers' ? (
       <MultiQuestion
         key={q.field}
         name={`${name}${q.field}`}
         question={q.question}
         options={q.options}
         value={prd.readers}
-        onChange={(v) => onAnswer("readers", v as PrdAnswers["readers"])}
+        onChange={(v) => onAnswer('readers', v as PrdAnswers['readers'])}
       />
     ) : (
       <Question
@@ -266,8 +309,10 @@ function NumberQuestion({
           min={0}
           className={`${INPUT} tnum w-28`}
           placeholder={placeholder}
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value === "" ? null : Math.max(0, Math.floor(Number(e.target.value))))}
+          value={value ?? ''}
+          onChange={(e) =>
+            onChange(e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value))))
+          }
         />
       </label>
       {hint && (
@@ -303,7 +348,7 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
   });
   useEffect(() => {
     if (!dirty || leaving || armed.current || sent.current) return;
-    window.history.pushState(window.history.state, "", window.location.href);
+    window.history.pushState(window.history.state, '', window.location.href);
     armed.current = true;
   }, [dirty, leaving]);
   useEffect(() => {
@@ -311,13 +356,23 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
     sent.current = false;
     const asks = () => live.current.dirty && !sent.current;
     const onClick = (e: MouseEvent) => {
-      if (!asks() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[href]") : null;
-      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      if (
+        !asks() ||
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      )
+        return;
+      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
       const url = new URL(a.href, window.location.href);
       // Another site: the browser's own question (beforeunload, below) asks.
       if (url.origin !== window.location.origin) return;
-      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search)
+        return;
       // Before Next's Link sees the click: nothing navigates until the person answers.
       e.preventDefault();
       e.stopPropagation();
@@ -335,11 +390,11 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
     const onUnload = (e: BeforeUnloadEvent) => {
       if (!asks()) return;
       e.preventDefault();
-      e.returnValue = "";
+      e.returnValue = '';
     };
-    window.addEventListener("click", onClick, true);
-    window.addEventListener("beforeunload", onUnload);
-    window.addEventListener("popstate", onPop, true);
+    window.addEventListener('click', onClick, true);
+    window.addEventListener('beforeunload', onUnload);
+    window.addEventListener('popstate', onPop, true);
     // A button that navigates (the mode switch, Sign out) asks through lib/leave-guard.
     holdLeaving((go) => {
       if (!asks()) return false;
@@ -347,9 +402,9 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
       return true;
     });
     return () => {
-      window.removeEventListener("click", onClick, true);
-      window.removeEventListener("beforeunload", onUnload);
-      window.removeEventListener("popstate", onPop, true);
+      window.removeEventListener('click', onClick, true);
+      window.removeEventListener('beforeunload', onUnload);
+      window.removeEventListener('popstate', onPop, true);
       holdLeaving(null);
     };
   }, []);
@@ -389,20 +444,20 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
 
 // ---------------------------------------------------------------- dark page (theme previews)
 
-const darkQuery = "(prefers-color-scheme: dark)";
+const darkQuery = '(prefers-color-scheme: dark)';
 function subscribeScheme(cb: () => void) {
   const media = window.matchMedia(darkQuery);
-  media.addEventListener("change", cb);
+  media.addEventListener('change', cb);
   const watch = new MutationObserver(cb);
-  watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   return () => {
-    media.removeEventListener("change", cb);
+    media.removeEventListener('change', cb);
     watch.disconnect();
   };
 }
 function readDark() {
   const t = document.documentElement.dataset.theme;
-  return t === "dark" || (t !== "light" && window.matchMedia(darkQuery).matches);
+  return t === 'dark' || (t !== 'light' && window.matchMedia(darkQuery).matches);
 }
 /** The app is in dark mode (the user menu's choice, else the system's). */
 function useDarkPage() {
@@ -413,8 +468,8 @@ function useDarkPage() {
 
 const storageKey = (kind: Kind) => `po-new-draft-${kind}`;
 const subscribe = (cb: () => void) => {
-  window.addEventListener("storage", cb);
-  return () => window.removeEventListener("storage", cb);
+  window.addEventListener('storage', cb);
+  return () => window.removeEventListener('storage', cb);
 };
 
 function useLastChoice(kind: Kind): Choice | null {
@@ -427,7 +482,7 @@ function useLastChoice(kind: Kind): Choice | null {
     if (!raw) return null;
     try {
       const c = JSON.parse(raw) as Choice;
-      return typeof c?.template === "string" ? c : null;
+      return typeof c?.template === 'string' ? c : null;
     } catch {
       return null;
     }
@@ -436,26 +491,38 @@ function useLastChoice(kind: Kind): Choice | null {
 
 // ---------------------------------------------------------------- template and theme choice
 
-type Pick = { key: string | null; source: "user" | "company" };
+type Pick = { key: string | null; source: 'user' | 'company' };
 
-const recommend = (body: Schemas["RecommendIn"]) => unwrap(api.POST("/v1/drafts/recommend", { body }));
+const recommend = (body: Schemas['RecommendIn']) =>
+  unwrap(api.POST('/v1/drafts/recommend', { body }));
 
 /**
  * The recommended template and theme for `input`, with the user's overrides: shared by
  * the new-draft picker and Build roadmap (O4b). Before any answer the last choice wins.
  */
-export function useDraftChoice(input: Schemas["RecommendIn"], initial?: { template: string | null; theme: string | null }) {
+export function useDraftChoice(
+  input: Schemas['RecommendIn'],
+  initial?: { template: string | null; theme: string | null },
+) {
   const kind = input.kind;
   // A choice made earlier (the brief's, C4's Draft with Oracle sheet) starts as the user's pick.
-  const [templatePick, setTemplatePick] = useState<Pick | null>(initial?.template ? { key: initial.template, source: "user" } : null);
-  const [themePick, setThemePick] = useState<Pick | null>(initial?.template ? { key: initial.theme, source: "user" } : null);
+  const [templatePick, setTemplatePick] = useState<Pick | null>(
+    initial?.template ? { key: initial.template, source: 'user' } : null,
+  );
+  const [themePick, setThemePick] = useState<Pick | null>(
+    initial?.template ? { key: initial.theme, source: 'user' } : null,
+  );
   const last = useLastChoice(kind);
 
   const live = useLive(input, recommend, 250);
   const rec = live.data;
-  const themes = useQuery(`themes|${kind}`, () => unwrap(api.GET("/v1/themes", { params: { query: { kind } } })));
+  const themes = useQuery(`themes|${kind}`, () =>
+    unwrap(api.GET('/v1/themes', { params: { query: { kind } } })),
+  );
 
-  const answered = Object.values((kind === "prd" ? input.prd : input.roadmap) ?? {}).some((v) => v != null);
+  const answered = Object.values((kind === 'prd' ? input.prd : input.roadmap) ?? {}).some(
+    (v) => v != null,
+  );
   const templates = rec?.templates ?? [];
   const has = (k: string | null | undefined) => !!k && templates.some((t) => t.key === k);
   const themeKeys = new Set((themes.data ?? []).map((t) => t.key));
@@ -463,9 +530,12 @@ export function useDraftChoice(input: Schemas["RecommendIn"], initial?: { templa
 
   // Template: an explicit pick, else (before any answer) the last choice, else the recommendation.
   const useLast = !templatePick && !answered && has(last?.template);
-  const templateKey = (templatePick && has(templatePick.key) ? templatePick.key : null) ?? (useLast ? last!.template : rec?.template.key ?? null);
+  const templateKey =
+    (templatePick && has(templatePick.key) ? templatePick.key : null) ??
+    (useLast ? last!.template : (rec?.template.key ?? null));
   const template = templates.find((t) => t.key === templateKey) ?? null;
-  const templateSource = templatePick && has(templatePick.key) ? templatePick.source : useLast ? "last" : "recommended";
+  const templateSource =
+    templatePick && has(templatePick.key) ? templatePick.source : useLast ? 'last' : 'recommended';
 
   // Theme: an explicit pick, else the last choice with its template, else the recommendation
   // (for the recommended template) or the chosen template's suggestion.
@@ -476,7 +546,21 @@ export function useDraftChoice(input: Schemas["RecommendIn"], initial?: { templa
   else if (hasTheme(template?.suggested_theme)) themeKey = template!.suggested_theme;
   else themeKey = rec?.theme?.key ?? null;
 
-  return { kind, live, rec, answered, themes, templates, template, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick };
+  return {
+    kind,
+    live,
+    rec,
+    answered,
+    themes,
+    templates,
+    template,
+    templateKey,
+    templateSource,
+    themeKey,
+    themePick,
+    setTemplatePick,
+    setThemePick,
+  };
 }
 
 type DraftChoice = ReturnType<typeof useDraftChoice>;
@@ -511,7 +595,18 @@ function useBalancedColumns(count: number) {
 
 /** The template cards and theme thumbnails of a draft choice, with the recommended marks. */
 export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
-  const { kind, rec, themes, templates, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick } = choice;
+  const {
+    kind,
+    rec,
+    themes,
+    templates,
+    templateKey,
+    templateSource,
+    themeKey,
+    themePick,
+    setTemplatePick,
+    setThemePick,
+  } = choice;
   // Unique per picker: Next keeps visited pages mounted, and same-named radios would share a group.
   const id = useId();
   const [tilesRef, tileCols] = useBalancedColumns(themes.data?.length ?? 0);
@@ -520,35 +615,49 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
   const onlyTheme = themes.data?.length === 1 ? themes.data[0] : null;
   // New PRD (3): a template the person picked never changes on its own; one Oracle chose
   // may follow the answers, and the change is said in one line.
-  const picked = templateSource === "user" || templateSource === "company";
+  const picked = templateSource === 'user' || templateSource === 'company';
   const nameOf = (k: string | null) => templates.find((t) => t.key === k)?.name ?? null;
-  const [shown, setShown] = useState<{ key: string | null; switched: string | null }>({ key: templateKey, switched: null });
-  if (shown.key !== templateKey) setShown({ key: templateKey, switched: !picked && shown.key && templateKey ? templateKey : null });
+  const [shown, setShown] = useState<{ key: string | null; switched: string | null }>({
+    key: templateKey,
+    switched: null,
+  });
+  if (shown.key !== templateKey)
+    setShown({
+      key: templateKey,
+      switched: !picked && shown.key && templateKey ? templateKey : null,
+    });
   const switchedName = !picked && shown.switched === templateKey ? nameOf(shown.switched) : null;
   const pick = (key: string) => {
-    setTemplatePick({ key, source: "user" });
-    if (themePick?.source !== "user") setThemePick(null);
+    setTemplatePick({ key, source: 'user' });
+    if (themePick?.source !== 'user') setThemePick(null);
   };
   return (
     <>
       <section aria-labelledby={`${id}-template`}>
         <div className="mb-2.5 flex min-h-8 flex-wrap items-center gap-2.5">
-          <h2 id={`${id}-template`} className="font-display text-lg leading-6 font-bold tracking-heading">
+          <h2
+            id={`${id}-template`}
+            className="font-display text-lg leading-6 font-bold tracking-heading"
+          >
             Template
           </h2>
-          {templateSource === "last" && <Chip kind="acc">Your last choice</Chip>}
-          {templateSource === "company" && <Chip kind="acc">Company default</Chip>}
+          {templateSource === 'last' && <Chip kind="acc">Your last choice</Chip>}
+          {templateSource === 'company' && <Chip kind="acc">Company default</Chip>}
           {rec && templateKey !== rec.template.key && (
-            <span data-testid="template-recommended-now" className="ml-auto inline-flex flex-wrap items-center gap-1.5 text-sm text-text2">
+            <span
+              data-testid="template-recommended-now"
+              className="ml-auto inline-flex flex-wrap items-center gap-1.5 text-sm text-text2"
+            >
               <span>
-                Recommended now: <span className="font-semibold text-text">{rec.template.name}</span>
+                Recommended now:{' '}
+                <span className="font-semibold text-text">{rec.template.name}</span>
               </span>
               <span aria-hidden="true">·</span>
               <Button
                 variant="ghost"
                 aria-label={`Use ${rec.template.name}`}
                 onClick={() => {
-                  setTemplatePick({ key: rec.template.key, source: "user" });
+                  setTemplatePick({ key: rec.template.key, source: 'user' });
                   setThemePick(null);
                 }}
               >
@@ -558,20 +667,34 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
           )}
         </div>
         {switchedName && (
-          <p data-testid="template-switched" role="status" className="-mt-1 mb-2.5 text-sm text-text2">
+          <p
+            data-testid="template-switched"
+            role="status"
+            className="-mt-1 mb-2.5 text-sm text-text2"
+          >
             Switched to {switchedName} to match your answers.
           </p>
         )}
-        <div role="radiogroup" aria-labelledby={`${id}-template`} className="grid gap-2 sm:grid-cols-2">
+        <div
+          role="radiogroup"
+          aria-labelledby={`${id}-template`}
+          className="grid gap-2 sm:grid-cols-2"
+        >
           {templates.map((t) => {
             const checked = t.key === templateKey;
             return (
               <label
                 key={t.key}
                 data-testid={`template-option-${t.key}`}
-                title={[t.description, t.suggest_when && `When: ${t.suggest_when}`].filter(Boolean).join("\n") || undefined}
+                title={
+                  [t.description, t.suggest_when && `When: ${t.suggest_when}`]
+                    .filter(Boolean)
+                    .join('\n') || undefined
+                }
                 className={`flex min-w-0 cursor-pointer items-start gap-2.5 rounded-button border bg-surface px-3 py-2.5 ${
-                  checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
+                  checked
+                    ? 'border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]'
+                    : 'border-line hover:border-line-strong'
                 }`}
               >
                 <input
@@ -585,14 +708,23 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 font-semibold text-text [overflow-wrap:anywhere]">{t.name}</span>
+                    <span className="min-w-0 font-semibold text-text [overflow-wrap:anywhere]">
+                      {t.name}
+                    </span>
                     {rec?.template.key === t.key && (
                       <Chip kind="pass" className="flex-none">
                         Recommended
                       </Chip>
                     )}
                   </span>
-                  {t.description && <span className="mt-0.5 block text-sm text-text2" data-testid="template-description">{t.description}</span>}
+                  {t.description && (
+                    <span
+                      className="mt-0.5 block text-sm text-text2"
+                      data-testid="template-description"
+                    >
+                      {t.description}
+                    </span>
+                  )}
                 </span>
               </label>
             );
@@ -602,7 +734,10 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
 
       <section aria-labelledby={`${id}-theme`}>
         <div className="mb-2.5 flex min-h-8 items-center gap-2.5">
-          <h2 id={`${id}-theme`} className="font-display text-lg leading-6 font-bold tracking-heading">
+          <h2
+            id={`${id}-theme`}
+            className="font-display text-lg leading-6 font-bold tracking-heading"
+          >
             Theme
           </h2>
           {rec && themeKey === rec.theme?.key && rec.theme_reason && (
@@ -633,7 +768,9 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                   key={t.key}
                   data-testid={`theme-option-${t.key}`}
                   className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-button border bg-surface p-2 ${
-                    checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
+                    checked
+                      ? 'border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]'
+                      : 'border-line hover:border-line-strong'
                   }`}
                 >
                   {/* A 400 x 300 page at 0.4: the sample's words stay legible at 160 x 120 (QA docs-64).
@@ -641,9 +778,15 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                   <span
                     data-testid="theme-preview-frame"
                     className="block rounded"
-                    style={dark ? { filter: "brightness(0.78)" } : undefined}
+                    style={dark ? { filter: 'brightness(0.78)' } : undefined}
                   >
-                    <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} page={{ width: 400, height: 300 }} fluid />
+                    <ThemeThumbnail
+                      tokens={t.tokens}
+                      css={t.css}
+                      kind={kind}
+                      page={{ width: 400, height: 300 }}
+                      fluid
+                    />
                   </span>
                   <span className="flex min-w-0 items-center gap-1.5">
                     <input
@@ -651,9 +794,11 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                       name={`${id}-theme`}
                       className="size-4 flex-none accent-[var(--accent)]"
                       checked={checked}
-                      onChange={() => setThemePick({ key: t.key, source: "user" })}
+                      onChange={() => setThemePick({ key: t.key, source: 'user' })}
                     />
-                    <span className="min-w-0 text-sm font-semibold text-text [overflow-wrap:anywhere]">{t.name}</span>
+                    <span className="min-w-0 text-sm font-semibold text-text [overflow-wrap:anywhere]">
+                      {t.name}
+                    </span>
                   </span>
                 </label>
               );
@@ -674,9 +819,9 @@ function saveLastChoice(kind: Kind, template: string, theme: string | null) {
 
 /** A roadmap recommendation's variant (the API's word) as people say it. */
 const VARIANT_NAME: Record<string, string> = {
-  board: "Board version",
-  engineering: "Engineering version",
-  public: "Public version",
+  board: 'Board version',
+  engineering: 'Engineering version',
+  public: 'Public version',
 };
 
 /** The recommendation, the selected template and theme, and the company default (owners set it). */
@@ -691,33 +836,54 @@ function RecommendationInspector({
 }) {
   const { can } = useMe();
   // #370: "Make company default" is PUT /v1/drafts/defaults.
-  const canSetDefault = can("set_draft_defaults");
-  const label = kind === "prd" ? "PRD" : "roadmap";
+  const canSetDefault = can('set_draft_defaults');
+  const label = kind === 'prd' ? 'PRD' : 'roadmap';
   const [busy, setBusy] = useState(false);
   // QA docs-8: a saved company default says so and can be taken back (to the one before it).
   const [saved, setSaved] = useState<{ before: Choice | null } | null>(null);
-  const { live, rec, answered, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
-  const defaults = useQuery("draft-defaults", () => unwrap(api.GET("/v1/drafts/defaults")));
+  const {
+    live,
+    rec,
+    answered,
+    themes,
+    templates,
+    template,
+    templateKey,
+    themeKey,
+    setTemplatePick,
+    setThemePick,
+  } = choice;
+  const defaults = useQuery('draft-defaults', () => unwrap(api.GET('/v1/drafts/defaults')));
   const company = defaults.data?.[kind] ?? null;
 
   function applyCompany() {
     if (!company) return;
-    setTemplatePick({ key: company.template, source: "company" });
-    setThemePick({ key: company.theme ?? null, source: "company" });
+    setTemplatePick({ key: company.template, source: 'company' });
+    setThemePick({ key: company.theme ?? null, source: 'company' });
   }
 
-  const templateName = (key: string | null | undefined) => (key ? (templates.find((t) => t.key === key)?.name ?? null) : null);
-  const themeNameOf = (key: string | null | undefined) => (key ? (themes.data?.find((t) => t.key === key)?.name ?? null) : null);
+  const templateName = (key: string | null | undefined) =>
+    key ? (templates.find((t) => t.key === key)?.name ?? null) : null;
+  const themeNameOf = (key: string | null | undefined) =>
+    key ? (themes.data?.find((t) => t.key === key)?.name ?? null) : null;
 
   async function putDefault(next: Choice | null): Promise<boolean> {
     setBusy(true);
     onError(null);
     try {
-      const out = await unwrapProblems(api.PUT("/v1/drafts/defaults", { body: { ...(defaults.data ?? {}), [kind]: next } }));
+      const out = await unwrapProblems(
+        api.PUT('/v1/drafts/defaults', { body: { ...(defaults.data ?? {}), [kind]: next } }),
+      );
       defaults.setData(() => out);
       return true;
     } catch (e) {
-      onError(e instanceof ProblemsError ? e.problems.map((p) => p.message).join(" ") : e instanceof Error && e.message ? e.message : errorMessage(e));
+      onError(
+        e instanceof ProblemsError
+          ? e.problems.map((p) => p.message).join(' ')
+          : e instanceof Error && e.message
+            ? e.message
+            : errorMessage(e),
+      );
       return false;
     } finally {
       setBusy(false);
@@ -726,9 +892,12 @@ function RecommendationInspector({
 
   async function makeDefault() {
     if (!templateKey) return;
-    const names = [templateName(templateKey) ?? "this template", themeNameOf(themeKey) ?? "no theme"].join(" with ");
+    const names = [
+      templateName(templateKey) ?? 'this template',
+      themeNameOf(themeKey) ?? 'no theme',
+    ].join(' with ');
     const yes = await confirmInPage({
-      action: "Make company default",
+      action: 'Make company default',
       message: `Every new ${label} in the company will start with ${names} unless someone picks another. You can undo this right after.`,
     });
     if (!yes) return;
@@ -745,22 +914,37 @@ function RecommendationInspector({
   const companyThemeName = company?.theme ? themeNameOf(company.theme) : null;
   const themeName = themeNameOf(themeKey);
   // The selection is the company default already: neither button has anything to do.
-  const selectedIsCompany = !!company && company.template === templateKey && (company.theme ?? null) === (themeKey ?? null);
+  const selectedIsCompany =
+    !!company && company.template === templateKey && (company.theme ?? null) === (themeKey ?? null);
 
   return (
     // Production minors 22: a fresh recommendation on its way never greys the card (it read as disabled).
-    <div data-testid="recommendation-panel" aria-live="polite" aria-busy={live.pending || undefined}>
+    <div
+      data-testid="recommendation-panel"
+      aria-live="polite"
+      aria-busy={live.pending || undefined}
+    >
       <Inspector
         label="Recommendation"
         eyebrow="Recommended"
-        title={rec ? <span data-testid="recommended-template">{rec.template.name}</span> : live.error ? "–" : "…"}
+        title={
+          rec ? (
+            <span data-testid="recommended-template">{rec.template.name}</span>
+          ) : live.error ? (
+            '–'
+          ) : (
+            '…'
+          )
+        }
         chips={
           rec && (
             <>
               {rec.theme && <Chip hero>{rec.theme.name}</Chip>}
-              {rec.variant && rec.variant !== "team" && <Chip hero>{VARIANT_NAME[rec.variant] ?? "Own version"}</Chip>}
-              {rec.group_by && rec.variant && rec.variant !== "team" && (
-                <Chip hero>{rec.group_by === "team" ? "Lanes by team" : "Grouped"}</Chip>
+              {rec.variant && rec.variant !== 'team' && (
+                <Chip hero>{VARIANT_NAME[rec.variant] ?? 'Own version'}</Chip>
+              )}
+              {rec.group_by && rec.variant && rec.variant !== 'team' && (
+                <Chip hero>{rec.group_by === 'team' ? 'Lanes by team' : 'Grouped'}</Chip>
               )}
             </>
           )
@@ -785,15 +969,18 @@ function RecommendationInspector({
               <p className="font-semibold text-text">
                 {/* qa-docs-36: with every question still Not sure, nothing has been fitted yet. */}
                 {rec.company_default?.template === rec.template.key
-                  ? "Company default"
+                  ? 'Company default'
                   : answered
-                    ? "Fits your answers"
-                    : "The usual start, until you answer the questions"}
+                    ? 'Fits your answers'
+                    : 'The usual start, until you answer the questions'}
               </p>
               {rec.warnings.length > 0 && (
                 <ul data-testid="recommendation-warnings" className="mt-2.5 flex flex-col gap-1.5">
                   {rec.warnings.map((w, i) => (
-                    <li key={i} className="flex gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+                    <li
+                      key={i}
+                      className="flex gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+                    >
                       <Icon name="alert" size={16} className="mt-0.5 flex-none" />
                       <span className="min-w-0">{w}</span>
                     </li>
@@ -805,8 +992,8 @@ function RecommendationInspector({
         )}
         <InspectorSection label="Selected">
           {/* qa-docs-36: no bare "v1" beside the template; its version means nothing here. */}
-          <InspectorRow>{template?.name ?? "–"}</InspectorRow>
-          <InspectorRow>{themeName ?? "No theme"}</InspectorRow>
+          <InspectorRow>{template?.name ?? '–'}</InspectorRow>
+          <InspectorRow>{themeName ?? 'No theme'}</InspectorRow>
         </InspectorSection>
         {(company || canSetDefault) && (
           <InspectorSection label="Company default">
@@ -824,10 +1011,15 @@ function RecommendationInspector({
               </Notice>
             )}
             {company && (
-              <div data-testid="company-default" className={`flex flex-wrap items-center gap-2 ${saved ? "mt-2.5" : ""}`}>
+              <div
+                data-testid="company-default"
+                className={`flex flex-wrap items-center gap-2 ${saved ? 'mt-2.5' : ''}`}
+              >
                 <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
-                  {companyTemplateName ?? "A template no longer offered"}
-                  {companyThemeName && <span className="font-normal text-text2"> · {companyThemeName}</span>}
+                  {companyTemplateName ?? 'A template no longer offered'}
+                  {companyThemeName && (
+                    <span className="font-normal text-text2"> · {companyThemeName}</span>
+                  )}
                 </span>
                 {selectedIsCompany ? (
                   <Chip kind="acc">Selected</Chip>
@@ -838,15 +1030,19 @@ function RecommendationInspector({
                 )}
               </div>
             )}
-            {!company && !saved && <p className="text-sm text-text2">None set. New {label}s start with the recommendation.</p>}
+            {!company && !saved && (
+              <p className="text-sm text-text2">
+                None set. New {label}s start with the recommendation.
+              </p>
+            )}
             {canSetDefault && !selectedIsCompany && (
               <div className="mt-2.5 flex items-center gap-2">
                 <Button variant="ghost" onClick={makeDefault} disabled={busy || !templateKey}>
-                  {busy ? "Saving…" : "Make company default"}
+                  {busy ? 'Saving…' : 'Make company default'}
                 </Button>
                 <InfoTip label="company default" align="start" side="bottom">
-                  Owners only. Makes the selected template and theme the start of every new {label} in the company; it asks
-                  first.
+                  Owners only. Makes the selected template and theme the start of every new {label}{' '}
+                  in the company; it asks first.
                 </InfoTip>
               </div>
             )}
@@ -863,26 +1059,28 @@ function RecommendationInspector({
 export function NewDraft({ kind }: { kind: Kind }) {
   const router = useRouter();
   const { can, capsReady } = useMe();
-  const label = kind === "prd" ? "PRD" : "roadmap";
+  const label = kind === 'prd' ? 'PRD' : 'roadmap';
   const [prd, setPrd] = useState<PrdAnswers>({});
   const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // qa-docs-37: Create draft is always there to press (filled, as New PRD's Continue); early, it says what is missing.
   const [checked, setChecked] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const choice = useDraftChoice(kind === "prd" ? { kind, prd } : { kind, roadmap });
+  const choice = useDraftChoice(kind === 'prd' ? { kind, prd } : { kind, roadmap });
   const { rec, templateKey, themeKey } = choice;
 
-  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
-  const setRoad = <K extends keyof RoadmapAnswers>(k: K, v: RoadmapAnswers[K]) => setRoadmap((a) => ({ ...a, [k]: v }));
+  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) =>
+    setPrd((a) => ({ ...a, [k]: v }));
+  const setRoad = <K extends keyof RoadmapAnswers>(k: K, v: RoadmapAnswers[K]) =>
+    setRoadmap((a) => ({ ...a, [k]: v }));
 
-  const answers = kind === "prd" ? prd : roadmap;
+  const answers = kind === 'prd' ? prd : roadmap;
   const dirty = !!title.trim() || Object.values(answers).some((v) => v != null);
   const guard = useLeaveGuard(dirty, () => {
-    setTitle("");
+    setTitle('');
     setPrd({});
     setRoadmap({});
     setChecked(false);
@@ -898,14 +1096,19 @@ export function NewDraft({ kind }: { kind: Kind }) {
     }
     if (!templateKey) {
       // The recommendation (which brings the templates) has not come yet, or failed: say so.
-      setError(choice.live.error ?? "Oracle is still choosing a template for this draft. Try Create draft again in a moment.");
+      setError(
+        choice.live.error ??
+          'Oracle is still choosing a template for this draft. Try Create draft again in a moment.',
+      );
       return;
     }
     setBusy(true);
     setError(null);
     try {
       const out = await unwrapProblems(
-        api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }),
+        api.POST('/v1/drafts', {
+          body: { kind, title: title.trim(), template: templateKey, theme: themeKey },
+        }),
       );
       saveLastChoice(kind, templateKey, themeKey);
       guard.markSent();
@@ -918,16 +1121,19 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
   const formId = `new-draft-${kind}`;
   const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} />;
-  const backHref = kind === "roadmap" ? "/plan/documents" : "/documents";
+  const backHref = kind === 'roadmap' ? '/plan/documents' : '/documents';
   const back = (
-    <Link href={backHref} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+    <Link
+      href={backHref}
+      className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
+    >
       <Icon name="back" size={16} />
-      {kind === "roadmap" ? "Plan" : "PRDs"}
+      {kind === 'roadmap' ? 'Plan' : 'PRDs'}
     </Link>
   );
 
   // As New PRD (QA docs-10): a role that cannot start a draft is told so up front, with no form.
-  if (!capsReady || !can("start_draft", true)) {
+  if (!capsReady || !can('start_draft', true)) {
     return (
       <Page>
         <PageHeader back={back} title={`New ${label}`} />
@@ -954,13 +1160,13 @@ export function NewDraft({ kind }: { kind: Kind }) {
         title={`New ${label}`}
         info={
           <InfoTip label={`new ${label}s`} align="start" side="bottom">
-            Answer what you can; every question is optional. The template and theme follow your answers, and you can
-            change either.
+            Answer what you can; every question is optional. The template and theme follow your
+            answers, and you can change either.
           </InfoTip>
         }
         action={
           <Button form={formId} type="submit" variant="primary" disabled={busy}>
-            {busy ? "Creating…" : "Create draft"}
+            {busy ? 'Creating…' : 'Create draft'}
           </Button>
         }
       />
@@ -976,7 +1182,9 @@ export function NewDraft({ kind }: { kind: Kind }) {
                 className={INPUT}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={kind === "prd" ? "Setup checklist" : "Product roadmap, next two quarters"}
+                placeholder={
+                  kind === 'prd' ? 'Setup checklist' : 'Product roadmap, next two quarters'
+                }
                 aria-invalid={titleError ? true : undefined}
                 required
               />
@@ -986,12 +1194,15 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
           <Panel as="div" bodyClassName="p-4">
             <section aria-labelledby="questions-heading">
-              <h2 id="questions-heading" className="mb-3 font-display text-lg leading-6 font-bold tracking-heading">
+              <h2
+                id="questions-heading"
+                className="mb-3 font-display text-lg leading-6 font-bold tracking-heading"
+              >
                 About this {label}
               </h2>
               <div className="flex flex-col gap-4">
-                {kind === "prd" && <PrdQuestions name="" prd={prd} onAnswer={setAnswer} />}
-                {kind === "roadmap" && (
+                {kind === 'prd' && <PrdQuestions name="" prd={prd} onAnswer={setAnswer} />}
+                {kind === 'roadmap' && (
                   <>
                     {ROADMAP_QUESTIONS.map((q) => (
                       <Question
@@ -1005,16 +1216,28 @@ export function NewDraft({ kind }: { kind: Kind }) {
                     ))}
                     <div className="flex flex-wrap gap-6">
                       {/* qa-docs-21: an example of the answer. */}
-                      <NumberQuestion label="How many teams?" placeholder="e.g. 3" value={roadmap.teams} onChange={(v) => setRoad("teams", v)} />
+                      <NumberQuestion
+                        label="How many teams?"
+                        placeholder="e.g. 3"
+                        value={roadmap.teams}
+                        onChange={(v) => setRoad('teams', v)}
+                      />
                       {/* qa-docs-39: the count is the baseline's, read here, not typed. */}
                       <div data-testid="confirmed-goals">
-                        <span className="mb-1.5 block text-[15px] font-semibold text-text">Confirmed goals</span>
+                        <span className="mb-1.5 block text-[15px] font-semibold text-text">
+                          Confirmed goals
+                        </span>
                         <span className="flex h-9 items-center gap-1.5 text-[15px] text-text">
                           <span className="tnum" data-testid="confirmed-goals-count">
-                            {rec?.confirmed_goals == null ? "–" : rec.confirmed_goals === 0 ? "None yet" : rec.confirmed_goals}
+                            {rec?.confirmed_goals == null
+                              ? '–'
+                              : rec.confirmed_goals === 0
+                                ? 'None yet'
+                                : rec.confirmed_goals}
                           </span>
                           <InfoTip label="confirmed goals" align="start">
-                            The goals confirmed in the company&apos;s Ground Truth. Confirm more there to plan for them here.
+                            The goals confirmed in the company&apos;s Ground Truth. Confirm more
+                            there to plan for them here.
                           </InfoTip>
                         </span>
                       </div>
@@ -1037,11 +1260,20 @@ export function NewDraft({ kind }: { kind: Kind }) {
 /** qa-docs-35: a role that may not start the draft reads why, as the page's empty state; the header's crumb is the one way back. */
 function NotAllowed({ testId, title, reason }: { testId: string; title: string; reason: string }) {
   return (
-    <div data-testid={testId} role="status" className="flex flex-col items-center gap-3 rounded-panel border border-line bg-surface px-4 py-12 text-center">
-      <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
+    <div
+      data-testid={testId}
+      role="status"
+      className="flex flex-col items-center gap-3 rounded-panel border border-line bg-surface px-4 py-12 text-center"
+    >
+      <span
+        aria-hidden
+        className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink"
+      >
         <Icon name="lock" size={24} />
       </span>
-      <h2 className="font-display text-lg leading-6 font-bold tracking-heading text-text">{title}</h2>
+      <h2 className="font-display text-lg leading-6 font-bold tracking-heading text-text">
+        {title}
+      </h2>
       <p className="max-w-md text-[15px] text-text2">{reason}</p>
     </div>
   );
@@ -1050,7 +1282,7 @@ function NotAllowed({ testId, title, reason }: { testId: string; title: string; 
 // ---------------------------------------------------------------- New PRD door (C4)
 
 /** POST /v1/intakes with the brief's fields (C4). */
-type BriefIn = Schemas["IntakeCreate"];
+type BriefIn = Schemas['IntakeCreate'];
 
 const MAX_OUT_OF_SCOPE = 20;
 const PROBLEM_MIN = 20;
@@ -1059,28 +1291,39 @@ const PROBLEM_MAX = 4000;
 /** The company's confirmed goals, as the goal pickers read them. */
 export function useConfirmedGoals() {
   // goal-order: the chips in the one goal order, whatever order the list comes in.
-  return useQuery("door-goals", async () =>
-    sortGoals(await unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } }))),
+  return useQuery('door-goals', async () =>
+    sortGoals(
+      await unwrap(
+        api.GET('/v1/baseline/entities', {
+          params: { query: { type: 'goal', status: 'confirmed' } },
+        }),
+      ),
+    ),
   );
 }
 
 /** Every goal of the company, archived ones included: a subgoal's code counts them (#345). */
 function useAllGoals() {
-  return useQuery("door-goals-all", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+  return useQuery('door-goals-all', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
 }
 
 /** The confirmed goals a brief (or its PRD run, #260) may serve, each with its distance to go (Home's reading). */
 export function GoalPicker({
   value,
   onChange,
-  legend = "Which goals does it serve?",
+  legend = 'Which goals does it serve?',
 }: {
   value: string[];
   onChange: (ids: string[]) => void;
   legend?: string;
 }) {
   const goals = useAllGoals();
-  const views = goalViews((goals.data ?? []).filter((g) => g.status === "confirmed"), goals.data);
+  const views = goalViews(
+    (goals.data ?? []).filter((g) => g.status === 'confirmed'),
+    goals.data,
+  );
   // #345: a goal's subgoals show under it, folded on demand.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const fold = (id: string) =>
@@ -1097,7 +1340,9 @@ export function GoalPicker({
       </legend>
       {goals.error && <ErrorNote>{goals.error}</ErrorNote>}
       {goals.loading && <Loading />}
-      {goals.data && views.length === 0 && <p className="text-sm text-text2">No confirmed goals yet. Oracle will ask.</p>}
+      {goals.data && views.length === 0 && (
+        <p className="text-sm text-text2">No confirmed goals yet. Oracle will ask.</p>
+      )}
       <div className="flex flex-col gap-1.5">
         {views
           .filter((g) => !g.parentId || !folded.has(g.parentId))
@@ -1105,28 +1350,43 @@ export function GoalPicker({
             const checked = value.includes(g.id);
             const p = assess(g);
             return (
-              <div key={g.id} className={`flex min-w-0 items-center gap-1.5 ${g.parentId ? "ml-6 max-[600px]:ml-4" : ""}`}>
+              <div
+                key={g.id}
+                className={`flex min-w-0 items-center gap-1.5 ${g.parentId ? 'ml-6 max-[600px]:ml-4' : ''}`}
+              >
                 <label
                   data-testid={`goal-pick-${g.tag}`}
                   className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-button border px-3 py-2 ${
-                    checked ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"
+                    checked
+                      ? 'border-accent bg-accent-soft'
+                      : 'border-line hover:border-line-strong'
                   }`}
                 >
                   <input
                     type="checkbox"
                     className="size-4 flex-none accent-[var(--accent)]"
                     checked={checked}
-                    onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id))}
+                    onChange={(e) =>
+                      onChange(
+                        e.target.checked ? [...value, g.id] : value.filter((id) => id !== g.id),
+                      )
+                    }
                   />
                   {g.code && <CodeTag code={g.code} />}
-                  <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.name}</span>
+                  <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">
+                    {g.name}
+                  </span>
                   {p.text && (
                     <span
                       className="flex-none text-sm text-text2"
-                      title={g.currentText && g.targetText ? `Now ${g.currentText}; target ${g.targetText}` : undefined}
+                      title={
+                        g.currentText && g.targetText
+                          ? `Now ${g.currentText}; target ${g.targetText}`
+                          : undefined
+                      }
                     >
                       {/* "7 pts to go" read as a countdown: say what the distance is to (QA docs-64). */}
-                      {p.state === "togo" ? p.text.replace(/ to go$/, " from target") : p.text}
+                      {p.state === 'togo' ? p.text.replace(/ to go$/, ' from target') : p.text}
                     </span>
                   )}
                 </label>
@@ -1134,11 +1394,11 @@ export function GoalPicker({
                   <button
                     type="button"
                     aria-expanded={!folded.has(g.id)}
-                    aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(g)}`}
+                    aria-label={`${folded.has(g.id) ? 'Show' : 'Hide'} subgoals of ${namedText(g)}`}
                     onClick={() => fold(g.id)}
                     className="flex size-8 flex-none items-center justify-center rounded-button border border-line text-text2 hover:border-line-strong"
                   >
-                    {folded.has(g.id) ? "▸" : "▾"}
+                    {folded.has(g.id) ? '▸' : '▾'}
                   </button>
                 )}
               </div>
@@ -1156,20 +1416,20 @@ export function GoalPicker({
  * start from an empty skeleton (POST /v1/drafts, unchanged).
  */
 export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
-  const kind = "prd" as const;
+  const kind = 'prd' as const;
   const router = useRouter();
   const { can, capsReady } = useMe();
   // #370: Continue creates an intake not linked to a PRD (the handler only asks an approver to link one).
-  const canWrite = can("create_intake", true);
-  const canSkeleton = can("start_draft", true);
+  const canWrite = can('create_intake', true);
+  const canSkeleton = can('start_draft', true);
   const [prd, setPrd] = useState<PrdAnswers>({});
-  const [title, setTitle] = useState("");
-  const [problem, setProblem] = useState("");
+  const [title, setTitle] = useState('');
+  const [problem, setProblem] = useState('');
   const [goalIds, setGoalIds] = useState<string[]>([]);
-  const [outOfScope, setOutOfScope] = useState<string[]>([""]);
+  const [outOfScope, setOutOfScope] = useState<string[]>(['']);
   // C1 lane 2: Start a PRD on requests ticks them here.
   const [requests, setRequests] = useState<string[]>(requestIds);
-  const [busy, setBusy] = useState<"continue" | "skeleton" | null>(null);
+  const [busy, setBusy] = useState<'continue' | 'skeleton' | null>(null);
   const [error, setError] = useState<string | null>(null);
   // New PRD (4): the 409's code, not its words, offers Release it.
   const [inTrash, setInTrash] = useState(false);
@@ -1184,7 +1444,8 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
 
   const choice = useDraftChoice({ kind, prd });
   const { templateKey, themeKey } = choice;
-  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
+  const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) =>
+    setPrd((a) => ({ ...a, [k]: v }));
 
   // qa-onboarding-1: typed words ask before they are left behind (the template and theme are picks, not typing).
   const dirty =
@@ -1193,12 +1454,12 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     goalIds.length > 0 ||
     outOfScope.some((l) => l.trim()) ||
     Object.values(prd).some((v) => v != null) ||
-    requests.join(",") !== requestIds.join(",");
+    requests.join(',') !== requestIds.join(',');
   const guard = useLeaveGuard(dirty, () => {
-    setTitle("");
-    setProblem("");
+    setTitle('');
+    setProblem('');
     setGoalIds([]);
-    setOutOfScope([""]);
+    setOutOfScope(['']);
     setPrd({});
     setRequests(requestIds);
     setChecked(false);
@@ -1206,10 +1467,10 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   });
 
   const problemLength = problem.trim().length;
-  const titleProblem = title.trim() ? null : "Give the PRD a title.";
+  const titleProblem = title.trim() ? null : 'Give the PRD a title.';
   const problemProblem =
     problemLength === 0
-      ? "Say what problem it solves."
+      ? 'Say what problem it solves.'
       : problemLength < PROBLEM_MIN
         ? `Say a little more: at least ${PROBLEM_MIN} characters (${problemLength} so far).`
         : null;
@@ -1223,9 +1484,11 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       (titleProblem ? titleRef : problemRef).current?.focus();
       return;
     }
-    setBusy("continue");
+    setBusy('continue');
     setError(null);
-    const answers = Object.fromEntries(Object.entries(prd).filter(([, v]) => v != null)) as PrdAnswers;
+    const answers = Object.fromEntries(
+      Object.entries(prd).filter(([, v]) => v != null),
+    ) as PrdAnswers;
     const body: BriefIn = {
       title: title.trim(),
       brief: problem.trim(),
@@ -1240,7 +1503,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       request_ids: requests,
     };
     try {
-      const out = await unwrap(api.POST("/v1/intakes", { body }));
+      const out = await unwrap(api.POST('/v1/intakes', { body }));
       if (templateKey) saveLastChoice(kind, templateKey, themeKey);
       guard.markSent();
       // The brief asks its first questions of me: the Inbox and its badge read them now, not a
@@ -1250,7 +1513,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       router.push(`/intakes/${out.intake.id}`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : errorMessage(err));
-      setInTrash(err instanceof ApiError && err.code === "linked_in_trash");
+      setInTrash(err instanceof ApiError && err.code === 'linked_in_trash');
       setBusy(null);
     }
   }
@@ -1259,7 +1522,9 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   async function release() {
     setReleasing(true);
     try {
-      await unwrap(api.POST("/v1/requests/release-from-trash", { body: { request_ids: requests } }));
+      await unwrap(
+        api.POST('/v1/requests/release-from-trash', { body: { request_ids: requests } }),
+      );
       setError(null);
       setInTrash(false);
       (document.getElementById(formId) as HTMLFormElement | null)?.requestSubmit();
@@ -1273,13 +1538,17 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   async function skeleton() {
     setInTrash(false);
     if (!templateKey || !title.trim()) {
-      setError("Give the PRD a title first.");
+      setError('Give the PRD a title first.');
       return;
     }
-    setBusy("skeleton");
+    setBusy('skeleton');
     setError(null);
     try {
-      const out = await unwrapProblems(api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }));
+      const out = await unwrapProblems(
+        api.POST('/v1/drafts', {
+          body: { kind, title: title.trim(), template: templateKey, theme: themeKey },
+        }),
+      );
       saveLastChoice(kind, templateKey, themeKey);
       guard.markSent();
       router.push(`/documents/${out.slug}`);
@@ -1289,10 +1558,13 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     }
   }
 
-  const formId = "new-prd";
+  const formId = 'new-prd';
   const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} />;
   const back = (
-    <Link href="/documents" className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+    <Link
+      href="/documents"
+      className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
+    >
       <Icon name="back" size={16} />
       PRDs
     </Link>
@@ -1325,167 +1597,203 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
         title="New PRD"
         info={
           <InfoTip label="new PRDs" align="start" side="bottom">
-            Say what problem it solves; the rest is optional. Continue and Oracle asks what it still needs to know before
-            it drafts.
+            Say what problem it solves; the rest is optional. Continue and Oracle asks what it still
+            needs to know before it drafts.
           </InfoTip>
         }
         action={
-          <Button form={formId} type="submit" variant="primary" disabled={busy !== null || !capsReady}>
-            {busy === "continue" ? "Saving…" : "Continue"}
+          <Button
+            form={formId}
+            type="submit"
+            variant="primary"
+            disabled={busy !== null || !capsReady}
+          >
+            {busy === 'continue' ? 'Saving…' : 'Continue'}
           </Button>
         }
       />
 
       <form id={formId} onSubmit={submit} noValidate className="min-w-0">
-        <fieldset disabled={!capsReady} aria-busy={!capsReady} data-testid="new-prd-fields" className="min-w-0 disabled:opacity-60">
+        <fieldset
+          disabled={!capsReady}
+          aria-busy={!capsReady}
+          data-testid="new-prd-fields"
+          className="min-w-0 disabled:opacity-60"
+        >
           {!capsReady && (
-            <p role="status" data-testid="new-prd-getting-ready" className="mb-3 text-sm text-text2">
+            <p
+              role="status"
+              data-testid="new-prd-getting-ready"
+              className="mb-3 text-sm text-text2"
+            >
               Getting the form ready…
             </p>
           )}
           <Split inspector={inspector}>
-          {error && (
-            <ErrorNote>
-              {error}
-              {/* New PRD (4): a request still linked to a PRD in Trash is released here, then Continue goes again. */}
-              {inTrash && (
-                <>
-                  {" "}
-                  <Button variant="ghost" onClick={() => void release()} disabled={releasing}>
-                    {releasing ? "Releasing…" : "Release it"}
+            {error && (
+              <ErrorNote>
+                {error}
+                {/* New PRD (4): a request still linked to a PRD in Trash is released here, then Continue goes again. */}
+                {inTrash && (
+                  <>
+                    {' '}
+                    <Button variant="ghost" onClick={() => void release()} disabled={releasing}>
+                      {releasing ? 'Releasing…' : 'Release it'}
+                    </Button>
+                  </>
+                )}
+              </ErrorNote>
+            )}
+            {checked && !ready && (
+              <ErrorNote>
+                <span data-testid="new-prd-missing">
+                  To continue,{' '}
+                  {[
+                    titleProblem && 'give it a title',
+                    // qa4-docs-54: a problem that is there but too short asks for more, not for one.
+                    problemProblem &&
+                      (problemLength === 0
+                        ? 'say what problem it solves'
+                        : `say a bit more about the problem (at least ${PROBLEM_MIN} characters)`),
+                  ]
+                    .filter(Boolean)
+                    .join(' and ')}
+                  .
+                </span>
+              </ErrorNote>
+            )}
+            <Panel bodyClassName="flex flex-col gap-4 p-4">
+              <label className="block">
+                <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
+                <input
+                  ref={titleRef}
+                  className={INPUT}
+                  value={title}
+                  maxLength={200}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Setup checklist"
+                  aria-invalid={titleError ? true : undefined}
+                  aria-describedby={titleError ? `${id}-title-error` : undefined}
+                  required
+                />
+                {titleError && (
+                  <span id={`${id}-title-error`} className="mt-1 block text-sm text-crit">
+                    {titleError}
+                  </span>
+                )}
+              </label>
+              <div className="block">
+                {/* #1590: how much to write sits behind the (i), outside the label so the label still names the text box. */}
+                <span className="mb-1.5 flex items-center gap-1 text-[15px] font-semibold text-text">
+                  <label htmlFor={`${id}-problem`}>What problem does it solve?</label>
+                  <InfoTip
+                    label="the brief"
+                    align="start"
+                    testId="brief-length-tip"
+                    id={`${id}-problem-hint`}
+                  >
+                    {`A couple of sentences is enough (at least ${PROBLEM_MIN} characters).`}
+                  </InfoTip>
+                </span>
+                <textarea
+                  id={`${id}-problem`}
+                  className={`${INPUT} h-auto min-h-24 py-2`}
+                  rows={4}
+                  value={problem}
+                  maxLength={PROBLEM_MAX}
+                  onChange={(e) => setProblem(e.target.value)}
+                  ref={problemRef}
+                  placeholder="Returning buyers retype their address at every checkout…"
+                  aria-describedby={problemError ? `${id}-problem-error` : `${id}-problem-hint`}
+                  aria-invalid={problemError ? true : undefined}
+                  required
+                />
+                {problemError && (
+                  <span id={`${id}-problem-error`} className="mt-1 block text-sm text-crit">
+                    {problemError}
+                  </span>
+                )}
+              </div>
+            </Panel>
+
+            <Panel as="div" bodyClassName="flex flex-col gap-5 p-4">
+              <GoalPicker value={goalIds} onChange={setGoalIds} />
+              <RequestsBehind value={requests} onChange={setRequests} />
+              <fieldset className="min-w-0">
+                <legend className="mb-2 text-[15px] font-semibold text-text">
+                  What is out of scope? <span className="font-normal text-text2">Optional</span>
+                </legend>
+                <div className="flex flex-col gap-1.5">
+                  {outOfScope.map((line, i) => (
+                    <input
+                      key={i}
+                      className={INPUT}
+                      value={line}
+                      maxLength={300}
+                      aria-label={`Out of scope ${i + 1}`}
+                      placeholder={i === 0 ? 'Address book sharing between accounts' : undefined}
+                      onChange={(e) =>
+                        setOutOfScope((all) => all.map((l, j) => (j === i ? e.target.value : l)))
+                      }
+                    />
+                  ))}
+                </div>
+                {outOfScope.length < MAX_OUT_OF_SCOPE && (
+                  <Button
+                    variant="ghost"
+                    icon="plus"
+                    className="mt-1.5"
+                    onClick={() => setOutOfScope((all) => [...all, ''])}
+                  >
+                    Add another
                   </Button>
-                </>
-              )}
-            </ErrorNote>
-          )}
-          {checked && !ready && (
-            <ErrorNote>
-              <span data-testid="new-prd-missing">
-                To continue,{" "}
-                {[
-                  titleProblem && "give it a title",
-                  // qa4-docs-54: a problem that is there but too short asks for more, not for one.
-                  problemProblem &&
-                    (problemLength === 0 ? "say what problem it solves" : `say a bit more about the problem (at least ${PROBLEM_MIN} characters)`),
-                ]
-                  .filter(Boolean)
-                  .join(" and ")}
-                .
-              </span>
-            </ErrorNote>
-          )}
-          <Panel bodyClassName="flex flex-col gap-4 p-4">
-            <label className="block">
-              <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
-              <input
-                ref={titleRef}
-                className={INPUT}
-                value={title}
-                maxLength={200}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Setup checklist"
-                aria-invalid={titleError ? true : undefined}
-                aria-describedby={titleError ? `${id}-title-error` : undefined}
-                required
-              />
-              {titleError && (
-                <span id={`${id}-title-error`} className="mt-1 block text-sm text-crit">
-                  {titleError}
-                </span>
-              )}
-            </label>
-            <div className="block">
-              {/* #1590: how much to write sits behind the (i), outside the label so the label still names the text box. */}
-              <span className="mb-1.5 flex items-center gap-1 text-[15px] font-semibold text-text">
-                <label htmlFor={`${id}-problem`}>What problem does it solve?</label>
-                <InfoTip label="the brief" align="start" testId="brief-length-tip" id={`${id}-problem-hint`}>
-                  {`A couple of sentences is enough (at least ${PROBLEM_MIN} characters).`}
-                </InfoTip>
-              </span>
-              <textarea
-                id={`${id}-problem`}
-                className={`${INPUT} h-auto min-h-24 py-2`}
-                rows={4}
-                value={problem}
-                maxLength={PROBLEM_MAX}
-                onChange={(e) => setProblem(e.target.value)}
-                ref={problemRef}
-                placeholder="Returning buyers retype their address at every checkout…"
-                aria-describedby={problemError ? `${id}-problem-error` : `${id}-problem-hint`}
-                aria-invalid={problemError ? true : undefined}
-                required
-              />
-              {problemError && (
-                <span id={`${id}-problem-error`} className="mt-1 block text-sm text-crit">
-                  {problemError}
-                </span>
-              )}
-            </div>
-          </Panel>
+                )}
+              </fieldset>
+            </Panel>
 
-          <Panel as="div" bodyClassName="flex flex-col gap-5 p-4">
-            <GoalPicker value={goalIds} onChange={setGoalIds} />
-            <RequestsBehind value={requests} onChange={setRequests} />
-            <fieldset className="min-w-0">
-              <legend className="mb-2 text-[15px] font-semibold text-text">
-                What is out of scope? <span className="font-normal text-text2">Optional</span>
-              </legend>
-              <div className="flex flex-col gap-1.5">
-                {outOfScope.map((line, i) => (
-                  <input
-                    key={i}
-                    className={INPUT}
-                    value={line}
-                    maxLength={300}
-                    aria-label={`Out of scope ${i + 1}`}
-                    placeholder={i === 0 ? "Address book sharing between accounts" : undefined}
-                    onChange={(e) => setOutOfScope((all) => all.map((l, j) => (j === i ? e.target.value : l)))}
-                  />
-                ))}
-              </div>
-              {outOfScope.length < MAX_OUT_OF_SCOPE && (
-                <Button variant="ghost" icon="plus" className="mt-1.5" onClick={() => setOutOfScope((all) => [...all, ""])}>
-                  Add another
-                </Button>
-              )}
-            </fieldset>
-          </Panel>
+            <Panel as="div" bodyClassName="p-4">
+              <section aria-labelledby={`${id}-questions`}>
+                <h2
+                  id={`${id}-questions`}
+                  className="mb-3 font-display text-lg leading-6 font-bold tracking-heading"
+                >
+                  About this PRD
+                </h2>
+                <div className="flex flex-col gap-4">
+                  <PrdQuestions name={`${id}-`} prd={prd} onAnswer={setAnswer} />
+                </div>
+              </section>
+            </Panel>
 
-          <Panel as="div" bodyClassName="p-4">
-            <section aria-labelledby={`${id}-questions`}>
-              <h2 id={`${id}-questions`} className="mb-3 font-display text-lg leading-6 font-bold tracking-heading">
-                About this PRD
-              </h2>
-              <div className="flex flex-col gap-4">
-                <PrdQuestions name={`${id}-`} prd={prd} onAnswer={setAnswer} />
-              </div>
-            </section>
-          </Panel>
+            <Panel as="div" bodyClassName="flex flex-col gap-6 p-4">
+              <TemplateThemePicker choice={choice} />
+            </Panel>
 
-          <Panel as="div" bodyClassName="flex flex-col gap-6 p-4">
-            <TemplateThemePicker choice={choice} />
-          </Panel>
+            {canSkeleton && (
+              <p className="text-sm text-text2">
+                <button
+                  type="button"
+                  onClick={skeleton}
+                  disabled={busy !== null}
+                  className="font-semibold text-accent-ink underline-offset-2 hover:underline disabled:text-text2"
+                >
+                  {busy === 'skeleton' ? 'Creating…' : 'Start from an empty skeleton instead'}
+                </button>
+              </p>
+            )}
 
-          {canSkeleton && (
-            <p className="text-sm text-text2">
-              <button
-                type="button"
-                onClick={skeleton}
-                disabled={busy !== null}
-                className="font-semibold text-accent-ink underline-offset-2 hover:underline disabled:text-text2"
-              >
-                {busy === "skeleton" ? "Creating…" : "Start from an empty skeleton instead"}
-              </button>
-            </p>
-          )}
-
-          {/* qa-onboarding-28: the form ends with its Continue too, where the last answer is given;
+            {/* qa-onboarding-28: the form ends with its Continue too, where the last answer is given;
               filled (solid), the header keeps the page's one primary. */}
-          <div className="flex justify-end">
-            <Button type="submit" variant="solid" disabled={busy !== null} data-testid="new-prd-continue-end">
-              {busy === "continue" ? "Saving…" : "Continue"}
-            </Button>
-          </div>
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                variant="solid"
+                disabled={busy !== null}
+                data-testid="new-prd-continue-end"
+              >
+                {busy === 'continue' ? 'Saving…' : 'Continue'}
+              </Button>
+            </div>
           </Split>
         </fieldset>
       </form>

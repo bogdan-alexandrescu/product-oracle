@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from 'react';
 
 /** Fired after a delete, Undo or Restore (#482): lists still mounted load again. */
-const EVENT = "oracle:artifacts-changed";
+const EVENT = 'oracle:artifacts-changed';
 
 export function artifactsChanged() {
   window.dispatchEvent(new Event(EVENT));

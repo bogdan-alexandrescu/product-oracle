@@ -1,11 +1,11 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import type { RouteProps } from "@/lib/route-props";
+import type { RouteProps } from '@/lib/route-props';
 
-import { CompositionView } from "./_view";
-import { PageSkeleton } from "@/components/ds";
+import { CompositionView } from './_view';
+import { PageSkeleton } from '@/components/ds';
 
-async function Composition({ params }: { params: RouteProps<{ doc: string }>["params"] }) {
+async function Composition({ params }: { params: RouteProps<{ doc: string }>['params'] }) {
   const { doc } = await params;
   return <CompositionView key={doc} doc={doc} />;
 }

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /*
  * Product Oracle v2 design system (I3: B1 Split). The colour tokens below are the one
@@ -74,7 +74,7 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme='light']) {
     --bg: #06101e;
     --surface: #0c1a2e;
     --surface2: #11233b;
@@ -114,7 +114,7 @@
     color-scheme: dark;
   }
 }
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --bg: #06101e;
   --surface: #0c1a2e;
   --surface2: #11233b;
@@ -159,7 +159,7 @@
  * and card scale, copied unchanged so the two merge as one set), scoped to [data-mode="simple"].
  * S6 priorities adds only what S1 lacks: --simple-ghost, the colour of Oracle's-rank ghosts.
  */
-[data-mode="simple"] {
+[data-mode='simple'] {
   --simple-text: 18px;
   --simple-leading: 28px;
   --simple-h1: 34px;
@@ -183,8 +183,8 @@
   --simple-m4: #d9c27a;
   --simple-m4-ink: #2e2400;
 }
-:root[data-theme="dark"] [data-mode="simple"],
-:root[data-theme="dark"][data-mode="simple"] {
+:root[data-theme='dark'] [data-mode='simple'],
+:root[data-theme='dark'][data-mode='simple'] {
   --simple-ghost: #828d9b;
   --simple-m1: #1f4a7a;
   --simple-m1-ink: #e6f4fd;
@@ -196,8 +196,8 @@
   --simple-m4-ink: #1f1600;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) [data-mode="simple"],
-  :root:not([data-theme="light"])[data-mode="simple"] {
+  :root:not([data-theme='light']) [data-mode='simple'],
+  :root:not([data-theme='light'])[data-mode='simple'] {
     --simple-m1: #1f4a7a;
     --simple-m1-ink: #e6f4fd;
     --simple-m2: #2f6fa6;
@@ -209,7 +209,7 @@
   }
 }
 @media (max-width: 600px) {
-  [data-mode="simple"] {
+  [data-mode='simple'] {
     --simple-h1: 28px;
     --simple-h1-leading: 34px;
     --simple-space: 28px;
@@ -228,7 +228,7 @@
   --simple-radius: 14px;
 }
 /* pre-demo QA P-10: the feature panel's selected tab stands out in dark too (its tokens above). */
-.panel-tabs [role="tab"][aria-selected="true"] {
+.panel-tabs [role='tab'][aria-selected='true'] {
   background: var(--panel-tab-on);
   color: var(--panel-tab-on-ink);
 }
@@ -390,26 +390,26 @@ html {
    scrollbar was. "below-1240"/"below-1600": a backdrop shown only under that width (the Ask
    panel's, which docks beside the page from there). --backdrop-room is that padding, for a fixed
    box over the backdrop that spans the page (the toasts) to keep to the page's width. */
-html:has([data-backdrop=""]) {
+html:has([data-backdrop='']) {
   overflow: hidden;
   scrollbar-gutter: auto;
   padding-right: var(--scrollbar-room, 0px);
   --backdrop-room: var(--scrollbar-room, 0px);
 }
 @media (max-width: 1239.98px) {
-  html:has([data-backdrop="below-1240"]) {
+  html:has([data-backdrop='below-1240']) {
     overflow: hidden;
     scrollbar-gutter: auto;
     padding-right: var(--scrollbar-room, 0px);
-  --backdrop-room: var(--scrollbar-room, 0px);
+    --backdrop-room: var(--scrollbar-room, 0px);
   }
 }
 @media (max-width: 1599.98px) {
-  html:has([data-backdrop="below-1600"]) {
+  html:has([data-backdrop='below-1600']) {
     overflow: hidden;
     scrollbar-gutter: auto;
     padding-right: var(--scrollbar-room, 0px);
-  --backdrop-room: var(--scrollbar-room, 0px);
+    --backdrop-room: var(--scrollbar-room, 0px);
   }
 }
 body {
@@ -461,10 +461,17 @@ body {
 }
 /* Phone sheets (ds Sheet): every control is a 44 px touch target. */
 @utility touch-44 {
-  & :is(button, select, summary, input:not([type="checkbox"], [type="radio"]), a[data-testid="feedback-goto"]) {
+  &
+    :is(
+      button,
+      select,
+      summary,
+      input:not([type='checkbox'], [type='radio']),
+      a[data-testid='feedback-goto']
+    ) {
     min-height: 44px;
   }
-  & a[data-testid="feedback-goto"] {
+  & a[data-testid='feedback-goto'] {
     display: inline-flex;
     align-items: center;
   }
@@ -567,7 +574,7 @@ body {
   user-select: none;
 }
 .cite-chip:hover,
-.cite-chip[aria-expanded="true"] {
+.cite-chip[aria-expanded='true'] {
   border-color: var(--color-neutral-500);
   color: var(--color-neutral-900);
 }
@@ -609,7 +616,7 @@ mark.hl-pending {
   color: var(--warn);
   border: 1px solid currentColor;
 }
-.date-mark[data-date-mark="withdrawn"] {
+.date-mark[data-date-mark='withdrawn'] {
   background: var(--crit-bg);
   color: var(--crit);
 }
@@ -653,7 +660,7 @@ code .date-mark {
   color: var(--color-neutral-900);
   outline: none;
 }
-.doc-body .expand-btn[aria-expanded="true"] {
+.doc-body .expand-btn[aria-expanded='true'] {
   background: var(--color-neutral-100);
 }
 .doc-body .detail-inline {
@@ -680,7 +687,7 @@ code .date-mark {
  * mockup picks is a change here: a larger type scale, more space, fewer borders, and a light
  * rail (Simple's rail and the phone bars read the same --rail-* tokens Detailed's do).
  */
-[data-mode="simple"] {
+[data-mode='simple'] {
   --simple-text: 18px;
   --simple-leading: 28px;
   --simple-h1: 34px;
@@ -721,14 +728,14 @@ code .date-mark {
   --rail-bar: var(--accent);
   --rail-sep: var(--line);
 }
-:root[data-theme="dark"][data-mode="simple"] {
+:root[data-theme='dark'][data-mode='simple'] {
   --simple-count-bg: #e0b23a;
   --simple-count-text: #1f1600;
   --simple-plan-bar: var(--accent-mid);
   --simple-plan-bar-soft: var(--accent-soft);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"])[data-mode="simple"] {
+  :root:not([data-theme='light'])[data-mode='simple'] {
     --simple-count-bg: #e0b23a;
     --simple-count-text: #1f1600;
     --simple-plan-bar: var(--accent-mid);
@@ -736,7 +743,7 @@ code .date-mark {
   }
 }
 @media (max-width: 600px) {
-  [data-mode="simple"] {
+  [data-mode='simple'] {
     --simple-h1: 28px;
     --simple-h1-leading: 34px;
     --simple-space: 28px;
@@ -777,7 +784,7 @@ code .date-mark {
   .simple-page {
     padding-bottom: calc(var(--simple-pad-y) + var(--phone-tab-bar));
   }
-  [data-mode="simple"] [data-testid="simple-priorities"] {
+  [data-mode='simple'] [data-testid='simple-priorities'] {
     padding-bottom: calc(24px + var(--phone-tab-bar));
   }
 }
@@ -864,20 +871,20 @@ code .date-mark {
 }
 /* A disabled button reads as one (the walk's Undo while nothing can be undone). */
 .simple-button:disabled,
-.simple-button[aria-disabled="true"] {
+.simple-button[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.5;
 }
 .simple-button:disabled:hover,
-.simple-button[aria-disabled="true"]:hover {
+.simple-button[aria-disabled='true']:hover {
   background: var(--surface);
 }
 .simple-button-primary:disabled:hover,
-.simple-button-primary[aria-disabled="true"]:hover {
+.simple-button-primary[aria-disabled='true']:hover {
   background: var(--accent);
 }
 .simple-button-quiet:disabled:hover,
-.simple-button-quiet[aria-disabled="true"]:hover {
+.simple-button-quiet[aria-disabled='true']:hover {
   background: transparent;
 }
 /* A button with a long label (a change card's fixes): wraps inside its container. */
@@ -1030,7 +1037,7 @@ code .date-mark {
 .simple-button-quiet:hover {
   background: var(--accent-soft);
 }
-.simple-button[aria-pressed="true"] {
+.simple-button[aria-pressed='true'] {
   background: var(--surface2);
 }
 .simple-link {
@@ -1073,7 +1080,7 @@ code .date-mark {
 .simple-seg button:hover {
   background: var(--surface2);
 }
-.simple-seg button[aria-pressed="true"] {
+.simple-seg button[aria-pressed='true'] {
   background: var(--accent);
   color: var(--on-accent);
   font-weight: 650;
@@ -1200,7 +1207,11 @@ code .date-mark {
   background: var(--simple-plan-bar);
 }
 .simple-plan-bar.simple-bar-estimated {
-  background: repeating-linear-gradient(135deg, var(--simple-plan-bar) 0 6px, var(--simple-plan-bar-soft) 6px 12px);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--simple-plan-bar) 0 6px,
+    var(--simple-plan-bar-soft) 6px 12px
+  );
 }
 .simple-bar-broken {
   outline: 2px solid var(--crit);
@@ -1249,7 +1260,7 @@ code .date-mark {
   --simple-bar-outline: var(--line-strong);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme='light']) {
     --simple-paper: #141b26;
     --simple-desk: #0b1119;
     --simple-rule: #283244;
@@ -1282,7 +1293,7 @@ code .date-mark {
     --simple-bar-outline: #8fa3ba;
   }
 }
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --simple-paper: #141b26;
   --simple-desk: #0b1119;
   --simple-rule: #283244;
@@ -1314,18 +1325,29 @@ code .date-mark {
   --simple-bar-outline: #8fa3ba;
 }
 @media print {
-  .simple-noprint { display: none !important; }
+  .simple-noprint {
+    display: none !important;
+  }
   /* E-13: a printed Simple page (a one-pager saved as PDF) is the page alone, across the sheet:
      no rail, phone top bar, docked Ask panel or the phone's open Ask sheet (its chat). */
-  [data-mode="simple"] [data-testid="phone-header"],
-  [data-mode="simple"] [data-testid="hop-dock"],
-  [data-mode="simple"] [data-testid="phone-ask-sheet"],
-  [data-mode="simple"] [data-testid="ask-chat"] { display: none !important; }
-  [data-mode="simple"] main#main { grid-column: 1 / -1; }
-  [data-mode="simple"] .simple-page { max-width: none; }
+  [data-mode='simple'] [data-testid='phone-header'],
+  [data-mode='simple'] [data-testid='hop-dock'],
+  [data-mode='simple'] [data-testid='phone-ask-sheet'],
+  [data-mode='simple'] [data-testid='ask-chat'] {
+    display: none !important;
+  }
+  [data-mode='simple'] main#main {
+    grid-column: 1 / -1;
+  }
+  [data-mode='simple'] .simple-page {
+    max-width: none;
+  }
   /* A one-pager prints in one column across the sheet (landscape or no margins included):
      no 820 px text column beside its margin notes, which do not print. */
-  [data-testid="one-pager-columns"] { grid-template-columns: minmax(0, 1fr) !important; max-width: none !important; }
+  [data-testid='one-pager-columns'] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    max-width: none !important;
+  }
 }
 
 /* roadmap-talk: a bar a chat card just changed pulses in Oracle's accent (both themes follow the tokens). */
@@ -1368,7 +1390,7 @@ code .date-mark {
   --simple-m4-tag-ink: #0a7a55;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme='light']) {
     --simple-m1-bar: #7cc8f8;
     --simple-m2-bar: #c4b5fd;
     --simple-m3-bar: #f0b75a;
@@ -1383,7 +1405,7 @@ code .date-mark {
     --simple-m4-tag-ink: #4cd9a0;
   }
 }
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --simple-m1-bar: #7cc8f8;
   --simple-m2-bar: #c4b5fd;
   --simple-m3-bar: #f0b75a;
@@ -1400,11 +1422,11 @@ code .date-mark {
 
 /* qa4-docs-share-58: in dark mode the audience preview (a white page as the audience sees it)
    is dimmed, so it does not glare inside the dark console; its own colours stay as shared. */
-:root[data-theme="dark"] [data-testid="audience-view"] iframe {
+:root[data-theme='dark'] [data-testid='audience-view'] iframe {
   filter: brightness(0.8);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) [data-testid="audience-view"] iframe {
+  :root:not([data-theme='light']) [data-testid='audience-view'] iframe {
     filter: brightness(0.8);
   }
 }
@@ -1417,7 +1439,7 @@ code .date-mark {
  * --on-accent (a data URI can't read a variable).
  */
 @layer base {
-  :root[data-theme="dark"] input[type="checkbox"]:not([class*="appearance-none"]) {
+  :root[data-theme='dark'] input[type='checkbox']:not([class*='appearance-none']) {
     appearance: none;
     flex: none;
     width: 1rem;
@@ -1427,16 +1449,17 @@ code .date-mark {
     background: transparent center / 80% no-repeat;
     vertical-align: middle;
   }
-  :root[data-theme="dark"] input[type="checkbox"]:not([class*="appearance-none"]):is(:checked, :indeterminate) {
+  :root[data-theme='dark']
+    input[type='checkbox']:not([class*='appearance-none']):is(:checked, :indeterminate) {
     border-color: var(--accent);
     background-color: var(--accent);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
   }
-  :root[data-theme="dark"] input[type="checkbox"]:not([class*="appearance-none"]):indeterminate {
+  :root[data-theme='dark'] input[type='checkbox']:not([class*='appearance-none']):indeterminate {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) input[type="checkbox"]:not([class*="appearance-none"]) {
+    :root:not([data-theme='light']) input[type='checkbox']:not([class*='appearance-none']) {
       appearance: none;
       flex: none;
       width: 1rem;
@@ -1446,32 +1469,114 @@ code .date-mark {
       background: transparent center / 80% no-repeat;
       vertical-align: middle;
     }
-    :root:not([data-theme="light"]) input[type="checkbox"]:not([class*="appearance-none"]):is(:checked, :indeterminate) {
+    :root:not([data-theme='light'])
+      input[type='checkbox']:not([class*='appearance-none']):is(:checked, :indeterminate) {
       border-color: var(--accent);
       background-color: var(--accent);
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
     }
-    :root:not([data-theme="light"]) input[type="checkbox"]:not([class*="appearance-none"]):indeterminate {
+    :root:not([data-theme='light'])
+      input[type='checkbox']:not([class*='appearance-none']):indeterminate {
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
     }
   }
 }
 
 /* The focused row of a Split's table is ringed on all four sides (Esc on its panel brings focus back here). */
-[data-split-table] tr[data-row]:focus-visible { outline: none; }
-[data-split-table] tr[data-row]:focus-visible > td { box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
-[data-split-table] tr[data-row]:focus-visible > td:first-child { box-shadow: inset 6px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
-[data-split-table] tr[data-row]:focus-visible > td:last-child { box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+[data-split-table] tr[data-row]:focus-visible {
+  outline: none;
+}
+[data-split-table] tr[data-row]:focus-visible > td {
+  box-shadow:
+    inset 0 2px 0 var(--accent),
+    inset 0 -2px 0 var(--accent);
+}
+[data-split-table] tr[data-row]:focus-visible > td:first-child {
+  box-shadow:
+    inset 6px 0 0 var(--accent),
+    inset 0 2px 0 var(--accent),
+    inset 0 -2px 0 var(--accent);
+}
+[data-split-table] tr[data-row]:focus-visible > td:last-child {
+  box-shadow:
+    inset -2px 0 0 var(--accent),
+    inset 0 2px 0 var(--accent),
+    inset 0 -2px 0 var(--accent);
+}
 /* build-goal-order-control: a goal's place (1 to n) before its name, and Home's row while ordering. */
-.goal-num { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; margin-right: 6px; border-radius: 999px; background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; line-height: 1; vertical-align: 1px; }
+.goal-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
+}
 /* The " · " after it: read in the page's text and by screen readers, never seen (no width; inline, so the text stays on one line). */
-.goal-num-sep { display: inline-block; width: 1px; height: 1px; margin-right: -1px; overflow: hidden; clip-path: inset(50%); white-space: pre; vertical-align: top; }
-.goal-order-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; padding: 8px 12px; border-radius: 12px; background: var(--accent-soft); }
-.simple-goal.goal-order-card { min-height: 120px; outline: 1px dashed var(--line-strong); cursor: grab; user-select: none; }
-.simple-goal.goal-order-lifted { position: relative; z-index: 5; transform: translate(10px, -14px) rotate(-2.5deg); outline: 2px solid var(--accent); box-shadow: 0 22px 44px rgb(0 0 0 / 0.32); cursor: grabbing; }
-.goal-order-grip { color: var(--text-faint); font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 6px; cursor: grab; touch-action: none; }
-.goal-order-arrow { min-width: 44px; height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-weight: 700; }
-.goal-order-arrow:disabled { opacity: 0.35; }
+.goal-num-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1px;
+  margin-right: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: pre;
+  vertical-align: top;
+}
+.goal-order-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.simple-goal.goal-order-card {
+  min-height: 120px;
+  outline: 1px dashed var(--line-strong);
+  cursor: grab;
+  user-select: none;
+}
+.simple-goal.goal-order-lifted {
+  position: relative;
+  z-index: 5;
+  transform: translate(10px, -14px) rotate(-2.5deg);
+  outline: 2px solid var(--accent);
+  box-shadow: 0 22px 44px rgb(0 0 0 / 0.32);
+  cursor: grabbing;
+}
+.goal-order-grip {
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: none;
+}
+.goal-order-arrow {
+  min-width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+}
+.goal-order-arrow:disabled {
+  opacity: 0.35;
+}
 
 /*
  * X-3: a printed Detailed page (a roadmap or PRD version saved as PDF) is the document alone,
@@ -1482,7 +1587,7 @@ code .date-mark {
  * Simple keeps its own print look.
  */
 @media print {
-  :root:not([data-mode="simple"]):root {
+  :root:not([data-mode='simple']):root {
     --accent-ink: #075985;
     --accent-mid: #b6daf2;
     --accent-soft: #e5f3fc;
@@ -1526,68 +1631,98 @@ code .date-mark {
     --warn: #8a5a00;
     color-scheme: light;
   }
-  :root:not([data-mode="simple"]),
-  :root:not([data-mode="simple"]) body {
+  :root:not([data-mode='simple']),
+  :root:not([data-mode='simple']) body {
     background: #fff;
     color: var(--text);
   }
-  [data-testid="app-nav"],
-  [data-testid="tab-bar"],
-  [data-testid="phone-header"],
-  [data-testid="hop-dock"],
-  [data-testid="skip-link"],
-  [data-testid="version-toolbar"],
-  [data-testid="version-tabs"],
-  [data-testid="view-note"],
-  [data-testid="outline-rail"],
-  [data-testid="section-switcher"],
-  [data-testid="review-panel-column"],
-  [data-testid="phone-bar"],
-  [data-testid="doc-header"] [data-page-back],
-  [data-testid="doc-header"] [data-page-action],
-  article[aria-label="Document"] .expand-btn,
-  [data-testid="document-sections"] [data-testid="review-bar"],
-  [data-testid="document-sections"] [aria-label^="Actions for "],
-  [data-testid="document-sections"] [aria-label^="Open feedback on this section"],
-  article[aria-label="Document"] > nav[aria-label="Previous and next section"] {
+  [data-testid='app-nav'],
+  [data-testid='tab-bar'],
+  [data-testid='phone-header'],
+  [data-testid='hop-dock'],
+  [data-testid='skip-link'],
+  [data-testid='version-toolbar'],
+  [data-testid='version-tabs'],
+  [data-testid='view-note'],
+  [data-testid='outline-rail'],
+  [data-testid='section-switcher'],
+  [data-testid='review-panel-column'],
+  [data-testid='phone-bar'],
+  [data-testid='doc-header'] [data-page-back],
+  [data-testid='doc-header'] [data-page-action],
+  article[aria-label='Document'] .expand-btn,
+  [data-testid='document-sections'] [data-testid='review-bar'],
+  [data-testid='document-sections'] [aria-label^='Actions for '],
+  [data-testid='document-sections'] [aria-label^='Open feedback on this section'],
+  article[aria-label='Document'] > nav[aria-label='Previous and next section'] {
     display: none !important;
   }
-  main#main { grid-column: 1 / -1; }
-  main#main:has([data-testid="version-toolbar"]) > div > div { padding-inline: 0; }
-  [data-testid="prd-layout"] { display: block; }
-  article[aria-label="Document"] {
+  main#main {
+    grid-column: 1 / -1;
+  }
+  main#main:has([data-testid='version-toolbar']) > div > div {
+    padding-inline: 0;
+  }
+  [data-testid='prd-layout'] {
+    display: block;
+  }
+  article[aria-label='Document'] {
     border: 0;
     border-radius: 0;
     background: #fff;
     box-shadow: none;
   }
-  article[aria-label="Document"] :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }
-  article[aria-label="Document"] :is(p, li) { orphans: 3; widows: 3; }
-  article[aria-label="Document"] :is(blockquote, pre, figure, img, tr) { break-inside: avoid; }
-  article[aria-label="Document"] thead { display: table-header-group; }
-  article[aria-label="Document"] .table-wrap {
+  article[aria-label='Document'] :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+  }
+  article[aria-label='Document'] :is(p, li) {
+    orphans: 3;
+    widows: 3;
+  }
+  article[aria-label='Document'] :is(blockquote, pre, figure, img, tr) {
+    break-inside: avoid;
+  }
+  article[aria-label='Document'] thead {
+    display: table-header-group;
+  }
+  article[aria-label='Document'] .table-wrap {
     max-width: 100%;
     margin-right: 0;
     overflow: visible;
   }
-  article[aria-label="Document"] table {
+  article[aria-label='Document'] table {
     width: 100%;
     min-width: 0 !important;
     table-layout: auto;
   }
-  article[aria-label="Document"] :is(th, td) { overflow-wrap: anywhere; }
-  article[aria-label="Document"] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  article[aria-label='Document'] :is(th, td) {
+    overflow-wrap: anywhere;
+  }
+  article[aria-label='Document'] pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   /* A roadmap version's Items tab is not inside the Document article: its fixed column widths
      leave the Item column a sliver on paper, so the columns share the sheet and cells wrap. */
-  [data-testid="roadmap-items-table"] { overflow: visible; }
-  [data-testid="roadmap-items-table"] table { table-layout: auto; }
-  [data-testid="roadmap-items-table"] col { width: auto !important; }
-  [data-testid="roadmap-items-table"] td {
+  [data-testid='roadmap-items-table'] {
+    overflow: visible;
+  }
+  [data-testid='roadmap-items-table'] table {
+    table-layout: auto;
+  }
+  [data-testid='roadmap-items-table'] col {
+    width: auto !important;
+  }
+  [data-testid='roadmap-items-table'] td {
     overflow: visible;
     text-overflow: clip;
     white-space: normal;
     overflow-wrap: break-word;
   }
-  [data-testid="roadmap-items-table"] tr { break-inside: avoid; }
-  [data-testid="roadmap-items-table"] thead { display: table-header-group; }
+  [data-testid='roadmap-items-table'] tr {
+    break-inside: avoid;
+  }
+  [data-testid='roadmap-items-table'] thead {
+    display: table-header-group;
+  }
 }

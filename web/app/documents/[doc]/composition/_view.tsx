@@ -1,20 +1,33 @@
-"use client";
+'use client';
 
-import { RoleBadge } from "@/components/RoleBadge";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { RoleBadge } from '@/components/RoleBadge';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useState, useSyncExternalStore } from 'react';
 
-import { DocCrumb } from "@/components/DocToolbar";
-import { Button, Chip, DataTable, FilterChips, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
-import { Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { formatDate, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { DocCrumb } from '@/components/DocToolbar';
+import {
+  Button,
+  Chip,
+  DataTable,
+  FilterChips,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  SegmentedControl,
+  Sheet,
+  Split,
+  type Column,
+} from '@/components/ds';
+import { Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { formatDate, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { CatalogTab } from "./_catalog";
-import { ConfirmStep, EMPTY_INPUTS, PublishStep } from "./_confirm";
-import { HistoryTab } from "./_history";
+import { CatalogTab } from './_catalog';
+import { ConfirmStep, EMPTY_INPUTS, PublishStep } from './_confirm';
+import { HistoryTab } from './_history';
 import {
   decidedByInWords,
   selectionInWords,
@@ -39,17 +52,18 @@ import {
   type Module,
   type Problem,
   type Recommendation,
-} from "./_lib";
-import { ModuleDetail } from "./_module-inspector";
-import { PolicyTab } from "./_policy";
+} from './_lib';
+import { ModuleDetail } from './_module-inspector';
+import { PolicyTab } from './_policy';
 
-const PHONE = "(max-width: 600px)";
-const META = "inline-flex min-h-[26px] items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
+const PHONE = '(max-width: 600px)';
+const META =
+  'inline-flex min-h-[26px] items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 function useIsPhone(): boolean {
@@ -60,15 +74,15 @@ function useIsPhone(): boolean {
   );
 }
 
-type Tab = "modules" | "catalog" | "policy" | "history";
-type Source = "working" | "current" | "preview";
+type Tab = 'modules' | 'catalog' | 'policy' | 'history';
+type Source = 'working' | 'current' | 'preview';
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: "modules", label: "Modules" },
-  { value: "catalog", label: "Catalog" },
+  { value: 'modules', label: 'Modules' },
+  { value: 'catalog', label: 'Catalog' },
   // qa-docs-44: one name on every screen (the four tabs still fit a 390 px phone).
-  { value: "policy", label: "Company policy" },
-  { value: "history", label: "History" },
+  { value: 'policy', label: 'Company policy' },
+  { value: 'history', label: 'History' },
 ];
 
 /** The Composition inspector of a PRD (v2 screen 1, picks.md 1). */
@@ -77,10 +91,14 @@ export function CompositionView({ doc }: { doc: string }) {
   const phone = useIsPhone();
   const pathname = usePathname();
   const params = useSearchParams();
-  const tab = (TABS.find((t) => t.value === params.get("tab"))?.value ?? "modules") as Tab;
-  const docQ = useQuery(`doc:${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
-  const packsQ = useQuery("module-packs", () => unwrap(api.GET("/v1/module-packs")));
-  const q = useQuery(`composition:${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/composition", { params: { path: { doc } } })));
+  const tab = (TABS.find((t) => t.value === params.get('tab'))?.value ?? 'modules') as Tab;
+  const docQ = useQuery(`doc:${doc}`, () =>
+    unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc } } })),
+  );
+  const packsQ = useQuery('module-packs', () => unwrap(api.GET('/v1/module-packs')));
+  const q = useQuery(`composition:${doc}`, () =>
+    unwrap(api.GET('/v1/documents/{doc}/composition', { params: { path: { doc } } })),
+  );
   const [changes, setChanges] = useState<Changes>(NO_CHANGES);
   const [confirming, setConfirming] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -88,38 +106,46 @@ export function CompositionView({ doc }: { doc: string }) {
   const [view, setView] = useState<Source | null>(null);
   const [preview, setPreview] = useState<Recommendation | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>('all');
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
 
-  const mayConfirm = can("confirm_composition_revision");
-  const mayPublish = can("publish_composition");
+  const mayConfirm = can('confirm_composition_revision');
+  const mayPublish = can('publish_composition');
   const data = q.data;
 
   async function loadPreview() {
     setPreviewError(null);
     try {
-      setPreview(await unwrap(api.POST("/v1/compositions/recommend", { body: { ...EMPTY_INPUTS, document: doc } })));
-      setView("preview");
+      setPreview(
+        await unwrap(
+          api.POST('/v1/compositions/recommend', { body: { ...EMPTY_INPUTS, document: doc } }),
+        ),
+      );
+      setView('preview');
     } catch (e) {
       setPreviewError(errorMessage(e));
     }
   }
 
-  function done(out: InspectorOut, status: "confirmed" | "working") {
+  function done(out: InspectorOut, status: 'confirmed' | 'working') {
     const n = out.head_revision;
     q.setData(() => out);
     setChanges(NO_CHANGES);
     setConfirming(false);
     setView(null);
     setResult({
-      text: status === "confirmed" ? `Revision ${n} confirmed.` : `Revision ${n} saved as a working draft. It replaces nothing until confirmed.`,
+      text:
+        status === 'confirmed'
+          ? `Revision ${n} confirmed.`
+          : `Revision ${n} saved as a working draft. It replaces nothing until confirmed.`,
       problems: out.problems,
     });
   }
 
   const pack = data?.current?.packs ?? data?.working?.packs ?? data?.recommendation?.packs ?? [];
-  const packsSource = (data?.current ?? data?.working)?.inputs.policy?.packs_source as string | undefined;
+  const packsSource = (data?.current ?? data?.working)?.inputs.policy?.packs_source as
+    string | undefined;
   const packNames = pack.map((id) => packsQ.data?.find((p) => p.id === id)?.title).filter(Boolean);
 
   const tabs = (
@@ -128,7 +154,11 @@ export function CompositionView({ doc }: { doc: string }) {
       label="Composition views"
       value={tab}
       fill={phone}
-      items={TABS.map((t) => ({ value: t.value, label: t.label, href: t.value === "modules" ? pathname : `${pathname}?tab=${t.value}` }))}
+      items={TABS.map((t) => ({
+        value: t.value,
+        label: t.label,
+        href: t.value === 'modules' ? pathname : `${pathname}?tab=${t.value}`,
+      }))}
     />
   );
 
@@ -141,33 +171,65 @@ export function CompositionView({ doc }: { doc: string }) {
     );
   } else if (!data) {
     body = <Loading label="Loading the composition…" />;
-  } else if (tab === "catalog") {
+  } else if (tab === 'catalog') {
     body = <CatalogTab phone={phone} />;
-  } else if (tab === "policy") {
-    body = <PolicyTab phone={phone} onSaved={() => void q.reload()} prdModules={(data.working ?? data.current ?? data.recommendation)?.modules ?? []} prdTitle={docQ.data?.title ?? data.slug} />;
-  } else if (tab === "history") {
+  } else if (tab === 'policy') {
+    body = (
+      <PolicyTab
+        phone={phone}
+        onSaved={() => void q.reload()}
+        prdModules={(data.working ?? data.current ?? data.recommendation)?.modules ?? []}
+        prdTitle={docQ.data?.title ?? data.slug}
+      />
+    );
+  } else if (tab === 'history') {
     body = <HistoryTab data={data} />;
   } else {
     const sources: { value: Source; label: string; modules: Module[] }[] = [];
-    if (data.working) sources.push({ value: "working", label: `Working revision ${data.working.number}`, modules: data.working.modules });
-    if (data.current) sources.push({ value: "current", label: `Confirmed revision ${data.current.number}`, modules: data.current.modules });
-    if (preview || data.recommendation) sources.push({ value: "preview", label: "Recommendation", modules: (preview ?? data.recommendation)!.modules });
+    if (data.working)
+      sources.push({
+        value: 'working',
+        label: `Working revision ${data.working.number}`,
+        modules: data.working.modules,
+      });
+    if (data.current)
+      sources.push({
+        value: 'current',
+        label: `Confirmed revision ${data.current.number}`,
+        modules: data.current.modules,
+      });
+    if (preview || data.recommendation)
+      sources.push({
+        value: 'preview',
+        label: 'Recommendation',
+        modules: (preview ?? data.recommendation)!.modules,
+      });
     const source = sources.find((s) => s.value === view) ?? sources[0];
     // A new revision starts from the newest one: the draft's order is over its modules.
     const base = (data.working ?? data.current ?? data.recommendation)?.modules ?? [];
     const last = lastKeys(base);
     const custom = changes.order;
-    const all = sortModules((source?.modules ?? []).map((m) => (custom?.includes(m.key) ? { ...m, order: (custom.indexOf(m.key) + 1) * 10 } : m)));
+    const all = sortModules(
+      (source?.modules ?? []).map((m) =>
+        custom?.includes(m.key) ? { ...m, order: (custom.indexOf(m.key) + 1) * 10 } : m,
+      ),
+    );
     const rows = all.filter((m) => matches(m, filter));
     const selected = all.find((m) => m.key === picked) ?? null;
     const count = (f: Filter) => all.filter((m) => matches(m, f)).length;
-    const titleOf = titler(all, data.working?.modules, data.current?.modules, data.recommendation?.modules, preview?.modules);
+    const titleOf = titler(
+      all,
+      data.working?.modules,
+      data.current?.modules,
+      data.recommendation?.modules,
+      preview?.modules,
+    );
     // The place (1, 2, 3 …) of each included module, not the API's 10, 20 … steps, in the
     // order the table reads, groups included (qa4-docs-50).
     const place = new Map(all.filter((m) => m.included).map((m, i) => [m.key, i + 1]));
     // qa4-docs-50: under a Required/Suggested/Optional heading (or filter) the Selection column
     // would only repeat it; "When it applies" then shows under the module's name.
-    const showSelection = filter === "excluded" || filter === "problems";
+    const showSelection = filter === 'excluded' || filter === 'problems';
     const detail = (m: Module, bare: boolean) => (
       <ModuleDetail
         m={m}
@@ -188,11 +250,17 @@ export function CompositionView({ doc }: { doc: string }) {
       />
     );
     const columns: Column<Module>[] = [
-      { key: "order", header: "#", width: "48px", phone: "hide", cell: (m) => <span className="tnum text-text2">{place.get(m.key) ?? "—"}</span> },
       {
-        key: "module",
-        header: "Module",
-        phone: "title",
+        key: 'order',
+        header: '#',
+        width: '48px',
+        phone: 'hide',
+        cell: (m) => <span className="tnum text-text2">{place.get(m.key) ?? '—'}</span>,
+      },
+      {
+        key: 'module',
+        header: 'Module',
+        phone: 'title',
         // Names wrap, never cut (also when the inspector narrows the table).
         wrap: true,
         cell: (m) => (
@@ -202,34 +270,44 @@ export function CompositionView({ doc }: { doc: string }) {
               {changes.add.includes(m.key) && <Chip kind="acc">+ in draft</Chip>}
               {changes.remove.includes(m.key) && <Chip kind="warn">− in draft</Chip>}
               {m.field_problems.length > 0 && (
-                <Chip kind="warn">
-                  {plural(m.field_problems.length, "field problem")}
-                </Chip>
+                <Chip kind="warn">{plural(m.field_problems.length, 'field problem')}</Chip>
               )}
               {m.condition_error && <Chip kind="warn">Condition problem</Chip>}
             </span>
             {!showSelection && selectionInWords(m) !== SELECTION_LABEL[m.selection] && (
               <span className="text-sm text-text2">{selectionInWords(m)}</span>
             )}
-            {m.required_review_role === "owner" && <span className="text-sm text-text2">Owner review</span>}
+            {m.required_review_role === 'owner' && (
+              <span className="text-sm text-text2">Owner review</span>
+            )}
           </span>
         ),
       },
-      ...(showSelection ? ([{ key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => selectionInWords(m) }] satisfies Column<Module>[]) : []),
+      ...(showSelection
+        ? ([
+            {
+              key: 'selection',
+              header: 'Selection',
+              width: '110px',
+              wrap: true,
+              cell: (m) => selectionInWords(m),
+            },
+          ] satisfies Column<Module>[])
+        : []),
       {
-        key: "decided",
-        header: "Why",
-        width: "170px",
+        key: 'decided',
+        header: 'Why',
+        width: '170px',
         wrap: true,
-        phoneLabel: "Why",
+        phoneLabel: 'Why',
         cell: (m) => decidedByInWords(m),
       },
       {
-        key: "layout",
-        header: "Sections",
-        width: "150px",
+        key: 'layout',
+        header: 'Sections',
+        width: '150px',
         wrap: true,
-        narrow: "hide",
+        narrow: 'hide',
         cell: (m) => {
           const words = sectionsInWords(m);
           if (!words) return <span className="text-text2">No sections</span>;
@@ -237,14 +315,14 @@ export function CompositionView({ doc }: { doc: string }) {
         },
       },
       {
-        key: "state",
-        header: "State",
+        key: 'state',
+        header: 'State',
         // qa-docs-42: room for the widest pill ("Excluded" and its dot) inside the cell's padding.
-        width: "124px",
-        phone: "action",
+        width: '124px',
+        phone: 'action',
         cell: (m) => (
-          <Chip kind={m.included ? "pass" : "na"} dot>
-            {m.included ? "Included" : "Excluded"}
+          <Chip kind={m.included ? 'pass' : 'na'} dot>
+            {m.included ? 'Included' : 'Excluded'}
           </Chip>
         ),
       },
@@ -253,19 +331,27 @@ export function CompositionView({ doc }: { doc: string }) {
     body = (
       <Split inspector={!phone && selected ? detail(selected, false) : undefined}>
         {data.policy_changed_at && (
-          <Notice testId="policy-changed" tone="warn" action={<Button onClick={loadPreview}>Preview with new policy</Button>}>
-            <b>Company policy changed on {formatDate(data.policy_changed_at)}.</b> Compositions are only flagged; confirm a new revision to apply it.
+          <Notice
+            testId="policy-changed"
+            tone="warn"
+            action={<Button onClick={loadPreview}>Preview with new policy</Button>}
+          >
+            <b>Company policy changed on {formatDate(data.policy_changed_at)}.</b> Compositions are
+            only flagged; confirm a new revision to apply it.
           </Notice>
         )}
         {data.legacy && data.recommendation && (
           <Notice testId="legacy-notice">
-            This PRD has no composition yet. Oracle recommends {plural(data.recommendation.summary.included, "module")}
-            {packNames.length ? ` from ${packNames.join(", ")}` : ""}.
-            {mayConfirm ? " Review them below; nothing is in force until you confirm." : " You can look at them and preview a new one. Only an approver can confirm them."}
+            This PRD has no composition yet. Oracle recommends{' '}
+            {plural(data.recommendation.summary.included, 'module')}
+            {packNames.length ? ` from ${packNames.join(', ')}` : ''}.
+            {mayConfirm
+              ? ' Review them below; nothing is in force until you confirm.'
+              : ' You can look at them and preview a new one. Only an approver can confirm them.'}
           </Notice>
         )}
         {previewError && <Notice tone="error">{previewError}</Notice>}
-        {preview && source?.value === "preview" && (
+        {preview && source?.value === 'preview' && (
           // qa-docs-48: a preview says it is one; nothing is saved until someone confirms.
           <Notice
             testId="preview-banner"
@@ -280,7 +366,8 @@ export function CompositionView({ doc }: { doc: string }) {
               </Button>
             }
           >
-            <b>Preview.</b> This is Oracle&apos;s recommendation for this PRD today. Nothing is saved.
+            <b>Preview.</b> This is Oracle&apos;s recommendation for this PRD today. Nothing is
+            saved.
           </Notice>
         )}
         <Panel
@@ -289,12 +376,18 @@ export function CompositionView({ doc }: { doc: string }) {
           tools={
             sources.length > 1 ? (
               <div data-testid="composition-source">
-                <SegmentedControl label="Show" size="sm" value={source.value} onChange={setView} items={sources.map((s) => ({ value: s.value, label: s.label }))} />
+                <SegmentedControl
+                  label="Show"
+                  size="sm"
+                  value={source.value}
+                  onChange={setView}
+                  items={sources.map((s) => ({ value: s.value, label: s.label }))}
+                />
               </div>
             ) : source ? (
               // qa-docs-43: what the table shows, as a status chip (not a bare label that reads as a control).
               <Chip kind="line" data-testid="composition-source">
-                {source.value === "preview" ? "Recommendation, not in force" : source.label}
+                {source.value === 'preview' ? 'Recommendation, not in force' : source.label}
               </Chip>
             ) : null
           }
@@ -304,7 +397,11 @@ export function CompositionView({ doc }: { doc: string }) {
               label="Filter modules"
               value={filter}
               onChange={setFilter}
-              items={(Object.keys(FILTER_LABEL) as Filter[]).map((f) => ({ value: f, label: FILTER_LABEL[f], count: count(f) }))}
+              items={(Object.keys(FILTER_LABEL) as Filter[]).map((f) => ({
+                value: f,
+                label: FILTER_LABEL[f],
+                count: count(f),
+              }))}
             />
           </div>
           <DataTable
@@ -313,9 +410,12 @@ export function CompositionView({ doc }: { doc: string }) {
             columns={columns}
             rows={rows}
             rowKey={(m) => m.key}
-            rowProps={(m) => ({ "data-module": m.key, "data-problems": hasProblems(m) ? "1" : undefined })}
-            group={filter === "all" ? (m) => m.selection : undefined}
-            groupLabel={(g) => SELECTION_LABEL[g as Module["selection"]]}
+            rowProps={(m) => ({
+              'data-module': m.key,
+              'data-problems': hasProblems(m) ? '1' : undefined,
+            })}
+            group={filter === 'all' ? (m) => m.selection : undefined}
+            groupLabel={(g) => SELECTION_LABEL[g as Module['selection']]}
             selected={picked}
             onSelect={(k) => {
               setPicked(k);
@@ -324,27 +424,28 @@ export function CompositionView({ doc }: { doc: string }) {
             empty={
               <span className="flex flex-col items-center gap-2">
                 No modules match “{FILTER_LABEL[filter]}”.
-                <Button onClick={() => setFilter("all")}>Show all</Button>
+                <Button onClick={() => setFilter('all')}>Show all</Button>
               </span>
             }
           />
           {data.sections.unmapped.length > 0 && (
             <p className="border-t border-line px-4 py-2.5 text-sm text-text2">
-              {plural(data.sections.unmapped.length, "section")} of the PRD belong to no module. They are kept as written.
+              {plural(data.sections.unmapped.length, 'section')} of the PRD belong to no module.
+              They are kept as written.
             </p>
           )}
         </Panel>
         {staged && (
-          <Panel
-            testId="draft-changes"
-            title="Draft changes"
-            bodyClassName="px-4 py-3"
-          >
+          <Panel testId="draft-changes" title="Draft changes" bodyClassName="px-4 py-3">
             <ul className="space-y-1.5 text-[15px]">
               {changes.add.map((k) => (
                 <li key={k} className="flex items-center gap-2">
                   <span>+ {titleOf(k)}</span>
-                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, false, last))}>
+                  <Button
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => setChanges((c) => toggle(c, k, false, last))}
+                  >
                     Undo
                   </Button>
                 </li>
@@ -352,34 +453,61 @@ export function CompositionView({ doc }: { doc: string }) {
               {changes.remove.map((k) => (
                 <li key={k} className="flex items-center gap-2">
                   <span>− {titleOf(k)}</span>
-                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, true, last))}>
+                  <Button
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => setChanges((c) => toggle(c, k, true, last))}
+                  >
                     Undo
                   </Button>
                 </li>
               ))}
               {changes.order && (
                 <li className="flex items-center gap-2">
-                  <span>↕ Custom order ({plural(changes.order.length, "module")})</span>
-                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => ({ ...c, order: null }))}>
+                  <span>↕ Custom order ({plural(changes.order.length, 'module')})</span>
+                  <Button
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => setChanges((c) => ({ ...c, order: null }))}
+                  >
                     Reset
                   </Button>
                 </li>
               )}
             </ul>
-            <p className="mt-2 text-sm text-text2">Nothing is saved until you choose Use these modules above.</p>
+            <p className="mt-2 text-sm text-text2">
+              Nothing is saved until you choose Use these modules above.
+            </p>
           </Panel>
         )}
         {data.working && (
-          <Panel testId="working-draft" title={`Working draft, revision ${data.working.number}`} tools={<Chip kind="warn">Replaces nothing until confirmed</Chip>} bodyClassName="space-y-1.5 px-4 py-3 text-[15px]">
+          <Panel
+            testId="working-draft"
+            title={`Working draft, revision ${data.working.number}`}
+            tools={<Chip kind="warn">Replaces nothing until confirmed</Chip>}
+            bodyClassName="space-y-1.5 px-4 py-3 text-[15px]"
+          >
             <p className="text-sm text-text2">
-              {data.working.parent_number != null ? `Started from revision ${data.working.parent_number}` : "First draft"}
-              {data.working.decided_at ? ` · ${formatDate(data.working.decided_at)}` : ""}
+              {data.working.parent_number != null
+                ? `Started from revision ${data.working.parent_number}`
+                : 'First draft'}
+              {data.working.decided_at ? ` · ${formatDate(data.working.decided_at)}` : ''}
             </p>
-            {diffLine(data.working.diff, titleOf) ? <p>{diffLine(data.working.diff, titleOf)}</p> : <p className="text-text2">No module changes against the revision in force.</p>}
+            {diffLine(data.working.diff, titleOf) ? (
+              <p>{diffLine(data.working.diff, titleOf)}</p>
+            ) : (
+              <p className="text-text2">No module changes against the revision in force.</p>
+            )}
             {data.working.diff.material && data.working.diff.affected_sections.length > 0 && (
               <p className="text-sm text-text2">
-                Approvals on the sections of{" "}
-                {touchedNames(data.working.diff.added, data.working.diff.removed, data.working.diff.version_changed.map((v) => v.key), titleOf)} will be cleared when it is confirmed.
+                Approvals on the sections of{' '}
+                {touchedNames(
+                  data.working.diff.added,
+                  data.working.diff.removed,
+                  data.working.diff.version_changed.map((v) => v.key),
+                  titleOf,
+                )}{' '}
+                will be cleared when it is confirmed.
               </p>
             )}
             {data.working.reason && <q className="block">{data.working.reason}</q>}
@@ -394,7 +522,6 @@ export function CompositionView({ doc }: { doc: string }) {
     );
   }
 
-
   return (
     <Page>
       <PageHeader
@@ -404,7 +531,7 @@ export function CompositionView({ doc }: { doc: string }) {
           data && (
             <>
               {/* qa-docs-22: a viewer or commenter (no section review) gets the same role badge as every Documents page. */}
-              {!can("review_section") ? (
+              {!can('review_section') ? (
                 <RoleBadge />
               ) : (
                 role && (
@@ -420,7 +547,7 @@ export function CompositionView({ doc }: { doc: string }) {
               ) : (
                 <Chip kind="na">No composition yet</Chip>
               )}
-              {data.current?.status === "published" && <Chip kind="acc">Published</Chip>}
+              {data.current?.status === 'published' && <Chip kind="acc">Published</Chip>}
               {data.working && (
                 <Chip kind="warn" data-testid="composition-working">
                   Working draft, revision {data.working.number}
@@ -428,9 +555,11 @@ export function CompositionView({ doc }: { doc: string }) {
               )}
               {packNames.length > 0 && (
                 <span className={META} data-testid="composition-pack">
-                  {packNames.length === 1 ? "Company pack: " : "Company packs: "}
-                  {packNames.join(", ")}
-                  {packsSource && PACKS_SOURCE[packsSource] ? ` · ${PACKS_SOURCE[packsSource]}` : ""}
+                  {packNames.length === 1 ? 'Company pack: ' : 'Company packs: '}
+                  {packNames.join(', ')}
+                  {packsSource && PACKS_SOURCE[packsSource]
+                    ? ` · ${PACKS_SOURCE[packsSource]}`
+                    : ''}
                 </span>
               )}
             </>
@@ -440,9 +569,11 @@ export function CompositionView({ doc }: { doc: string }) {
           data && (
             <>
               <Button onClick={loadPreview}>Preview recommendation</Button>
-              {mayPublish && data.current?.status === "confirmed" && (
+              {mayPublish && data.current?.status === 'confirmed' && (
                 // qa4-docs-16: the revision is already in force; publishing pins it to an approved version.
-                <Button onClick={() => setPublishing(true)}>Pin revision {data.current.number} to an approved version</Button>
+                <Button onClick={() => setPublishing(true)}>
+                  Pin revision {data.current.number} to an approved version
+                </Button>
               )}
               {mayConfirm && (
                 // qa-docs-30: the button says what it does; the dialog it opens names the revision.
@@ -457,11 +588,18 @@ export function CompositionView({ doc }: { doc: string }) {
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
         <div className="min-w-0 max-w-full overflow-x-auto">{tabs}</div>
         {/* qa-docs-49: one plain banner; a PRD without a composition says it in its own notice. */}
-        {data && !mayConfirm && !(tab === "modules" && data.legacy && data.recommendation) && (
-          <Notice testId="read-only">You can look at this composition and preview a recommendation. Only an approver can change or publish it.</Notice>
+        {data && !mayConfirm && !(tab === 'modules' && data.legacy && data.recommendation) && (
+          <Notice testId="read-only">
+            You can look at this composition and preview a recommendation. Only an approver can
+            change or publish it.
+          </Notice>
         )}
         {result && (
-          <div data-testid="composition-result" role="status" className="space-y-1.5 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
+          <div
+            data-testid="composition-result"
+            role="status"
+            className="space-y-1.5 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass"
+          >
             <p>{result.text}</p>
             {result.problems.map((p, i) => (
               <p key={i} className="text-text">

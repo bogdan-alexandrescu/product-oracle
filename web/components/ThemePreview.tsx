@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useLive } from "@/lib/use-live";
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useLive } from '@/lib/use-live';
 
-type PreviewIn = { tokens: Schemas["ThemeTokens"]; css: string; kind: "prd" | "roadmap" };
+type PreviewIn = { tokens: Schemas['ThemeTokens']; css: string; kind: 'prd' | 'roadmap' };
 
 const loadPreview = (body: PreviewIn) =>
   unwrap<string>(
-    api.POST("/v1/themes/preview", {
-      body: { ...body, view: "document", slide_css: null, slide_variant: null },
-      parseAs: "text",
+    api.POST('/v1/themes/preview', {
+      body: { ...body, view: 'document', slide_css: null, slide_variant: null },
+      parseAs: 'text',
     }),
   );
 
@@ -23,8 +23,8 @@ export function ThemePreview({
   tokens,
   css,
   kind,
-  title = "Theme preview",
-  testId = "theme-preview",
+  title = 'Theme preview',
+  testId = 'theme-preview',
   height,
   pageWidth,
 }: PreviewIn & { title?: string; testId?: string; height?: string; pageWidth?: number }) {
@@ -43,15 +43,15 @@ export function ThemePreview({
 }
 
 type SlidePreviewIn = {
-  tokens: Schemas["ThemeTokens"];
+  tokens: Schemas['ThemeTokens'];
   slide_css: string | null;
-  kind: "prd" | "roadmap";
-  view: "slides";
+  kind: 'prd' | 'roadmap';
+  view: 'slides';
   slide_variant: string | null;
 };
 
 const loadSlidePreview = (body: SlidePreviewIn) =>
-  unwrap<string>(api.POST("/v1/themes/preview", { body: { ...body, css: "" }, parseAs: "text" }));
+  unwrap<string>(api.POST('/v1/themes/preview', { body: { ...body, css: '' }, parseAs: 'text' }));
 
 /**
  * The sample's brief as Present mode slides with unsaved tokens and slide CSS (O1g).
@@ -63,13 +63,13 @@ export function SlidePreview({
   kind,
   variant = null,
 }: {
-  tokens: Schemas["ThemeTokens"];
+  tokens: Schemas['ThemeTokens'];
   slideCss: string | null;
-  kind: "prd" | "roadmap";
+  kind: 'prd' | 'roadmap';
   variant?: string | null;
 }) {
   const live = useLive<SlidePreviewIn, string>(
-    { tokens, slide_css: slideCss, kind, view: "slides", slide_variant: variant },
+    { tokens, slide_css: slideCss, kind, view: 'slides', slide_variant: variant },
     loadSlidePreview,
     300,
   );
@@ -120,17 +120,26 @@ function FittedPage({
   }, []);
   const scale = width && width < pageWidth ? width / pageWidth : 1;
   return (
-    <div ref={box} data-scale={scale.toFixed(3)} className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface`}>
+    <div
+      ref={box}
+      data-scale={scale.toFixed(3)}
+      className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface`}
+    >
       <iframe
         title={title}
         data-testid={testId}
         sandbox=""
-        srcDoc={html ?? ""}
+        srcDoc={html ?? ''}
         className="block border-0"
         style={
           scale === 1
-            ? { width: "100%", height: "100%" }
-            : { width: pageWidth, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }
+            ? { width: '100%', height: '100%' }
+            : {
+                width: pageWidth,
+                height: `${100 / scale}%`,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }
         }
       />
     </div>
@@ -144,7 +153,7 @@ function PreviewFrame({
   title,
   testId,
   scale = 1,
-  height = "h-[34rem]",
+  height = 'h-[34rem]',
   pageWidth,
 }: {
   html: string | undefined;
@@ -160,16 +169,29 @@ function PreviewFrame({
   return (
     <div className="relative">
       {scale === 1 ? (
-        <FittedPage html={html} title={title} testId={testId} height={height} pageWidth={pageWidth} />
+        <FittedPage
+          html={html}
+          title={title}
+          testId={testId}
+          height={height}
+          pageWidth={pageWidth}
+        />
       ) : (
-        <div className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}>
+        <div
+          className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}
+        >
           <iframe
             title={title}
             data-testid={testId}
             sandbox=""
-            srcDoc={html ?? ""}
+            srcDoc={html ?? ''}
             className="border-0"
-            style={{ width: `${100 / scale}%`, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }}
+            style={{
+              width: `${100 / scale}%`,
+              height: `${100 / scale}%`,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+            }}
           />
         </div>
       )}
@@ -191,13 +213,17 @@ function PreviewFrame({
  * Null when the page cannot be read: the sketch stays.
  */
 function pictureOf(html: string, page: { width: number; height: number }): string | null {
-  if (typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") return null;
+  if (typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined') return null;
   try {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const css = [...doc.querySelectorAll("style")].map((el) => el.textContent ?? "").join("\n");
-    doc.querySelectorAll("style, script, link, meta, base, iframe, frame, object, embed").forEach((el) => el.remove());
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const css = [...doc.querySelectorAll('style')].map((el) => el.textContent ?? '').join('\n');
+    doc
+      .querySelectorAll('style, script, link, meta, base, iframe, frame, object, embed')
+      .forEach((el) => el.remove());
     const body = new XMLSerializer().serializeToString(doc.body);
-    const still = `${css}\nbody { overflow: hidden !important; }`.split("]]>").join("]]]]><![CDATA[>");
+    const still = `${css}\nbody { overflow: hidden !important; }`
+      .split(']]>')
+      .join(']]]]><![CDATA[>');
     const { width: w, height: h } = page;
     const svg =
       `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
@@ -240,21 +266,35 @@ export function ThemeThumbnail({
     <div
       aria-hidden
       data-testid="theme-thumbnail"
-      data-ready={src && shown === src ? "true" : undefined}
+      data-ready={src && shown === src ? 'true' : undefined}
       className="pointer-events-none relative overflow-hidden rounded border border-line bg-surface"
-      style={fluid ? { width: "100%", aspectRatio: `${page.width} / ${page.height}` } : { width: page.width * scale, height: page.height * scale }}
+      style={
+        fluid
+          ? { width: '100%', aspectRatio: `${page.width} / ${page.height}` }
+          : { width: page.width * scale, height: page.height * scale }
+      }
     >
       <div
         data-testid="theme-thumbnail-sketch"
         className="absolute inset-0 flex flex-col gap-1 p-2"
-        style={{ background: c.background ?? "#ffffff", fontFamily: tokens.fonts?.heading ?? undefined }}
+        style={{
+          background: c.background ?? '#ffffff',
+          fontFamily: tokens.fonts?.heading ?? undefined,
+        }}
       >
-        <span className="text-[10px] leading-tight font-bold" style={{ color: c.heading ?? "#111827" }}>
-          {kind === "roadmap" ? "Product roadmap" : "Feature PRD"}
+        <span
+          className="text-[10px] leading-tight font-bold"
+          style={{ color: c.heading ?? '#111827' }}
+        >
+          {kind === 'roadmap' ? 'Product roadmap' : 'Feature PRD'}
         </span>
-        <span className="h-0.5 w-1/2 rounded" style={{ background: c.accent ?? "#2f5bd3" }} />
+        <span className="h-0.5 w-1/2 rounded" style={{ background: c.accent ?? '#2f5bd3' }} />
         {[90, 75, 85, 60].map((w) => (
-          <span key={w} className="h-1 rounded" style={{ width: `${w}%`, background: c.muted ?? "#5b6472", opacity: 0.5 }} />
+          <span
+            key={w}
+            className="h-1 rounded"
+            style={{ width: `${w}%`, background: c.muted ?? '#5b6472', opacity: 0.5 }}
+          />
         ))}
       </div>
       {src && broken !== src && (

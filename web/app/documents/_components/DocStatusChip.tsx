@@ -1,8 +1,12 @@
-import { Chip, type ChipKind } from "@/components/ds";
-import type { DocumentOut } from "@/lib/api/client";
-import { DOC_STATUS_LABEL } from "@/lib/format";
+import { Chip, type ChipKind } from '@/components/ds';
+import type { DocumentOut } from '@/lib/api/client';
+import { DOC_STATUS_LABEL } from '@/lib/format';
 
-const KIND: Record<DocumentOut["status"], ChipKind> = { draft: "na", in_review: "acc", approved: "pass" };
+const KIND: Record<DocumentOut['status'], ChipKind> = {
+  draft: 'na',
+  in_review: 'acc',
+  approved: 'pass',
+};
 
 /** A document's status as a ds Chip (draft, in review, approved). */
 export function DocStatusChip({
@@ -11,7 +15,7 @@ export function DocStatusChip({
   dot = false,
   label,
 }: {
-  status: DocumentOut["status"];
+  status: DocumentOut['status'];
   hero?: boolean;
   dot?: boolean;
   /** Another word for the status where a page uses one. */

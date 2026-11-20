@@ -1,23 +1,25 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 
-import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { ArtifactMenu } from "@/components/ArtifactMenu";
-import { Icon, useDocumentDestination } from "@/components/ds";
-import type { DocumentOut } from "@/lib/api/client";
-import { REPLACED_PRD_HOME } from "@/lib/experience-paths";
+import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
+import { ArtifactMenu } from '@/components/ArtifactMenu';
+import { Icon, useDocumentDestination } from '@/components/ds';
+import type { DocumentOut } from '@/lib/api/client';
+import { REPLACED_PRD_HOME } from '@/lib/experience-paths';
 
 /** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), Company › Updates for updates (H8), Company › Market › Pricing for pricing memos (H9), PRDs for the rest. */
 function home(doc?: DocumentOut) {
-  if (doc?.kind === "roadmap") return { href: "/plan", label: "Plan" };
-  if (doc?.kind === "vision" || doc?.kind === "strategy") return { href: "/company/strategy", label: "Company › Strategy" };
-  if (doc?.kind === "update") return { href: "/company/updates", label: "Company › Updates" };
+  if (doc?.kind === 'roadmap') return { href: '/plan', label: 'Plan' };
+  if (doc?.kind === 'vision' || doc?.kind === 'strategy')
+    return { href: '/company/strategy', label: 'Company › Strategy' };
+  if (doc?.kind === 'update') return { href: '/company/updates', label: 'Company › Updates' };
   // H9: a pricing memo belongs to Company › Market › Pricing.
-  if (doc?.kind === "pricing") return { href: "/company/market?tab=pricing", label: "Company › Market › Pricing" };
-  return { href: "/documents", label: "PRDs" };
+  if (doc?.kind === 'pricing')
+    return { href: '/company/market?tab=pricing', label: 'Company › Market › Pricing' };
+  return { href: '/documents', label: 'PRDs' };
 }
 
 /**
@@ -27,12 +29,15 @@ function home(doc?: DocumentOut) {
 export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTitle?: boolean }) {
   const h = home(doc);
   // simple-replaced-prds: a replaced PRD says so, so the mode switch opens One-pagers, not its one-pager.
-  const destination = doc?.kind === "prd" && doc.replaced_by?.length ? REPLACED_PRD_HOME : h.href;
+  const destination = doc?.kind === 'prd' && doc.replaced_by?.length ? REPLACED_PRD_HOME : h.href;
   // The rail highlights the same list (Plan for a roadmap, Company for a strategy) once the kind is known.
   useDocumentDestination(doc?.slug, doc ? destination : undefined);
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
-      <Link href={h.href} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+      <Link
+        href={h.href}
+        className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
+      >
         <Icon name="back" size={16} />
         {h.label}
       </Link>
@@ -42,7 +47,10 @@ export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTit
             /
           </span>
           {doc ? (
-            <Link href={`/documents/${doc.slug}`} className="min-w-0 truncate font-semibold text-text hover:underline">
+            <Link
+              href={`/documents/${doc.slug}`}
+              className="min-w-0 truncate font-semibold text-text hover:underline"
+            >
               {doc.title}
             </Link>
           ) : (
@@ -79,7 +87,13 @@ export function DocToolbar({
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {children}
           {/* A deleted document is gone: back to its list. */}
-          {doc && <ArtifactMenu doc={doc} openItem={openItem} onDeleted={() => router.push(home(doc).href)} />}
+          {doc && (
+            <ArtifactMenu
+              doc={doc}
+              openItem={openItem}
+              onDeleted={() => router.push(home(doc).href)}
+            />
+          )}
         </div>
       </div>
     </div>

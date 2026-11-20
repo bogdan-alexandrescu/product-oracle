@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 
-import { ApiError } from "@/lib/api/client";
-import { CARD_CHANGED_EVENT, type CardChangedDetail } from "@/lib/api/simple-chat";
-import { CompanyZoneContext } from "@/lib/me";
+import { ApiError } from '@/lib/api/client';
+import { CARD_CHANGED_EVENT, type CardChangedDetail } from '@/lib/api/simple-chat';
+import { CompanyZoneContext } from '@/lib/me';
 
 export type Query<T> = {
   data: T | undefined;
@@ -15,7 +15,7 @@ export type Query<T> = {
   setData: (update: (prev: T | undefined) => T | undefined) => void;
 };
 
-const CHANGED = "po:data-changed";
+const CHANGED = 'po:data-changed';
 
 /**
  * After an action made beside the page (Ask Oracle's panel applied a card): every page's data
@@ -28,7 +28,7 @@ export function dataChanged() {
 /** Message for an unknown thrown value; network failures read as "cannot reach". */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  return "Cannot reach the API.";
+  return 'Cannot reach the API.';
 }
 
 /** Redirects to the login page when a call fails with 401. */
@@ -52,8 +52,17 @@ export function useAuthRedirect() {
  * to the login page; other failures land in `error`. With `keepPrevious`, a new key keeps
  * showing the last data (still `loading`) until its own arrives, so nothing blanks.
  */
-export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious = false }: { keepPrevious?: boolean } = {}): Query<T> {
-  const [state, setState] = useState<{ key: string; data?: T; error: string | null; loading: boolean }>({
+export function useQuery<T>(
+  key: string,
+  load: () => Promise<T>,
+  { keepPrevious = false }: { keepPrevious?: boolean } = {},
+): Query<T> {
+  const [state, setState] = useState<{
+    key: string;
+    data?: T;
+    error: string | null;
+    loading: boolean;
+  }>({
     key,
     error: null,
     loading: true,
@@ -84,9 +93,11 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
     const n = begin(key);
     try {
       const data = await loadRef.current();
-      if (keyRef.current === key && isLatest(key, n)) setState({ key, data, error: null, loading: false });
+      if (keyRef.current === key && isLatest(key, n))
+        setState({ key, data, error: null, loading: false });
     } catch (e) {
-      if (!onAuth(e) && keyRef.current === key && isLatest(key, n)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+      if (!onAuth(e) && keyRef.current === key && isLatest(key, n))
+        setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
     }
   }, [key, onAuth]);
 
@@ -102,9 +113,12 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
     const n = begin(key);
     loadRef
       .current()
-      .then((data) => live && isLatest(key, n) && setState({ key, data, error: null, loading: false }))
+      .then(
+        (data) => live && isLatest(key, n) && setState({ key, data, error: null, loading: false }),
+      )
       .catch((e) => {
-        if (live && isLatest(key, n) && !onAuth(e)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+        if (live && isLatest(key, n) && !onAuth(e))
+          setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
       });
     return () => {
       live = false;

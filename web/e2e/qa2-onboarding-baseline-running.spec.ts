@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * qa-onboarding-10, -37, -39, -51: a new company's owner starts the first Ground Truth build from
@@ -12,99 +12,123 @@ import { login } from "./helpers";
  * (api/tests/test_setup.py covers run_id); the mock's agents move only on "Refresh progress".
  */
 
-const setupRow = (page: Page) => page.getByTestId("setup-row-build_baseline");
-const goals = (page: Page) => page.getByTestId("home-goals");
+const setupRow = (page: Page) => page.getByTestId('setup-row-build_baseline');
+const goals = (page: Page) => page.getByTestId('home-goals');
 
 /** Set up > Build Ground Truth > Open > Start, then back to Home with the app's own Home link. */
 async function startFromSetup(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'empty'));
   await login(page);
   const row = setupRow(page);
-  await expect(row.getByTestId("setup-status")).toHaveText("Not built");
+  await expect(row.getByTestId('setup-status')).toHaveText('Not built');
   // One Ground Truth action before the build: the row's Open; the Goals card points at it.
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build the Ground Truth from Set up, above");
-  await expect(goals(page).getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
+  await expect(goals(page).getByTestId('goals-build-in-setup')).toHaveText(
+    'Build the Ground Truth from Set up, above',
+  );
+  await expect(goals(page).getByRole('link', { name: 'Build the Ground Truth' })).toHaveCount(0);
   // Start waits for a source with items (qa-onboarding-2): Pick sources first, a file in an upload source.
-  await page.getByTestId("setup-row-sources").getByRole("link", { name: "Open" }).click();
+  await page.getByTestId('setup-row-sources').getByRole('link', { name: 'Open' }).click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
-  const form = page.getByRole("form", { name: "Add a source" });
-  await form.getByLabel("Kind").selectOption("upload");
-  await form.getByLabel("Name").fill("Research notes");
-  await form.getByRole("button", { name: "Add source" }).click();
-  const notes = page.getByRole("listitem", { name: "Research notes" });
-  await notes.getByLabel("Upload files to Research notes").setInputFiles([
-    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  const form = page.getByRole('form', { name: 'Add a source' });
+  await form.getByLabel('Kind').selectOption('upload');
+  await form.getByLabel('Name').fill('Research notes');
+  await form.getByRole('button', { name: 'Add source' }).click();
+  const notes = page.getByRole('listitem', { name: 'Research notes' });
+  await notes.getByLabel('Upload files to Research notes').setInputFiles([
+    {
+      name: 'interview.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from('# Interview\nThe export button is hard to find.'),
+    },
   ]);
-  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
-  await page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" }).click();
+  await expect(notes.getByTestId('source-items')).toHaveText('1 item');
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('link', { name: 'Back to Home' })
+    .click();
   await expect(page).toHaveURL(/\/home$/);
-  await row.getByRole("link", { name: "Open" }).click();
+  await row.getByRole('link', { name: 'Open' }).click();
   await expect(page).toHaveURL(/\/ground-truth\?build=1&from=setup$/);
-  const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });
-  await sheet.getByRole("button", { name: "Start" }).click();
+  const sheet = page.getByRole('dialog', { name: 'Build the Ground Truth' });
+  await sheet.getByRole('button', { name: 'Start' }).click();
   await expect(sheet).toHaveCount(0);
   // The build banner says it, with the Inbox item to come (qa-onboarding-25: one line, not a toast too).
-  await expect(page.getByTestId("baseline-build-banner")).toContainText("You'll get an Inbox item when it's ready to review.");
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Home", exact: true }).filter({ visible: true }).first().click();
+  await expect(page.getByTestId('baseline-build-banner')).toContainText(
+    "You'll get an Inbox item when it's ready to review.",
+  );
+  await page
+    .getByRole('navigation', { name: 'Oracle' })
+    .getByRole('link', { name: 'Home', exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/home$/);
 }
 
 /** The row says Building… and links to the run; the Goals card points at it (qa-onboarding-14: one Open the build). */
 async function seeBuilding(page: Page): Promise<string> {
   const row = setupRow(page);
-  await expect(row.getByTestId("setup-status")).toHaveText("Building…");
-  await expect(row).toHaveAttribute("data-done", "false");
-  const link = row.getByRole("link", { name: "Open the build" });
-  await expect(link).toHaveAttribute("href", /^\/runs\/[0-9a-f-]+$/);
-  const href = (await link.getAttribute("href"))!;
+  await expect(row.getByTestId('setup-status')).toHaveText('Building…');
+  await expect(row).toHaveAttribute('data-done', 'false');
+  const link = row.getByRole('link', { name: 'Open the build' });
+  await expect(link).toHaveAttribute('href', /^\/runs\/[0-9a-f-]+$/);
+  const href = (await link.getAttribute('href'))!;
   // No "Not built" and no second start anywhere on Home.
-  await expect(row).not.toContainText("Not built");
-  await expect(page.getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
-  await expect(goals(page).getByRole("link", { name: "Open the build" })).toHaveCount(0);
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("The Ground Truth is building: open it from Set up, above");
-  await expect(page.getByRole("link", { name: "Open the build" })).toHaveCount(1);
+  await expect(row).not.toContainText('Not built');
+  await expect(page.getByRole('link', { name: 'Build the Ground Truth' })).toHaveCount(0);
+  await expect(goals(page).getByRole('link', { name: 'Open the build' })).toHaveCount(0);
+  await expect(goals(page).getByTestId('goals-build-in-setup')).toHaveText(
+    'The Ground Truth is building: open it from Set up, above',
+  );
+  await expect(page.getByRole('link', { name: 'Open the build' })).toHaveCount(1);
   return href;
 }
 
-test("while the first build runs, Set up says Building… and opens the build; the Goals card points there", async ({ page }) => {
+test('while the first build runs, Set up says Building… and opens the build; the Goals card points there', async ({
+  page,
+}) => {
   // protects=qa-onboarding-10/-51 on a desktop; fails_when=the row still says Not built, its
   // button starts another build, or the Goals card offers Build the Ground Truth (the sheet's
   // already-under-way error); no_claim=the run's own page.
   await startFromSetup(page);
   const href = await seeBuilding(page);
   // In flight lists the build once; Open the build on the Set up row lands on that run.
-  await expect(page.getByTestId("home-in-flight-table").getByTestId("flight-row")).toHaveCount(1);
-  await setupRow(page).getByRole("link", { name: "Open the build" }).click();
+  await expect(page.getByTestId('home-in-flight-table').getByTestId('flight-row')).toHaveCount(1);
+  await setupRow(page).getByRole('link', { name: 'Open the build' }).click();
   await expect(page).toHaveURL(new RegExp(`${href}$`));
-  await expect(page.getByRole("heading", { name: "Build the Ground Truth" }).first()).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Build the Ground Truth" })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Build the Ground Truth' }).first()).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Build the Ground Truth' })).toHaveCount(0);
 });
 
-test.describe("on a phone", () => {
+test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("the running build is one compact In flight row; the inspector waits for a tap", async ({ page }) => {
+  test('the running build is one compact In flight row; the inspector waits for a tap', async ({
+    page,
+  }) => {
     // protects=qa-onboarding-39/-51 at 390 px; fails_when=the run's inspector card is stacked
     // under its own In flight row, the row and card do not say Building/Open the build, or the
     // page scrolls sideways; no_claim=other phone widths.
     await startFromSetup(page);
     await seeBuilding(page);
-    const rows = page.getByTestId("home-in-flight-table").getByTestId("flight-row");
+    const rows = page.getByTestId('home-in-flight-table').getByTestId('flight-row');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toBeVisible();
     // One row, no repeat of the same run below it.
-    await expect(page.getByTestId("home-inspector")).toBeHidden();
+    await expect(page.getByTestId('home-inspector')).toBeHidden();
     const box = (await rows.first().boundingBox())!;
     expect(box.height).toBeLessThan(120);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
     // A tap opens the run's details right under In flight.
     await rows.first().click();
-    const inspector = page.getByTestId("home-inspector");
+    const inspector = page.getByTestId('home-inspector');
     await expect(inspector).toBeVisible();
-    await expect(inspector).toContainText("Run · selected");
+    await expect(inspector).toContainText('Run · selected');
     const [flightBottom, cardTop] = await page.evaluate(() => [
-      document.querySelector("[data-testid=home-in-flight]")!.getBoundingClientRect().bottom,
-      document.querySelector("[data-testid=home-inspector]")!.getBoundingClientRect().top,
+      document.querySelector('[data-testid=home-in-flight]')!.getBoundingClientRect().bottom,
+      document.querySelector('[data-testid=home-inspector]')!.getBoundingClientRect().top,
     ]);
     expect(cardTop).toBeGreaterThanOrEqual(flightBottom);
   });

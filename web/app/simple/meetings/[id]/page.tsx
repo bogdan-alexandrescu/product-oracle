@@ -1,13 +1,13 @@
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 
-import type { RouteProps } from "@/lib/route-props";
-import { SIMPLE_MODE } from "@/lib/simple-mode";
+import type { RouteProps } from '@/lib/route-props';
+import { SIMPLE_MODE } from '@/lib/simple-mode';
 
-import { MeetingScreen } from "./_meeting";
-import { PageSkeleton } from "@/components/ds";
+import { MeetingScreen } from './_meeting';
+import { PageSkeleton } from '@/components/ds';
 
-async function Body({ params }: { params: RouteProps<{ id: string }>["params"] }) {
+async function Body({ params }: { params: RouteProps<{ id: string }>['params'] }) {
   const { id } = await params;
   return <MeetingScreen id={id} />;
 }

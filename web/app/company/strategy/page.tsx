@@ -1,28 +1,28 @@
-"use client";
+'use client';
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { InfoTip, Panel, Sheet, Split, ViewOnly } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { goalViews } from "@/app/home/_goals";
-import { api, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { InfoTip, Panel, Sheet, Split, ViewOnly } from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { goalViews } from '@/app/home/_goals';
+import { api, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import { CompanyHeader } from "../_nav";
-import { StrategyCard, VisionCard } from "./_components/Cards";
-import { DraftSheet } from "./_components/DraftSheet";
-import { DriftList } from "./_components/DriftList";
-import { StackInspector, StackTable, stackRows } from "./_components/StackTable";
-import type { DocKind, FindingState } from "./_components/lib";
+import { CompanyHeader } from '../_nav';
+import { StrategyCard, VisionCard } from './_components/Cards';
+import { DraftSheet } from './_components/DraftSheet';
+import { DriftList } from './_components/DriftList';
+import { StackInspector, StackTable, stackRows } from './_components/StackTable';
+import type { DocKind, FindingState } from './_components/lib';
 
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 function useIsPhone(): boolean {
@@ -43,12 +43,12 @@ export default function StrategyPage() {
   const { can, capsReady } = useMe();
   // #370: a vision or a product strategy is an owner's to start: POST /v1/drafts lets an
   // approver in by kind, and its per-item role (owner) is the one these kinds need.
-  const owner = can("start_draft", false);
+  const owner = can('start_draft', false);
   // #370: approvers waive drift and owners draft; below that the strategy is read only.
   // Waive's per-item role is owner, and an approver waives the findings its kind allows
   // (outside_strategy), so the page asks whether the role may waive some finding.
-  const readOnly = capsReady && !can("waive_strategy_finding", true);
-  const [state, setState] = useState<FindingState>("open");
+  const readOnly = capsReady && !can('waive_strategy_finding', true);
+  const [state, setState] = useState<FindingState>('open');
   const [picked, setPicked] = useState<string | null>(null);
   const [drafting, setDrafting] = useState<DocKind | null>(null);
   // pass F F-44: on a phone a stack line's details open in a sheet.
@@ -56,44 +56,58 @@ export default function StrategyPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const stackPanel = useRef<HTMLDivElement>(null);
 
-  const stackQ = useQuery("strategy|stack", () => unwrap(api.GET("/v1/strategy/stack")));
+  const stackQ = useQuery('strategy|stack', () => unwrap(api.GET('/v1/strategy/stack')));
   // Every state's list, so each chip counts the findings its list shows (the API does not page).
-  const findings = (status: FindingState) => () => unwrap(api.GET("/v1/strategy/findings", { params: { query: { status } } }));
-  const openQ = useQuery("strategy|findings|open", findings("open"));
-  const waivedQ = useQuery("strategy|findings|waived", findings("waived"));
-  const resolvedQ = useQuery("strategy|findings|resolved", findings("resolved"));
+  const findings = (status: FindingState) => () =>
+    unwrap(api.GET('/v1/strategy/findings', { params: { query: { status } } }));
+  const openQ = useQuery('strategy|findings|open', findings('open'));
+  const waivedQ = useQuery('strategy|findings|waived', findings('waived'));
+  const resolvedQ = useQuery('strategy|findings|resolved', findings('resolved'));
   const listQ = { open: openQ, waived: waivedQ, resolved: resolvedQ }[state];
-  const docsQ = useQuery("strategy|documents", async () => {
+  const docsQ = useQuery('strategy|documents', async () => {
     const [vision, strategy] = await Promise.all(
-      (["vision", "strategy"] as const).map((kind) => unwrap(api.GET("/v1/documents", { params: { query: { kind } } }))),
+      (['vision', 'strategy'] as const).map((kind) =>
+        unwrap(api.GET('/v1/documents', { params: { query: { kind } } })),
+      ),
     );
     return { vision, strategy };
   });
-  const goalsQ = useQuery("strategy|goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+  const goalsQ = useQuery('strategy|goals', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
 
   const stack = stackQ.data;
   const open = useMemo(() => openQ.data ?? [], [openQ.data]);
   const rows = useMemo(() => stackRows(stack, open), [stack, open]);
-  const goals = useMemo(() => new Map((goalsQ.data ? goalViews(goalsQ.data) : []).map((g) => [g.id, g])), [goalsQ.data]);
+  const goals = useMemo(
+    () => new Map((goalsQ.data ? goalViews(goalsQ.data) : []).map((g) => [g.id, g])),
+    [goalsQ.data],
+  );
   const selected = rows.find((r) => r.key === picked) ?? rows[0] ?? null;
 
   // The approved document when there is one; else the draft in progress.
   const docs = docsQ.data;
   const docOf = (kind: DocKind) => {
-    const approved = kind === "vision" ? stack?.vision?.document : stack?.strategy?.document;
+    const approved = kind === 'vision' ? stack?.vision?.document : stack?.strategy?.document;
     const listed = docs?.[kind] ?? [];
     return listed.find((d) => d.slug === approved?.slug) ?? listed[0] ?? null;
   };
-  const approvedVersion = (kind: DocKind) => (kind === "vision" ? stack?.vision?.document.version : stack?.strategy?.document.version) ?? null;
+  const approvedVersion = (kind: DocKind) =>
+    (kind === 'vision' ? stack?.vision?.document.version : stack?.strategy?.document.version) ??
+    null;
 
   /** Opens a stack line: its details beside the stack, or in a sheet on a phone (F-42, F-44). */
   function pick(key: string, fromCard = false) {
     setPicked(key);
     if (phone) setSheetOpen(true);
-    else if (fromCard) stackPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else if (fromCard) stackPanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   // pass F F-13: until the stack answers the cards show a skeleton; a failure says so with Try again.
-  const load = { loading: stackQ.loading, failed: !!stackQ.error && !stack, onRetry: () => void stackQ.reload() };
+  const load = {
+    loading: stackQ.loading,
+    failed: !!stackQ.error && !stack,
+    onRetry: () => void stackQ.reload(),
+  };
 
   async function waived() {
     invalidateWaiting();
@@ -105,45 +119,67 @@ export default function StrategyPage() {
     <div data-testid="strategy-page" className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
       <CompanyHeader status={readOnly && <ViewOnly />} />
       {(stackQ.error || docsQ.error) && (
-        <LoadError what="the strategy" error={stackQ.error ?? docsQ.error ?? ""} onRetry={() => void Promise.all([stackQ.reload(), docsQ.reload()])} />
+        <LoadError
+          what="the strategy"
+          error={stackQ.error ?? docsQ.error ?? ''}
+          onRetry={() => void Promise.all([stackQ.reload(), docsQ.reload()])}
+        />
       )}
       {/* Visual QA X-1: nothing half-drawn under documents that never loaded; a stack that never
           loaded says so in each card (pass F F-13), with the drift list still there. */}
       {!(docsQ.error && !docsQ.data) && (
         <>
           <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">
-            <VisionCard stack={stack} load={load} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
+            <VisionCard
+              stack={stack}
+              load={load}
+              doc={docs ? docOf('vision') : null}
+              owner={owner && !!docs}
+              onDraft={setDrafting}
+            />
             <StrategyCard
               stack={stack}
               load={load}
-              doc={docs ? docOf("strategy") : null}
+              doc={docs ? docOf('strategy') : null}
               owner={owner && !!docs}
               goals={goals}
-              canAddGoal={can("confirm_entity")}
+              canAddGoal={can('confirm_entity')}
               onPick={(key) => pick(key, true)}
               onDraft={setDrafting}
               open={open}
             />
           </div>
           <div ref={stackPanel} className="scroll-mt-4" />
-          <Split inspector={selected && !phone ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
+          <Split
+            inspector={
+              selected && !phone ? (
+                <StackInspector stack={stack} row={selected} onWaived={waived} />
+              ) : undefined
+            }
+          >
             <Panel
               title="Strategy stack"
               tools={
                 <InfoTip label="the strategy stack" align="end">
-                  The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
-                  roadmap item from a goal; anything that does not shows up as drift. One line per goal under the focus choice it derives from, with the
-                  roadmap items serving it. The last group lists the goals and items not under the strategy.
+                  The vision and the product strategy Oracle drafts and an owner approves. Each goal
+                  should follow from a focus choice, and each roadmap item from a goal; anything
+                  that does not shows up as drift. One line per goal under the focus choice it
+                  derives from, with the roadmap items serving it. The last group lists the goals
+                  and items not under the strategy.
                 </InfoTip>
               }
             >
               <StackTable
                 stack={stack}
                 rows={rows}
-                selected={phone ? (sheetOpen ? (selected?.key ?? null) : null) : (selected?.key ?? null)}
+                selected={
+                  phone ? (sheetOpen ? (selected?.key ?? null) : null) : (selected?.key ?? null)
+                }
                 onSelect={(key) => pick(key)}
                 load={load}
-                confirmedGoals={goalsQ.data ? goalsQ.data.filter((g) => g.status === "confirmed").length : null}
+                confirmedGoals={
+                  goalsQ.data ? goalsQ.data.filter((g) => g.status === 'confirmed').length : null
+                }
                 hasStrategy={!!docs?.strategy.length}
                 canStart={owner && !!docs}
               />
@@ -154,14 +190,25 @@ export default function StrategyPage() {
               rows={listQ.data}
               loading={listQ.loading}
               error={listQ.error}
-              onRetry={() => void Promise.all([openQ.reload(), waivedQ.reload(), resolvedQ.reload()])}
-              counts={{ open: openQ.data?.length, waived: waivedQ.data?.length, resolved: resolvedQ.data?.length }}
+              onRetry={() =>
+                void Promise.all([openQ.reload(), waivedQ.reload(), resolvedQ.reload()])
+              }
+              counts={{
+                open: openQ.data?.length,
+                waived: waivedQ.data?.length,
+                resolved: resolvedQ.data?.length,
+              }}
               stack={stack}
               onWaived={waived}
             />
           </Split>
           {phone && (
-            <Sheet open={sheetOpen && !!selected} title="Stack line" onClose={() => setSheetOpen(false)} testId="stack-sheet">
+            <Sheet
+              open={sheetOpen && !!selected}
+              title="Stack line"
+              onClose={() => setSheetOpen(false)}
+              testId="stack-sheet"
+            >
               {selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : null}
             </Sheet>
           )}

@@ -1,85 +1,102 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useRouter } from 'next/navigation';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
-import { RowMenu, RowMenuItem } from "@/app/company/updates/_components/RowMenu";
-import { usd } from "@/app/runs/_lib";
-import { Button, Icon, Notice, toast, useFocusTrap } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { artifactsChanged } from "@/lib/artifacts";
-import { formatDay } from "@/lib/format";
-import { useMe, type Operation } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
-import { versionHref } from "@/lib/version-href";
+import { RowMenu, RowMenuItem } from '@/app/company/updates/_components/RowMenu';
+import { usd } from '@/app/runs/_lib';
+import { Button, Icon, Notice, toast, useFocusTrap } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { artifactsChanged } from '@/lib/artifacts';
+import { formatDay } from '@/lib/format';
+import { useMe, type Operation } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
+import { versionHref } from '@/lib/version-href';
 
 /** What the menu needs of a document (a DocumentOut or a list row). */
-export type ArtifactDoc = { slug: string; title: string; kind?: string | null; latest_version?: number | null; replaced_by?: unknown[] | null };
+export type ArtifactDoc = {
+  slug: string;
+  title: string;
+  kind?: string | null;
+  latest_version?: number | null;
+  replaced_by?: unknown[] | null;
+};
 
-type TrashItem = Schemas["TrashItem"];
-type Estimate = Schemas["RegenerateEstimateOut"];
+type TrashItem = Schemas['TrashItem'];
+type Estimate = Schemas['RegenerateEstimateOut'];
 
 /** Kinds with a flow behind them (PRD, roadmap, spec or tech brief, update). */
-const REGENERATES = new Set(["prd", "roadmap", "spec", "update"]);
+const REGENERATES = new Set(['prd', 'roadmap', 'spec', 'update']);
 
 const KIND_LABEL: Record<string, string> = {
-  prd: "PRD",
-  roadmap: "Roadmap",
-  spec: "Spec",
-  update: "Update",
-  vision: "Vision",
-  strategy: "Strategy",
-  intake: "Brief",
+  prd: 'PRD',
+  roadmap: 'Roadmap',
+  spec: 'Spec',
+  update: 'Update',
+  vision: 'Vision',
+  strategy: 'Strategy',
+  intake: 'Brief',
   // trash-features-goals: a roadmap feature and a goal in Settings › Trash.
-  feature: "Feature",
-  goal: "Goal",
+  feature: 'Feature',
+  goal: 'Goal',
   // edit-decisions: a decision and a PRD's question deleted from Simple's sheet.
-  decision: "Decision",
-  question: "Question",
+  decision: 'Decision',
+  question: 'Question',
   // port-an-decisions: a meeting's removed agenda item and a request an owner deleted.
-  agenda_item: "Agenda item",
-  request: "Request",
+  agenda_item: 'Agenda item',
+  request: 'Request',
   // outcomes-edit: an outcome moved to Trash from Plan › Outcomes.
-  outcome: "Outcome",
+  outcome: 'Outcome',
 };
 
 export function itemKind(i: TrashItem): string {
-  if (i.type === "run") return "Run";
+  if (i.type === 'run') return 'Run';
   return KIND_LABEL[i.kind] ?? i.kind;
 }
 
 /** qa4-docs-26: "The run of Oct 17 that wrote Early shipping cost: engineering spec". */
 function runText(r: TrashItem, root: string): string {
-  const day = r.created_at ? ` of ${formatDay(r.created_at)}` : "";
+  const day = r.created_at ? ` of ${formatDay(r.created_at)}` : '';
   return `The run${day} that wrote ${r.wrote ?? root}`;
 }
 
 /** F-69: an item's one title, in the delete dialog and in Trash alike (a run by its day and what it wrote). */
 export function itemTitle(i: TrashItem, root: string): string {
-  return i.type === "run" ? runText(i, root) : i.title;
+  return i.type === 'run' ? runText(i, root) : i.title;
 }
 
 /** F-68: "Usage alerts PRD, Its spec and The run of Oct 17 that wrote Usage alerts PRD": a Trash entry
  * in a line, every item named. */
 export function entryText(root: TrashItem, items: TrashItem[]): string {
-  const names = [root.type === "run" ? itemTitle(root, root.title) : root.title, ...items.map((i) => itemTitle(i, root.title))];
-  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  const names = [
+    root.type === 'run' ? itemTitle(root, root.title) : root.title,
+    ...items.map((i) => itemTitle(i, root.title)),
+  ];
+  return names.length > 1
+    ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+    : names[0];
 }
 
 /** A toast's few words for a Trash entry: "Usage alerts PRD and 3 items that went with it"; a
  * feature by its code and name ("F-26 Alert rules engine"), as its Trash row reads it. */
 export function entrySummary(root: TrashItem, items: TrashItem[]): string {
-  const name = root.code ? `${root.code} ${root.title}` : root.type === "run" ? itemTitle(root, root.title) : root.title;
+  const name = root.code
+    ? `${root.code} ${root.title}`
+    : root.type === 'run'
+      ? itemTitle(root, root.title)
+      : root.title;
   const n = items.length;
-  return n ? `${name} and ${n} ${n === 1 ? "item" : "items"} that went with it` : name;
+  return n ? `${name} and ${n} ${n === 1 ? 'item' : 'items'} that went with it` : name;
 }
 
 /** Undo (= Restore) right after a delete, from the toast. */
-async function undo(entry: Schemas["TrashEntryOut"]) {
+async function undo(entry: Schemas['TrashEntryOut']) {
   try {
-    await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: entry.id } } }));
+    await unwrap(
+      api.POST('/v1/trash/{entry_id}/restore', { params: { path: { entry_id: entry.id } } }),
+    );
     artifactsChanged();
     toast({ message: `Restored ${entrySummary(entry.root, entry.items)}` });
   } catch (e) {
@@ -91,22 +108,40 @@ async function undo(entry: Schemas["TrashEntryOut"]) {
  * A document's ⋮ menu (#482): Open latest (v<n>) (the latest version, where its sections are edited) and Regenerate… for approvers (deciders approve) and owners,
  * Delete… for owners. Commenters and viewers can use none of these, so it is not drawn (#370).
  */
-export function ArtifactMenu({ doc, onDeleted, openItem = true }: { doc: ArtifactDoc; onDeleted?: () => void; openItem?: boolean }) {
+export function ArtifactMenu({
+  doc,
+  onDeleted,
+  openItem = true,
+}: {
+  doc: ArtifactDoc;
+  onDeleted?: () => void;
+  openItem?: boolean;
+}) {
   const { can } = useMe();
-  const [open, setOpen] = useState<"delete" | "regenerate" | null>(null);
+  const [open, setOpen] = useState<'delete' | 'regenerate' | null>(null);
   const router = useRouter();
   // #370: each action shows when the API lets this role call it. `openItem={false}`: the page
   // already opens the latest version its own way (qa-docs-27, qa-docs-32), so no second Open.
   const edit =
-    openItem && can("edit_document_section") && doc.latest_version != null ? versionHref(doc.slug, doc.kind, doc.latest_version) : null;
+    openItem && can('edit_document_section') && doc.latest_version != null
+      ? versionHref(doc.slug, doc.kind, doc.latest_version)
+      : null;
   // one-roadmap-many-prds: a replaced PRD is read-only, so it is not regenerated.
-  const regenerate = can("start_regeneration") && !!doc.kind && REGENERATES.has(doc.kind) && !doc.replaced_by?.length;
-  const del = can("delete_document");
+  const regenerate =
+    can('start_regeneration') &&
+    !!doc.kind &&
+    REGENERATES.has(doc.kind) &&
+    !doc.replaced_by?.length;
+  const del = can('delete_document');
   if (!edit && !regenerate && !del) return null;
   const label = `Actions for ${doc.title}`;
   return (
     // A list row selects on click: the menu and its dialogs keep their clicks.
-    <span className="contents" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}>
+    <span
+      className="contents"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.key !== 'Escape' && e.stopPropagation()}
+    >
       <RowMenu label={label}>
         {(close) => (
           <>
@@ -124,7 +159,7 @@ export function ArtifactMenu({ doc, onDeleted, openItem = true }: { doc: Artifac
               <RowMenuItem
                 onClick={() => {
                   close();
-                  setOpen("regenerate");
+                  setOpen('regenerate');
                 }}
               >
                 Regenerate…
@@ -134,7 +169,7 @@ export function ArtifactMenu({ doc, onDeleted, openItem = true }: { doc: Artifac
               <RowMenuItem
                 onClick={() => {
                   close();
-                  setOpen("delete");
+                  setOpen('delete');
                 }}
               >
                 Delete…
@@ -143,18 +178,27 @@ export function ArtifactMenu({ doc, onDeleted, openItem = true }: { doc: Artifac
           </>
         )}
       </RowMenu>
-      {open === "delete" &&
+      {open === 'delete' &&
         createPortal(
           <DeleteDialog
             title={doc.title}
-            dependents={() => unwrap(api.GET("/v1/documents/{doc}/dependents", { params: { path: { doc: doc.slug } } }))}
-            remove={(query) => unwrap(api.DELETE("/v1/documents/{doc}", { params: { path: { doc: doc.slug }, query } }))}
+            dependents={() =>
+              unwrap(
+                api.GET('/v1/documents/{doc}/dependents', { params: { path: { doc: doc.slug } } }),
+              )
+            }
+            remove={(query) =>
+              unwrap(
+                api.DELETE('/v1/documents/{doc}', { params: { path: { doc: doc.slug }, query } }),
+              )
+            }
             onClose={() => setOpen(null)}
             onDeleted={onDeleted}
           />,
           document.body,
         )}
-      {open === "regenerate" && createPortal(<RegenerateDialog doc={doc} onClose={() => setOpen(null)} />, document.body)}
+      {open === 'regenerate' &&
+        createPortal(<RegenerateDialog doc={doc} onClose={() => setOpen(null)} />, document.body)}
     </span>
   );
 }
@@ -194,7 +238,10 @@ function Dialog({
         className="w-full max-w-lg min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none"
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line pr-2 pl-5 max-[600px]:pl-4">
-          <h2 id={id} className="min-w-0 flex-1 font-display text-lg font-bold break-words tracking-heading">
+          <h2
+            id={id}
+            className="min-w-0 flex-1 font-display text-lg font-bold break-words tracking-heading"
+          >
             {title}
           </h2>
           <button
@@ -206,14 +253,18 @@ function Dialog({
             <Icon name="x" size={20} />
           </button>
         </div>
-        <div className="space-y-3.5 px-5 py-4 text-[15px] leading-6 max-[600px]:px-4">{children}</div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">{footer}</div>
+        <div className="space-y-3.5 px-5 py-4 text-[15px] leading-6 max-[600px]:px-4">
+          {children}
+        </div>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
+          {footer}
+        </div>
       </div>
     </div>
   );
 }
 
-const LABEL = "mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
+const LABEL = 'mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
 
 /**
  * Delete… (owners): what goes to Trash with it, a published artifact's second yes (its
@@ -230,25 +281,29 @@ export function DeleteDialog({
   title: string;
   /** What deleting removes, in words, where the title alone does not say it. */
   what?: string;
-  dependents: () => Promise<Schemas["DependentsOut"]>;
-  remove: (query: { reason?: string | null; confirm_published?: boolean }) => Promise<Schemas["TrashEntryOut"]>;
+  dependents: () => Promise<Schemas['DependentsOut']>;
+  remove: (query: {
+    reason?: string | null;
+    confirm_published?: boolean;
+  }) => Promise<Schemas['TrashEntryOut']>;
   onClose: () => void;
   onDeleted?: () => void;
 }) {
   const id = useId();
-  const [deps, setDeps] = useState<Schemas["DependentsOut"] | null>(null);
-  const [reason, setReason] = useState("");
+  const [deps, setDeps] = useState<Schemas['DependentsOut'] | null>(null);
+  const [reason, setReason] = useState('');
   const [external, setExternal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const load = useRef(dependents);
   useEffect(() => {
-    load.current()
+    load
+      .current()
       .then(setDeps)
       .catch((e) => setError(errorMessage(e)));
   }, []);
   const working = (deps?.working_runs.length ?? 0) > 0;
-  const runs = deps?.items.filter((i) => i.type === "run") ?? [];
+  const runs = deps?.items.filter((i) => i.type === 'run') ?? [];
   const root = deps?.root.title ?? title;
   const ready = !!deps && !working && (!deps.published || external);
 
@@ -256,10 +311,16 @@ export function DeleteDialog({
     setBusy(true);
     setError(null);
     try {
-      const entry = await remove({ reason: reason.trim() || null, confirm_published: deps?.published || undefined });
+      const entry = await remove({
+        reason: reason.trim() || null,
+        confirm_published: deps?.published || undefined,
+      });
       artifactsChanged();
       onClose();
-      toast({ message: `Moved to Trash: ${entrySummary(entry.root, entry.items)}`, action: { label: "Undo", onClick: () => void undo(entry) } });
+      toast({
+        message: `Moved to Trash: ${entrySummary(entry.root, entry.items)}`,
+        action: { label: 'Undo', onClick: () => void undo(entry) },
+      });
       onDeleted?.();
     } catch (e) {
       setError(errorMessage(e));
@@ -278,14 +339,21 @@ export function DeleteDialog({
           <Button variant="secondary" onClick={onClose} data-autofocus>
             Cancel
           </Button>
-          <Button variant="danger" disabled={!ready || busy} title={working ? "Cancel the run first" : undefined} onClick={submit}>
+          <Button
+            variant="danger"
+            disabled={!ready || busy}
+            title={working ? 'Cancel the run first' : undefined}
+            onClick={submit}
+          >
             Move to Trash
           </Button>
         </>
       }
     >
       {what && <p data-testid="delete-what">{what}</p>}
-      <p>It waits in Settings › Trash for 30 days, where an owner can restore it; then it is gone.</p>
+      <p>
+        It waits in Settings › Trash for 30 days, where an owner can restore it; then it is gone.
+      </p>
       {!deps && !error && <p className="text-text2">Finding what depends on it…</p>}
       {deps && (
         <div data-testid="delete-dependents">
@@ -296,10 +364,12 @@ export function DeleteDialog({
               <p className="font-semibold">These go to Trash with it, and come back with it:</p>
               <ul className="mt-1.5 flex flex-col gap-1">
                 {deps.items
-                  .filter((i) => i.type !== "run")
+                  .filter((i) => i.type !== 'run')
                   .map((i) => (
                     <li key={i.id} className="flex min-w-0 items-baseline gap-2">
-                      <span className="flex-none text-[13px] font-semibold text-text2">{itemKind(i)}</span>
+                      <span className="flex-none text-[13px] font-semibold text-text2">
+                        {itemKind(i)}
+                      </span>
                       <span className="min-w-0 break-words">{i.title}</span>
                     </li>
                   ))}
@@ -319,15 +389,28 @@ export function DeleteDialog({
         // qa-onboarding-16: said as it is (a run waiting for a decision is not "working"), and
         // Move to Trash stays off until the run is cancelled.
         <Notice tone="warn" testId="delete-blocked">
-          {deps?.root.type === "run" ? "This run has not finished" : "A run on this has not finished"} (it is running or waiting for
-          someone). Cancel the run first, then delete.
+          {deps?.root.type === 'run'
+            ? 'This run has not finished'
+            : 'A run on this has not finished'}{' '}
+          (it is running or waiting for someone). Cancel the run first, then delete.
         </Notice>
       )}
       {deps?.published && (
-        <div data-testid="published-warning" className="rounded-button bg-warn-bg px-3 py-2 text-warn">
-          <p>This is published. Deleting moves it to Trash here only: the external copy (Notion, Google Docs, Slack) stays where it is.</p>
+        <div
+          data-testid="published-warning"
+          className="rounded-button bg-warn-bg px-3 py-2 text-warn"
+        >
+          <p>
+            This is published. Deleting moves it to Trash here only: the external copy (Notion,
+            Google Docs, Slack) stays where it is.
+          </p>
           <label className="mt-2 flex items-start gap-2 font-medium text-text">
-            <input type="checkbox" className="mt-1" checked={external} onChange={(e) => setExternal(e.target.checked)} />
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={external}
+              onChange={(e) => setExternal(e.target.checked)}
+            />
             Delete it here; the external copy stays where it is
           </label>
         </div>
@@ -336,7 +419,13 @@ export function DeleteDialog({
         <label htmlFor={`${id}-reason`} className={LABEL}>
           Reason (optional)
         </label>
-        <input id={`${id}-reason`} className={INPUT} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+        <input
+          id={`${id}-reason`}
+          className={INPUT}
+          value={reason}
+          maxLength={500}
+          onChange={(e) => setReason(e.target.value)}
+        />
       </div>
       {error && <Notice tone="error">{error}</Notice>}
     </Dialog>
@@ -350,7 +439,7 @@ export function DeleteDialog({
 function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => void }) {
   const id = useId();
   const router = useRouter();
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
   // The estimate, for the note it was made with: a changed note asks for a new one.
   const [draft, setDraft] = useState<{ note: string; out: Estimate } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -362,7 +451,10 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
     setError(null);
     try {
       const out = await unwrap(
-        api.POST("/v1/documents/{doc}/regenerate/estimate", { params: { path: { doc: doc.slug } }, body: { note: note.trim() || null } }),
+        api.POST('/v1/documents/{doc}/regenerate/estimate', {
+          params: { path: { doc: doc.slug } },
+          body: { note: note.trim() || null },
+        }),
       );
       setDraft({ note, out });
     } catch (e) {
@@ -378,7 +470,7 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
     setError(null);
     try {
       const run = await unwrap(
-        api.POST("/v1/documents/{doc}/regenerate", {
+        api.POST('/v1/documents/{doc}/regenerate', {
           params: { path: { doc: doc.slug } },
           body: { run_id: estimate.run_id, note: note.trim() || null },
         }),
@@ -411,15 +503,20 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
           <Button onClick={runEstimate} disabled={busy}>
             Estimate
           </Button>
-          <Button variant="solid" disabled={!estimate || busy} title={!estimate ? "Estimate the cost first" : undefined} onClick={start}>
+          <Button
+            variant="solid"
+            disabled={!estimate || busy}
+            title={!estimate ? 'Estimate the cost first' : undefined}
+            onClick={start}
+          >
             Start run
           </Button>
         </>
       }
     >
       <p>
-        A new run writes it again; the result becomes the next version. Earlier versions stay in history and in
-        Changes.
+        A new run writes it again; the result becomes the next version. Earlier versions stay in
+        history and in Changes.
       </p>
       <div>
         <label htmlFor={`${id}-note`} className={LABEL}>
@@ -436,7 +533,10 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
         />
       </div>
       {estimate && (
-        <section aria-label="Estimate" className="rounded-panel border border-line bg-surface2 px-3.5 py-2.5">
+        <section
+          aria-label="Estimate"
+          className="rounded-panel border border-line bg-surface2 px-3.5 py-2.5"
+        >
           <p className="text-[13px] font-semibold text-text2">It will use</p>
           <ul data-testid="regenerate-inputs" className="mt-1 flex list-disc flex-col gap-0.5 pl-5">
             {estimate.inputs.map((i) => (
@@ -453,12 +553,15 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
           </p>
           {estimate.needs_owner_approval && (
             <p className="mt-1 text-sm text-warn">
-              Over {usd(estimate.approval_threshold_usd)}: an owner approves the cost before it runs.
+              Over {usd(estimate.approval_threshold_usd)}: an owner approves the cost before it
+              runs.
             </p>
           )}
         </section>
       )}
-      {draft && !estimate && <p className="text-sm text-text2">The note changed: estimate again before starting.</p>}
+      {draft && !estimate && (
+        <p className="text-sm text-text2">The note changed: estimate again before starting.</p>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
     </Dialog>
   );
@@ -478,8 +581,11 @@ export function DeleteMenu({
   title: string;
   /** The delete operation, so the menu shows only to roles that may call it (#370). */
   op: Operation;
-  dependents: () => Promise<Schemas["DependentsOut"]>;
-  remove: (query: { reason?: string | null; confirm_published?: boolean }) => Promise<Schemas["TrashEntryOut"]>;
+  dependents: () => Promise<Schemas['DependentsOut']>;
+  remove: (query: {
+    reason?: string | null;
+    confirm_published?: boolean;
+  }) => Promise<Schemas['TrashEntryOut']>;
   onDeleted?: () => void;
 }) {
   const { can } = useMe();
@@ -501,7 +607,13 @@ export function DeleteMenu({
       </RowMenu>
       {open &&
         createPortal(
-          <DeleteDialog title={title} dependents={dependents} remove={remove} onClose={() => setOpen(false)} onDeleted={onDeleted} />,
+          <DeleteDialog
+            title={title}
+            dependents={dependents}
+            remove={remove}
+            onClose={() => setOpen(false)}
+            onDeleted={onDeleted}
+          />,
           document.body,
         )}
     </>

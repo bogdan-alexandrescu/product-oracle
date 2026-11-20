@@ -8,55 +8,57 @@
  * owner, whose Slack post failed; week of Oct 12, unread, posted to #plan), the install
  * and #plan as the report's channel. Every other scenario starts with neither.
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import { mockSettingValue, setMockSetting } from "./connections";
-import { reply } from "./typed";
-import type { DiscussionsDb } from "./discussions";
-import { mockUuid, seeded } from "./ids";
-import { REPORT_ITEM_MILESTONE_SCENARIO, REPORT_OFF_TRACK_SCENARIO } from "./roadmap";
-import { needsReconnect, SLACK_CHANNELS, SLACK_SCENARIO, slackInstall, unlinkAll } from "./slack";
+import { mockSettingValue, setMockSetting } from './connections';
+import { reply } from './typed';
+import type { DiscussionsDb } from './discussions';
+import { mockUuid, seeded } from './ids';
+import { REPORT_ITEM_MILESTONE_SCENARIO, REPORT_OFF_TRACK_SCENARIO } from './roadmap';
+import { needsReconnect, SLACK_CHANNELS, SLACK_SCENARIO, slackInstall, unlinkAll } from './slack';
 
-type Report = Schemas["AlignmentReportOut"];
-type Track = Schemas["ReportTrack"];
-type Integration = Schemas["CompanyIntegrationOut"];
-type Role = "viewer" | "commenter" | "approver" | "owner";
+type Report = Schemas['AlignmentReportOut'];
+type Track = Schemas['ReportTrack'];
+type Integration = Schemas['CompanyIntegrationOut'];
+type Role = 'viewer' | 'commenter' | 'approver' | 'owner';
 
 export interface ReportsDb {
-  reports: (Omit<Report, "read"> & { dismissed?: boolean })[];
+  reports: (Omit<Report, 'read'> & { dismissed?: boolean })[];
   /** Report id -> the member ids who opened it. */
   reads: Record<string, string[]>;
   integration: Integration | null;
 }
 
-export const REPORT_SCENARIO = "alignment-report";
-const SCENARIO_KEY = "po-mock-scenario";
+export const REPORT_SCENARIO = 'alignment-report';
+const SCENARIO_KEY = 'po-mock-scenario';
 // Includes a private channel the bot was invited to (the install has groups:read).
 const CHANNELS = SLACK_CHANNELS;
-const SETTING = "alignment_report";
+const SETTING = 'alignment_report';
 
-const ROLE_ORDER: Role[] = ["viewer", "commenter", "approver", "owner"];
+const ROLE_ORDER: Role[] = ['viewer', 'commenter', 'approver', 'owner'];
 const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
 const now = () => new Date().toISOString();
 
 function json(status: number, body: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,
-    headers: body === undefined ? {} : { "content-type": "application/json" },
+    headers: body === undefined ? {} : { 'content-type': 'application/json' },
   });
 }
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const shortDay = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
-const title = (kind: Report["kind"], week: string) => `${kind === "weekly" ? "Weekly alignment" : "Alignment so far"} · week of ${shortDay(week)}`;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDay = (iso: string) =>
+  `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
+const title = (kind: Report['kind'], week: string) =>
+  `${kind === 'weekly' ? 'Weekly alignment' : 'Alignment so far'} · week of ${shortDay(week)}`;
 
-function headline(s: Schemas["ReportSummaryFigures"]): string {
+function headline(s: Schemas['ReportSummaryFigures']): string {
   const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
-  return `${s.at_risk + s.off_track} of ${n(s.tracks, "track", "tracks")} at risk; ${n(s.slips, "date", "dates")} slipping as of now; ${n(
+  return `${s.at_risk + s.off_track} of ${n(s.tracks, 'track', 'tracks')} at risk; ${n(s.slips, 'date', 'dates')} slipping as of now; ${n(
     s.untracked_now,
-    "Now item has",
-    "Now items have",
+    'Now item has',
+    'Now items have',
   )} no issue.`;
 }
 
@@ -68,10 +70,20 @@ function headline(s: Schemas["ReportSummaryFigures"]): string {
  */
 export type LiveTracks = (calm: boolean) => (Track & { untracked_now?: number })[];
 
-const HEALTH_ORDER: Record<string, number> = { off_track: 0, at_risk: 1, no_roadmap: 2, on_track: 3, paused: 4 };
+const HEALTH_ORDER: Record<string, number> = {
+  off_track: 0,
+  at_risk: 1,
+  no_roadmap: 2,
+  on_track: 3,
+  paused: 4,
+};
 
 function tracks(live: LiveTracks, calm: boolean): { ts: Track[]; untrackedNow: number } {
-  const parts = live(calm).sort((a, b) => (HEALTH_ORDER[a.health] ?? 9) - (HEALTH_ORDER[b.health] ?? 9) || a.prd.title.toLowerCase().localeCompare(b.prd.title.toLowerCase()));
+  const parts = live(calm).sort(
+    (a, b) =>
+      (HEALTH_ORDER[a.health] ?? 9) - (HEALTH_ORDER[b.health] ?? 9) ||
+      a.prd.title.toLowerCase().localeCompare(b.prd.title.toLowerCase()),
+  );
   let untrackedNow = 0;
   const ts = parts.map(({ untracked_now, ...t }) => {
     untrackedNow += untracked_now ?? 0;
@@ -84,57 +96,68 @@ function tracks(live: LiveTracks, calm: boolean): { ts: Track[]; untrackedNow: n
  * The figures, from the tracks as the API counts them (qa-plan-56): slips are the slipping
  * items listed under Needs attention; untracked Now items as each track counted them.
  */
-function summaryOf(ts: Track[], untrackedNow: number): Schemas["ReportSummaryFigures"] {
-  const slips = ts.flatMap((t) => t.needs_attention).filter((n) => n.kind === "slipping").length;
+function summaryOf(ts: Track[], untrackedNow: number): Schemas['ReportSummaryFigures'] {
+  const slips = ts.flatMap((t) => t.needs_attention).filter((n) => n.kind === 'slipping').length;
   return {
     tracks: ts.length,
-    at_risk: ts.filter((t) => t.health === "at_risk").length,
-    off_track: ts.filter((t) => t.health === "off_track").length,
+    at_risk: ts.filter((t) => t.health === 'at_risk').length,
+    off_track: ts.filter((t) => t.health === 'off_track').length,
     slips,
     untracked_now: untrackedNow,
-    unplanned: ts.flatMap((t) => t.drift).filter((d) => d.kind === "unplanned").length,
+    unplanned: ts.flatMap((t) => t.drift).filter((d) => d.kind === 'unplanned').length,
     dates_verified: ts.reduce((n, t) => n + t.dates.verified.length, 0),
     dates_withdrawn: ts.reduce((n, t) => n + t.dates.withdrawn.length, 0),
   };
 }
 
 /** As oracle.reports.alignment.prd_moved_text (qa-plan-43). */
-const prdMovedText = (t: Track) => (t.prd_moved_to ? `v${t.prd_moved_to} of the PRD is approved` : "A newer version of the PRD is approved");
+const prdMovedText = (t: Track) =>
+  t.prd_moved_to
+    ? `v${t.prd_moved_to} of the PRD is approved`
+    : 'A newer version of the PRD is approved';
 /** As oracle.reports.alignment.rebuild_link (fix4 qa-plan-3): the PRD's Build roadmap, on Plan › Roadmap documents. */
 export const rebuildLink = (slug: string) => `/plan/documents?prd=${encodeURIComponent(slug)}`;
 
-type Need = Track["needs_attention"][number];
+type Need = Track['needs_attention'][number];
 const REASON_ORDER: Record<string, number> = { slipping: 0, blocked: 1, stale: 2 };
 /** As oracle.reports.alignment.needs_by_item: one entry per item, its reasons slipping first. */
 function needsByItem(needs: Need[]): [Need, Need[]][] {
   const out = new Map<string, Need[]>();
   for (const n of needs) out.set(n.item_key, [...(out.get(n.item_key) ?? []), n]);
-  return [...out.values()].map((rs) => [rs[0]!, [...rs].sort((a, b) => (REASON_ORDER[a.kind] ?? 9) - (REASON_ORDER[b.kind] ?? 9))]);
+  return [...out.values()].map((rs) => [
+    rs[0]!,
+    [...rs].sort((a, b) => (REASON_ORDER[a.kind] ?? 9) - (REASON_ORDER[b.kind] ?? 9)),
+  ]);
 }
 
-function markdown(r: Omit<Report, "read" | "markdown">): string {
+function markdown(r: Omit<Report, 'read' | 'markdown'>): string {
   const parts = r.tracks.map((t) =>
     [
       `## ${t.prd.title}`,
-      "",
+      '',
       t.headline,
-      ...(t.prd_moved ? [`- ${prdMovedText(t)} · [Build the roadmap from it](${rebuildLink(t.prd.slug)})`] : []),
-      ...needsByItem(t.needs_attention).map(([n, rs]) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${rs.map((r) => r.detail).join(" ")}`),
-    ].join("\n"),
+      ...(t.prd_moved
+        ? [`- ${prdMovedText(t)} · [Build the roadmap from it](${rebuildLink(t.prd.slug)})`]
+        : []),
+      ...needsByItem(t.needs_attention).map(
+        ([n, rs]) =>
+          `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${rs.map((r) => r.detail).join(' ')}`,
+      ),
+    ].join('\n'),
   );
-  return [`# ${r.title}`, "", r.headline, "", ...parts].join("\n") + "\n";
+  return [`# ${r.title}`, '', r.headline, '', ...parts].join('\n') + '\n';
 }
 
 function makeReport(input: {
-  kind: Report["kind"];
+  kind: Report['kind'];
   week: string;
   from: string;
   to: string;
   at: string;
   atRisk: boolean;
-  slack: Schemas["ReportSlack"];
+  slack: Schemas['ReportSlack'];
   live: LiveTracks;
-}): Omit<Report, "read"> {
+}): Omit<Report, 'read'> {
   const { ts, untrackedNow } = tracks(input.live, !input.atRisk);
   const summary = summaryOf(ts, untrackedNow);
   const base = {
@@ -143,7 +166,7 @@ function makeReport(input: {
     week_start: input.week,
     title: title(input.kind, input.week),
     period: { from: input.from, to: input.to },
-    timezone: String(mockSettingValue("company_timezone")),
+    timezone: String(mockSettingValue('company_timezone')),
     generated_at: input.at,
     headline: headline(summary),
     summary,
@@ -155,77 +178,117 @@ function makeReport(input: {
   return { ...base, markdown: markdown(base) };
 }
 
-const PLAN_CHANNEL = { id: "C0PLAN", name: "plan" };
+const PLAN_CHANNEL = { id: 'C0PLAN', name: 'plan' };
 
 /** The "alignment-report" scenarios: the default company with two weekly reports seeded (fix4: "report-prd-moved" has the Usage alerts PRD's v2 approved too). */
-export const REPORT_PRD_MOVED_SCENARIO = "report-prd-moved";
+export const REPORT_PRD_MOVED_SCENARIO = 'report-prd-moved';
 /**
  * plan-open-from-simple "report-draft-item": "alignment-report" whose week of Oct 12 names Quiet
  * hours for alerts, work started early that is only in a Usage alerts draft on Simple now
  * (server.ts), so its "<prd>:<key>" link names an item the Plan does not show.
  */
-export const REPORT_DRAFT_ITEM_SCENARIO = "report-draft-item";
-export const REPORT_DRAFT_ITEM = { key: "alert-quiet-hours", title: "Quiet hours for alerts" };
-const reportScenario = () => [REPORT_SCENARIO, REPORT_PRD_MOVED_SCENARIO, REPORT_OFF_TRACK_SCENARIO, REPORT_ITEM_MILESTONE_SCENARIO, REPORT_DRAFT_ITEM_SCENARIO].includes(localStorage.getItem(SCENARIO_KEY) ?? "");
+export const REPORT_DRAFT_ITEM_SCENARIO = 'report-draft-item';
+export const REPORT_DRAFT_ITEM = { key: 'alert-quiet-hours', title: 'Quiet hours for alerts' };
+const reportScenario = () =>
+  [
+    REPORT_SCENARIO,
+    REPORT_PRD_MOVED_SCENARIO,
+    REPORT_OFF_TRACK_SCENARIO,
+    REPORT_ITEM_MILESTONE_SCENARIO,
+    REPORT_DRAFT_ITEM_SCENARIO,
+  ].includes(localStorage.getItem(SCENARIO_KEY) ?? '');
 
 function seedReports(ownerId: string, live: LiveTracks): ReportsDb {
   // Read the tracks before the seed's id scope: reading them may seed the roadmap mock, whose ids stay its own.
   const read = reportScenario() ? { calm: live(true), busy: live(false) } : null;
   const snapshot: LiveTracks = (calm) => structuredClone(calm ? read!.calm : read!.busy);
-  return seeded("reports", () => {
+  return seeded('reports', () => {
     const db: ReportsDb = { reports: [], reads: {}, integration: null };
     // G8 "slack-bridge": the install with the bridge's scopes, and no reports.
-    if (localStorage.getItem(SCENARIO_KEY) === SLACK_SCENARIO) db.integration = slackInstall(ownerId, mockUuid(), "2026-10-01T09:00:00Z");
+    if (localStorage.getItem(SCENARIO_KEY) === SLACK_SCENARIO)
+      db.integration = slackInstall(ownerId, mockUuid(), '2026-10-01T09:00:00Z');
     if (!read) return db;
     const failed = makeReport({
-      kind: "weekly",
-      week: "2026-10-05",
-      from: "2026-10-05T07:00:00Z",
-      to: "2026-10-12T07:00:00Z",
-      at: "2026-10-12T15:00:12Z",
+      kind: 'weekly',
+      week: '2026-10-05',
+      from: '2026-10-05T07:00:00Z',
+      to: '2026-10-12T07:00:00Z',
+      at: '2026-10-12T15:00:12Z',
       atRisk: false,
       live: snapshot,
-      slack: { status: "failed", channel: PLAN_CHANNEL, posted_at: null, attempts: 12, error: "channel_not_found", next_attempt_at: null },
+      slack: {
+        status: 'failed',
+        channel: PLAN_CHANNEL,
+        posted_at: null,
+        attempts: 12,
+        error: 'channel_not_found',
+        next_attempt_at: null,
+      },
     });
     const posted = makeReport({
-      kind: "weekly",
-      week: "2026-10-12",
-      from: "2026-10-12T07:00:00Z",
-      to: "2026-10-19T07:00:00Z",
-      at: "2026-10-19T15:00:12Z",
+      kind: 'weekly',
+      week: '2026-10-12',
+      from: '2026-10-12T07:00:00Z',
+      to: '2026-10-19T07:00:00Z',
+      at: '2026-10-19T15:00:12Z',
       atRisk: true,
       live: snapshot,
-      slack: { status: "posted", channel: PLAN_CHANNEL, posted_at: "2026-10-19T15:00:14Z", attempts: 1, error: null, next_attempt_at: null },
+      slack: {
+        status: 'posted',
+        channel: PLAN_CHANNEL,
+        posted_at: '2026-10-19T15:00:14Z',
+        attempts: 1,
+        error: null,
+        next_attempt_at: null,
+      },
     });
     if (localStorage.getItem(SCENARIO_KEY) === REPORT_DRAFT_ITEM_SCENARIO) {
-      const alerts = posted.tracks.find((t) => t.prd.slug === "usage-alerts");
+      const alerts = posted.tracks.find((t) => t.prd.slug === 'usage-alerts');
       alerts?.drift.push({
-        kind: "ahead", item_key: REPORT_DRAFT_ITEM.key, tracker_ref: "ENG-441", detail: "Engineering has started work planned for Next.",
-        title: REPORT_DRAFT_ITEM.title, link: `/plan?item=usage-alerts:${REPORT_DRAFT_ITEM.key}`,
+        kind: 'ahead',
+        item_key: REPORT_DRAFT_ITEM.key,
+        tracker_ref: 'ENG-441',
+        detail: 'Engineering has started work planned for Next.',
+        title: REPORT_DRAFT_ITEM.title,
+        link: `/plan?item=usage-alerts:${REPORT_DRAFT_ITEM.key}`,
       });
     }
     db.reports = [failed, posted];
     db.reads[failed.id] = [ownerId];
     // Installed with F6's scopes before G8: the card asks an owner to reconnect for mirroring.
-    db.integration = slackInstall(ownerId, mockUuid(), "2026-10-01T09:00:00Z", ["chat:write", "chat:write.public", "channels:read", "groups:read"]);
+    db.integration = slackInstall(ownerId, mockUuid(), '2026-10-01T09:00:00Z', [
+      'chat:write',
+      'chat:write.public',
+      'channels:read',
+      'groups:read',
+    ]);
     setMockSetting(SETTING, { ...reportSetting(), slack_channel: PLAN_CHANNEL });
     return db;
   });
 }
 
-type ReportSetting = { enabled: boolean; weekday: string; time: string; slack_channel: { id: string; name: string } | null };
+type ReportSetting = {
+  enabled: boolean;
+  weekday: string;
+  time: string;
+  slack_channel: { id: string; name: string } | null;
+};
 
 function reportSetting(): ReportSetting {
   return mockSettingValue(SETTING) as ReportSetting;
 }
 
 /** `live` reads the tracks' parts now (./roadmap.ts reportTracks, through the server's roadmap db). */
-export function ensureReports(holder: { reports?: ReportsDb }, ownerId: string, live: LiveTracks): ReportsDb {
+export function ensureReports(
+  holder: { reports?: ReportsDb },
+  ownerId: string,
+  live: LiveTracks,
+): ReportsDb {
   holder.reports ??= seedReports(ownerId, live);
   return holder.reports;
 }
 
-const out = (db: ReportsDb, r: ReportsDb["reports"][number], me: string): Report => {
+const out = (db: ReportsDb, r: ReportsDb['reports'][number], me: string): Report => {
   const { dismissed: _dismissed, ...rest } = r;
   void _dismissed;
   return { ...rest, read: (db.reads[r.id] ?? []).includes(me) };
@@ -233,9 +296,12 @@ const out = (db: ReportsDb, r: ReportsDb["reports"][number], me: string): Report
 
 /** What the API's GET /v1/inbox adds for owners: the newest weekly reports and the failed posts. */
 export function inboxReports(db: ReportsDb, me: { id: string; role: Role }) {
-  if (me.role !== "owner") return { reports: [], report_failures: [], unread: 0 };
-  const weekly = db.reports.filter((r) => r.kind === "weekly").sort((a, b) => b.week_start.localeCompare(a.week_start)).slice(0, 8);
-  const reports: Schemas["InboxReport"][] = weekly.map((r) => ({
+  if (me.role !== 'owner') return { reports: [], report_failures: [], unread: 0 };
+  const weekly = db.reports
+    .filter((r) => r.kind === 'weekly')
+    .sort((a, b) => b.week_start.localeCompare(a.week_start))
+    .slice(0, 8);
+  const reports: Schemas['InboxReport'][] = weekly.map((r) => ({
     id: r.id,
     kind: r.kind,
     week_start: r.week_start,
@@ -245,8 +311,8 @@ export function inboxReports(db: ReportsDb, me: { id: string; role: Role }) {
     read: (db.reads[r.id] ?? []).includes(me.id),
     created_at: r.generated_at,
   }));
-  const report_failures: Schemas["InboxReportFailure"][] = db.reports
-    .filter((r) => r.slack.status === "failed" && !r.dismissed)
+  const report_failures: Schemas['InboxReportFailure'][] = db.reports
+    .filter((r) => r.slack.status === 'failed' && !r.dismissed)
     .map((r) => ({
       id: r.id,
       week_start: r.week_start,
@@ -256,81 +322,124 @@ export function inboxReports(db: ReportsDb, me: { id: string; role: Role }) {
       attempts: r.slack.attempts ?? 0,
       created_at: r.generated_at,
     }));
-  return { reports, report_failures, unread: reports.filter((r) => !r.read).length + report_failures.length };
+  return {
+    reports,
+    report_failures,
+    unread: reports.filter((r) => !r.read).length + report_failures.length,
+  };
 }
 
 /** This Monday in Los Angeles (the mock company's zone), as YYYY-MM-DD. */
 function thisMonday(): string {
-  const local = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const local = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   local.setDate(local.getDate() - ((local.getDay() + 6) % 7));
-  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
 }
 
-function post(db: ReportsDb, channel: ReportSetting["slack_channel"]): Schemas["ReportSlack"] {
-  if (!db.integration || !channel) return { status: "not_configured", channel: null, posted_at: null, attempts: 0, error: null, next_attempt_at: null };
-  return { status: "posted", channel, posted_at: now(), attempts: 1, error: null, next_attempt_at: null };
+function post(db: ReportsDb, channel: ReportSetting['slack_channel']): Schemas['ReportSlack'] {
+  if (!db.integration || !channel)
+    return {
+      status: 'not_configured',
+      channel: null,
+      posted_at: null,
+      attempts: 0,
+      error: null,
+      next_attempt_at: null,
+    };
+  return {
+    status: 'posted',
+    channel,
+    posted_at: now(),
+    attempts: 1,
+    error: null,
+    next_attempt_at: null,
+  };
 }
 
 /** Handles /v1/alignment-reports… and /v1/company-integrations…; null for other routes. */
-export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: DiscussionsDb }, ownerId: string, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams, live: LiveTracks): Promise<Response | null> {
-  if (p[1] !== "alignment-reports" && p[1] !== "company-integrations") return null;
+export async function reportsRoute(
+  holder: { reports?: ReportsDb; discussions?: DiscussionsDb },
+  ownerId: string,
+  me: { id: string; role: Role },
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+  live: LiveTracks,
+): Promise<Response | null> {
+  if (p[1] !== 'alignment-reports' && p[1] !== 'company-integrations') return null;
   const db = ensureReports(holder, ownerId, live);
   const m = req.method;
-  const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
 
-  if (p[1] === "company-integrations") {
-    if (!atLeast(me.role, "owner")) return forbidden("owner");
-    if (!p[2] && m === "GET") return reply("/v1/company-integrations", "get", db.integration ? [db.integration] : []);
-    if (p[2] === "slack" && p[3] === "install" && m === "GET") {
-      if (db.integration && !needsReconnect(db.integration)) return json(409, { detail: "Slack is already connected; disconnect it first" });
+  if (p[1] === 'company-integrations') {
+    if (!atLeast(me.role, 'owner')) return forbidden('owner');
+    if (!p[2] && m === 'GET')
+      return reply('/v1/company-integrations', 'get', db.integration ? [db.integration] : []);
+    if (p[2] === 'slack' && p[3] === 'install' && m === 'GET') {
+      if (db.integration && !needsReconnect(db.integration))
+        return json(409, { detail: 'Slack is already connected; disconnect it first' });
       // The mocked OAuth return: Slack's consent screen is skipped, the install is made (a
       // reconnect keeps the install and gains the bridge's scopes).
-      db.integration = db.integration ? { ...db.integration, scopes: slackInstall(me.id, "", "").scopes } : slackInstall(me.id, mockUuid(), now());
-      return reply("/v1/company-integrations/slack/install", "get", { url: "/settings/notifications?connected=slack" });
+      db.integration = db.integration
+        ? { ...db.integration, scopes: slackInstall(me.id, '', '').scopes }
+        : slackInstall(me.id, mockUuid(), now());
+      return reply('/v1/company-integrations/slack/install', 'get', {
+        url: '/settings/notifications?connected=slack',
+      });
     }
-    if (p[2] === "slack" && p[3] === "channels" && m === "GET") {
-      if (!db.integration) return json(409, { detail: "Connect Slack for notifications first" });
-      return reply("/v1/company-integrations/slack/channels", "get", CHANNELS);
+    if (p[2] === 'slack' && p[3] === 'channels' && m === 'GET') {
+      if (!db.integration) return json(409, { detail: 'Connect Slack for notifications first' });
+      return reply('/v1/company-integrations/slack/channels', 'get', CHANNELS);
     }
-    if (p[2] === "slack" && p[3] === "test" && m === "POST") {
-      if (!db.integration) return json(409, { detail: "Connect Slack for notifications first" });
-      const { channel_id } = await body<Schemas["SlackTestIn"]>();
-      if (!CHANNELS.some((c) => c.id === channel_id)) return json(502, { detail: "Slack answered channel_not_found" });
-      return reply("/v1/company-integrations/slack/test", "post", { sent: true, channel_id });
+    if (p[2] === 'slack' && p[3] === 'test' && m === 'POST') {
+      if (!db.integration) return json(409, { detail: 'Connect Slack for notifications first' });
+      const { channel_id } = await body<Schemas['SlackTestIn']>();
+      if (!CHANNELS.some((c) => c.id === channel_id))
+        return json(502, { detail: 'Slack answered channel_not_found' });
+      return reply('/v1/company-integrations/slack/test', 'post', { sent: true, channel_id });
     }
-    if (p[2] && !p[3] && m === "DELETE") {
-      if (!db.integration || db.integration.id !== p[2]) return json(404, { detail: "Integration not found" });
+    if (p[2] && !p[3] && m === 'DELETE') {
+      if (!db.integration || db.integration.id !== p[2])
+        return json(404, { detail: 'Integration not found' });
       db.integration = null;
       unlinkAll(holder.discussions);
       const setting = reportSetting();
       if (setting.slack_channel) setMockSetting(SETTING, { ...setting, slack_channel: null });
-      return reply("/v1/company-integrations/{integration_id}", "delete", undefined, 204);
+      return reply('/v1/company-integrations/{integration_id}', 'delete', undefined, 204);
     }
-    return json(404, { detail: "Route not found" });
+    return json(404, { detail: 'Route not found' });
   }
 
   if (!p[2]) {
-    if (m === "GET") {
-      const limit = Number(q.get("limit") ?? 50);
-      const offset = Number(q.get("offset") ?? 0);
-      const rows = [...db.reports].sort((a, b) => b.generated_at.localeCompare(a.generated_at)).slice(offset, offset + limit);
+    if (m === 'GET') {
+      const limit = Number(q.get('limit') ?? 50);
+      const offset = Number(q.get('offset') ?? 0);
+      const rows = [...db.reports]
+        .sort((a, b) => b.generated_at.localeCompare(a.generated_at))
+        .slice(offset, offset + limit);
       return reply(
-        "/v1/alignment-reports",
-        "get",
+        '/v1/alignment-reports',
+        'get',
         rows.map((r) => {
-          const { tracks: _t, markdown: _m, unreadable_tracks: _u, needs_attention_as_of_now: _n, ...item } = out(db, r, me.id);
+          const {
+            tracks: _t,
+            markdown: _m,
+            unreadable_tracks: _u,
+            needs_attention_as_of_now: _n,
+            ...item
+          } = out(db, r, me.id);
           void [_t, _m, _u, _n];
           return item;
         }),
       );
     }
-    if (m === "POST") {
-      if (!atLeast(me.role, "owner")) return forbidden("owner");
-      const { post_to_slack } = (await body<Schemas["AlignmentReportCreate"]>()) ?? {};
+    if (m === 'POST') {
+      if (!atLeast(me.role, 'owner')) return forbidden('owner');
+      const { post_to_slack } = (await body<Schemas['AlignmentReportCreate']>()) ?? {};
       const week = thisMonday();
       const at = now();
       const report = makeReport({
-        kind: "on_demand",
+        kind: 'on_demand',
         week,
         from: `${week}T07:00:00Z`,
         to: at,
@@ -339,34 +448,51 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
         live,
         slack: post_to_slack
           ? post(db, reportSetting().slack_channel)
-          : { status: "not_requested", channel: null, posted_at: null, attempts: 0, error: null, next_attempt_at: null },
+          : {
+              status: 'not_requested',
+              channel: null,
+              posted_at: null,
+              attempts: 0,
+              error: null,
+              next_attempt_at: null,
+            },
       });
       db.reports.push(report);
-      return reply("/v1/alignment-reports", "post", { ...report, read: false }, 201);
+      return reply('/v1/alignment-reports', 'post', { ...report, read: false }, 201);
     }
   }
   const row = db.reports.find((r) => r.id === p[2]);
-  if (!row) return json(404, { detail: "Report not found" });
-  if (!p[3] && m === "GET") return reply("/v1/alignment-reports/{report_id}", "get", out(db, row, me.id));
-  if (p[3] === "read" && m === "POST") {
+  if (!row) return json(404, { detail: 'Report not found' });
+  if (!p[3] && m === 'GET')
+    return reply('/v1/alignment-reports/{report_id}', 'get', out(db, row, me.id));
+  if (p[3] === 'read' && m === 'POST') {
     const readers = (db.reads[row.id] ??= []);
     if (!readers.includes(me.id)) readers.push(me.id);
-    return reply("/v1/alignment-reports/{report_id}/read", "post", out(db, row, me.id));
+    return reply('/v1/alignment-reports/{report_id}/read', 'post', out(db, row, me.id));
   }
-  if (p[3] === "slack" && m === "POST") {
-    if (!atLeast(me.role, "owner")) return forbidden("owner");
-    if (p[4] === "retry") {
-      if (!["pending", "failed"].includes(row.slack.status)) return json(409, { detail: `Nothing to retry: the report is ${row.slack.status}` });
-      if (!db.integration) return json(409, { detail: "Slack is not connected for notifications: connect it in Settings › Notifications, then retry" });
-      row.slack = { ...post(db, row.slack.channel ?? reportSetting().slack_channel), attempts: (row.slack.attempts ?? 0) + 1 };
+  if (p[3] === 'slack' && m === 'POST') {
+    if (!atLeast(me.role, 'owner')) return forbidden('owner');
+    if (p[4] === 'retry') {
+      if (!['pending', 'failed'].includes(row.slack.status))
+        return json(409, { detail: `Nothing to retry: the report is ${row.slack.status}` });
+      if (!db.integration)
+        return json(409, {
+          detail:
+            'Slack is not connected for notifications: connect it in Settings › Notifications, then retry',
+        });
+      row.slack = {
+        ...post(db, row.slack.channel ?? reportSetting().slack_channel),
+        attempts: (row.slack.attempts ?? 0) + 1,
+      };
       row.dismissed = false;
-      return reply("/v1/alignment-reports/{report_id}/slack/retry", "post", out(db, row, me.id));
+      return reply('/v1/alignment-reports/{report_id}/slack/retry', 'post', out(db, row, me.id));
     }
-    if (p[4] === "dismiss") {
-      if (row.slack.status !== "failed") return json(409, { detail: "Only a failed Slack post can be dismissed" });
+    if (p[4] === 'dismiss') {
+      if (row.slack.status !== 'failed')
+        return json(409, { detail: 'Only a failed Slack post can be dismissed' });
       row.dismissed = true;
-      return reply("/v1/alignment-reports/{report_id}/slack/dismiss", "post", out(db, row, me.id));
+      return reply('/v1/alignment-reports/{report_id}/slack/dismiss', 'post', out(db, row, me.id));
     }
   }
-  return json(404, { detail: "Route not found" });
+  return json(404, { detail: 'Route not found' });
 }

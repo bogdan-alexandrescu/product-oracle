@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import Link from 'next/link';
+import { useState } from 'react';
 
 import {
   Button,
@@ -17,42 +17,44 @@ import {
   Panel,
   Split,
   type Column,
-} from "@/components/ds";
-import { revealOnPhone } from "@/app/settings/_components/reveal";
-import { useThemeNames } from "@/components/TemplateBodyEditor";
-import { LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { revealOnPhone } from '@/app/settings/_components/reveal';
+import { useThemeNames } from '@/components/TemplateBodyEditor';
+import { LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatDate } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-type TemplateSummary = Schemas["TemplateSummary"];
+type TemplateSummary = Schemas['TemplateSummary'];
 
 const KINDS = [
-  { kind: "prd", title: "PRD templates" },
-  { kind: "roadmap", title: "Roadmap templates" },
+  { kind: 'prd', title: 'PRD templates' },
+  { kind: 'roadmap', title: 'Roadmap templates' },
 ] as const;
 
-const KIND_LABEL: Record<TemplateSummary["kind"], string> = {
-  prd: "PRD",
-  roadmap: "Roadmap",
-  vision: "Vision",
-  strategy: "Product strategy",
-  update: "Update",
-  pricing: "Pricing memo",
+const KIND_LABEL: Record<TemplateSummary['kind'], string> = {
+  prd: 'PRD',
+  roadmap: 'Roadmap',
+  vision: 'Vision',
+  strategy: 'Product strategy',
+  update: 'Update',
+  pricing: 'Pricing memo',
 };
 
 /** The list's columns; a suggested theme reads as its name (qa-settings-26). */
-const columns = (themeName: (key: string | null | undefined) => string): Column<TemplateSummary>[] => [
+const columns = (
+  themeName: (key: string | null | undefined) => string,
+): Column<TemplateSummary>[] => [
   {
-    key: "name",
-    header: "Template",
+    key: 'name',
+    header: 'Template',
     cell: (t) => (
       <span className="flex min-w-0 items-center gap-2">
         <Link
           href={`/settings/templates/${t.key}`}
           onClick={(e) => e.stopPropagation()}
-          className={`min-w-0 truncate font-medium hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal ${t.archived_at ? "text-text2" : "text-text"}`}
+          className={`min-w-0 truncate font-medium hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal ${t.archived_at ? 'text-text2' : 'text-text'}`}
         >
           {t.name}
         </Link>
@@ -62,24 +64,36 @@ const columns = (themeName: (key: string | null | undefined) => string): Column<
     ),
   },
   {
-    key: "theme",
-    header: "Suggested theme",
-    width: "190px",
+    key: 'theme',
+    header: 'Suggested theme',
+    width: '190px',
     hideOnPhone: true,
     cell: (t) => <span className="text-text2">{themeName(t.suggested_theme)}</span>,
   },
-  { key: "latest", header: "Latest", width: "76px", align: "right", cell: (t) => <span className="tnum">v{t.latest_version}</span> },
   {
-    key: "added",
-    header: "Added",
-    width: "120px",
-    align: "right",
+    key: 'latest',
+    header: 'Latest',
+    width: '76px',
+    align: 'right',
+    cell: (t) => <span className="tnum">v{t.latest_version}</span>,
+  },
+  {
+    key: 'added',
+    header: 'Added',
+    width: '120px',
+    align: 'right',
     hideOnPhone: true,
     cell: (t) => <span className="tnum text-text2">{formatDate(t.created_at)}</span>,
   },
 ];
 
-function TemplateInspector({ t, themeName }: { t: TemplateSummary; themeName: (key: string | null | undefined) => string }) {
+function TemplateInspector({
+  t,
+  themeName,
+}: {
+  t: TemplateSummary;
+  themeName: (key: string | null | undefined) => string;
+}) {
   return (
     <Inspector
       eyebrow="Template · selected"
@@ -108,8 +122,8 @@ function TemplateInspector({ t, themeName }: { t: TemplateSummary; themeName: (k
         </LinkButton>
       }
       stats={[
-        { label: "Latest", value: `v${t.latest_version}` },
-        { label: "Added", value: <span className="text-lg">{formatDate(t.created_at)}</span> },
+        { label: 'Latest', value: `v${t.latest_version}` },
+        { label: 'Added', value: <span className="text-lg">{formatDate(t.created_at)}</span> },
       ]}
     >
       {/* Only names: the internal key is not shown to people (qa4-settings-17). */}
@@ -132,13 +146,13 @@ function TemplateInspector({ t, themeName }: { t: TemplateSummary; themeName: (k
 
 export default function TemplatesPage() {
   const { can, capsReady } = useMe();
-  const canCreate = can("create_template");
+  const canCreate = can('create_template');
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const themeName = useThemeNames();
   const cols = columns(themeName);
   const q = useQuery(`templates|${showArchived}`, () =>
-    unwrap(api.GET("/v1/templates", { params: { query: { include_archived: showArchived } } })),
+    unwrap(api.GET('/v1/templates', { params: { query: { include_archived: showArchived } } })),
   );
 
   const lists = KINDS.map(({ kind, title }) => ({
@@ -167,8 +181,8 @@ export default function TemplatesPage() {
         title="Templates"
         info={
           <InfoTip label="templates" align="start" side="bottom">
-            The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
-            the version they started from.
+            The skeletons new PRDs and roadmaps start from. Every saved change to a template is a
+            new version; documents keep the version they started from.
           </InfoTip>
         }
         status={capsReady && !canCreate && <ViewOnly />}
@@ -186,27 +200,38 @@ export default function TemplatesPage() {
           ))
         }
       />
-      <Split inspector={current ? <TemplateInspector t={current} themeName={themeName} /> : undefined}>
+      <Split
+        inspector={current ? <TemplateInspector t={current} themeName={themeName} /> : undefined}
+      >
         {/* F-1: a list that did not load says so, with Try again, and no empty tables under it. */}
-        {q.error && <LoadError what="your templates" error={q.error} onRetry={() => void q.reload()} />}
-        {!q.error && lists.map(({ kind, title, rows }, i) => (
-          <Panel key={kind} title={title} count={rows?.length} tools={i === 0 ? toggle : undefined} testId={`templates-${kind}`}>
-            <DataTable
-              label={title}
-              columns={cols}
-              rows={rows}
-              loading={q.loading}
-              rowKey={(t) => t.key}
-              selected={current?.key}
-              onSelect={(k) => {
-                setSelected(k);
-                revealOnPhone("template-inspector");
-              }}
-              rowProps={(t) => ({ "data-testid": `template-row-${t.key}` })}
-              empty={kind === "prd" ? "No PRD templates" : "No roadmap templates"}
-            />
-          </Panel>
-        ))}
+        {q.error && (
+          <LoadError what="your templates" error={q.error} onRetry={() => void q.reload()} />
+        )}
+        {!q.error &&
+          lists.map(({ kind, title, rows }, i) => (
+            <Panel
+              key={kind}
+              title={title}
+              count={rows?.length}
+              tools={i === 0 ? toggle : undefined}
+              testId={`templates-${kind}`}
+            >
+              <DataTable
+                label={title}
+                columns={cols}
+                rows={rows}
+                loading={q.loading}
+                rowKey={(t) => t.key}
+                selected={current?.key}
+                onSelect={(k) => {
+                  setSelected(k);
+                  revealOnPhone('template-inspector');
+                }}
+                rowProps={(t) => ({ 'data-testid': `template-row-${t.key}` })}
+                empty={kind === 'prd' ? 'No PRD templates' : 'No roadmap templates'}
+              />
+            </Panel>
+          ))}
       </Split>
     </>
   );

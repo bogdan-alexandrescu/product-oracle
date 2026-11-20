@@ -1,20 +1,34 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
-import { Button, Chip, type Column, DataTable, Empty, InfoTip, PageSkeleton, Panel, SegmentedControl, Sheet, Split, ViewOnly, confirmInPage } from "@/components/ds";
-import { PHONE, usePhone } from "@/components/ds/page-info";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useCompanyZone } from "@/lib/dates";
-import { formatMoney, zoneName } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  type Column,
+  DataTable,
+  Empty,
+  InfoTip,
+  PageSkeleton,
+  Panel,
+  SegmentedControl,
+  Sheet,
+  Split,
+  ViewOnly,
+  confirmInPage,
+} from '@/components/ds';
+import { PHONE, usePhone } from '@/components/ds/page-info';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useCompanyZone } from '@/lib/dates';
+import { formatMoney, zoneName } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { CompanyHeader } from "../_nav";
-import { RitualInspector } from "./_components/RitualInspector";
+import { CompanyHeader } from '../_nav';
+import { RitualInspector } from './_components/RitualInspector';
 import {
   estimateText,
   latestPreRead,
@@ -30,7 +44,7 @@ import {
   zoneTime,
   type Ritual,
   type SummarySettings,
-} from "./_components/lib";
+} from './_components/lib';
 
 export default function RitualsPage() {
   return (
@@ -49,31 +63,41 @@ export default function RitualsPage() {
 function Rituals() {
   const { can, capsReady, capsError } = useMe();
   // #370: editing rituals is the ritual routes' role (owners).
-  const owner = can("update_ritual");
-  const ritualsQ = useQuery("rituals", () => unwrap(api.GET("/v1/rituals")));
-  const settingsQ = useQuery("rituals|summaries", () => unwrap(api.GET("/v1/rituals/summaries")));
+  const owner = can('update_ritual');
+  const ritualsQ = useQuery('rituals', () => unwrap(api.GET('/v1/rituals')));
+  const settingsQ = useQuery('rituals|summaries', () => unwrap(api.GET('/v1/rituals/summaries')));
   // The owner's member pickers read the member list (owners only); every name on the page
   // comes from the member directory, which everyone who sees the table may read.
-  const membersQ = useQuery(owner ? "rituals|members" : "rituals|members|none", () => (owner ? unwrap(api.GET("/v1/members")) : Promise.resolve(undefined)));
+  const membersQ = useQuery(owner ? 'rituals|members' : 'rituals|members|none', () =>
+    owner ? unwrap(api.GET('/v1/members')) : Promise.resolve(undefined),
+  );
   // qa-company-24: whether an owner chose the Company time zone yet (Settings are the owner's).
-  const zoneQ = useQuery(owner ? "settings|company_timezone" : "settings|company_timezone|none", () =>
-    owner ? unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })) : Promise.resolve(undefined),
+  const zoneQ = useQuery(
+    owner ? 'settings|company_timezone' : 'settings|company_timezone|none',
+    () =>
+      owner
+        ? unwrap(api.GET('/v1/settings/{key}', { params: { path: { key: 'company_timezone' } } }))
+        : Promise.resolve(undefined),
   );
   // home-honest-loading: Home's "Ritual settings" opens with its ritual picked (?ritual=<id>).
-  const asked = useSearchParams().get("ritual");
+  const asked = useSearchParams().get('ritual');
   const [picked, setPicked] = useState<string | null>(asked);
   const [adding, setAdding] = useState(false);
   // qa-company-6: on a phone the selected ritual opens in a sheet, as Decisions does.
   const phone = usePhone();
   // The asked ritual opens in its sheet on a phone only: a wider window shows it beside the
   // table, and a later resize to a phone must not pop a sheet nobody asked for.
-  const [sheetOpen, setSheetOpen] = useState(() => !!asked && typeof window !== "undefined" && window.matchMedia(PHONE).matches);
+  const [sheetOpen, setSheetOpen] = useState(
+    () => !!asked && typeof window !== 'undefined' && window.matchMedia(PHONE).matches,
+  );
   const companyZone = useCompanyZone();
   const zone = zoneText(companyZone, !!zoneQ.data?.is_default);
   const rows = ritualsQ.data ?? [];
-  const ownerIds = [...new Set(rows.map((r) => r.owner_id))].sort().join(",");
+  const ownerIds = [...new Set(rows.map((r) => r.owner_id))].sort().join(',');
   const peopleQ = useQuery(`rituals|people|${ownerIds}`, () =>
-    ownerIds ? unwrap(api.GET("/v1/people", { params: { query: { ids: ownerIds.split(",") } } })) : Promise.resolve([]),
+    ownerIds
+      ? unwrap(api.GET('/v1/people', { params: { query: { ids: ownerIds.split(',') } } }))
+      : Promise.resolve([]),
   );
   const selected = rows.find((r) => r.id === picked) ?? rows[0];
 
@@ -86,13 +110,19 @@ function Rituals() {
     // qa-company-8: names and schedules wrap rather than cut; Owner and Attendees (in the
     // inspector too) give way when the table is narrow beside it (qa-company-22: already
     // beside the inspector at 1440, so names and schedules keep one or two lines).
-    { key: "title", header: "Ritual", phone: "title", wrap: true, cell: (r) => <span className="font-medium">{r.title}</span> },
     {
-      key: "when",
-      header: "When",
-      phone: "meta",
+      key: 'title',
+      header: 'Ritual',
+      phone: 'title',
       wrap: true,
-      className: "max-[600px]:basis-full",
+      cell: (r) => <span className="font-medium">{r.title}</span>,
+    },
+    {
+      key: 'when',
+      header: 'When',
+      phone: 'meta',
+      wrap: true,
+      className: 'max-[600px]:basis-full',
       // qa-company-22: the schedule and the next meeting in one column; qa-company-7: a meeting
       // prepared early stays Next, its pre-read one click away. A paused ritual has no Next.
       cell: (r) => (
@@ -104,15 +134,19 @@ function Rituals() {
               Starts when the first goal is confirmed
             </span>
           )}
-          {r.status === "active" && r.next_due_at && (
+          {r.status === 'active' && r.next_due_at && (
             <span className="block text-text2">
-              Next{" "}
-              <span data-col="next" className="tnum" title={zoneTime(r.next_due_at, scheduleOf(r.schedule).timezone)}>
+              Next{' '}
+              <span
+                data-col="next"
+                className="tnum"
+                title={zoneTime(r.next_due_at, scheduleOf(r.schedule).timezone)}
+              >
                 {localTime(r.next_due_at)}
               </span>
               {r.next_pre_read && (
                 <>
-                  {" · "}
+                  {' · '}
                   <Link
                     href={`/company/rituals/${r.next_pre_read.id}`}
                     data-testid="next-pre-read"
@@ -129,11 +163,11 @@ function Rituals() {
       ),
     },
     {
-      key: "owner",
-      header: "Owner",
-      width: "132px",
-      phone: "hide",
-      narrow: "laptop",
+      key: 'owner',
+      header: 'Owner',
+      width: '132px',
+      phone: 'hide',
+      narrow: 'laptop',
       wrap: true,
       cell: (r) => (
         <span className="text-sm" title={personEmail(peopleQ.data, r.owner_id)}>
@@ -141,17 +175,25 @@ function Rituals() {
         </span>
       ),
     },
-    { key: "attendees", header: "Attendees", width: "88px", phone: "hide", narrow: "laptop", align: "right", cell: (r) => <span className="tnum text-sm">{r.attendee_ids.length}</span> },
     {
-      key: "last",
+      key: 'attendees',
+      header: 'Attendees',
+      width: '88px',
+      phone: 'hide',
+      narrow: 'laptop',
+      align: 'right',
+      cell: (r) => <span className="tnum text-sm">{r.attendee_ids.length}</span>,
+    },
+    {
+      key: 'last',
       // qa-company-2: the newest pre-read, a ready one for the next meeting too, so the row
       // never says "None yet" beside "Pre-read ready" (the panel's newest occurrence is the same).
-      header: "Latest pre-read",
-      width: "128px",
-      phone: "meta",
-      phoneLabel: "Latest pre-read",
+      header: 'Latest pre-read',
+      width: '128px',
+      phone: 'meta',
+      phoneLabel: 'Latest pre-read',
       // qa-company-34: on a phone, a line of its own under When and Next.
-      className: "max-[600px]:basis-full",
+      className: 'max-[600px]:basis-full',
       cell: (r) => {
         const latest = latestPreRead(r);
         return latest ? (
@@ -169,24 +211,24 @@ function Rituals() {
       },
     },
     {
-      key: "state",
-      header: "State",
-      width: "112px",
+      key: 'state',
+      header: 'State',
+      width: '112px',
       // On a phone the state sits right of the name.
-      phone: "action",
+      phone: 'action',
       // H5: the goals check-in the metrics review replaced says so (an owner may resume it).
       // qa-company-32: a thin edge in the chip's own colour keeps the pill seen on the selected
       // row's tint too (the pass and accent tints are near alike, in light and dark).
       cell: (r) => (
         <Chip
-          kind={r.status === "active" ? "pass" : "na"}
+          kind={r.status === 'active' ? 'pass' : 'na'}
           dot
           wrap={!!r.replaced_by}
           title={r.replaced_by ? `Replaced by ${r.replaced_by}` : undefined}
           className="shadow-[inset_0_0_0_1px_color-mix(in_srgb,currentColor_35%,transparent)]"
           data-testid="ritual-state"
         >
-          {r.status === "active" ? "On" : r.replaced_by ? `Replaced by ${r.replaced_by}` : "Paused"}
+          {r.status === 'active' ? 'On' : r.replaced_by ? `Replaced by ${r.replaced_by}` : 'Paused'}
         </Chip>
       ),
     },
@@ -208,7 +250,13 @@ function Rituals() {
         }
       />
       {ritualsQ.error && <ErrorNote>{ritualsQ.error}</ErrorNote>}
-      {settingsQ.data && <SummariesLine settings={settingsQ.data} canEdit={owner} onChanged={(s) => settingsQ.setData(() => s)} />}
+      {settingsQ.data && (
+        <SummariesLine
+          settings={settingsQ.data}
+          canEdit={owner}
+          onChanged={(s) => settingsQ.setData(() => s)}
+        />
+      )}
       {adding && owner && (
         <AddRitual
           onClose={() => setAdding(false)}
@@ -227,8 +275,9 @@ function Rituals() {
           count={ritualsQ.data ? rows.length : undefined}
           tools={
             <InfoTip label="rituals" align="end">
-              Oracle prepares each ritual&apos;s pre-read from its own data before the meeting and puts it in the owner&apos;s and
-              attendees&apos; Inbox. After the meeting the owner records notes, or skips it with a reason.
+              Oracle prepares each ritual&apos;s pre-read from its own data before the meeting and
+              puts it in the owner&apos;s and attendees&apos; Inbox. After the meeting the owner
+              records notes, or skips it with a reason.
             </InfoTip>
           }
         >
@@ -240,8 +289,11 @@ function Rituals() {
                 {/* #1590: why times default to Pacific sits behind the (i). */}
                 <InfoTip label="the time zone" align="start" testId="rituals-zone-tip">
                   Times use {zoneName(companyZone)} until you set the company time zone.
-                </InfoTip>{" "}
-                <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
+                </InfoTip>{' '}
+                <Link
+                  href="/settings/company#timezone"
+                  className="font-semibold text-accent-ink hover:underline"
+                >
                   Set it
                 </Link>
               </>
@@ -265,13 +317,18 @@ function Rituals() {
                 setPicked(r.id);
                 if (phone) setSheetOpen(true);
               }}
-              rowProps={(r) => ({ "data-testid": "ritual-row", "data-kind": r.kind })}
+              rowProps={(r) => ({ 'data-testid': 'ritual-row', 'data-kind': r.kind })}
             />
           )}
         </Panel>
       </Split>
       {phone && (
-        <Sheet open={sheetOpen && !!selected} title={selected?.title ?? "Ritual"} onClose={() => setSheetOpen(false)} testId="ritual-sheet">
+        <Sheet
+          open={sheetOpen && !!selected}
+          title={selected?.title ?? 'Ritual'}
+          onClose={() => setSheetOpen(false)}
+          testId="ritual-sheet"
+        >
           {selected && inspectorOf(selected, true)}
         </Sheet>
       )}
@@ -295,13 +352,24 @@ function Rituals() {
 }
 
 /** Summaries: On demand · Every pre-read (owners change it), and the monthly estimate. */
-function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySettings; canEdit: boolean; onChanged: (s: SummarySettings) => void }) {
+function SummariesLine({
+  settings,
+  canEdit,
+  onChanged,
+}: {
+  settings: SummarySettings;
+  canEdit: boolean;
+  onChanged: (s: SummarySettings) => void;
+}) {
   const [error, setError] = useState<string | null>(null);
   // qa-company-23: what the last change saved, in words.
   const [saved, setSaved] = useState<string | null>(null);
-  const label = settings.mode === "always" ? "Every pre-read" : "On demand";
+  const label = settings.mode === 'always' ? 'Every pre-read' : 'On demand';
   return (
-    <div data-testid="ritual-summaries" className="mb-3 flex flex-wrap items-center gap-3 rounded-panel border border-line bg-surface px-4 py-2.5 shadow-panel">
+    <div
+      data-testid="ritual-summaries"
+      className="mb-3 flex flex-wrap items-center gap-3 rounded-panel border border-line bg-surface px-4 py-2.5 shadow-panel"
+    >
       {canEdit ? (
         <>
           <span className="text-sm font-semibold text-text2">Summaries</span>
@@ -310,28 +378,36 @@ function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySett
             size="sm"
             value={settings.mode}
             items={[
-              { value: "on_demand", label: "On demand", title: "Summarize with Oracle on an occurrence page" },
-              { value: "always", label: "Every pre-read", title: "Oracle summarizes each pre-read as soon as it is built" },
+              {
+                value: 'on_demand',
+                label: 'On demand',
+                title: 'Summarize with Oracle on an occurrence page',
+              },
+              {
+                value: 'always',
+                label: 'Every pre-read',
+                title: 'Oracle summarizes each pre-read as soon as it is built',
+              },
             ]}
             onChange={async (mode) => {
               setError(null);
               setSaved(null);
               // qa-company-23: a recurring cost is asked about first, with what it costs.
               if (
-                mode === "always" &&
+                mode === 'always' &&
                 !(await confirmInPage({
-                  action: "Summarize every pre-read",
+                  action: 'Summarize every pre-read',
                   message: `Oracle will write a summary of every pre-read as soon as it is built, each one an Oracle run. With today's rituals that is ${monthlyText(settings)}.`,
                 }))
               )
                 return;
               try {
-                const next = await unwrap(api.PUT("/v1/rituals/summaries", { body: { mode } }));
+                const next = await unwrap(api.PUT('/v1/rituals/summaries', { body: { mode } }));
                 onChanged(next);
                 setSaved(
-                  mode === "always"
+                  mode === 'always'
                     ? `Saved · Oracle now summarizes every pre-read, ${monthlyText(next)}`
-                    : "Saved · Summaries are on demand: Oracle writes one only when someone asks",
+                    : 'Saved · Summaries are on demand: Oracle writes one only when someone asks',
                 );
               } catch (e) {
                 setError(errorMessage(e));
@@ -349,7 +425,7 @@ function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySett
         </span>
         <InfoTip label="the summaries estimate" align="start">
           {settings.estimate.rituals.length === 0
-            ? "No active ritual would be summarized."
+            ? 'No active ritual would be summarized.'
             : settings.estimate.rituals.map((r) => (
                 <span key={r.ritual_id} className="block">
                   {r.title}: {perMonthText(r.runs_per_month)}, {formatMoney(r.per_summary_usd)} each
@@ -359,7 +435,7 @@ function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySett
           <span className="mt-1 block">
             {settings.estimate.rituals.length === 0
               ? `Each summary is one Oracle run of about ${formatMoney(settings.estimate.per_summary_usd)}.`
-              : "Each summary is one Oracle run."}
+              : 'Each summary is one Oracle run.'}
           </span>
         </InfoTip>
       </span>
@@ -377,8 +453,14 @@ function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySett
  * Add ritual (owners): a custom ritual with a title, made with the defaults it says
  * (qa-company-29); its schedule, length and people are then edited in the inspector.
  */
-function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Ritual) => Promise<void> }) {
-  const [title, setTitle] = useState("");
+function AddRitual({
+  onClose,
+  onAdded,
+}: {
+  onClose: () => void;
+  onAdded: (r: Ritual) => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   return (
     <form
@@ -389,13 +471,20 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
         setError(null);
         try {
           const r = await unwrap(
-            api.POST("/v1/rituals", {
+            api.POST('/v1/rituals', {
               body: {
-                kind: "custom",
+                kind: 'custom',
                 title: title.trim(),
                 attendee_ids: [],
                 // In the Company time zone: a ritual has no zone of its own.
-                schedule: { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00" },
+                schedule: {
+                  freq: 'weekly',
+                  interval: 1,
+                  weekday: 0,
+                  week_of_month: 1,
+                  month: 1,
+                  time: '09:00',
+                },
               },
             }),
           );
@@ -411,7 +500,8 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
           {/* detailed-b 17: the defaults sentence sits behind its (i), not as a second line of prose. */}
           <InfoTip label="this ritual's defaults" testId="add-ritual-defaults">
             <span data-testid="add-ritual-hint">
-              It starts every Monday at 9:00 AM for 30 minutes, with you as owner and no attendees. Change any of it in the panel once it is added.
+              It starts every Monday at 9:00 AM for 30 minutes, with you as owner and no attendees.
+              Change any of it in the panel once it is added.
             </span>
           </InfoTip>
         </span>
@@ -422,19 +512,28 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
           required
           maxLength={120}
           autoFocus
-          aria-describedby={title.trim() ? undefined : "add-ritual-needs"}
+          aria-describedby={title.trim() ? undefined : 'add-ritual-needs'}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
       </div>
-      <Button type="submit" variant="solid" disabled={!title.trim()} title={title.trim() ? undefined : "Type a title first"}>
+      <Button
+        type="submit"
+        variant="solid"
+        disabled={!title.trim()}
+        title={title.trim() ? undefined : 'Type a title first'}
+      >
         Add
       </Button>
       <Button variant="ghost" onClick={onClose}>
         Cancel
       </Button>
       {!title.trim() && (
-        <p id="add-ritual-needs" className="basis-full text-sm text-text2" data-testid="add-ritual-needs">
+        <p
+          id="add-ritual-needs"
+          className="basis-full text-sm text-text2"
+          data-testid="add-ritual-needs"
+        >
           Type a title to add the ritual.
         </p>
       )}

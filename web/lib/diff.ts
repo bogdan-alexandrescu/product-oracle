@@ -1,6 +1,6 @@
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-type WordOp = Schemas["WordOp"];
+type WordOp = Schemas['WordOp'];
 
 /** Splits text into words and the whitespace between them, keeping both. */
 function tokenize(text: string): string[] {
@@ -21,7 +21,7 @@ export function wordDiff(from: string, to: string): WordOp[] {
     }
   }
   const ops: WordOp[] = [];
-  const push = (op: WordOp["op"], text: string) => {
+  const push = (op: WordOp['op'], text: string) => {
     const last = ops[ops.length - 1];
     if (last && last.op === op) last.text += text;
     else ops.push({ op, text });
@@ -30,17 +30,17 @@ export function wordDiff(from: string, to: string): WordOp[] {
   let j = 0;
   while (i < n && j < m) {
     if (a[i] === b[j]) {
-      push("equal", a[i]);
+      push('equal', a[i]);
       i++;
       j++;
     } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-      push("delete", a[i++]);
+      push('delete', a[i++]);
     } else {
-      push("insert", b[j++]);
+      push('insert', b[j++]);
     }
   }
-  while (i < n) push("delete", a[i++]);
-  while (j < m) push("insert", b[j++]);
+  while (i < n) push('delete', a[i++]);
+  while (j < m) push('insert', b[j++]);
   return ops;
 }
 
@@ -58,38 +58,38 @@ function bridge(text: string): boolean {
  */
 export function readableWords(ops: WordOp[]): WordOp[] {
   const out: WordOp[] = [];
-  let del = "";
-  let ins = "";
-  let gap = "";
+  let del = '';
+  let ins = '';
+  let gap = '';
   let open = false;
   const equal = (text: string) => {
     if (!text) return;
     const last = out[out.length - 1];
-    if (last?.op === "equal") last.text += text;
-    else out.push({ op: "equal", text });
+    if (last?.op === 'equal') last.text += text;
+    else out.push({ op: 'equal', text });
   };
   const close = () => {
-    if (del) out.push({ op: "delete", text: del });
-    if (ins) out.push({ op: "insert", text: ins });
-    del = "";
-    ins = "";
+    if (del) out.push({ op: 'delete', text: del });
+    if (ins) out.push({ op: 'insert', text: ins });
+    del = '';
+    ins = '';
     open = false;
   };
   for (const w of ops) {
-    if (w.op === "equal") {
+    if (w.op === 'equal') {
       if (open && !gap && bridge(w.text)) {
         gap = w.text;
         continue;
       }
       close();
       equal(gap + w.text);
-      gap = "";
+      gap = '';
       continue;
     }
     if (gap) {
       // Review of qa-docs-11: the run joins the phrases only when the change both removes and
       // adds words; around words only added (or only removed) it stays as it is.
-      const both = (del || w.op === "delete") && (ins || w.op === "insert");
+      const both = (del || w.op === 'delete') && (ins || w.op === 'insert');
       if (both) {
         // A side still empty takes the run's words, never a bare space.
         if (del || gap.trim()) del += gap;
@@ -98,10 +98,10 @@ export function readableWords(ops: WordOp[]): WordOp[] {
         close();
         equal(gap);
       }
-      gap = "";
+      gap = '';
     }
     open = true;
-    if (w.op === "delete") del += w.text;
+    if (w.op === 'delete') del += w.text;
     else ins += w.text;
   }
   close();
@@ -139,8 +139,8 @@ interface DiffableSection {
   heading: string;
   body_text: string;
   content_hash: string;
-  layer?: "brief" | "detail" | null;
-  spec_states?: Schemas["SpecPartState"][];
+  layer?: 'brief' | 'detail' | null;
+  spec_states?: Schemas['SpecPartState'][];
 }
 
 /**
@@ -149,31 +149,34 @@ interface DiffableSection {
  * A section counts as moved when it is outside the longest run of sections that kept
  * their relative order.
  */
-export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Schemas["SectionDiff"][] {
+export function sectionDiff(
+  from: DiffableSection[],
+  to: DiffableSection[],
+): Schemas['SectionDiff'][] {
   const fromByKey = new Map(from.map((s) => [s.section_key, s]));
   const toKeys = new Set(to.map((s) => s.section_key));
   const common = to.filter((s) => fromByKey.has(s.section_key));
   const stay = longestIncreasing(common.map((s) => fromByKey.get(s.section_key)!.ordinal));
   const moved = new Set(common.filter((_, i) => !stay.has(i)).map((s) => s.section_key));
 
-  const out: Schemas["SectionDiff"][] = to.map((t) => {
+  const out: Schemas['SectionDiff'][] = to.map((t) => {
     const f = fromByKey.get(t.section_key);
     if (!f) {
       return {
         section_key: t.section_key,
-        status: "added",
+        status: 'added',
         moved: false,
         to_ordinal: t.ordinal,
         to_heading: t.heading,
         to_layer: t.layer ?? null,
-        words: [{ op: "insert", text: t.body_text }],
+        words: [{ op: 'insert', text: t.body_text }],
         spec_states: t.spec_states ?? [],
       };
     }
     const changed = f.content_hash !== t.content_hash || f.heading !== t.heading;
     return {
       section_key: t.section_key,
-      status: changed ? "changed" : "unchanged",
+      status: changed ? 'changed' : 'unchanged',
       moved: moved.has(t.section_key),
       from_ordinal: f.ordinal,
       to_ordinal: t.ordinal,
@@ -188,14 +191,14 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
 
   from.forEach((f, idx) => {
     if (toKeys.has(f.section_key)) return;
-    const removed: Schemas["SectionDiff"] = {
+    const removed: Schemas['SectionDiff'] = {
       section_key: f.section_key,
-      status: "removed",
+      status: 'removed',
       moved: false,
       from_ordinal: f.ordinal,
       from_heading: f.heading,
       from_layer: f.layer ?? null,
-      words: [{ op: "delete", text: f.body_text }],
+      words: [{ op: 'delete', text: f.body_text }],
       // The older version's states for a removed section (as the API).
       spec_states: f.spec_states ?? [],
     };

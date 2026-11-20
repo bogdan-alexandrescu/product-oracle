@@ -10,4 +10,4 @@ export const RAIL_SELECTED =
  * bar it once had on top stuck out above the highlight as a second indicator. Kept as the one
  * place both tab bars (Detailed's, Simple's) take their selected extras from.
  */
-export const TAB_BAR = "";
+export const TAB_BAR = '';

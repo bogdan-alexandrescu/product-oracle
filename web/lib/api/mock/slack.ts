@@ -7,49 +7,60 @@
  * The "slack-bridge" scenario seeds the "discussion-replies" discussions, Oracle's Slack
  * install with the bridge's scopes, and one open discussion mirrored to #product.
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import { seedDiscussionReplies, type DiscussionRow, type DiscussionsContext, type DiscussionsDb } from "./discussions";
-import { reply } from "./typed";
+import {
+  seedDiscussionReplies,
+  type DiscussionRow,
+  type DiscussionsContext,
+  type DiscussionsDb,
+} from './discussions';
+import { reply } from './typed';
 
-type Integration = Schemas["CompanyIntegrationOut"];
-type Role = Schemas["MemberOut"]["role"];
-type Link = Schemas["DiscussionSlackOut"];
+type Integration = Schemas['CompanyIntegrationOut'];
+type Role = Schemas['MemberOut']['role'];
+type Link = Schemas['DiscussionSlackOut'];
 
-export const SLACK_SCENARIO = "slack-bridge";
+export const SLACK_SCENARIO = 'slack-bridge';
 /** The seeded discussion that is mirrored to #product in the "slack-bridge" scenario. */
-export const MIRRORED_TITLE = "Alert digests: daily or weekly?";
+export const MIRRORED_TITLE = 'Alert digests: daily or weekly?';
 /** F6's bot scopes, then the ones G8 adds to read who replied (users:read.email). */
-export const F6_SCOPES = ["chat:write", "chat:write.public", "channels:read"];
-export const BRIDGE_SCOPES = [...F6_SCOPES, "groups:read", "users:read", "users:read.email"];
+export const F6_SCOPES = ['chat:write', 'chat:write.public', 'channels:read'];
+export const BRIDGE_SCOPES = [...F6_SCOPES, 'groups:read', 'users:read', 'users:read.email'];
 
 /** The channels the report can post to: every public one, and a private one the app was invited to. */
-export const SLACK_CHANNELS: Schemas["NotificationChannelOut"][] = [
-  { id: "C0ENG", name: "eng", is_private: false },
-  { id: "C0GENERAL", name: "general", is_private: false },
-  { id: "G0LEADS", name: "leads", is_private: true },
-  { id: "C0PLAN", name: "plan", is_private: false },
-  { id: "C0PRODUCT", name: "product", is_private: false },
+export const SLACK_CHANNELS: Schemas['NotificationChannelOut'][] = [
+  { id: 'C0ENG', name: 'eng', is_private: false },
+  { id: 'C0GENERAL', name: 'general', is_private: false },
+  { id: 'G0LEADS', name: 'leads', is_private: true },
+  { id: 'C0PLAN', name: 'plan', is_private: false },
+  { id: 'C0PRODUCT', name: 'product', is_private: false },
 ];
 
 /** The public channels Oracle's app is not in: Slack sends no replies from them, so a discussion is never mirrored there. */
-const NOT_IN = new Set(["C0GENERAL"]);
+const NOT_IN = new Set(['C0GENERAL']);
 /** The channels a discussion can be mirrored to: the ones Oracle's app is in. */
 export const MIRROR_CHANNELS = SLACK_CHANNELS.filter((c) => !NOT_IN.has(c.id));
 
 /** A made-up Slack thread link (never a real company's Slack). */
-const threadUrl = (channelId: string, seq: number) => `https://example-co.slack.com/archives/${channelId}/p17610400000${String(seq).padStart(5, "0")}`;
+const threadUrl = (channelId: string, seq: number) =>
+  `https://example-co.slack.com/archives/${channelId}/p17610400000${String(seq).padStart(5, '0')}`;
 
 /** Oracle's Slack install for the mock company ("Example Co"). */
-export function slackInstall(installedBy: string, id: string, createdAt: string, scopes: string[] = BRIDGE_SCOPES): Integration {
+export function slackInstall(
+  installedBy: string,
+  id: string,
+  createdAt: string,
+  scopes: string[] = BRIDGE_SCOPES,
+): Integration {
   return {
     id,
-    provider: "slack",
-    purpose: "notifications",
-    account_id: "T0EXAMPLE",
-    account_label: "Example Co",
+    provider: 'slack',
+    purpose: 'notifications',
+    account_id: 'T0EXAMPLE',
+    account_label: 'Example Co',
     scopes,
-    status: "active",
+    status: 'active',
     last_error: null,
     installed_by: installedBy,
     created_at: createdAt,
@@ -57,11 +68,17 @@ export function slackInstall(installedBy: string, id: string, createdAt: string,
 }
 
 /** True when the install lacks a scope the bridge needs: the card asks an owner to reconnect. */
-export const needsReconnect = (i: Integration | null) => !!i && BRIDGE_SCOPES.some((s) => !(i.scopes ?? []).includes(s));
+export const needsReconnect = (i: Integration | null) =>
+  !!i && BRIDGE_SCOPES.some((s) => !(i.scopes ?? []).includes(s));
 
-export function slackStatus(i: Integration | null): Schemas["SlackStatusOut"] {
+export function slackStatus(i: Integration | null): Schemas['SlackStatusOut'] {
   const reconnect = needsReconnect(i);
-  return { connected: !!i, label: i ? (i.account_label ?? i.account_id) : null, mirroring: !!i && !reconnect, needs_reconnect: reconnect };
+  return {
+    connected: !!i,
+    label: i ? (i.account_label ?? i.account_id) : null,
+    mirroring: !!i && !reconnect,
+    needs_reconnect: reconnect,
+  };
 }
 
 /** Disconnect: every mirrored thread gets its closing line and stops mirroring. */
@@ -70,7 +87,10 @@ export function unlinkAll(db: DiscussionsDb | undefined) {
 }
 
 const json = (status: number, body: unknown) =>
-  new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  new Response(status === 204 ? null : JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 const refuse = (status: number, detail: string) => json(status, { detail });
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
@@ -78,16 +98,22 @@ const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner
  * GET /v1/company-integrations/slack/status (any member) and …/slack/channels (commenters and
  * up; `?mirror=true` keeps the channels Oracle's app is in); null otherwise.
  */
-export function slackRoute(integration: Integration | null, me: { role: Role }, req: Request, p: string[]): Response | null {
-  if (p[1] !== "company-integrations" || p[2] !== "slack" || req.method !== "GET") return null;
-  if (p[3] === "status") return reply("/v1/company-integrations/slack/status", "get", slackStatus(integration));
-  if (p[3] === "channels") {
-    if (RANK[me.role] < RANK.commenter) return refuse(403, "Requires the commenter role");
-    if (!integration) return refuse(409, "Connect Slack for notifications first");
+export function slackRoute(
+  integration: Integration | null,
+  me: { role: Role },
+  req: Request,
+  p: string[],
+): Response | null {
+  if (p[1] !== 'company-integrations' || p[2] !== 'slack' || req.method !== 'GET') return null;
+  if (p[3] === 'status')
+    return reply('/v1/company-integrations/slack/status', 'get', slackStatus(integration));
+  if (p[3] === 'channels') {
+    if (RANK[me.role] < RANK.commenter) return refuse(403, 'Requires the commenter role');
+    if (!integration) return refuse(409, 'Connect Slack for notifications first');
     return reply(
-      "/v1/company-integrations/slack/channels",
-      "get",
-      new URL(req.url).searchParams.get("mirror") === "true" ? MIRROR_CHANNELS : SLACK_CHANNELS,
+      '/v1/company-integrations/slack/channels',
+      'get',
+      new URL(req.url).searchParams.get('mirror') === 'true' ? MIRROR_CHANNELS : SLACK_CHANNELS,
     );
   }
   return null;
@@ -102,55 +128,81 @@ export async function discussionSlackRoute(
   ctx: { me: { id: string; role: Role }; integration: Integration | null },
   req: Request,
 ): Promise<Response | null> {
-  if (!(d.started_by === ctx.me.id || RANK[ctx.me.role] >= RANK.approver)) return refuse(403, "Only the starter or an approver can mirror it to Slack");
-  if (req.method === "DELETE") {
+  if (!(d.started_by === ctx.me.id || RANK[ctx.me.role] >= RANK.approver))
+    return refuse(403, 'Only the starter or an approver can mirror it to Slack');
+  if (req.method === 'DELETE') {
     d.slack = null;
-    return reply("/v1/discussions/{discussion_id}/slack", "delete", undefined, 204);
+    return reply('/v1/discussions/{discussion_id}/slack', 'delete', undefined, 204);
   }
-  if (req.method !== "POST") return null;
-  if (d.status === "closed") return refuse(409, "This discussion is closed");
-  if (d.origin === "panel") return refuse(422, "Share a panel chat with Share as discussion");
-  if (d.visibility === "private") return refuse(422, "Private discussions stay in Oracle");
-  if (!ctx.integration) return refuse(409, "An owner connects Oracle to Slack in Settings");
-  if (needsReconnect(ctx.integration)) return refuse(409, "Reconnect Slack to allow mirroring discussions");
+  if (req.method !== 'POST') return null;
+  if (d.status === 'closed') return refuse(409, 'This discussion is closed');
+  if (d.origin === 'panel') return refuse(422, 'Share a panel chat with Share as discussion');
+  if (d.visibility === 'private') return refuse(422, 'Private discussions stay in Oracle');
+  if (!ctx.integration) return refuse(409, 'An owner connects Oracle to Slack in Settings');
+  if (needsReconnect(ctx.integration))
+    return refuse(409, 'Reconnect Slack to allow mirroring discussions');
   if (d.slack) return refuse(409, `Already mirrored to #${d.slack.channel_name}`);
-  const { channel_id } = (JSON.parse((await req.text()) || "{}") ?? {}) as Partial<Schemas["DiscussionSlackIn"]>;
+  const { channel_id } = (JSON.parse((await req.text()) || '{}') ?? {}) as Partial<
+    Schemas['DiscussionSlackIn']
+  >;
   const channel = MIRROR_CHANNELS.find((c) => c.id === channel_id);
   if (!channel) return refuse(422, "Oracle's Slack app is not in that channel");
-  const link: Link = { channel_name: channel.name, thread_url: threadUrl(channel.id, d.lock_version), status: "live", error: null };
+  const link: Link = {
+    channel_name: channel.name,
+    thread_url: threadUrl(channel.id, d.lock_version),
+    status: 'live',
+    error: null,
+  };
   d.slack = link;
-  return reply("/v1/discussions/{discussion_id}/slack", "post", link, 201);
+  return reply('/v1/discussions/{discussion_id}/slack', 'post', link, 201);
 }
 
 /**
  * The "slack-bridge" scenario: "discussion-replies", plus an open discussion the approver
  * started on the same Problem, already mirrored to #product.
  */
-export function seedSlackBridge(ctx: Omit<DiscussionsContext, "me" | "db">, documentId: string, label: string, url: string): DiscussionsDb {
+export function seedSlackBridge(
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  documentId: string,
+  label: string,
+  url: string,
+): DiscussionsDb {
   const db = seedDiscussionReplies(ctx, documentId, label, url);
-  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
-  const at = "2026-10-21T11:00:00Z";
+  const approver = ctx.members.find((m) => m.email === 'approver@example.com')!.id;
+  const at = '2026-10-21T11:00:00Z';
   const mirrored: DiscussionRow = {
     ...db.discussions[0],
     id: ctx.uuid(),
     title: MIRRORED_TITLE,
-    visibility: "open",
+    visibility: 'open',
     summary_shared: true,
     started_by: approver,
     private_findings: null,
     last_message_at: at,
     created_at: at,
     updated_at: at,
-    slack: { channel_name: "product", thread_url: threadUrl("C0PRODUCT", 1), status: "live", error: null },
+    slack: {
+      channel_name: 'product',
+      thread_url: threadUrl('C0PRODUCT', 1),
+      status: 'live',
+      error: null,
+    },
   };
   db.discussions.push(mirrored);
-  db.participants.push({ discussion_id: mirrored.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  db.participants.push({
+    discussion_id: mirrored.id,
+    user_id: approver,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: at,
+  });
   db.messages.push({
     id: ctx.uuid(),
     discussion_id: mirrored.id,
-    author_kind: "person",
+    author_kind: 'person',
     author_id: approver,
-    body: "Daily digests or weekly? Asking the team in #product too.",
+    body: 'Daily digests or weekly? Asking the team in #product too.',
     mentions: [],
     mentions_oracle: false,
     reply_to: null,
@@ -176,11 +228,12 @@ export function injectSlackReply(
   const d = db.discussions.find((x) => x.title === input.title);
   if (!d?.slack) throw new Error(`"${input.title}" is not mirrored to Slack`);
   const who = members.find((m) => m.email === input.email);
-  if (!who || who.status === "disabled" || RANK[who.role] < RANK.commenter) throw new Error(`${input.email} cannot write here: the reply is not kept`);
+  if (!who || who.status === 'disabled' || RANK[who.role] < RANK.commenter)
+    throw new Error(`${input.email} cannot write here: the reply is not kept`);
   db.messages.push({
     id,
     discussion_id: d.id,
-    author_kind: "person",
+    author_kind: 'person',
     author_id: who.id,
     body: input.text,
     mentions: [],
@@ -189,11 +242,18 @@ export function injectSlackReply(
     created_at: at,
     edited_at: null,
     deleted_at: null,
-    via: "slack",
+    via: 'slack',
   });
   d.last_message_at = at;
   if (!db.participants.some((x) => x.discussion_id === d.id && x.user_id === who.id && !x.left_at))
-    db.participants.push({ discussion_id: d.id, user_id: who.id, added_via: "posted", left_at: null, last_read_at: null, created_at: at });
+    db.participants.push({
+      discussion_id: d.id,
+      user_id: who.id,
+      added_via: 'posted',
+      left_at: null,
+      last_read_at: null,
+      created_at: at,
+    });
   return id;
 }
 
@@ -204,7 +264,7 @@ export function injectSlackReply(
 export function failSlackMirror(db: DiscussionsDb, input: { title: string; error: string }) {
   const d = db.discussions.find((x) => x.title === input.title);
   if (!d?.slack) throw new Error(`"${input.title}" is not mirrored to Slack`);
-  d.slack = { ...d.slack, thread_url: null, status: "failed", error: input.error };
+  d.slack = { ...d.slack, thread_url: null, status: 'failed', error: input.error };
 }
 
 /**
@@ -214,5 +274,5 @@ export function failSlackMirror(db: DiscussionsDb, input: { title: string; error
 export function holdSlackMirror(db: DiscussionsDb, input: { title: string }) {
   const d = db.discussions.find((x) => x.title === input.title);
   if (!d?.slack) throw new Error(`"${input.title}" is not mirrored to Slack`);
-  d.slack = { ...d.slack, thread_url: null, status: "posting", error: null };
+  d.slack = { ...d.slack, thread_url: null, status: 'posting', error: null };
 }

@@ -1,36 +1,66 @@
-"use client";
+'use client';
 
-import { BRANDING_OPS } from "@/lib/api/branding-types";
-import { useMe, type Operation } from "@/lib/me";
+import { BRANDING_OPS } from '@/lib/api/branding-types';
+import { useMe, type Operation } from '@/lib/me';
 
 /**
  * Settings' tabs, each with the API read its page needs (#370): a tab shows when the
  * signed-in role can call it. Which role that is lives in the API's route roles alone.
  */
 export const SETTINGS_TABS: { label: string; href: string; testId: string; read: Operation }[] = [
-  { label: "Members", href: "/settings/members", testId: "nav-members", read: "list_people" },
+  { label: 'Members', href: '/settings/members', testId: 'nav-members', read: 'list_people' },
   // O5 lane 4: every member reads the company's branding there; the other company settings are the owner's.
-  { label: "Company", href: "/settings/company", testId: "nav-company", read: BRANDING_OPS.get },
-  { label: "API tokens", href: "/settings/api-tokens", testId: "nav-api-tokens", read: "list_api_tokens" },
-  { label: "Connections", href: "/settings/connections", testId: "nav-connections", read: "list_connections" },
-  { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts", read: "list_claude_accounts" },
-  { label: "Sources", href: "/settings/sources", testId: "nav-sources", read: "list_sources" },
-  { label: "Notifications", href: "/settings/notifications", testId: "nav-notifications", read: "list_company_integrations" },
+  { label: 'Company', href: '/settings/company', testId: 'nav-company', read: BRANDING_OPS.get },
+  {
+    label: 'API tokens',
+    href: '/settings/api-tokens',
+    testId: 'nav-api-tokens',
+    read: 'list_api_tokens',
+  },
+  {
+    label: 'Connections',
+    href: '/settings/connections',
+    testId: 'nav-connections',
+    read: 'list_connections',
+  },
+  {
+    label: 'Claude accounts',
+    href: '/settings/claude-accounts',
+    testId: 'nav-claude-accounts',
+    read: 'list_claude_accounts',
+  },
+  { label: 'Sources', href: '/settings/sources', testId: 'nav-sources', read: 'list_sources' },
+  {
+    label: 'Notifications',
+    href: '/settings/notifications',
+    testId: 'nav-notifications',
+    read: 'list_company_integrations',
+  },
   // I1: approvers (their own) and owners (every one); absent below approver (#370).
-  { label: "Webhooks", href: "/settings/webhooks", testId: "nav-webhooks", read: "list_webhooks" },
+  { label: 'Webhooks', href: '/settings/webhooks', testId: 'nav-webhooks', read: 'list_webhooks' },
   // H5: the PostHog connection the weekly metrics are read from; owners alone (#370).
-  { label: "Analytics", href: "/settings/analytics", testId: "nav-analytics", read: "get_analytics_integration" },
-  { label: "Templates", href: "/settings/templates", testId: "nav-templates", read: "list_templates" },
-  { label: "Themes", href: "/settings/themes", testId: "nav-themes", read: "list_themes" },
-  { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy", read: "get_autonomy" },
+  {
+    label: 'Analytics',
+    href: '/settings/analytics',
+    testId: 'nav-analytics',
+    read: 'get_analytics_integration',
+  },
+  {
+    label: 'Templates',
+    href: '/settings/templates',
+    testId: 'nav-templates',
+    read: 'list_templates',
+  },
+  { label: 'Themes', href: '/settings/themes', testId: 'nav-themes', read: 'list_themes' },
+  { label: 'Autonomy', href: '/settings/autonomy', testId: 'nav-autonomy', read: 'get_autonomy' },
   // #482: owners see Trash (#370); commenters and up, the features and goals they deleted.
-  { label: "Trash", href: "/settings/trash", testId: "nav-trash", read: "list_trash" },
+  { label: 'Trash', href: '/settings/trash', testId: 'nav-trash', read: 'list_trash' },
 ];
 
 /** Settings pages that only make something: they need that operation, not just the read. */
 export const SETTINGS_WRITES: Record<string, Operation> = {
-  "/settings/templates/new": "create_template",
-  "/settings/themes/new": "create_theme",
+  '/settings/templates/new': 'create_template',
+  '/settings/themes/new': 'create_theme',
 };
 
 /** The tab a Settings path belongs to, if any. */

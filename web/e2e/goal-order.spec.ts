@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /**
  * goal-order: goals keep one order on every page, set by a Position field (1 = first) in the
@@ -13,11 +13,11 @@ import { login } from "./helpers";
  */
 
 const POSITIONS: [key: string, name: string, position: number][] = [
-  ["grow-retention", "Grow retention", 1],
-  ["quiet-alerts", "Keep alerts quiet", 2],
-  ["faster-activation", "Faster activation", 3],
-  ["g.paid-conversion", "Growth", 4],
-  ["g.activation", "Activation", 5],
+  ['grow-retention', 'Grow retention', 1],
+  ['quiet-alerts', 'Keep alerts quiet', 2],
+  ['faster-activation', 'Faster activation', 3],
+  ['g.paid-conversion', 'Growth', 4],
+  ['g.activation', 'Activation', 5],
 ];
 const NAMES = POSITIONS.map(([, name]) => name);
 
@@ -42,84 +42,102 @@ async function inOrder(list: Locator, want: string[]) {
 }
 
 async function setPositions(page: Page) {
-  await page.goto("/ground-truth");
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
+  await page.goto('/ground-truth');
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth' })).toBeVisible();
   for (const [key, name, position] of POSITIONS) {
     const row = page.getByTestId(`goal-${key}`);
-    await row.getByRole("button", { name, exact: true }).click();
-    const drawer = page.getByRole("dialog").last();
-    await drawer.getByRole("button", { name: "Edit" }).click();
-    const form = drawer.getByRole("form", { name: "Edit" });
+    await row.getByRole('button', { name, exact: true }).click();
+    const drawer = page.getByRole('dialog').last();
+    await drawer.getByRole('button', { name: 'Edit' }).click();
+    const form = drawer.getByRole('form', { name: 'Edit' });
     await form.getByLabel(/^Position/).fill(String(position));
-    await form.getByRole("button", { name: "Save" }).click();
+    await form.getByRole('button', { name: 'Save' }).click();
     await expect(form).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    await page.keyboard.press('Escape');
     await expect(drawer).toHaveCount(0);
   }
 }
 
 for (const [label, viewport] of [
-  ["desktop", { width: 1366, height: 820 }],
-  ["phone", { width: 390, height: 844 }],
+  ['desktop', { width: 1366, height: 820 }],
+  ['phone', { width: 390, height: 844 }],
 ] as const) {
   test.describe(`goal order (${label})`, () => {
     test.use({ viewport });
 
-    test("the Position field sets one goal order on every page", async ({ page }) => {
+    test('the Position field sets one goal order on every page', async ({ page }) => {
       test.setTimeout(120_000);
-      await page.context().addInitScript(([key]) => localStorage.setItem(key, "simple-home"), [MOCK_SCENARIO_KEY]);
+      await page
+        .context()
+        .addInitScript(([key]) => localStorage.setItem(key, 'simple-home'), [MOCK_SCENARIO_KEY]);
       await login(page);
       await setPositions(page);
 
-      await page.goto("/simple");
-      await inOrder(page.getByTestId("home-goal"), expected("Grow retention", "Keep alerts quiet", "Faster activation"));
+      await page.goto('/simple');
+      await inOrder(
+        page.getByTestId('home-goal'),
+        expected('Grow retention', 'Keep alerts quiet', 'Faster activation'),
+      );
 
-      await page.getByRole("button", { name: "New PRD" }).first().click();
-      const chips = page.getByRole("group", { name: "The goals it helps" }).getByRole("button");
-      await inOrder(chips, expected("Grow retention", "Keep alerts quiet", "Faster activation"));
+      await page.getByRole('button', { name: 'New PRD' }).first().click();
+      const chips = page.getByRole('group', { name: 'The goals it helps' }).getByRole('button');
+      await inOrder(chips, expected('Grow retention', 'Keep alerts quiet', 'Faster activation'));
 
-      await page.goto("/simple/roadmap");
-      await inOrder(page.getByTestId("goal-counters").getByRole("listitem"), expected("Grow retention", "Keep alerts quiet", "Faster activation"));
+      await page.goto('/simple/roadmap');
+      await inOrder(
+        page.getByTestId('goal-counters').getByRole('listitem'),
+        expected('Grow retention', 'Keep alerts quiet', 'Faster activation'),
+      );
 
-      await page.goto("/simple/priorities");
-      await page.getByRole("tab", { name: "Goal buckets" }).click();
-      await inOrder(page.getByTestId("goal-bucket"), expected("Grow retention", "Faster activation"));
+      await page.goto('/simple/priorities');
+      await page.getByRole('tab', { name: 'Goal buckets' }).click();
+      await inOrder(
+        page.getByTestId('goal-bucket'),
+        expected('Grow retention', 'Faster activation'),
+      );
 
       // Simple > Decisions: the Goal filter lists its goals in the one order too (by key,
       // Faster activation would come first).
-      await page.goto("/simple/decisions");
-      const goalBox = page.getByRole("combobox", { name: "Goal", exact: true });
+      await page.goto('/simple/decisions');
+      const goalBox = page.getByRole('combobox', { name: 'Goal', exact: true });
       await expect(goalBox).toBeVisible();
       await expect
-        .poll(async () => order(await goalBox.locator("option").allTextContents()))
-        .toEqual(expected("Grow retention", "Faster activation"));
+        .poll(async () => order(await goalBox.locator('option').allTextContents()))
+        .toEqual(expected('Grow retention', 'Faster activation'));
 
-      await page.goto("/plan");
+      await page.goto('/plan');
       const cards = page.locator('[data-testid^="home-goal-G"]');
       // Plan's goal cards show the first four goals, then "2 more".
       await inOrder(cards, NAMES.slice(0, 4));
 
-      await page.goto("/priorities");
-      const byGoal = page.getByRole("table", { name: "By goal" }).getByRole("row");
-      await inOrder(byGoal, expected("Growth", "Activation"));
+      await page.goto('/priorities');
+      const byGoal = page.getByRole('table', { name: 'By goal' }).getByRole('row');
+      await inOrder(byGoal, expected('Growth', 'Activation'));
 
       // Detailed > Ground Truth > Flagged: the Goal coverage grid.
-      await page.goto("/ground-truth");
-      await page.getByRole("tab", { name: /Flagged/ }).click();
-      await inOrder(page.getByRole("grid", { name: "Goal coverage" }).getByRole("row"), NAMES);
+      await page.goto('/ground-truth');
+      await page.getByRole('tab', { name: /Flagged/ }).click();
+      await inOrder(page.getByRole('grid', { name: 'Goal coverage' }).getByRole('row'), NAMES);
     });
 
-    test("the Position field refuses a number below 1", async ({ page }) => {
-      await page.context().addInitScript(([key]) => localStorage.setItem(key, "simple-home"), [MOCK_SCENARIO_KEY]);
+    test('the Position field refuses a number below 1', async ({ page }) => {
+      await page
+        .context()
+        .addInitScript(([key]) => localStorage.setItem(key, 'simple-home'), [MOCK_SCENARIO_KEY]);
       await login(page);
-      await page.goto("/ground-truth");
-      await page.getByTestId("goal-grow-retention").getByRole("button", { name: "Grow retention", exact: true }).click();
-      const drawer = page.getByRole("dialog").last();
-      await drawer.getByRole("button", { name: "Edit" }).click();
-      const form = drawer.getByRole("form", { name: "Edit" });
-      await form.getByLabel(/^Position/).fill("0");
-      await form.getByRole("button", { name: "Save" }).click();
-      await expect(form.getByText("The position is a whole number, 1 or more (1 = first)")).toBeVisible();
+      await page.goto('/ground-truth');
+      await page
+        .getByTestId('goal-grow-retention')
+        .getByRole('button', { name: 'Grow retention', exact: true })
+        .click();
+      const drawer = page.getByRole('dialog').last();
+      await drawer.getByRole('button', { name: 'Edit' }).click();
+      const form = drawer.getByRole('form', { name: 'Edit' });
+      await form.getByLabel(/^Position/).fill('0');
+      await form.getByRole('button', { name: 'Save' }).click();
+      await expect(
+        form.getByText('The position is a whole number, 1 or more (1 = first)'),
+      ).toBeVisible();
     });
   });
 }

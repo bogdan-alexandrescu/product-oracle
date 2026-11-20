@@ -1,8 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from 'node:fs/promises';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * The one-pager of a run-written PRD reads as the PRD says (CLD's walk B, 2026-11-01), on the
@@ -33,90 +33,120 @@ import { expect, test, type Page } from "./test";
  *   fails_when=M2 or M3 reads "No dates yet" or ends on another day; no_claim=the API's
  *   reading (api/tests/test_simple_plan_walkb.py).
  */
-const URL = "/simple/one-pagers/guided-setup";
+const URL = '/simple/one-pagers/guided-setup';
 
-async function open(page: Page, scenario = "one-pager-run-prd-walk") {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, scenario] as const);
+async function open(page: Page, scenario = 'one-pager-run-prd-walk') {
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page);
   await page.goto(URL);
 }
 
 for (const phone of [false, true]) {
-  test.describe(phone ? "phone" : "desktop", () => {
+  test.describe(phone ? 'phone' : 'desktop', () => {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 900 } });
 
     test("an owner reads a run's PRD one-pager as the PRD says it", async ({ page }) => {
       await open(page);
-      const article = page.getByRole("article", { name: "One-pager" });
-      const outcomes = article.getByRole("region", { name: "Outcomes and how we measure them" });
+      const article = page.getByRole('article', { name: 'One-pager' });
+      const outcomes = article.getByRole('region', { name: 'Outcomes and how we measure them' });
       // How each outcome is measured, in its Success measures line's own words.
-      await expect(outcomes.locator('[data-line="outcomes-1"]').getByTestId("outcome-measure")).toHaveText(
-        "counted as: share of new accounts live within 30 days, recomputed daily · from the onboarding tracker",
+      await expect(
+        outcomes.locator('[data-line="outcomes-1"]').getByTestId('outcome-measure'),
+      ).toHaveText(
+        'counted as: share of new accounts live within 30 days, recomputed daily · from the onboarding tracker',
       );
-      await expect(outcomes.locator('[data-line="outcomes-2"]').getByTestId("outcome-measure")).toHaveText("counted as: reported weekly per person");
+      await expect(
+        outcomes.locator('[data-line="outcomes-2"]').getByTestId('outcome-measure'),
+      ).toHaveText('counted as: reported weekly per person');
       // A target the job cut mid-word reads whole.
-      await expect(outcomes.locator('[data-line="outcomes-2"]')).toContainText("Hours saved per manager: 0 → 3 hours a week");
-      await expect(article).not.toContainText("2027-03-31");
+      await expect(outcomes.locator('[data-line="outcomes-2"]')).toContainText(
+        'Hours saved per manager: 0 → 3 hours a week',
+      );
+      await expect(article).not.toContainText('2027-03-31');
       // Who has it: one plain line, never labels, the hypothesis note or the job story.
-      await expect(article.getByTestId("problem-who")).toHaveText("Who has it: Customer success managers who run onboarding for new accounts");
+      await expect(article.getByTestId('problem-who')).toHaveText(
+        'Who has it: Customer success managers who run onboarding for new accounts',
+      );
       // A code gets its feature section's name, and the sentence still reads.
-      const bets = article.getByRole("region", { name: "What we will build" });
-      await expect(bets.locator('[data-line="bets-1"]')).toContainText("F-01 Pacing plan gives every new account a pace to follow.");
-      await expect(article).not.toContainText("every newly connected");
+      const bets = article.getByRole('region', { name: 'What we will build' });
+      await expect(bets.locator('[data-line="bets-1"]')).toContainText(
+        'F-01 Pacing plan gives every new account a pace to follow.',
+      );
+      await expect(article).not.toContainText('every newly connected');
       // No false "Needs a look": the milestone's two features are no disagreement, every code is named.
-      await expect(page.getByRole("region", { name: "Needs a look" })).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Needs a look' })).toHaveCount(0);
       // Export PDF prints the same words (the mock's PDF prints the lines, not the measures).
-      const download = page.waitForEvent("download");
-      await page.getByRole("button", { name: "Export PDF" }).click();
-      const pdf = await readFile((await (await download).path())!, "utf8");
-      expect(pdf).toContain("F-01 Pacing plan gives every new account a pace to follow.");
-      expect(pdf).toContain("by Mar 31, 2027");
-      expect(pdf).not.toContain("2027-03-31");
+      const download = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Export PDF' }).click();
+      const pdf = await readFile((await (await download).path())!, 'utf8');
+      expect(pdf).toContain('F-01 Pacing plan gives every new account a pace to follow.');
+      expect(pdf).toContain('by Mar 31, 2027');
+      expect(pdf).not.toContain('2027-03-31');
     });
 
-    test("Read the plan again keeps the last plan shown, marked as updating, while Oracle reads it", async ({ page }) => {
-      await open(page, "simple-plan-by-job");
-      const noDates = page.getByTestId("timeline-no-dates").first();
-      await expect(noDates).toContainText("No dates yet:");
-      await noDates.getByRole("button", { name: "Read the plan again" }).click();
+    test('Read the plan again keeps the last plan shown, marked as updating, while Oracle reads it', async ({
+      page,
+    }) => {
+      await open(page, 'simple-plan-by-job');
+      const noDates = page.getByTestId('timeline-no-dates').first();
+      await expect(noDates).toContainText('No dates yet:');
+      await noDates.getByRole('button', { name: 'Read the plan again' }).click();
       // While the job reads: the last plan, said to be updating; never an empty page.
-      await expect(page.getByTestId("plan-updating")).toHaveText("Oracle is reading the plan again. This is the last plan until it is done.");
-      await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
+      await expect(page.getByTestId('plan-updating')).toHaveText(
+        'Oracle is reading the plan again. This is the last plan until it is done.',
+      );
+      await expect(page.getByTestId('timeline-no-dates').first()).toBeVisible();
       // Then the plan Oracle read, its milestones dated.
-      await expect(page.getByTestId("plan-updating")).toHaveCount(0);
-      await expect(page.getByTestId("timeline-no-dates")).toHaveCount(0);
+      await expect(page.getByTestId('plan-updating')).toHaveCount(0);
+      await expect(page.getByTestId('timeline-no-dates')).toHaveCount(0);
     });
 
-    test("Read the plan again says so when the plan cannot be read", async ({ page }) => {
-      await open(page, "simple-plan-by-job-down");
-      await page.getByTestId("timeline-no-dates").first().getByRole("button", { name: "Read the plan again" }).click();
-      await expect(page.getByText("Oracle could not check on the plan. Try Read the plan again.")).toBeVisible();
-      await expect(page.getByTestId("plan-updating")).toHaveCount(0);
-      await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
+    test('Read the plan again says so when the plan cannot be read', async ({ page }) => {
+      await open(page, 'simple-plan-by-job-down');
+      await page
+        .getByTestId('timeline-no-dates')
+        .first()
+        .getByRole('button', { name: 'Read the plan again' })
+        .click();
+      await expect(
+        page.getByText('Oracle could not check on the plan. Try Read the plan again.'),
+      ).toBeVisible();
+      await expect(page.getByTestId('plan-updating')).toHaveCount(0);
+      await expect(page.getByTestId('timeline-no-dates').first()).toBeVisible();
     });
 
-    test("Read the plan again stops asking and says so when the read never ends", async ({ page }) => {
-      await open(page, "simple-plan-by-job-stuck");
-      await page.getByTestId("timeline-no-dates").first().getByRole("button", { name: "Read the plan again" }).click();
-      await expect(page.getByTestId("plan-updating")).toBeVisible();
+    test('Read the plan again stops asking and says so when the read never ends', async ({
+      page,
+    }) => {
+      await open(page, 'simple-plan-by-job-stuck');
+      await page
+        .getByTestId('timeline-no-dates')
+        .first()
+        .getByRole('button', { name: 'Read the plan again' })
+        .click();
+      await expect(page.getByTestId('plan-updating')).toBeVisible();
       await page.clock.runFor(125_000);
-      await expect(page.getByTestId("plan-updating")).toHaveCount(0);
-      await expect(page.getByText("Oracle is still reading the plan. Come back in a few minutes to see it.")).toBeVisible();
-      await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
+      await expect(page.getByTestId('plan-updating')).toHaveCount(0);
+      await expect(
+        page.getByText('Oracle is still reading the plan. Come back in a few minutes to see it.'),
+      ).toBeVisible();
+      await expect(page.getByTestId('timeline-no-dates').first()).toBeVisible();
     });
 
-    test("the plan reads the dates the engineering lead accepted", async ({ page }) => {
-      await open(page, "simple-plan-lead-dated");
-      const tl = page.getByRole("region", { name: "Timeline" }).first();
+    test('the plan reads the dates the engineering lead accepted', async ({ page }) => {
+      await open(page, 'simple-plan-lead-dated');
+      const tl = page.getByRole('region', { name: 'Timeline' }).first();
       await expect(tl).toBeVisible();
-      await expect(page.getByTestId("timeline-no-dates")).toHaveCount(0);
+      await expect(page.getByTestId('timeline-no-dates')).toHaveCount(0);
       if (!phone) {
-        await expect(tl.getByRole("button", { name: "M1 ends Nov 27" })).toBeVisible();
-        await expect(tl.getByRole("button", { name: "M2 ends Jan 15" })).toBeVisible();
-        await expect(tl.getByRole("button", { name: "M3 ends Feb 26" })).toBeVisible();
+        await expect(tl.getByRole('button', { name: 'M1 ends Nov 27' })).toBeVisible();
+        await expect(tl.getByRole('button', { name: 'M2 ends Jan 15' })).toBeVisible();
+        await expect(tl.getByRole('button', { name: 'M3 ends Feb 26' })).toBeVisible();
       }
-      await tl.getByRole("button", { name: /^M3 Open to all/ }).click();
-      await expect(page.getByTestId("milestone-part")).not.toContainText("No dates yet");
+      await tl.getByRole('button', { name: /^M3 Open to all/ }).click();
+      await expect(page.getByTestId('milestone-part')).not.toContainText('No dates yet');
     });
   });
 }

@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { CHAT_MEETING_ID } from "../lib/api/mock/simple-chat";
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN } from "./helpers";
+import { CHAT_MEETING_ID } from '../lib/api/mock/simple-chat';
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN } from './helpers';
 
 /*
  * chat-latest-card (owner, Nov 4): in a chat only the latest card acts. Two cards on one item:
@@ -18,45 +18,45 @@ import { ADMIN } from "./helpers";
  */
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function signIn(page: Page, to: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(ADMIN.email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await tap(page.getByRole("button", { name: "Sign in" }));
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(ADMIN.email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await tap(page.getByRole('button', { name: 'Sign in' }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(to);
 }
 
 async function say(box: Locator, text: string) {
-  const n = await box.getByTestId("chat-message").count();
-  await box.getByRole("textbox", { name: "Message Oracle" }).fill(text);
-  await tap(box.getByRole("button", { name: "Send" }));
-  await expect(box.getByTestId("chat-message")).toHaveCount(n + 2);
+  const n = await box.getByTestId('chat-message').count();
+  await box.getByRole('textbox', { name: 'Message Oracle' }).fill(text);
+  await tap(box.getByRole('button', { name: 'Send' }));
+  await expect(box.getByTestId('chat-message')).toHaveCount(n + 2);
 }
 
 /** The card of the chat's latest reply. */
 async function newest(box: Locator): Promise<Locator> {
-  const card = box.getByTestId("chat-message").last().getByTestId("chat-card");
+  const card = box.getByTestId('chat-message').last().getByTestId('chat-card');
   await expect(card).toHaveCount(1);
-  const id = await card.getAttribute("data-card-id");
+  const id = await card.getAttribute('data-card-id');
   return box.locator(`[data-testid="chat-card"][data-card-id="${id}"]`);
 }
 
-const applyOf = (card: Locator) => card.getByRole("button", { name: "Apply", exact: true });
+const applyOf = (card: Locator) => card.getByRole('button', { name: 'Apply', exact: true });
 
 async function active(card: Locator) {
   await expect(applyOf(card)).toBeVisible();
-  await expect(card.getByTestId("chat-card-replaced")).toHaveCount(0);
+  await expect(card.getByTestId('chat-card-replaced')).toHaveCount(0);
 }
 
 async function replaced(card: Locator) {
-  await expect(card.getByTestId("chat-card-replaced")).toContainText("Replaced by a newer card");
+  await expect(card.getByTestId('chat-card-replaced')).toContainText('Replaced by a newer card');
   await expect(applyOf(card)).toHaveCount(0);
-  await expect(card.getByRole("button", { name: /^(Discard|Reject)$/ })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: /^(Discard|Reject)$/ })).toHaveCount(0);
 }
 
 type Lines = { first: string; again: string; other: string };
@@ -65,7 +65,12 @@ type Lines = { first: string; again: string; other: string };
  * Two cards on one item, then one on another; the older on the first item is replaced and its
  * link goes to the newer; Apply on the newest replaces every earlier card; `reopen` reloads.
  */
-async function latestCard(page: Page, box: () => Locator, lines: Lines, reopen: () => Promise<void>) {
+async function latestCard(
+  page: Page,
+  box: () => Locator,
+  lines: Lines,
+  reopen: () => Promise<void>,
+) {
   await say(box(), lines.first);
   const a1 = await newest(box());
   await active(a1);
@@ -73,10 +78,10 @@ async function latestCard(page: Page, box: () => Locator, lines: Lines, reopen: 
   const a2 = await newest(box());
   await active(a2);
   await replaced(a1);
-  const a1Id = await a1.getAttribute("data-card-id");
-  const a2Id = await a2.getAttribute("data-card-id");
+  const a1Id = await a1.getAttribute('data-card-id');
+  const a2Id = await a2.getAttribute('data-card-id');
   // The link goes to the card that replaced it.
-  await tap(a1.getByRole("link", { name: "Go to the newer card" }));
+  await tap(a1.getByRole('link', { name: 'Go to the newer card' }));
   await expect(page.locator(`[data-card-id="${a2Id}"]`)).toBeFocused();
   await expect(page.locator(`[data-card-id="${a2Id}"]`)).toBeInViewport();
   // A card on another target: one active card per target.
@@ -87,17 +92,18 @@ async function latestCard(page: Page, box: () => Locator, lines: Lines, reopen: 
   await replaced(a1);
   // Apply the newest: every earlier card is replaced.
   await tap(applyOf(b));
-  await expect(b).toHaveAttribute("data-status", "applied");
+  await expect(b).toHaveAttribute('data-status', 'applied');
   await replaced(a2);
   await replaced(a1);
-  const bId = await b.getAttribute("data-card-id");
+  const bId = await b.getAttribute('data-card-id');
   // A reload reads the same.
   await reopen();
-  const card = (id: string | null) => box().locator(`[data-testid="chat-card"][data-card-id="${id}"]`);
+  const card = (id: string | null) =>
+    box().locator(`[data-testid="chat-card"][data-card-id="${id}"]`);
   await replaced(card(a1Id));
   await replaced(card(a2Id));
-  await expect(card(bId)).toHaveAttribute("data-status", "applied");
-  await expect(card(bId).getByTestId("chat-card-replaced")).toHaveCount(0);
+  await expect(card(bId)).toHaveAttribute('data-status', 'applied');
+  await expect(card(bId).getByTestId('chat-card-replaced')).toHaveCount(0);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -109,46 +115,64 @@ test.beforeEach(async ({ page }) => {
  * and Apply replaces the earlier ones, after a reload too; fails_when = an older card still
  * offers Apply or Discard; no_claim = the Gantt's bars.
  */
-test("the feature talk keeps only the newest card per target active", async ({ page }) => {
+test('the feature talk keeps only the newest card per target active', async ({ page }) => {
   const open = async () => {
-    await tap(page.getByTestId("format-gantt"));
+    await tap(page.getByTestId('format-gantt'));
     const bar = page.locator('[data-testid="bar"][data-item="alert-digest"]');
     await expect(bar).toBeVisible();
     await bar.click();
     // This line's feature panel opens its talk from "Talk to Oracle".
-    await tap(page.getByTestId("floating-card").getByRole("button", { name: "Talk to Oracle" }));
-    await expect(page.getByTestId("item-talk")).toBeVisible();
+    await tap(page.getByTestId('floating-card').getByRole('button', { name: 'Talk to Oracle' }));
+    await expect(page.getByTestId('item-talk')).toBeVisible();
   };
-  await signIn(page, "/simple/roadmap");
+  await signIn(page, '/simple/roadmap');
   await open();
-  const box = () => page.getByTestId("floating-card").getByTestId("item-talk");
-  await latestCard(page, box, { first: "rename it to Alert digest one", again: "rename it to Alert digest two", other: "add the assumption Night shift nurse" }, async () => {
-    await page.reload();
-    await open();
-  });
+  const box = () => page.getByTestId('floating-card').getByTestId('item-talk');
+  await latestCard(
+    page,
+    box,
+    {
+      first: 'rename it to Alert digest one',
+      again: 'rename it to Alert digest two',
+      other: 'add the assumption Night shift nurse',
+    },
+    async () => {
+      await page.reload();
+      await open();
+    },
+  );
 });
 
 /**
  * Card latest-card-panel: protects = the Ask Oracle panel keeps one active card per item and
  * Apply replaces every earlier card, after a reload too; fails_when = an older card applies.
  */
-test("the Ask Oracle panel keeps only the newest card per item active", async ({ page }) => {
+test('the Ask Oracle panel keeps only the newest card per item active', async ({ page }) => {
   const open = async () => {
-    await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
-    await expect(page.getByTestId("ask-chat").filter({ visible: true })).toBeVisible();
+    await tap(page.getByTestId('simple-ask').filter({ visible: true }).first());
+    await expect(page.getByTestId('ask-chat').filter({ visible: true })).toBeVisible();
   };
-  await signIn(page, "/simple/roadmap");
+  await signIn(page, '/simple/roadmap');
   await open();
-  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
-  await latestCard(page, box, { first: "rename Setup checklist to First-run checklist", again: "rename Setup checklist to Setup guide", other: "rename In-app tour to Product tour" }, async () => {
-    await page.reload();
-    await open();
-    // Ask opens a clean chat: Recent chats reopens this one.
-    const panel = page.getByTestId("hop-panel").filter({ visible: true });
-    await tap(panel.getByRole("button", { name: "Recent chats" }));
-    await tap(panel.getByTestId("ask-recent-row").first());
-    await expect(box().getByTestId("chat-card")).toHaveCount(3);
-  });
+  const box = () => page.getByTestId('ask-chat').filter({ visible: true });
+  await latestCard(
+    page,
+    box,
+    {
+      first: 'rename Setup checklist to First-run checklist',
+      again: 'rename Setup checklist to Setup guide',
+      other: 'rename In-app tour to Product tour',
+    },
+    async () => {
+      await page.reload();
+      await open();
+      // Ask opens a clean chat: Recent chats reopens this one.
+      const panel = page.getByTestId('hop-panel').filter({ visible: true });
+      await tap(panel.getByRole('button', { name: 'Recent chats' }));
+      await tap(panel.getByTestId('ask-recent-row').first());
+      await expect(box().getByTestId('chat-card')).toHaveCount(3);
+    },
+  );
 });
 
 /**
@@ -156,26 +180,40 @@ test("the Ask Oracle panel keeps only the newest card per item active", async ({
  * older card in the meeting still applies; no_claim = the minutes.
  */
 test("a meeting's chat keeps only the newest card per item active", async ({ context, page }) => {
-  await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+  await context.addInitScript((key) => localStorage.setItem(key, 'simple-chat'), MOCK_SCENARIO_KEY);
   await signIn(page, `/simple/meetings/${CHAT_MEETING_ID}/chat`);
-  const ready = () => expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  const ready = () =>
+    expect(
+      page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first(),
+    ).toBeVisible();
   await ready();
-  const box = () => page.getByTestId("meeting-chat");
-  await latestCard(page, box, { first: "rename Setup checklist to First-run checklist", again: "rename Setup checklist to Setup guide", other: "rename In-app tour to Product tour" }, async () => {
-    await page.reload();
-    await ready();
-  });
+  const box = () => page.getByTestId('meeting-chat');
+  await latestCard(
+    page,
+    box,
+    {
+      first: 'rename Setup checklist to First-run checklist',
+      again: 'rename Setup checklist to Setup guide',
+      other: 'rename In-app tour to Product tour',
+    },
+    async () => {
+      await page.reload();
+      await ready();
+    },
+  );
 });
 
-async function openMeeting(page: Page, context: import("@playwright/test").BrowserContext) {
-  await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+async function openMeeting(page: Page, context: import('@playwright/test').BrowserContext) {
+  await context.addInitScript((key) => localStorage.setItem(key, 'simple-chat'), MOCK_SCENARIO_KEY);
   await signIn(page, `/simple/meetings/${CHAT_MEETING_ID}/chat`);
-  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await expect(
+    page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first(),
+  ).toBeVisible();
 }
 
 async function openAsk(page: Page) {
-  await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
-  await expect(page.getByTestId("ask-chat").filter({ visible: true })).toBeVisible();
+  await tap(page.getByTestId('simple-ask').filter({ visible: true }).first());
+  await expect(page.getByTestId('ask-chat').filter({ visible: true })).toBeVisible();
 }
 
 /**
@@ -187,37 +225,39 @@ async function openAsk(page: Page) {
  */
 test("a meeting's chat keeps different notes and decisions active", async ({ context, page }) => {
   await openMeeting(page, context);
-  const box = () => page.getByTestId("meeting-chat");
-  await say(box(), "note: the budget is approved");
+  const box = () => page.getByTestId('meeting-chat');
+  await say(box(), 'note: the budget is approved');
   const n1 = await newest(box());
-  await say(box(), "note: we hire a designer next month");
+  await say(box(), 'note: we hire a designer next month');
   const n2 = await newest(box());
-  await say(box(), "decision: the pilot starts in spring");
+  await say(box(), 'decision: the pilot starts in spring');
   const d1 = await newest(box());
-  await say(box(), "decision: the tour stays optional");
+  await say(box(), 'decision: the tour stays optional');
   const d2 = await newest(box());
   for (const c of [n1, n2, d1, d2]) await active(c);
   // Most of the same words, not asked as a change: another note, both active.
-  await say(box(), "note: the budget is approved for the summer");
+  await say(box(), 'note: the budget is approved for the summer');
   const n0 = await newest(box());
   await active(n0);
   await active(n1);
   // Asked as a change of the note ("no, ..."): it replaces the earlier draft; the others stay active.
-  await say(box(), "no, note: the budget is approved for the spring");
+  await say(box(), 'no, note: the budget is approved for the spring');
   const n3 = await newest(box());
   await active(n3);
   await replaced(n0);
   for (const c of [n1, n2, d1, d2]) await active(c);
-  const n3Id = await n3.getAttribute("data-card-id");
+  const n3Id = await n3.getAttribute('data-card-id');
   await page.reload();
-  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await expect(
+    page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first(),
+  ).toBeVisible();
   await replaced(n0);
   for (const c of [n1, n2, d1, d2]) await active(c);
   const again = box().locator(`[data-testid="chat-card"][data-card-id="${n3Id}"]`);
   await active(again);
   // Both different notes apply.
   await tap(applyOf(again));
-  await expect(again).toHaveAttribute("data-status", "applied");
+  await expect(again).toHaveAttribute('data-status', 'applied');
   await replaced(n2);
 });
 
@@ -226,18 +266,18 @@ test("a meeting's chat keeps different notes and decisions active", async ({ con
  * Discard on the newest replaces every earlier card; fails_when = the goal makes them one topic,
  * or an earlier card still applies after a Discard.
  */
-test("Discard on the newest card replaces the earlier ones", async ({ page }) => {
-  await signIn(page, "/simple/roadmap");
+test('Discard on the newest card replaces the earlier ones', async ({ page }) => {
+  await signIn(page, '/simple/roadmap');
   await openAsk(page);
-  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
-  await say(box(), "suggest a feature for Grow retention: Search across saved notes");
+  const box = () => page.getByTestId('ask-chat').filter({ visible: true });
+  await say(box(), 'suggest a feature for Grow retention: Search across saved notes');
   const a = await newest(box());
-  await say(box(), "suggest a feature for Grow retention: Export reports to a sheet");
+  await say(box(), 'suggest a feature for Grow retention: Export reports to a sheet');
   const b = await newest(box());
   await active(a);
   await active(b);
-  await tap(b.getByRole("button", { name: "Discard", exact: true }));
-  await expect(b).toHaveAttribute("data-status", "discarded");
+  await tap(b.getByRole('button', { name: 'Discard', exact: true }));
+  await expect(b).toHaveAttribute('data-status', 'discarded');
   await replaced(a);
 });
 
@@ -246,21 +286,24 @@ test("Discard on the newest card replaces the earlier ones", async ({ page }) =>
  * Propose, and Propose on the newest replaces the earlier one; fails_when = the page makes them
  * one topic, or the earlier one still offers Propose after it.
  */
-test("Propose on the newest card replaces the earlier ones", async ({ page }) => {
-  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "commenter"] as const);
-  await signIn(page, "/simple/roadmap");
+test('Propose on the newest card replaces the earlier ones', async ({ page }) => {
+  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [
+    MOCK_ROLE_KEY,
+    'commenter',
+  ] as const);
+  await signIn(page, '/simple/roadmap');
   await openAsk(page);
-  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
-  const propose = (c: Locator) => c.getByRole("button", { name: "Propose", exact: true });
-  await say(box(), "decision: the pilot starts in spring");
+  const box = () => page.getByTestId('ask-chat').filter({ visible: true });
+  const propose = (c: Locator) => c.getByRole('button', { name: 'Propose', exact: true });
+  await say(box(), 'decision: the pilot starts in spring');
   const a = await newest(box());
-  await say(box(), "decision: the tour stays optional");
+  await say(box(), 'decision: the tour stays optional');
   const b = await newest(box());
   await expect(propose(a)).toBeVisible();
   await expect(propose(b)).toBeVisible();
   await tap(propose(b));
-  await expect(b).toHaveAttribute("data-status", "proposed");
-  await expect(a.getByTestId("chat-card-replaced")).toContainText("Replaced by a newer card");
+  await expect(b).toHaveAttribute('data-status', 'proposed');
+  await expect(a.getByTestId('chat-card-replaced')).toContainText('Replaced by a newer card');
   await expect(propose(a)).toHaveCount(0);
 });
 
@@ -271,13 +314,16 @@ test("Propose on the newest card replaces the earlier ones", async ({ page }) =>
  * a reload too; fails_when = word overlap replaces a different decision or note, or the asked
  * change leaves the March card active.
  */
-test("drafts sharing most words stay active; only an asked change replaces one", async ({ context, page }) => {
+test('drafts sharing most words stay active; only an asked change replaces one', async ({
+  context,
+  page,
+}) => {
   await openMeeting(page, context);
-  const box = () => page.getByTestId("meeting-chat");
+  const box = () => page.getByTestId('meeting-chat');
   const pairs = [
-    ["decision: we launch billing in March", "decision: we launch billing in April"],
-    ["note: Use Postgres for the events store", "note: Use Redis for the events store"],
-    ["note: Ask Dana about the pricing page", "note: Ask Lee about the pricing page"],
+    ['decision: we launch billing in March', 'decision: we launch billing in April'],
+    ['note: Use Postgres for the events store', 'note: Use Redis for the events store'],
+    ['note: Ask Dana about the pricing page', 'note: Ask Lee about the pricing page'],
   ];
   const cards: Locator[] = [];
   for (const [one, two] of pairs) {
@@ -288,16 +334,18 @@ test("drafts sharing most words stay active; only an asked change replaces one",
   }
   for (const c of cards) await active(c);
   // The person asks to change the newest decision draft: the reader makes it a redo of that card.
-  await say(box(), "decision: we launch payroll in March");
+  await say(box(), 'decision: we launch payroll in March');
   const march = await newest(box());
-  await say(box(), "make it April instead");
+  await say(box(), 'make it April instead');
   const april = await newest(box());
-  await expect(april.getByTestId("chat-card-summary")).toContainText("April");
+  await expect(april.getByTestId('chat-card-summary')).toContainText('April');
   await active(april);
   await replaced(march);
   for (const c of cards) await active(c);
   await page.reload();
-  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await expect(
+    page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first(),
+  ).toBeVisible();
   await replaced(march);
   await active(april);
   for (const c of cards) await active(c);
@@ -310,19 +358,22 @@ test("drafts sharing most words stay active; only an asked change replaces one",
  * fails_when = "instead" replaces the earlier note or drops the word, or "no, ..." replaces a
  * draft from before the plain answer.
  */
-test("only a short change request or a 'no' right after a card replaces a draft", async ({ context, page }) => {
+test("only a short change request or a 'no' right after a card replaces a draft", async ({
+  context,
+  page,
+}) => {
   await openMeeting(page, context);
-  const box = () => page.getByTestId("meeting-chat");
-  await say(box(), "note: the export runs nightly");
+  const box = () => page.getByTestId('meeting-chat');
+  await say(box(), 'note: the export runs nightly');
   const a = await newest(box());
-  await say(box(), "note: we use Redis instead");
+  await say(box(), 'note: we use Redis instead');
   const b = await newest(box());
-  await expect(b.getByTestId("chat-card-summary")).toContainText("we use Redis instead");
+  await expect(b.getByTestId('chat-card-summary')).toContainText('we use Redis instead');
   await active(a);
   await active(b);
-  await say(box(), "who owns Setup checklist?");
-  await expect(box().getByTestId("chat-message").last().getByTestId("chat-card")).toHaveCount(0);
-  await say(box(), "no, note: we use Redis for the export");
+  await say(box(), 'who owns Setup checklist?');
+  await expect(box().getByTestId('chat-message').last().getByTestId('chat-card')).toHaveCount(0);
+  await say(box(), 'no, note: we use Redis for the export');
   const c = await newest(box());
   for (const x of [a, b, c]) await active(x);
 });
@@ -332,18 +383,18 @@ test("only a short change request or a 'no' right after a card replaces a draft"
  * panel shows the change on the page under it at once (the roadmap reads the renamed feature),
  * with no reload; fails_when = the page keeps the old name until a reload.
  */
-test("Apply in the Ask panel updates the page under it at once", async ({ page }) => {
-  await signIn(page, "/simple/roadmap");
+test('Apply in the Ask panel updates the page under it at once', async ({ page }) => {
+  await signIn(page, '/simple/roadmap');
   // The roadmap's own feature buttons (the Ask panel's card text is not a button). docs/ground-truth.md:
   // a feature shows its code with its name; this item is the Ground Truth's F-01 (qa-nov17).
-  const feature = (name: string) => page.getByRole("button", { name: `F-01 ${name}`, exact: true });
-  await expect(feature("Setup checklist").first()).toBeVisible();
+  const feature = (name: string) => page.getByRole('button', { name: `F-01 ${name}`, exact: true });
+  await expect(feature('Setup checklist').first()).toBeVisible();
   await openAsk(page);
-  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
-  await say(box(), "rename Setup checklist to First-run checklist");
+  const box = () => page.getByTestId('ask-chat').filter({ visible: true });
+  await say(box(), 'rename Setup checklist to First-run checklist');
   const card = await newest(box());
   await tap(applyOf(card));
-  await expect(card).toHaveAttribute("data-status", "applied");
-  await expect(feature("First-run checklist").first()).toBeVisible();
-  await expect(feature("Setup checklist")).toHaveCount(0);
+  await expect(card).toHaveAttribute('data-status', 'applied');
+  await expect(feature('First-run checklist').first()).toBeVisible();
+  await expect(feature('Setup checklist')).toHaveCount(0);
 });

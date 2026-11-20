@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { Button, InfoTip, Inspector, InspectorRow, InspectorSection, Sheet } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { Field, INPUT } from "@/app/settings/_components/fields";
-import { api, unwrap } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { ConfirmDialog } from '@/components/account/ConfirmDialog';
+import { Button, InfoTip, Inspector, InspectorRow, InspectorSection, Sheet } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import { Field, INPUT } from '@/app/settings/_components/fields';
+import { api, unwrap } from '@/lib/api/client';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-import { DeliveryLog } from "./DeliveryLog";
-import { EditWebhookSheet } from "./EditWebhookSheet";
-import { TestEvent } from "./NewWebhookSheet";
-import { OnTop, SecretOnce, WebhookStatus, type EventType, type Webhook } from "./parts";
+import { DeliveryLog } from './DeliveryLog';
+import { EditWebhookSheet } from './EditWebhookSheet';
+import { TestEvent } from './NewWebhookSheet';
+import { OnTop, SecretOnce, WebhookStatus, type EventType, type Webhook } from './parts';
 
 /**
  * The selected webhook: its settings, with Edit (name, URL, events; an owner's
@@ -39,9 +39,9 @@ export function WebhookInspector({
   const { can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [asking, setAsking] = useState<"rotate" | "delete" | null>(null);
+  const [asking, setAsking] = useState<'rotate' | 'delete' | null>(null);
   const [endOld, setEndOld] = useState(false);
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   // Bumped when a delivery was added here, so the log reads again.
@@ -65,11 +65,20 @@ export function WebhookInspector({
     }
   }
 
-  const pause = (status: "active" | "paused") =>
-    run(() => unwrap(api.PATCH("/v1/webhooks/{webhook_id}", { ...path, body: { status } })), onChanged);
+  const pause = (status: 'active' | 'paused') =>
+    run(
+      () => unwrap(api.PATCH('/v1/webhooks/{webhook_id}', { ...path, body: { status } })),
+      onChanged,
+    );
   const rotate = () =>
     run(
-      () => unwrap(api.POST("/v1/webhooks/{webhook_id}/rotate-secret", { ...path, body: { end_old_now: endOld } })),
+      () =>
+        unwrap(
+          api.POST('/v1/webhooks/{webhook_id}/rotate-secret', {
+            ...path,
+            body: { end_old_now: endOld },
+          }),
+        ),
       (out) => {
         setAsking(null);
         setEndOld(false);
@@ -79,65 +88,92 @@ export function WebhookInspector({
     );
   const remove = () =>
     run(
-      () => unwrap(api.DELETE("/v1/webhooks/{webhook_id}", path)),
+      () => unwrap(api.DELETE('/v1/webhooks/{webhook_id}', path)),
       () => {
         setAsking(null);
         onDeleted();
       },
     );
-  const takeOver = () => run(() => unwrap(api.POST("/v1/webhooks/{webhook_id}/take-over", path)), onChanged);
+  const takeOver = () =>
+    run(() => unwrap(api.POST('/v1/webhooks/{webhook_id}/take-over', path)), onChanged);
 
   return (
-    <Inspector testId="webhook-inspector" label={`Webhook ${hook.name}`} eyebrow="Webhook · selected" title={hook.name} chips={<WebhookStatus hook={hook} />}>
+    <Inspector
+      testId="webhook-inspector"
+      label={`Webhook ${hook.name}`}
+      eyebrow="Webhook · selected"
+      title={hook.name}
+      chips={<WebhookStatus hook={hook} />}
+    >
       <InspectorSection label="Settings">
-        <InspectorRow value={<span className="font-normal">{hook.host}</span>}>Sends to</InspectorRow>
+        <InspectorRow value={<span className="font-normal">{hook.host}</span>}>
+          Sends to
+        </InspectorRow>
         <p className="mb-2 truncate font-mono text-[13px] text-text2" title={hook.url}>
           {hook.url}
         </p>
-        <InspectorRow value={<span data-testid="secret-hint">…{hook.secret_hint}</span>}>Secret</InspectorRow>
-        <InspectorRow value={<span className="font-normal text-text2">{formatDateTime(hook.secret_rotated_at)}</span>}>Secret made</InspectorRow>
+        <InspectorRow value={<span data-testid="secret-hint">…{hook.secret_hint}</span>}>
+          Secret
+        </InspectorRow>
+        <InspectorRow
+          value={
+            <span className="font-normal text-text2">{formatDateTime(hook.secret_rotated_at)}</span>
+          }
+        >
+          Secret made
+        </InspectorRow>
         <InspectorRow value={hook.created_by.name}>Created by</InspectorRow>
         {/* qa4-settings-28: the payload's version as a day; pass F, F-64: what it means is in the (i). */}
-        <InspectorRow value={<span data-testid="payload-format">{formatDate(hook.api_version)}</span>}>
+        <InspectorRow
+          value={<span data-testid="payload-format">{formatDate(hook.api_version)}</span>}
+        >
           <span className="inline-flex items-center gap-1">
             Format version
-            <InfoTip label="the format version">The layout of what Oracle sends, named by the day it was set.</InfoTip>
+            <InfoTip label="the format version">
+              The layout of what Oracle sends, named by the day it was set.
+            </InfoTip>
           </span>
         </InspectorRow>
-        <InspectorRow value={<span data-testid="approvers-content">{hook.include_approvers_content ? "On" : "Off"}</span>}>
+        <InspectorRow
+          value={
+            <span data-testid="approvers-content">
+              {hook.include_approvers_content ? 'On' : 'Off'}
+            </span>
+          }
+        >
           <span className="inline-flex items-center gap-1">
             Private details
-            <InfoTip label="private details">What only owners and approvers can see in Oracle.</InfoTip>
+            <InfoTip label="private details">
+              What only owners and approvers can see in Oracle.
+            </InfoTip>
           </span>
         </InspectorRow>
         <div className="mt-2 text-[13px] leading-[18px] text-text2">
-          {hook.event_types.length} event{hook.event_types.length === 1 ? "" : "s"}:{" "}
-          {hook.event_types.map((t) => labels.get(t) ?? t).join(" · ")}
+          {hook.event_types.length} event{hook.event_types.length === 1 ? '' : 's'}:{' '}
+          {hook.event_types.map((t) => labels.get(t) ?? t).join(' · ')}
         </div>
-        {can("update_webhook") && (
+        {can('update_webhook') && (
           <div className="mt-3">
-            <Button onClick={() => setEditing(true)}>
-              Edit
-            </Button>
+            <Button onClick={() => setEditing(true)}>Edit</Button>
           </div>
         )}
       </InspectorSection>
-      {can("update_webhook") && (
+      {can('update_webhook') && (
         <InspectorSection label="Actions">
           <div className="flex flex-col gap-3">
             <TestEvent hook={hook} onSent={delivered} />
             <div className="flex flex-wrap gap-2">
-              {can("rotate_webhook_secret") && (
-                <Button disabled={busy} onClick={() => setAsking("rotate")}>
+              {can('rotate_webhook_secret') && (
+                <Button disabled={busy} onClick={() => setAsking('rotate')}>
                   Rotate secret
                 </Button>
               )}
-              {hook.status === "active" ? (
-                <Button disabled={busy} icon="pause" onClick={() => void pause("paused")}>
+              {hook.status === 'active' ? (
+                <Button disabled={busy} icon="pause" onClick={() => void pause('paused')}>
                   Pause
                 </Button>
               ) : (
-                <Button disabled={busy} onClick={() => void pause("active")}>
+                <Button disabled={busy} onClick={() => void pause('active')}>
                   Resume
                 </Button>
               )}
@@ -146,13 +182,13 @@ export function WebhookInspector({
                   Take over
                 </Button>
               )}
-              {can("delete_webhook") && (
+              {can('delete_webhook') && (
                 <Button
                   variant="danger"
                   disabled={busy}
                   onClick={() => {
-                    setTyped("");
-                    setAsking("delete");
+                    setTyped('');
+                    setAsking('delete');
                   }}
                 >
                   Delete
@@ -177,7 +213,7 @@ export function WebhookInspector({
       </InspectorSection>
 
       <ConfirmDialog
-        open={asking === "rotate"}
+        open={asking === 'rotate'}
         title="Rotate the signing secret?"
         subject={hook.name}
         testId="rotate-dialog"
@@ -189,20 +225,27 @@ export function WebhookInspector({
         onClose={() => setAsking(null)}
         onConfirm={() => void rotate()}
         consequences={[
-          { icon: "lock", text: "Oracle makes a new secret and shows it once." },
+          { icon: 'lock', text: 'Oracle makes a new secret and shows it once.' },
           {
-            icon: "clock",
-            text: endOld ? "The old secret stops signing now: update the receiver first." : "For 24 hours both the old and the new secret sign each call; then only the new one does.",
+            icon: 'clock',
+            text: endOld
+              ? 'The old secret stops signing now: update the receiver first.'
+              : 'For 24 hours both the old and the new secret sign each call; then only the new one does.',
           },
         ]}
       >
         <label className="flex items-center gap-2 text-[15px]">
-          <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={endOld} onChange={(e) => setEndOld(e.target.checked)} />
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--accent)]"
+            checked={endOld}
+            onChange={(e) => setEndOld(e.target.checked)}
+          />
           End the old one now
         </label>
       </ConfirmDialog>
       <ConfirmDialog
-        open={asking === "delete"}
+        open={asking === 'delete'}
         title="Delete this webhook?"
         subject={hook.name}
         testId="delete-dialog"
@@ -210,12 +253,12 @@ export function WebhookInspector({
         pendingLabel="Deleting…"
         pending={busy}
         error={error}
-        waiting={typed.trim() === hook.name ? null : "Delete"}
+        waiting={typed.trim() === hook.name ? null : 'Delete'}
         onClose={() => setAsking(null)}
         onConfirm={() => void remove()}
         consequences={[
-          { icon: "x", text: "Oracle stops sending to it at once." },
-          { icon: "doc", text: "Its secret and its delivery log are deleted with it." },
+          { icon: 'x', text: 'Oracle stops sending to it at once.' },
+          { icon: 'doc', text: 'Its secret and its delivery log are deleted with it.' },
         ]}
       >
         <Field label="Type the webhook's name">
@@ -229,10 +272,16 @@ export function WebhookInspector({
           onClose={() => setEditing(false)}
           eventTypes={eventTypes}
           // Owners-and-approvers content is an owner's choice: the owner-only operation says who that is (#370).
-          ownerChoices={can("take_over_webhook")}
+          ownerChoices={can('take_over_webhook')}
           onSaved={onChanged}
         />
-        <Sheet open={!!secret} dialog title="New signing secret" onClose={() => setSecret(null)} testId="rotated-secret-sheet">
+        <Sheet
+          open={!!secret}
+          dialog
+          title="New signing secret"
+          onClose={() => setSecret(null)}
+          testId="rotated-secret-sheet"
+        >
           {secret && (
             <div className="flex flex-col gap-4 p-4">
               <SecretOnce secret={secret} />

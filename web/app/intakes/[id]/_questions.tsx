@@ -1,32 +1,60 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 
-import { AnswerQuestion, type InboxQuestion } from "@/components/AnswerQuestion";
-import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl, initialsOf } from "@/components/ds";
-import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
-import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
-import { ApiError, SOMETHING_WENT_WRONG, api, unwrap, type Schemas } from "@/lib/api/client";
-import { plural } from "@/lib/format";
-import { useMe, type Role } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { AnswerQuestion, type InboxQuestion } from '@/components/AnswerQuestion';
+import {
+  Avatar,
+  Button,
+  Chip,
+  Empty,
+  InfoTip,
+  Mark,
+  Panel,
+  SegmentedControl,
+  initialsOf,
+} from '@/components/ds';
+import { PersonPicker, findPeople, peopleByIds, type Person } from '@/components/PersonPicker';
+import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from '@/components/review/parts';
+import { ApiError, SOMETHING_WENT_WRONG, api, unwrap, type Schemas } from '@/lib/api/client';
+import { plural } from '@/lib/format';
+import { useMe, type Role } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-import { DecideForm, mayReview } from "./_inspector";
-import { CATEGORY_LABEL, NON_ANSWER, dayMonth, knowledgeLabel, when, type Batch, type Card, type Summary } from "./_lib";
+import { DecideForm, mayReview } from './_inspector';
+import {
+  CATEGORY_LABEL,
+  NON_ANSWER,
+  dayMonth,
+  knowledgeLabel,
+  when,
+  type Batch,
+  type Card,
+  type Summary,
+} from './_lib';
 
 type Me = { id: string | null; role: Role | null };
 type People = ReadonlyMap<string, Person>;
-type Message = Schemas["InterviewMessageOut"];
+type Message = Schemas['InterviewMessageOut'];
 type Turn = (questionId: string, body: string | null, skip: boolean) => Promise<boolean>;
-type Proposal = Summary["proposals"][number];
+type Proposal = Summary['proposals'][number];
 
 /** A send that never came back whole (the server or the way to it failed or took too long). */
-const SEND_LOST = "Your answer did not reach Oracle in time. Your text is still here: send it again.";
+const SEND_LOST =
+  'Your answer did not reach Oracle in time. Your text is still here: send it again.';
 
 /** The research proposed for a question: its own, else its gap's; the latest first. */
-function researchFor(s: Summary, questionId: string, gapId: string | null | undefined): Proposal | undefined {
-  const mine = s.proposals.filter((p) => p.kind === "research_run" && (p.question_id === questionId || (!!gapId && p.gap_id === gapId)));
+function researchFor(
+  s: Summary,
+  questionId: string,
+  gapId: string | null | undefined,
+): Proposal | undefined {
+  const mine = s.proposals.filter(
+    (p) =>
+      p.kind === 'research_run' &&
+      (p.question_id === questionId || (!!gapId && p.gap_id === gapId)),
+  );
   return [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
 }
 
@@ -34,9 +62,19 @@ function researchFor(s: Summary, questionId: string, gapId: string | null | unde
  * brief-answers: a question sent to research says where the research is: proposed and
  * waiting for an approver (a link to the proposal), or running (a link to its run).
  */
-function Research({ proposal, onOpen }: { proposal: Proposal | undefined; onOpen?: (proposalId: string) => void }) {
-  const run = proposal?.status === "accepted" && typeof proposal.result?.run_id === "string" ? proposal.result.run_id : null;
-  const refused = run && typeof proposal?.result?.start_error === "string" ? proposal.result.start_error : null;
+function Research({
+  proposal,
+  onOpen,
+}: {
+  proposal: Proposal | undefined;
+  onOpen?: (proposalId: string) => void;
+}) {
+  const run =
+    proposal?.status === 'accepted' && typeof proposal.result?.run_id === 'string'
+      ? proposal.result.run_id
+      : null;
+  const refused =
+    run && typeof proposal?.result?.start_error === 'string' ? proposal.result.start_error : null;
   // brief-answers review: a research run Accept could not start says why, not "Being researched".
   if (refused)
     return (
@@ -54,7 +92,7 @@ function Research({ proposal, onOpen }: { proposal: Proposal | undefined; onOpen
         </Link>
       </span>
     );
-  if (proposal?.status === "dismissed")
+  if (proposal?.status === 'dismissed')
     return (
       <span data-testid="question-research">
         <Chip kind="na">Research dismissed</Chip>
@@ -80,20 +118,23 @@ function Research({ proposal, onOpen }: { proposal: Proposal | undefined; onOpen
 }
 
 /** C3 team follow-ups: "Oracle follows up" is on unless this person turned it off. */
-const FOLLOW_UP_KEY = "po-interview-follow-up";
+const FOLLOW_UP_KEY = 'po-interview-follow-up';
 /** Oracle's note when it records an answer: the answer bubble already shows it. */
-const RECORDED = "Answer recorded.";
+const RECORDED = 'Answer recorded.';
 
 /** This question's messages since Oracle last recorded an answer to it. */
 function openRound(messages: Message[]): Message[] {
-  return messages.slice(messages.map((m) => m.kind).lastIndexOf("closing") + 1);
+  return messages.slice(messages.map((m) => m.kind).lastIndexOf('closing') + 1);
 }
 
 /** One of Oracle's interview messages: a follow-up, or the note that it could not follow up. */
 function OracleBubble({ message, testId }: { message: Message; testId: string }) {
   return (
     <div data-testid={testId} className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
-      <span aria-hidden className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text">
+      <span
+        aria-hidden
+        className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text"
+      >
         <Mark size={16} />
       </span>
       <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2 text-[15px] leading-[22px] break-words text-text">
@@ -106,7 +147,7 @@ function OracleBubble({ message, testId }: { message: Message; testId: string })
 /** qa-work-28: the reader's own initials, as the rail's account button shows them, never "YO" for "You". */
 function useMyInitials(): string {
   const { me } = useMe();
-  return initialsOf(me?.email ?? me?.token_name ?? "");
+  return initialsOf(me?.email ?? me?.token_name ?? '');
 }
 
 /** What the person wrote before Oracle's follow-up, not recorded yet. */
@@ -123,13 +164,17 @@ function PendingBubble({ message }: { message: Message }) {
 }
 
 /** Reply to Oracle's follow-up, or record the answer as written. */
-function FollowUpReply({ onTurn }: { onTurn: (body: string | null, skip: boolean) => Promise<boolean> }) {
-  const [body, setBody] = useState("");
+function FollowUpReply({
+  onTurn,
+}: {
+  onTurn: (body: string | null, skip: boolean) => Promise<boolean>;
+}) {
+  const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function go(skip: boolean) {
     if (!skip && !body.trim()) {
-      setError("Write your reply first");
+      setError('Write your reply first');
       return;
     }
     setBusy(true);
@@ -146,7 +191,14 @@ function FollowUpReply({ onTurn }: { onTurn: (body: string | null, skip: boolean
     <div className="flex min-w-0 flex-col gap-2 rounded-panel border border-line bg-surface p-3">
       <label className={FIELD_LABEL}>
         Your reply
-        <textarea rows={2} maxLength={4000} value={body} autoFocus onChange={(e) => setBody(e.target.value)} className={TEXTAREA} />
+        <textarea
+          rows={2}
+          maxLength={4000}
+          value={body}
+          autoFocus
+          onChange={(e) => setBody(e.target.value)}
+          className={TEXTAREA}
+        />
       </label>
       {error && <InlineError>{error}</InlineError>}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -163,33 +215,48 @@ function FollowUpReply({ onTurn }: { onTurn: (body: string | null, skip: boolean
 
 /** A person's name, "you" for the reader. */
 function nameOf(people: People, me: Me, id: string | null | undefined): string {
-  if (!id) return "someone";
-  if (id === me.id) return "you";
-  return people.get(id)?.name ?? "someone";
+  if (!id) return 'someone';
+  if (id === me.id) return 'you';
+  return people.get(id)?.name ?? 'someone';
 }
 
 /** The question as the shared answer form reads it (C2): Oracle asks, about this brief. */
 function asInbox(card: Card, s: Summary): InboxQuestion {
   return {
     question: card.question,
-    asked_by: { kind: "oracle" },
-    subject: { kind: "intake", title: `Before drafting · ${s.intake.title}`, href: null },
+    asked_by: { kind: 'oracle' },
+    subject: { kind: 'intake', title: `Before drafting · ${s.intake.title}`, href: null },
     gap: card.gap,
-    answer_paths: card.question.gap_id ? card.answer_paths : card.answer_paths.filter((p) => p !== "research"),
+    answer_paths: card.question.gap_id
+      ? card.answer_paths
+      : card.answer_paths.filter((p) => p !== 'research'),
   };
 }
 
 /** An answer as a bubble from its author: when, and what it is worth (a decision, a fact, a guess). */
-function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number]; people: People; me: Me }) {
+function AnswerBubble({
+  answer,
+  people,
+  me,
+}: {
+  answer: Card['answers'][number];
+  people: People;
+  me: Me;
+}) {
   const mine = answer.answered_by === me.id;
-  const who = mine ? "You" : (people.get(answer.answered_by ?? "")?.name ?? "Someone");
+  const who = mine ? 'You' : (people.get(answer.answered_by ?? '')?.name ?? 'Someone');
   const myInitials = useMyInitials();
-  const kind = answer.kind === "answer" && answer.knowledge_state !== "unknown" ? (answer.knowledge_state === "user_decision" ? "pass" : "acc") : "na";
+  const kind =
+    answer.kind === 'answer' && answer.knowledge_state !== 'unknown'
+      ? answer.knowledge_state === 'user_decision'
+        ? 'pass'
+        : 'acc'
+      : 'na';
   // qa4-work-6: "I don't know" (or a hand-over) says itself; no second "Unknown" tag.
   const label = knowledgeLabel(answer, mine, who);
   return (
     <div data-testid="answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
-      <Avatar name={who} initials={mine ? myInitials : undefined} tone={mine ? "me" : "default"} />
+      <Avatar name={who} initials={mine ? myInitials : undefined} tone={mine ? 'me' : 'default'} />
       <div className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
           <span className="font-semibold text-text">{who}</span>
@@ -201,12 +268,12 @@ function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number];
         </div>
         <p
           className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text"
-          data-user-content={answer.kind === "answer" ? true : undefined}
+          data-user-content={answer.kind === 'answer' ? true : undefined}
         >
-          {answer.kind === "answer"
+          {answer.kind === 'answer'
             ? answer.body
-            : answer.kind === "delegate"
-              ? `Asked ${people.get(answer.delegated_to ?? "")?.name ?? "someone else"} instead`
+            : answer.kind === 'delegate'
+              ? `Asked ${people.get(answer.delegated_to ?? '')?.name ?? 'someone else'} instead`
               : NON_ANSWER[answer.kind]}
         </p>
       </div>
@@ -242,16 +309,16 @@ function QuestionBubble({
 }) {
   const q = card.question;
   const gap = card.gap;
-  const [mode, setMode] = useState<"answer" | "review" | "reassign" | null>(null);
+  const [mode, setMode] = useState<'answer' | 'review' | 'reassign' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
   const [focused, setFocused] = useState(false);
   if (focus !== focused) {
     setFocused(focus);
-    if (focus) setMode("answer");
+    if (focus) setMode('answer');
   }
   const round = openRound(transcript);
-  const waiting = round.some((m) => m.kind === "follow_up");
+  const waiting = round.some((m) => m.kind === 'follow_up');
 
   async function turn(body: string | null, skip: boolean): Promise<boolean> {
     if (!onTurn) return false;
@@ -264,30 +331,35 @@ function QuestionBubble({
       setThinking(false);
     }
   }
-  const open = q.status === "asked" || q.status === "delegated";
+  const open = q.status === 'asked' || q.status === 'delegated';
   // A deferred question may still be answered (answers.py ANSWERABLE): it offers Answer again.
-  const deferred = q.status === "deferred";
+  const deferred = q.status === 'deferred';
   const answerable = open || deferred;
   const mine = q.asked_to === me.id;
   const { can } = useMe();
   // #370: who asked and the intake's author may move a question; at the handler's role
   // (approver), anyone may, and may answer a question asked of someone else.
-  const mayMove = can("update_question", q.asked_by === me.id || s.intake.author_id === me.id);
-  const mayAnswer = can("answer_question", mine || can("update_question"));
-  const waitingReview = gap?.status === "answered_pending_review";
+  const mayMove = can('update_question', q.asked_by === me.id || s.intake.author_id === me.id);
+  const mayAnswer = can('answer_question', mine || can('update_question'));
+  const waitingReview = gap?.status === 'answered_pending_review';
   const last = card.answers[card.answers.length - 1];
   /** An answer stands on it (not a hand-over, not a deferral): Answer becomes Change answer. */
-  const standing = !!last && last.kind !== "delegate" && last.kind !== "defer";
+  const standing = !!last && last.kind !== 'delegate' && last.kind !== 'defer';
   // Answered "I don't know": the API lets an approver write the answer later (answers.py).
-  const unsure = q.status === "answered" && last?.kind === "dont_know";
-  const mayChange = unsure && can("update_question");
+  const unsure = q.status === 'answered' && last?.kind === 'dont_know';
+  const mayChange = unsure && can('update_question');
 
   /** Production minors 27: a deferred question is asked again of the same person. */
   async function undoDefer() {
     if (!q.asked_to) return;
     setError(null);
     try {
-      await unwrap(api.PATCH("/v1/questions/{question_id}", { params: { path: { question_id: q.id } }, body: { asked_to: q.asked_to } }));
+      await unwrap(
+        api.PATCH('/v1/questions/{question_id}', {
+          params: { path: { question_id: q.id } },
+          body: { asked_to: q.asked_to },
+        }),
+      );
       onChanged();
     } catch (e) {
       setError(errorMessage(e));
@@ -297,7 +369,12 @@ function QuestionBubble({
   async function reassign(p: Person) {
     setError(null);
     try {
-      await unwrap(api.PATCH("/v1/questions/{question_id}", { params: { path: { question_id: q.id } }, body: { asked_to: p.user_id } }));
+      await unwrap(
+        api.PATCH('/v1/questions/{question_id}', {
+          params: { path: { question_id: q.id } },
+          body: { asked_to: p.user_id },
+        }),
+      );
       setMode(null);
       onChanged();
     } catch (e) {
@@ -306,29 +383,53 @@ function QuestionBubble({
   }
 
   // qa-work-28: a question that already has an answer (an "I don't know" too) offers to change it.
-  const actions = (className = "") => (
-    <div data-testid="question-actions" className={`${className} flex flex-wrap items-center gap-2`}>
-      {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-      {(answerable ? mayAnswer : mayChange) && mode !== "answer" && (
-        <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
-          {standing ? "Change answer" : "Answer"}
+  const actions = (className = '') => (
+    <div
+      data-testid="question-actions"
+      className={`${className} flex flex-wrap items-center gap-2`}
+    >
+      {open && !mine && (
+        <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>
+      )}
+      {(answerable ? mayAnswer : mayChange) && mode !== 'answer' && (
+        <Button
+          variant={mine && !standing ? 'solid' : 'secondary'}
+          onClick={() => setMode('answer')}
+        >
+          {standing ? 'Change answer' : 'Answer'}
         </Button>
       )}
-      {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
+      {!mine && mayMove && mode !== 'reassign' && (
+        <Button onClick={() => setMode('reassign')}>Ask someone else</Button>
+      )}
     </div>
   );
 
   return (
-    <li id={`q-${q.id}`} className="flex min-w-0 scroll-mt-16 flex-col gap-2" data-testid="question">
+    <li
+      id={`q-${q.id}`}
+      className="flex min-w-0 scroll-mt-16 flex-col gap-2"
+      data-testid="question"
+    >
       <div className="flex min-w-0 gap-2.5">
-        <span aria-hidden className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text">
+        <span
+          aria-hidden
+          className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text"
+        >
           <Mark size={16} />
         </span>
-        <article aria-label={q.prompt} className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2.5 shadow-panel">
-          <p className="text-[15px] leading-[22px] font-semibold break-words text-text">{q.prompt}</p>
+        <article
+          aria-label={q.prompt}
+          className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2.5 shadow-panel"
+        >
+          <p className="text-[15px] leading-[22px] font-semibold break-words text-text">
+            {q.prompt}
+          </p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px] text-text2">
-            <Chip kind="line">{q.category === "general" ? "Question" : CATEGORY_LABEL[q.category]}</Chip>
-            {gap?.importance === "critical" && <Chip kind="crit">Critical</Chip>}
+            <Chip kind="line">
+              {q.category === 'general' ? 'Question' : CATEGORY_LABEL[q.category]}
+            </Chip>
+            {gap?.importance === 'critical' && <Chip kind="crit">Critical</Chip>}
             {q.rationale && (
               <span className="inline-flex items-center gap-1">
                 Why Oracle asks
@@ -337,46 +438,60 @@ function QuestionBubble({
                 </InfoTip>
               </span>
             )}
-            <span data-testid="asked-to">{mine ? "Asked you" : `Asked ${nameOf(people, me, q.asked_to)}`}</span>
-            {q.status === "deferred" && (
+            <span data-testid="asked-to">
+              {mine ? 'Asked you' : `Asked ${nameOf(people, me, q.asked_to)}`}
+            </span>
+            {q.status === 'deferred' && (
               <span data-testid="question-deferred" className="inline-flex items-center gap-1.5">
                 <Chip kind="na">Deferred</Chip>
                 {mayMove && q.asked_to && (
                   <>
                     <span aria-hidden>·</span>
-                    <Button variant="ghost" onClick={undoDefer} aria-label={`Undo defer: ${q.prompt}`}>
+                    <Button
+                      variant="ghost"
+                      onClick={undoDefer}
+                      aria-label={`Undo defer: ${q.prompt}`}
+                    >
                       Undo
                     </Button>
                   </>
                 )}
               </span>
             )}
-            {q.status === "researching" && <Research proposal={researchFor(s, q.id, q.gap_id)} onOpen={onOpenProposal} />}
-            {q.status === "retired" && <Chip kind="na">Retired</Chip>}
+            {q.status === 'researching' && (
+              <Research proposal={researchFor(s, q.id, q.gap_id)} onOpen={onOpenProposal} />
+            )}
+            {q.status === 'retired' && <Chip kind="na">Retired</Chip>}
           </div>
           {/* qa-docs-86: an open question's actions sit in its card, not below it. */}
-          {answerable && !standing && !waiting && actions("mt-2.5")}
+          {answerable && !standing && !waiting && actions('mt-2.5')}
         </article>
       </div>
       {transcript.map((m) =>
-        m.kind === "follow_up" ? (
+        m.kind === 'follow_up' ? (
           <OracleBubble key={m.id} message={m} testId="follow-up" />
-        ) : m.kind === "closing" && m.body !== RECORDED ? (
+        ) : m.kind === 'closing' && m.body !== RECORDED ? (
           <OracleBubble key={m.id} message={m} testId="oracle-note" />
-        ) : waiting && !standing && m.kind === "answer" && round.includes(m) ? (
+        ) : waiting && !standing && m.kind === 'answer' && round.includes(m) ? (
           <PendingBubble key={m.id} message={m} />
         ) : null,
       )}
       {/* qa4-work-3: a deferral is the question's state (its Deferred tag), not an answer. */}
       {card.answers
-        .filter((a) => a.kind !== "defer")
+        .filter((a) => a.kind !== 'defer')
         .map((a) => (
           <AnswerBubble key={a.id} answer={a} people={people} me={me} />
         ))}
       {/* qa-work-28: an answered question (an "I don't know" too) offers Change answer after its answers. */}
-      {(answerable || unsure) && standing && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
+      {(answerable || unsure) && standing && !waiting && (
+        <div className="ml-10 max-[600px]:ml-4">{actions()}</div>
+      )}
       {thinking && (
-        <p data-testid="oracle-typing" role="status" className="ml-10 text-sm text-text2 max-[600px]:ml-4">
+        <p
+          data-testid="oracle-typing"
+          role="status"
+          className="ml-10 text-sm text-text2 max-[600px]:ml-4"
+        >
           Oracle is thinking…
         </p>
       )}
@@ -386,13 +501,15 @@ function QuestionBubble({
             <Chip kind="warn" dot>
               Waiting for review
             </Chip>
-            {mayReview(can, gap) && mode !== "review" && <Button onClick={() => setMode("review")}>Review</Button>}
+            {mayReview(can, gap) && mode !== 'review' && (
+              <Button onClick={() => setMode('review')}>Review</Button>
+            )}
           </div>
         )}
-        {mode === "review" && gap && (
+        {mode === 'review' && gap && (
           <DecideForm
             gap={gap}
-            choices={[{ value: "validate", label: "Validate" }]}
+            choices={[{ value: 'validate', label: 'Validate' }]}
             submit="Validate"
             onCancel={() => setMode(null)}
             onDone={() => {
@@ -403,15 +520,18 @@ function QuestionBubble({
         )}
         {/* brief-answers: the answer is recorded with Oracle's follow-up; the reply adds to it. */}
         {(open || standing) && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
-        {(answerable || unsure) && !waiting && mode === "answer" && (
+        {(answerable || unsure) && !waiting && mode === 'answer' && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion
               question={
                 open
                   ? asInbox(card, s)
                   : deferred
-                    ? { ...asInbox(card, s), answer_paths: asInbox(card, s).answer_paths.filter((p) => p !== "defer") }
-                    : { ...asInbox(card, s), answer_paths: ["answer"] }
+                    ? {
+                        ...asInbox(card, s),
+                        answer_paths: asInbox(card, s).answer_paths.filter((p) => p !== 'defer'),
+                      }
+                    : { ...asInbox(card, s), answer_paths: ['answer'] }
               }
               // Production minors 28: the question is in its card right above; it is not repeated.
               showPrompt={false}
@@ -424,8 +544,12 @@ function QuestionBubble({
             />
           </div>
         )}
-        {answerable && mode === "reassign" && (
-          <div className="rounded-button border border-line bg-surface p-2" role="group" aria-label="Ask someone else">
+        {answerable && mode === 'reassign' && (
+          <div
+            className="rounded-button border border-line bg-surface p-2"
+            role="group"
+            aria-label="Ask someone else"
+          >
             <PersonPicker autoFocus exclude={q.asked_to ? [q.asked_to] : []} onPick={reassign} />
             <Button variant="ghost" onClick={() => setMode(null)}>
               Cancel
@@ -444,7 +568,7 @@ function askedOn(b: Batch): string | null {
   return stamps.length ? dayMonth(stamps[0]) : null;
 }
 
-const SIZES = ["3", "5", "10"] as const;
+const SIZES = ['3', '5', '10'] as const;
 
 /**
  * Next questions (the author or an approver): Oracle's next batch exactly as Ask these asks
@@ -452,9 +576,23 @@ const SIZES = ["3", "5", "10"] as const;
  * While Ask people questions is at Observe (H11) Oracle proposes nothing and the panel says
  * why (`held`) instead of offering Ask these.
  */
-function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; me: Me; version: number; onAsked: () => void }) {
-  const [size, setSize] = useState<(typeof SIZES)[number]>("5");
-  const [preview, setPreview] = useState<{ cards: Card[]; remaining: number; held: string | null } | null>(null);
+function NextQuestions({
+  intakeId,
+  me,
+  version,
+  onAsked,
+}: {
+  intakeId: string;
+  me: Me;
+  version: number;
+  onAsked: () => void;
+}) {
+  const [size, setSize] = useState<(typeof SIZES)[number]>('5');
+  const [preview, setPreview] = useState<{
+    cards: Card[];
+    remaining: number;
+    held: string | null;
+  } | null>(null);
   const [writers, setWriters] = useState<Person[]>([]);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -462,10 +600,14 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
 
   useEffect(() => {
     let live = true;
-    unwrap(api.GET("/v1/intakes/{intake_id}/next-batch", { params: { path: { intake_id: intakeId }, query: { size: Number(size) } } }))
+    unwrap(
+      api.GET('/v1/intakes/{intake_id}/next-batch', {
+        params: { path: { intake_id: intakeId }, query: { size: Number(size) } },
+      }),
+    )
       .then(async (out) => {
         const defaults = await peopleByIds(out.questions.map((c) => c.question.asked_to));
-        const first = await findPeople("");
+        const first = await findPeople('');
         if (!live) return;
         const all = new Map(first.filter((p) => p.can_write).map((p) => [p.user_id, p]));
         for (const p of defaults.values()) all.set(p.user_id, p);
@@ -485,9 +627,18 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
     if (!preview) return;
     setBusy(true);
     setError(null);
-    const assign = Object.fromEntries(Object.entries(chosen).filter(([qid, uid]) => preview.cards.find((c) => c.question.id === qid)?.question.asked_to !== uid));
+    const assign = Object.fromEntries(
+      Object.entries(chosen).filter(
+        ([qid, uid]) => preview.cards.find((c) => c.question.id === qid)?.question.asked_to !== uid,
+      ),
+    );
     try {
-      await unwrap(api.POST("/v1/intakes/{intake_id}/question-batches", { params: { path: { intake_id: intakeId } }, body: { size: Number(size), assign } }));
+      await unwrap(
+        api.POST('/v1/intakes/{intake_id}/question-batches', {
+          params: { path: { intake_id: intakeId } },
+          body: { size: Number(size), assign },
+        }),
+      );
       onAsked();
     } catch (e) {
       setError(errorMessage(e));
@@ -498,20 +649,36 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
 
   const n = preview?.remaining ?? 0;
   // qa-work-47: the batch size says what it is ("Ask 5 at a time"), and only while there is more to ask.
-  const sizes = preview && (n === 0 || preview.held) ? undefined : (
-    <span data-testid="batch-size" className="inline-flex items-center gap-1.5 text-sm text-text2">
-      <span aria-hidden>Ask</span>
-      <SegmentedControl label={`Ask ${size} at a time`} size="sm" items={SIZES.map((v) => ({ value: v, label: v, ariaLabel: `Ask ${v} questions at a time` }))} value={size} onChange={setSize} />
-      <span aria-hidden>at a time</span>
-    </span>
-  );
+  const sizes =
+    preview && (n === 0 || preview.held) ? undefined : (
+      <span
+        data-testid="batch-size"
+        className="inline-flex items-center gap-1.5 text-sm text-text2"
+      >
+        <span aria-hidden>Ask</span>
+        <SegmentedControl
+          label={`Ask ${size} at a time`}
+          size="sm"
+          items={SIZES.map((v) => ({
+            value: v,
+            label: v,
+            ariaLabel: `Ask ${v} questions at a time`,
+          }))}
+          value={size}
+          onChange={setSize}
+        />
+        <span aria-hidden>at a time</span>
+      </span>
+    );
   return (
     <Panel title="Next questions" testId="next-questions" tools={sizes}>
       <div className="flex flex-col gap-3 p-4 max-[600px]:p-3">
-        {!preview && !error && <p className="text-sm text-text2">Reading Oracle&apos;s next questions…</p>}
+        {!preview && !error && (
+          <p className="text-sm text-text2">Reading Oracle&apos;s next questions…</p>
+        )}
         {preview && (
           <p className="text-[15px] font-semibold text-text">
-            {n === 0 ? "Oracle has no more questions." : `Oracle has ${plural(n, "more question")}`}
+            {n === 0 ? 'Oracle has no more questions.' : `Oracle has ${plural(n, 'more question')}`}
           </p>
         )}
         {preview?.held && (
@@ -523,33 +690,42 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
           <>
             <ol className="flex flex-col divide-y divide-line">
               {preview.cards.map((c) => (
-                <li key={c.question.id} data-testid="next-question" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
-                  <span data-testid="next-prompt" className="min-w-0 flex-[1_1_16rem] text-sm break-words text-text">
+                <li
+                  key={c.question.id}
+                  data-testid="next-question"
+                  className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 py-2"
+                >
+                  <span
+                    data-testid="next-prompt"
+                    className="min-w-0 flex-[1_1_16rem] text-sm break-words text-text"
+                  >
                     {c.question.prompt}
                   </span>
-                  {c.gap?.importance === "critical" && <Chip kind="crit">Critical</Chip>}
+                  {c.gap?.importance === 'critical' && <Chip kind="crit">Critical</Chip>}
                   {/* rirs-31: the drop-down says what it picks. */}
                   <label className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-[13px] text-text2">
                     <span aria-hidden>Who answers</span>
-                  <select
-                    aria-label={`Who answers: ${c.question.prompt}`}
-                    className={`${SELECT} max-w-full min-w-0`}
-                    value={chosen[c.question.id] ?? c.question.asked_to ?? ""}
-                    onChange={(e) => setChosen((m) => ({ ...m, [c.question.id]: e.target.value }))}
-                  >
-                    {writers.map((p) => (
-                      <option key={p.user_id} value={p.user_id}>
-                        {p.user_id === me.id ? `${p.name} (you)` : p.name}
-                      </option>
-                    ))}
-                  </select>
+                    <select
+                      aria-label={`Who answers: ${c.question.prompt}`}
+                      className={`${SELECT} max-w-full min-w-0`}
+                      value={chosen[c.question.id] ?? c.question.asked_to ?? ''}
+                      onChange={(e) =>
+                        setChosen((m) => ({ ...m, [c.question.id]: e.target.value }))
+                      }
+                    >
+                      {writers.map((p) => (
+                        <option key={p.user_id} value={p.user_id}>
+                          {p.user_id === me.id ? `${p.name} (you)` : p.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </li>
               ))}
             </ol>
             <div>
               <Button variant="solid" icon="ask" disabled={busy} onClick={ask}>
-                {busy ? "Asking…" : "Ask these"}
+                {busy ? 'Asking…' : 'Ask these'}
               </Button>
             </div>
           </>
@@ -581,11 +757,16 @@ export function QuestionsTab({
   onOpenProposal?: (proposalId: string) => void;
 }) {
   const [people, setPeople] = useState<People>(new Map());
-  const ids = batches.flatMap((b) => b.questions.flatMap((c) => [c.question.asked_to, ...c.answers.flatMap((a) => [a.answered_by, a.delegated_to])]));
-  const key = [...new Set(ids.filter(Boolean))].sort().join(",");
+  const ids = batches.flatMap((b) =>
+    b.questions.flatMap((c) => [
+      c.question.asked_to,
+      ...c.answers.flatMap((a) => [a.answered_by, a.delegated_to]),
+    ]),
+  );
+  const key = [...new Set(ids.filter(Boolean))].sort().join(',');
   useEffect(() => {
     let live = true;
-    peopleByIds(key ? key.split(",") : [])
+    peopleByIds(key ? key.split(',') : [])
       .then((m) => live && setPeople(m))
       .catch(() => undefined);
     return () => {
@@ -593,17 +774,23 @@ export function QuestionsTab({
     };
   }, [key]);
   const { can } = useMe();
-  const asker = can("ask_next_question_batch", s.intake.author_id === me.id);
+  const asker = can('ask_next_question_batch', s.intake.author_id === me.id);
   // C3 team follow-ups: my team interview on this brief holds Oracle's follow-ups and my replies
   // (#370: shown to a role that can answer in it).
-  const member = can("open_team_interview");
-  const [followUp, setFollowUp] = useState(() => typeof window === "undefined" || localStorage.getItem(FOLLOW_UP_KEY) !== "off");
+  const member = can('open_team_interview');
+  const [followUp, setFollowUp] = useState(
+    () => typeof window === 'undefined' || localStorage.getItem(FOLLOW_UP_KEY) !== 'off',
+  );
   const [interview, setInterview] = useState<{ id: string; messages: Message[] } | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   useEffect(() => {
     if (!member) return;
     let live = true;
-    unwrap(api.POST("/v1/intakes/{intake_id}/interview", { params: { path: { intake_id: s.intake.id } } }))
+    unwrap(
+      api.POST('/v1/intakes/{intake_id}/interview', {
+        params: { path: { intake_id: s.intake.id } },
+      }),
+    )
       .then((iv) => live && setInterview({ id: iv.id, messages: iv.messages }))
       .catch(() => undefined);
     return () => {
@@ -614,12 +801,12 @@ export function QuestionsTab({
   // the thread loads after the page, so it scrolls there once the question is drawn.
   const drawn = batches.length > 0;
   useEffect(() => {
-    if (!drawn || !window.location.hash.startsWith("#q-")) return;
-    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "start" });
+    if (!drawn || !window.location.hash.startsWith('#q-')) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'start' });
   }, [drawn]);
   function toggle(on: boolean) {
     setFollowUp(on);
-    localStorage.setItem(FOLLOW_UP_KEY, on ? "on" : "off");
+    localStorage.setItem(FOLLOW_UP_KEY, on ? 'on' : 'off');
   }
   // Production minors 26: one turn at a time, as the API takes them; an answer sent while
   // Oracle still reads the one before waits for it, and never fails for it.
@@ -630,17 +817,23 @@ export function QuestionsTab({
     return next;
   };
   const takeTurn: Turn = async (questionId, body, skip) => {
-    if (!interview) throw new ApiError(409, "Your interview is still loading. Wait a moment, then send again.");
+    if (!interview)
+      throw new ApiError(409, 'Your interview is still loading. Wait a moment, then send again.');
     const out = await unwrap(
-      api.POST("/v1/interviews/{interview_id}/turns", {
+      api.POST('/v1/interviews/{interview_id}/turns', {
         params: { path: { interview_id: interview.id } },
         body: { question_id: questionId, body, skip_follow_up: skip },
       }),
     ).catch((e: unknown) => {
-      if (e instanceof ApiError && e.status === 429) throw new ApiError(429, "Oracle is still reading your last answer. Wait a moment, then send again.");
+      if (e instanceof ApiError && e.status === 429)
+        throw new ApiError(
+          429,
+          'Oracle is still reading your last answer. Wait a moment, then send again.',
+        );
       // brief-answers: a send cut off on the way (a timeout, a server error) says why; the
       // text stays in the form, and sending it again saves it once.
-      if (e instanceof ApiError && e.status >= 500 && e.message === SOMETHING_WENT_WRONG) throw new ApiError(e.status, SEND_LOST);
+      if (e instanceof ApiError && e.status >= 500 && e.message === SOMETHING_WENT_WRONG)
+        throw new ApiError(e.status, SEND_LOST);
       if (!(e instanceof ApiError)) throw new ApiError(0, SEND_LOST);
       throw e;
     });
@@ -655,7 +848,10 @@ export function QuestionsTab({
       {member && (
         <div className="flex justify-end">
           {/* qa-work-43: a 44 px row and a 20 px box to tap on a phone. */}
-          <label data-testid="follow-up-switch" className="inline-flex min-h-6 cursor-pointer items-center gap-2 text-sm font-semibold text-text max-[600px]:min-h-11">
+          <label
+            data-testid="follow-up-switch"
+            className="inline-flex min-h-6 cursor-pointer items-center gap-2 text-sm font-semibold text-text max-[600px]:min-h-11"
+          >
             <input
               type="checkbox"
               role="switch"
@@ -666,7 +862,8 @@ export function QuestionsTab({
             />
             Oracle follows up
             <InfoTip label="what Oracle follows up does" align="end">
-              When your answer does not settle the question yet, Oracle asks you one follow-up before it records your answer.
+              When your answer does not settle the question yet, Oracle asks you one follow-up
+              before it records your answer.
             </InfoTip>
           </label>
         </div>
@@ -674,10 +871,15 @@ export function QuestionsTab({
       <div data-testid="intake-thread" className="flex min-w-0 flex-col gap-5">
         {batches.length === 0 && <Empty>No questions asked yet</Empty>}
         {batches.map((b) => (
-          <section key={b.batch} data-testid="batch" aria-label={`Batch ${b.batch}`} className="flex min-w-0 flex-col gap-3">
+          <section
+            key={b.batch}
+            data-testid="batch"
+            aria-label={`Batch ${b.batch}`}
+            className="flex min-w-0 flex-col gap-3"
+          >
             <h2 className="text-[13px] font-semibold tracking-[0.02em] text-text2">
-              Batch {b.batch} · {plural(b.questions.length, "question")}
-              {askedOn(b) ? ` · asked ${askedOn(b)}` : ""}
+              Batch {b.batch} · {plural(b.questions.length, 'question')}
+              {askedOn(b) ? ` · asked ${askedOn(b)}` : ''}
             </h2>
             <ul className="flex min-w-0 flex-col gap-4">
               {b.questions.map((c) => (
@@ -688,7 +890,9 @@ export function QuestionsTab({
                   people={people}
                   me={me}
                   onChanged={onChanged}
-                  transcript={interview?.messages.filter((m) => m.question_id === c.question.id) ?? []}
+                  transcript={
+                    interview?.messages.filter((m) => m.question_id === c.question.id) ?? []
+                  }
                   onTurn={followUp && interview ? turn : undefined}
                   focus={focus === c.question.id}
                   onOpenProposal={onOpenProposal}
@@ -698,7 +902,9 @@ export function QuestionsTab({
           </section>
         ))}
       </div>
-      {asker && s.intake.status !== "archived" && <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />}
+      {asker && s.intake.status !== 'archived' && (
+        <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />
+      )}
     </div>
   );
 }

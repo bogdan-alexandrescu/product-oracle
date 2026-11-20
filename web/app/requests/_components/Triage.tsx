@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 
-import { Button, Chip, InfoTip } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
-import { failedAt, formatAge, plural } from "@/lib/format";
-import { errorMessage, useQuery, type Query } from "@/lib/use-query";
+import { Button, Chip, InfoTip } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatInZone, todayIn, useCompanyZone, zoneInstant } from '@/lib/dates';
+import { failedAt, formatAge, plural } from '@/lib/format';
+import { errorMessage, useQuery, type Query } from '@/lib/use-query';
 
-type Status = Schemas["TriageStatus"];
+type Status = Schemas['TriageStatus'];
 
 /** How often the header re-reads a triage run under way. */
 const POLL_MS = 2_000;
 
 /** "just now", "2m ago", "3h ago": the app's one way to write an age (formatAge). */
 function ago(at: string | null | undefined, now: number): string {
-  const age = at ? formatAge(at, now) : "now";
-  return !age || age === "now" ? "just now" : `${age} ago`;
+  const age = at ? formatAge(at, now) : 'now';
+  return !age || age === 'now' ? 'just now' : `${age} ago`;
 }
 
 /** Oracle's latest triage run, re-read every few seconds while it is under way. */
 export function useTriage(): Query<Status> {
-  const q = useQuery("request-triage", () => unwrap(api.GET("/v1/requests/triage")));
+  const q = useQuery('request-triage', () => unwrap(api.GET('/v1/requests/triage')));
   const active = q.data?.active ?? false;
   const { reload } = q;
   useEffect(() => {
@@ -44,15 +44,17 @@ function Started({ at }: { at: string | null | undefined }) {
 
 /** What the daily triage switch says under its name: off, or who the daily run acts as (qa-work-38). */
 function daily(status: Status): { text: string; warn: boolean } {
-  if (!status.daily_on) return { text: "Off", warn: false };
+  if (!status.daily_on) return { text: 'Off', warn: false };
   if (status.daily_as) return { text: `On, runs as ${status.daily_as}`, warn: false };
-  return { text: "On, but no active approver or owner can run it", warn: true };
+  return { text: 'On, but no active approver or owner can run it', warn: true };
 }
 
 /** What Oracle's last finished run did: the requests it left suggestions on, and what was new in your sources (qa-work-5). */
 function lastRun(status: Status): string {
-  const found = status.found ? `found ${plural(status.found, "new possible request")} in your sources` : "found nothing new in your sources";
-  return `Oracle's last triage left suggestions on ${plural(status.suggestions, "request")} and ${found}`;
+  const found = status.found
+    ? `found ${plural(status.found, 'new possible request')} in your sources`
+    : 'found nothing new in your sources';
+  return `Oracle's last triage left suggestions on ${plural(status.suggestions, 'request')} and ${found}`;
 }
 
 /**
@@ -77,14 +79,17 @@ export function TriageStatusLine({ status }: { status: Status | undefined }) {
         <>
           Oracle is sorting · <Started at={status.started_at} />
         </>
-      ) : status.status === "succeeded" ? (
+      ) : status.status === 'succeeded' ? (
         lastRun(status)
       ) : (
         // When it failed, then what was so then (#633 re-review).
         <>
           {/* The ". " follows the sentence whenever more follows it: a when, a why or both. */}
-          Oracle&apos;s last triage did not finish{status.error || (status.status === "failed" && status.finished_at) ? ". " : ""}
-          {status.status === "failed" && status.finished_at && <span data-testid="failed-at">{failedAt(status.finished_at)}. </span>}
+          Oracle&apos;s last triage did not finish
+          {status.error || (status.status === 'failed' && status.finished_at) ? '. ' : ''}
+          {status.status === 'failed' && status.finished_at && (
+            <span data-testid="failed-at">{failedAt(status.finished_at)}. </span>
+          )}
           {status.error}
         </>
       )}
@@ -105,7 +110,10 @@ const US_ZONE =
  */
 export function useTriageTime(): string {
   const zone = useCompanyZone();
-  const shown = formatInZone(zoneInstant(todayIn(zone), "07:00", zone), zone, { hour: "numeric", minute: "2-digit" });
+  const shown = formatInZone(zoneInstant(todayIn(zone), '07:00', zone), zone, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
   const m = /^(\d{1,2}:\d{2})\s([AP]M)\s(.+)$/.exec(shown);
   if (!m) return shown;
   const [, clock, half, name] = m;
@@ -113,7 +121,7 @@ export function useTriageTime(): string {
   // "PDT"/"PST" read as "PT", "AKDT" as "AKT", "HST" as "HT".
   const us = /^(E|C|M|P|AK|H)[SD]?T$/.exec(name);
   if (US_ZONE.test(zone) && us) return `${time}\u00a0${us[1]}T`;
-  const city = (zone.split("/").pop() ?? zone).replace(/_/g, " ").replace(/ /g, "\u00a0");
+  const city = (zone.split('/').pop() ?? zone).replace(/_/g, ' ').replace(/ /g, '\u00a0');
   return `${time}\u00a0${city}\u00a0time`;
 }
 
@@ -122,33 +130,45 @@ export function useTriageTime(): string {
  * switch and Sort now, so the header keeps two primary actions. Approvers and owners get the
  * panel; commenters and viewers read its state only.
  */
-export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Status>; canChange: boolean; canStart: boolean }) {
+export function TriageMenu({
+  triage,
+  canChange,
+  canStart,
+}: {
+  triage: Query<Status>;
+  canChange: boolean;
+  canStart: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const status = triage.data;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       setOpen(false);
-      root.current?.querySelector<HTMLElement>("[data-triage-menu-button]")?.focus();
+      root.current?.querySelector<HTMLElement>('[data-triage-menu-button]')?.focus();
     };
     const onDown = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
     };
   }, [open]);
   if (!canChange && !canStart) {
     // #370: commenters and viewers can never turn it, so they read its state, no switch.
     const said = status ? daily(status) : null;
     return status ? (
-      <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state" title={said?.text}>
-        Auto-sort: {status.daily_on ? "On" : "Off"}
+      <Chip
+        kind={status.daily_on ? 'pass' : 'na'}
+        data-testid="daily-triage-state"
+        title={said?.text}
+      >
+        Auto-sort: {status.daily_on ? 'On' : 'Off'}
       </Chip>
     ) : null;
   }
@@ -163,7 +183,7 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
         className="max-[600px]:h-11 max-[600px]:w-full"
         onClick={() => setOpen((o) => !o)}
       >
-        Auto-sort: {status?.daily_on ? "On" : "Off"}
+        Auto-sort: {status?.daily_on ? 'On' : 'Off'}
       </Button>
       {open && (
         <div
@@ -186,7 +206,15 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
  * "Auto-sort new requests daily at 7:00 AM PT" (owner decision 2026-10-21: off by default).
  * An approver or owner turns it on or off; commenters and viewers see its state only.
  */
-export function DailyTriageSwitch({ triage, canChange, tip = true }: { triage: Query<Status>; canChange: boolean; tip?: boolean }) {
+export function DailyTriageSwitch({
+  triage,
+  canChange,
+  tip = true,
+}: {
+  triage: Query<Status>;
+  canChange: boolean;
+  tip?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const status = triage.data;
@@ -197,7 +225,7 @@ export function DailyTriageSwitch({ triage, canChange, tip = true }: { triage: Q
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.PUT("/v1/requests/triage/daily", { body: { on } }));
+      await unwrap(api.PUT('/v1/requests/triage/daily', { body: { on } }));
       await triage.reload();
     } catch (e) {
       setError(errorMessage(e));
@@ -227,7 +255,10 @@ export function DailyTriageSwitch({ triage, canChange, tip = true }: { triage: Q
           <span className="min-w-0">
             Auto-sort new requests daily at {at}
             {said && (
-              <span data-testid="daily-triage-said" className={`block font-medium ${said.warn ? "text-warn" : "text-text2"}`}>
+              <span
+                data-testid="daily-triage-said"
+                className={`block font-medium ${said.warn ? 'text-warn' : 'text-text2'}`}
+              >
                 {said.text}
               </span>
             )}
@@ -235,8 +266,12 @@ export function DailyTriageSwitch({ triage, canChange, tip = true }: { triage: Q
         </label>
       ) : (
         status && (
-          <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state" title={said?.text}>
-            Auto-sort: {status.daily_on ? "On" : "Off"}
+          <Chip
+            kind={status.daily_on ? 'pass' : 'na'}
+            data-testid="daily-triage-state"
+            title={said?.text}
+          >
+            Auto-sort: {status.daily_on ? 'On' : 'Off'}
           </Chip>
         )
       )}
@@ -253,9 +288,11 @@ export function DailyTriageSwitch({ triage, canChange, tip = true }: { triage: Q
 function DailyTip({ status, at }: { status: Status | undefined; at: string }) {
   return (
     <>
-      While Auto-sort is on, Oracle sorts new requests every day at {at}, about $1.50 a run. It runs as whoever turned it
-      on, while they are an approver or owner, otherwise as the longest-standing owner.
-      {status?.daily_changed_by && ` Last turned ${status.daily_on ? "on" : "off"} by ${status.daily_changed_by}.`}
+      While Auto-sort is on, Oracle sorts new requests every day at {at}, about $1.50 a run. It runs
+      as whoever turned it on, while they are an approver or owner, otherwise as the
+      longest-standing owner.
+      {status?.daily_changed_by &&
+        ` Last turned ${status.daily_on ? 'on' : 'off'} by ${status.daily_changed_by}.`}
     </>
   );
 }
@@ -264,7 +301,13 @@ function DailyTip({ status, at }: { status: Status | undefined; at: string }) {
  * Sort now (approvers and owners): starts Oracle's triage run; it decides nothing. With
  * `withDaily` its tip also says what Auto-sort does, the panel's one tip (qa-work-36).
  */
-export function ClassifyNow({ triage, withDaily = false }: { triage: Query<Status>; withDaily?: boolean }) {
+export function ClassifyNow({
+  triage,
+  withDaily = false,
+}: {
+  triage: Query<Status>;
+  withDaily?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const active = triage.data?.active ?? false;
@@ -274,7 +317,7 @@ export function ClassifyNow({ triage, withDaily = false }: { triage: Query<Statu
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/requests/triage", { body: {} }));
+      await unwrap(api.POST('/v1/requests/triage', { body: {} }));
       await triage.reload();
     } catch (e) {
       setError(errorMessage(e));
@@ -294,19 +337,19 @@ export function ClassifyNow({ triage, withDaily = false }: { triage: Query<Statu
         className="max-[600px]:h-11 max-[600px]:flex-1"
         variant="secondary"
         disabled={busy || active}
-        title={active ? "Oracle is sorting now" : undefined}
+        title={active ? 'Oracle is sorting now' : undefined}
         onClick={start}
         data-testid="classify-now"
       >
         Sort now
       </Button>
-      <InfoTip label={withDaily ? "Auto-sort and Sort now" : "Sort now"}>
-        Sort now: Oracle suggests a theme, goals, a duplicate and a feature for every new request, and looks through your
-        own sources for requests. You accept or ignore each suggestion. Oracle also sorts new requests every day at {at}{" "}
-        while Auto-sort is on.
+      <InfoTip label={withDaily ? 'Auto-sort and Sort now' : 'Sort now'}>
+        Sort now: Oracle suggests a theme, goals, a duplicate and a feature for every new request,
+        and looks through your own sources for requests. You accept or ignore each suggestion.
+        Oracle also sorts new requests every day at {at} while Auto-sort is on.
         {withDaily && (
           <>
-            {" "}
+            {' '}
             <DailyTip status={triage.data} at={at} />
           </>
         )}

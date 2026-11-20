@@ -1,69 +1,93 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
 
-import { Chip, DataTable, Icon, Page, Panel, type Column } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewSummary } from "@/lib/api/interviews";
-import { formatAge, formatDateTime } from "@/lib/format";
-import { useQuery } from "@/lib/use-query";
+import { Chip, DataTable, Icon, Page, Panel, type Column } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import {
+  INTERVIEW_STATUS_KIND,
+  INTERVIEW_STATUS_LABEL,
+  interviewsCall,
+  type InterviewSummary,
+} from '@/lib/api/interviews';
+import { formatAge, formatDateTime } from '@/lib/format';
+import { useQuery } from '@/lib/use-query';
 
-import { RequestsHeader } from "../_components/RequestsHeader";
-import { useTriage } from "../_components/Triage";
+import { RequestsHeader } from '../_components/RequestsHeader';
+import { useTriage } from '../_components/Triage';
 
 /** "just now", "5m ago": the age the request rows and the triage line write (never "now ago"). */
 function finishedAgo(at: string): string {
   const age = formatAge(at);
-  return !age || age === "now" ? "just now" : `${age} ago`;
+  return !age || age === 'now' ? 'just now' : `${age} ago`;
 }
 
 const COLUMNS: Column<InterviewSummary>[] = [
   {
-    key: "customer",
-    header: "Customer",
+    key: 'customer',
+    header: 'Customer',
     cell: (r) => (
       // qa-work-44: the name reads as a link, and the row ends in a chevron: a row opens.
       <span className="font-semibold text-accent-ink">
         {r.interviewee_name}
-        {r.interviewee_company && <span className="font-normal text-text2"> · {r.interviewee_company}</span>}
+        {r.interviewee_company && (
+          <span className="font-normal text-text2"> · {r.interviewee_company}</span>
+        )}
       </span>
     ),
-    phone: "title",
+    phone: 'title',
   },
-  { key: "about", header: "About", cell: (r) => <span title={r.title}>{r.title}</span> },
+  { key: 'about', header: 'About', cell: (r) => <span title={r.title}>{r.title}</span> },
   {
-    key: "status",
-    header: "Status",
-    width: "130px",
+    key: 'status',
+    header: 'Status',
+    width: '130px',
     cell: (r) => (
       <Chip kind={INTERVIEW_STATUS_KIND[r.status]} dot data-testid="interview-status">
         {INTERVIEW_STATUS_LABEL[r.status]}
       </Chip>
     ),
-    phone: "action",
+    phone: 'action',
   },
-  { key: "by", header: "Created by", width: "150px", cell: (r) => r.created_by_name ?? "—", hideOnPhone: true },
   {
-    key: "finished",
-    header: "Finished",
-    width: "100px",
+    key: 'by',
+    header: 'Created by',
+    width: '150px',
+    cell: (r) => r.created_by_name ?? '—',
+    hideOnPhone: true,
+  },
+  {
+    key: 'finished',
+    header: 'Finished',
+    width: '100px',
     // An age, as the request rows show theirs (qa-work-41); the full date on hover.
     cell: (r) =>
       r.finished_at ? (
-        <span className="tnum" title={formatDateTime(r.finished_at)} data-testid="interview-finished">
+        <span
+          className="tnum"
+          title={formatDateTime(r.finished_at)}
+          data-testid="interview-finished"
+        >
           {finishedAgo(r.finished_at)}
         </span>
       ) : (
-        "—"
+        '—'
       ),
-    phoneLabel: "Finished ",
+    phoneLabel: 'Finished ',
   },
-  { key: "requests", header: "Requests", width: "100px", align: "right", cell: (r) => <span className="tnum">{r.request_count}</span>, phoneLabel: "Requests " },
   {
-    key: "open",
+    key: 'requests',
+    header: 'Requests',
+    width: '100px',
+    align: 'right',
+    cell: (r) => <span className="tnum">{r.request_count}</span>,
+    phoneLabel: 'Requests ',
+  },
+  {
+    key: 'open',
     header: <span className="sr-only">Open</span>,
-    width: "40px",
-    align: "right",
+    width: '40px',
+    align: 'right',
     cell: () => (
       <span data-testid="interview-row-open" className="inline-flex text-text2">
         <Icon name="chevron-right" size={16} />
@@ -82,7 +106,9 @@ const COLUMNS: Column<InterviewSummary>[] = [
 export default function InterviewsPage() {
   const router = useRouter();
   const triage = useTriage();
-  const q = useQuery("interviews", () => interviewsCall<InterviewSummary[]>("GET", "/v1/interviews?kind=customer"));
+  const q = useQuery('interviews', () =>
+    interviewsCall<InterviewSummary[]>('GET', '/v1/interviews?kind=customer'),
+  );
   return (
     <Page>
       <RequestsHeader
@@ -100,7 +126,7 @@ export default function InterviewsPage() {
           rowKey={(r) => r.id}
           loading={q.loading}
           onSelect={(id) => router.push(`/requests/interviews/${id}`)}
-          rowProps={(r) => ({ "data-testid": "interview-row", "data-status": r.status })}
+          rowProps={(r) => ({ 'data-testid': 'interview-row', 'data-status': r.status })}
         />
       </Panel>
     </Page>

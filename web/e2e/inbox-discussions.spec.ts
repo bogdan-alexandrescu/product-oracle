@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * G6 Discussion rows in the Inbox through the UI, on the mock layer ("discussions" scenario):
@@ -14,87 +14,99 @@ import { login } from "./helpers";
  * In the default scenario the badge is still 10: e2e/inbox-one.spec.ts pins it.
  */
 
-const TITLE = "F-12 Referral link: keep links for guests?";
-const VIEWER = "viewer@example.com";
-const APPROVER = "approver@example.com";
+const TITLE = 'F-12 Referral link: keep links for guests?';
+const VIEWER = 'viewer@example.com';
+const APPROVER = 'approver@example.com';
 
-const withScenario = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "discussions"), MOCK_SCENARIO_KEY);
-const tabs = (page: Page) => page.getByTestId("inbox-state-tabs");
-const tab = (page: Page, name: string) => tabs(page).getByRole("tab", { name: new RegExp(`^${name}`) });
-const tabCount = async (page: Page, name: string) => Number((await tab(page, name).innerText()).replace(/\D+/g, "") || "0");
-const badge = (page: Page) => page.getByTestId("nav-inbox-badge");
-const group = (page: Page, state: string) => page.getByTestId(`inbox-tab-${state}`).getByTestId("inbox-discussions");
-const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true });
+const withScenario = (page: Page) =>
+  page.addInitScript((key) => localStorage.setItem(key, 'discussions'), MOCK_SCENARIO_KEY);
+const tabs = (page: Page) => page.getByTestId('inbox-state-tabs');
+const tab = (page: Page, name: string) =>
+  tabs(page).getByRole('tab', { name: new RegExp(`^${name}`) });
+const tabCount = async (page: Page, name: string) =>
+  Number((await tab(page, name).innerText()).replace(/\D+/g, '') || '0');
+const badge = (page: Page) => page.getByTestId('nav-inbox-badge');
+const group = (page: Page, state: string) =>
+  page.getByTestId(`inbox-tab-${state}`).getByTestId('inbox-discussions');
+const thread = (page: Page) => page.getByTestId('discussion-thread').filter({ visible: true });
 
 async function inboxAs(page: Page, email: string) {
   await withScenario(page);
   await login(page, email);
-  await page.goto("/inbox");
-  await expect(tab(page, "New")).toHaveAttribute("aria-selected", "true");
+  await page.goto('/inbox');
+  await expect(tab(page, 'New')).toHaveAttribute('aria-selected', 'true');
 }
 
 // protects=criterion 9.1: a viewer invited by a mention sees "Invited" with Read; opening it
 // reads the thread, so the row moves to Done and the rail badge drops by 1; fails_when=no
 // row, Join for a viewer, or the row still counted after reading; no_claim=the API's
 // done rule (test_a_mention_invites_and_reading_marks_it_done).
-test("an invited viewer reads the discussion and the row moves to Done", async ({ page }) => {
+test('an invited viewer reads the discussion and the row moves to Done', async ({ page }) => {
   await inboxAs(page, VIEWER);
-  const row = group(page, "new").locator("tr[data-row]").filter({ hasText: TITLE });
-  await expect(row).toContainText("Invited");
-  await expect(row).toContainText("by Theo Brandt");
-  await expect(row.getByRole("button", { name: "Join" })).toHaveCount(0);
+  const row = group(page, 'new').locator('tr[data-row]').filter({ hasText: TITLE });
+  await expect(row).toContainText('Invited');
+  await expect(row).toContainText('by Theo Brandt');
+  await expect(row.getByRole('button', { name: 'Join' })).toHaveCount(0);
   const before = Number(await badge(page).innerText());
-  await row.getByRole("link", { name: "Read" }).click();
+  await row.getByRole('link', { name: 'Read' }).click();
   await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\?discussion=/);
   await expect(thread(page)).toContainText(TITLE);
   // The thread marks itself read once drawn; the rail's badge dropping is the sign it was.
   // qa-company-4: the viewer's only counted item is this one, so the badge goes once it is read.
   const after = async () =>
-    before - 1 > 0 ? expect(badge(page)).toHaveText(String(before - 1)) : expect(badge(page)).toHaveCount(0);
+    before - 1 > 0
+      ? expect(badge(page)).toHaveText(String(before - 1))
+      : expect(badge(page)).toHaveCount(0);
   await after();
-  await page.goto("/inbox");
+  await page.goto('/inbox');
   await after();
-  await tab(page, "Done").click();
-  await expect(group(page, "done").locator("tr[data-row]").filter({ hasText: TITLE })).toContainText("Invited");
+  await tab(page, 'Done').click();
+  await expect(
+    group(page, 'done').locator('tr[data-row]').filter({ hasText: TITLE }),
+  ).toContainText('Invited');
 });
 
 // protects=criterion 9.2: an approver in the discussion sees "Discussion" with "<title> · 2
 // changes proposed" and Review changes, which opens the thread scrolled to its changes card;
 // fails_when=no row, a wrong count, or the thread opens elsewhere; no_claim=staging (G3/G4).
-test("an approver reviews the changes proposed in a discussion", async ({ page }) => {
+test('an approver reviews the changes proposed in a discussion', async ({ page }) => {
   await inboxAs(page, APPROVER);
-  const row = group(page, "new").locator("tr[data-row]").filter({ hasText: `${TITLE} · 2 changes proposed` });
-  await expect(row).toContainText("Discussion");
-  await row.getByRole("link", { name: "Review changes" }).click();
+  const row = group(page, 'new')
+    .locator('tr[data-row]')
+    .filter({ hasText: `${TITLE} · 2 changes proposed` });
+  await expect(row).toContainText('Discussion');
+  await row.getByRole('link', { name: 'Review changes' }).click();
   await expect(page).toHaveURL(/\?discussion=[^&]+&changes=1/);
   // G3's changes card is the thread's one list of changes.
-  const card = thread(page).getByTestId("changes-card");
+  const card = thread(page).getByTestId('changes-card');
   await expect(card).toBeInViewport();
-  await expect(card.getByRole("list", { name: "Open changes" }).getByTestId("change-row")).toHaveCount(2);
+  await expect(
+    card.getByRole('list', { name: 'Open changes' }).getByTestId('change-row'),
+  ).toHaveCount(2);
 });
 
 // protects=criterion 9.3: a participant mentioned again sees "Mentioned you" with the
 // message's excerpt in quotes, and Open; fails_when=no row or no quoted excerpt;
 // no_claim=the 140-character cut (the API test checks it).
-test("a mention shows its excerpt in quotes", async ({ page }) => {
+test('a mention shows its excerpt in quotes', async ({ page }) => {
   await inboxAs(page, APPROVER);
-  const row = group(page, "new").locator("tr[data-row]").filter({ hasText: "Mentioned you" });
-  await expect(row).toContainText("“Priya, can guests keep a link for 30 days?”");
+  const row = group(page, 'new').locator('tr[data-row]').filter({ hasText: 'Mentioned you' });
+  await expect(row).toContainText('“Priya, can guests keep a link for 30 days?”');
   await expect(row).toContainText(TITLE);
-  await expect(row.getByRole("link", { name: "Open" })).toBeVisible();
+  await expect(row.getByRole('link', { name: 'Open' })).toBeVisible();
 });
 
 // protects=criterion 8: with discussion rows present the rail badge equals the New + Open
 // tabs, and each discussion row counts; fails_when=a discussion row is counted on one
 // surface and not another; no_claim=the visual order of groups.
-test("the badge equals New + Open with discussion rows present", async ({ page }) => {
+test('the badge equals New + Open with discussion rows present', async ({ page }) => {
   await inboxAs(page, APPROVER);
   // Referral link's mention and changes, the goals interview's and the priorities' changes.
-  await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(4);
+  await expect(group(page, 'new').locator('tr[data-row]')).toHaveCount(4);
   // hotfix 3: the rows show at once, the counts only once every read they add up has arrived;
   // read the tabs once the New tab shows its count, not before (a tab without one reads 0).
-  await expect(tab(page, "New")).toHaveText(/\d/);
-  const total = (await tabCount(page, "New")) + (await tabCount(page, "Seen"));
+  await expect(tab(page, 'New')).toHaveText(/\d/);
+  const total = (await tabCount(page, 'New')) + (await tabCount(page, 'Seen'));
   await expect(badge(page)).toHaveText(String(total));
   await expect(page.getByText(`${total} waiting`)).toBeVisible();
 });
@@ -103,11 +115,14 @@ test("the badge equals New + Open with discussion rows present", async ({ page }
 // discussion <title>" and has Open discussion, which opens that thread; fails_when=the row
 // shows only its document, or no Open discussion link; no_claim=the title hidden from someone
 // who cannot read the discussion (test_discussion_inbox.py checks it).
-test("a question asked from a discussion names it and opens it", async ({ page }) => {
+test('a question asked from a discussion names it and opens it', async ({ page }) => {
   await inboxAs(page, APPROVER);
-  const row = page.getByTestId("inbox-tab-new").locator("tr[data-row]").filter({ hasText: "How long should a guest's link last?" });
+  const row = page
+    .getByTestId('inbox-tab-new')
+    .locator('tr[data-row]')
+    .filter({ hasText: "How long should a guest's link last?" });
   await expect(row).toContainText(`From discussion ${TITLE}`);
-  await row.getByRole("link", { name: "Open discussion" }).click();
+  await row.getByRole('link', { name: 'Open discussion' }).click();
   await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\?discussion=/);
   await expect(thread(page)).toContainText(TITLE);
 });

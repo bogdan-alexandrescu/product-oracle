@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
-import { usePathname } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { usePathname } from 'next/navigation';
+import { useSyncExternalStore } from 'react';
 
-import { LinkButton } from "@/components/ds";
+import { LinkButton } from '@/components/ds';
 
 /** The sections a wrong URL may sit under, and their lists. */
 const SECTIONS = [
-  { prefix: "/settings", href: "/settings", label: "Settings" },
-  { prefix: "/company", href: "/company", label: "Company" },
-  { prefix: "/plan", href: "/plan", label: "Plan" },
-  { prefix: "/documents", href: "/documents", label: "PRDs" },
-  { prefix: "/runs", href: "/runs", label: "Runs" },
-  { prefix: "/requests", href: "/requests", label: "Requests" },
+  { prefix: '/settings', href: '/settings', label: 'Settings' },
+  { prefix: '/company', href: '/company', label: 'Company' },
+  { prefix: '/plan', href: '/plan', label: 'Plan' },
+  { prefix: '/documents', href: '/documents', label: 'PRDs' },
+  { prefix: '/runs', href: '/runs', label: 'Runs' },
+  { prefix: '/requests', href: '/requests', label: 'Requests' },
 ] as const;
 
 const noop = () => () => {};
@@ -24,12 +24,24 @@ const noop = () => () => {};
  */
 export function SectionBackLink() {
   const pathname = usePathname();
-  const hydrated = useSyncExternalStore(noop, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    noop,
+    () => true,
+    () => false,
+  );
   if (!hydrated || !pathname) return null;
-  const section = SECTIONS.find((s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`));
+  const section = SECTIONS.find(
+    (s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`),
+  );
   if (!section) return null;
   return (
-    <LinkButton href={section.href} variant="secondary" icon="back" data-testid="not-found-back" className="h-10">
+    <LinkButton
+      href={section.href}
+      variant="secondary"
+      icon="back"
+      data-testid="not-found-back"
+      className="h-10"
+    >
       Back to {section.label}
     </LinkButton>
   );

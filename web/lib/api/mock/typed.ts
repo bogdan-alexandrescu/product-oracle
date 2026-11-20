@@ -4,42 +4,56 @@
  * field that drifts from the API fails `tsc`. The path names the route as openapi.json does;
  * e2e/mock-route-coverage.spec.ts reads these names to check every route a page reads is mocked.
  */
-import type { paths } from "@/lib/api/schema";
+import type { paths } from '@/lib/api/schema';
 
-export type MockMethod = "get" | "post" | "put" | "patch" | "delete";
+export type MockMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 /** A route of the schema and the methods it has. */
 export type MockPath = keyof paths;
 type Op<P extends MockPath, M extends MockMethod> = NonNullable<paths[P][M]>;
-type Responses<P extends MockPath, M extends MockMethod> = Op<P, M> extends { responses: infer R } ? R : never;
+type Responses<P extends MockPath, M extends MockMethod> =
+  Op<P, M> extends { responses: infer R } ? R : never;
 type Success = 200 | 201 | 202 | 203 | 204 | 206;
 
 /** The JSON body of a route's success response(s). */
 export type MockBody<P extends MockPath, M extends MockMethod> = {
   [S in keyof Responses<P, M>]: S extends Success
-    ? Responses<P, M>[S] extends { content: { "application/json": infer B } }
+    ? Responses<P, M>[S] extends { content: { 'application/json': infer B } }
       ? B
       : undefined
     : never;
 }[keyof Responses<P, M>];
 
 /** A success reply of `path` + `method` whose body must match the schema. */
-export function reply<P extends MockPath, M extends MockMethod>(path: P, method: M, body: MockBody<P, M>, status = 200): Response {
+export function reply<P extends MockPath, M extends MockMethod>(
+  path: P,
+  method: M,
+  body: MockBody<P, M>,
+  status = 200,
+): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,
-    headers: body === undefined ? {} : { "content-type": "application/json" },
+    headers: body === undefined ? {} : { 'content-type': 'application/json' },
   });
 }
 
 /** Checks a body against a route's success response without building a Response (for routes that add headers). */
-export function bodyOf<P extends MockPath, M extends MockMethod>(path: P, method: M, body: MockBody<P, M>): MockBody<P, M> {
+export function bodyOf<P extends MockPath, M extends MockMethod>(
+  path: P,
+  method: M,
+  body: MockBody<P, M>,
+): MockBody<P, M> {
   void path;
   void method;
   return body;
 }
 
 /** Names the route of a reply whose body is not JSON (html, pdf, markdown, yaml), for the route coverage check. */
-export function rawReply<P extends MockPath, M extends MockMethod>(path: P, method: M & keyof paths[P], res: Response): Response {
+export function rawReply<P extends MockPath, M extends MockMethod>(
+  path: P,
+  method: M & keyof paths[P],
+  res: Response,
+): Response {
   void path;
   void method;
   return res;

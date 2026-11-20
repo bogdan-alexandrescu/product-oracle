@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
-import { Button } from "@/components/ds";
+import { Button } from '@/components/ds';
 
 /** How long an acted row keeps its outcome (and Undo) before the list settles. */
 export const SETTLE_MS = 1200;
@@ -53,18 +53,22 @@ export function useActed() {
 
   /** Row attributes: the acted row is marked, the others are inert to the pointer. */
   const rowAttrs = (key: string): Record<string, string | undefined> =>
-    acted ? (acted.key === key ? { "data-acted": "true" } : { "data-settling": "true" }) : {};
+    acted ? (acted.key === key ? { 'data-acted': 'true' } : { 'data-settling': 'true' }) : {};
 
   return { acted, mark, undo, rowAttrs };
 }
 
 /** Classes for a list wrapper: rows marked settling ignore the pointer. */
-export const SETTLING = "[&_[data-settling]]:pointer-events-none";
+export const SETTLING = '[&_[data-settling]]:pointer-events-none';
 
 /** The acted row's outcome in place of its action, with Undo when there is one. */
 export function ActedCell({ acted, onUndo }: { acted: Acted; onUndo: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap" role="status" data-testid="acted">
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap"
+      role="status"
+      data-testid="acted"
+    >
       <span className="text-sm font-semibold text-text2">{acted.outcome}</span>
       {acted.undo && (
         <Button variant="ghost" onClick={onUndo}>
@@ -86,7 +90,11 @@ export function Unavailable({
   testId,
 }: {
   reason: string;
-  children: (props: { "aria-disabled": true; "aria-describedby": string; onClick: (e: { preventDefault(): void }) => void }) => ReactNode;
+  children: (props: {
+    'aria-disabled': true;
+    'aria-describedby': string;
+    onClick: (e: { preventDefault(): void }) => void;
+  }) => ReactNode;
   testId?: string;
 }) {
   const id = useId();
@@ -108,12 +116,16 @@ export function Unavailable({
       onFocus={show}
       onBlur={() => setAt(null)}
     >
-      {children({ "aria-disabled": true, "aria-describedby": id, onClick: (e) => e.preventDefault() })}
+      {children({
+        'aria-disabled': true,
+        'aria-describedby': id,
+        onClick: (e) => e.preventDefault(),
+      })}
       <span
         id={id}
         role="tooltip"
         hidden={!at}
-        style={at ? { position: "fixed", top: at.top, right: at.right } : undefined}
+        style={at ? { position: 'fixed', top: at.top, right: at.right } : undefined}
         className="z-50 w-max max-w-[min(300px,calc(100vw-24px))] rounded-button bg-tip px-3 py-2 text-left text-sm leading-5 font-normal whitespace-normal text-tip-text shadow-tip"
       >
         {reason}

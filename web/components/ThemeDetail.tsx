@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import Link from 'next/link';
+import { useState, type ReactNode } from 'react';
 
-import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
-import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
-import { FormActions } from "@/app/settings/_components/FormActions";
+import { GrowingTextarea } from '@/app/settings/_components/GrowingTextarea';
+import { Field, INPUT, SELECT, TEXTAREA } from '@/app/settings/_components/fields';
+import { FormActions } from '@/app/settings/_components/FormActions';
 import {
   Button,
   Chip,
@@ -19,37 +19,44 @@ import {
   Panel,
   SegmentedControl,
   Split,
-} from "@/components/ds";
-import { ProblemList } from "@/components/TemplateBodyEditor";
-import { SlidePreview, ThemePreview } from "@/components/ThemePreview";
-import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
-import { formatDate } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useLive } from "@/lib/use-live";
-import { errorMessage, useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { ProblemList } from '@/components/TemplateBodyEditor';
+import { SlidePreview, ThemePreview } from '@/components/ThemePreview';
+import { Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { ProblemsError, unwrapProblems, type Problem } from '@/lib/api/problems';
+import { formatDate } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useLive } from '@/lib/use-live';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type ThemeOut = Schemas["ThemeOut"];
-type Tokens = Schemas["ThemeTokens"];
-type ThemeKind = ThemeOut["kind"];
+type ThemeOut = Schemas['ThemeOut'];
+type Tokens = Schemas['ThemeTokens'];
+type ThemeKind = ThemeOut['kind'];
 
-type Form = { name: string; description: string; kind: ThemeKind; tokens: Tokens; css: string; slide_css: string };
+type Form = {
+  name: string;
+  description: string;
+  kind: ThemeKind;
+  tokens: Tokens;
+  css: string;
+  slide_css: string;
+};
 
 const COLOURS: { name: string; label: string; hint: string }[] = [
-  { name: "text", label: "Text", hint: "Body text" },
-  { name: "heading", label: "Heading", hint: "Headings" },
-  { name: "muted", label: "Muted", hint: "Captions, status line" },
-  { name: "accent", label: "Accent", hint: "Links, rules under titles" },
-  { name: "background", label: "Background", hint: "Page" },
-  { name: "rule", label: "Rule", hint: "Table and card borders" },
-  { name: "surface", label: "Surface", hint: "Boxes, code" },
+  { name: 'text', label: 'Text', hint: 'Body text' },
+  { name: 'heading', label: 'Heading', hint: 'Headings' },
+  { name: 'muted', label: 'Muted', hint: 'Captions, status line' },
+  { name: 'accent', label: 'Accent', hint: 'Links, rules under titles' },
+  { name: 'background', label: 'Background', hint: 'Page' },
+  { name: 'rule', label: 'Rule', hint: 'Table and card borders' },
+  { name: 'surface', label: 'Surface', hint: 'Boxes, code' },
 ];
 
 const FONTS = [
-  { name: "body", label: "Body font" },
-  { name: "heading", label: "Heading font" },
-  { name: "mono", label: "Monospace font" },
+  { name: 'body', label: 'Body font' },
+  { name: 'heading', label: 'Heading font' },
+  { name: 'mono', label: 'Monospace font' },
 ] as const;
 
 /**
@@ -57,72 +64,87 @@ const FONTS = [
  * The exports render with the DejaVu families; the others are common system fonts.
  */
 const KNOWN_FONTS: Record<string, string> = {
-  "DejaVu Sans": '"DejaVu Sans", Helvetica, Arial, sans-serif',
-  "DejaVu Serif": '"DejaVu Serif", Georgia, serif',
-  "DejaVu Sans Mono": '"DejaVu Sans Mono", Menlo, Consolas, monospace',
-  Arial: "Arial, Helvetica, sans-serif",
-  Helvetica: "Helvetica, Arial, sans-serif",
+  'DejaVu Sans': '"DejaVu Sans", Helvetica, Arial, sans-serif',
+  'DejaVu Serif': '"DejaVu Serif", Georgia, serif',
+  'DejaVu Sans Mono': '"DejaVu Sans Mono", Menlo, Consolas, monospace',
+  Arial: 'Arial, Helvetica, sans-serif',
+  Helvetica: 'Helvetica, Arial, sans-serif',
   Georgia: 'Georgia, "Times New Roman", serif',
-  "Times New Roman": '"Times New Roman", Times, serif',
-  Menlo: "Menlo, Consolas, monospace",
-  Consolas: "Consolas, Menlo, monospace",
+  'Times New Roman': '"Times New Roman", Times, serif',
+  Menlo: 'Menlo, Consolas, monospace',
+  Consolas: 'Consolas, Menlo, monospace',
 };
 
 const SPACING = [
-  { name: "base_size_pt", label: "Base size (pt)", step: 0.5, min: 6, max: 20 },
-  { name: "line_height", label: "Line height", step: 0.05, min: 1, max: 2.5 },
-  { name: "page_margin_mm", label: "Page margin (mm)", step: 1, min: 5, max: 40 },
-  { name: "section_gap_rem", label: "Section gap (rem)", step: 0.1, min: 0, max: 6 },
+  { name: 'base_size_pt', label: 'Base size (pt)', step: 0.5, min: 6, max: 20 },
+  { name: 'line_height', label: 'Line height', step: 0.05, min: 1, max: 2.5 },
+  { name: 'page_margin_mm', label: 'Page margin (mm)', step: 1, min: 5, max: 40 },
+  { name: 'section_gap_rem', label: 'Section gap (rem)', step: 0.1, min: 0, max: 6 },
 ] as const;
 
 const FEATURES = [
-  { name: "toc", label: "Table of contents" },
-  { name: "status_header", label: "Status header" },
-  { name: "numbered_headings", label: "Numbered headings" },
-  { name: "legend", label: "Legend on every page" },
-  { name: "appendix_break", label: "Appendix on a new page" },
+  { name: 'toc', label: 'Table of contents' },
+  { name: 'status_header', label: 'Status header' },
+  { name: 'numbered_headings', label: 'Numbered headings' },
+  { name: 'legend', label: 'Legend on every page' },
+  { name: 'appendix_break', label: 'Appendix on a new page' },
 ] as const;
 
 const KIND_LABEL: Record<ThemeKind, string> = {
-  prd: "PRD",
-  roadmap: "Roadmap",
-  vision: "Vision",
-  strategy: "Product strategy",
-  update: "Update",
-  pricing: "Pricing memo",
-  any: "Any document",
+  prd: 'PRD',
+  roadmap: 'Roadmap',
+  vision: 'Vision',
+  strategy: 'Product strategy',
+  update: 'Update',
+  pricing: 'Pricing memo',
+  any: 'Any document',
 };
 
 function formOf(t: ThemeOut): Form {
   return {
     name: t.name,
-    description: t.description ?? "",
+    description: t.description ?? '',
     kind: t.kind,
     tokens: t.tokens,
     css: t.css,
-    slide_css: t.slide_css ?? "",
+    slide_css: t.slide_css ?? '',
   };
 }
 
 /** The family names of a CSS font stack, without quotes: "'Inter', Arial" → Inter, Arial. */
 function fontFamilies(stack: string): string[] {
   return stack
-    .split(",")
-    .map((f) => f.trim().replace(/^['"]|['"]$/g, "").trim())
+    .split(',')
+    .map((f) =>
+      f
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .trim(),
+    )
     .filter(Boolean);
 }
 
 /** #abc → #aabbcc; anything that is not a hex colour → black (for <input type="color">). */
 function pickerValue(v: string | undefined): string {
-  if (!v || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) return "#000000";
-  return v.length === 4 ? `#${[...v.slice(1)].map((c) => c + c).join("")}`.toLowerCase() : v.toLowerCase();
+  if (!v || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) return '#000000';
+  return v.length === 4
+    ? `#${[...v.slice(1)].map((c) => c + c).join('')}`.toLowerCase()
+    : v.toLowerCase();
 }
 
 /**
  * A group of the editor. The title is passed as a node, so the panel carries no aria-label
  * of its own and labels like "Slide CSS" name only their control.
  */
-function Group({ title, tools, children }: { title: string; tools?: ReactNode; children: ReactNode }) {
+function Group({
+  title,
+  tools,
+  children,
+}: {
+  title: string;
+  tools?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <Panel title={<>{title}</>} tools={tools} bodyClassName="p-4 max-[600px]:p-3">
       {children}
@@ -133,30 +155,35 @@ function Group({ title, tools, children }: { title: string; tools?: ReactNode; c
 const SELECT_FULL = `${SELECT} h-9 w-full`;
 
 const BACK = (
-  <Link href="/settings/themes" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
+  <Link
+    href="/settings/themes"
+    className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11"
+  >
     ← Themes
   </Link>
 );
 
 const validate = (body: { tokens: Tokens; css: string; slide_css: string | null }) =>
-  unwrap(api.POST("/v1/themes/validate", { body }));
+  unwrap(api.POST('/v1/themes/validate', { body }));
 
 /** Editor of a theme's tokens and CSS, with a live preview and live validation. */
 export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
-  const q = useQuery(`theme|${key}`, () => unwrap(api.GET("/v1/themes/{key}", { params: { path: { key } } })));
+  const q = useQuery(`theme|${key}`, () =>
+    unwrap(api.GET('/v1/themes/{key}', { params: { path: { key } } })),
+  );
   const t = q.data;
   // #370: approvers and owners change themes; other roles read them and the preview only.
   const { can, capsReady } = useMe();
-  const canEdit = can("update_theme");
+  const canEdit = can('update_theme');
   const [edit, setEdit] = useState<Form | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveProblems, setSaveProblems] = useState<Problem[]>([]);
-  const [previewView, setPreviewView] = useState<"document" | "slides">("document");
+  const [previewView, setPreviewView] = useState<'document' | 'slides'>('document');
   const form = edit ?? (t ? formOf(t) : null);
   const live = useLive(
-    { tokens: form?.tokens ?? {}, css: form?.css ?? "", slide_css: form?.slide_css || null },
+    { tokens: form?.tokens ?? {}, css: form?.css ?? '', slide_css: form?.slide_css || null },
     validate,
     300,
     form !== null,
@@ -183,7 +210,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
   const colors = tokens.colors ?? {};
   const changed = JSON.stringify(form) !== JSON.stringify(formOf(t));
   const problems = live.data?.problems ?? [];
-  const contrast = problems.filter((p) => p.code === "insufficient_contrast");
+  const contrast = problems.filter((p) => p.code === 'insufficient_contrast');
   // A malformed colour or font is said under its own field (the message starts with the
   // field's label, as oracle.templates.validation writes it); the rest are listed above.
   const fieldProblem = (code: string, label: string) =>
@@ -191,11 +218,12 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
   const atField = new Set(
     problems.filter(
       (p) =>
-        (p.code === "invalid_color" && COLOURS.some((c) => p.message.startsWith(`${c.label} colour `))) ||
-        (p.code === "invalid_font" && FONTS.some((f) => p.message.startsWith(`${f.label} `))),
+        (p.code === 'invalid_color' &&
+          COLOURS.some((c) => p.message.startsWith(`${c.label} colour `))) ||
+        (p.code === 'invalid_font' && FONTS.some((f) => p.message.startsWith(`${f.label} `))),
     ),
   );
-  const other = problems.filter((p) => p.code !== "insufficient_contrast" && !atField.has(p));
+  const other = problems.filter((p) => p.code !== 'insufficient_contrast' && !atField.has(p));
   const invalid = live.data ? !live.data.valid : false;
 
   const set = (patch: Partial<Form>) => {
@@ -225,10 +253,10 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
 
   const save = () =>
     run(
-      "save",
+      'save',
       () =>
         unwrapProblems(
-          api.PATCH("/v1/themes/{key}", {
+          api.PATCH('/v1/themes/{key}', {
             params: { path: { key } },
             body: {
               name: form.name.trim(),
@@ -241,28 +269,32 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
             },
           }),
         ),
-      "Theme saved. New exports use it; documents already exported keep their files.",
+      'Theme saved. New exports use it; documents already exported keep their files.',
     );
   const archive = () =>
     run(
-      "archive",
-      () => unwrap(api.DELETE("/v1/themes/{key}", { params: { path: { key } } })),
-      "Archived: hidden from the new-draft picker. Documents using it still export with it.",
+      'archive',
+      () => unwrap(api.DELETE('/v1/themes/{key}', { params: { path: { key } } })),
+      'Archived: hidden from the new-draft picker. Documents using it still export with it.',
     );
   const restore = () =>
-    run("restore", () => unwrap(api.POST("/v1/themes/{key}/restore", { params: { path: { key } } })), "Restored.");
+    run(
+      'restore',
+      () => unwrap(api.POST('/v1/themes/{key}/restore', { params: { path: { key } } })),
+      'Restored.',
+    );
 
-  const previewKind = form.kind === "roadmap" ? "roadmap" : "prd";
+  const previewKind = form.kind === 'roadmap' ? 'roadmap' : 'prd';
   // qa-settings-28: why Save is disabled, said next to it.
   const saveReason =
     busy !== null
       ? null
       : !changed
-        ? "Change something to save the theme."
+        ? 'Change something to save the theme.'
         : live.pending || !live.data
-          ? "Checking the theme…"
+          ? 'Checking the theme…'
           : invalid
-            ? "Fix the problems above to save."
+            ? 'Fix the problems above to save.'
             : null;
 
   const inspector = (
@@ -272,10 +304,18 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
         <InspectorSection label="Details">
           <div className="flex flex-col gap-3">
             <Field label="Name">
-              <input className={INPUT} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+              <input
+                className={INPUT}
+                value={form.name}
+                onChange={(e) => set({ name: e.target.value })}
+              />
             </Field>
             <Field label="For">
-              <select className={SELECT_FULL} value={form.kind} onChange={(e) => set({ kind: e.target.value as ThemeKind })}>
+              <select
+                className={SELECT_FULL}
+                value={form.kind}
+                onChange={(e) => set({ kind: e.target.value as ThemeKind })}
+              >
                 {(Object.keys(KIND_LABEL) as ThemeKind[]).map((k) => (
                   <option key={k} value={k}>
                     {KIND_LABEL[k]}
@@ -284,7 +324,10 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               </select>
             </Field>
             <Field label="Description">
-              <GrowingTextarea value={form.description} onChange={(e) => set({ description: e.target.value })} />
+              <GrowingTextarea
+                value={form.description}
+                onChange={(e) => set({ description: e.target.value })}
+              />
             </Field>
           </div>
         </InspectorSection>
@@ -297,11 +340,11 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
         <InspectorSection>
           {t.archived_at ? (
             <Button onClick={restore} disabled={busy !== null}>
-              {busy === "restore" ? "Restoring…" : "Restore"}
+              {busy === 'restore' ? 'Restoring…' : 'Restore'}
             </Button>
           ) : (
             <Button onClick={archive} disabled={busy !== null}>
-              {busy === "archive" ? "Archiving…" : "Archive"}
+              {busy === 'archive' ? 'Archiving…' : 'Archive'}
             </Button>
           )}
         </InspectorSection>
@@ -328,9 +371,15 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
           <div className="flex flex-col gap-2">
             {notice && <Notice tone="pass">{notice}</Notice>}
             {error && <Notice tone="error">{error}</Notice>}
-            {saveProblems.length > 0 && <ProblemList problems={saveProblems} testId="save-problems" />}
+            {saveProblems.length > 0 && (
+              <ProblemList problems={saveProblems} testId="save-problems" />
+            )}
             {contrast.length > 0 && (
-              <div role="alert" data-testid="contrast-errors" className="rounded-button bg-crit-bg px-3 py-2 text-sm text-crit">
+              <div
+                role="alert"
+                data-testid="contrast-errors"
+                className="rounded-button bg-crit-bg px-3 py-2 text-sm text-crit"
+              >
                 <p className="font-semibold">Low contrast</p>
                 <ul className="mt-1 list-disc space-y-1 pl-5">
                   {contrast.map((p, i) => (
@@ -355,21 +404,21 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                     value={previewView}
                     onChange={setPreviewView}
                     items={[
-                      { value: "document", label: "Document" },
-                      { value: "slides", label: "Slides" },
+                      { value: 'document', label: 'Document' },
+                      { value: 'slides', label: 'Slides' },
                     ]}
                   />
                   <InfoTip label="the preview">
-                    {previewView === "document"
-                      ? `A sample ${previewKind === "roadmap" ? "roadmap" : "PRD"} with these settings.`
-                      : "The sample's brief as Present mode and the deck PDF show it."}{" "}
+                    {previewView === 'document'
+                      ? `A sample ${previewKind === 'roadmap' ? 'roadmap' : 'PRD'} with these settings.`
+                      : "The sample's brief as Present mode and the deck PDF show it."}{' '}
                     Unsaved changes show here first.
                   </InfoTip>
                 </>
               }
               bodyClassName="p-4 max-[600px]:p-3"
             >
-              {previewView === "document" ? (
+              {previewView === 'document' ? (
                 <ThemePreview tokens={form.tokens} css={form.css} kind={previewKind} />
               ) : (
                 <SlidePreview
@@ -387,8 +436,10 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               <Group title="Colours">
                 <div className="grid gap-3 sm:grid-cols-2">
                   {COLOURS.map((c) => {
-                    const malformed = fieldProblem("invalid_color", `${c.label} colour`);
-                    const bad = !!malformed || contrast.some((p) => p.message.startsWith(`${c.label} colour `));
+                    const malformed = fieldProblem('invalid_color', `${c.label} colour`);
+                    const bad =
+                      !!malformed ||
+                      contrast.some((p) => p.message.startsWith(`${c.label} colour `));
                     return (
                       <div key={c.name} className="flex flex-col gap-1">
                         <div className="flex items-end gap-2">
@@ -396,20 +447,25 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                             type="color"
                             aria-label={`${c.label} colour picker`}
                             value={pickerValue(colors[c.name])}
-                            onChange={(e) => setTokens("colors", { [c.name]: e.target.value })}
+                            onChange={(e) => setTokens('colors', { [c.name]: e.target.value })}
                             className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-line-strong bg-surface p-0.5"
                           />
                           <label className="flex min-w-0 flex-1 flex-col gap-1.5">
-                            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2" title={c.hint}>
+                            <span
+                              className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                              title={c.hint}
+                            >
                               {c.label}
                             </span>
                             <input
                               aria-label={c.label}
                               aria-invalid={bad || undefined}
                               aria-describedby={malformed ? `colour-${c.name}-problem` : undefined}
-                              value={colors[c.name] ?? ""}
-                              onChange={(e) => setTokens("colors", { [c.name]: e.target.value.trim() })}
-                              className={`${INPUT} font-mono ${bad ? "border-crit ring-1 ring-crit" : ""}`}
+                              value={colors[c.name] ?? ''}
+                              onChange={(e) =>
+                                setTokens('colors', { [c.name]: e.target.value.trim() })
+                              }
+                              className={`${INPUT} font-mono ${bad ? 'border-crit ring-1 ring-crit' : ''}`}
                             />
                           </label>
                         </div>
@@ -431,9 +487,9 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               <Group title="Type">
                 <div className="flex flex-col gap-3">
                   {FONTS.map((f) => {
-                    const stack = tokens.fonts?.[f.name] ?? "";
+                    const stack = tokens.fonts?.[f.name] ?? '';
                     const families = fontFamilies(stack);
-                    const malformed = fieldProblem("invalid_font", f.label);
+                    const malformed = fieldProblem('invalid_font', f.label);
                     return (
                       <div key={f.name} className="flex min-w-0 flex-col gap-1.5">
                         <span className="flex items-center gap-1.5">
@@ -445,28 +501,38 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                           </label>
                           {!malformed && (
                             // #1590: how the font falls back sits behind the (i).
-                            <InfoTip label={`${f.label} fallback`} align="start" testId="font-fallback-tip">
+                            <InfoTip
+                              label={`${f.label} fallback`}
+                              align="start"
+                              testId="font-fallback-tip"
+                            >
                               {families.length === 0
                                 ? "The theme's default font."
                                 : families.length === 1
                                   ? `Uses ${families[0]}.`
-                                  : `Uses ${families[0]}; without it, ${families.slice(1).join(", then ")}.`}
+                                  : `Uses ${families[0]}; without it, ${families.slice(1).join(', then ')}.`}
                             </InfoTip>
                           )}
                         </span>
                         {/* qa-settings-32: the font by name; its CSS fallbacks under Advanced. */}
                         <select
                           id={`font-${f.name}`}
-                          className={`${SELECT_FULL} ${malformed ? "border-crit ring-1 ring-crit" : ""}`}
-                          value={families[0] ?? ""}
+                          className={`${SELECT_FULL} ${malformed ? 'border-crit ring-1 ring-crit' : ''}`}
+                          value={families[0] ?? ''}
                           aria-invalid={!!malformed || undefined}
                           aria-describedby={malformed ? `font-${f.name}-hint` : undefined}
                           onChange={(e) =>
-                            setTokens("fonts", { [f.name]: e.target.value ? (KNOWN_FONTS[e.target.value] ?? stack) : null })
+                            setTokens('fonts', {
+                              [f.name]: e.target.value
+                                ? (KNOWN_FONTS[e.target.value] ?? stack)
+                                : null,
+                            })
                           }
                         >
                           <option value="">The theme&apos;s default</option>
-                          {families[0] && !KNOWN_FONTS[families[0]] && <option value={families[0]}>{families[0]}</option>}
+                          {families[0] && !KNOWN_FONTS[families[0]] && (
+                            <option value={families[0]}>{families[0]}</option>
+                          )}
                           {Object.keys(KNOWN_FONTS).map((name) => (
                             <option key={name} value={name}>
                               {name}
@@ -474,12 +540,18 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                           ))}
                         </select>
                         {malformed && (
-                          <p id={`font-${f.name}-hint`} data-testid={`font-${f.name}-hint`} className="text-[13px] leading-[18px] text-crit">
+                          <p
+                            id={`font-${f.name}-hint`}
+                            data-testid={`font-${f.name}-hint`}
+                            className="text-[13px] leading-[18px] text-crit"
+                          >
                             {malformed}
                           </p>
                         )}
                         <details open={malformed ? true : undefined} className="text-sm">
-                          <summary className="cursor-pointer text-text2 hover:text-text">Advanced</summary>
+                          <summary className="cursor-pointer text-text2 hover:text-text">
+                            Advanced
+                          </summary>
                           <div className="mt-2 flex flex-col gap-1.5">
                             <label
                               htmlFor={`font-${f.name}-stack`}
@@ -491,8 +563,12 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                               id={`font-${f.name}-stack`}
                               value={stack}
                               aria-invalid={!!malformed || undefined}
-                              onChange={(e) => setTokens("fonts", { [f.name]: e.target.value.replace(/\n/g, " ") || null })}
-                              className={`font-mono ${malformed ? "border-crit ring-1 ring-crit" : ""}`}
+                              onChange={(e) =>
+                                setTokens('fonts', {
+                                  [f.name]: e.target.value.replace(/\n/g, ' ') || null,
+                                })
+                              }
+                              className={`font-mono ${malformed ? 'border-crit ring-1 ring-crit' : ''}`}
                             />
                           </div>
                         </details>
@@ -512,9 +588,11 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                         min={s.min}
                         max={s.max}
                         className={`${INPUT} tnum`}
-                        value={tokens.spacing?.[s.name] ?? ""}
+                        value={tokens.spacing?.[s.name] ?? ''}
                         onChange={(e) =>
-                          setTokens("spacing", { [s.name]: e.target.value === "" ? null : Number(e.target.value) })
+                          setTokens('spacing', {
+                            [s.name]: e.target.value === '' ? null : Number(e.target.value),
+                          })
                         }
                       />
                     </Field>
@@ -522,9 +600,12 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                   <Field label="Page size">
                     <select
                       className={SELECT_FULL}
-                      value={tokens.page?.size ?? "A4"}
+                      value={tokens.page?.size ?? 'A4'}
                       onChange={(e) =>
-                        setTokens("page", { size: e.target.value as "A4" | "Letter", orientation: tokens.page?.orientation ?? "portrait" })
+                        setTokens('page', {
+                          size: e.target.value as 'A4' | 'Letter',
+                          orientation: tokens.page?.orientation ?? 'portrait',
+                        })
                       }
                     >
                       <option value="A4">A4</option>
@@ -534,11 +615,11 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                   <Field label="Orientation">
                     <select
                       className={SELECT_FULL}
-                      value={tokens.page?.orientation ?? "portrait"}
+                      value={tokens.page?.orientation ?? 'portrait'}
                       onChange={(e) =>
-                        setTokens("page", {
-                          size: tokens.page?.size ?? "A4",
-                          orientation: e.target.value as "portrait" | "landscape",
+                        setTokens('page', {
+                          size: tokens.page?.size ?? 'A4',
+                          orientation: e.target.value as 'portrait' | 'landscape',
                         })
                       }
                     >
@@ -557,7 +638,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                         type="checkbox"
                         className="size-4 accent-[var(--accent)]"
                         checked={!!tokens.features?.[f.name]}
-                        onChange={(e) => setTokens("features", { [f.name]: e.target.checked })}
+                        onChange={(e) => setTokens('features', { [f.name]: e.target.checked })}
                       />
                       {f.label}
                     </label>
@@ -566,8 +647,10 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                     <input
                       type="checkbox"
                       className="size-4 accent-[var(--accent)]"
-                      checked={tokens.features?.page_fit === "one_page"}
-                      onChange={(e) => setTokens("features", { page_fit: e.target.checked ? "one_page" : null })}
+                      checked={tokens.features?.page_fit === 'one_page'}
+                      onChange={(e) =>
+                        setTokens('features', { page_fit: e.target.checked ? 'one_page' : null })
+                      }
                     />
                     Must fit on one page
                   </label>
@@ -578,8 +661,8 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                 title="CSS"
                 tools={
                   <InfoTip label="extra rules">
-                    Extra rules applied after the tokens. Colours are available as <code>var(--color-accent)</code> and so on; no
-                    @import or external URLs.
+                    Extra rules applied after the tokens. Colours are available as{' '}
+                    <code>var(--color-accent)</code> and so on; no @import or external URLs.
                   </InfoTip>
                 }
               >
@@ -598,15 +681,19 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                 tools={
                   t.builtin ? undefined : (
                     <InfoTip label="slide rules">
-                      Rules for Present mode and the deck PDF, applied after the shared slide layout. Each slide is a{" "}
-                      <code>.slide</code> inside <code>.deck</code>, with <code>.slide-title</code> and <code>.slide-body</code>;
-                      the PowerPoint export uses the colours and fonts only. Same limits as the CSS above.
+                      Rules for Present mode and the deck PDF, applied after the shared slide
+                      layout. Each slide is a <code>.slide</code> inside <code>.deck</code>, with{' '}
+                      <code>.slide-title</code> and <code>.slide-body</code>; the PowerPoint export
+                      uses the colours and fonts only. Same limits as the CSS above.
                     </InfoTip>
                   )
                 }
               >
                 {t.builtin ? (
-                  <p data-testid="slide-css-builtin" className="flex items-center gap-2 text-[15px] text-text2">
+                  <p
+                    data-testid="slide-css-builtin"
+                    className="flex items-center gap-2 text-[15px] text-text2"
+                  >
                     Built-in themes keep their own slide design.
                     <InfoTip label="built-in theme design" align="start">
                       It cannot be edited. To write slide CSS, create a new theme from this one.
@@ -618,7 +705,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                     rows={8}
                     spellCheck={false}
                     value={form.slide_css}
-                    onFocus={() => setPreviewView("slides")}
+                    onFocus={() => setPreviewView('slides')}
                     onChange={(e) => set({ slide_css: e.target.value })}
                     placeholder=".deck .slide-title { text-transform: uppercase; }"
                     className={`${TEXTAREA} font-mono text-sm leading-5`}
@@ -635,9 +722,9 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                   icon="check"
                   onClick={save}
                   disabled={busy !== null || !changed || invalid || live.pending}
-                  aria-describedby={saveReason ? "theme-save-reason" : undefined}
+                  aria-describedby={saveReason ? 'theme-save-reason' : undefined}
                 >
-                  {busy === "save" ? "Saving…" : "Save"}
+                  {busy === 'save' ? 'Saving…' : 'Save'}
                 </Button>
               </FormActions>
             </div>

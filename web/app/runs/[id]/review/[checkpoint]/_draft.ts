@@ -1,6 +1,6 @@
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from '@/lib/api/client';
 
-type Review = Schemas["CheckpointReview"];
+type Review = Schemas['CheckpointReview'];
 
 /**
  * The checkpoint's shared draft (D8), asked for by the shell together with the run
@@ -13,7 +13,11 @@ const begun = new Map<string, Promise<Review>>();
 export const draftKey = (runId: string, checkpointId: string) => `draft|${runId}|${checkpointId}`;
 
 function readDraft(runId: string, checkpointId: string): Promise<Review> {
-  return unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", { params: { path: { run_id: runId, checkpoint_id: checkpointId } } }));
+  return unwrap(
+    api.GET('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review', {
+      params: { path: { run_id: runId, checkpoint_id: checkpointId } },
+    }),
+  );
 }
 
 /** Begins the draft's read; the returned function forgets it if no view took it. */

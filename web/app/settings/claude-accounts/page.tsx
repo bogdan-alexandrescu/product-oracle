@@ -1,4 +1,4 @@
-import { ClaudeAccounts } from "./ClaudeAccounts";
+import { ClaudeAccounts } from './ClaudeAccounts';
 
 export default function ClaudeAccountsPage() {
   return <ClaudeAccounts />;

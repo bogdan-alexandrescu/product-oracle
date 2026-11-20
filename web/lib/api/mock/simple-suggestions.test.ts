@@ -1,27 +1,36 @@
-import { expect, test } from "vitest";
+import { expect, test } from 'vitest';
 
-import { routeSimpleChanges } from "./simple-changes";
-import { goalId, seedSimpleRoadmap } from "./simple-roadmap";
-import { routeGoalSuggestions } from "./simple-suggestions";
+import { routeSimpleChanges } from './simple-changes';
+import { goalId, seedSimpleRoadmap } from './simple-roadmap';
+import { routeGoalSuggestions } from './simple-suggestions';
 
 // The mock's goal-suggest routes check as the API's (additions.suggest): the role first, then
 // the goal (no page: the viewer never sees "Suggest", and no screen names an unknown goal).
-const ME = "u0000000-0000-4000-8000-000000000001";
-const UNKNOWN = "g0000000-0000-4000-8000-000000000009";
+const ME = 'u0000000-0000-4000-8000-000000000001';
+const UNKNOWN = 'g0000000-0000-4000-8000-000000000009';
 
-function api(role: "viewer" | "commenter") {
+function api(role: 'viewer' | 'commenter') {
   const db = seedSimpleRoadmap();
-  const ctx = { id: ME, role, owners: [], names: { [ME]: "Sam Example" } };
-  const req = (path: string, body: unknown = {}) => new Request(`http://mock/v1/${path}`, { method: "POST", body: JSON.stringify(body) });
-  const at = (path: string) => ["v1", ...path.split("/")];
+  const ctx = { id: ME, role, owners: [], names: { [ME]: 'Sam Example' } };
+  const req = (path: string, body: unknown = {}) =>
+    new Request(`http://mock/v1/${path}`, { method: 'POST', body: JSON.stringify(body) });
+  const at = (path: string) => ['v1', ...path.split('/')];
   return {
     /** Through the mock's router, as the app calls it. */
     async routed(path: string, body?: unknown) {
-      return (await routeSimpleChanges(db, ctx, req(path, body), at(path), new URLSearchParams()))!.status;
+      return (await routeSimpleChanges(db, ctx, req(path, body), at(path), new URLSearchParams()))!
+        .status;
     },
     /** The goal-suggest route itself (its own order of checks). */
     async direct(path: string, body?: unknown) {
-      const res = await routeGoalSuggestions(db, ctx, req(path, body), at(path), new URLSearchParams(), async () => new Response("{}", { status: 201 }));
+      const res = await routeGoalSuggestions(
+        db,
+        ctx,
+        req(path, body),
+        at(path),
+        new URLSearchParams(),
+        async () => new Response('{}', { status: 201 }),
+      );
       return res!.status;
     },
   };
@@ -36,13 +45,18 @@ function api(role: "viewer" | "commenter") {
  * job's suggestions (simple-suggest.spec.ts).
  */
 test("the mock's goal suggest checks the role before the goal", async () => {
-  const viewer = api("viewer");
+  const viewer = api('viewer');
   expect(await viewer.direct(`simple/goals/${UNKNOWN}/suggest`)).toBe(403);
-  expect(await viewer.direct(`simple/goals/${goalId("grow-retention")}/suggest`)).toBe(403);
+  expect(await viewer.direct(`simple/goals/${goalId('grow-retention')}/suggest`)).toBe(403);
   expect(await viewer.routed(`simple/goals/${UNKNOWN}/suggest`)).toBe(403);
-  const commenter = api("commenter");
+  const commenter = api('commenter');
   expect(await commenter.direct(`simple/goals/${UNKNOWN}/suggest`)).toBe(422);
   expect(await commenter.routed(`simple/goals/${UNKNOWN}/suggest`)).toBe(422);
-  expect(await commenter.routed(`simple/goals/${UNKNOWN}/suggestions`, { title: "Faster sign-in", outcome: "More people finish" })).toBe(422);
-  expect(await commenter.routed(`simple/goals/${goalId("grow-retention")}/suggest`)).toBe(200);
+  expect(
+    await commenter.routed(`simple/goals/${UNKNOWN}/suggestions`, {
+      title: 'Faster sign-in',
+      outcome: 'More people finish',
+    }),
+  ).toBe(422);
+  expect(await commenter.routed(`simple/goals/${goalId('grow-retention')}/suggest`)).toBe(200);
 });

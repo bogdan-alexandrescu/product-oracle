@@ -1,91 +1,160 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 
-import { Button, InfoTip, Sheet, toast } from "@/components/ds";
-import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
-import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
-import { FlowDiagram } from "@/components/simple/FlowViews";
-import { usePanelOpen } from "@/components/hop/open-state";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { sendCardChanged } from "@/lib/api/simple-chat";
-import { calendarDay } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
-import { useSetParams } from "@/lib/use-set-params";
-import { topGoalSuggestions } from "@/lib/key-results";
-import { LoadError } from "@/components/ui";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, InfoTip, Sheet, toast } from '@/components/ds';
+import {
+  GoalPanel,
+  SuggestionsButton,
+  useGoalSuggestions,
+  type GoalBrief,
+  type GoalPanelStart,
+  type GoalSuggestionsApi,
+} from '@/components/simple/GoalSuggestions';
+import { FlowPanel, subjectOf } from '@/components/simple/FlowVisual';
+import { FlowDiagram } from '@/components/simple/FlowViews';
+import { usePanelOpen } from '@/components/hop/open-state';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { sendCardChanged } from '@/lib/api/simple-chat';
+import { calendarDay } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import {
+  FeatureMarks,
+  MarkFor,
+  ShowFilter,
+  showsAs,
+  useFeatureMarks,
+  type ShowKind,
+} from '@/components/current-state/CurrentState';
+import { useSetParams } from '@/lib/use-set-params';
+import { topGoalSuggestions } from '@/lib/key-results';
+import { LoadError } from '@/components/ui';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
-import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
-import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
-import { Named, NotInGt } from "@/components/simple/FeatureName";
-import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
-import { useBucketDrag } from "./goal-drag";
-import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
-import { useCodedMilestone } from "./milestone-codes";
-import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
-import { MsCard, MsProvider, MsToast, useMilestones } from "../roadmap/_milestones";
-import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
-import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
+import { FeaturePanel, useItemChanged } from '../roadmap/_panel';
+import { ITEM_CHANGED_EVENT } from '@/lib/api/simple-chat';
+import { FeatureMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
+import { Named, NotInGt } from '@/components/simple/FeatureName';
+import {
+  ArchiveDialog,
+  ArchivedGoals,
+  BTN,
+  count,
+  dayOf,
+  DeleteArchivedDialog,
+  FeatureRows,
+  featureOf,
+  GoalForm,
+  GoalMenu,
+  OrderBadge,
+  otherGoal,
+  placedPlan,
+  UndoNote,
+  useBucketRights,
+  useBucketWrites,
+  useGoalBuckets,
+  type GoalFeatures,
+  type Note,
+} from './goal-buckets';
+import { useBucketDrag } from './goal-drag';
+import {
+  goalKeysOf,
+  KeyResultList,
+  liftedMoves,
+  topGoalBuckets,
+  topGoalPlan,
+  topGoalPriorities,
+  usePriorityKeyResults,
+  type PriorityKeyResults,
+} from './key-results';
+import { useCodedMilestone } from './milestone-codes';
+import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
+import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
+import {
+  CodeTag,
+  featureCount,
+  goalLabel,
+  PlanBucketsHead,
+  planFeatures,
+  planGoals,
+  planSpan,
+  weeksWords,
+} from './plan-buckets';
+import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from './mark-counts';
 
-type Out = Schemas["SimplePrioritiesOut"];
-type Row = Schemas["SimplePriorityRow"];
-type Proposal = Schemas["SimplePriorityProposal"];
-type Draft = Schemas["SimplePriorityDraft"];
-type Twin = Schemas["SimplePriorityTwin"];
-type Bucket = Schemas["SimpleGoalBucket"];
-type Line = Schemas["SimpleLine"];
-type ChangeIn = Schemas["SimpleChangeIn"];
-type Tab = "ranked" | "value-effort" | "buckets";
+type Out = Schemas['SimplePrioritiesOut'];
+type Row = Schemas['SimplePriorityRow'];
+type Proposal = Schemas['SimplePriorityProposal'];
+type Draft = Schemas['SimplePriorityDraft'];
+type Twin = Schemas['SimplePriorityTwin'];
+type Bucket = Schemas['SimpleGoalBucket'];
+type Line = Schemas['SimpleLine'];
+type ChangeIn = Schemas['SimpleChangeIn'];
+type Tab = 'ranked' | 'value-effort' | 'buckets';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "ranked", label: "Ranked list" },
-  { key: "value-effort", label: "Value / effort" },
-  { key: "buckets", label: "Goal buckets" },
+  { key: 'ranked', label: 'Ranked list' },
+  { key: 'value-effort', label: 'Value / effort' },
+  { key: 'buckets', label: 'Goal buckets' },
 ];
 /** Shapes by goal (never colour alone), in the order the goals first rank; "none": a row with no goal. */
-const SHAPES = ["circle", "square", "triangle", "diamond", "pentagon"] as const;
-type Shape = (typeof SHAPES)[number] | "none";
+const SHAPES = ['circle', 'square', 'triangle', 'diamond', 'pentagon'] as const;
+type Shape = (typeof SHAPES)[number] | 'none';
 
 /** Whether the screen is a phone's (under 640 px). */
 export function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const q = window.matchMedia("(max-width: 639px)");
+    const q = window.matchMedia('(max-width: 639px)');
     const on = () => setPhone(q.matches);
     on();
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
   }, []);
   return phone;
 }
 
-const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "–" : Number(n.toFixed(digits)).toString());
+const fmt = (n: number | null | undefined, digits = 1): string =>
+  n == null ? '–' : Number(n.toFixed(digits)).toString();
 /** A score, always to two places (1.60 · 1.25 · 1.00), so a list of them reads one way (qa-plan-53). */
 
 /** A feature as people read it: its title and its own key when it has one ("Sample data import (F-12)"), never a made-up code. */
-const nameOf = (r: { title: string; own_key?: string | null }): string => (r.own_key ? `${r.title} (${r.own_key})` : r.title);
+const nameOf = (r: { title: string; own_key?: string | null }): string =>
+  r.own_key ? `${r.title} (${r.own_key})` : r.title;
 
 /** prio-company: a move or an estimate names the item, or the feature itself when it is on no roadmap (a move then adds it to the company roadmap). */
-const targetOf = (r: { item_id?: string | null; feature_id: string }) => (r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id });
+const targetOf = (r: { item_id?: string | null; feature_id: string }) =>
+  r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id };
 
 /** prio-company: the feature's own key beside its name, only when it has one. */
 function OwnKey({ r }: { r: { own_key?: string | null } }) {
   return r.own_key ? (
-    <span data-testid="prio-own-key" className="ml-1.5 whitespace-nowrap text-[length:var(--simple-small)] font-normal tabular-nums text-text2">
+    <span
+      data-testid="prio-own-key"
+      className="ml-1.5 whitespace-nowrap text-[length:var(--simple-small)] font-normal tabular-nums text-text2"
+    >
       {r.own_key}
     </span>
   ) : null;
 }
 
 /** qa-simple-plan-3: what the score is, in words (the API's formula: Σ goal weight × contribution × confidence ÷ effort). */
-const SCORE_WORDS = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
+const SCORE_WORDS =
+  "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
 /** qa-prio-twins (the owner's rule: explanations behind a tooltip): how the score is worked out, behind an (i) by the list's heading. */
-function ScoreTip({ id = "prio-score-text" }: { id?: string }) {
+function ScoreTip({ id = 'prio-score-text' }: { id?: string }) {
   // The caption's and the "Makes" heading's can show at once (a goal's list split at a dated line): one id each.
   return (
     <InfoTip label="the score" align="start" testId="prio-score-help" id={id}>
@@ -96,52 +165,66 @@ function ScoreTip({ id = "prio-score-text" }: { id?: string }) {
 
 /** Each tab's own line under the heading; only the Ranked list is a ranking. */
 const SUBTITLE: Record<Tab, string> = {
-  ranked: "Features that serve a goal first, then by score; a feature never ranks above one it depends on.",
-  "value-effort": "Each feature by its goal value and its effort; the dashed lines are the middles.",
-  buckets: "Where the engineer-weeks go, goal by goal.",
+  ranked:
+    'Features that serve a goal first, then by score; a feature never ranks above one it depends on.',
+  'value-effort':
+    'Each feature by its goal value and its effort; the dashed lines are the middles.',
+  buckets: 'Where the engineer-weeks go, goal by goal.',
 };
 
 /** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
 const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
   const fCodes = data.rows.length > 0 && data.rows.every((r) => !!r.own_key);
-  const tap = phone ? "tap" : "click";
+  const tap = phone ? 'tap' : 'click';
   // PV-1 One count per spot: every mark opens the one feature panel; a count lists the marks it holds.
-  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to open its feature."} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
+  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? 'Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change.' : 'Select a mark to open its feature.'} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
 };
 
 /** Goal buckets' how-to-read words, behind the page's (i) like Value / effort's. */
 const BUCKETS_WORDS = (data: Out): string => {
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
-  const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
-  return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : "No dated plan yet, so the work is not placed by milestone."}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${weeksWords(data.weeks_total)} in all.` : ""}`;
+  const dated = (data.lines ?? []).some((l) => l.kind === 'milestone' || l.kind === 'key_date');
+  return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : 'No dated plan yet, so the work is not placed by milestone.'}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${weeksWords(data.weeks_total)} in all.` : ''}`;
 };
 
 /** The calendar quarter a date falls in, as people say it: "Q4 2026". */
-const quarterOf = (date: string): string => `Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1} ${date.slice(0, 4)}`;
+const quarterOf = (date: string): string =>
+  `Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1} ${date.slice(0, 4)}`;
 
-type Sent = { ok: true; change: Schemas["SimpleChangeOut"] } | { ok: false; status: number; message: string; pushback: boolean };
+type Sent =
+  | { ok: true; change: Schemas['SimpleChangeOut'] }
+  | { ok: false; status: number; message: string; pushback: boolean };
 
 /** POST /v1/simple/changes; a refusal comes back with its words (409 Oracle's pushback included). */
 /** The API's reason for a refusal: its detail, or its detail's message. */
 function detailMessage(error: unknown, response: Response): string {
   const detail = (error as { detail?: unknown } | undefined)?.detail;
-  return typeof detail === "string" ? detail : detail && typeof detail === "object" && "message" in detail ? String((detail as { message: unknown }).message) : response.statusText;
+  return typeof detail === 'string'
+    ? detail
+    : detail && typeof detail === 'object' && 'message' in detail
+      ? String((detail as { message: unknown }).message)
+      : response.statusText;
 }
 
 async function send(body: ChangeIn): Promise<Sent> {
   try {
-    const { data, error, response } = await api.POST("/v1/simple/changes", { body });
+    const { data, error, response } = await api.POST('/v1/simple/changes', { body });
     if (response.ok && data) return { ok: true, change: data.change };
     const detail = (error as { detail?: unknown } | undefined)?.detail;
-    const pushback = !!detail && typeof detail === "object" && "pushback" in detail;
-    return { ok: false, status: response.status, message: detailMessage(error, response), pushback };
+    const pushback = !!detail && typeof detail === 'object' && 'pushback' in detail;
+    return {
+      ok: false,
+      status: response.status,
+      message: detailMessage(error, response),
+      pushback,
+    };
   } catch (e) {
     return { ok: false, status: 0, message: errorMessage(e), pushback: false };
   }
 }
 
 /** What opens the feature panel: a ranked row, or an item with no ranked feature (prio-unranked). */
-type Opened = Pick<Row, "feature_id" | "item_id" | "code" | "title">;
+type Opened = Pick<Row, 'feature_id' | 'item_id' | 'code' | 'title'>;
 /** one-feature-panel: a ranked row's name opens the feature's panel (the roadmap's). */
 const OpenRow = createContext<((r: Opened) => void) | null>(null);
 
@@ -149,7 +232,7 @@ const OpenRow = createContext<((r: Opened) => void) | null>(null);
  * the URL at once, so a tab come back to or a reload opens nothing again, and the name takes the
  * focus only while that first form is open (`linked`), never on a later Edit in place. */
 function useLinkedGoalEdit(): [string | null, (id: string | null) => void, string | null] {
-  const param = useSearchParams().get("edit");
+  const param = useSearchParams().get('edit');
   const setParams = useSetParams();
   const [editing, setEditing] = useState<string | null>(param);
   const [linked, setLinked] = useState<string | null>(param);
@@ -168,52 +251,66 @@ export function Priorities() {
   const setParams = useSetParams();
   const phone = usePhone();
   const { can, capsReady } = useMe();
-  const urlTab = (TABS.find((t) => t.key === params.get("tab"))?.key ?? "ranked") as Tab;
+  const urlTab = (TABS.find((t) => t.key === params.get('tab'))?.key ?? 'ranked') as Tab;
   // qa-simple-plan-42: a tab picked shows at once, whatever else rewrites the URL meanwhile (the
   // remembered line put back as the page loads); the URL follows, and wins once it moves on.
   const [tabPick, setTabPick] = useState<{ tab: Tab; from: string | null } | null>(null);
-  const tab = tabPick && tabPick.from === params.get("tab") ? tabPick.tab : urlTab;
+  const tab = tabPick && tabPick.from === params.get('tab') ? tabPick.tab : urlTab;
   const pickTab = (t: Tab) => {
-    setTabPick({ tab: t, from: params.get("tab") });
-    setParams({ tab: t === "ranked" ? null : t });
+    setTabPick({ tab: t, from: params.get('tab') });
+    setParams({ tab: t === 'ranked' ? null : t });
   };
   // qa-simple-plan-42: while the URL still reads what it did at the pick (the line put back
   // meanwhile rewrote it without the tab), the pick is written again, so a reload keeps it.
   const urlQuery = params.toString();
   useEffect(() => {
-    const now = new URLSearchParams(urlQuery).get("tab");
+    const now = new URLSearchParams(urlQuery).get('tab');
     if (!tabPick || tabPick.from !== now) return;
-    const want = tabPick.tab === "ranked" ? null : tabPick.tab;
+    const want = tabPick.tab === 'ranked' ? null : tabPick.tab;
     if (now !== want) setParams({ tab: want });
   }, [tabPick, urlQuery, setParams]);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // qa-simple-plan-41: the arrow keys (and Home / End) move between the tabs, as a WAI-ARIA tablist.
   const tabKey = (e: KeyboardEvent, k: number) => {
-    const to = e.key === "ArrowRight" ? (k + 1) % TABS.length : e.key === "ArrowLeft" ? (k + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+    const to =
+      e.key === 'ArrowRight'
+        ? (k + 1) % TABS.length
+        : e.key === 'ArrowLeft'
+          ? (k + TABS.length - 1) % TABS.length
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? TABS.length - 1
+              : -1;
     if (to < 0) return;
     e.preventDefault();
     pickTab(TABS[to].key);
     tabRefs.current[to]?.focus();
   };
-  const compare = params.get("compare") === "1";
+  const compare = params.get('compare') === '1';
   // Roadmap-plus: the line, from the URL; landing without one, the person's remembered pick
   // (preferences) is put back in the URL once.
-  const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
+  const prefs = useQuery('me-preferences', () => unwrap(api.GET('/v1/me/preferences')));
   const remembered = prefs.data?.priorities_line ?? null;
   // Once the person picks, the URL alone says the line (Now: none).
   const [picked, setPicked] = useState(false);
-  const line = params.get("line") ?? (picked ? null : remembered);
+  const line = params.get('line') ?? (picked ? null : remembered);
   // qa-simple-plan-42: put back until the URL holds it (a tab clicked meanwhile rewrites the URL
   // too, and one of two quick rewrites can be lost), unless the person picks a line themselves.
   useEffect(() => {
-    if (picked || new URLSearchParams(urlQuery).get("line") || !remembered || remembered === "now") return;
+    if (picked || new URLSearchParams(urlQuery).get('line') || !remembered || remembered === 'now')
+      return;
     setParams({ line: remembered });
   }, [picked, urlQuery, remembered, setParams]);
-  const q = useQuery<Out>(`simple-priorities:${line ?? "now"}`, () => unwrap(api.GET("/v1/simple/priorities", { params: { query: line ? { line } : {} } })), { keepPrevious: true });
+  const q = useQuery<Out>(
+    `simple-priorities:${line ?? 'now'}`,
+    () => unwrap(api.GET('/v1/simple/priorities', { params: { query: line ? { line } : {} } })),
+    { keepPrevious: true },
+  );
   const pickLine = (key: string) => {
     setPicked(true);
-    setParams({ line: key === "now" ? null : key });
-    void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
+    setParams({ line: key === 'now' ? null : key });
+    void api.PATCH('/v1/me/preferences', { body: { priorities_line: key } });
   };
   // kr-in-priorities: a key result's features read, count and draw as its goal's.
   const kr = usePriorityKeyResults();
@@ -231,14 +328,30 @@ export function Priorities() {
   }, [data, marks]);
   // The All chip counts each line the full list shows: a row, each same-name line folded into it and each item with
   // no ranked feature (a goal's list leaves those out), never only the rows they are grouped in.
-  const allCount = data ? data.rows.reduce((n, r) => n + 1 + (r.twins?.length ?? 0), 0) + (params.get("goal") ? 0 : data.unranked.length) : 0;
-  const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }), unranked: [] } : null;
+  const allCount = data
+    ? data.rows.reduce((n, r) => n + 1 + (r.twins?.length ?? 0), 0) +
+      (params.get('goal') ? 0 : data.unranked.length)
+    : 0;
+  const shownData =
+    data && show && marks
+      ? {
+          ...data,
+          rows: data.rows.filter((r) => {
+            const f = marks.get(r.feature_id);
+            return !!f && showsAs(f.mark) === show;
+          }),
+          unranked: [],
+        }
+      : null;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
-  const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
+  const mayChange = capsReady && can('create_simple_change') && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
   const allSuggestions = useGoalSuggestions(() => q.reload());
   // kr-in-priorities: a key result's suggested features are under its goal's bucket.
-  const suggestions = useMemo(() => ({ ...allSuggestions, data: topGoalSuggestions(allSuggestions.data, kr.krs) }), [allSuggestions, kr.krs]);
+  const suggestions = useMemo(
+    () => ({ ...allSuggestions, data: topGoalSuggestions(allSuggestions.data, kr.krs) }),
+    [allSuggestions, kr.krs],
+  );
   useItemChanged(q.reload);
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
@@ -251,31 +364,44 @@ export function Priorities() {
     if (!proposed.current || (!data && !readError)) return;
     const p = data?.proposals.find((x) => x.change_id === proposed.current);
     proposed.current = null;
-    toast({ message: p?.waiting_for.length ? `Proposed: ${p.waiting_for.join(", ")} ${p.waiting_for.length === 1 ? "decides" : "decide"}` : "Proposed: it waits for a decision" });
+    toast({
+      message: p?.waiting_for.length
+        ? `Proposed: ${p.waiting_for.join(', ')} ${p.waiting_for.length === 1 ? 'decides' : 'decide'}`
+        : 'Proposed: it waits for a decision',
+    });
   }, [data, readError]);
 
   // An applied change is the next move: `row` is the item it moved (highlighted), none clears
   // the highlight; `moves` false (a decline) leaves it.
-  async function changed(r: Sent, done: string, row?: Row, moves = true, why?: string): Promise<void> {
+  async function changed(
+    r: Sent,
+    done: string,
+    row?: Row,
+    moves = true,
+    why?: string,
+  ): Promise<void> {
     if (!r.ok) {
       toast({ message: r.message });
       return;
     }
     const c = r.change;
-    if (c.status !== "applied") proposed.current = c.id;
+    if (c.status !== 'applied') proposed.current = c.id;
     await q.reload();
-    if (c.status === "applied" && moves) setMoved(row ? { featureId: row.feature_id, from: row.rank, why } : null);
-    if (c.status === "applied")
+    if (c.status === 'applied' && moves)
+      setMoved(row ? { featureId: row.feature_id, from: row.rank, why } : null);
+    if (c.status === 'applied')
       toast({
         message: done,
         action: c.can_undo
           ? {
-              label: "Undo",
+              label: 'Undo',
               onClick: async () => {
-                const u = await api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: c.id } } });
+                const u = await api.POST('/v1/simple/changes/{change_id}/undo', {
+                  params: { path: { change_id: c.id } },
+                });
                 if (row) setMoved(null);
                 await q.reload();
-                toast({ message: u.response.ok ? "Undone" : "Could not undo" });
+                toast({ message: u.response.ok ? 'Undone' : 'Could not undo' });
               },
             }
           : undefined,
@@ -285,38 +411,71 @@ export function Priorities() {
   const shapes = goalShapes(data);
   // qa-shell-8: a new company has no feature to rank: one line on what shows here and the next
   // step, with no line or comparison to pick over nothing.
-  const blank = !!data && !data.rows.length && !data.unranked.length && !data.drafts.length && !data.proposals.length;
+  const blank =
+    !!data &&
+    !data.rows.length &&
+    !data.unranked.length &&
+    !data.drafts.length &&
+    !data.proposals.length;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
   const [rowOpen, setRowOpen] = useState<Opened | null>(null);
   // A feature deleted from its row closes its panel, if open.
-  const removeFeature = useFeatureDelete(q.reload, undefined, (id) => setRowOpen((r) => (r?.item_id === id ? null : r)));
+  const removeFeature = useFeatureDelete(q.reload, undefined, (id) =>
+    setRowOpen((r) => (r?.item_id === id ? null : r)),
+  );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
+    <div
+      className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text"
+      data-testid="simple-priorities"
+    >
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">Priorities</h1>
+          <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">
+            Priorities
+          </h1>
           {/* Demo 9 / P-7: the view's explanation sits behind an (i); the line under the heading says only which quarter or plan. */}
           <p className="flex items-center gap-1.5 text-text2">
             <span data-testid="prio-subtitle">
               {/* mk-goalbuckets: Goal buckets names the plan's quarter ("Q4 2026"); its card gives the plan's dates. */}
-              {data ? `${tab === "buckets" && data.plan?.span ? quarterOf(data.plan.span.start) : data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}` : ""}
+              {data
+                ? `${tab === 'buckets' && data.plan?.span ? quarterOf(data.plan.span.start) : data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}`
+                : ''}
             </span>
-            <InfoTip label={TABS.find((t) => t.key === tab)?.label ?? "this view"} align="start" side="bottom" testId="prio-about" id="prio-about-text">
+            <InfoTip
+              label={TABS.find((t) => t.key === tab)?.label ?? 'this view'}
+              align="start"
+              side="bottom"
+              testId="prio-about"
+              id="prio-about-text"
+            >
               {SUBTITLE[tab]}
-              {data && tab === "ranked" && splitAtLine(data) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
-              {tab === "value-effort" && data ? ` ${VE_WORDS(data, mayChange, phone)}` : ""}
-              {tab === "buckets" && data && !(data.plan?.milestones.length && data.plan.span) ? <span data-testid="buckets-intro"> {BUCKETS_WORDS(data)}</span> : ""}
+              {data && tab === 'ranked' && splitAtLine(data)
+                ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? '' : 's'} what makes the line, so what makes it is listed first, each part by rank.`
+                : ''}
+              {tab === 'value-effort' && data ? ` ${VE_WORDS(data, mayChange, phone)}` : ''}
+              {tab === 'buckets' && data && !(data.plan?.milestones.length && data.plan.span) ? (
+                <span data-testid="buckets-intro"> {BUCKETS_WORDS(data)}</span>
+              ) : (
+                ''
+              )}
             </InfoTip>
           </p>
         </div>
-        <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
+        <Link
+          href="/priorities"
+          className="text-[length:var(--simple-small)] font-medium text-accent-ink underline"
+        >
           Open the detailed view
         </Link>
       </header>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Priorities views" className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-1">
+        <div
+          role="tablist"
+          aria-label="Priorities views"
+          className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-1"
+        >
           {TABS.map((t, k) => (
             <button
               key={t.key}
@@ -330,24 +489,27 @@ export function Priorities() {
               tabIndex={tab === t.key ? 0 : -1}
               onKeyDown={(e) => tabKey(e, k)}
               onClick={() => pickTab(t.key)}
-              className={`whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[length:var(--simple-small)] font-medium sm:px-3 ${tab === t.key ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2"}`}
+              className={`whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[length:var(--simple-small)] font-medium sm:px-3 ${tab === t.key ? 'bg-accent text-on-accent' : 'text-text2 hover:bg-surface2'}`}
             >
               {t.label}
             </button>
           ))}
         </div>
-        {data && !blank && tab !== "buckets" && <LinePicker data={data} onPick={pickLine} />}
-        {tab === "ranked" && !blank && (
+        {data && !blank && tab !== 'buckets' && <LinePicker data={data} onPick={pickLine} />}
+        {tab === 'ranked' && !blank && (
           <label className="flex cursor-pointer items-center gap-2 text-[length:var(--simple-small)]">
             <button
               role="switch"
               aria-checked={compare}
               aria-label="Compare with Oracle"
-              onClick={() => setParams({ compare: compare ? null : "1" })}
-              className={`relative h-6 w-11 rounded-full border border-line-strong ${compare ? "bg-accent" : "bg-surface2"}`}
+              onClick={() => setParams({ compare: compare ? null : '1' })}
+              className={`relative h-6 w-11 rounded-full border border-line-strong ${compare ? 'bg-accent' : 'bg-surface2'}`}
             >
               {/* V-3: the off knob in the ink's grey, so it stands out from its track in dark as in light. */}
-              <span data-testid="compare-knob" className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-all ${compare ? "left-6 bg-surface" : "left-0.5 bg-text2"}`} />
+              <span
+                data-testid="compare-knob"
+                className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-all ${compare ? 'left-6 bg-surface' : 'left-0.5 bg-text2'}`}
+              />
             </button>
             <span aria-hidden>Compare with Oracle</span>
           </label>
@@ -356,66 +518,91 @@ export function Priorities() {
 
       {/* qa4-simple-plan-29: the shown view is the tab panel its tab names. */}
       <div role="tabpanel" id="prio-panel" aria-labelledby={`prio-tab-${tab}`}>
-      {q.error && !data && <p role="alert" className="text-crit">{q.error}</p>}
-      {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
-      {/* #1586: key results that could not be read say why, never goals that have none. */}
-      {kr.failed && <LoadError what="the key results" error={kr.failed.error} onRetry={kr.failed.retry} />}
-      {blank && (
-        <p className="text-text2" data-testid="priorities-empty">
-          {hasGoals ? (
-            <>
-              No features yet: they rank here once the roadmap has some, so add one or accept one Oracle suggests on the{" "}
-              <Link href="/simple/roadmap" className="font-medium text-accent-ink underline">
-                Roadmap
-              </Link>
-              .
-            </>
-          ) : (
-            <>
-              No features yet: confirm your company&rsquo;s goals in{" "}
-              <Link href="/ground-truth" className="font-medium text-accent-ink underline">
-                Detailed › Ground Truth
-              </Link>{" "}
-              and the features Oracle suggests for them rank here.
-            </>
-          )}
-        </p>
-      )}
-      {data && !blank && tab === "ranked" && marks && (
-        <div className="mb-3" data-testid="cs-prio-bar">
-          <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
-          {show && (
-            <p className="mt-2 text-[length:var(--simple-small)] text-text2">
-              {SHOW_NOTE[show](showCounts[show])} <InfoTip label="ranks shown">Ranks stay as in the full list.</InfoTip>
-            </p>
-          )}
-        </div>
-      )}
-      {data && !blank && tab === "ranked" && (
-        <FeatureMarks.Provider value={marks}>
+        {q.error && !data && (
+          <p role="alert" className="text-crit">
+            {q.error}
+          </p>
+        )}
+        {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
+        {/* #1586: key results that could not be read say why, never goals that have none. */}
+        {kr.failed && (
+          <LoadError what="the key results" error={kr.failed.error} onRetry={kr.failed.retry} />
+        )}
+        {blank && (
+          <p className="text-text2" data-testid="priorities-empty">
+            {hasGoals ? (
+              <>
+                No features yet: they rank here once the roadmap has some, so add one or accept one
+                Oracle suggests on the{' '}
+                <Link href="/simple/roadmap" className="font-medium text-accent-ink underline">
+                  Roadmap
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                No features yet: confirm your company&rsquo;s goals in{' '}
+                <Link href="/ground-truth" className="font-medium text-accent-ink underline">
+                  Detailed › Ground Truth
+                </Link>{' '}
+                and the features Oracle suggests for them rank here.
+              </>
+            )}
+          </p>
+        )}
+        {data && !blank && tab === 'ranked' && marks && (
+          <div className="mb-3" data-testid="cs-prio-bar">
+            <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
+            {show && (
+              <p className="mt-2 text-[length:var(--simple-small)] text-text2">
+                {SHOW_NOTE[show](showCounts[show])}{' '}
+                <InfoTip label="ranks shown">Ranks stay as in the full list.</InfoTip>
+              </p>
+            )}
+          </div>
+        )}
+        {data && !blank && tab === 'ranked' && (
+          <FeatureMarks.Provider value={marks}>
+            <OpenRow.Provider value={setRowOpen}>
+              <Ranked
+                data={shownData ?? data}
+                phone={phone}
+                compare={compare}
+                mayChange={mayChange}
+                changed={changed}
+                moved={moved}
+                onDelete={removeFeature}
+              />
+            </OpenRow.Provider>
+          </FeatureMarks.Provider>
+        )}
+        {rowOpen && (
+          <FeaturePanel
+            key={rowOpen.feature_id}
+            feature={{ id: rowOpen.item_id ?? null, code: rowOpen.code, name: rowOpen.title }}
+            phone={phone}
+            canChange={can('create_simple_change')}
+            onClose={() => {
+              setRowOpen(null);
+              void q.reload();
+            }}
+          />
+        )}
+        {data && !blank && tab === 'value-effort' && (
           <OpenRow.Provider value={setRowOpen}>
-            <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} onDelete={removeFeature} />
+            <ValueEffort
+              data={data}
+              shapes={shapes}
+              mayChange={mayChange}
+              changed={changed}
+              moved={moved}
+              featureOpen={!!rowOpen}
+            />
           </OpenRow.Provider>
-        </FeatureMarks.Provider>
-      )}
-      {rowOpen && (
-        <FeaturePanel
-          key={rowOpen.feature_id}
-          feature={{ id: rowOpen.item_id ?? null, code: rowOpen.code, name: rowOpen.title }}
-          phone={phone}
-          canChange={can("create_simple_change")}
-          onClose={() => {
-            setRowOpen(null);
-            void q.reload();
-          }}
-        />
-      )}
-      {data && !blank && tab === "value-effort" && (
-        <OpenRow.Provider value={setRowOpen}>
-          <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} featureOpen={!!rowOpen} />
-        </OpenRow.Provider>
-      )}
-      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} kr={kr} />}
+        )}
+        {data && !blank && tab === 'buckets' && (
+          <Buckets data={data} suggestions={suggestions} kr={kr} />
+        )}
       </div>
     </div>
   );
@@ -445,13 +632,19 @@ type Moved = { featureId: string; from: number; why?: string };
 /** "moved #8 → #3" for the row just moved, "now #5 (effort 4 weeks)" for one re-estimated (its rank now from the read); null for any other row. */
 function movedWords(moved: Moved | null, r: Row): string | null {
   if (moved?.featureId !== r.feature_id) return null;
-  if (moved.why) return moved.from === r.rank ? `rank stays #${r.rank} (${moved.why})` : `now #${r.rank} (${moved.why})`;
+  if (moved.why)
+    return moved.from === r.rank
+      ? `rank stays #${r.rank} (${moved.why})`
+      : `now #${r.rank} (${moved.why})`;
   return moved.from === r.rank ? `stays #${r.rank}` : `moved #${moved.from} → #${r.rank}`;
 }
 
 function MovedTag({ words }: { words: string }) {
   return (
-    <span data-testid="moved" className="flex-none whitespace-nowrap rounded-full bg-accent px-2 text-[length:var(--simple-small)] font-medium text-on-accent">
+    <span
+      data-testid="moved"
+      className="flex-none whitespace-nowrap rounded-full bg-accent px-2 text-[length:var(--simple-small)] font-medium text-on-accent"
+    >
       {words}
     </span>
   );
@@ -463,8 +656,8 @@ function PartOf({ r }: { r: Row }) {
   if (!r.part_of) return null;
   return (
     <span data-testid="prio-part-of" className="text-[length:var(--simple-small)] text-text2">
-      part of {[r.part_of.code, r.part_of.title].filter(Boolean).join(" ")}
-      {r.part_of.in_trash ? " (in Trash)" : ""}
+      part of {[r.part_of.code, r.part_of.title].filter(Boolean).join(' ')}
+      {r.part_of.in_trash ? ' (in Trash)' : ''}
     </span>
   );
 }
@@ -473,17 +666,31 @@ function PartOf({ r }: { r: Row }) {
 function CodeChip({ r }: { r: Row }) {
   if (!r.own_key) return null;
   return (
-    <span data-testid="prio-code" title={r.title} className="min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center text-[length:var(--simple-small)] font-semibold tabular-nums text-text">
+    <span
+      data-testid="prio-code"
+      title={r.title}
+      className="min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center text-[length:var(--simple-small)] font-semibold tabular-nums text-text"
+    >
       {r.own_key}
     </span>
   );
 }
 
 /** Where a move may land: a feature never goes above one it needs, nor below one that needs it. */
-function moveBounds(rows: Row[], row: Row): { top: number; bottom: number; needs: Row | null; neededBy: Row | null } {
-  const needs = rows.filter((x) => row.depends_on.includes(x.code)).sort((a, b) => b.rank - a.rank)[0] ?? null;
-  const neededBy = rows.filter((x) => x.depends_on.includes(row.code)).sort((a, b) => a.rank - b.rank)[0] ?? null;
-  return { top: needs ? needs.rank + 1 : 1, bottom: neededBy ? neededBy.rank - 1 : rows.length, needs, neededBy };
+function moveBounds(
+  rows: Row[],
+  row: Row,
+): { top: number; bottom: number; needs: Row | null; neededBy: Row | null } {
+  const needs =
+    rows.filter((x) => row.depends_on.includes(x.code)).sort((a, b) => b.rank - a.rank)[0] ?? null;
+  const neededBy =
+    rows.filter((x) => x.depends_on.includes(row.code)).sort((a, b) => a.rank - b.rank)[0] ?? null;
+  return {
+    top: needs ? needs.rank + 1 : 1,
+    bottom: neededBy ? neededBy.rank - 1 : rows.length,
+    needs,
+    neededBy,
+  };
 }
 
 /** Where a move to `position` puts the item in a dated plan's list: under which row, on which side of the line. */
@@ -492,9 +699,9 @@ function landsUnder(rows: Row[], row: Row, position: number): string {
   order.splice(position - 1, 0, row);
   const side = order.filter((x) => x.above_line === row.above_line);
   const under = side[side.indexOf(row) - 1];
-  const where = row.above_line ? "above the line" : "below the line";
+  const where = row.above_line ? 'above the line' : 'below the line';
   if (under) return `It lands just under ${nameOf(under)}, ${where}.`;
-  return row.above_line ? "It lands at the top." : "It lands first below the line.";
+  return row.above_line ? 'It lands at the top.' : 'It lands first below the line.';
 }
 
 // --------------------------------------------------------------------------- ranked list
@@ -505,48 +712,98 @@ const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
   exists: (n) => `${n} features that run today.`,
 };
 
-function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void }) {
-  const [side, setSide] = useState<"yours" | "oracle">("yours");
+function Ranked({
+  data,
+  phone,
+  compare,
+  mayChange,
+  changed,
+  moved,
+  onDelete,
+}: {
+  data: Out;
+  phone: boolean;
+  compare: boolean;
+  mayChange: boolean;
+  changed: Changed;
+  moved: Moved | null;
+  onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void;
+}) {
+  const [side, setSide] = useState<'yours' | 'oracle'>('yours');
   // A goal's list (from a Home goal card) leaves out the features not ranked yet.
-  const goalOn = !!useSearchParams().get("goal");
+  const goalOn = !!useSearchParams().get('goal');
   const [move, setMove] = useState<{ row: Row; position: number } | null>(null);
   // qa-simple-plan-5: closing the move dialog (Escape, Cancel, Move) puts focus back on the row's handle.
   const backToHandle = (featureId: string) =>
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-handle="${featureId}"]`)?.focus());
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-handle="${featureId}"]`)?.focus(),
+    );
   // qa4-simple-plan-6: beside Oracle's order (half the width) each card's details take a line of their own.
-  const list = <YourList data={data} half={compare && !phone} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} onDelete={onDelete} />;
+  const list = (
+    <YourList
+      data={data}
+      half={compare && !phone}
+      mayChange={mayChange}
+      onMove={(row, position) => setMove({ row, position })}
+      changed={changed}
+      moved={moved}
+      onDelete={onDelete}
+    />
+  );
   return (
     <>
       {compare && phone && (
-        <div role="radiogroup" aria-label="Which order" className="mb-3 flex gap-1 rounded-[var(--simple-card-radius)] border border-line bg-surface p-1">
-          {(["yours", "oracle"] as const).map((s) => (
-            <button key={s} role="radio" aria-checked={side === s} onClick={() => setSide(s)} className={`flex-1 rounded-[10px] px-3 py-1.5 text-[length:var(--simple-small)] ${side === s ? "bg-accent text-on-accent" : "text-text2"}`}>
-              {s === "yours" ? "Yours" : "Oracle's"}
+        <div
+          role="radiogroup"
+          aria-label="Which order"
+          className="mb-3 flex gap-1 rounded-[var(--simple-card-radius)] border border-line bg-surface p-1"
+        >
+          {(['yours', 'oracle'] as const).map((s) => (
+            <button
+              key={s}
+              role="radio"
+              aria-checked={side === s}
+              onClick={() => setSide(s)}
+              className={`flex-1 rounded-[10px] px-3 py-1.5 text-[length:var(--simple-small)] ${side === s ? 'bg-accent text-on-accent' : 'text-text2'}`}
+            >
+              {s === 'yours' ? 'Yours' : "Oracle's"}
             </button>
           ))}
         </div>
       )}
       {compare && data.rows.every((r) => r.oracle_rank == null || r.oracle_rank === r.rank) && (
-        <p className="mb-3 rounded-lg bg-accent-soft px-3 py-2 text-[length:var(--simple-small)] text-accent-ink" data-testid="compare-same">
+        <p
+          className="mb-3 rounded-lg bg-accent-soft px-3 py-2 text-[length:var(--simple-small)] text-accent-ink"
+          data-testid="compare-same"
+        >
           Same as Oracle&apos;s order: no one has moved a feature.
         </p>
       )}
       {compare && !phone ? (
         <div className="grid grid-cols-2 gap-4">
           <section aria-label="Your order">
-            <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Your order</h2>
+            <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+              Your order
+            </h2>
             {list}
           </section>
           <OracleOrder data={data} />
         </div>
-      ) : compare && side === "oracle" ? (
+      ) : compare && side === 'oracle' ? (
         <OracleOrder data={data} />
       ) : (
         list
       )}
       {data.unranked.length > 0 && !goalOn && <Unranked items={data.unranked} />}
       {/* qa-prio-twins: a draft of a ranked feature shows on that feature's row, not here too. */}
-      {ownDrafts(data).length > 0 && !goalOn && <Drafts drafts={ownDrafts(data)} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
+      {ownDrafts(data).length > 0 && !goalOn && (
+        <Drafts
+          drafts={ownDrafts(data)}
+          proposals={data.proposals}
+          mayChange={mayChange}
+          changed={changed}
+        />
+      )}
       {move && (
         <MoveDialog
           move={move}
@@ -567,7 +824,23 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
   );
 }
 
-function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void }) {
+function YourList({
+  data,
+  half = false,
+  mayChange,
+  onMove,
+  changed,
+  moved,
+  onDelete,
+}: {
+  data: Out;
+  half?: boolean;
+  mayChange: boolean;
+  onMove: (row: Row, position: number) => void;
+  changed: Changed;
+  moved: Moved | null;
+  onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void;
+}) {
   // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
@@ -577,18 +850,20 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
     const w = coded(name, { itemId });
     return w === name ? `Milestone ${name}` : w;
   };
-  const goal = params.get("goal");
-  const goalName = params.get("name") ?? goal;
+  const goal = params.get('goal');
+  const goalName = params.get('name') ?? goal;
   // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
-  const rows = byLine(data).filter((r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName));
+  const rows = byLine(data).filter(
+    (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName),
+  );
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   // qa-simple-plan-34: a look-alike's link (?show=<its item or feature>) marks its row and brings it into view.
-  const show = useSearchParams().get("show");
+  const show = useSearchParams().get('show');
   const shown = (r: Row) => !!show && (r.feature_id === show || r.item_id === show);
   useEffect(() => {
-    if (show) document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: "center" });
+    if (show) document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: 'center' });
   }, [show]);
 
   // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
@@ -631,14 +906,15 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   // row's own rank when it is past them. A drop onto any other row takes that row's rank.
   const aboveCount = data.rows.filter((r) => r.above_line).length;
   const lastAbove = rows.filter((r) => r.above_line).at(-1);
-  const dropRank = (target: Row): number => (dateLine(data) && target === lastAbove ? Math.min(target.rank, aboveCount) : target.rank);
+  const dropRank = (target: Row): number =>
+    dateLine(data) && target === lastAbove ? Math.min(target.rank, aboveCount) : target.rank;
 
   function key(e: KeyboardEvent, i: number) {
     const at = data.rows.indexOf(rows[i]);
-    if (e.key === "ArrowUp" && at > 0) {
+    if (e.key === 'ArrowUp' && at > 0) {
       e.preventDefault();
       onMove(rows[i], data.rows[at - 1].rank);
-    } else if (e.key === "ArrowDown" && at < data.rows.length - 1) {
+    } else if (e.key === 'ArrowDown' && at < data.rows.length - 1) {
       e.preventDefault();
       onMove(rows[i], data.rows[at + 1].rank);
     }
@@ -647,188 +923,303 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   const goalOf = goalOfRow(data);
   // qa-simple-plan-4: the override ends (after.clear) and the feature takes Oracle's rank again; Undo puts it back.
   async function backToOracle(r: Row) {
-    const sent = await send({ op: "override_priority", target: targetOf(r), before: { override: r.before_override ?? null }, after: { clear: true }, reason: "Back to Oracle's rank" });
-    await changed(sent, r.applies ? `Moved ${nameOf(r)} back to Oracle's rank` : `Proposed putting ${nameOf(r)} back at Oracle's rank`, r);
+    const sent = await send({
+      op: 'override_priority',
+      target: targetOf(r),
+      before: { override: r.before_override ?? null },
+      after: { clear: true },
+      reason: "Back to Oracle's rank",
+    });
+    await changed(
+      sent,
+      r.applies
+        ? `Moved ${nameOf(r)} back to Oracle's rank`
+        : `Proposed putting ${nameOf(r)} back at Oracle's rank`,
+      r,
+    );
   }
   return (
     <>
-    {goal && (
-      <p className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink" data-testid="prio-goal-filter">
-        <span>
-          Showing <b>{goalName}</b> only: {rows.length ? `${rows.length} of ${data.rows.length} features` : "nothing for this goal is planned yet"}
-        </span>
-        <button type="button" className="font-semibold underline" onClick={() => setParams({ goal: null, name: null })}>
-          Show all
-        </button>
-      </p>
-    )}
-    {/* Split at a dated line, the two parts' headings say what the caption said; a goal's list keeps it (qp4=b), counting only its features. */}
-    {goal ? rows.length > 0 && <LineCaption data={{ ...data, rows }} /> : !apart && <LineCaption data={data} />}
-    <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
-      {rows.flatMap((r, i) => {
-        // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
-        const divider = apart
-          ? [...(i === 0 ? [<PartHead key="makes" data={data} makes n={split} />] : []), ...(i === split ? [<PartHead key="misses" data={data} makes={false} n={rows.length - split} />] : [])]
-          : i === split
-            ? [<LineDivider key="the-line" data={data} />]
-            : [];
-        // Any of the feature's items (a proposal on its later item shows here too).
-        const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
-        const target = drag && drag.to === i && drag.from !== i;
-        const words = movedWords(moved, r);
-        return [
-          ...divider,
-          <li
-            key={r.feature_id}
-            ref={(el) => {
-              refs.current[i] = el;
-            }}
-            data-testid="prio-row"
-            data-code={r.code}
-            data-above={r.above_line ? "true" : "false"}
-            data-end={r.end_date ?? ""}
-            data-misses={r.above_line ? undefined : "true"}
-            data-moved={words ? "true" : undefined}
-            data-shown={shown(r) ? "true" : undefined}
-            className={`max-sm:relative rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target || words || shown(r) ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
+      {goal && (
+        <p
+          className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink"
+          data-testid="prio-goal-filter"
+        >
+          <span>
+            Showing <b>{goalName}</b> only:{' '}
+            {rows.length
+              ? `${rows.length} of ${data.rows.length} features`
+              : 'nothing for this goal is planned yet'}
+          </span>
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={() => setParams({ goal: null, name: null })}
           >
-            {/* PR4: on a phone the row's ⋯ is pinned top-right, so it never takes a line of its own. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {mayChange && r.can_reorder && (
-                <button
-                  aria-label={`Drag ${nameOf(r)} to reorder`}
-                  // A role whose move is a proposal is told so (qa-plan-14): the row's own `applies`.
-                  title={r.applies ? "Drag to reorder (or use the arrow keys)" : "Drag to propose a new rank (or use the arrow keys): the decider decides"}
-                  data-handle={r.feature_id}
-                  className="-my-3 flex min-h-11 min-w-11 cursor-grab touch-none items-center justify-center rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2 sm:my-0 sm:min-h-0 sm:min-w-[22px]"
-                  onPointerDown={(e) => start(e, i)}
-                  onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY, drag.from) })}
-                  onPointerUp={end}
-                  onPointerCancel={() => setDrag(null)}
-                  onKeyDown={(e) => key(e, i)}
-                >
-                  <svg width="14" height="20" viewBox="0 0 14 20" aria-hidden fill="currentColor">
-                    {[3, 10, 17].flatMap((y) => [4, 10].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.8" />))}
-                  </svg>
-                </button>
-              )}
-              {/* qa-simple-plan-32: a row the reader cannot move keeps the handle's column; why is said under it. */}
-              {mayChange && !r.can_reorder && <span aria-hidden data-testid="prio-no-handle" className="min-w-11 sm:min-w-[22px]" />}
-              <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums" data-testid="prio-rank">
-                {r.rank}
-              </span>
-              <span
-                aria-label={r.above_line ? "Above the line" : "Below the line"}
-                title={r.above_line ? "Above the line" : "Below the line"}
-                className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
-                data-testid="prio-line-mark"
-              />
-              {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
-                  to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
-              <span className={`flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1 ${mayChange && r.item_id ? "max-sm:pr-7" : ""}`} data-testid="prio-name">
-                {/* PR3: the title, its code and its pill stay on one line; the title wraps on its own. */}
-                <span className="flex min-w-0 max-w-full items-center gap-x-2 max-sm:flex-wrap max-sm:gap-y-1" data-testid="prio-named">
-                  {open ? (
-                    <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
-                      {r.title}
-                    </button>
-                  ) : (
-                    <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
-                  )}
-                  <OwnKey r={r} />
-                  <span className="flex flex-none items-center">
-                    <MarkFor featureId={r.feature_id} checked />
-                  </span>
-                </span>
-                {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
-                {!r.own_key && <NotInGt />}
-                <PartOf r={r} />
-              </span>
-              {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
-              <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
-                {/* The chips stay together, wrapping as one group. */}
-                <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
-                  {goalOf(r) ? (
-                    <span data-testid="prio-goal">{goalOf(r)}</span>
-                  ) : (
-                    <span data-testid="prio-goal" className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn">
-                      No goal
-                    </span>
-                  )}
-                </span>
-                {/* walkb-priorities: a long milestone name wraps inside the card (a phone scrolled sideways). */}
-                {/* Bring a date in: a sliced or split feature's new date waits for its estimate. */}
-                {r.estimate_pending && r.end_date && (
-                  <span data-testid="prio-estimate-pending" className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn">
-                    Ends {calendarDay(r.end_date)} · Estimate pending
-                  </span>
-                )}
-                {/* qa-nov17 G8: by its code and name as the roadmap reads it ("M6 Beta"); "Milestone Beta" only when it has no code. */}
-                {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">{msWords(r.milestone, r.item_id)}</span>}
-                {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
-                <Numbers r={r} mayChange={mayChange} changed={changed} />
-              </span>
-              {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
-              {mayChange && r.item_id && (
-                <span className="flex-none max-sm:absolute max-sm:right-1.5 max-sm:top-1.5" data-testid="prio-row-menu">
-                  <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })} />
-                </span>
-              )}
-            </div>
-            {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
-            {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
-              <p className="mt-1 flex flex-wrap items-center gap-1.5 sm:pl-12" data-testid="prio-marks">
-                {r.oracle_rank != null && r.oracle_rank !== r.rank && (
-                  <span
-                    data-testid="prio-ghost"
-                    title="Oracle's rank"
-                    className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-2 text-[length:var(--simple-small)] text-text2"
+            Show all
+          </button>
+        </p>
+      )}
+      {/* Split at a dated line, the two parts' headings say what the caption said; a goal's list keeps it (qp4=b), counting only its features. */}
+      {goal
+        ? rows.length > 0 && <LineCaption data={{ ...data, rows }} />
+        : !apart && <LineCaption data={data} />}
+      <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
+        {rows.flatMap((r, i) => {
+          // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
+          const divider = apart
+            ? [
+                ...(i === 0 ? [<PartHead key="makes" data={data} makes n={split} />] : []),
+                ...(i === split
+                  ? [<PartHead key="misses" data={data} makes={false} n={rows.length - split} />]
+                  : []),
+              ]
+            : i === split
+              ? [<LineDivider key="the-line" data={data} />]
+              : [];
+          // Any of the feature's items (a proposal on its later item shows here too).
+          const proposals = data.proposals.filter(
+            (p) =>
+              p.feature_id === r.feature_id &&
+              (p.op === 'override_priority' || p.op === 'estimate_feature'),
+          );
+          const target = drag && drag.to === i && drag.from !== i;
+          const words = movedWords(moved, r);
+          return [
+            ...divider,
+            <li
+              key={r.feature_id}
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              data-testid="prio-row"
+              data-code={r.code}
+              data-above={r.above_line ? 'true' : 'false'}
+              data-end={r.end_date ?? ''}
+              data-misses={r.above_line ? undefined : 'true'}
+              data-moved={words ? 'true' : undefined}
+              data-shown={shown(r) ? 'true' : undefined}
+              className={`max-sm:relative rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? 'bg-surface' : 'bg-surface2 text-text2'} ${target || words || shown(r) ? 'border-accent ring-2 ring-accent' : 'border-line'} ${drag?.from === i ? 'opacity-60' : ''}`}
+            >
+              {/* PR4: on a phone the row's ⋯ is pinned top-right, so it never takes a line of its own. */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {mayChange && r.can_reorder && (
+                  <button
+                    aria-label={`Drag ${nameOf(r)} to reorder`}
+                    // A role whose move is a proposal is told so (qa-plan-14): the row's own `applies`.
+                    title={
+                      r.applies
+                        ? 'Drag to reorder (or use the arrow keys)'
+                        : 'Drag to propose a new rank (or use the arrow keys): the decider decides'
+                    }
+                    data-handle={r.feature_id}
+                    className="-my-3 flex min-h-11 min-w-11 cursor-grab touch-none items-center justify-center rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2 sm:my-0 sm:min-h-0 sm:min-w-[22px]"
+                    onPointerDown={(e) => start(e, i)}
+                    onPointerMove={(e) =>
+                      drag && setDrag({ ...drag, to: targetIndex(e.clientY, drag.from) })
+                    }
+                    onPointerUp={end}
+                    onPointerCancel={() => setDrag(null)}
+                    onKeyDown={(e) => key(e, i)}
                   >
-                    Oracle #{r.oracle_rank}
-                  </span>
-                )}
-                {words && <MovedTag words={words} />}
-              </p>
-            )}
-            {mayChange && r.can_reorder && !r.on_roadmap && data.company_roadmap && (
-              <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-adds">
-                Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
-              </p>
-            )}
-            {/* qa-prio-twins: the feature's drafts on the roadmap and its unlinked twins, on its one row. */}
-            <RowDrafts drafts={data.drafts.filter((d) => d.row_feature_id === r.feature_id)} proposals={data.proposals} mayChange={mayChange} changed={changed} />
-            {(r.twins ?? []).length > 0 && <Twins r={r} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
-            {mayChange && !r.can_reorder && (
-              <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
-                    on the company roadmap waits for the owner to add it, which no access changes. */}
-                {(!r.on_roadmap || r.draft_item_id) && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
-              </p>
-            )}
-            {r.after && (
-              <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-after">
-                After {r.after.title}, which it needs.
-              </p>
-            )}
-            {r.override && (
-              <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-override">
-                <span>
-                  Moved by {r.override.by_name}: “{r.override.reason}”
-                </span>
-                {mayChange && r.can_reorder && r.item_id && !proposals.length && (
-                  <button type="button" data-testid="prio-back-to-oracle" className="font-semibold text-accent-ink underline" onClick={() => void backToOracle(r)}>
-                    {r.applies ? "Back to Oracle's rank" : "Propose Oracle's rank"}
+                    <svg width="14" height="20" viewBox="0 0 14 20" aria-hidden fill="currentColor">
+                      {[3, 10, 17].flatMap((y) =>
+                        [4, 10].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.8" />),
+                      )}
+                    </svg>
                   </button>
                 )}
-              </p>
-            )}
-            {proposals.map((p) => (
-              <ProposalCard key={p.change_id} p={p} row={r} changed={changed} />
-            ))}
-          </li>,
-        ];
-      })}
-    </ol>
+                {/* qa-simple-plan-32: a row the reader cannot move keeps the handle's column; why is said under it. */}
+                {mayChange && !r.can_reorder && (
+                  <span
+                    aria-hidden
+                    data-testid="prio-no-handle"
+                    className="min-w-11 sm:min-w-[22px]"
+                  />
+                )}
+                <span
+                  className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums"
+                  data-testid="prio-rank"
+                >
+                  {r.rank}
+                </span>
+                <span
+                  aria-label={r.above_line ? 'Above the line' : 'Below the line'}
+                  title={r.above_line ? 'Above the line' : 'Below the line'}
+                  className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? 'bg-accent' : 'bg-transparent'}`}
+                  data-testid="prio-line-mark"
+                />
+                {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
+                  to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
+                <span
+                  className={`flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1 ${mayChange && r.item_id ? 'max-sm:pr-7' : ''}`}
+                  data-testid="prio-name"
+                >
+                  {/* PR3: the title, its code and its pill stay on one line; the title wraps on its own. */}
+                  <span
+                    className="flex min-w-0 max-w-full items-center gap-x-2 max-sm:flex-wrap max-sm:gap-y-1"
+                    data-testid="prio-named"
+                  >
+                    {open ? (
+                      <button
+                        type="button"
+                        className="min-w-0 text-left font-medium hover:underline"
+                        data-testid="prio-title"
+                        onClick={() => open(r)}
+                      >
+                        {r.title}
+                      </button>
+                    ) : (
+                      <span className="min-w-0 font-medium" data-testid="prio-title">
+                        {r.title}
+                      </span>
+                    )}
+                    <OwnKey r={r} />
+                    <span className="flex flex-none items-center">
+                      <MarkFor featureId={r.feature_id} checked />
+                    </span>
+                  </span>
+                  {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
+                  {!r.own_key && <NotInGt />}
+                  <PartOf r={r} />
+                </span>
+                {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
+                <span
+                  data-testid="prio-details"
+                  className={`${half ? 'basis-full sm:pl-12' : ''} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}
+                >
+                  {/* The chips stay together, wrapping as one group. */}
+                  <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
+                    {goalOf(r) ? (
+                      <span data-testid="prio-goal">{goalOf(r)}</span>
+                    ) : (
+                      <span
+                        data-testid="prio-goal"
+                        className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn"
+                      >
+                        No goal
+                      </span>
+                    )}
+                  </span>
+                  {/* walkb-priorities: a long milestone name wraps inside the card (a phone scrolled sideways). */}
+                  {/* Bring a date in: a sliced or split feature's new date waits for its estimate. */}
+                  {r.estimate_pending && r.end_date && (
+                    <span
+                      data-testid="prio-estimate-pending"
+                      className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn"
+                    >
+                      Ends {calendarDay(r.end_date)} · Estimate pending
+                    </span>
+                  )}
+                  {/* qa-nov17 G8: by its code and name as the roadmap reads it ("M6 Beta"); "Milestone Beta" only when it has no code. */}
+                  {r.milestone && (
+                    <span
+                      data-testid="prio-milestone"
+                      className="min-w-0 max-w-full [overflow-wrap:anywhere]"
+                    >
+                      {msWords(r.milestone, r.item_id)}
+                    </span>
+                  )}
+                  {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
+                  <Numbers r={r} mayChange={mayChange} changed={changed} />
+                </span>
+                {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
+                {mayChange && r.item_id && (
+                  <span
+                    className="flex-none max-sm:absolute max-sm:right-1.5 max-sm:top-1.5"
+                    data-testid="prio-row-menu"
+                  >
+                    <FeatureMenu
+                      title={nameOf(r)}
+                      propose={!r.applies}
+                      onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })}
+                    />
+                  </span>
+                )}
+              </div>
+              {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
+              {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
+                <p
+                  className="mt-1 flex flex-wrap items-center gap-1.5 sm:pl-12"
+                  data-testid="prio-marks"
+                >
+                  {r.oracle_rank != null && r.oracle_rank !== r.rank && (
+                    <span
+                      data-testid="prio-ghost"
+                      title="Oracle's rank"
+                      className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-2 text-[length:var(--simple-small)] text-text2"
+                    >
+                      Oracle #{r.oracle_rank}
+                    </span>
+                  )}
+                  {words && <MovedTag words={words} />}
+                </p>
+              )}
+              {mayChange && r.can_reorder && !r.on_roadmap && data.company_roadmap && (
+                <p
+                  className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12"
+                  data-testid="prio-adds"
+                >
+                  Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
+                </p>
+              )}
+              {/* qa-prio-twins: the feature's drafts on the roadmap and its unlinked twins, on its one row. */}
+              <RowDrafts
+                drafts={data.drafts.filter((d) => d.row_feature_id === r.feature_id)}
+                proposals={data.proposals}
+                mayChange={mayChange}
+                changed={changed}
+              />
+              {(r.twins ?? []).length > 0 && (
+                <Twins r={r} proposals={data.proposals} mayChange={mayChange} changed={changed} />
+              )}
+              {mayChange && !r.can_reorder && (
+                <p
+                  className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12"
+                  data-testid="prio-locked"
+                >
+                  {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
+                    on the company roadmap waits for the owner to add it, which no access changes. */}
+                  {(!r.on_roadmap || r.draft_item_id) && data.company_roadmap
+                    ? 'Only the owner can add this to the roadmap.'
+                    : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
+                </p>
+              )}
+              {r.after && (
+                <p
+                  className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12"
+                  data-testid="prio-after"
+                >
+                  After {r.after.title}, which it needs.
+                </p>
+              )}
+              {r.override && (
+                <p
+                  className="mt-1 flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2 sm:pl-12"
+                  data-testid="prio-override"
+                >
+                  <span>
+                    Moved by {r.override.by_name}: “{r.override.reason}”
+                  </span>
+                  {mayChange && r.can_reorder && r.item_id && !proposals.length && (
+                    <button
+                      type="button"
+                      data-testid="prio-back-to-oracle"
+                      className="font-semibold text-accent-ink underline"
+                      onClick={() => void backToOracle(r)}
+                    >
+                      {r.applies ? "Back to Oracle's rank" : "Propose Oracle's rank"}
+                    </button>
+                  )}
+                </p>
+              )}
+              {proposals.map((p) => (
+                <ProposalCard key={p.change_id} p={p} row={r} changed={changed} />
+              ))}
+            </li>,
+          ];
+        })}
+      </ol>
     </>
   );
 }
@@ -837,32 +1228,54 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
  * prio-unranked: the live roadmap items with no ranked feature, under the ranked rows in a row's
  * look, muted: no rank, no score, nothing to drag; a click (or Enter) opens the one feature panel.
  */
-function Unranked({ items }: { items: Out["unranked"] }) {
+function Unranked({ items }: { items: Out['unranked'] }) {
   const open = useContext(OpenRow);
   return (
     <section aria-labelledby="prio-unranked-head" data-testid="prio-unranked" className="mt-4">
-      <h2 id="prio-unranked-head" className="mb-2 flex items-center gap-1.5 text-[length:var(--simple-small)] font-semibold text-text2">
+      <h2
+        id="prio-unranked-head"
+        className="mb-2 flex items-center gap-1.5 text-[length:var(--simple-small)] font-semibold text-text2"
+      >
         No ranked feature
         <InfoTip label="No ranked feature" align="start">
-          These roadmap items have no ranked feature yet, so they have no rank or score. Link each to a Ground Truth feature and it ranks.
+          These roadmap items have no ranked feature yet, so they have no rank or score. Link each
+          to a Ground Truth feature and it ranks.
         </InfoTip>
       </h2>
       <ul className="flex flex-col gap-[var(--simple-gap)]">
         {items.map((u) => (
-          <li key={u.item_id} data-testid="prio-unranked-row" data-code={u.code} className="rounded-[var(--simple-card-radius)] border border-line bg-surface2 p-3 text-text2">
+          <li
+            key={u.item_id}
+            data-testid="prio-unranked-row"
+            data-code={u.code}
+            className="rounded-[var(--simple-card-radius)] border border-line bg-surface2 p-3 text-text2"
+          >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {/* The rank's column, empty: an unranked item has no rank. */}
               <span aria-hidden className="w-8" />
               <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                 {open ? (
-                  <button type="button" className="min-w-0 text-left font-medium hover:underline" onClick={() => open({ feature_id: u.item_id, item_id: u.item_id, code: u.code, title: u.title })}>
+                  <button
+                    type="button"
+                    className="min-w-0 text-left font-medium hover:underline"
+                    onClick={() =>
+                      open({
+                        feature_id: u.item_id,
+                        item_id: u.item_id,
+                        code: u.code,
+                        title: u.title,
+                      })
+                    }
+                  >
                     {u.title}
                   </button>
                 ) : (
                   <span className="min-w-0 font-medium">{u.title}</span>
                 )}
               </span>
-              <span className="text-[length:var(--simple-small)]">{u.goal?.title ?? "No goal"}</span>
+              <span className="text-[length:var(--simple-small)]">
+                {u.goal?.title ?? 'No goal'}
+              </span>
             </div>
           </li>
         ))}
@@ -880,21 +1293,38 @@ function pushedBy(rows: Row[], r: Row): string {
   const o = r.oracle_rank ?? r.rank;
   const down = r.rank > o;
   // Moved rows that crossed it: up past it (it went down), or down past it (it went up).
-  const movers = rows.filter((x) => x.override && x.oracle_rank != null && (down ? x.oracle_rank > o && x.rank <= r.rank : x.oracle_rank < o && x.rank >= r.rank));
+  const movers = rows.filter(
+    (x) =>
+      x.override &&
+      x.oracle_rank != null &&
+      (down ? x.oracle_rank > o && x.rank <= r.rank : x.oracle_rank < o && x.rank >= r.rank),
+  );
   const list = (xs: Row[]) => {
     const names = xs.map((x) => x.title);
-    return names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
+    return names.length > 2
+      ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+      : names.join(' and ');
   };
-  if (movers.length) return `${down ? "pushed down" : "pulled up"} when ${list(movers)} moved ${down ? "up" : "down"}`;
+  if (movers.length)
+    return `${down ? 'pushed down' : 'pulled up'} when ${list(movers)} moved ${down ? 'up' : 'down'}`;
   // A prerequisite comes just before the rows that need it: rows that need it moved up pull it up;
   // a row it needs moved down pushes it down.
   const deps = rows.filter((x) =>
     down
-      ? r.depends_on.includes(x.code) && x.rank < r.rank && x.oracle_rank != null && x.rank > x.oracle_rank
-      : x.depends_on.includes(r.code) && x.rank > r.rank && x.oracle_rank != null && x.rank < x.oracle_rank,
+      ? r.depends_on.includes(x.code) &&
+        x.rank < r.rank &&
+        x.oracle_rank != null &&
+        x.rank > x.oracle_rank
+      : x.depends_on.includes(r.code) &&
+        x.rank > r.rank &&
+        x.oracle_rank != null &&
+        x.rank < x.oracle_rank,
   );
-  if (deps.length) return down ? `pushed down to stay after ${list(deps)}, which it needs` : `pulled up to come before ${list(deps)}, which ${deps.length > 1 ? "need" : "needs"} it`;
-  return down ? "pushed down by the moves above it" : "pulled up by the moves below it";
+  if (deps.length)
+    return down
+      ? `pushed down to stay after ${list(deps)}, which it needs`
+      : `pulled up to come before ${list(deps)}, which ${deps.length > 1 ? 'need' : 'needs'} it`;
+  return down ? 'pushed down by the moves above it' : 'pulled up by the moves below it';
 }
 
 /**
@@ -907,21 +1337,35 @@ function OracleOrder({ data }: { data: Out }) {
   const open = useContext(OpenRow);
   return (
     <section aria-label="Oracle's order">
-      <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Oracle&apos;s order</h2>
+      <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+        Oracle&apos;s order
+      </h2>
       <ol className="flex flex-col gap-[var(--simple-gap)]">
         {sorted.map((r) => (
-          <li key={r.feature_id} data-testid="oracle-row" data-code={r.code} data-differs={r.oracle_rank !== r.rank ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed p-3 ${r.oracle_rank !== r.rank ? "border-accent bg-accent-soft" : "border-line-strong bg-surface"}`}>
+          <li
+            key={r.feature_id}
+            data-testid="oracle-row"
+            data-code={r.code}
+            data-differs={r.oracle_rank !== r.rank ? 'true' : undefined}
+            className={`rounded-[var(--simple-card-radius)] border border-dashed p-3 ${r.oracle_rank !== r.rank ? 'border-accent bg-accent-soft' : 'border-line-strong bg-surface'}`}
+          >
             <div className="flex flex-wrap items-center gap-3">
-              <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums">{r.oracle_rank ?? "–"}</span>
+              <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums">
+                {r.oracle_rank ?? '–'}
+              </span>
               <span
-                aria-label={r.above_line ? "Above the line" : "Below the line"}
-                title={r.above_line ? "Above the line" : "Below the line"}
-                className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
+                aria-label={r.above_line ? 'Above the line' : 'Below the line'}
+                title={r.above_line ? 'Above the line' : 'Below the line'}
+                className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? 'bg-accent' : 'bg-transparent'}`}
               />
               {/* The feature's name opens the one feature panel. */}
               <span className="min-w-[8rem] flex-1 font-medium">
                 {open ? (
-                  <button type="button" className="text-left hover:underline" onClick={() => open(r)}>
+                  <button
+                    type="button"
+                    className="text-left hover:underline"
+                    onClick={() => open(r)}
+                  >
                     {r.title}
                   </button>
                 ) : (
@@ -934,15 +1378,23 @@ function OracleOrder({ data }: { data: Out }) {
                 {goalOf(r) ? (
                   <span data-testid="oracle-goal">{goalOf(r)}</span>
                 ) : (
-                  <span data-testid="oracle-goal" className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn">
+                  <span
+                    data-testid="oracle-goal"
+                    className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn"
+                  >
                     No goal
                   </span>
                 )}
-                <span className="whitespace-nowrap">{r.score == null ? "no score" : `score ${fmt(r.score, 2)}`}</span>
+                <span className="whitespace-nowrap">
+                  {r.score == null ? 'no score' : `score ${fmt(r.score, 2)}`}
+                </span>
               </span>
             </div>
             {r.oracle_rank !== r.rank && (
-              <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="oracle-why">
+              <p
+                className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12"
+                data-testid="oracle-why"
+              >
                 {r.override
                   ? `Yours: #${r.rank}. ${r.override.by_name} moved it: “${r.override.reason}”`
                   : `Yours: #${r.rank} (${pushedBy(data.rows, r)})`}
@@ -955,13 +1407,25 @@ function OracleOrder({ data }: { data: Out }) {
   );
 }
 
-function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row; position: number }; rows: Row[]; dated: boolean; onClose: () => void; changed: Changed }) {
-  const [reason, setReason] = useState("");
+function MoveDialog({
+  move,
+  rows,
+  dated,
+  onClose,
+  changed,
+}: {
+  move: { row: Row; position: number };
+  rows: Row[];
+  dated: boolean;
+  onClose: () => void;
+  changed: Changed;
+}) {
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [pushback, setPushback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { row } = move;
-  const verb = row.applies ? "Move" : "Propose";
+  const verb = row.applies ? 'Move' : 'Propose';
   // Where the item can really land: a dependency stops it short (said), or keeps it where it is (refused).
   const bounds = moveBounds(rows, row);
   const position = Math.min(bounds.bottom, Math.max(bounds.top, move.position));
@@ -982,24 +1446,24 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
   const lands = dated ? landsUnder(rows, row, position) : null;
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   async function submit(confirm = false) {
     if (refused) return;
     if (!reason.trim()) {
-      setError("Say why in one line.");
+      setError('Say why in one line.');
       return;
     }
     setBusy(true);
     setError(null);
     const r = await send({
-      op: "override_priority",
+      op: 'override_priority',
       target: targetOf(row),
       before: { override: row.before_override ?? null },
       after: { position, reason: reason.trim(), ...(confirm ? { confirm: true } : {}) },
@@ -1008,15 +1472,34 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
     setBusy(false);
     if (!r.ok && r.pushback) setPushback(r.message);
     else if (!r.ok) setError(r.message);
-    else await changed(r, `${row.applies ? "Moved" : "Proposed moving"} ${nameOf(row)} to rank ${position}`);
+    else
+      await changed(
+        r,
+        `${row.applies ? 'Moved' : 'Proposed moving'} ${nameOf(row)} to rank ${position}`,
+      );
   }
 
   if (refused)
     return (
-      <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
-        <div role="dialog" aria-modal="true" aria-label={`Why move ${nameOf(row)}`} className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
-          <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{nameOf(row)} stays #{row.rank}</h2>
-          <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-refused">
+      <div
+        data-backdrop=""
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Why move ${nameOf(row)}`}
+          className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+            {nameOf(row)} stays #{row.rank}
+          </h2>
+          <p
+            className="mt-1 text-[length:var(--simple-small)] text-text2"
+            data-testid="move-refused"
+          >
             {refused}
           </p>
           <div className="mt-3 flex justify-end">
@@ -1028,9 +1511,12 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
       </div>
     );
 
-
   return (
-    <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -1047,12 +1533,18 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
           </p>
         )}
         {stopped && (
-          <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-stopped">
+          <p
+            className="mt-1 text-[length:var(--simple-small)] text-text2"
+            data-testid="move-stopped"
+          >
             {stopped}
           </p>
         )}
         <p className="mb-2 text-[length:var(--simple-small)] text-text2">
-          Oracle ranks it #{row.oracle_rank ?? row.rank}. {row.applies ? "Your order replaces Oracle's for it: say why in one line." : "If accepted, your order replaces Oracle's for it: say why in one line; whoever decides accepts or declines it."}
+          Oracle ranks it #{row.oracle_rank ?? row.rank}.{' '}
+          {row.applies
+            ? "Your order replaces Oracle's for it: say why in one line."
+            : "If accepted, your order replaces Oracle's for it: say why in one line; whoever decides accepts or declines it."}
         </p>
         <form
           onSubmit={(e) => {
@@ -1060,7 +1552,10 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
             void submit();
           }}
         >
-          <label className="block text-[length:var(--simple-small)] font-medium" htmlFor="prio-reason">
+          <label
+            className="block text-[length:var(--simple-small)] font-medium"
+            htmlFor="prio-reason"
+          >
             Reason <span className="font-normal text-text2">(required)</span>
           </label>
           <input
@@ -1070,13 +1565,16 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
             maxLength={500}
             value={reason}
             onChange={(e) => {
-              setReason(e.target.value.replace(/[\r\n]/g, " "));
+              setReason(e.target.value.replace(/[\r\n]/g, ' '));
               setError(null);
             }}
             className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 text-[length:var(--simple-small)]"
           />
           {pushback && (
-            <div role="alert" className="mt-3 rounded-lg bg-warn-bg p-2 text-[length:var(--simple-small)] text-warn">
+            <div
+              role="alert"
+              className="mt-3 rounded-lg bg-warn-bg p-2 text-[length:var(--simple-small)] text-warn"
+            >
               Oracle disagrees: {pushback}
               <div className="mt-2">
                 <Button type="button" onClick={() => void submit(true)} disabled={busy}>
@@ -1106,16 +1604,21 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
 
 function proposalWords(p: Proposal): string {
   const a = p.after as Record<string, unknown>;
-  if (p.op === "override_priority" && "override" in a && a.override === null) return `${p.by_name} proposes putting it back at Oracle's rank`;
-  if (p.op === "override_priority") {
+  if (p.op === 'override_priority' && 'override' in a && a.override === null)
+    return `${p.by_name} proposes putting it back at Oracle's rank`;
+  if (p.op === 'override_priority') {
     const o = (a.override ?? a) as { position?: number; reason?: string };
-    return `${p.by_name} proposes rank ${o.position}: “${o.reason ?? p.reason ?? ""}”`;
+    return `${p.by_name} proposes rank ${o.position}: “${o.reason ?? p.reason ?? ''}”`;
   }
-  if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
+  if (p.op === 'confirm_item') return `${p.by_name} proposes confirming it`;
   // S7: a Merge is a merge_item change (train T's was a cut with this note).
-  if (p.op === "cut" || p.op === "merge_item" || p.op === "merge_twin") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
-  const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${weeksWords(Number(a.effort))}` : null].filter(Boolean);
-  return `${p.by_name} proposes ${parts.join(" and ")}`;
+  if (p.op === 'cut' || p.op === 'merge_item' || p.op === 'merge_twin')
+    return `${p.by_name} proposes merging it: “${p.reason ?? ''}”`;
+  const parts = [
+    a.goal_value != null ? `goal value ${a.goal_value}` : null,
+    a.effort != null ? `effort ${weeksWords(Number(a.effort))}` : null,
+  ].filter(Boolean);
+  return `${p.by_name} proposes ${parts.join(' and ')}`;
 }
 
 /** A proposal inline under its row: the flow thumbnail (or "No flow yet") widens the card in place; a phone opens a full-height sheet. */
@@ -1125,55 +1628,88 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
   const [busy, setBusy] = useState(false);
 
   // qa-simple-plan-30: "withdraw" is the proposer taking it back (closed, nothing changes).
-  async function decide(action: "accept" | "decline" | "withdraw") {
+  async function decide(action: 'accept' | 'decline' | 'withdraw') {
     setBusy(true);
-    const r = await api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: p.change_id } }, body: {} });
+    const r = await api.POST(`/v1/simple/changes/{change_id}/${action}`, {
+      params: { path: { change_id: p.change_id } },
+      body: {},
+    });
     setBusy(false);
     await changed(
       r.response.ok && r.data
-        ? { ok: true, change: { ...r.data.change, status: "applied", can_undo: false } }
-        : { ok: false, status: r.response.status, message: `Could not decide: ${detailMessage(r.error, r.response)}`, pushback: false },
-      action === "accept" ? `Accepted the proposal for ${p.title}` : action === "withdraw" ? `Withdrew your proposal for ${p.title}` : `Declined the proposal for ${p.title}`,
+        ? { ok: true, change: { ...r.data.change, status: 'applied', can_undo: false } }
+        : {
+            ok: false,
+            status: r.response.status,
+            message: `Could not decide: ${detailMessage(r.error, r.response)}`,
+            pushback: false,
+          },
+      action === 'accept'
+        ? `Accepted the proposal for ${p.title}`
+        : action === 'withdraw'
+          ? `Withdrew your proposal for ${p.title}`
+          : `Declined the proposal for ${p.title}`,
       row,
-      action === "accept",
+      action === 'accept',
     );
   }
 
-  const flow = p.flow ? <FlowPanel subject={subjectOf(p.flow) ?? { kind: "change", id: p.change_id }} /> : null;
+  const flow = p.flow ? (
+    <FlowPanel subject={subjectOf(p.flow) ?? { kind: 'change', id: p.change_id }} />
+  ) : null;
   return (
     <div
       data-testid="prio-proposal"
-      data-wide={open && !phone ? "true" : "false"}
-      className={`mt-2 rounded-[var(--simple-card-radius)] border border-dashed border-accent bg-accent-soft p-3 text-[length:var(--simple-small)] transition-all ${open && !phone ? "ml-0" : "max-w-xl sm:ml-12"}`}
+      data-wide={open && !phone ? 'true' : 'false'}
+      className={`mt-2 rounded-[var(--simple-card-radius)] border border-dashed border-accent bg-accent-soft p-3 text-[length:var(--simple-small)] transition-all ${open && !phone ? 'ml-0' : 'max-w-xl sm:ml-12'}`}
     >
       <div className="flex flex-wrap items-center gap-3">
         {p.flow ? (
-          <button aria-label={`Open the flow for ${p.title}`} onClick={() => setOpen(!open)} className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong" data-testid="flow-thumb">
+          <button
+            aria-label={`Open the flow for ${p.title}`}
+            onClick={() => setOpen(!open)}
+            className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong"
+            data-testid="flow-thumb"
+          >
             <FlowDiagram flow={p.flow} layout="mini" />
           </button>
         ) : null}
         <span className="flex-1" data-testid="prio-proposal-words">
-          {proposalWords(p)} · {p.can_decide ? "waiting for you" : `waiting for ${p.waiting_for.join(", ") || "the company's owners"}`}
+          {proposalWords(p)} ·{' '}
+          {p.can_decide
+            ? 'waiting for you'
+            : `waiting for ${p.waiting_for.join(', ') || "the company's owners"}`}
         </span>
         {p.can_decide && (
           <span className="flex gap-2">
-            <Button onClick={() => void decide("accept")} disabled={busy}>
+            <Button onClick={() => void decide('accept')} disabled={busy}>
               Accept
             </Button>
-            <Button variant="secondary" onClick={() => void decide("decline")} disabled={busy}>
+            <Button variant="secondary" onClick={() => void decide('decline')} disabled={busy}>
               Decline
             </Button>
           </span>
         )}
         {p.can_withdraw && !p.can_decide && (
-          <Button variant="secondary" onClick={() => void decide("withdraw")} disabled={busy} title="Take your proposal back; nothing changes">
+          <Button
+            variant="secondary"
+            onClick={() => void decide('withdraw')}
+            disabled={busy}
+            title="Take your proposal back; nothing changes"
+          >
             Withdraw
           </Button>
         )}
       </div>
       {open && !phone && flow}
       {phone && p.flow && (
-        <Sheet open={open} title={p.flow.title} onClose={() => setOpen(false)} full testId="flow-sheet">
+        <Sheet
+          open={open}
+          title={p.flow.title}
+          onClose={() => setOpen(false)}
+          full
+          testId="flow-sheet"
+        >
           {flow}
         </Sheet>
       )}
@@ -1182,20 +1718,43 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
 }
 
 /** qa-prio-twins: a merge's toast; one name merged into the same name says by code which record was kept. */
-const sameName = (t: string): string => t.split(/\s+/).filter(Boolean).join(" ").toLowerCase();
-const mergedWords = (from: { title: string; code: string }, kept: { title: string; code: string }): string =>
-  sameName(from.title) === sameName(kept.title) ? `Merged ${from.title} (${from.code}) into ${kept.title} (${kept.code}), which is kept` : `Merged ${from.title} into ${kept.title}`;
+const sameName = (t: string): string => t.split(/\s+/).filter(Boolean).join(' ').toLowerCase();
+const mergedWords = (
+  from: { title: string; code: string },
+  kept: { title: string; code: string },
+): string =>
+  sameName(from.title) === sameName(kept.title)
+    ? `Merged ${from.title} (${from.code}) into ${kept.title} (${kept.code}), which is kept`
+    : `Merged ${from.title} into ${kept.title}`;
 
 /** qa-prio-twins: the drafts no ranked row holds (one of a ranked feature shows on its row). */
 const ownDrafts = (data: Out): Draft[] => data.drafts.filter((d) => !d.row_feature_id);
 
-function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
+function Drafts({
+  drafts,
+  proposals,
+  mayChange,
+  changed,
+}: {
+  drafts: Draft[];
+  proposals: Proposal[];
+  mayChange: boolean;
+  changed: Changed;
+}) {
   return (
     <section aria-label="Not ranked yet" className="mt-6">
-      <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
+      <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+        Not ranked yet
+      </h2>
       <ul className="flex flex-col gap-[var(--simple-gap)]">
         {drafts.map((d) => (
-          <DraftItem key={d.item_id} d={d} proposals={proposals} mayChange={mayChange} changed={changed} />
+          <DraftItem
+            key={d.item_id}
+            d={d}
+            proposals={proposals}
+            mayChange={mayChange}
+            changed={changed}
+          />
         ))}
       </ul>
     </section>
@@ -1203,76 +1762,152 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
 }
 
 /** qa-prio-twins: a ranked feature's drafts on its row: its own (Confirm, Merge into…) and one only named as it (Merge into…). */
-function RowDrafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
+function RowDrafts({
+  drafts,
+  proposals,
+  mayChange,
+  changed,
+}: {
+  drafts: Draft[];
+  proposals: Proposal[];
+  mayChange: boolean;
+  changed: Changed;
+}) {
   if (!drafts.length) return null;
   return (
     <ul className="mt-2 flex flex-col gap-2 sm:pl-12" aria-label="Drafts of this feature">
       {drafts.map((d) => (
-        <DraftItem key={d.item_id} d={d} proposals={proposals} mayChange={mayChange} changed={changed} onRow />
+        <DraftItem
+          key={d.item_id}
+          d={d}
+          proposals={proposals}
+          mayChange={mayChange}
+          changed={changed}
+          onRow
+        />
       ))}
     </ul>
   );
 }
 
 /** A draft with its Confirm and Merge into…; on a ranked row (`onRow`) a draft only named as the row's feature merges only. */
-function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Draft; proposals: Proposal[]; mayChange: boolean; changed: Changed; onRow?: boolean }) {
+function DraftItem({
+  d,
+  proposals,
+  mayChange,
+  changed,
+  onRow = false,
+}: {
+  d: Draft;
+  proposals: Proposal[];
+  mayChange: boolean;
+  changed: Changed;
+  onRow?: boolean;
+}) {
   const [merging, setMerging] = useState(false);
   // On its row, the row's item is first: the one it repeats.
-  const [into, setInto] = useState(onRow && !d.linked ? (d.merge_into[0]?.item_id ?? "") : "");
-  const show = useSearchParams().get("show");
+  const [into, setInto] = useState(onRow && !d.linked ? (d.merge_into[0]?.item_id ?? '') : '');
+  const show = useSearchParams().get('show');
   // A draft's name opens the one feature panel (the roadmap's), as a ranked row's does.
   const [opened, setOpened] = useState(false);
   const phone = usePhone();
   const { can } = useMe();
   // qa-simple-plan-29: a Confirm or Merge waiting for the decider; none more until it is decided.
-  const pending = proposals.filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"));
+  const pending = proposals.filter(
+    (p) =>
+      p.item_id === d.item_id &&
+      (p.op === 'confirm_item' || p.op === 'cut' || p.op === 'merge_item'),
+  );
   const confirms = !onRow || d.linked;
   return (
     <li
-      data-testid={onRow ? "prio-row-draft" : "prio-draft"}
+      data-testid={onRow ? 'prio-row-draft' : 'prio-draft'}
       data-code={d.code}
-      data-shown={show === d.item_id ? "true" : undefined}
-      className={onRow ? "rounded-lg border border-dashed border-line-strong px-2 py-1.5" : `rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}
+      data-shown={show === d.item_id ? 'true' : undefined}
+      className={
+        onRow
+          ? 'rounded-lg border border-dashed border-line-strong px-2 py-1.5'
+          : `rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? 'border-accent ring-2 ring-accent' : 'border-line-strong'}`
+      }
     >
-      <div className={`flex flex-wrap items-center ${onRow ? "gap-2 text-[length:var(--simple-small)]" : "gap-3"}`}>
+      <div
+        className={`flex flex-wrap items-center ${onRow ? 'gap-2 text-[length:var(--simple-small)]' : 'gap-3'}`}
+      >
         <span
           className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na"
-          title={onRow ? (d.linked ? `On ${d.roadmap.title}, not confirmed yet: moving the feature confirms it there` : "A draft with this feature's name, not linked to it") : undefined}
+          title={
+            onRow
+              ? d.linked
+                ? `On ${d.roadmap.title}, not confirmed yet: moving the feature confirms it there`
+                : "A draft with this feature's name, not linked to it"
+              : undefined
+          }
         >
           Draft
         </span>
         {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
         <span className="flex-1 font-medium">
-          <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(true)}>
+          <button
+            type="button"
+            data-feature={d.item_id}
+            title={`Open ${d.title}`}
+            className="text-left hover:underline"
+            onClick={() => setOpened(true)}
+          >
             {d.title}
           </button>
         </span>
-        {!onRow && <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>}
+        {!onRow && (
+          <span className="text-[length:var(--simple-small)] text-text2">
+            {d.goal?.title ?? 'No goal'}
+          </span>
+        )}
         {mayChange && (
           <span className="flex gap-2">
             {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
             {confirms && (
               <Button
                 disabled={pending.length > 0}
-                title={pending.length ? "A proposal for it is waiting for a decision" : d.applies ? undefined : "Propose confirming it: the decider decides"}
+                title={
+                  pending.length
+                    ? 'A proposal for it is waiting for a decision'
+                    : d.applies
+                      ? undefined
+                      : 'Propose confirming it: the decider decides'
+                }
                 onClick={async () =>
                   changed(
-                    await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }),
-                    d.applies ? (onRow ? `Confirmed ${d.title} on ${d.roadmap.title}` : `Added ${d.title} to the ranking`) : `Proposed adding ${d.title}`,
+                    await send({
+                      op: 'confirm_item',
+                      target: { item_id: d.item_id },
+                      before: { draft: true },
+                      after: { draft: false },
+                    }),
+                    d.applies
+                      ? onRow
+                        ? `Confirmed ${d.title} on ${d.roadmap.title}`
+                        : `Added ${d.title} to the ranking`
+                      : `Proposed adding ${d.title}`,
                   )
                 }
               >
-                {onRow ? (d.applies ? "Confirm" : "Propose confirming") : d.applies ? "Add to the ranking" : "Propose adding"}
+                {onRow
+                  ? d.applies
+                    ? 'Confirm'
+                    : 'Propose confirming'
+                  : d.applies
+                    ? 'Add to the ranking'
+                    : 'Propose adding'}
               </Button>
             )}
             <Button
               variant="secondary"
               disabled={pending.length > 0}
-              title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+              title={pending.length ? 'A proposal for it is waiting for a decision' : undefined}
               aria-expanded={merging}
               onClick={() => setMerging(!merging)}
             >
-              {d.applies ? "Merge into…" : "Propose a merge…"}
+              {d.applies ? 'Merge into…' : 'Propose a merge…'}
             </Button>
           </span>
         )}
@@ -1286,7 +1921,13 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
             if (!target) return;
             setMerging(false);
             await changed(
-              await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
+              await send({
+                op: 'merge_item',
+                target: { item_id: d.item_id, into_id: target.item_id },
+                before: {},
+                after: {},
+                reason: `Merged into ${target.title}`,
+              }),
               mergedWords(d, target),
             );
           }}
@@ -1294,7 +1935,12 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
           <label htmlFor={`merge-${d.item_id}`} className="text-[length:var(--simple-small)]">
             Merge into
           </label>
-          <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]">
+          <select
+            id={`merge-${d.item_id}`}
+            value={into}
+            onChange={(e) => setInto(e.target.value)}
+            className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]"
+          >
             <option value="">Choose a feature…</option>
             {d.merge_into.map((m) => (
               <option key={m.item_id} value={m.item_id}>
@@ -1303,10 +1949,15 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
             ))}
           </select>
           <Button type="submit" disabled={!into}>
-            {d.applies ? "Merge" : "Propose"}
+            {d.applies ? 'Merge' : 'Propose'}
           </Button>
-          <p className="w-full text-[length:var(--simple-small)] text-text2" data-testid="merge-hint">
-            {into ? "" : "Choose the feature it repeats. "}Only features on {d.roadmap?.title ? `the ${d.roadmap.title} roadmap` : "its own roadmap"}, the same as the draft&apos;s, are listed.
+          <p
+            className="w-full text-[length:var(--simple-small)] text-text2"
+            data-testid="merge-hint"
+          >
+            {into ? '' : 'Choose the feature it repeats. '}Only features on{' '}
+            {d.roadmap?.title ? `the ${d.roadmap.title} roadmap` : 'its own roadmap'}, the same as
+            the draft&apos;s, are listed.
           </p>
         </form>
       )}
@@ -1315,7 +1966,13 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
         <ProposalCard key={p.change_id} p={p} changed={changed} />
       ))}
       {opened && (
-        <FeaturePanel key={d.item_id} feature={{ id: d.item_id, code: d.code, name: d.title }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(false)} />
+        <FeaturePanel
+          key={d.item_id}
+          feature={{ id: d.item_id, code: d.code, name: d.title }}
+          phone={phone}
+          canChange={can('create_simple_change')}
+          onClose={() => setOpened(false)}
+        />
       )}
     </li>
   );
@@ -1327,32 +1984,70 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
  * same roadmap, else the Ground Truth's Merge into…, which first links the twin's items to this feature). Oracle never
  * merges them.
  */
-function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
+function Twins({
+  r,
+  proposals,
+  mayChange,
+  changed,
+}: {
+  r: Row;
+  proposals: Proposal[];
+  mayChange: boolean;
+  changed: Changed;
+}) {
   const [merging, setMerging] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function merge(t: Twin) {
     setMerging(null);
-    if (t.merge === "item" && t.item_id && t.into_id) {
+    if (t.merge === 'item' && t.item_id && t.into_id) {
       await changed(
-        await send({ op: "merge_item", target: { item_id: t.item_id, into_id: t.into_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }),
+        await send({
+          op: 'merge_item',
+          target: { item_id: t.item_id, into_id: t.into_id },
+          before: {},
+          after: {},
+          reason: `Merged into ${r.title}`,
+        }),
         mergedWords(t, r),
       );
       return;
     }
-    if (t.merge !== "entity" || !t.feature_id) return;
+    if (t.merge !== 'entity' || !t.feature_id) return;
     // prio-twin-propose: who may not merge Ground Truth features proposes it (twin_merges); the decider's
     // approval runs the same merge.
     if (!t.applies) {
-      await changed(await send({ op: "merge_twin", target: { feature_id: t.feature_id, into_id: r.feature_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }), mergedWords(t, r));
+      await changed(
+        await send({
+          op: 'merge_twin',
+          target: { feature_id: t.feature_id, into_id: r.feature_id },
+          before: {},
+          after: {},
+          reason: `Merged into ${r.title}`,
+        }),
+        mergedWords(t, r),
+      );
       return;
     }
     setBusy(true);
     try {
       // Its roadmap items are linked to the kept feature first (priorities.merge_twin), never left with none.
-      const out = await unwrap(api.POST("/v1/simple/priorities/twins/{feature_id}/merge", { params: { path: { feature_id: t.feature_id } }, body: { into: r.feature_id } }));
+      const out = await unwrap(
+        api.POST('/v1/simple/priorities/twins/{feature_id}/merge', {
+          params: { path: { feature_id: t.feature_id } },
+          body: { into: r.feature_id },
+        }),
+      );
       window.dispatchEvent(new Event(ITEM_CHANGED_EVENT));
       const n = out.relinked?.length ?? 0;
-      toast({ message: mergedWords(t, r) + (n === 0 ? "" : n === 1 ? ", and its roadmap item now serves it" : `, and its ${n} roadmap items now serve it`) });
+      toast({
+        message:
+          mergedWords(t, r) +
+          (n === 0
+            ? ''
+            : n === 1
+              ? ', and its roadmap item now serves it'
+              : `, and its ${n} roadmap items now serve it`),
+      });
     } catch (e) {
       toast({ message: errorMessage(e) });
     } finally {
@@ -1365,37 +2060,56 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
         const id = t.feature_id ?? t.code;
         // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve, else
         // proposed (prio-twin-propose) unless an approver is told why it cannot be merged.
-        const may = mayChange && (t.merge === "item" || (t.merge === "entity" && (t.applies || !t.blocked)));
+        const may =
+          mayChange && (t.merge === 'item' || (t.merge === 'entity' && (t.applies || !t.blocked)));
         // Its own waiting proposals (a move, an estimate, a merge of its item or of its feature): they show here, its row being folded into this one;
         // none more until they are decided (as a draft's).
         const pending = proposals.filter(
           (p) =>
-            (p.feature_id != null && p.feature_id === t.feature_id && (p.op === "override_priority" || p.op === "estimate_feature" || p.op === "merge_twin")) ||
-            (p.op === "merge_item" && p.item_id === t.item_id),
+            (p.feature_id != null &&
+              p.feature_id === t.feature_id &&
+              (p.op === 'override_priority' ||
+                p.op === 'estimate_feature' ||
+                p.op === 'merge_twin')) ||
+            (p.op === 'merge_item' && p.item_id === t.item_id),
         );
         return (
-          <li key={id} data-testid="prio-twin" data-code={t.code} className="rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-[length:var(--simple-small)]">
+          <li
+            key={id}
+            data-testid="prio-twin"
+            data-code={t.code}
+            className="rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-[length:var(--simple-small)]"
+          >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-na-bg px-2 text-na" title="Another record with this feature's name, not linked to it">
+              <span
+                className="rounded-full bg-na-bg px-2 text-na"
+                title="Another record with this feature's name, not linked to it"
+              >
                 Same name
               </span>
               <span className="flex-1 font-medium">{t.title}</span>
               {/* The folding by name stays visible: the twin's own rank and goal. */}
               {t.rank != null && (
-                <span className="tabular-nums text-text2" data-testid="prio-twin-rank" title="Its own rank">
+                <span
+                  className="tabular-nums text-text2"
+                  data-testid="prio-twin-rank"
+                  title="Its own rank"
+                >
                   #{t.rank}
                 </span>
               )}
-              <span className="text-text2" data-testid="prio-twin-goal">{t.goal?.title ?? "No goal"}</span>
+              <span className="text-text2" data-testid="prio-twin-goal">
+                {t.goal?.title ?? 'No goal'}
+              </span>
               {may && (
                 <Button
                   variant="secondary"
                   disabled={busy || pending.length > 0}
-                  title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+                  title={pending.length ? 'A proposal for it is waiting for a decision' : undefined}
                   aria-expanded={merging === id}
                   onClick={() => setMerging(merging === id ? null : id)}
                 >
-                  {t.applies ? "Merge into…" : "Propose a merge…"}
+                  {t.applies ? 'Merge into…' : 'Propose a merge…'}
                 </Button>
               )}
             </div>
@@ -1414,12 +2128,17 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
                 }}
               >
                 <label htmlFor={`twin-${id}`}>Merge into</label>
-                <select id={`twin-${id}`} value={r.feature_id} disabled className="rounded-lg border border-line bg-bg px-2 py-1">
+                <select
+                  id={`twin-${id}`}
+                  value={r.feature_id}
+                  disabled
+                  className="rounded-lg border border-line bg-bg px-2 py-1"
+                >
                   <option value={r.feature_id}>
                     {r.title} ({r.code})
                   </option>
                 </select>
-                <Button type="submit">{t.applies ? "Merge" : "Propose"}</Button>
+                <Button type="submit">{t.applies ? 'Merge' : 'Propose'}</Button>
               </form>
             )}
             {pending.map((p) => (
@@ -1439,11 +2158,26 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
  * the accent, its code on it (9.5 px); hollow below the line. No goal: a neutral circle with a
  * dashed edge (never a cross).
  */
-function ShapeMark({ shape, hollow, code, small = false }: { shape: Shape; hollow: boolean; code?: string; small?: boolean }) {
-  const none = shape === "none";
-  const fill = hollow ? "var(--surface)" : none ? "var(--line)" : "var(--accent)";
-  const text = hollow || none ? "var(--text)" : "var(--on-accent)";
-  const common = { fill, stroke: none ? "var(--text2)" : "var(--accent)", strokeWidth: 2, ...(none ? { strokeDasharray: "4 3" } : {}) };
+function ShapeMark({
+  shape,
+  hollow,
+  code,
+  small = false,
+}: {
+  shape: Shape;
+  hollow: boolean;
+  code?: string;
+  small?: boolean;
+}) {
+  const none = shape === 'none';
+  const fill = hollow ? 'var(--surface)' : none ? 'var(--line)' : 'var(--accent)';
+  const text = hollow || none ? 'var(--text)' : 'var(--on-accent)';
+  const common = {
+    fill,
+    stroke: none ? 'var(--text2)' : 'var(--accent)',
+    strokeWidth: 2,
+    ...(none ? { strokeDasharray: '4 3' } : {}),
+  };
   const path: Record<Shape, React.ReactNode> = {
     circle: <circle cx="18" cy="18" r="14" {...common} />,
     square: <rect x="5" y="5" width="26" height="26" rx="3" {...common} />,
@@ -1453,10 +2187,24 @@ function ShapeMark({ shape, hollow, code, small = false }: { shape: Shape; hollo
     none: <circle cx="18" cy="18" r="14" {...common} />,
   };
   return (
-    <svg width={small ? 18 : 36} height={small ? 18 : 36} viewBox="0 0 36 36" aria-hidden className="block flex-none overflow-visible">
+    <svg
+      width={small ? 18 : 36}
+      height={small ? 18 : 36}
+      viewBox="0 0 36 36"
+      aria-hidden
+      className="block flex-none overflow-visible"
+    >
       {path[shape]}
       {code != null && (
-        <text data-testid="vxe-code" x="18" y={shape === "triangle" ? 26.3 : shape === "pentagon" ? 23 : 21.4} textAnchor="middle" fontSize={code.length <= 4 ? 9.5 : 8} fontWeight="700" fill={text}>
+        <text
+          data-testid="vxe-code"
+          x="18"
+          y={shape === 'triangle' ? 26.3 : shape === 'pentagon' ? 23 : 21.4}
+          textAnchor="middle"
+          fontSize={code.length <= 4 ? 9.5 : 8}
+          fontWeight="700"
+          fill={text}
+        >
           {code}
         </text>
       )}
@@ -1466,8 +2214,13 @@ function ShapeMark({ shape, hollow, code, small = false }: { shape: Shape; hollo
 
 /** The legend's small marks (22 px), as B draws them. */
 function LegendMark({ shape }: { shape: Shape }) {
-  const none = shape === "none";
-  const common = { fill: none ? "var(--line)" : "var(--accent)", stroke: none ? "var(--text2)" : "var(--accent)", strokeWidth: 2, ...(none ? { strokeDasharray: "3 2" } : {}) };
+  const none = shape === 'none';
+  const common = {
+    fill: none ? 'var(--line)' : 'var(--accent)',
+    stroke: none ? 'var(--text2)' : 'var(--accent)',
+    strokeWidth: 2,
+    ...(none ? { strokeDasharray: '3 2' } : {}),
+  };
   const path: Record<Shape, React.ReactNode> = {
     circle: <circle cx="11" cy="11" r="7" {...common} />,
     square: <rect x="5" y="5" width="12" height="12" rx="3" {...common} />,
@@ -1477,7 +2230,13 @@ function LegendMark({ shape }: { shape: Shape }) {
     none: <circle cx="11" cy="11" r="8" {...common} />,
   };
   return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden className="flex-none overflow-visible">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 22 22"
+      aria-hidden
+      className="flex-none overflow-visible"
+    >
       {path[shape]}
     </svg>
   );
@@ -1492,7 +2251,9 @@ function effortTicks(top: number): number[] {
 
 /** The goal value axis: up to four even steps (0, 0.5, 1, 1.5, 2 as B draws them) from 0 to just past the highest value. */
 function valueTicks(max: number): number[] {
-  const step = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].find((x) => Math.ceil((max * 1.05) / x) <= 4) ?? Math.ceil((max * 1.05) / 4);
+  const step =
+    [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].find((x) => Math.ceil((max * 1.05) / x) <= 4) ??
+    Math.ceil((max * 1.05) / 4);
   const n = Math.max(1, Math.ceil((max * 1.05) / step));
   return Array.from({ length: n + 1 }, (_, k) => Math.round(k * step * 100) / 100);
 }
@@ -1502,15 +2263,35 @@ function valueTicks(max: number): number[] {
  * ascending for effort) is "high value" / "low effort"; a mark on a median line counts on the
  * side its rank puts it. The median itself is where the line is drawn.
  */
-function medianSplit(rows: Row[], key: (r: Row) => number, high: boolean): { median: number; firstHalf: Set<string> } {
-  const sorted = [...rows].sort((a, b) => (high ? key(b) - key(a) : key(a) - key(b)) || a.rank - b.rank);
+function medianSplit(
+  rows: Row[],
+  key: (r: Row) => number,
+  high: boolean,
+): { median: number; firstHalf: Set<string> } {
+  const sorted = [...rows].sort(
+    (a, b) => (high ? key(b) - key(a) : key(a) - key(b)) || a.rank - b.rank,
+  );
   const n = sorted.length;
   const vals = sorted.map(key).sort((a, b) => a - b);
   const median = n === 0 ? 0 : n % 2 ? vals[(n - 1) / 2] : (vals[n / 2 - 1] + vals[n / 2]) / 2;
   return { median, firstHalf: new Set(sorted.slice(0, Math.ceil(n / 2)).map((r) => r.feature_id)) };
 }
 
-function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: { data: Out; shapes: Map<string, { shape: Shape; name: string }>; mayChange: boolean; changed: Changed; moved: Moved | null; featureOpen: boolean }) {
+function ValueEffort({
+  data,
+  shapes,
+  mayChange,
+  changed,
+  moved,
+  featureOpen,
+}: {
+  data: Out;
+  shapes: Map<string, { shape: Shape; name: string }>;
+  mayChange: boolean;
+  changed: Changed;
+  moved: Moved | null;
+  featureOpen: boolean;
+}) {
   const box = useRef<HTMLDivElement>(null);
   // The plot's size, kept as it resizes (where the median lines' words fit).
   const [plotSize, setPlotSize] = useState({ w: 0, h: 0 });
@@ -1523,7 +2304,13 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const [drag, setDrag] = useState<{ code: string; x0: number; y0: number; dx: number; dy: number } | null>(null);
+  const [drag, setDrag] = useState<{
+    code: string;
+    x0: number;
+    y0: number;
+    dx: number;
+    dy: number;
+  } | null>(null);
   // plan-charts: the mark and row selected together (Escape clears); a drag is not a selection.
   const [selected, setSelected] = useState<string | null>(null);
   const dragged = useRef(false);
@@ -1541,7 +2328,14 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const ticks = effortTicks(2 ** hi);
   const byValue = medianSplit(rows, (r) => r.goal_value ?? 0, true);
   const byEffort = medianSplit(rows, effortOf, false);
-  const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
+  const quadrant = (r: Row) =>
+    byValue.firstHalf.has(r.feature_id)
+      ? byEffort.firstHalf.has(r.feature_id)
+        ? 0
+        : 1
+      : byEffort.firstHalf.has(r.feature_id)
+        ? 2
+        : 3;
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
   // simple-goals: a quadrant's count lists its features in the side list (again shows them all).
   const [quad, setQuad] = useState<number | null>(null);
@@ -1550,7 +2344,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const keyOf = goalKeyOfRow(data);
   const shapeOf = (r: Row): Shape => {
     const k = keyOf(r);
-    return k ? (shapes.get(k)?.shape ?? "circle") : "none";
+    return k ? (shapes.get(k)?.shape ?? 'circle') : 'none';
   };
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -1559,18 +2353,26 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const openRow = useContext(OpenRow);
   // PV-1: the count whose features are listed in a sheet, by its features (its rows follow the data while it is open).
   const [crowdIds, setCrowdIds] = useState<string[] | null>(null);
-  const setCrowdOpen = (c: Crowd<Row> | null) => setCrowdIds(c ? c.rows.map((r) => r.feature_id) : null);
+  const setCrowdOpen = (c: Crowd<Row> | null) =>
+    setCrowdIds(c ? c.rows.map((r) => r.feature_id) : null);
 
   const panelOpen = usePanelOpen();
   useEffect(() => {
     if (!selected) return;
     // Escape closes what is open on top first (a dialog, a sheet, the Ask panel, the feature panel a mark opened), then the selection.
     const off = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented || panelOpen || featureOpen || document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
+      if (
+        e.key !== 'Escape' ||
+        e.defaultPrevented ||
+        panelOpen ||
+        featureOpen ||
+        document.querySelector('[role="dialog"], [aria-modal="true"]')
+      )
+        return;
       setSelected(null);
     };
-    window.addEventListener("keydown", off);
-    return () => window.removeEventListener("keydown", off);
+    window.addEventListener('keydown', off);
+    return () => window.removeEventListener('keydown', off);
   }, [selected, panelOpen, featureOpen]);
 
   // PV-1: a mark moved with the arrow keys onto another's spot joins a count; the focus goes to that count, never lost.
@@ -1578,23 +2380,30 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   useEffect(() => {
     const id = keyed.current;
     keyed.current = null;
-    if (id && (!document.activeElement || document.activeElement === document.body)) markRefs.current.get(id)?.focus();
+    if (id && (!document.activeElement || document.activeElement === document.body))
+      markRefs.current.get(id)?.focus();
   }, [data]);
 
   /** Selects a feature and brings its other half (the row, or the mark) into view. */
-  function select(id: string, from: "mark" | "row") {
+  function select(id: string, from: 'mark' | 'row') {
     setSelected(id);
-    const other = from === "mark" ? sideRefs.current.get(id) : markRefs.current.get(id);
-    other?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const other = from === 'mark' ? sideRefs.current.get(id) : markRefs.current.get(id);
+    other?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   async function estimate(r: Row, after: { goal_value?: number; effort?: number }) {
-    const words = after.effort != null ? `effort ${weeksWords(after.effort)}` : `goal value ${after.goal_value}`;
+    const words =
+      after.effort != null
+        ? `effort ${weeksWords(after.effort)}`
+        : `goal value ${after.goal_value}`;
     await changed(
       await send({
-        op: "estimate_feature",
+        op: 'estimate_feature',
         target: targetOf(r),
-        before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: r.effort ?? null },
+        before: {
+          goal_value: r.value_estimated ? (r.goal_value ?? null) : null,
+          effort: r.effort ?? null,
+        },
         after,
       }),
       `Re-estimated ${nameOf(r)}: ${words}`,
@@ -1659,11 +2468,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
 
   const QUADRANTS = [
     // PR5: each name has the plot's own background (its text where it was), so a middle line never runs through it.
-    { name: "Quick wins", at: "left-[6px] top-[8px]" },
-    { name: "Big bets", at: "right-[6px] top-[8px] text-right" },
+    { name: 'Quick wins', at: 'left-[6px] top-[8px]' },
+    { name: 'Big bets', at: 'right-[6px] top-[8px] text-right' },
     // V-4: the bottom names sit just above the zero line (4% up), never on it.
-    { name: "Fill-ins", at: "bottom-[calc(4%+4px)] left-[6px]" },
-    { name: "Later", at: "bottom-[calc(4%+4px)] right-[6px] text-right" },
+    { name: 'Fill-ins', at: 'bottom-[calc(4%+4px)] left-[6px]' },
+    { name: 'Later', at: 'bottom-[calc(4%+4px)] right-[6px] text-right' },
   ];
   const effortAt = xPct(byEffort.median);
   const valueAt = yPct(byValue.median);
@@ -1675,29 +2484,93 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const quadrantBoxes = QUADRANTS.map((q, k): Box => {
     const len = `${q.name} · ${counts[k]}`.length * 8.6;
     const foot = h - h * 0.04 - 4;
-    return [[10, 8, 10 + len, 28], [w - 10 - len, 8, w - 10, 28], [10, foot - 20, 10 + len, foot], [w - 10 - len, foot - 20, w - 10, foot]][k] as Box;
+    return [
+      [10, 8, 10 + len, 28],
+      [w - 10 - len, 8, w - 10, 28],
+      [10, foot - 20, 10 + len, foot],
+      [w - 10 - len, foot - 20, w - 10, foot],
+    ][k] as Box;
   });
   // PV-1 One count per spot: each mark within half a mark of its values; marks that would cover each other are one count.
-  const { spots, crowds } = markLayout(rows, w, h, (r) => [(xPct(effortOf(r)) / 100) * w, (yPct(r.goal_value ?? 0) / 100) * h], quadrantBoxes);
+  const { spots, crowds } = markLayout(
+    rows,
+    w,
+    h,
+    (r) => [(xPct(effortOf(r)) / 100) * w, (yPct(r.goal_value ?? 0) / 100) * h],
+    quadrantBoxes,
+  );
   // The open count as the data has it now: the one holding most of its features; none once they are all apart.
-  const crowdOpen = crowdIds ? (crowds.map((c) => ({ c, n: c.rows.filter((r) => crowdIds.includes(r.feature_id)).length })).filter((x) => x.n > 0).sort((x, y) => y.n - x.n)[0]?.c ?? null) : null;
+  const crowdOpen = crowdIds
+    ? (crowds
+        .map((c) => ({ c, n: c.rows.filter((r) => crowdIds.includes(r.feature_id)).length }))
+        .filter((x) => x.n > 0)
+        .sort((x, y) => y.n - x.n)[0]?.c ?? null)
+    : null;
   if (crowdIds && !crowdOpen && w) setCrowdIds(null);
   const R = MARK_R;
-  const taken: Box[] = [...[...spots.values(), ...crowds.map((c) => c.at)].map(([x, y]): Box => [x - R, y - R, x + R, y + R]), ...quadrantBoxes];
-  const free = (b: Box) => b[0] >= 0 && b[2] <= w && b[1] >= 0 && b[3] <= h && !taken.some((o) => o[0] < b[2] && b[0] < o[2] && o[1] < b[3] && b[1] < o[3]);
+  const taken: Box[] = [
+    ...[...spots.values(), ...crowds.map((c) => c.at)].map(([x, y]): Box => [
+      x - R,
+      y - R,
+      x + R,
+      y + R,
+    ]),
+    ...quadrantBoxes,
+  ];
+  const free = (b: Box) =>
+    b[0] >= 0 &&
+    b[2] <= w &&
+    b[1] >= 0 &&
+    b[3] <= h &&
+    !taken.some((o) => o[0] < b[2] && b[0] < o[2] && o[1] < b[3] && b[1] < o[3]);
   const effortSpots: { box: Box; style: React.CSSProperties }[] = [
-    { box: [ex + 5, h - 19, ex + 91, h - 3], style: { left: `calc(${effortAt}% + 5px)`, bottom: 3 } },
-    { box: [ex - 91, h - 19, ex - 5, h - 3], style: { left: `calc(${effortAt}% - 5px)`, bottom: 3, transform: "translateX(-100%)" } },
+    {
+      box: [ex + 5, h - 19, ex + 91, h - 3],
+      style: { left: `calc(${effortAt}% + 5px)`, bottom: 3 },
+    },
+    {
+      box: [ex - 91, h - 19, ex - 5, h - 3],
+      style: { left: `calc(${effortAt}% - 5px)`, bottom: 3, transform: 'translateX(-100%)' },
+    },
     ...[0.75, 0.6].flatMap((at): { box: Box; style: React.CSSProperties }[] => [
-      { box: [ex + 5, at * h - 8, ex + 91, at * h + 8], style: { left: `calc(${effortAt}% + 5px)`, top: `calc(${at * 100}% - 8px)` } },
-      { box: [ex - 91, at * h - 8, ex - 5, at * h + 8], style: { left: `calc(${effortAt}% - 5px)`, top: `calc(${at * 100}% - 8px)`, transform: "translateX(-100%)" } },
+      {
+        box: [ex + 5, at * h - 8, ex + 91, at * h + 8],
+        style: { left: `calc(${effortAt}% + 5px)`, top: `calc(${at * 100}% - 8px)` },
+      },
+      {
+        box: [ex - 91, at * h - 8, ex - 5, at * h + 8],
+        style: {
+          left: `calc(${effortAt}% - 5px)`,
+          top: `calc(${at * 100}% - 8px)`,
+          transform: 'translateX(-100%)',
+        },
+      },
     ]),
     { box: [ex + 5, 32, ex + 91, 48], style: { left: `calc(${effortAt}% + 5px)`, top: 32 } },
-    { box: [ex - 91, 32, ex - 5, 48], style: { left: `calc(${effortAt}% - 5px)`, top: 32, transform: "translateX(-100%)" } },
+    {
+      box: [ex - 91, 32, ex - 5, 48],
+      style: { left: `calc(${effortAt}% - 5px)`, top: 32, transform: 'translateX(-100%)' },
+    },
   ];
-  const valueSpots: { box: Box; style: React.CSSProperties }[] = [0.82, 0.6, 0.3, 0.9, 0.7, 0.5, 0.4, 0.2, 0.12].flatMap((at) => [
-    { box: [at * w - 42, vy + 4, at * w + 42, vy + 20] as Box, style: { left: `${at * 100}%`, top: `calc(${valueAt}% + 4px)`, transform: "translateX(-50%)" } },
-    { box: [at * w - 42, vy - 20, at * w + 42, vy - 4] as Box, style: { left: `${at * 100}%`, top: `calc(${valueAt}% - 20px)`, transform: "translateX(-50%)" } },
+  const valueSpots: { box: Box; style: React.CSSProperties }[] = [
+    0.82, 0.6, 0.3, 0.9, 0.7, 0.5, 0.4, 0.2, 0.12,
+  ].flatMap((at) => [
+    {
+      box: [at * w - 42, vy + 4, at * w + 42, vy + 20] as Box,
+      style: {
+        left: `${at * 100}%`,
+        top: `calc(${valueAt}% + 4px)`,
+        transform: 'translateX(-50%)',
+      },
+    },
+    {
+      box: [at * w - 42, vy - 20, at * w + 42, vy - 4] as Box,
+      style: {
+        left: `${at * 100}%`,
+        top: `calc(${valueAt}% - 20px)`,
+        transform: 'translateX(-50%)',
+      },
+    },
   ]);
   // qa4-simple-plan-9: once the plot is measured, a middle line's words with no free spot are left out, never drawn over a mark.
   const effortLabel = w ? effortSpots.find((s) => free(s.box)) : effortSpots[0];
@@ -1706,41 +2579,111 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const dragRow = drag ? rows.find((r) => r.code === drag.code) : undefined;
   const pending = dragRow && drag ? dragTo(dragRow, drag.dx, drag.dy) : null;
   const listed = byLine(data).filter((r) => quad === null || quadrant(r) === quad);
-  const heldKey = (r: Row) => (r.after ? rows.find((x) => x.code === r.after!.code)?.own_key || null : null);
+  const heldKey = (r: Row) =>
+    r.after ? rows.find((x) => x.code === r.after!.code)?.own_key || null : null;
   const split = lineSplit(listed);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <section aria-label="Value / effort" className="min-w-0">
         <div className="pl-[46px] pr-[14px] pt-3">
           {/* B's plot is 706 x 548; a phone's narrow plot is square, so its marks keep their room. */}
-          <div ref={box} data-testid="vxe-plot" className="relative aspect-square rounded-xl border border-line bg-surface sm:aspect-[706/548]">
-            <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+          <div
+            ref={box}
+            data-testid="vxe-plot"
+            className="relative aspect-square rounded-xl border border-line bg-surface sm:aspect-[706/548]"
+          >
+            <svg
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+            >
               {ticks.map((t) => (
-                <line key={`x${t}`} x1={`${xPct(t)}%`} x2={`${xPct(t)}%`} y1="0" y2="100%" stroke="var(--line)" strokeWidth=".7" />
+                <line
+                  key={`x${t}`}
+                  x1={`${xPct(t)}%`}
+                  x2={`${xPct(t)}%`}
+                  y1="0"
+                  y2="100%"
+                  stroke="var(--line)"
+                  strokeWidth=".7"
+                />
               ))}
               {vTicks.map((v) => (
-                <line key={`y${v}`} x1="0" x2="100%" y1={`${yPct(v)}%`} y2={`${yPct(v)}%`} stroke="var(--line)" strokeWidth=".7" />
+                <line
+                  key={`y${v}`}
+                  x1="0"
+                  x2="100%"
+                  y1={`${yPct(v)}%`}
+                  y2={`${yPct(v)}%`}
+                  stroke="var(--line)"
+                  strokeWidth=".7"
+                />
               ))}
-              <line x1={`${effortAt}%`} x2={`${effortAt}%`} y1="0" y2="100%" stroke="var(--accent-ink)" strokeDasharray="6 4" strokeWidth="1.5" />
-              <line x1="0" x2="100%" y1={`${valueAt}%`} y2={`${valueAt}%`} stroke="var(--accent-ink)" strokeDasharray="6 4" strokeWidth="1.5" />
+              <line
+                x1={`${effortAt}%`}
+                x2={`${effortAt}%`}
+                y1="0"
+                y2="100%"
+                stroke="var(--accent-ink)"
+                strokeDasharray="6 4"
+                strokeWidth="1.5"
+              />
+              <line
+                x1="0"
+                x2="100%"
+                y1={`${valueAt}%`}
+                y2={`${valueAt}%`}
+                stroke="var(--accent-ink)"
+                strokeDasharray="6 4"
+                strokeWidth="1.5"
+              />
             </svg>
-            <span aria-hidden className="pointer-events-none absolute top-1/2 whitespace-nowrap text-[14px] leading-5 text-text2" style={{ left: -32, transform: "translate(-50%, -50%) rotate(-90deg)" }}>
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 whitespace-nowrap text-[14px] leading-5 text-text2"
+              style={{ left: -32, transform: 'translate(-50%, -50%) rotate(-90deg)' }}
+            >
               Goal value ↑
             </span>
             {vTicks.map((v) => (
-              <span key={v} data-testid="vxe-value-tick" aria-hidden className="pointer-events-none absolute right-[calc(100%+6px)] -translate-y-1/2 text-[12px] leading-4 tabular-nums text-text2" style={{ top: `${yPct(v)}%` }}>
+              <span
+                key={v}
+                data-testid="vxe-value-tick"
+                aria-hidden
+                className="pointer-events-none absolute right-[calc(100%+6px)] -translate-y-1/2 text-[12px] leading-4 tabular-nums text-text2"
+                style={{ top: `${yPct(v)}%` }}
+              >
                 {v}
               </span>
             ))}
-            <span data-testid="vxe-median-effort" aria-hidden className="pointer-events-none absolute inset-y-0 w-0" style={{ left: `${effortAt}%` }} />
-            <span data-testid="vxe-median-value" aria-hidden className="pointer-events-none absolute inset-x-0 h-0" style={{ top: `${valueAt}%` }} />
+            <span
+              data-testid="vxe-median-effort"
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 w-0"
+              style={{ left: `${effortAt}%` }}
+            />
+            <span
+              data-testid="vxe-median-value"
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 h-0"
+              style={{ top: `${valueAt}%` }}
+            />
             {effortLabel && (
-              <span data-testid="vxe-middle-effort" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={effortLabel.style}>
+              <span
+                data-testid="vxe-middle-effort"
+                aria-hidden
+                className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink"
+                style={effortLabel.style}
+              >
                 middle effort
               </span>
             )}
             {valueLabel && (
-              <span data-testid="vxe-middle-value" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={valueLabel.style}>
+              <span
+                data-testid="vxe-middle-value"
+                aria-hidden
+                className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink"
+                style={valueLabel.style}
+              >
                 middle value
               </span>
             )}
@@ -1754,7 +2697,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   e.stopPropagation();
                   setQuad(quad === k ? null : k);
                 }}
-                className={`absolute z-10 whitespace-nowrap rounded px-1 text-[15px] font-[650] leading-5 hover:underline ${quad === k ? "bg-accent-soft text-accent-ink" : "bg-surface text-text-faint"} ${q.at}`}
+                className={`absolute z-10 whitespace-nowrap rounded px-1 text-[15px] font-[650] leading-5 hover:underline ${quad === k ? 'bg-accent-soft text-accent-ink' : 'bg-surface text-text-faint'} ${q.at}`}
               >
                 {q.name} · {counts[k]}
               </button>
@@ -1766,8 +2709,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
               const d = drag?.code === r.code ? drag : null;
               // Laid out in pixels once the plot is measured (off the middle lines, apart from each other).
               const [sx, sy] = at;
-              const left = w ? `${sx + (d?.dx ?? 0)}px` : `calc(${xPct(effortOf(r))}% + ${d?.dx ?? 0}px)`;
-              const top = w ? `${sy + (d?.dy ?? 0)}px` : `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
+              const left = w
+                ? `${sx + (d?.dx ?? 0)}px`
+                : `calc(${xPct(effortOf(r))}% + ${d?.dx ?? 0}px)`;
+              const top = w
+                ? `${sy + (d?.dy ?? 0)}px`
+                : `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
               const isMoved = !!movedWords(moved, r);
               const isSelected = selected === r.feature_id;
               // The name tag stays inside the plot: it runs left from a mark in the right half, right from one in the left.
@@ -1785,12 +2732,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   data-testid="vxe-point"
                   data-code={r.code}
                   title={r.own_key ? `${r.own_key} ${r.title}` : r.title}
-                  data-above={r.above_line ? "true" : "false"}
-                  data-moved={isMoved ? "true" : undefined}
+                  data-above={r.above_line ? 'true' : 'false'}
+                  data-moved={isMoved ? 'true' : undefined}
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
-                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? "PM-owned, no effort" : `effort ${weeksWords(r.effort)}`}${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
-                  className={`group absolute -translate-x-1/2 -translate-y-1/2 rounded-full hover:z-30 focus-visible:z-30 ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab touch-none" : "cursor-pointer"}`}
+                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? 'PM-owned, no effort' : `effort ${weeksWords(r.effort)}`}${r.above_line ? '' : ', below the line'}${goalOf(r) ? '' : ', no goal'}`}
+                  className={`group absolute -translate-x-1/2 -translate-y-1/2 rounded-full hover:z-30 focus-visible:z-30 ${isSelected ? 'z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface' : isMoved ? 'z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface' : ''} ${mayChange && r.can_reorder ? 'cursor-grab touch-none' : 'cursor-pointer'}`}
                   style={{ left, top }}
                   onClick={() => {
                     if (dragged.current) {
@@ -1799,7 +2746,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                     }
                     // A mark opens its feature panel; on a phone the chart stays in view (the list is below it).
                     if (phone) setSelected(r.feature_id);
-                    else select(r.feature_id, "mark");
+                    else select(r.feature_id, 'mark');
                     openRow?.(r);
                   }}
                   onPointerDown={(e) => {
@@ -1809,18 +2756,25 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                     setDrag({ code: r.code, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0 });
                   }}
-                  onPointerMove={(e) => drag?.code === r.code && setDrag({ ...drag, dx: e.clientX - drag.x0, dy: e.clientY - drag.y0 })}
+                  onPointerMove={(e) =>
+                    drag?.code === r.code &&
+                    setDrag({ ...drag, dx: e.clientX - drag.x0, dy: e.clientY - drag.y0 })
+                  }
                   onPointerUp={() => drop(r)}
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, r)}
                 >
                   {/* PR1: the feature's real code only, never made-up letters; one with none is flagged in its name tag. */}
-                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.own_key ?? undefined} />
+                  <ShapeMark
+                    shape={shapeOf(r)}
+                    hollow={!r.above_line}
+                    code={r.own_key ?? undefined}
+                  />
                   {/* P-3: a mark's code with its name, on hover, focus or selection (the plot has no room to name every mark). */}
                   <span
                     data-testid="vxe-name"
                     aria-hidden
-                    className={`pointer-events-none absolute ${onRight ? "right-0" : "left-0"} ${tagAbove ? "bottom-full mb-1" : "top-full mt-1"} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
+                    className={`pointer-events-none absolute ${onRight ? 'right-0' : 'left-0'} ${tagAbove ? 'bottom-full mb-1' : 'top-full mt-1'} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? 'block' : 'hidden'}`}
                     style={{ maxWidth: tagRoom }}
                   >
                     #{r.rank} {r.own_key ? `${r.own_key} · ${r.title}` : r.title}
@@ -1850,20 +2804,36 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 data-testid="vxe-drag-readout"
                 role="status"
                 className="pointer-events-none absolute z-30 -translate-x-1/2 whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold text-bg"
-                style={{ left: (spots.get(dragRow.feature_id)?.[0] ?? 0) + drag.dx, top: (spots.get(dragRow.feature_id)?.[1] ?? 0) + drag.dy - 44 }}
+                style={{
+                  left: (spots.get(dragRow.feature_id)?.[0] ?? 0) + drag.dx,
+                  top: (spots.get(dragRow.feature_id)?.[1] ?? 0) + drag.dy - 44,
+                }}
               >
-                {pending?.effort != null ? `effort ${weeksWords(pending.effort)}` : pending?.goal_value != null ? `goal value ${fmt(pending.goal_value)}` : !dragRow.goal && Math.abs(drag.dy) > Math.abs(drag.dx) ? "No goal: no goal value to change" : "no change"}
+                {pending?.effort != null
+                  ? `effort ${weeksWords(pending.effort)}`
+                  : pending?.goal_value != null
+                    ? `goal value ${fmt(pending.goal_value)}`
+                    : !dragRow.goal && Math.abs(drag.dy) > Math.abs(drag.dx)
+                      ? 'No goal: no goal value to change'
+                      : 'no change'}
               </span>
             )}
           </div>
           <div className="relative h-[22px]" aria-hidden>
             {ticks.map((t) => (
-              <span key={t} data-testid="vxe-tick" className="absolute top-[4px] -translate-x-1/2 whitespace-nowrap text-[12px] leading-4 tabular-nums text-text2" style={{ left: `${xPct(t)}%` }}>
+              <span
+                key={t}
+                data-testid="vxe-tick"
+                className="absolute top-[4px] -translate-x-1/2 whitespace-nowrap text-[12px] leading-4 tabular-nums text-text2"
+                style={{ left: `${xPct(t)}%` }}
+              >
                 {t}
               </span>
             ))}
           </div>
-          <p className="text-center text-[14px] leading-[18px] text-text2">Effort (engineer-weeks, log scale) →</p>
+          <p className="text-center text-[14px] leading-[18px] text-text2">
+            Effort (engineer-weeks, log scale) →
+          </p>
         </div>
         <CrowdSheet
           crowd={crowdOpen}
@@ -1877,7 +2847,10 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
             openRow?.(r);
           }}
         />
-        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2" aria-label="Legend">
+        <ul
+          className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2"
+          aria-label="Legend"
+        >
           {[...shapes.entries()].map(([k, s]) => (
             <li key={k} className="flex items-center gap-1" data-shape={s.shape}>
               <LegendMark shape={s.shape} />
@@ -1894,10 +2867,10 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
           {(!effortLabel || !valueLabel) && (
             <li data-testid="vxe-legend-middles">
               {!effortLabel && !valueLabel
-                ? "The dashed lines are the middle effort (up and down) and the middle value (across)."
+                ? 'The dashed lines are the middle effort (up and down) and the middle value (across).'
                 : !effortLabel
-                  ? "The dashed line up and down is the middle effort."
-                  : "The dashed line across is the middle value."}
+                  ? 'The dashed line up and down is the middle effort.'
+                  : 'The dashed line across is the middle value.'}
             </li>
           )}
           {/* Demo 9: how to read the chart is behind the (i) by the heading; the legend keeps its key. */}
@@ -1924,64 +2897,93 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 }}
                 data-testid="side-row"
                 data-code={r.code}
-                data-above={r.above_line ? "true" : "false"}
-                data-misses={r.above_line ? undefined : "true"}
-                data-moved={words ? "true" : undefined}
-                data-selected={isSelected ? "true" : undefined}
-                className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
+                data-above={r.above_line ? 'true' : 'false'}
+                data-misses={r.above_line ? undefined : 'true'}
+                data-moved={words ? 'true' : undefined}
+                data-selected={isSelected ? 'true' : undefined}
+                className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? 'border-accent bg-accent-soft ring-2 ring-accent' : words ? 'border-accent ring-2 ring-accent' : 'border-line'} ${isSelected ? '' : r.above_line ? 'bg-surface' : 'bg-surface2 text-text2'}`}
               >
                 <button
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() => {
                     // one-feature-panel: a row opens its feature's panel too, and stays selected with its mark.
-                    select(r.feature_id, "row");
+                    select(r.feature_id, 'row');
                     openRow?.(r);
                   }}
                   className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left"
                 >
-                  <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
+                  <span
+                    className="w-5 flex-none text-right font-[650] tabular-nums"
+                    data-testid="side-rank"
+                  >
                     {r.rank}
                   </span>
                   {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
                   {r.own_key && (
-                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={`${r.own_key} ${r.title}`}>
+                    <span
+                      className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text"
+                      data-testid="side-code"
+                      title={`${r.own_key} ${r.title}`}
+                    >
                       {r.own_key}
                     </span>
                   )}
-                  <span className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]" data-testid="prio-title" title={r.title}>
+                  <span
+                    className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]"
+                    data-testid="prio-title"
+                    title={r.title}
+                  >
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
                     // The name keeps its room: the pill says "after"; the feature it needs, code with name, is in the tip and on
                     // the selected row's second line (never a code without its name).
-                    <span data-testid="side-held" title={`After ${heldKey(r) ? `${heldKey(r)} ` : ""}${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+                    <span
+                      data-testid="side-held"
+                      title={`After ${heldKey(r) ? `${heldKey(r)} ` : ''}${r.after.title}, which it needs`}
+                      className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2"
+                    >
                       after
                       <span className="sr-only">
-                        {" "}
+                        {' '}
                         <Named item={{ code: heldKey(r), title: r.after.title }} />
                       </span>
                     </span>
                   ) : (
                     r.oracle_rank != null &&
                     r.oracle_rank !== r.rank && (
-                      <span data-testid="side-ghost" title="Oracle's rank" className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-1.5 text-[12px] leading-[18px] text-text2">
+                      <span
+                        data-testid="side-ghost"
+                        title="Oracle's rank"
+                        className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-1.5 text-[12px] leading-[18px] text-text2"
+                      >
                         Oracle #{r.oracle_rank}
                       </span>
                     )
                   )}
                   {!r.above_line && <MissesTag data={data} compact />}
-                  <span className="flex-none tabular-nums text-text2" title="Score">{r.score == null ? "–" : fmt(r.score, 2)}</span>
+                  <span className="flex-none tabular-nums text-text2" title="Score">
+                    {r.score == null ? '–' : fmt(r.score, 2)}
+                  </span>
                 </button>
                 {isSelected && r.after && (
-                  <span data-testid="side-after" className="block truncate px-2 pl-[34px] text-[13px] text-text2">
+                  <span
+                    data-testid="side-after"
+                    className="block truncate px-2 pl-[34px] text-[13px] text-text2"
+                  >
                     after <Named item={{ code: heldKey(r), title: r.after.title }} />
                   </span>
                 )}
                 {isSelected && (
-                  <span data-testid="side-numbers" className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text">
-                    {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}
+                  <span
+                    data-testid="side-numbers"
+                    className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text"
+                  >
+                    {r.effort == null
+                      ? `goal value ${fmt(r.goal_value)} · PM-owned, no score`
+                      : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}
                   </span>
                 )}
                 {/* PR1: no made-up letters; a selected feature with no Ground Truth code is flagged under its row (the row has no room). */}
@@ -2010,7 +3012,9 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
 /** The line in words: "not this quarter" for Now, else "not done by <day>". */
 function lineWords(data: Out): string {
   const l = data.line;
-  return !l || l.kind === "now" ? "not this quarter" : `not planned to finish by ${l.label.replace(/^By /, "")}`;
+  return !l || l.kind === 'now'
+    ? 'not this quarter'
+    : `not planned to finish by ${l.label.replace(/^By /, '')}`;
 }
 
 /** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
@@ -2018,15 +3022,20 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   // qa-nov17 G8: a milestone's line by its code and name as the roadmap reads it ("Milestone: M6 Beta · Nov 30, 2026").
   const coded = useCodedMilestone();
   const msLine = (l: { key: string; label: string }) => {
-    const at = l.label.lastIndexOf(" · ");
+    const at = l.label.lastIndexOf(' · ');
     if (at < 0) return l.label;
-    return `${coded(l.label.slice(0, at), { id: l.key.startsWith("milestone:") ? l.key.slice("milestone:".length) : null })}${l.label.slice(at)}`;
+    return `${coded(l.label.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null })}${l.label.slice(at)}`;
   };
-  const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
+  const current = data.line ?? {
+    key: 'now',
+    kind: 'now' as const,
+    label: 'This quarter (Now)',
+    date: null,
+  };
   // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
   const [picking, setPicking] = useState(false);
   // qa-simple-plan-1: the day typed is applied only when whole (Apply or Enter), never mid-typing.
-  const [day, setDay] = useState("");
+  const [day, setDay] = useState('');
   const whole = /^\d{4}-\d{2}-\d{2}$/.test(day) && Number(day.slice(0, 4)) >= 2000;
   // qa4-simple-plan-33: a day already gone is refused (everything would miss it), said under the field.
   const today = localDay(new Date());
@@ -2038,9 +3047,9 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   };
   // qa-simple-plan-25: in date order (the API's), one naming style: "<kind>: <name> · <day>".
   const offered = data.lines ?? [];
-  const value = current.kind === "date" ? "picked" : current.key;
+  const value = current.kind === 'date' ? 'picked' : current.key;
   // B's box: 32 px high, as wide as the line it shows (not its longest option), a chevron of its own.
-  const field = "h-8 rounded-lg border border-line-strong bg-surface px-2 text-[15px] text-text";
+  const field = 'h-8 rounded-lg border border-line-strong bg-surface px-2 text-[15px] text-text';
   return (
     <div className="flex flex-wrap items-center gap-2 text-[15px]" data-testid="line-picker">
       <label htmlFor="prio-line" className="font-semibold">
@@ -2054,28 +3063,38 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
             min={today}
             aria-label="The line's date"
             aria-invalid={past || undefined}
-            aria-describedby={past ? "prio-line-past" : undefined}
+            aria-describedby={past ? 'prio-line-past' : undefined}
             className={field}
             value={day}
             onChange={(e) => setDay(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === 'Enter') {
                 e.preventDefault();
                 apply();
-              } else if (e.key === "Escape") setPicking(false);
+              } else if (e.key === 'Escape') setPicking(false);
             }}
           />
           {whole && !past && (
             <span data-testid="line-day-preview" className="whitespace-nowrap text-text2">
-              {calendarDay(day, { month: "short", day: "numeric", year: "numeric" }, "en-US")}
+              {calendarDay(day, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-US')}
             </span>
           )}
           {past && (
-            <span id="prio-line-past" role="alert" data-testid="line-day-past" className="whitespace-nowrap text-crit">
+            <span
+              id="prio-line-past"
+              role="alert"
+              data-testid="line-day-past"
+              className="whitespace-nowrap text-crit"
+            >
               That date has passed: pick today or later.
             </span>
           )}
-          <Button type="button" onClick={apply} disabled={!whole || past} title={past ? "That date has passed" : whole ? undefined : "Type the whole date first"}>
+          <Button
+            type="button"
+            onClick={apply}
+            disabled={!whole || past}
+            title={past ? 'That date has passed' : whole ? undefined : 'Type the whole date first'}
+          >
             Apply
           </Button>
           <Button type="button" variant="ghost" onClick={() => setPicking(false)}>
@@ -2083,25 +3102,36 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
           </Button>
         </span>
       )}
-      <span className={`relative max-w-full ${picking ? "hidden" : "inline-flex"}`}>
+      <span className={`relative max-w-full ${picking ? 'hidden' : 'inline-flex'}`}>
         <select
           id="prio-line"
           value={value}
           className={`${field} max-w-full appearance-none pr-[26px] [field-sizing:content]`}
           onChange={(e) => {
-            if (e.target.value === "pick") {
-              setDay(current.date ?? "");
+            if (e.target.value === 'pick') {
+              setDay(current.date ?? '');
               setPicking(true);
-            }
-            else if (e.target.value !== "picked") onPick(e.target.value);
+            } else if (e.target.value !== 'picked') onPick(e.target.value);
           }}
         >
           {lineGroups(offered).map(([prd, ls]) => {
             // priorities-keydates: a PRD's milestone is a key date marked as the roadmap marks it ("From the PRD", in
             // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
             const options = ls.map((l) => (
-              <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${msLine(l)}` : l.label}
+              <option
+                key={l.key}
+                value={l.key}
+                title={
+                  l.prd
+                    ? `A key date from the PRD; change it in the PRD, ${l.prd.title}`
+                    : undefined
+                }
+              >
+                {l.kind === 'key_date'
+                  ? `${l.prd ? 'From the PRD' : 'Key date'}: ${l.label}`
+                  : l.kind === 'milestone'
+                    ? `Milestone: ${msLine(l)}`
+                    : l.label}
               </option>
             ));
             // prio-company: each PRD's milestones listed under its name.
@@ -2113,21 +3143,32 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
               options
             );
           })}
-          {current.kind === "date" && <option value="picked">{`Date: ${current.label.replace(/^By /, "")}`}</option>}
-          <option value="pick">{current.kind === "date" ? "Pick another date…" : "Pick a date…"}</option>
+          {current.kind === 'date' && (
+            <option value="picked">{`Date: ${current.label.replace(/^By /, '')}`}</option>
+          )}
+          <option value="pick">
+            {current.kind === 'date' ? 'Pick another date…' : 'Pick a date…'}
+          </option>
         </select>
-        <span aria-hidden className="pointer-events-none absolute right-[9px] top-[11px] h-1.5 w-1.5 rotate-45 border-b-[1.5px] border-r-[1.5px] border-text2" />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-[9px] top-[11px] h-1.5 w-1.5 rotate-45 border-b-[1.5px] border-r-[1.5px] border-text2"
+        />
       </span>
     </div>
   );
 }
 
 /** prio-company: the lines in their order, each run of one PRD's lines under that PRD (null: lines of no PRD). */
-function lineGroups(lines: Line[]): [Line["prd"], Line[]][] {
-  const out: [Line["prd"], Line[]][] = [];
+function lineGroups(lines: Line[]): [Line['prd'], Line[]][] {
+  const out: [Line['prd'], Line[]][] = [];
   for (const l of lines) {
     // Each PRD is one group, at its first line, even when another's line falls between by date.
-    const mine = l.prd ? out.find(([p]) => p?.id === l.prd!.id) : out.at(-1)?.[0] ? undefined : out.at(-1);
+    const mine = l.prd
+      ? out.find(([p]) => p?.id === l.prd!.id)
+      : out.at(-1)?.[0]
+        ? undefined
+        : out.at(-1);
     if (mine) mine[1].push(l);
     else out.push([l.prd ?? null, [l]]);
   }
@@ -2135,10 +3176,12 @@ function lineGroups(lines: Line[]): [Line["prd"], Line[]][] {
 }
 
 /** A day as a date field writes it (2026-10-31), in the reader's own time zone. */
-const localDay = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const localDay = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** The line inside a sentence: "this quarter", "Nov 20, 2026", "Beta · Dec 4, 2026" (never the picker's "By " or "(Now)"). */
-const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now" ? "this quarter" : data.line.label.replace(/^By /, ""));
+const lineLabel = (data: Out): string =>
+  !data.line || data.line.kind === 'now' ? 'this quarter' : data.line.label.replace(/^By /, '');
 
 /** qa-nov17 G8: the line inside a sentence, a milestone's by its code and name as the Line picker reads it ("M6 Beta · Nov 30, 2026"). */
 function useLineLabel(): (data: Out) => string {
@@ -2146,10 +3189,10 @@ function useLineLabel(): (data: Out) => string {
   return (data) => {
     const words = lineLabel(data);
     const l = data.line;
-    if (!l || l.kind !== "milestone") return words;
-    const at = words.lastIndexOf(" · ");
+    if (!l || l.kind !== 'milestone') return words;
+    const at = words.lastIndexOf(' · ');
     if (at < 0) return words;
-    return `${coded(words.slice(0, at), { id: l.key.startsWith("milestone:") ? l.key.slice("milestone:".length) : null })}${words.slice(at)}`;
+    return `${coded(words.slice(0, at), { id: l.key.startsWith('milestone:') ? l.key.slice('milestone:'.length) : null })}${words.slice(at)}`;
   };
 }
 
@@ -2158,7 +3201,11 @@ function useLineLabel(): (data: Out) => string {
  * does, each feature under the goal it moves most), as Goal buckets shows it.
  */
 function goalOfRow(data: Out): (r: Row) => string | null {
-  const planGoal = new Map((data.plan?.slices ?? []).filter((x) => x.goal).map((x) => [x.feature_code, goalLabel(x.goal!).name]));
+  const planGoal = new Map(
+    (data.plan?.slices ?? [])
+      .filter((x) => x.goal)
+      .map((x) => [x.feature_code, goalLabel(x.goal!).name]),
+  );
   return (r) => r.goal?.title ?? planGoal.get(r.short_code) ?? null;
 }
 
@@ -2177,7 +3224,10 @@ function goalKeyOfRow(data: Out): (r: Row) => string | null {
       .map((x) => {
         const code = goalLabel(x.goal!).code;
         const at = place.get(x.goal!);
-        return [x.feature_code, code ? `plan:${code}` : at != null ? `plan:${at}` : `plan-goal:${x.goal}`];
+        return [
+          x.feature_code,
+          code ? `plan:${code}` : at != null ? `plan:${at}` : `plan-goal:${x.goal}`,
+        ];
       }),
   );
   return (r) => r.goal?.key ?? planKey.get(r.short_code) ?? null;
@@ -2199,7 +3249,7 @@ function byLine(data: Out): Row[] {
  * picked day): then what makes it is listed first, as a dated plan's list is.
  */
 function dateLine(data: Out): boolean {
-  return !!data.plan?.span || (!!data.line && data.line.kind !== "now");
+  return !!data.plan?.span || (!!data.line && data.line.kind !== 'now');
 }
 
 /** The list is regrouped at the line: dates decide it and rank order alone would interleave. */
@@ -2230,15 +3280,25 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
   const [open, setOpen] = useState(false);
   const openRow = useContext(OpenRow);
   return (
-    <div data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
+    <div
+      data-testid="line-caption"
+      className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? 'leading-[21px]' : ''}`}
+    >
       <p className="flex flex-wrap items-center gap-x-2">
         <span className="font-medium text-accent-ink">
           {misses.length} of {data.rows.length} miss {lineWordsOf(data)}
         </span>
         <ScoreTip />
         {misses.length > 0 && (
-          <button type="button" data-testid="line-caption-more" aria-expanded={open} aria-controls="line-misses" onClick={() => setOpen(!open)} className="font-semibold text-accent-ink underline">
-            {open ? "Hide them" : "Show them"}
+          <button
+            type="button"
+            data-testid="line-caption-more"
+            aria-expanded={open}
+            aria-controls="line-misses"
+            onClick={() => setOpen(!open)}
+            className="font-semibold text-accent-ink underline"
+          >
+            {open ? 'Hide them' : 'Show them'}
           </button>
         )}
       </p>
@@ -2247,7 +3307,12 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
           {misses.map((r) => (
             <li key={r.feature_id}>
               {/* Each name opens the one feature panel. */}
-              <button type="button" data-testid="line-miss" onClick={openRow ? () => openRow(r) : undefined} className="py-0.5 text-left text-text underline decoration-line-strong underline-offset-2 hover:decoration-accent">
+              <button
+                type="button"
+                data-testid="line-miss"
+                onClick={openRow ? () => openRow(r) : undefined}
+                className="py-0.5 text-left text-text underline decoration-line-strong underline-offset-2 hover:decoration-accent"
+              >
                 {nameOf(r)}
               </button>
             </li>
@@ -2262,21 +3327,35 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
 function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compact?: boolean }) {
   const lineWordsOf = useLineLabel();
   // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone.
-  const own = !!row?.milestone && data.line?.kind === "milestone" && data.line.label.split(" · ")[0] === row.milestone;
+  const own =
+    !!row?.milestone &&
+    data.line?.kind === 'milestone' &&
+    data.line.label.split(' · ')[0] === row.milestone;
   if (own && !compact)
     return (
-      <span data-testid="prio-misses" data-own="true" className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">
+      <span
+        data-testid="prio-misses"
+        data-own="true"
+        className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit"
+      >
         Misses its own milestone, {lineWordsOf(data)}
       </span>
     );
   if (compact)
     return (
-      <span data-testid="prio-misses" title={`Misses ${lineWordsOf(data)}`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+      <span
+        data-testid="prio-misses"
+        title={`Misses ${lineWordsOf(data)}`}
+        className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2"
+      >
         Misses
       </span>
     );
   return (
-    <span data-testid="prio-misses" className="flex-none whitespace-nowrap rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2">
+    <span
+      data-testid="prio-misses"
+      className="flex-none whitespace-nowrap rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2"
+    >
       Misses {lineWordsOf(data)}
     </span>
   );
@@ -2285,12 +3364,16 @@ function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compa
 function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) {
   const lineWordsOf = useLineLabel();
   return (
-    <li data-testid="prio-part-head" aria-label={`${makes ? "Makes" : "Misses"} ${lineWordsOf(data)}`} className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>
+    <li
+      data-testid="prio-part-head"
+      aria-label={`${makes ? 'Makes' : 'Misses'} ${lineWordsOf(data)}`}
+      className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? '' : 'mt-2 border-t-2 border-accent-ink pt-3'}`}
+    >
       <span className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
-        {makes ? "Makes" : "Misses"} {lineWordsOf(data)}
+        {makes ? 'Makes' : 'Misses'} {lineWordsOf(data)}
       </span>
       <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
-        {n} {n === 1 ? "feature" : "features"}, in rank order
+        {n} {n === 1 ? 'feature' : 'features'}, in rank order
       </span>
       {makes && <ScoreTip id="prio-score-text-makes" />}
     </li>
@@ -2298,7 +3381,15 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
 }
 
 /** A row's numbers, each keeping its "·" with it so a wrapped line never starts or ends with a stray dot. */
-function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolean; changed?: Changed }) {
+function Numbers({
+  r,
+  mayChange = false,
+  changed,
+}: {
+  r: Row;
+  mayChange?: boolean;
+  changed?: Changed;
+}) {
   const parts = [
     <span key="value">value {fmt(r.goal_value)}</span>,
     ...(r.effort == null
@@ -2314,10 +3405,12 @@ function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolea
           ...(mayChange && changed ? [<EffortEdit key="effort" r={r} changed={changed} />] : []),
         ]
       : [
-          <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>confidence {fmt(r.confidence, 2)}</span>,
+          <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>
+            confidence {fmt(r.confidence, 2)}
+          </span>,
           <span key="weeks">{weeksWords(r.effort)}</span>,
           <span key="score">
-            score{" "}
+            score{' '}
             <span className="font-semibold text-text" data-testid="prio-score" title={SCORE_WORDS}>
               {fmt(r.score, 2)}
             </span>
@@ -2330,7 +3423,9 @@ function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolea
       <span className="-ml-[14px] flex flex-wrap items-center gap-y-1">
         {parts.map((p) => (
           <span key={p.key} className="relative flex items-center whitespace-nowrap pl-[14px]">
-            <span aria-hidden className="absolute left-[4px]">·</span>
+            <span aria-hidden className="absolute left-[4px]">
+              ·
+            </span>
             {p}
           </span>
         ))}
@@ -2342,18 +3437,18 @@ function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolea
 /** prio-company: a PM-owned row's effort, set in place; its score then appears. */
 function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
   const [editing, setEditing] = useState(false);
-  const [weeks, setWeeks] = useState("");
+  const [weeks, setWeeks] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const n = Number(weeks);
-  const ok = weeks.trim() !== "" && Number.isFinite(n) && n > 0;
+  const ok = weeks.trim() !== '' && Number.isFinite(n) && n > 0;
   async function save() {
     if (!ok) return;
     setBusy(true);
     setError(null);
     const effort = Math.round(n * 10) / 10;
     const sent = await send({
-      op: "estimate_feature",
+      op: 'estimate_feature',
       target: targetOf(r),
       before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: null },
       after: { effort },
@@ -2361,11 +3456,22 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
     setBusy(false);
     if (!sent.ok) return setError(sent.message);
     setEditing(false);
-    await changed(sent, `Estimated ${nameOf(r)}: effort ${weeksWords(effort)}`, r, true, `effort ${weeksWords(effort)}`);
+    await changed(
+      sent,
+      `Estimated ${nameOf(r)}: effort ${weeksWords(effort)}`,
+      r,
+      true,
+      `effort ${weeksWords(effort)}`,
+    );
   }
   if (!editing)
     return (
-      <button type="button" data-testid="prio-add-effort" className="font-semibold text-accent-ink underline" onClick={() => setEditing(true)}>
+      <button
+        type="button"
+        data-testid="prio-add-effort"
+        className="font-semibold text-accent-ink underline"
+        onClick={() => setEditing(true)}
+      >
         Add effort
       </button>
     );
@@ -2384,10 +3490,10 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
           value={weeks}
           onChange={(e) => setWeeks(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === 'Enter') {
               e.preventDefault();
               void save();
-            } else if (e.key === "Escape") setEditing(false);
+            } else if (e.key === 'Escape') setEditing(false);
           }}
         />
         <span>weeks</span>
@@ -2411,13 +3517,17 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
   const lineWordsOf = useLineLabel();
   return (
-    <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5 leading-[21px]" : "py-1"}`}>
+    <li
+      role="separator"
+      data-testid="line-divider"
+      className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? 'py-0.5 leading-[21px]' : 'py-1'}`}
+    >
       <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
       {/* qa-simple-plan-19: "misses it" kept together, so no word is left alone on a line. */}
       {/* qa4-simple-plan-28: one line on a phone (the rest said to screen readers), a rule each side. */}
       <span className="min-w-0 whitespace-nowrap sm:whitespace-normal">
         The line: {lineWordsOf(data)}
-        <span className="sr-only sm:not-sr-only"> · everything below misses{"\u00a0"}it</span>
+        <span className="sr-only sm:not-sr-only"> · everything below misses{'\u00a0'}it</span>
       </span>
       <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
     </li>
@@ -2426,20 +3536,38 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data, suggestions, kr }: { data: Out; suggestions: GoalSuggestionsApi; kr: PriorityKeyResults }) {
+function Buckets({
+  data,
+  suggestions,
+  kr,
+}: {
+  data: Out;
+  suggestions: GoalSuggestionsApi;
+  kr: PriorityKeyResults;
+}) {
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
-  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} kr={kr} />;
+  if (data.plan?.milestones.length && data.plan.span)
+    return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} kr={kr} />;
   return <UndatedBuckets data={data} suggestions={suggestions} kr={kr} />;
 }
 
-const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
+const sameGoal = (a: string, b: string) =>
+  goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
 
 /**
  * No dated plan: a card per goal with its share of the quarter's engineer-weeks, and its tasks
  * you can change as in the dated view: drag one to another goal by its grip (pointer, touch or
  * keys), add one in place, edit or cut one, each with Undo.
  */
-function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: GoalSuggestionsApi; kr: PriorityKeyResults }) {
+function UndatedBuckets({
+  data,
+  suggestions,
+  kr,
+}: {
+  data: Out;
+  suggestions: GoalSuggestionsApi;
+  kr: PriorityKeyResults;
+}) {
   const { can } = useMe();
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   const bucketsQ = useGoalBuckets();
@@ -2453,7 +3581,14 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
   const drag = useBucketDrag({ gb, writes: liftedMoves(writes, read) });
-  const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
+  const tasks = useBucketTasks({
+    rows: data.rows,
+    plan: null,
+    may: rights.task,
+    reload: reloadAll,
+    setNote,
+    setError,
+  });
   // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
   // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
@@ -2465,22 +3600,38 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   const draftGrip = (t: Task, from: string | null) => {
     if (!rights.task || !gb) return undefined;
     const f = { code: t.code, name: t.name, slices: [], weeks: null };
-    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to), code: knownCode(t.code) ? t.code : null, draft: true };
-    return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+    const own = {
+      from,
+      move: (to: { id: string; title: string }) => tasks.move(t, to),
+      code: knownCode(t.code) ? t.code : null,
+      draft: true,
+    };
+    return {
+      onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own),
+      onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own),
+    };
   };
   // A feature's grip: moved at once by who may move it, else proposed by the change engine (commenters).
-  const featureGrip = (f: Parameters<typeof drag.grip>[0], e: React.PointerEvent | React.KeyboardEvent) => {
+  const featureGrip = (
+    f: Parameters<typeof drag.grip>[0],
+    e: React.PointerEvent | React.KeyboardEvent,
+  ) => {
     if (rights.move) return drag.grip(f, e);
     const t = tasks.taskOf(f.code, f.name);
     if (!t || !rights.task) return;
-    drag.grip(f, e, { from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null, move: (to) => tasks.move(t, to), code: f.code });
+    drag.grip(f, e, {
+      from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null,
+      move: (to) => tasks.move(t, to),
+      code: f.code,
+    });
   };
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   // Each feature by its code and its name, as the Ranked list shows them.
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
   // Each bucket's goal in the goal buckets (by its name): a drop target, and where a task is added.
-  const goalOf = (b: Bucket) => (b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title)));
+  const goalOf = (b: Bucket) =>
+    b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title));
   // A feature's goal links place it (moved by its grip): under the first goal it serves, when that goal has a bucket here.
   const home = new Map<string, string>();
   for (const b of data.buckets) for (const c of b.codes) home.set(c, b.key);
@@ -2490,28 +3641,59 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
     return to?.key ?? home.get(r.code);
   };
   const moved = data.rows.filter((r) => home.has(r.code) && placedIn(r) !== home.get(r.code));
-  const nowWeeks = (r: Row) => (r.horizon === "now" ? (r.effort ?? 0) : 0);
+  const nowWeeks = (r: Row) => (r.horizon === 'now' ? (r.effort ?? 0) : 0);
   // A goal with no feature this quarter (one just added) still has its card, before No goal, as with a dated plan.
   const extra: Bucket[] = (gb?.goals ?? [])
-    .filter((g) => !kr.krs.parentOf(g.id) && !kr.krs.parentOf(g.title) && !data.buckets.some((b) => !b.no_goal && sameGoal(g.title, b.title)))
+    .filter(
+      (g) =>
+        !kr.krs.parentOf(g.id) &&
+        !kr.krs.parentOf(g.title) &&
+        !data.buckets.some((b) => !b.no_goal && sameGoal(g.title, b.title)),
+    )
     .sort((a, b) => a.order - b.order)
-    .map((g) => ({ key: g.id, title: g.title, weeks: 0, share: 0, codes: [], no_goal: false, position: null }));
-  const drawn = [...data.buckets.filter((b) => !b.no_goal), ...extra, ...data.buckets.filter((b) => b.no_goal)];
+    .map((g) => ({
+      key: g.id,
+      title: g.title,
+      weeks: 0,
+      share: 0,
+      codes: [],
+      no_goal: false,
+      position: null,
+    }));
+  const drawn = [
+    ...data.buckets.filter((b) => !b.no_goal),
+    ...extra,
+    ...data.buckets.filter((b) => b.no_goal),
+  ];
   const all: Bucket[] = drawn.map((b) => {
-    const weeks = b.weeks - moved.filter((r) => home.get(r.code) === b.key).reduce((n, r) => n + nowWeeks(r), 0) + moved.filter((r) => placedIn(r) === b.key).reduce((n, r) => n + nowWeeks(r), 0);
-    const codes = [...b.codes.filter((c) => !moved.some((r) => r.code === c)), ...moved.filter((r) => placedIn(r) === b.key).map((r) => r.code)];
+    const weeks =
+      b.weeks -
+      moved.filter((r) => home.get(r.code) === b.key).reduce((n, r) => n + nowWeeks(r), 0) +
+      moved.filter((r) => placedIn(r) === b.key).reduce((n, r) => n + nowWeeks(r), 0);
+    const codes = [
+      ...b.codes.filter((c) => !moved.some((r) => r.code === c)),
+      ...moved.filter((r) => placedIn(r) === b.key).map((r) => r.code),
+    ];
     return { ...b, weeks, codes };
   });
   const total = all.reduce((n, b) => n + b.weeks, 0);
   // An empty "No goal" bucket warns about nothing: it is left out.
-  const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
+  const buckets: Bucket[] = all
+    .filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0))
+    .map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
-  const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
-  const acts = useGoalActs({ gb, plan: null, featuresOf: goalFeatures(gb, data, null, kr), writes, rights });
+  const weeksOf = (r: Row) => (r.effort == null ? '' : weeksWords(r.effort));
+  const acts = useGoalActs({
+    gb,
+    plan: null,
+    featuresOf: goalFeatures(gb, data, null, kr),
+    writes,
+    rights,
+  });
   // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;
   return (
-    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
+    <section aria-label="Goal buckets" className={note ? 'max-sm:pb-48' : ''}>
       {!planned && (
         <p className="mb-3 text-text2" data-testid="buckets-empty">
           Nothing planned this quarter.
@@ -2519,7 +3701,9 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
       )}
       {planned && (
         <figure className="hidden sm:block" data-testid="bucket-bar">
-          <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
+          <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">
+            Share of engineer-weeks by goal
+          </figcaption>
           <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
             {buckets.map((b, k) =>
               b.weeks > 0 ? (
@@ -2529,25 +3713,36 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                   title={`${b.title}: ${weeksWords(b.weeks)} · ${percent[k]}%`}
                   style={{ width: `${b.share * 100}%` }}
                   // V-5: neighbouring goals alternate the soft and mid accent fills, so two segments never read as one (dark included).
-                  data-fill={b.no_goal ? "warn" : k % 2 ? "mid" : "soft"}
-                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : k % 2 ? "bg-accent-mid text-accent-ink" : "bg-accent-soft text-accent-ink"}`}
+                  data-fill={b.no_goal ? 'warn' : k % 2 ? 'mid' : 'soft'}
+                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? 'bg-warn-bg text-warn' : k % 2 ? 'bg-accent-mid text-accent-ink' : 'bg-accent-soft text-accent-ink'}`}
                 >
                   {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
-                  <span className="block truncate font-medium" title={b.title}>{b.title}</span>
+                  <span className="block truncate font-medium" title={b.title}>
+                    {b.title}
+                  </span>
                 </div>
               ) : null,
             )}
           </div>
         </figure>
       )}
-      {note && <UndoNote id={note.id} clear='[data-testid="goal-bucket"] h3' onUndo={undoOf(note, writes, tasks)}>{note.text}</UndoNote>}
+      {note && (
+        <UndoNote
+          id={note.id}
+          clear='[data-testid="goal-bucket"] h3'
+          onUndo={undoOf(note, writes, tasks)}
+        >
+          {note.text}
+        </UndoNote>
+      )}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
         </p>
       )}
       <p id="bucket-move-help" className="sr-only">
-        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop it there and Escape to cancel.
+        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop
+        it there and Escape to cancel.
       </p>
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
@@ -2558,7 +3753,9 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
         {buckets.map((b, k) => {
           const rec = goalOf(b);
           const over = !!rec && drag.over === rec.id;
-          const drafts = data.drafts.filter((d) => (b.no_goal ? !d.goal : !!d.goal && sameGoal(d.goal.title, b.title)));
+          const drafts = data.drafts.filter((d) =>
+            b.no_goal ? !d.goal : !!d.goal && sameGoal(d.goal.title, b.title),
+          );
           const add = b.no_goal ? null : tasks.add(rec && { id: rec.id, title: b.title }, !gb);
           return (
             <li
@@ -2566,12 +3763,18 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
               data-testid="goal-bucket"
               data-key={b.key}
               data-goal-id={rec?.id}
-              data-drop={over ? "" : undefined}
-              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? "border-2 border-accent bg-accent-soft" : b.no_goal ? "border-warn" : "border-line"}`}
+              data-drop={over ? '' : undefined}
+              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? 'border-2 border-accent bg-accent-soft' : b.no_goal ? 'border-warn' : 'border-line'}`}
             >
               {rec && editingGoal === rec.id ? (
                 <GoalForm
-                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                  start={{
+                    title: rec.title,
+                    measure: rec.measure ?? '',
+                    target: rec.target ?? '',
+                    due: dayOf(rec.due, year),
+                    owner: rec.owner_id ?? null,
+                  }}
                   goal={rec}
                   order={rec.order}
                   title="Edit goal"
@@ -2584,36 +3787,64 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                 />
               ) : (
                 <>
-                <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
-                  <span className="tabular-nums">
-                    {weeksWords(b.weeks)} · <span data-testid="bucket-share">{percent[k]}%</span>
-                  </span>
-                  {rights.edit(rec) && (
-                    <button type="button" aria-label={`Edit ${b.title}`} title="Edit goal" className={`${ICON_BTN} self-center`} onClick={() => setEditingGoal(rec!.id)} disabled={!!editingGoal}>
-                      ✎
-                    </button>
-                  )}
-                  {rec && <span className="self-center">{acts.menu(rec, b.title, rights.edit(rec) ? () => setEditingGoal(rec.id) : undefined)}</span>}
-                </div>
-                {/* eg1-a-rest: each goal names its owner under its heading. */}
-                {rec?.owner_name && (
-                  <p className="mt-0.5">
-                    <span data-testid="goal-owner" className="text-[14px] text-text2">
-                      Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
+                    <span className="tabular-nums">
+                      {weeksWords(b.weeks)} · <span data-testid="bucket-share">{percent[k]}%</span>
                     </span>
-                  </p>
-                )}
-                {!b.no_goal && <KeyResultList list={kr.of([rec?.id, b.key, b.title], read)} goal={b.title} />}
+                    {rights.edit(rec) && (
+                      <button
+                        type="button"
+                        aria-label={`Edit ${b.title}`}
+                        title="Edit goal"
+                        className={`${ICON_BTN} self-center`}
+                        onClick={() => setEditingGoal(rec!.id)}
+                        disabled={!!editingGoal}
+                      >
+                        ✎
+                      </button>
+                    )}
+                    {rec && (
+                      <span className="self-center">
+                        {acts.menu(
+                          rec,
+                          b.title,
+                          rights.edit(rec) ? () => setEditingGoal(rec.id) : undefined,
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  {/* eg1-a-rest: each goal names its owner under its heading. */}
+                  {rec?.owner_name && (
+                    <p className="mt-0.5">
+                      <span data-testid="goal-owner" className="text-[14px] text-text2">
+                        Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                      </span>
+                    </p>
+                  )}
+                  {!b.no_goal && (
+                    <KeyResultList list={kr.of([rec?.id, b.key, b.title], read)} goal={b.title} />
+                  )}
                 </>
               )}
               <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
-                <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
+                <div
+                  className={`h-full ${b.no_goal ? 'bg-warn' : 'bg-accent'}`}
+                  style={{ width: `${b.share * 100}%` }}
+                />
               </div>
-              {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
+              {b.no_goal && (
+                <p className="mt-1 text-[length:var(--simple-small)] text-warn">
+                  ⚠ Serves no confirmed goal
+                </p>
+              )}
               {b.codes.length || drafts.length || add ? (
                 <ul className="mt-1" data-testid="bucket-features">
-                  {b.codes.length === 0 && drafts.length === 0 && <li className="py-[5px] text-[length:var(--simple-small)] text-text2">Nothing this quarter</li>}
+                  {b.codes.length === 0 && drafts.length === 0 && (
+                    <li className="py-[5px] text-[length:var(--simple-small)] text-text2">
+                      Nothing this quarter
+                    </li>
+                  )}
                   {b.codes.map((c) => {
                     const r = rowOf.get(c);
                     const name = r?.title ?? c;
@@ -2621,23 +3852,40 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                     const form = t ? tasks.form(t, b.title) : null;
                     if (form)
                       return (
-                        <li key={c} data-testid="plan-feature" data-code={r?.short_code || c} className="border-b border-line">
+                        <li
+                          key={c}
+                          data-testid="plan-feature"
+                          data-code={r?.short_code || c}
+                          className="border-b border-line"
+                        >
                           {form}
                         </li>
                       );
                     const f = { code: c, name, slices: [], weeks: r?.effort ?? null };
-                    const movable = (rights.move || (rights.task && !!t)) && !!r && !!featureOf(gb, r.code, r.title);
+                    const movable =
+                      (rights.move || (rights.task && !!t)) &&
+                      !!r &&
+                      !!featureOf(gb, r.code, r.title);
                     return (
                       <TaskRow
                         key={c}
                         code={r?.short_code || c}
                         name={name}
                         milestone={(t && tasks.milestoneName(t)) ?? r?.milestone ?? null}
-                        weeks={r ? weeksOf(r) : ""}
-                        grip={movable ? { onPointerDown: (e) => featureGrip(f, e), onKeyDown: (e) => featureGrip(f, e) } : undefined}
+                        weeks={r ? weeksOf(r) : ''}
+                        grip={
+                          movable
+                            ? {
+                                onPointerDown: (e) => featureGrip(f, e),
+                                onKeyDown: (e) => featureGrip(f, e),
+                              }
+                            : undefined
+                        }
                         lifted={drag.lifted === c}
                         // S-3: a feature not among the ranked rows opens by its code and name all the same.
-                        onOpen={() => setOpened(r ? { code: r.code, name: r.title } : { code: c, name })}
+                        onOpen={() =>
+                          setOpened(r ? { code: r.code, name: r.title } : { code: c, name })
+                        }
                         actions={tasks.actions(t)}
                         // panel-menu: a part names the feature it is part of, as on the ranked rows.
                         partOf={r && <PartOf r={r} />}
@@ -2648,7 +3896,12 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                     const t = { itemId: d.item_id, code: d.code, name: d.title };
                     const form = tasks.form(t, b.title);
                     return form ? (
-                      <li key={d.item_id} data-testid="plan-feature" data-code={d.code} className="border-b border-line">
+                      <li
+                        key={d.item_id}
+                        data-testid="plan-feature"
+                        data-code={d.code}
+                        className="border-b border-line"
+                      >
                         {form}
                       </li>
                     ) : (
@@ -2669,16 +3922,28 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                   {add}
                 </ul>
               ) : (
-                <p className="mt-1 text-[length:var(--simple-small)] text-text2">Nothing this quarter</p>
+                <p className="mt-1 text-[length:var(--simple-small)] text-text2">
+                  Nothing this quarter
+                </p>
               )}
               {over && (
-                <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
+                <p
+                  data-testid="drop-note"
+                  className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink"
+                >
                   Drop here: {b.title} becomes the goal it moves most
                 </p>
               )}
               {!b.no_goal && (
                 <div className="mt-3 border-t border-line pt-3">
-                  <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} label={can("create_goal_suggestion") ? "See or make suggestions" : "See suggestions"} />
+                  <SuggestionsButton
+                    goal={{ id: '', key: b.key, title: b.title }}
+                    api={suggestions}
+                    onOpen={setGoalPanel}
+                    label={
+                      can('create_goal_suggestion') ? 'See or make suggestions' : 'See suggestions'
+                    }
+                  />
                 </div>
               )}
             </li>
@@ -2686,10 +3951,13 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
         })}
         {/* As with a dated plan: who may add a goal adds it here, in the same tile and form. */}
         {rights.add &&
-          (editingGoal === "new" ? (
-            <li data-testid="add-goal" className="rounded-[var(--simple-card-radius)] border-2 border-accent bg-surface p-4">
+          (editingGoal === 'new' ? (
+            <li
+              data-testid="add-goal"
+              className="rounded-[var(--simple-card-radius)] border-2 border-accent bg-surface p-4"
+            >
               <GoalForm
-                start={{ title: "", measure: "", target: "", due: "" }}
+                start={{ title: '', measure: '', target: '', due: '' }}
                 order={nextOrder}
                 title="New goal"
                 year={year}
@@ -2700,8 +3968,16 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
               />
             </li>
           ) : (
-            <li data-testid="add-goal" className="flex min-h-[120px] items-center justify-center rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4">
-              <button type="button" className={BTN} onClick={() => setEditingGoal("new")} disabled={!!editingGoal}>
+            <li
+              data-testid="add-goal"
+              className="flex min-h-[120px] items-center justify-center rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4"
+            >
+              <button
+                type="button"
+                className={BTN}
+                onClick={() => setEditingGoal('new')}
+                disabled={!!editingGoal}
+              >
                 + Add goal
               </button>
             </li>
@@ -2711,9 +3987,19 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
       {drag.edge}
       {drag.ghost}
       {tasks.dialog}
-      {opened && <FeaturePanel key={opened.code} feature={opened} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
+      {opened && (
+        <FeaturePanel
+          key={opened.code}
+          feature={opened}
+          phone={phone}
+          canChange={can('create_simple_change')}
+          onClose={() => setOpened(null)}
+        />
+      )}
       {acts.dialogs}
-      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {goalPanel && (
+        <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />
+      )}
     </section>
   );
 }
@@ -2735,16 +4021,33 @@ function sharePercents(weeks: number[]): number[] {
 }
 
 /** The goal a plan goal names among the goals people suggest under: the same name (its code aside), the same code, or the same key. */
-function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleGoalSuggestionGoal"] | undefined {
+function suggestionGoal(
+  api: GoalSuggestionsApi,
+  goal: string,
+): Schemas['SimpleGoalSuggestionGoal'] | undefined {
   const mine = goalLabel(goal);
   return api.data?.goals.find((g) => {
     const theirs = goalLabel(g.goal.title);
-    return theirs.name.toLowerCase() === mine.name.toLowerCase() || (!!mine.code && theirs.code === mine.code) || g.goal.key === goal;
+    return (
+      theirs.name.toLowerCase() === mine.name.toLowerCase() ||
+      (!!mine.code && theirs.code === mine.code) ||
+      g.goal.key === goal
+    );
   });
 }
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
-function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; kr: PriorityKeyResults }) {
+function PlanBuckets({
+  data,
+  plan: read,
+  suggestions,
+  kr,
+}: {
+  data: Out;
+  plan: Schemas['SimplePlanOut'];
+  suggestions: GoalSuggestionsApi;
+  kr: PriorityKeyResults;
+}) {
   const { can } = useMe();
   const bucketsQ = useGoalBuckets();
   // kr-in-priorities: top-level goals only; a feature linked to a key result is under its goal.
@@ -2773,16 +4076,17 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
     setNote,
     setError,
   });
-  const taskRows = (goal: string | null, rec: Schemas["GoalBucketGoal"] | undefined) => ({
+  const taskRows = (goal: string | null, rec: Schemas['GoalBucketGoal'] | undefined) => ({
     task: {
       name: (f: { code: string; name: string }) => tasks.taskOf(f.code, f.name)?.name ?? f.name,
       cut: (f: { code: string; name: string }) => tasks.isCut(f.code, f.name),
       actions: (f: { code: string; name: string }) => tasks.actions(tasks.taskOf(f.code, f.name)),
       form: (f: { code: string; name: string }) => {
         const t = tasks.taskOf(f.code, f.name);
-        return t ? tasks.form(t, goal ?? "No goal") : null;
+        return t ? tasks.form(t, goal ?? 'No goal') : null;
       },
-      milestone: (f: { code: string; name: string }) => tasks.ownMilestone(tasks.taskOf(f.code, f.name)),
+      milestone: (f: { code: string; name: string }) =>
+        tasks.ownMilestone(tasks.taskOf(f.code, f.name)),
     },
     tail: (
       <>
@@ -2790,9 +4094,14 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
           .filter((d) => (goal == null ? !d.goal : !!d.goal && sameGoal(d.goal.title, goal)))
           .map((d) => {
             const t = { itemId: d.item_id, code: d.code, name: d.title };
-            const form = tasks.form(t, goal ?? "No goal");
+            const form = tasks.form(t, goal ?? 'No goal');
             return form ? (
-              <li key={d.item_id} data-testid="plan-feature" data-code={d.code} className="border-b border-line">
+              <li
+                key={d.item_id}
+                data-testid="plan-feature"
+                data-code={d.code}
+                className="border-b border-line"
+              >
                 {form}
               </li>
             ) : (
@@ -2824,18 +4133,33 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const draftGrip = (t: Task, from: string | null) => {
     if (!rights.task || !gb) return undefined;
     const f = { code: t.code, name: t.name, slices: [], weeks: null };
-    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to), code: knownCode(t.code) ? t.code : null, draft: true };
-    return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+    const own = {
+      from,
+      move: (to: { id: string; title: string }) => tasks.move(t, to),
+      code: knownCode(t.code) ? t.code : null,
+      draft: true,
+    };
+    return {
+      onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own),
+      onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own),
+    };
   };
   // A feature's grip: moved at once by who may move it, else proposed by the change engine (commenters).
-  const featureGrip = (f: Parameters<typeof drag.grip>[0], e: React.PointerEvent | React.KeyboardEvent) => {
+  const featureGrip = (
+    f: Parameters<typeof drag.grip>[0],
+    e: React.PointerEvent | React.KeyboardEvent,
+  ) => {
     if (rights.move) return drag.grip(f, e);
     const t = tasks.taskOf(f.code, f.name);
     if (!t || !rights.task) return;
-    drag.grip(f, e, { from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null, move: (to) => tasks.move(t, to), code: f.code });
+    drag.grip(f, e, {
+      from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null,
+      move: (to) => tasks.move(t, to),
+      code: f.code,
+    });
   };
   // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
-  const suggests = can("create_goal_suggestion");
+  const suggests = can('create_goal_suggestion');
   // A goal's code: its own ("G-A1 Account Safety"), else the code of the goal it names.
   const codeOf = (goal: string): string | null => {
     const own = goalLabel(goal).code;
@@ -2846,7 +4170,10 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   // This quarter's roadmap items the plan does not hold (another PRD's, or none), by their goal.
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
   const outside = data.buckets
-    .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
+    .map((b) => ({
+      b,
+      rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan),
+    }))
     .filter((x) => x.rows.length > 0);
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
@@ -2860,38 +4187,61 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
     // note's own place above the buckets, where it covers no goal's title. A phone's note is fixed
     // above the bottom bar: the page stays, any title it covers lifted clear.
     onArchived: () => {
-      if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
+      if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0)
+        noteSlot.current?.scrollIntoView({ block: 'start' });
     },
   });
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   // milestone-rename (the owner, Nov 10): each milestone in place, through the Roadmap's own card and rights (a PRD
   // milestone's name goes straight in for the PRD's owner, else asks them); the roadmap's read gives its milestones.
   // A change reads it again once, with every other read on the page (reloadAll: each useQuery reads again).
-  const roadmapQ = useQuery<Schemas["SimpleRoadmapOut"]>("simple-priorities-milestones", () => unwrap(api.GET("/v1/simple/roadmap", {})));
-  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: reloadAll, openItem: () => {} });
+  const roadmapQ = useQuery<Schemas['SimpleRoadmapOut']>('simple-priorities-milestones', () =>
+    unwrap(api.GET('/v1/simple/roadmap', {})),
+  );
+  const ms = useMilestones({
+    data: roadmapQ.data,
+    phone,
+    canChange: can('create_simple_change'),
+    reload: reloadAll,
+    openItem: () => {},
+  });
   // The plan's code is the PRD's own (its roadmap-wide code may differ); else its name.
   const milestoneOf = (code: string, name: string) => {
     const mine = ms?.list.filter((m) => m.prd?.slug === read.prd.slug) ?? [];
     return mine.find((m) => m.code === code) ?? mine.find((m) => m.name === name) ?? null;
   };
   return (
-    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
+    <section aria-label="Goal buckets" className={note ? 'max-sm:pb-48' : ''}>
       {ms && (
         <MsProvider value={ms}>
           <MsCard />
           <MsToast />
         </MsProvider>
       )}
-      <PlanBucketsHead plan={plan} codeOf={codeOf} milestoneOf={milestoneOf} onMilestone={(m) => ms?.edit(m)} />
+      <PlanBucketsHead
+        plan={plan}
+        codeOf={codeOf}
+        milestoneOf={milestoneOf}
+        onMilestone={(m) => ms?.edit(m)}
+      />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes, tasks)}>{note.text}</UndoNote>}
+      {note && (
+        <UndoNote
+          id={note.id}
+          clear='[data-testid="plan-goal"] h3'
+          onUndo={undoOf(note, writes, tasks)}
+        >
+          {note.text}
+        </UndoNote>
+      )}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
         </p>
       )}
       <p id="bucket-move-help" className="sr-only">
-        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop it there and Escape to cancel.
+        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop
+        it there and Escape to cancel.
       </p>
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
@@ -2912,12 +4262,18 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
               data-testid="plan-goal"
               data-goal={g}
               data-goal-id={rec?.id}
-              data-drop={over ? "" : undefined}
-              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-4 ${over ? "border-2 border-accent bg-accent-soft" : incomplete ? "border-warn" : "border-line"}`}
+              data-drop={over ? '' : undefined}
+              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-4 ${over ? 'border-2 border-accent bg-accent-soft' : incomplete ? 'border-warn' : 'border-line'}`}
             >
               {rec && editing === rec.id ? (
                 <GoalForm
-                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                  start={{
+                    title: rec.title,
+                    measure: rec.measure ?? '',
+                    target: rec.target ?? '',
+                    due: dayOf(rec.due, year),
+                    owner: rec.owner_id ?? null,
+                  }}
                   goal={rec}
                   order={rec.order}
                   title="Edit goal"
@@ -2933,25 +4289,51 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                   {/* On a phone the count takes its own line under the heading, so the name keeps its room. */}
                   <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
-                    <h3 className="min-w-0 flex-1 text-[21px] font-[650] leading-7">{goalLabel(g).name}</h3>
+                    <h3 className="min-w-0 flex-1 text-[21px] font-[650] leading-7">
+                      {goalLabel(g).name}
+                    </h3>
                     {code && <CodeTag code={code} />}
-                    <span data-testid="plan-goal-count" className={`mt-1 flex-none text-[15px] text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? "max-sm:pl-8" : ""}`}>
+                    <span
+                      data-testid="plan-goal-count"
+                      className={`mt-1 flex-none text-[15px] text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? 'max-sm:pl-8' : ''}`}
+                    >
                       {count(n)}
                     </span>
                     {rights.edit(rec) && (
-                      <button type="button" aria-label={`Edit ${g}`} title="Edit goal" className={ICON_BTN} onClick={() => setEditing(rec!.id)} disabled={!!editing}>
+                      <button
+                        type="button"
+                        aria-label={`Edit ${g}`}
+                        title="Edit goal"
+                        className={ICON_BTN}
+                        onClick={() => setEditing(rec!.id)}
+                        disabled={!!editing}
+                      >
                         ✎
                       </button>
                     )}
-                    {rec && acts.menu(rec, g, rights.edit(rec) ? () => setEditing(rec.id) : undefined)}
+                    {rec &&
+                      acts.menu(rec, g, rights.edit(rec) ? () => setEditing(rec.id) : undefined)}
                   </div>
                   {rec && (
-                    <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>
+                    <p
+                      data-testid="goal-measure"
+                      className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? 'pl-8' : ''}`}
+                    >
                       {incomplete ? (
-                        <span className="text-warn">⚠ Needs {[!rec.measure && "a measure", !rec.target && "a target", !rec.due && "a date"].filter(Boolean).join(", ")}</span>
+                        <span className="text-warn">
+                          ⚠ Needs{' '}
+                          {[
+                            !rec.measure && 'a measure',
+                            !rec.target && 'a target',
+                            !rec.due && 'a date',
+                          ]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </span>
                       ) : (
                         <>
-                          {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by {dayOf(rec.due, year)}
+                          {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by{' '}
+                          {dayOf(rec.due, year)}
                         </>
                       )}
                     </p>
@@ -2963,12 +4345,28 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                       </span>
                     </p>
                   )}
-                  <KeyResultList list={kr.of([rec?.id, g], readGb)} goal={goalLabel(g).name} className={rec ? "pl-8" : ""} />
+                  <KeyResultList
+                    list={kr.of([rec?.id, g], readGb)}
+                    goal={goalLabel(g).name}
+                    className={rec ? 'pl-8' : ''}
+                  />
                 </>
               )}
-              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(g, rec)} />
+              <FeatureRows
+                plan={plan}
+                goal={g}
+                gb={gb}
+                grips={rights.move || rights.task}
+                lifted={drag.lifted}
+                onGrip={featureGrip}
+                onOpen={setOpened}
+                {...taskRows(g, rec)}
+              />
               {over && (
-                <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
+                <p
+                  data-testid="drop-note"
+                  className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink"
+                >
                   Drop here: {g} becomes the goal it moves most
                 </p>
               )}
@@ -2977,7 +4375,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                   <button
                     type="button"
                     data-testid="goal-suggest-feature"
-                    onClick={() => setPanel({ goal: state.goal, start: "form" })}
+                    onClick={() => setPanel({ goal: state.goal, start: 'form' })}
                     className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2"
                   >
                     + Suggest a feature
@@ -2987,28 +4385,36 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                     data-testid="goal-ask-oracle"
                     disabled={state.pending}
                     onClick={() => {
-                      setPanel({ goal: state.goal, start: "oracle" });
+                      setPanel({ goal: state.goal, start: 'oracle' });
                       void suggestions.suggest(state.goal);
                     }}
                     className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default disabled:opacity-70"
                   >
-                    {state.pending ? "✦ Oracle is suggesting…" : "✦ Ask Oracle to suggest"}
+                    {state.pending ? '✦ Oracle is suggesting…' : '✦ Ask Oracle to suggest'}
                   </button>
                 </div>
               )}
               {state && !suggests && editing !== rec?.id && (
                 <div className="mt-3 border-t border-line pt-3">
-                  <SuggestionsButton goal={state.goal} api={suggestions} onOpen={(goal) => setPanel({ goal })} label="See suggestions" />
+                  <SuggestionsButton
+                    goal={state.goal}
+                    api={suggestions}
+                    onOpen={(goal) => setPanel({ goal })}
+                    label="See suggestions"
+                  />
                 </div>
               )}
             </li>
           );
         })}
         {rights.add &&
-          (editing === "new" ? (
-            <li data-testid="add-goal" className="rounded-[var(--simple-card-radius)] border-2 border-accent bg-surface p-4">
+          (editing === 'new' ? (
+            <li
+              data-testid="add-goal"
+              className="rounded-[var(--simple-card-radius)] border-2 border-accent bg-surface p-4"
+            >
               <GoalForm
-                start={{ title: "", measure: "", target: "", due: "" }}
+                start={{ title: '', measure: '', target: '', due: '' }}
                 order={nextOrder}
                 title="New goal"
                 year={year}
@@ -3019,15 +4425,27 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
               />
             </li>
           ) : (
-            <li data-testid="add-goal" className="flex min-h-[120px] items-center justify-center rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4">
-              <button type="button" className={BTN} onClick={() => setEditing("new")} disabled={!!editing}>
+            <li
+              data-testid="add-goal"
+              className="flex min-h-[120px] items-center justify-center rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4"
+            >
+              <button
+                type="button"
+                className={BTN}
+                onClick={() => setEditing('new')}
+                disabled={!!editing}
+              >
                 + Add goal
               </button>
             </li>
           ))}
         {acts.fold(year)}
         {noGoal && (
-          <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
+          <li
+            data-testid="plan-goal"
+            data-goal=""
+            className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4"
+          >
             <div className="flex flex-wrap items-baseline gap-x-2">
               <h3 className="text-[21px] font-[650] leading-7">No goal</h3>
               <span data-testid="plan-goal-count" className="ml-auto text-[15px] text-text2">
@@ -3035,29 +4453,64 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
               </span>
             </div>
             <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
-            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(null, undefined)} />
+            <FeatureRows
+              plan={plan}
+              goal={null}
+              gb={gb}
+              grips={rights.move || rights.task}
+              lifted={drag.lifted}
+              onGrip={featureGrip}
+              onOpen={setOpened}
+              {...taskRows(null, undefined)}
+            />
           </li>
         )}
         {outside.length > 0 && (
-          <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 col-span-full">
-            <h3 className="text-[21px] font-[650] leading-7">Also this quarter, outside the plan</h3>
+          <li
+            data-testid="plan-outside"
+            className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 col-span-full"
+          >
+            <h3 className="text-[21px] font-[650] leading-7">
+              Also this quarter, outside the plan
+            </h3>
             <ul className="mt-2">
               {outside.map(({ b, rows }) => (
-                <li key={b.key} data-testid="plan-outside-goal" data-key={b.key} className="border-b border-line py-[5px] text-[16px] leading-[22px]">
-                  <span className={`font-[650] ${b.no_goal ? "text-warn" : ""}`}>{b.no_goal ? "⚠ Serves no confirmed goal" : b.title}</span>
-                  {": "}
+                <li
+                  key={b.key}
+                  data-testid="plan-outside-goal"
+                  data-key={b.key}
+                  className="border-b border-line py-[5px] text-[16px] leading-[22px]"
+                >
+                  <span className={`font-[650] ${b.no_goal ? 'text-warn' : ''}`}>
+                    {b.no_goal ? '⚠ Serves no confirmed goal' : b.title}
+                  </span>
+                  {': '}
                   {rows.map((r, k) => (
-                    <span key={r.code} className="inline-flex max-w-full flex-wrap items-center gap-x-1.5">
-                      {k > 0 && ", "}
+                    <span
+                      key={r.code}
+                      className="inline-flex max-w-full flex-wrap items-center gap-x-1.5"
+                    >
+                      {k > 0 && ', '}
                       <CodeChip r={r} />
                       {/* The feature's name opens the one feature panel. */}
-                      <button type="button" className="text-left hover:underline" onClick={() => setOpened({ code: r.code, name: r.title })}>
+                      <button
+                        type="button"
+                        className="text-left hover:underline"
+                        onClick={() => setOpened({ code: r.code, name: r.title })}
+                      >
                         {r.title}
                       </button>
                       {!r.own_key && <NotInGt />}
                     </span>
                   ))}
-                  <span className="whitespace-nowrap text-text2"> · {weeksWords(rows.reduce((n, r) => n + (r.effort ?? 0), 0)).replace(" ", "\u00a0")}</span>
+                  <span className="whitespace-nowrap text-text2">
+                    {' '}
+                    ·{' '}
+                    {weeksWords(rows.reduce((n, r) => n + (r.effort ?? 0), 0)).replace(
+                      ' ',
+                      '\u00a0',
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -3067,15 +4520,35 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
       {drag.edge}
       {drag.ghost}
       {tasks.dialog}
-      {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
+      {opened && (
+        <FeaturePanel
+          key={opened.code}
+          feature={{ ...opened, prd: plan.prd }}
+          phone={phone}
+          canChange={can('create_simple_change')}
+          onClose={() => setOpened(null)}
+        />
+      )}
       {acts.dialogs}
-      {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
+      {panel && (
+        <GoalPanel
+          key={`${panel.goal.key}:${panel.start ?? ''}`}
+          goal={panel.goal}
+          start={panel.start}
+          api={suggestions}
+          onClose={() => setPanel(null)}
+        />
+      )}
     </section>
   );
 }
 
 /** What the note's Undo does: a goal back from Trash with its links, a goal's move, or a bucket write's Undo. */
-function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks?: { undo: (changes: string[]) => unknown }): (() => void) | undefined {
+function undoOf(
+  note: Note,
+  writes: ReturnType<typeof useBucketWrites>,
+  tasks?: { undo: (changes: string[]) => unknown },
+): (() => void) | undefined {
   if (note.restore) return () => void writes.restore(note.restore!);
   if (note.order) return () => void writes.unorder(note.order!);
   if (note.undo) return () => void writes.undo(note.undo!);
@@ -3089,7 +4562,12 @@ function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks?: 
  * goal links), the plan's, and the roadmap items and drafts that name it, whatever their dates (a
  * bucket holds only this quarter's work), so none loses its goal unasked (goal-delete-dated).
  */
-function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan: Schemas["SimplePlanOut"] | null, kr?: PriorityKeyResults): GoalFeatures {
+function goalFeatures(
+  gb: Schemas['GoalBucketsOut'] | undefined,
+  data: Out,
+  plan: Schemas['SimplePlanOut'] | null,
+  kr?: PriorityKeyResults,
+): GoalFeatures {
   return (title) => {
     const g = gb?.goals.find((x) => sameGoal(x.title, title));
     if (!g) return [];
@@ -3103,7 +4581,9 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     const lift = (ids?: string[]) => ids?.map(liftOne);
     // goal-delete-r4: the key result an item stays on (its first other live goal, when that is a key result), by name.
     const keptKr = (ids?: string[]) => {
-      const kept = ids?.find((id) => liftOne(id) !== g.id && gb?.goals.some((x) => x.id === liftOne(id)));
+      const kept = ids?.find(
+        (id) => liftOne(id) !== g.id && gb?.goals.some((x) => x.id === liftOne(id)),
+      );
       const p = kept ? kr?.top(kept) : null;
       return (p && kr?.of([p.id]).find((k) => k.id === kept)?.name) || undefined;
     };
@@ -3113,24 +4593,56 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     const seen = new Map<string, ReturnType<GoalFeatures>[number]>();
     // An item is its feature's slice by its feature's own code too (`short`: F-16 for the item plan-f-16), so it counts once;
     // never by a short code made from initials, which may read as another feature's key (goal-features-own-key).
-    const add = (code: string, name: string, ids: (string | null | undefined)[] = [], goalIds?: string[], short?: string, kept?: string) => {
-      const hit = out.get(code.toLowerCase()) ?? (short ? out.get(short.toLowerCase()) : undefined) ?? ids.map((i) => (i ? seen.get(i) : undefined)).find(Boolean);
+    const add = (
+      code: string,
+      name: string,
+      ids: (string | null | undefined)[] = [],
+      goalIds?: string[],
+      short?: string,
+      kept?: string,
+    ) => {
+      const hit =
+        out.get(code.toLowerCase()) ??
+        (short ? out.get(short.toLowerCase()) : undefined) ??
+        ids.map((i) => (i ? seen.get(i) : undefined)).find(Boolean);
       if (hit) {
-        if (goalIds?.length && !hit.goal_ids?.length) Object.assign(hit, { goal_ids: goalIds, ...(kept ? { kept_kr: kept } : {}) });
+        if (goalIds?.length && !hit.goal_ids?.length)
+          Object.assign(hit, { goal_ids: goalIds, ...(kept ? { kept_kr: kept } : {}) });
         for (const i of ids) if (i) seen.set(i, hit);
         return;
       }
-      const slices = plan?.slices.filter((s) => s.feature_code.toLowerCase() === code.toLowerCase()) ?? [];
-      const f = { code, name, slices, tag: knownCode(code) ? code : null, ...(goalIds?.length ? { goal_ids: goalIds } : {}), ...(kept ? { kept_kr: kept } : {}) };
+      const slices =
+        plan?.slices.filter((s) => s.feature_code.toLowerCase() === code.toLowerCase()) ?? [];
+      const f = {
+        code,
+        name,
+        slices,
+        tag: knownCode(code) ? code : null,
+        ...(goalIds?.length ? { goal_ids: goalIds } : {}),
+        ...(kept ? { kept_kr: kept } : {}),
+      };
       out.set(code.toLowerCase(), f);
       for (const i of ids) if (i) seen.set(i, f);
     };
     if (plan) for (const f of planFeatures(plan, title)) add(f.code, f.name);
-    for (const f of gb?.features ?? []) if (f.goal_ids?.includes(g.id)) add(f.key, rowOf.get(f.key)?.title ?? f.title, [f.id]);
+    for (const f of gb?.features ?? [])
+      if (f.goal_ids?.includes(g.id)) add(f.key, rowOf.get(f.key)?.title ?? f.title, [f.id]);
     // The items and drafts by every goal they serve, not only their first (an item's own goals).
-    const serves = (r: { goal?: { title: string } | null; goal_ids?: string[] }) => (r.goal_ids?.length ? r.goal_ids.includes(g.id) : !!r.goal && sameGoal(r.goal.title, title));
-    for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], lift(r.goal_ids), r.own_key ?? undefined, keptKr(r.goal_ids));
-    for (const r of data.unranked) if (serves(r)) add(r.code, r.title, [r.item_id], lift(r.goal_ids), undefined, keptKr(r.goal_ids));
+    const serves = (r: { goal?: { title: string } | null; goal_ids?: string[] }) =>
+      r.goal_ids?.length ? r.goal_ids.includes(g.id) : !!r.goal && sameGoal(r.goal.title, title);
+    for (const r of data.rows)
+      if (serves(r))
+        add(
+          r.code,
+          r.title,
+          [r.item_id, r.feature_id],
+          lift(r.goal_ids),
+          r.own_key ?? undefined,
+          keptKr(r.goal_ids),
+        );
+    for (const r of data.unranked)
+      if (serves(r))
+        add(r.code, r.title, [r.item_id], lift(r.goal_ids), undefined, keptKr(r.goal_ids));
     // A linked draft (shown on its feature's row) is that feature's slice: it counts once with it, by the row's feature
     // and own key; never a draft only named as the row (a same-name twin is another feature).
     const rowById = new Map(data.rows.map((r) => [r.feature_id, r]));
@@ -3138,7 +4650,14 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
       // qa-nov17 G6: a draft the goal's bucket lists (by its goal, as the bucket reads it) is the goal's too.
       if (!serves(r) && !(r.goal && sameGoal(r.goal.title, title))) continue;
       const row = r.linked && r.row_feature_id ? rowById.get(r.row_feature_id) : undefined;
-      add(r.code, r.title, [r.item_id, row?.feature_id], lift(r.goal_ids), row?.own_key ?? undefined, keptKr(r.goal_ids));
+      add(
+        r.code,
+        r.title,
+        [r.item_id, row?.feature_id],
+        lift(r.goal_ids),
+        row?.own_key ?? undefined,
+        keptKr(r.goal_ids),
+      );
     }
     return [...out.values()];
   };
@@ -3149,22 +4668,50 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
  * for who may not), the Archived goals fold (Restore and Delete, or Ask to restore), and the
  * questions each asks first.
  */
-function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb: Schemas["GoalBucketsOut"] | undefined; plan: Schemas["SimplePlanOut"] | null; featuresOf: GoalFeatures; writes: ReturnType<typeof useBucketWrites>; rights: ReturnType<typeof useBucketRights>; onArchived?: () => void }) {
+function useGoalActs({
+  gb,
+  plan,
+  featuresOf,
+  writes,
+  rights,
+  onArchived,
+}: {
+  gb: Schemas['GoalBucketsOut'] | undefined;
+  plan: Schemas['SimplePlanOut'] | null;
+  featuresOf: GoalFeatures;
+  writes: ReturnType<typeof useBucketWrites>;
+  rights: ReturnType<typeof useBucketRights>;
+  onArchived?: () => void;
+}) {
   const [archiving, setArchiving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [archOpen, setArchOpen] = useState(false);
-  const [delArchived, setDelArchived] = useState<Schemas["ArchivedGoal"] | null>(null);
+  const [delArchived, setDelArchived] = useState<Schemas['ArchivedGoal'] | null>(null);
   const archivedGoal = gb?.goals.find((g) => g.id === archiving);
   const deletedGoal = gb?.goals.find((g) => g.id === deleting);
   const asksTo = gb?.asks_to ?? [];
   const trashed = (words: string) => `${words} It is in Settings > Trash for 30 days.`;
   return {
-    menu: (rec: Schemas["GoalBucketGoal"], title: string, onEdit?: () => void) => {
+    menu: (rec: Schemas['GoalBucketGoal'], title: string, onEdit?: () => void) => {
       // Move up and Move down, in the goal order the goal buckets list (none on the first or the last goal).
       const live = gb?.goals ?? [];
       const at = live.findIndex((g) => g.id === rec.id);
-      const by = (d: -1 | 1) => (rights.order(rec) && at >= 0 && live[at + d] ? () => void writes.reorder(live, rec.id, d) : undefined);
-      return <GoalMenu title={title} archive={rights.archiveAct} del={rights.deleteAct} onEdit={onEdit} onUp={by(-1)} onDown={by(1)} onArchive={() => setArchiving(rec.id)} onDelete={() => setDeleting(rec.id)} />;
+      const by = (d: -1 | 1) =>
+        rights.order(rec) && at >= 0 && live[at + d]
+          ? () => void writes.reorder(live, rec.id, d)
+          : undefined;
+      return (
+        <GoalMenu
+          title={title}
+          archive={rights.archiveAct}
+          del={rights.deleteAct}
+          onEdit={onEdit}
+          onUp={by(-1)}
+          onDown={by(1)}
+          onArchive={() => setArchiving(rec.id)}
+          onDelete={() => setDeleting(rec.id)}
+        />
+      );
     },
     fold: (year: string) =>
       gb && (
@@ -3175,7 +4722,11 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
           onToggle={setArchOpen}
           restore={rights.unarchiveAct}
           del={rights.deleteAct}
-          onRestore={(g) => void (rights.unarchiveAct === "ask" ? writes.ask("unarchive_goal", g, null, asksTo) : writes.unarchive(g))}
+          onRestore={(g) =>
+            void (rights.unarchiveAct === 'ask'
+              ? writes.ask('unarchive_goal', g, null, asksTo)
+              : writes.unarchive(g))
+          }
           onDelete={setDelArchived}
         />
       ),
@@ -3188,10 +4739,17 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
             featuresOf={featuresOf}
             gb={gb}
             kind="delete"
-            ask={rights.deleteAct === "ask" ? asksTo : null}
+            ask={rights.deleteAct === 'ask' ? asksTo : null}
             onClose={() => setDeleting(null)}
             onArchive={async (to) => {
-              const done = rights.deleteAct === "ask" ? await writes.ask("delete_goal", deletedGoal, to, asksTo) : await writes.remove(deletedGoal, to, trashed(archiveWords(featuresOf, gb, deletedGoal, to, "Deleted")));
+              const done =
+                rights.deleteAct === 'ask'
+                  ? await writes.ask('delete_goal', deletedGoal, to, asksTo)
+                  : await writes.remove(
+                      deletedGoal,
+                      to,
+                      trashed(archiveWords(featuresOf, gb, deletedGoal, to, 'Deleted')),
+                    );
               if (done) setDeleting(null);
             }}
           />
@@ -3201,7 +4759,8 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
             goal={delArchived}
             onClose={() => setDelArchived(null)}
             onDelete={async () => {
-              if (await writes.remove(delArchived, null, trashed(`Deleted ${delArchived.title}.`))) setDelArchived(null);
+              if (await writes.remove(delArchived, null, trashed(`Deleted ${delArchived.title}.`)))
+                setDelArchived(null);
             }}
           />
         )}
@@ -3211,14 +4770,21 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
             plan={plan}
             featuresOf={featuresOf}
             gb={gb}
-            ask={rights.archiveAct === "ask" ? asksTo : null}
+            ask={rights.archiveAct === 'ask' ? asksTo : null}
             onClose={() => setArchiving(null)}
             onArchive={async (to) => {
-              if (rights.archiveAct === "ask") {
-                if (await writes.ask("archive_goal", archivedGoal, to, asksTo)) setArchiving(null);
+              if (rights.archiveAct === 'ask') {
+                if (await writes.ask('archive_goal', archivedGoal, to, asksTo)) setArchiving(null);
                 return;
               }
-              if (!(await writes.archive(archivedGoal, to, archiveWords(featuresOf, gb, archivedGoal, to)))) return;
+              if (
+                !(await writes.archive(
+                  archivedGoal,
+                  to,
+                  archiveWords(featuresOf, gb, archivedGoal, to),
+                ))
+              )
+                return;
               setArchiving(null);
               // eg1-a-result: the archived goal tops the opened Archived goals fold.
               setArchOpen(true);
@@ -3231,18 +4797,28 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
   };
 }
 
-const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
+const ICON_BTN =
+  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40';
 
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
-function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null, verb = "Archived"): string {
+function archiveWords(
+  listOf: GoalFeatures,
+  gb: Schemas['GoalBucketsOut'],
+  goal: Schemas['GoalBucketGoal'],
+  to: string | null,
+  verb = 'Archived',
+): string {
   const list = listOf(goal.title);
   const own = list.filter((f) => otherGoal(gb, f, goal.id)).length;
   const rest = list.length - own;
   const toTitle = gb.goals.find((g) => g.id === to)?.title;
-  const feats = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
-  const ownWords = own ? `${own} to the other goal ${own === 1 ? "it serves" : "each serves"}` : "";
+  const feats = (n: number) => `${n} ${n === 1 ? 'feature' : 'features'}`;
+  const ownWords = own ? `${own} to the other goal ${own === 1 ? 'it serves' : 'each serves'}` : '';
   if (!list.length) return `${verb} ${goal.title}. It held no features.`;
-  if (!rest) return `${verb} ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
-  const restWords = toTitle ? `${feats(rest)} moved to ${toTitle}` : `${feats(rest)} ${rest === 1 ? "is" : "are"} under No goal now`;
-  return `${verb} ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
+  if (!rest)
+    return `${verb} ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? 'it serves' : 'each serves'}.`;
+  const restWords = toTitle
+    ? `${feats(rest)} moved to ${toTitle}`
+    : `${feats(rest)} ${rest === 1 ? 'is' : 'are'} under No goal now`;
+  return `${verb} ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ''}.`;
 }

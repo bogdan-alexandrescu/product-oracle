@@ -4,35 +4,35 @@
  * filters (any query parameter other than limit/offset matches a field of the row).
  * One linked row per entity, synthetic placeholders only. Lanes add their writes here.
  */
-import type { Schemas } from "@/lib/api/client";
-import type { DeletedEntity } from "./impact";
-import { reply } from "./typed";
+import type { Schemas } from '@/lib/api/client';
+import type { DeletedEntity } from './impact';
+import { reply } from './typed';
 
 export interface V2Db {
-  modules: Schemas["ModuleDefinitionOut"][];
-  module_versions: Schemas["ModuleVersionOut"][];
-  template_module_assignments: Schemas["TemplateModuleAssignmentOut"][];
-  compositions: Schemas["DocumentCompositionOut"][];
-  composition_revisions: Schemas["CompositionRevisionOut"][];
-  intakes: Schemas["ProductIntakeOut"][];
-  gaps: Schemas["KnowledgeGapOut"][];
-  questions: Schemas["StakeholderQuestionOut"][];
-  answers: Schemas["StakeholderAnswerOut"][];
-  assumption_decisions: Schemas["AssumptionDecisionOut"][];
-  blocker_options: Schemas["BlockerOptionOut"][];
-  feasibility_experiments: Schemas["FeasibilityExperimentOut"][];
-  blocker_events: Schemas["BlockerResolutionEventOut"][];
-  change_events: Schemas["ChangeEventOut"][];
-  section_links: Schemas["DocumentSectionLinkOut"][];
-  artifact_dependencies: Schemas["ArtifactDependencyOut"][];
-  evaluation_reports: Schemas["EvaluationReportOut"][];
-  evaluation_findings: Schemas["EvaluationFindingOut"][];
-  artifact_requests: Schemas["ArtifactRequestOut"][];
-  artifact_versions: Schemas["ArtifactVersionOut"][];
-  artifact_outputs: Schemas["ArtifactOutputOut"][];
-  artifact_review_events: Schemas["ArtifactReviewEventOut"][];
+  modules: Schemas['ModuleDefinitionOut'][];
+  module_versions: Schemas['ModuleVersionOut'][];
+  template_module_assignments: Schemas['TemplateModuleAssignmentOut'][];
+  compositions: Schemas['DocumentCompositionOut'][];
+  composition_revisions: Schemas['CompositionRevisionOut'][];
+  intakes: Schemas['ProductIntakeOut'][];
+  gaps: Schemas['KnowledgeGapOut'][];
+  questions: Schemas['StakeholderQuestionOut'][];
+  answers: Schemas['StakeholderAnswerOut'][];
+  assumption_decisions: Schemas['AssumptionDecisionOut'][];
+  blocker_options: Schemas['BlockerOptionOut'][];
+  feasibility_experiments: Schemas['FeasibilityExperimentOut'][];
+  blocker_events: Schemas['BlockerResolutionEventOut'][];
+  change_events: Schemas['ChangeEventOut'][];
+  section_links: Schemas['DocumentSectionLinkOut'][];
+  artifact_dependencies: Schemas['ArtifactDependencyOut'][];
+  evaluation_reports: Schemas['EvaluationReportOut'][];
+  evaluation_findings: Schemas['EvaluationFindingOut'][];
+  artifact_requests: Schemas['ArtifactRequestOut'][];
+  artifact_versions: Schemas['ArtifactVersionOut'][];
+  artifact_outputs: Schemas['ArtifactOutputOut'][];
+  artifact_review_events: Schemas['ArtifactReviewEventOut'][];
   /** What intakes proposed (./intake.ts); absent in data saved before the intake lane. */
-  intake_proposals?: Schemas["IntakeProposalOut"][];
+  intake_proposals?: Schemas['IntakeProposalOut'][];
   /** Gaps hidden from everyone but their intake's author (S6): the mock's only private
    * findings (the "private-finding" scenario); absent elsewhere. */
   private_gap_ids?: string[];
@@ -41,17 +41,26 @@ export interface V2Db {
   blocker_briefs?: boolean;
   /** Each intake's findings from its author's own sources (S6) and their sharing levels,
    * by intake id; absent for intakes without any. */
-  intake_findings?: Record<string, Schemas["FindingOut"][]>;
+  intake_findings?: Record<string, Schemas['FindingOut'][]>;
   /** Each intake's draft run (C5): its id and the answers that existed when it was made
    * (the mock's stand-in for the run's start); absent before any. */
   intake_runs?: Record<string, { run_id: string; answer_ids: string[]; document?: string }>;
   /** INT2: Oracle's read of each intake (the author's only) and when the author started
    * reads (the newest last; the reads on create and repin are not among them); absent
    * before any read. */
-  intake_reads?: Record<string, { read: Omit<Schemas["AiReadOut"], "reads_today" | "reads_per_day" | "read_again_refused">; on_demand: string[] }>;
+  intake_reads?: Record<
+    string,
+    {
+      read: Omit<Schemas['AiReadOut'], 'reads_today' | 'reads_per_day' | 'read_again_refused'>;
+      on_demand: string[];
+    }
+  >;
   /** C5 late answers: the answers given after drafting started that became feedback items
    * on the PRD (answer id -> where), as late_answers.on_answer makes them. */
-  late_answer_feedback?: Record<string, { intake_id: string; slug: string; version: number; withheld?: boolean }>;
+  late_answer_feedback?: Record<
+    string,
+    { intake_id: string; slug: string; version: number; withheld?: boolean }
+  >;
   /** Baseline items deleted after outputs were built on them (the "impact" scenario, ./impact.ts). */
   deleted_entities?: DeletedEntity[];
   /** The impact walk stops at its limit (the "impact-large" scenario): reports say truncated. */
@@ -60,28 +69,28 @@ export interface V2Db {
 
 /** URL segment after /v1 -> the table it lists. */
 const PATHS: Record<string, keyof V2Db> = {
-  modules: "modules",
-  "module-versions": "module_versions",
-  "template-module-assignments": "template_module_assignments",
-  compositions: "compositions",
-  "composition-revisions": "composition_revisions",
-  intakes: "intakes",
-  gaps: "gaps",
-  questions: "questions",
-  answers: "answers",
-  "assumption-decisions": "assumption_decisions",
-  "blocker-options": "blocker_options",
-  "feasibility-experiments": "feasibility_experiments",
-  "blocker-events": "blocker_events",
-  "change-events": "change_events",
-  "section-links": "section_links",
-  "artifact-dependencies": "artifact_dependencies",
-  "evaluation-reports": "evaluation_reports",
-  "evaluation-findings": "evaluation_findings",
-  "artifact-requests": "artifact_requests",
-  "artifact-versions": "artifact_versions",
-  "artifact-outputs": "artifact_outputs",
-  "artifact-review-events": "artifact_review_events",
+  modules: 'modules',
+  'module-versions': 'module_versions',
+  'template-module-assignments': 'template_module_assignments',
+  compositions: 'compositions',
+  'composition-revisions': 'composition_revisions',
+  intakes: 'intakes',
+  gaps: 'gaps',
+  questions: 'questions',
+  answers: 'answers',
+  'assumption-decisions': 'assumption_decisions',
+  'blocker-options': 'blocker_options',
+  'feasibility-experiments': 'feasibility_experiments',
+  'blocker-events': 'blocker_events',
+  'change-events': 'change_events',
+  'section-links': 'section_links',
+  'artifact-dependencies': 'artifact_dependencies',
+  'evaluation-reports': 'evaluation_reports',
+  'evaluation-findings': 'evaluation_findings',
+  'artifact-requests': 'artifact_requests',
+  'artifact-versions': 'artifact_versions',
+  'artifact-outputs': 'artifact_outputs',
+  'artifact-review-events': 'artifact_review_events',
 };
 
 /** No v2 rows: a new company's (the mock's empty-company scenario). */
@@ -91,78 +100,127 @@ export function emptyV2(): V2Db {
 
 /** Fixed ids, so fixtures link to each other and tests can address them. */
 export const V2_IDS = {
-  module: "a2000000-0000-4000-8000-000000000001",
-  moduleVersion: "a2000000-0000-4000-8000-000000000002",
-  assignment: "a2000000-0000-4000-8000-000000000003",
-  composition: "a2000000-0000-4000-8000-000000000004",
-  revision: "a2000000-0000-4000-8000-000000000005",
-  intake: "a2000000-0000-4000-8000-000000000006",
-  gap: "a2000000-0000-4000-8000-000000000007",
-  question: "a2000000-0000-4000-8000-000000000008",
-  answer: "a2000000-0000-4000-8000-000000000009",
-  assumption: "a2000000-0000-4000-8000-00000000000a",
-  option: "a2000000-0000-4000-8000-00000000000b",
-  experiment: "a2000000-0000-4000-8000-00000000000c",
-  blockerEvent: "a2000000-0000-4000-8000-00000000000d",
-  change: "a2000000-0000-4000-8000-00000000000e",
-  link: "a2000000-0000-4000-8000-00000000000f",
-  dependency: "a2000000-0000-4000-8000-000000000010",
-  report: "a2000000-0000-4000-8000-000000000011",
-  finding: "a2000000-0000-4000-8000-000000000012",
-  request: "a2000000-0000-4000-8000-000000000013",
-  artifactVersion: "a2000000-0000-4000-8000-000000000014",
-  output: "a2000000-0000-4000-8000-000000000015",
-  review: "a2000000-0000-4000-8000-000000000016",
+  module: 'a2000000-0000-4000-8000-000000000001',
+  moduleVersion: 'a2000000-0000-4000-8000-000000000002',
+  assignment: 'a2000000-0000-4000-8000-000000000003',
+  composition: 'a2000000-0000-4000-8000-000000000004',
+  revision: 'a2000000-0000-4000-8000-000000000005',
+  intake: 'a2000000-0000-4000-8000-000000000006',
+  gap: 'a2000000-0000-4000-8000-000000000007',
+  question: 'a2000000-0000-4000-8000-000000000008',
+  answer: 'a2000000-0000-4000-8000-000000000009',
+  assumption: 'a2000000-0000-4000-8000-00000000000a',
+  option: 'a2000000-0000-4000-8000-00000000000b',
+  experiment: 'a2000000-0000-4000-8000-00000000000c',
+  blockerEvent: 'a2000000-0000-4000-8000-00000000000d',
+  change: 'a2000000-0000-4000-8000-00000000000e',
+  link: 'a2000000-0000-4000-8000-00000000000f',
+  dependency: 'a2000000-0000-4000-8000-000000000010',
+  report: 'a2000000-0000-4000-8000-000000000011',
+  finding: 'a2000000-0000-4000-8000-000000000012',
+  request: 'a2000000-0000-4000-8000-000000000013',
+  artifactVersion: 'a2000000-0000-4000-8000-000000000014',
+  output: 'a2000000-0000-4000-8000-000000000015',
+  review: 'a2000000-0000-4000-8000-000000000016',
   // Stand-ins for a baseline constraint (the blocker), a requirement and a template.
-  blocker: "a2000000-0000-4000-8000-000000000101",
-  requirement: "a2000000-0000-4000-8000-000000000102",
-  template: "a2000000-0000-4000-8000-000000000103",
+  blocker: 'a2000000-0000-4000-8000-000000000101',
+  requirement: 'a2000000-0000-4000-8000-000000000102',
+  template: 'a2000000-0000-4000-8000-000000000103',
 } as const;
 
-const AT = "2026-10-19T09:00:00Z";
+const AT = '2026-10-19T09:00:00Z';
 
 /** ``documentId`` / ``versionId``: the mock PRD the rows hang off. */
 export function seedV2(documentId: string, versionId: string | null, userId: string): V2Db {
   const I = V2_IDS;
   return {
     modules: [
-      { id: I.module, key: "constraints.solutions", title: "Constraints, Blockers & Solution Strategy", description: null, builtin: true, archived_at: null, created_by: null, created_at: AT },
+      {
+        id: I.module,
+        key: 'constraints.solutions',
+        title: 'Constraints, Blockers & Solution Strategy',
+        description: null,
+        builtin: true,
+        archived_at: null,
+        created_by: null,
+        created_at: AT,
+      },
     ],
     module_versions: [
       {
         id: I.moduleVersion,
         module_id: I.module,
-        version: "1.0.0",
-        contract: { id: "constraints.solutions", version: "1.0.0", title: "Constraints, Blockers & Solution Strategy", policy: "required", outputs: ["prd"] },
-        contract_hash: "0".repeat(64),
-        origin: "builtin",
+        version: '1.0.0',
+        contract: {
+          id: 'constraints.solutions',
+          version: '1.0.0',
+          title: 'Constraints, Blockers & Solution Strategy',
+          policy: 'required',
+          outputs: ['prd'],
+        },
+        contract_hash: '0'.repeat(64),
+        origin: 'builtin',
         created_by: null,
         created_at: AT,
       },
     ],
     template_module_assignments: [
-      { id: I.assignment, template_id: I.template, module_key: "constraints.solutions", module_version: null, policy: "required", display_order: 60, section_ids: ["risks"], since_template_version: null, manifest_format: 1, created_by: null, created_at: AT },
+      {
+        id: I.assignment,
+        template_id: I.template,
+        module_key: 'constraints.solutions',
+        module_version: null,
+        policy: 'required',
+        display_order: 60,
+        section_ids: ['risks'],
+        since_template_version: null,
+        manifest_format: 1,
+        created_by: null,
+        created_at: AT,
+      },
     ],
     compositions: [
-      { id: I.composition, document_id: documentId, template: "oracle-default", template_version: "1", current_revision: 1, lock_version: 1, created_at: AT, updated_at: AT },
+      {
+        id: I.composition,
+        document_id: documentId,
+        template: 'oracle-default',
+        template_version: '1',
+        current_revision: 1,
+        lock_version: 1,
+        created_at: AT,
+        updated_at: AT,
+      },
     ],
     composition_revisions: [
       {
         id: I.revision,
         composition_id: I.composition,
         number: 1,
-        status: "working",
-        modules: [{ key: "constraints.solutions", version: "1.0.0", policy: "required", included: true, reason: "Required by company policy", order: 60, section_ids: ["risks"], driven_by: [], score: null, overridden_by: null }],
+        status: 'working',
+        modules: [
+          {
+            key: 'constraints.solutions',
+            version: '1.0.0',
+            policy: 'required',
+            included: true,
+            reason: 'Required by company policy',
+            order: 60,
+            section_ids: ['risks'],
+            driven_by: [],
+            score: null,
+            overridden_by: null,
+          },
+        ],
         inputs: {
-          template: { key: "oracle-default", version: "1" },
+          template: { key: 'oracle-default', version: '1' },
           brief: {},
-          category: "platform",
+          category: 'platform',
           scope: {},
           signals: {},
           baseline: {},
           sources: {},
           stakeholders: {},
-          outputs: ["prd"],
+          outputs: ['prd'],
           blockers: {},
           policy: {},
           intake_id: I.intake,
@@ -171,7 +229,7 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
         },
         decided_by: userId,
         decided_at: AT,
-        reason: "First composition",
+        reason: 'First composition',
         parent_number: null,
         document_version_id: null,
         lock_version: 1,
@@ -181,21 +239,22 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
     intakes: [
       {
         id: I.intake,
-        title: "Bulk import",
-        brief: "Returning buyers retype their address at every checkout. Make repeat checkout faster.",
+        title: 'Bulk import',
+        brief:
+          'Returning buyers retype their address at every checkout. Make repeat checkout faster.',
         author_id: userId,
         source_snapshot_ids: [],
-        status: "awaiting_answers",
+        status: 'awaiting_answers',
         analysis: {
-          users: [{ name: "Returning buyer", knowledge_state: "user_decision" }],
-          problem: { statement: "Repeat buyers retype addresses", knowledge_state: "hypothesis" },
+          users: [{ name: 'Returning buyer', knowledge_state: 'user_decision' }],
+          problem: { statement: 'Repeat buyers retype addresses', knowledge_state: 'hypothesis' },
           outcomes: [],
           goal_ids: [],
-          scope: ["Bulk import from a spreadsheet"],
+          scope: ['Bulk import from a spreadsheet'],
           non_goals: [],
           dependencies: [],
           blockers: [],
-          category: "platform",
+          category: 'platform',
           conflicts: [],
         },
         document_id: documentId,
@@ -209,19 +268,19 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
         id: I.gap,
         intake_id: I.intake,
         document_id: documentId,
-        category: "success_metric",
-        statement: "No baseline for repeat checkout time",
-        impact: ["goals", "scope"],
-        importance: "critical",
+        category: 'success_metric',
+        statement: 'No baseline for repeat checkout time',
+        impact: ['goals', 'scope'],
+        importance: 'critical',
         evidence_ids: [],
         confidence: null,
-        knowledge_state: "unknown",
-        status: "asked",
+        knowledge_state: 'unknown',
+        status: 'asked',
         owner_id: userId,
-        related_modules: ["constraints.solutions"],
-        stop_condition: "A named metric with a baseline value",
+        related_modules: ['constraints.solutions'],
+        stop_condition: 'A named metric with a baseline value',
         entity_ids: [I.requirement],
-        section_keys: ["metrics"],
+        section_keys: ['metrics'],
         created_by: null,
         lock_version: 1,
         created_at: AT,
@@ -229,26 +288,65 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
       },
     ],
     questions: [
-      { id: I.question, gap_id: I.gap, intake_id: I.intake, document_id: documentId, category: "success_metric", prompt: "Which metric shows repeat checkout got faster?", rationale: "Decides scope and the success criteria", priority: 10, batch: 1, asked_to: userId, asked_by: null, module_key: null, section_key: "metrics", status: "asked", created_at: AT, updated_at: AT },
+      {
+        id: I.question,
+        gap_id: I.gap,
+        intake_id: I.intake,
+        document_id: documentId,
+        category: 'success_metric',
+        prompt: 'Which metric shows repeat checkout got faster?',
+        rationale: 'Decides scope and the success criteria',
+        priority: 10,
+        batch: 1,
+        asked_to: userId,
+        asked_by: null,
+        module_key: null,
+        section_key: 'metrics',
+        status: 'asked',
+        created_at: AT,
+        updated_at: AT,
+      },
     ],
     answers: [
-      { id: I.answer, question_id: I.question, kind: "dont_know", body: null, answered_by: userId, delegated_to: null, evidence_ids: [], knowledge_state: "unknown", created_at: AT },
+      {
+        id: I.answer,
+        question_id: I.question,
+        kind: 'dont_know',
+        body: null,
+        answered_by: userId,
+        delegated_to: null,
+        evidence_ids: [],
+        knowledge_state: 'unknown',
+        created_at: AT,
+      },
     ],
     assumption_decisions: [
-      { id: I.assumption, gap_id: I.gap, document_id: documentId, entity_id: null, statement: "Median repeat checkout time is the metric", decision: "accept_assumption", rationale: "Best available signal until analytics are connected", decided_by: userId, decided_at: AT, review_at: null, created_at: AT },
+      {
+        id: I.assumption,
+        gap_id: I.gap,
+        document_id: documentId,
+        entity_id: null,
+        statement: 'Median repeat checkout time is the metric',
+        decision: 'accept_assumption',
+        rationale: 'Best available signal until analytics are connected',
+        decided_by: userId,
+        decided_at: AT,
+        review_at: null,
+        created_at: AT,
+      },
     ],
     blocker_options: [
       {
         id: I.option,
         blocker_id: I.blocker,
-        title: "Batch address lookups within the published quota",
-        approach: "architecture",
+        title: 'Batch address lookups within the published quota',
+        approach: 'architecture',
         description: null,
-        technical_feasibility: "high",
-        policy_feasibility: "high",
-        compliance: "compliant",
-        status: "evaluating",
-        details: { fallback: "Queue lookups and retry within limits" },
+        technical_feasibility: 'high',
+        policy_feasibility: 'high',
+        compliance: 'compliant',
+        status: 'evaluating',
+        details: { fallback: 'Queue lookups and retry within limits' },
         evidence_ids: [],
         owner_id: userId,
         selected_reason: null,
@@ -259,43 +357,188 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
       },
     ],
     feasibility_experiments: [
-      { id: I.experiment, blocker_id: I.blocker, option_id: I.option, hypothesis: "Batching halves lookup calls", method: "Replay a synthetic day of traffic", success_threshold: "Under 50% of today's calls", owner_id: userId, decision_gate_at: null, status: "planned", result: null, evidence_ids: [], lock_version: 1, created_at: AT, updated_at: AT },
+      {
+        id: I.experiment,
+        blocker_id: I.blocker,
+        option_id: I.option,
+        hypothesis: 'Batching halves lookup calls',
+        method: 'Replay a synthetic day of traffic',
+        success_threshold: "Under 50% of today's calls",
+        owner_id: userId,
+        decision_gate_at: null,
+        status: 'planned',
+        result: null,
+        evidence_ids: [],
+        lock_version: 1,
+        created_at: AT,
+        updated_at: AT,
+      },
     ],
     blocker_events: [
-      { id: I.blockerEvent, blocker_id: I.blocker, option_id: I.option, experiment_id: I.experiment, kind: "experiment_started", from_status: "open", to_status: "mitigating", reason: null, actor: `user:${userId}`, data: {}, summary: "Experiment started", created_at: AT },
+      {
+        id: I.blockerEvent,
+        blocker_id: I.blocker,
+        option_id: I.option,
+        experiment_id: I.experiment,
+        kind: 'experiment_started',
+        from_status: 'open',
+        to_status: 'mitigating',
+        reason: null,
+        actor: `user:${userId}`,
+        data: {},
+        summary: 'Experiment started',
+        created_at: AT,
+      },
     ],
     change_events: [
-      { id: I.change, subject_kind: "document_section", subject_id: null, subject_ref: "annual-billing@2#metrics", document_id: documentId, cause: "section_edited", actor: `user:${userId}`, data: {}, handled_by: [], created_at: AT },
+      {
+        id: I.change,
+        subject_kind: 'document_section',
+        subject_id: null,
+        subject_ref: 'annual-billing@2#metrics',
+        document_id: documentId,
+        cause: 'section_edited',
+        actor: `user:${userId}`,
+        data: {},
+        handled_by: [],
+        created_at: AT,
+      },
     ],
     section_links: [
-      { id: I.link, document_id: documentId, version_id: versionId, section_key: "metrics", section_hash: null, composition_revision: 1, module_key: null, kind: "implements", entity_id: I.requirement, evidence_id: null, source_item_id: null, precision: "section", claim: null, created_by: null, created_at: AT },
+      {
+        id: I.link,
+        document_id: documentId,
+        version_id: versionId,
+        section_key: 'metrics',
+        section_hash: null,
+        composition_revision: 1,
+        module_key: null,
+        kind: 'implements',
+        entity_id: I.requirement,
+        evidence_id: null,
+        source_item_id: null,
+        precision: 'section',
+        claim: null,
+        created_by: null,
+        created_at: AT,
+      },
     ],
     artifact_dependencies: [
-      { id: I.dependency, artifact_version_id: I.artifactVersion, document_version_id: null, upstream_version_id: versionId, upstream_section_key: "metrics", upstream_section_hash: null, upstream_entity_id: null, composition_revision: 1, freshness: "potentially_stale", caused_by_change_id: I.change, stale_since: AT, reconciled_by: null, reconciled_at: null, note: null, created_at: AT, updated_at: AT },
+      {
+        id: I.dependency,
+        artifact_version_id: I.artifactVersion,
+        document_version_id: null,
+        upstream_version_id: versionId,
+        upstream_section_key: 'metrics',
+        upstream_section_hash: null,
+        upstream_entity_id: null,
+        composition_revision: 1,
+        freshness: 'potentially_stale',
+        caused_by_change_id: I.change,
+        stale_since: AT,
+        reconciled_by: null,
+        reconciled_at: null,
+        note: null,
+        created_at: AT,
+        updated_at: AT,
+      },
     ],
     evaluation_reports: [
-      { id: I.report, document_id: documentId, version_id: versionId, composition_revision: 1, evaluator: "rules", policy: "advisory", status: "complete", summary: { warning: 1 }, created_by: null, created_at: AT },
+      {
+        id: I.report,
+        document_id: documentId,
+        version_id: versionId,
+        composition_revision: 1,
+        evaluator: 'rules',
+        policy: 'advisory',
+        status: 'complete',
+        summary: { warning: 1 },
+        created_by: null,
+        created_at: AT,
+      },
     ],
     evaluation_findings: [
-      { id: I.finding, report_id: I.report, criterion: "success_metrics", status: "warning", hard: false, rationale: "The metric has no baseline value yet", evidence_ids: [], owner_id: userId, section_keys: ["metrics"], module_key: null, created_at: AT },
+      {
+        id: I.finding,
+        report_id: I.report,
+        criterion: 'success_metrics',
+        status: 'warning',
+        hard: false,
+        rationale: 'The metric has no baseline value yet',
+        evidence_ids: [],
+        owner_id: userId,
+        section_keys: ['metrics'],
+        module_key: null,
+        created_at: AT,
+      },
     ],
     artifact_requests: [
-      { id: I.request, kind: "tech_brief", title: "Bulk import tech brief", source_document_id: documentId, source_version_id: versionId, requirement_ids: [I.requirement], section_keys: ["metrics"], params: {}, status: "succeeded", run_id: null, requested_by: userId, lock_version: 1, created_at: AT, updated_at: AT },
+      {
+        id: I.request,
+        kind: 'tech_brief',
+        title: 'Bulk import tech brief',
+        source_document_id: documentId,
+        source_version_id: versionId,
+        requirement_ids: [I.requirement],
+        section_keys: ['metrics'],
+        params: {},
+        status: 'succeeded',
+        run_id: null,
+        requested_by: userId,
+        lock_version: 1,
+        created_at: AT,
+        updated_at: AT,
+      },
     ],
     artifact_versions: [
-      { id: I.artifactVersion, request_id: I.request, number: 1, status: "in_review", freshness: "potentially_stale", source_version_id: versionId, composition_revision: 1, content_hash: null, summary: "Tech brief for imported rows", provenance: {}, created_by: null, approved_by: null, approved_at: null, created_at: AT },
+      {
+        id: I.artifactVersion,
+        request_id: I.request,
+        number: 1,
+        status: 'in_review',
+        freshness: 'potentially_stale',
+        source_version_id: versionId,
+        composition_revision: 1,
+        content_hash: null,
+        summary: 'Tech brief for imported rows',
+        provenance: {},
+        created_by: null,
+        approved_by: null,
+        approved_at: null,
+        created_at: AT,
+      },
     ],
     artifact_outputs: [
-      { id: I.output, version_id: I.artifactVersion, name: "tech-brief.md", media_type: "text/markdown", size_bytes: 128, sha256: "0".repeat(64), meta: {}, created_at: AT },
+      {
+        id: I.output,
+        version_id: I.artifactVersion,
+        name: 'tech-brief.md',
+        media_type: 'text/markdown',
+        size_bytes: 128,
+        sha256: '0'.repeat(64),
+        meta: {},
+        created_at: AT,
+      },
     ],
     artifact_review_events: [
-      { id: I.review, version_id: I.artifactVersion, kind: "marked_stale", body: "The metrics section changed", actor: "system", data: {}, created_at: AT },
+      {
+        id: I.review,
+        version_id: I.artifactVersion,
+        kind: 'marked_stale',
+        body: 'The metrics section changed',
+        actor: 'system',
+        data: {},
+        created_at: AT,
+      },
     ],
   };
 }
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 /** A row's own field by name, without an index signature on its (schema) type. */
@@ -314,71 +557,240 @@ function filterSort<T extends { created_at: string }>(rows: T[], filters: [strin
 }
 
 /** GET /v1/<v2 path>[/<id>]; null when the path is not a v2 route. `me` is the signed-in user (asked_to=me). */
-export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams, me: string | null = null): Response | null {
+export function routeV2(
+  db: V2Db,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+  me: string | null = null,
+): Response | null {
   const table = PATHS[p[1]];
-  if (!table || req.method !== "GET" || p.length > 3) return null;
+  if (!table || req.method !== 'GET' || p.length > 3) return null;
   if (p[2]) {
     const id = p[2];
     switch (table) {
-      case "modules": { const row = findById(db.modules, id); return row ? reply("/v1/modules/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "module_versions": { const row = findById(db.module_versions, id); return row ? reply("/v1/module-versions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "template_module_assignments": { const row = findById(db.template_module_assignments, id); return row ? reply("/v1/template-module-assignments/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "compositions": { const row = findById(db.compositions, id); return row ? reply("/v1/compositions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "composition_revisions": { const row = findById(db.composition_revisions, id); return row ? reply("/v1/composition-revisions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "intakes": { const row = findById(db.intakes, id); return row ? reply("/v1/intakes/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "gaps": { const row = findById(db.gaps, id); return row ? reply("/v1/gaps/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "questions": { const row = findById(db.questions, id); return row ? reply("/v1/questions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "answers": { const row = findById(db.answers, id); return row ? reply("/v1/answers/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "assumption_decisions": { const row = findById(db.assumption_decisions, id); return row ? reply("/v1/assumption-decisions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "blocker_options": { const row = findById(db.blocker_options, id); return row ? reply("/v1/blocker-options/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "feasibility_experiments": { const row = findById(db.feasibility_experiments, id); return row ? reply("/v1/feasibility-experiments/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "blocker_events": { const row = findById(db.blocker_events, id); return row ? reply("/v1/blocker-events/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "change_events": { const row = findById(db.change_events, id); return row ? reply("/v1/change-events/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "section_links": { const row = findById(db.section_links, id); return row ? reply("/v1/section-links/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "artifact_dependencies": { const row = findById(db.artifact_dependencies, id); return row ? reply("/v1/artifact-dependencies/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "evaluation_reports": {
-        const row = findById(db.evaluation_reports, id);
-        if (!row) return json(404, { detail: "Not found" });
-        return reply("/v1/evaluation-reports/{item_id}", "get", { ...row, findings: db.evaluation_findings.filter((f) => f.report_id === row.id) });
+      case 'modules': {
+        const row = findById(db.modules, id);
+        return row
+          ? reply('/v1/modules/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
       }
-      case "evaluation_findings": { const row = findById(db.evaluation_findings, id); return row ? reply("/v1/evaluation-findings/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "artifact_requests": { const row = findById(db.artifact_requests, id); return row ? reply("/v1/artifact-requests/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "artifact_versions": { const row = findById(db.artifact_versions, id); return row ? reply("/v1/artifact-versions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "artifact_outputs": { const row = findById(db.artifact_outputs, id); return row ? reply("/v1/artifact-outputs/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
-      case "artifact_review_events": { const row = findById(db.artifact_review_events, id); return row ? reply("/v1/artifact-review-events/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case 'module_versions': {
+        const row = findById(db.module_versions, id);
+        return row
+          ? reply('/v1/module-versions/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'template_module_assignments': {
+        const row = findById(db.template_module_assignments, id);
+        return row
+          ? reply('/v1/template-module-assignments/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'compositions': {
+        const row = findById(db.compositions, id);
+        return row
+          ? reply('/v1/compositions/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'composition_revisions': {
+        const row = findById(db.composition_revisions, id);
+        return row
+          ? reply('/v1/composition-revisions/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'intakes': {
+        const row = findById(db.intakes, id);
+        return row
+          ? reply('/v1/intakes/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'gaps': {
+        const row = findById(db.gaps, id);
+        return row ? reply('/v1/gaps/{item_id}', 'get', row) : json(404, { detail: 'Not found' });
+      }
+      case 'questions': {
+        const row = findById(db.questions, id);
+        return row
+          ? reply('/v1/questions/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'answers': {
+        const row = findById(db.answers, id);
+        return row
+          ? reply('/v1/answers/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'assumption_decisions': {
+        const row = findById(db.assumption_decisions, id);
+        return row
+          ? reply('/v1/assumption-decisions/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'blocker_options': {
+        const row = findById(db.blocker_options, id);
+        return row
+          ? reply('/v1/blocker-options/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'feasibility_experiments': {
+        const row = findById(db.feasibility_experiments, id);
+        return row
+          ? reply('/v1/feasibility-experiments/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'blocker_events': {
+        const row = findById(db.blocker_events, id);
+        return row
+          ? reply('/v1/blocker-events/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'change_events': {
+        const row = findById(db.change_events, id);
+        return row
+          ? reply('/v1/change-events/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'section_links': {
+        const row = findById(db.section_links, id);
+        return row
+          ? reply('/v1/section-links/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'artifact_dependencies': {
+        const row = findById(db.artifact_dependencies, id);
+        return row
+          ? reply('/v1/artifact-dependencies/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'evaluation_reports': {
+        const row = findById(db.evaluation_reports, id);
+        if (!row) return json(404, { detail: 'Not found' });
+        return reply('/v1/evaluation-reports/{item_id}', 'get', {
+          ...row,
+          findings: db.evaluation_findings.filter((f) => f.report_id === row.id),
+        });
+      }
+      case 'evaluation_findings': {
+        const row = findById(db.evaluation_findings, id);
+        return row
+          ? reply('/v1/evaluation-findings/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'artifact_requests': {
+        const row = findById(db.artifact_requests, id);
+        return row
+          ? reply('/v1/artifact-requests/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'artifact_versions': {
+        const row = findById(db.artifact_versions, id);
+        return row
+          ? reply('/v1/artifact-versions/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'artifact_outputs': {
+        const row = findById(db.artifact_outputs, id);
+        return row
+          ? reply('/v1/artifact-outputs/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
+      case 'artifact_review_events': {
+        const row = findById(db.artifact_review_events, id);
+        return row
+          ? reply('/v1/artifact-review-events/{item_id}', 'get', row)
+          : json(404, { detail: 'Not found' });
+      }
     }
   }
-  const limit = Number(q.get("limit") ?? 100);
-  const offset = Number(q.get("offset") ?? 0);
-  if (!(limit >= 1 && limit <= 500) || !(offset >= 0)) return json(422, { detail: "limit or offset" });
-  if (q.get("asked_to") && q.get("asked_to") !== "me") return json(422, { detail: "asked_to takes only me" });
+  const limit = Number(q.get('limit') ?? 100);
+  const offset = Number(q.get('offset') ?? 0);
+  if (!(limit >= 1 && limit <= 500) || !(offset >= 0))
+    return json(422, { detail: 'limit or offset' });
+  if (q.get('asked_to') && q.get('asked_to') !== 'me')
+    return json(422, { detail: 'asked_to takes only me' });
   const filters = [...q.entries()]
-    .filter(([k]) => k !== "limit" && k !== "offset")
-    .map(([k, v]): [string, string] => [k, v === "me" ? (me ?? "nobody") : v]);
+    .filter(([k]) => k !== 'limit' && k !== 'offset')
+    .map(([k, v]): [string, string] => [k, v === 'me' ? (me ?? 'nobody') : v]);
   const page = <T>(rows: T[]) => rows.slice(offset, offset + limit);
   switch (table) {
-    case "modules": return reply("/v1/modules", "get", page(filterSort(db.modules, filters)));
-    case "module_versions": return reply("/v1/module-versions", "get", page(filterSort(db.module_versions, filters)));
-    case "template_module_assignments": return reply("/v1/template-module-assignments", "get", page(filterSort(db.template_module_assignments, filters)));
-    case "compositions": return reply("/v1/compositions", "get", page(filterSort(db.compositions, filters)));
-    case "composition_revisions": return reply("/v1/composition-revisions", "get", page(filterSort(db.composition_revisions, filters)));
-    case "intakes": return reply("/v1/intakes", "get", page(filterSort(db.intakes, filters)));
-    case "gaps": return reply("/v1/gaps", "get", page(filterSort(db.gaps, filters)));
-    case "questions": return reply("/v1/questions", "get", page(filterSort(db.questions, filters)));
-    case "answers": return reply("/v1/answers", "get", page(filterSort(db.answers, filters)));
-    case "assumption_decisions": return reply("/v1/assumption-decisions", "get", page(filterSort(db.assumption_decisions, filters)));
-    case "blocker_options": return reply("/v1/blocker-options", "get", page(filterSort(db.blocker_options, filters)));
-    case "feasibility_experiments": return reply("/v1/feasibility-experiments", "get", page(filterSort(db.feasibility_experiments, filters)));
-    case "blocker_events": return reply("/v1/blocker-events", "get", page(filterSort(db.blocker_events, filters)));
-    case "change_events": return reply("/v1/change-events", "get", page(filterSort(db.change_events, filters)));
-    case "section_links": return reply("/v1/section-links", "get", page(filterSort(db.section_links, filters)));
-    case "artifact_dependencies": return reply("/v1/artifact-dependencies", "get", page(filterSort(db.artifact_dependencies, filters)));
-    case "evaluation_reports": return reply("/v1/evaluation-reports", "get", page(filterSort(db.evaluation_reports, filters)));
-    case "evaluation_findings": return reply("/v1/evaluation-findings", "get", page(filterSort(db.evaluation_findings, filters)));
-    case "artifact_requests": return reply("/v1/artifact-requests", "get", page(filterSort(db.artifact_requests, filters)));
-    case "artifact_versions": return reply("/v1/artifact-versions", "get", page(filterSort(db.artifact_versions, filters)));
-    case "artifact_outputs": return reply("/v1/artifact-outputs", "get", page(filterSort(db.artifact_outputs, filters)));
-    case "artifact_review_events": return reply("/v1/artifact-review-events", "get", page(filterSort(db.artifact_review_events, filters)));
-    default: return null;
+    case 'modules':
+      return reply('/v1/modules', 'get', page(filterSort(db.modules, filters)));
+    case 'module_versions':
+      return reply('/v1/module-versions', 'get', page(filterSort(db.module_versions, filters)));
+    case 'template_module_assignments':
+      return reply(
+        '/v1/template-module-assignments',
+        'get',
+        page(filterSort(db.template_module_assignments, filters)),
+      );
+    case 'compositions':
+      return reply('/v1/compositions', 'get', page(filterSort(db.compositions, filters)));
+    case 'composition_revisions':
+      return reply(
+        '/v1/composition-revisions',
+        'get',
+        page(filterSort(db.composition_revisions, filters)),
+      );
+    case 'intakes':
+      return reply('/v1/intakes', 'get', page(filterSort(db.intakes, filters)));
+    case 'gaps':
+      return reply('/v1/gaps', 'get', page(filterSort(db.gaps, filters)));
+    case 'questions':
+      return reply('/v1/questions', 'get', page(filterSort(db.questions, filters)));
+    case 'answers':
+      return reply('/v1/answers', 'get', page(filterSort(db.answers, filters)));
+    case 'assumption_decisions':
+      return reply(
+        '/v1/assumption-decisions',
+        'get',
+        page(filterSort(db.assumption_decisions, filters)),
+      );
+    case 'blocker_options':
+      return reply('/v1/blocker-options', 'get', page(filterSort(db.blocker_options, filters)));
+    case 'feasibility_experiments':
+      return reply(
+        '/v1/feasibility-experiments',
+        'get',
+        page(filterSort(db.feasibility_experiments, filters)),
+      );
+    case 'blocker_events':
+      return reply('/v1/blocker-events', 'get', page(filterSort(db.blocker_events, filters)));
+    case 'change_events':
+      return reply('/v1/change-events', 'get', page(filterSort(db.change_events, filters)));
+    case 'section_links':
+      return reply('/v1/section-links', 'get', page(filterSort(db.section_links, filters)));
+    case 'artifact_dependencies':
+      return reply(
+        '/v1/artifact-dependencies',
+        'get',
+        page(filterSort(db.artifact_dependencies, filters)),
+      );
+    case 'evaluation_reports':
+      return reply(
+        '/v1/evaluation-reports',
+        'get',
+        page(filterSort(db.evaluation_reports, filters)),
+      );
+    case 'evaluation_findings':
+      return reply(
+        '/v1/evaluation-findings',
+        'get',
+        page(filterSort(db.evaluation_findings, filters)),
+      );
+    case 'artifact_requests':
+      return reply('/v1/artifact-requests', 'get', page(filterSort(db.artifact_requests, filters)));
+    case 'artifact_versions':
+      return reply('/v1/artifact-versions', 'get', page(filterSort(db.artifact_versions, filters)));
+    case 'artifact_outputs':
+      return reply('/v1/artifact-outputs', 'get', page(filterSort(db.artifact_outputs, filters)));
+    case 'artifact_review_events':
+      return reply(
+        '/v1/artifact-review-events',
+        'get',
+        page(filterSort(db.artifact_review_events, filters)),
+      );
+    default:
+      return null;
   }
 }

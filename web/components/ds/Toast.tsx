@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { Icon } from "./Icon";
+import { Icon } from './Icon';
 
 export type ToastAsk = {
   message: string;
@@ -16,7 +16,7 @@ export type ToastAsk = {
    * chart below it), left of Simple's Ask panel while it is open (400 px wide, docked or over the
    * page: SIMPLE_ASK_PANEL_ID), never over a control (the highest row with room, fix 2); a phone
    * keeps the centred strip. Every other toast stays centred. */
-  place?: "corner" | "rail" | "top";
+  place?: 'corner' | 'rail' | 'top';
   /** What the message must not cover (a CSS selector: the row its action came from, roadmap-decide
    * review): where it would at the bottom, it sits at the top of the screen instead. */
   avoid?: string;
@@ -27,13 +27,16 @@ function covers(avoid: string, x: number, w: number, top: number, h: number): nu
   let area = 0;
   for (const el of document.querySelectorAll(avoid)) {
     const r = el.getBoundingClientRect();
-    area += Math.max(0, Math.min(r.right, x + w) - Math.max(r.left, x)) * Math.max(0, Math.min(r.bottom, top + h) - Math.max(r.top, top));
+    area +=
+      Math.max(0, Math.min(r.right, x + w) - Math.max(r.left, x)) *
+      Math.max(0, Math.min(r.bottom, top + h) - Math.max(r.top, top));
   }
   return area;
 }
 
 /** What a person presses: a "top" toast never sits over one (fix 2: Simple's Roadmap's format switch beside its title). */
-const CONTROLS = 'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"]';
+const CONTROLS =
+  'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"]';
 
 /**
  * Where a "top" toast `w` × `h` sits clear of every control on screen and of Simple's Ask panel:
@@ -44,16 +47,21 @@ function clearSpot(skip: Element, w: number, h: number): { top: number; right: n
   const edge = 16;
   const pad = 8;
   let end = window.innerWidth - edge;
-  for (const el of document.querySelectorAll("#simple-ask-panel")) {
+  for (const el of document.querySelectorAll('#simple-ask-panel')) {
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.left < window.innerWidth) end = Math.min(end, r.left - edge);
   }
   const boxes = [...document.querySelectorAll(CONTROLS)]
     .filter((el) => !skip.contains(el))
     .map((el) => el.getBoundingClientRect())
-    .filter((r) => r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.left < end);
-  for (let top = edge; top + h <= window.innerHeight - edge; ) {
-    const row = boxes.filter((r) => r.top < top + h + pad && r.bottom > top - pad).sort((a, b) => a.left - b.left);
+    .filter(
+      (r) =>
+        r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.left < end,
+    );
+  for (let top = edge; top + h <= window.innerHeight - edge;) {
+    const row = boxes
+      .filter((r) => r.top < top + h + pad && r.bottom > top - pad)
+      .sort((a, b) => a.left - b.left);
     // The gaps between the row's controls, from the right: the toast takes the rightmost that fits.
     const gaps: [number, number][] = [];
     let from = edge;
@@ -84,12 +92,13 @@ function clearOfDialogs(skip: Element, box: DOMRect): number | null {
     .map((el) => el.getBoundingClientRect())
     .filter((r) => r.width > 1 && r.height > 1 && r.right > box.left && r.left < box.right);
   const pad = 8;
-  const clear = (top: number) => boxes.every((r) => r.bottom + pad <= top || r.top - pad >= top + box.height);
+  const clear = (top: number) =>
+    boxes.every((r) => r.bottom + pad <= top || r.top - pad >= top + box.height);
   if (clear(box.top)) return null;
   const edge = 16;
   const bottom = window.innerHeight - (window.innerWidth <= 600 ? 80 : edge) - box.height;
   if (clear(bottom)) return bottom;
-  for (let top = edge; top <= bottom; ) {
+  for (let top = edge; top <= bottom;) {
     if (clear(top)) return top;
     const hit = boxes.filter((r) => r.top - pad < top + box.height && r.bottom + pad > top);
     top = Math.max(top + 1, Math.min(...hit.map((r) => r.bottom)) + pad);
@@ -102,10 +111,10 @@ type Shown = ToastAsk & { id: number };
 let show: ((ask: ToastAsk) => void) | null = null;
 let hide: ((message: string) => void) | null = null;
 /** Where a toast sits when it does not say (a page sets it while it is open: Simple's Home, "rail"). */
-let pagePlace: ToastAsk["place"];
+let pagePlace: ToastAsk['place'];
 
 /** A page's own default place for its toasts, until it returns the cleanup (qa-simple-home-30). */
-export function setToastPlace(place: ToastAsk["place"]): () => void {
+export function setToastPlace(place: ToastAsk['place']): () => void {
   pagePlace = place;
   return () => {
     if (pagePlace === place) pagePlace = undefined;
@@ -144,23 +153,25 @@ export function ToastHost() {
       const box = host.current?.querySelector('[role="status"]')?.getBoundingClientRect();
       if (!box) return;
       const bottom = window.innerHeight - (window.innerWidth <= 600 ? 80 : 16) - box.height;
-      const over = covers(avoid, box.left, box.width, bottom, box.height) > covers(avoid, box.left, box.width, 16, box.height);
+      const over =
+        covers(avoid, box.left, box.width, bottom, box.height) >
+        covers(avoid, box.left, box.width, 16, box.height);
       setUpOf((u) => (over ? id : u === id ? null : u));
     };
     const first = window.requestAnimationFrame(check);
     const t = window.setInterval(check, 200);
-    window.addEventListener("resize", check);
-    document.addEventListener("scroll", check, true);
+    window.addEventListener('resize', check);
+    document.addEventListener('scroll', check, true);
     return () => {
       window.cancelAnimationFrame(first);
       window.clearInterval(t);
-      window.removeEventListener("resize", check);
-      document.removeEventListener("scroll", check, true);
+      window.removeEventListener('resize', check);
+      document.removeEventListener('scroll', check, true);
     };
   }, [id, avoid]);
   // A "top" toast on a desktop: at the first spot clear of every control (checked again as the page redraws).
   const [spot, setSpot] = useState<{ id: number; top: number; right: number } | null>(null);
-  const top = shown?.place === "top" && !up;
+  const top = shown?.place === 'top' && !up;
   useLayoutEffect(() => {
     if (!top || id == null) return;
     const place = () => {
@@ -168,14 +179,16 @@ export function ToastHost() {
       if (!el || window.innerWidth <= 600) return setSpot(null);
       const box = el.getBoundingClientRect();
       const at = clearSpot(el, box.width, box.height);
-      setSpot((s) => (!at ? null : s?.id === id && s.top === at.top && s.right === at.right ? s : { id, ...at }));
+      setSpot((s) =>
+        !at ? null : s?.id === id && s.top === at.top && s.right === at.right ? s : { id, ...at },
+      );
     };
     place();
     const t = window.setInterval(place, 200);
-    window.addEventListener("resize", place);
+    window.addEventListener('resize', place);
     return () => {
       window.clearInterval(t);
-      window.removeEventListener("resize", place);
+      window.removeEventListener('resize', place);
     };
   }, [id, top]);
   const at = top && spot?.id === id ? spot : null;
@@ -191,10 +204,10 @@ export function ToastHost() {
     };
     place();
     const t = window.setInterval(place, 200);
-    window.addEventListener("resize", place);
+    window.addEventListener('resize', place);
     return () => {
       window.clearInterval(t);
-      window.removeEventListener("resize", place);
+      window.removeEventListener('resize', place);
     };
   }, [id]);
   const clearTop = dialogTop != null && dialogTop.id === id ? dialogTop.top : null;
@@ -206,14 +219,19 @@ export function ToastHost() {
     const root = document.documentElement;
     const measure = () => {
       const box = host.current?.querySelector('[role="status"]')?.getBoundingClientRect();
-      if (window.innerWidth > 600 || !box || document.querySelector('[aria-modal="true"], [data-sheet="bottom"]')) return root.style.removeProperty("--toast-room");
-      root.style.setProperty("--toast-room", `${Math.ceil(window.innerHeight - box.top + 8)}px`);
+      if (
+        window.innerWidth > 600 ||
+        !box ||
+        document.querySelector('[aria-modal="true"], [data-sheet="bottom"]')
+      )
+        return root.style.removeProperty('--toast-room');
+      root.style.setProperty('--toast-room', `${Math.ceil(window.innerHeight - box.top + 8)}px`);
     };
     measure();
-    window.addEventListener("resize", measure);
+    window.addEventListener('resize', measure);
     return () => {
-      window.removeEventListener("resize", measure);
-      root.style.removeProperty("--toast-room");
+      window.removeEventListener('resize', measure);
+      root.style.removeProperty('--toast-room');
     };
   }, [id, atBottom]);
   useEffect(() => {
@@ -230,7 +248,10 @@ export function ToastHost() {
   useEffect(() => {
     if (!shown || held) return;
     const from = Date.now();
-    const t = window.setTimeout(() => setShown((s) => (s?.id === shown.id ? null : s)), left.current);
+    const t = window.setTimeout(
+      () => setShown((s) => (s?.id === shown.id ? null : s)),
+      left.current,
+    );
     return () => {
       window.clearTimeout(t);
       left.current = Math.max(0, left.current - (Date.now() - from));
@@ -245,9 +266,15 @@ export function ToastHost() {
     <div
       ref={host}
       data-testid="toasts"
-      data-up={up ? "" : undefined}
-      style={clearTop != null ? { top: clearTop, bottom: "auto" } : at ? { top: at.top, right: at.right } : undefined}
-      className={`pointer-events-none fixed left-0 right-[var(--backdrop-room,0px)] bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4 [body:has([data-sheet=bottom])_&]:bottom-auto [body:has([data-sheet=bottom])_&]:top-[var(--phone-top-bar)] ${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}${shown?.place === "top" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:bottom-auto min-[601px]:top-4 min-[601px]:justify-end min-[601px]:px-0 min-[601px]:[body:has(#simple-ask-panel)_&]:right-[416px]" : ""}${up ? " bottom-auto! top-4" : ""}`}
+      data-up={up ? '' : undefined}
+      style={
+        clearTop != null
+          ? { top: clearTop, bottom: 'auto' }
+          : at
+            ? { top: at.top, right: at.right }
+            : undefined
+      }
+      className={`pointer-events-none fixed left-0 right-[var(--backdrop-room,0px)] bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4 [body:has([data-sheet=bottom])_&]:bottom-auto [body:has([data-sheet=bottom])_&]:top-[var(--phone-top-bar)] ${shown?.place === 'corner' ? ' min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0' : ''}${shown?.place === 'rail' ? ' min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0' : ''}${shown?.place === 'top' ? ' min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:bottom-auto min-[601px]:top-4 min-[601px]:justify-end min-[601px]:px-0 min-[601px]:[body:has(#simple-ask-panel)_&]:right-[416px]' : ''}${up ? ' bottom-auto! top-4' : ''}`}
     >
       {shown && (
         <div

@@ -1,13 +1,22 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-import { Button, Chip, Icon, Inspector, InspectorSection, Numeral, Ring, SegmentedControl } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { named, namedText } from "@/lib/codes";
-import { formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  Icon,
+  Inspector,
+  InspectorSection,
+  Numeral,
+  Ring,
+  SegmentedControl,
+} from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { named, namedText } from '@/lib/codes';
+import { formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
 import {
   actionsOn,
@@ -35,7 +44,7 @@ import {
   type Ui,
   answers,
   refOf,
-} from "./_scope-lib";
+} from './_scope-lib';
 
 /**
  * Runs a fix, saying what went wrong in place. `inColumn`: in a row's column, headed Suggest for a
@@ -43,18 +52,29 @@ import {
  * fits the column; its name stays "Suggest Include dependency", and a phone's card, which has no
  * column heading, shows it whole.
  */
-export function FixButtons({ fixes, small = true, inColumn = false }: { fixes: Fix[]; small?: boolean; inColumn?: boolean }) {
+export function FixButtons({
+  fixes,
+  small = true,
+  inColumn = false,
+}: {
+  fixes: Fix[];
+  small?: boolean;
+  inColumn?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5" data-testid="fix-buttons">
+    <span
+      className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5"
+      data-testid="fix-buttons"
+    >
       {fixes.map((f) => (
         <Button
           key={f.label}
           title={f.title}
           aria-label={inColumn && f.short ? f.label : undefined}
           // qa-work-12: short labels on one line ("Include dependency"); the buttons wrap as a group.
-          className={`min-h-8 max-w-full whitespace-nowrap ${small ? "h-8 px-2.5 text-sm max-[600px]:h-10" : ""}`}
+          className={`min-h-8 max-w-full whitespace-nowrap ${small ? 'h-8 px-2.5 text-sm max-[600px]:h-10' : ''}`}
           disabled={busy}
           onClick={async (e) => {
             e.stopPropagation();
@@ -89,7 +109,17 @@ export function FixButtons({ fixes, small = true, inColumn = false }: { fixes: F
 }
 
 /** Leave out asks why: No goal · Not now · Out of scope · Duplicate · Other (with text). */
-export function LeaveOutPicker({ preset, onPick, onCancel, suggest = false }: { preset?: string; onPick: (reason: string) => Promise<void> | void; onCancel: () => void; suggest?: boolean }) {
+export function LeaveOutPicker({
+  preset,
+  onPick,
+  onCancel,
+  suggest = false,
+}: {
+  preset?: string;
+  onPick: (reason: string) => Promise<void> | void;
+  onCancel: () => void;
+  suggest?: boolean;
+}) {
   const [other, setOther] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pick = async (reason: string) => {
@@ -101,15 +131,32 @@ export function LeaveOutPicker({ preset, onPick, onCancel, suggest = false }: { 
     }
   };
   return (
-    <div role="group" aria-label="Why leave it out?" className="mt-2 flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5" data-testid="leave-out-picker" onClick={(e) => e.stopPropagation()}>
-      <span className="text-sm font-medium">{suggest ? "Suggest leaving it out because:" : "Why leave it out?"}</span>
+    <div
+      role="group"
+      aria-label="Why leave it out?"
+      className="mt-2 flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5"
+      data-testid="leave-out-picker"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="text-sm font-medium">
+        {suggest ? 'Suggest leaving it out because:' : 'Why leave it out?'}
+      </span>
       <span className="flex flex-wrap gap-1.5">
         {LEAVE_OUT_REASONS.map((r) => (
-          <Button key={r.value} variant={preset === r.value ? "solid" : "secondary"} className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void pick(r.value)}>
+          <Button
+            key={r.value}
+            variant={preset === r.value ? 'solid' : 'secondary'}
+            className="h-8 px-2.5 text-sm max-[600px]:h-10"
+            onClick={() => void pick(r.value)}
+          >
             {r.label}
           </Button>
         ))}
-        <Button className="h-8 px-2.5 text-sm max-[600px]:h-10" aria-pressed={other != null} onClick={() => setOther(other == null ? "" : null)}>
+        <Button
+          className="h-8 px-2.5 text-sm max-[600px]:h-10"
+          aria-pressed={other != null}
+          onClick={() => setOther(other == null ? '' : null)}
+        >
           Other
         </Button>
         <Button variant="ghost" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={onCancel}>
@@ -118,8 +165,18 @@ export function LeaveOutPicker({ preset, onPick, onCancel, suggest = false }: { 
       </span>
       {other != null && (
         <span className="flex flex-wrap gap-1.5">
-          <input aria-label="Other reason" maxLength={480} value={other} onChange={(e) => setOther(e.target.value)} className={`${INPUT} min-w-0 flex-1`} />
-          <Button variant="solid" disabled={!other.trim()} onClick={() => void pick(`other:${other.trim()}`)}>
+          <input
+            aria-label="Other reason"
+            maxLength={480}
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            className={`${INPUT} min-w-0 flex-1`}
+          />
+          <Button
+            variant="solid"
+            disabled={!other.trim()}
+            onClick={() => void pick(`other:${other.trim()}`)}
+          >
             Leave out
           </Button>
         </span>
@@ -129,7 +186,11 @@ export function LeaveOutPicker({ preset, onPick, onCancel, suggest = false }: { 
   );
 }
 
-const lines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
+const lines = (text: string) =>
+  text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 
 /** Enhance: Oracle deepens a requirement; its suggestion is accepted, edited and accepted, or discarded. */
 function EnhanceCard({ req, ops, onClose }: { req: Requirement; ops: Ops; onClose: () => void }) {
@@ -149,7 +210,12 @@ function EnhanceCard({ req, ops, onClose }: { req: Requirement; ops: Ops; onClos
     // Once per opening.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const out = (job?.status === "succeeded" ? job.output : null) as { text: string; acceptance: string[]; edge_cases: string[]; data_needs: string[] } | null;
+  const out = (job?.status === 'succeeded' ? job.output : null) as {
+    text: string;
+    acceptance: string[];
+    edge_cases: string[];
+    data_needs: string[];
+  } | null;
   async function accept(text?: string) {
     if (!job) return;
     setBusy(true);
@@ -164,17 +230,34 @@ function EnhanceCard({ req, ops, onClose }: { req: Requirement; ops: Ops; onClos
     }
   }
   return (
-    <div className="mt-2 rounded-button border border-accent bg-accent-soft/40 p-3" data-testid="enhance-card" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="mt-2 rounded-button border border-accent bg-accent-soft/40 p-3"
+      data-testid="enhance-card"
+      onClick={(e) => e.stopPropagation()}
+    >
       {error && <p className="text-sm text-crit">{error}</p>}
       {!out && !error && (
         <p className="text-sm text-text2" aria-live="polite">
-          {job?.status === "failed" ? `Oracle could not deepen it: ${job.error ?? "the job failed"}` : "Oracle is deepening this requirement…"}
+          {job?.status === 'failed'
+            ? `Oracle could not deepen it: ${job.error ?? 'the job failed'}`
+            : 'Oracle is deepening this requirement…'}
         </p>
       )}
       {out && (
         <div className="flex flex-col gap-2 text-sm" data-testid="enhance-suggestion">
           <p className="font-medium">Oracle suggests</p>
-          {edit == null ? <p data-testid="enhance-text">{out.text}</p> : <textarea aria-label="Requirement text" value={edit} maxLength={1000} rows={3} onChange={(e) => setEdit(e.target.value)} className={INPUT} />}
+          {edit == null ? (
+            <p data-testid="enhance-text">{out.text}</p>
+          ) : (
+            <textarea
+              aria-label="Requirement text"
+              value={edit}
+              maxLength={1000}
+              rows={3}
+              onChange={(e) => setEdit(e.target.value)}
+              className={INPUT}
+            />
+          )}
           <List title="Acceptance criteria" items={out.acceptance} />
           <List title="Edge cases" items={out.edge_cases} />
           <List title="Data needs" items={out.data_needs} />
@@ -189,7 +272,11 @@ function EnhanceCard({ req, ops, onClose }: { req: Requirement; ops: Ops; onClos
                 </Button>
               </>
             ) : (
-              <Button variant="solid" disabled={busy || !edit.trim()} onClick={() => void accept(edit)}>
+              <Button
+                variant="solid"
+                disabled={busy || !edit.trim()}
+                onClick={() => void accept(edit)}
+              >
                 Accept
               </Button>
             )}
@@ -223,25 +310,37 @@ function List({ title, items }: { title: string; items: string[] }) {
 }
 
 /** A requirement: its text in full (on its own line in the inspector), acceptance count, decision, Keep · Cut · Edit · Enhance. */
-export function RequirementRow({ req, mode, ops, review, indent = true }: { req: Requirement; mode: Mode; ops: Ops; review: Review | null; indent?: boolean }) {
+export function RequirementRow({
+  req,
+  mode,
+  ops,
+  review,
+  indent = true,
+}: {
+  req: Requirement;
+  mode: Mode;
+  ops: Ops;
+  review: Review | null;
+  indent?: boolean;
+}) {
   const { can } = useMe();
   const [editing, setEditing] = useState<string | null>(null);
   const [enhancing, setEnhancing] = useState(false);
   const text = plainText(req.text ?? req.title);
-  const cut = req.decision === "cut";
-  const suggestions = actionsOn(review, req.key).filter((a) => a.state === "suggested");
+  const cut = req.decision === 'cut';
+  const suggestions = actionsOn(review, req.key).filter((a) => a.state === 'suggested');
   return (
     <div
       role="row"
       data-testid={`requirement-${req.key}`}
       data-added={req.added || undefined}
-      className={`border-t border-line py-2 pr-2 ${indent ? "pl-14 max-[600px]:pl-3" : "pl-0"}`}
+      className={`border-t border-line py-2 pr-2 ${indent ? 'pl-14 max-[600px]:pl-3' : 'pl-0'}`}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span
           role="cell"
-          className={`min-w-0 text-sm break-words ${indent ? "flex-1 basis-[16rem]" : "basis-full"} ${cut ? "text-text2 line-through" : ""}`}
+          className={`min-w-0 text-sm break-words ${indent ? 'flex-1 basis-[16rem]' : 'basis-full'} ${cut ? 'text-text2 line-through' : ''}`}
           data-testid="requirement-text"
         >
           {text}
@@ -252,63 +351,101 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
           </Chip>
         )}
         <span className="text-sm text-text2 tnum" data-testid="requirement-checks">
-          {req.acceptance.length} acceptance {req.acceptance.length === 1 ? "check" : "checks"}
+          {req.acceptance.length} acceptance {req.acceptance.length === 1 ? 'check' : 'checks'}
         </span>
         {req.edited && !req.added ? (
-          <span className="flex items-center gap-1.5 text-sm text-pass" data-testid="requirement-done">
+          <span
+            className="flex items-center gap-1.5 text-sm text-pass"
+            data-testid="requirement-done"
+          >
             {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
-            <Icon name="check" size={16} /> {cut ? "Requirement cut" : "Edited"}
-            {mode === "approver" && (
-              <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.patch(req, { revert: true })}>
+            <Icon name="check" size={16} /> {cut ? 'Requirement cut' : 'Edited'}
+            {mode === 'approver' && (
+              <Button
+                variant="ghost"
+                className="h-8 px-2 text-sm"
+                onClick={() => void ops.patch(req, { revert: true })}
+              >
                 Undo
               </Button>
             )}
           </span>
         ) : (
-          <Chip kind={cut ? "na" : "pass"}>{cut ? "Cut" : "Kept"}</Chip>
+          <Chip kind={cut ? 'na' : 'pass'}>{cut ? 'Cut' : 'Kept'}</Chip>
         )}
-        {mode === "approver" && (
+        {mode === 'approver' && (
           <span className="flex flex-wrap gap-1">
             {cut ? (
-              <Button className="h-8 px-2.5 text-sm" onClick={() => void ops.patch(req, { decision: "keep" })}>
+              <Button
+                className="h-8 px-2.5 text-sm"
+                onClick={() => void ops.patch(req, { decision: 'keep' })}
+              >
                 Keep
               </Button>
             ) : (
-              <Button className="h-8 px-2.5 text-sm" onClick={() => void ops.patch(req, { decision: "cut" })}>
+              <Button
+                className="h-8 px-2.5 text-sm"
+                onClick={() => void ops.patch(req, { decision: 'cut' })}
+              >
                 Cut
               </Button>
             )}
-            <Button className="h-8 px-2.5 text-sm" onClick={() => setEditing(editing == null ? text : null)}>
+            <Button
+              className="h-8 px-2.5 text-sm"
+              onClick={() => setEditing(editing == null ? text : null)}
+            >
               Edit
             </Button>
-            {can("enhance_scope_requirement") && (
-              <Button className="h-8 px-2.5 text-sm" disabled={enhancing} onClick={() => setEnhancing(true)}>
+            {can('enhance_scope_requirement') && (
+              <Button
+                className="h-8 px-2.5 text-sm"
+                disabled={enhancing}
+                onClick={() => setEnhancing(true)}
+              >
                 Enhance
               </Button>
             )}
-            {req.added && can("delete_scope_item") && (
-              <Button variant="ghost" className="h-8 px-2.5 text-sm" onClick={() => void ops.removeItem(req.id)}>
+            {req.added && can('delete_scope_item') && (
+              <Button
+                variant="ghost"
+                className="h-8 px-2.5 text-sm"
+                onClick={() => void ops.removeItem(req.id)}
+              >
                 Remove
               </Button>
             )}
           </span>
         )}
-        {mode === "commenter" && !cut && (
-          <Button className="h-8 px-2.5 text-sm" onClick={() => void setDecision(mode, ops, req, "cut")}>
+        {mode === 'commenter' && !cut && (
+          <Button
+            className="h-8 px-2.5 text-sm"
+            onClick={() => void setDecision(mode, ops, req, 'cut')}
+          >
             Suggest Cut
           </Button>
         )}
       </div>
       {suggestions.map((a) => (
         <p key={a.id} className="mt-1 text-sm text-text2" data-testid="suggested-by">
-          Suggested by {a.created_by?.name ?? "someone"}: {describeAction(a)}
+          Suggested by {a.created_by?.name ?? 'someone'}: {describeAction(a)}
         </p>
       ))}
       {editing != null && (
         <div className="mt-2 flex flex-col gap-1.5">
-          <textarea aria-label={`Edit ${req.key}`} value={editing} maxLength={1000} rows={2} onChange={(e) => setEditing(e.target.value)} className={INPUT} />
+          <textarea
+            aria-label={`Edit ${req.key}`}
+            value={editing}
+            maxLength={1000}
+            rows={2}
+            onChange={(e) => setEditing(e.target.value)}
+            className={INPUT}
+          />
           <span className="flex gap-1.5">
-            <Button variant="solid" disabled={!editing.trim()} onClick={() => void ops.patch(req, { text: editing }).then(() => setEditing(null))}>
+            <Button
+              variant="solid"
+              disabled={!editing.trim()}
+              onClick={() => void ops.patch(req, { text: editing }).then(() => setEditing(null))}
+            >
               Save
             </Button>
             <Button variant="ghost" onClick={() => setEditing(null)}>
@@ -324,8 +461,8 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
 
 function AddRequirement({ feature, ops }: { feature: Feature; ops: Ops }) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [acceptance, setAcceptance] = useState("");
+  const [text, setText] = useState('');
+  const [acceptance, setAcceptance] = useState('');
   const [error, setError] = useState<string | null>(null);
   if (!open)
     return (
@@ -335,7 +472,15 @@ function AddRequirement({ feature, ops }: { feature: Feature; ops: Ops }) {
     );
   return (
     <div className="mt-2 flex flex-col gap-1.5" data-testid="add-requirement">
-      <textarea aria-label="Requirement" placeholder="What it must do" value={text} maxLength={1000} rows={2} onChange={(e) => setText(e.target.value)} className={`${INPUT} placeholder:text-text2`} />
+      <textarea
+        aria-label="Requirement"
+        placeholder="What it must do"
+        value={text}
+        maxLength={1000}
+        rows={2}
+        onChange={(e) => setText(e.target.value)}
+        className={`${INPUT} placeholder:text-text2`}
+      />
       <textarea
         aria-label="Acceptance criteria (one per line, optional)"
         placeholder="Acceptance criteria, one per line (optional)"
@@ -344,7 +489,9 @@ function AddRequirement({ feature, ops }: { feature: Feature; ops: Ops }) {
         onChange={(e) => setAcceptance(e.target.value)}
         className={`${INPUT} placeholder:text-text2`}
       />
-      <span className="text-sm text-text2">{text.length} / 1000 · its goals are the feature&apos;s</span>
+      <span className="text-sm text-text2">
+        {text.length} / 1000 · its goals are the feature&apos;s
+      </span>
       {error && <span className="text-sm text-crit">{error}</span>}
       <span className="flex gap-1.5">
         <Button
@@ -354,8 +501,8 @@ function AddRequirement({ feature, ops }: { feature: Feature; ops: Ops }) {
             void ops.add(feature.id, text.trim(), lines(acceptance)).then(
               () => {
                 setOpen(false);
-                setText("");
-                setAcceptance("");
+                setText('');
+                setAcceptance('');
               },
               (e) => setError(errorMessage(e)),
             )
@@ -371,16 +518,40 @@ function AddRequirement({ feature, ops }: { feature: Feature; ops: Ops }) {
   );
 }
 
-function GoalsEditor({ feature, scope, mode, ops, onDone }: { feature: Feature; scope: Scope; mode: Mode; ops: Ops; onDone: () => void }) {
+function GoalsEditor({
+  feature,
+  scope,
+  mode,
+  ops,
+  onDone,
+}: {
+  feature: Feature;
+  scope: Scope;
+  mode: Mode;
+  ops: Ops;
+  onDone: () => void;
+}) {
   const [picked, setPicked] = useState<Record<string, number>>(
-    Object.fromEntries(feature.goals.filter((g) => g.goal_id).map((g) => [g.goal_id!, g.contribution ?? 1])),
+    Object.fromEntries(
+      feature.goals.filter((g) => g.goal_id).map((g) => [g.goal_id!, g.contribution ?? 1]),
+    ),
   );
   const [error, setError] = useState<string | null>(null);
   const save = async () => {
-    const goals = Object.entries(picked).map(([goal_id, contribution]) => ({ goal_id, contribution }));
+    const goals = Object.entries(picked).map(([goal_id, contribution]) => ({
+      goal_id,
+      contribution,
+    }));
     try {
-      if (mode === "approver") await ops.patch(feature, { goals });
-      else await ops.act({ item_key: feature.key, kind: "edit", field: "goals", value: goals, answers: [] });
+      if (mode === 'approver') await ops.patch(feature, { goals });
+      else
+        await ops.act({
+          item_key: feature.key,
+          kind: 'edit',
+          field: 'goals',
+          value: goals,
+          answers: [],
+        });
       onDone();
     } catch (e) {
       setError(errorMessage(e));
@@ -393,7 +564,13 @@ function GoalsEditor({ feature, scope, mode, ops, onDone }: { feature: Feature; 
           <input
             type="checkbox"
             checked={g.goal_id in picked}
-            onChange={(e) => setPicked((p) => (e.target.checked ? { ...p, [g.goal_id]: 2 } : Object.fromEntries(Object.entries(p).filter(([k]) => k !== g.goal_id))))}
+            onChange={(e) =>
+              setPicked((p) =>
+                e.target.checked
+                  ? { ...p, [g.goal_id]: 2 }
+                  : Object.fromEntries(Object.entries(p).filter(([k]) => k !== g.goal_id)),
+              )
+            }
           />
           <span className="min-w-0 flex-1">{g.title}</span>
           {g.goal_id in picked && (
@@ -415,7 +592,7 @@ function GoalsEditor({ feature, scope, mode, ops, onDone }: { feature: Feature; 
       {error && <span className="text-sm text-crit">{error}</span>}
       <span className="flex gap-1.5">
         <Button variant="solid" onClick={() => void save()}>
-          {mode === "approver" ? "Save goals" : "Suggest goals"}
+          {mode === 'approver' ? 'Save goals' : 'Suggest goals'}
         </Button>
         <Button variant="ghost" onClick={onDone}>
           Cancel
@@ -426,19 +603,45 @@ function GoalsEditor({ feature, scope, mode, ops, onDone }: { feature: Feature; 
 }
 
 /** Waive one reason, named by its own ref: two problems of one code are waived each with its own reason. */
-function WaiveForm({ feature, reason, ops, onDone }: { feature: Feature; reason: string; ops: Ops; onDone: () => void }) {
-  const [note, setNote] = useState("");
+function WaiveForm({
+  feature,
+  reason,
+  ops,
+  onDone,
+}: {
+  feature: Feature;
+  reason: string;
+  ops: Ops;
+  onDone: () => void;
+}) {
+  const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="mt-2 flex flex-col gap-1.5" data-testid="waive-form">
-      <textarea aria-label="Why is this fine?" placeholder="Why is this fine?" value={note} maxLength={2000} rows={2} onChange={(e) => setNote(e.target.value)} className={`${INPUT} placeholder:text-text2`} />
+      <textarea
+        aria-label="Why is this fine?"
+        placeholder="Why is this fine?"
+        value={note}
+        maxLength={2000}
+        rows={2}
+        onChange={(e) => setNote(e.target.value)}
+        className={`${INPUT} placeholder:text-text2`}
+      />
       {error && <span className="text-sm text-crit">{error}</span>}
       <span className="flex gap-1.5">
         <Button
           variant="solid"
           disabled={!note.trim()}
           onClick={() =>
-            void ops.act({ item_key: feature.key, kind: "waive", answers: [reason], value: { reason: note.trim() }, note: note.trim() }).then(onDone, (e) => setError(errorMessage(e)))
+            void ops
+              .act({
+                item_key: feature.key,
+                kind: 'waive',
+                answers: [reason],
+                value: { reason: note.trim() },
+                note: note.trim(),
+              })
+              .then(onDone, (e) => setError(errorMessage(e)))
           }
         >
           Waive
@@ -486,25 +689,34 @@ export function ScopeInspector({
   const { can } = useMe();
   const byKey = new Map(scope.features.map((x) => [x.key, x]));
   const actions = actionsOn(review, f.key);
-  const staged = actions.filter((a) => a.state === "staged");
-  const suggested = actions.filter((a) => a.state === "suggested");
+  const staged = actions.filter((a) => a.state === 'staged');
+  const suggested = actions.filter((a) => a.state === 'suggested');
   const goalTitle = (key: string) => goalName(scope, key);
-  const write = mode !== "viewer";
+  const write = mode !== 'viewer';
   // rirs-14: a row the person has not decided yet shows what the agents proposed, not a decision.
   // A feature kept for every reason to confirm is included, though a blocking reason is still open.
-  const kept = staged.some((a) => a.kind === "accept") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
+  const kept =
+    staged.some((a) => a.kind === 'accept') &&
+    !f.reasons.some((r) => !r.answered && r.severity !== 'blocking');
   const undecided = f.needs_you && !f.edited && !kept;
   const proposed = proposedText(f.decision);
   // Include on a feature the set includes that only a blocking reason holds: say what to do.
   const [blockedOn, setBlockedOn] = useState<string | null>(null);
-  const onlyBlocked = f.decision === "include" && !kept && f.reasons.some((r) => !r.answered && r.severity === "blocking") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
+  const onlyBlocked =
+    f.decision === 'include' &&
+    !kept &&
+    f.reasons.some((r) => !r.answered && r.severity === 'blocking') &&
+    !f.reasons.some((r) => !r.answered && r.severity !== 'blocking');
   // Undo of one reason: a call staged before each reason had its own may answer others too; they stay kept.
   // detailed-b 3: the header's code with its name, never the key alone.
   const n = named(f.title, f.key);
   const undoReason = async (answer: (typeof staged)[number], ref: string) => {
-    if (answer.kind === "accept" && answer.field == null) {
-      const covered = f.reasons.filter((r) => r.answered && r.severity !== "blocking" && answers(answer, r));
-      for (const r of covered) if (refOf(r) !== ref) await ops.act({ item_key: f.key, kind: "accept", answers: [r.code] });
+    if (answer.kind === 'accept' && answer.field == null) {
+      const covered = f.reasons.filter(
+        (r) => r.answered && r.severity !== 'blocking' && answers(answer, r),
+      );
+      for (const r of covered)
+        if (refOf(r) !== ref) await ops.act({ item_key: f.key, kind: 'accept', answers: [r.code] });
     }
     await ops.removeAction(answer.id);
   };
@@ -516,17 +728,32 @@ export function ScopeInspector({
       testId="scope-inspector"
       chips={
         <>
-          <Chip hero kind={undecided ? "warn" : f.decision === "include" ? "now" : "na"}>
+          <Chip hero kind={undecided ? 'warn' : f.decision === 'include' ? 'now' : 'na'}>
             {undecided ? proposed : decisionText(f.decision, f.decision_reason)}
           </Chip>
-          <Chip hero>{goalsOf(f).length ? goalsOf(f).map((g) => goalTitle(g.key)).join(", ") : "No goal"}</Chip>
+          <Chip hero>
+            {goalsOf(f).length
+              ? goalsOf(f)
+                  .map((g) => goalTitle(g.key))
+                  .join(', ')
+              : 'No goal'}
+          </Chip>
         </>
       }
       stats={[
         // rirs-11: the stats row is light, so the ring's figure takes the page's text colour, not the hero's.
-        { label: "Confidence", figure: <Ring value={pct(f.confidence)} size={44} /> },
+        { label: 'Confidence', figure: <Ring value={pct(f.confidence)} size={44} /> },
         // qa4-work-43: the count says what it counts ("2 of 2", Requirements kept), never a bare fraction.
-        { label: "Requirements kept", figure: <Numeral value={f.requirements.filter((q) => q.decision === "keep").length} unit={` of ${f.requirements.length}`} />, testId: "stat-requirements" },
+        {
+          label: 'Requirements kept',
+          figure: (
+            <Numeral
+              value={f.requirements.filter((q) => q.decision === 'keep').length}
+              unit={` of ${f.requirements.length}`}
+            />
+          ),
+          testId: 'stat-requirements',
+        },
       ]}
     >
       {f.text && (
@@ -535,22 +762,41 @@ export function ScopeInspector({
         </InspectorSection>
       )}
       {f.reasons.length > 0 && (
-        <InspectorSection label={mode === "approver" ? "Needs you because" : "Needs a decision because"}>
+        <InspectorSection
+          label={mode === 'approver' ? 'Needs you because' : 'Needs a decision because'}
+        >
           <ul className="flex flex-col gap-2">
             {f.reasons.map((r) => {
-              const answer = staged.find((a) => (a.kind === "waive" || a.kind === "accept") && answers(a, r));
+              const answer = staged.find(
+                (a) => (a.kind === 'waive' || a.kind === 'accept') && answers(a, r),
+              );
               return (
-                <li key={refOf(r)} className={`rounded-button border p-2.5 ${r.severity === "blocking" ? "border-crit/40" : "border-warn/40"}`} data-testid={`reason-${r.code}`}>
+                <li
+                  key={refOf(r)}
+                  className={`rounded-button border p-2.5 ${r.severity === 'blocking' ? 'border-crit/40' : 'border-warn/40'}`}
+                  data-testid={`reason-${r.code}`}
+                >
                   <span className="flex flex-wrap items-center gap-2">
-                    <Chip kind={r.severity === "blocking" ? "crit" : "warn"}>{r.severity === "blocking" ? "Blocking" : "To confirm"}</Chip>
-                    <span className="min-w-0 flex-1 text-sm break-words">{reasonText(r, scope)}</span>
+                    <Chip kind={r.severity === 'blocking' ? 'crit' : 'warn'}>
+                      {r.severity === 'blocking' ? 'Blocking' : 'To confirm'}
+                    </Chip>
+                    <span className="min-w-0 flex-1 text-sm break-words">
+                      {reasonText(r, scope)}
+                    </span>
                   </span>
                   {r.answered && answer ? (
                     <p className="mt-1.5 flex items-center gap-1.5 text-sm text-pass">
                       {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
-                      <Icon name="check" size={16} /> {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Included"}
-                      {mode === "approver" && (
-                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(answer, refOf(r))}>
+                      <Icon name="check" size={16} />{' '}
+                      {answer.kind === 'waive'
+                        ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ''}`
+                        : 'Included'}
+                      {mode === 'approver' && (
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-2 text-sm"
+                          onClick={() => void undoReason(answer, refOf(r))}
+                        >
                           Undo
                         </Button>
                       )}
@@ -568,7 +814,9 @@ export function ScopeInspector({
                       ) : null;
                     })()
                   )}
-                  {waiving === refOf(r) && mode === "approver" && <WaiveForm feature={f} reason={refOf(r)} ops={ops} onDone={onWaiveDone} />}
+                  {waiving === refOf(r) && mode === 'approver' && (
+                    <WaiveForm feature={f} reason={refOf(r)} ops={ops} onDone={onWaiveDone} />
+                  )}
                 </li>
               );
             })}
@@ -578,33 +826,48 @@ export function ScopeInspector({
       <InspectorSection label="Decision">
         {undecided && (
           <p className="mb-1.5 text-sm text-text2" data-testid="proposed-decision">
-            {proposed}. {mode === "approver" ? "Pick one to decide." : "Not decided yet."}
+            {proposed}. {mode === 'approver' ? 'Pick one to decide.' : 'Not decided yet.'}
           </p>
         )}
-        {mode === "approver" ? (
+        {mode === 'approver' ? (
           <SegmentedControl
             label="Decision"
             size="sm"
             value={undecided ? null : f.decision}
             items={[
-              { value: "include", label: "Include" },
-              { value: "exclude", label: "Leave out" },
-              { value: "defer", label: "Defer to a later PRD" },
+              { value: 'include', label: 'Include' },
+              { value: 'exclude', label: 'Leave out' },
+              { value: 'defer', label: 'Defer to a later PRD' },
             ]}
             onChange={(v) =>
-              v === "exclude" ? ui.leaveOut(f) : v === "include" ? (onlyBlocked ? setBlockedOn(f.key) : void includeFeature(mode, ops, f)) : void setDecision(mode, ops, f, v)
+              v === 'exclude'
+                ? ui.leaveOut(f)
+                : v === 'include'
+                  ? onlyBlocked
+                    ? setBlockedOn(f.key)
+                    : void includeFeature(mode, ops, f)
+                  : void setDecision(mode, ops, f, v)
             }
           />
         ) : (
           // rirs-13, qa4-work-45: only an approver decides; a commenter gets the same choices as
           // suggestions, a viewer no buttons at all, never a control they cannot use.
-          mode === "commenter" && (
+          mode === 'commenter' && (
             <FixButtons
               fixes={(
                 [
-                  ["include", { label: "Suggest Include", run: () => includeFeature(mode, ops, f) }],
-                  ["exclude", { label: "Suggest Leave out", run: () => ui.leaveOut(f) }],
-                  ["defer", { label: "Suggest Defer to a later PRD", run: () => setDecision(mode, ops, f, "defer") }],
+                  [
+                    'include',
+                    { label: 'Suggest Include', run: () => includeFeature(mode, ops, f) },
+                  ],
+                  ['exclude', { label: 'Suggest Leave out', run: () => ui.leaveOut(f) }],
+                  [
+                    'defer',
+                    {
+                      label: 'Suggest Defer to a later PRD',
+                      run: () => setDecision(mode, ops, f, 'defer'),
+                    },
+                  ],
                 ] as const
               )
                 .filter(([value]) => undecided || value !== f.decision)
@@ -617,20 +880,33 @@ export function ScopeInspector({
             Fix what blocks it first, above.
           </p>
         )}
-        {mode !== "approver" && (
+        {mode !== 'approver' && (
           <p className="mt-1.5 text-sm text-text2" data-testid="who-decides">
-            {mode === "commenter" ? "An approver decides; you can suggest a change." : "An approver decides."}
+            {mode === 'commenter'
+              ? 'An approver decides; you can suggest a change.'
+              : 'An approver decides.'}
           </p>
         )}
         {leavingOut !== undefined && (
-          <LeaveOutPicker preset={leavingOut ?? undefined} suggest={mode === "commenter"} onCancel={onLeaveOutDone} onPick={(reason) => Promise.resolve(setDecision(mode, ops, f, "exclude", reason)).then(onLeaveOutDone)} />
+          <LeaveOutPicker
+            preset={leavingOut ?? undefined}
+            suggest={mode === 'commenter'}
+            onCancel={onLeaveOutDone}
+            onPick={(reason) =>
+              Promise.resolve(setDecision(mode, ops, f, 'exclude', reason)).then(onLeaveOutDone)
+            }
+          />
         )}
         {f.edited && (
           <p className="mt-2 flex items-center gap-1.5 text-sm text-pass">
             {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
             <Icon name="check" size={16} /> {changeText(f)}
-            {mode === "approver" && (
-              <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.patch(f, { revert: true })}>
+            {mode === 'approver' && (
+              <Button
+                variant="ghost"
+                className="h-8 px-2 text-sm"
+                onClick={() => void ops.patch(f, { revert: true })}
+              >
                 Undo
               </Button>
             )}
@@ -669,7 +945,10 @@ export function ScopeInspector({
             {f.depends_on.map((d) => {
               const dep = byKey.get(d);
               // Another PRD's feature on the company roadmap: named with its PRD, not unknown.
-              const other = dep?.decision === "include" ? undefined : f.other_prd_dependencies?.find((x) => x.key === d);
+              const other =
+                dep?.decision === 'include'
+                  ? undefined
+                  : f.other_prd_dependencies?.find((x) => x.key === d);
               const name = other?.title ?? dep?.title ?? d;
               return (
                 <li key={d} className="flex items-center gap-2 text-sm">
@@ -677,14 +956,18 @@ export function ScopeInspector({
                   {other ? (
                     <Chip kind="acc">{other.prd}</Chip>
                   ) : (
-                    <Chip kind={!dep ? "crit" : dep.decision === "include" ? "pass" : "warn"}>{dep ? decisionText(dep.decision) : "Unknown"}</Chip>
+                    <Chip kind={!dep ? 'crit' : dep.decision === 'include' ? 'pass' : 'warn'}>
+                      {dep ? decisionText(dep.decision) : 'Unknown'}
+                    </Chip>
                   )}
-                  {mode === "approver" && (
+                  {mode === 'approver' && (
                     <button
                       type="button"
                       aria-label={`Remove dependency on ${name}`}
                       className="grid size-8 place-items-center rounded hover:bg-surface2"
-                      onClick={() => void ops.patch(f, { depends_on: f.depends_on.filter((x) => x !== d) })}
+                      onClick={() =>
+                        void ops.patch(f, { depends_on: f.depends_on.filter((x) => x !== d) })
+                      }
                     >
                       ×
                     </button>
@@ -698,10 +981,19 @@ export function ScopeInspector({
       <InspectorSection label="Requirements">
         <div data-testid="inspector-requirements">
           {f.requirements.map((q) => (
-            <RequirementRow key={q.id} req={q} mode={mode} ops={ops} review={review} indent={false} />
+            <RequirementRow
+              key={q.id}
+              req={q}
+              mode={mode}
+              ops={ops}
+              review={review}
+              indent={false}
+            />
           ))}
         </div>
-        {mode === "approver" && can("add_scope_requirement") && <AddRequirement feature={f} ops={ops} />}
+        {mode === 'approver' && can('add_scope_requirement') && (
+          <AddRequirement feature={f} ops={ops} />
+        )}
       </InspectorSection>
       <InspectorSection label="Evidence">
         {/* walk-eng-check 6: each source by its name, never a bare id. */}
@@ -710,7 +1002,12 @@ export function ScopeInspector({
             {f.evidence.slice(0, 3).map((e) => (
               <li key={e.id} className="break-words">
                 {e.url ? (
-                  <a href={e.url} target="_blank" rel="noreferrer" className="text-accent-ink hover:underline">
+                  <a
+                    href={e.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent-ink hover:underline"
+                  >
                     {e.title}
                   </a>
                 ) : (
@@ -729,14 +1026,23 @@ export function ScopeInspector({
             {suggested.map((a) => (
               <li key={a.id} className="text-sm">
                 <p>
-                  Suggested by {a.created_by?.name ?? "someone"}: {describeAction(a, (k) => byKey.get(k)?.title ?? k)}
+                  Suggested by {a.created_by?.name ?? 'someone'}:{' '}
+                  {describeAction(a, (k) => byKey.get(k)?.title ?? k)}
                 </p>
-                {mode === "approver" && (
+                {mode === 'approver' && (
                   <span className="mt-1 flex gap-1.5">
-                    <Button variant="solid" className="h-8 px-2.5 text-sm" onClick={() => void ops.stage(a.id)}>
+                    <Button
+                      variant="solid"
+                      className="h-8 px-2.5 text-sm"
+                      onClick={() => void ops.stage(a.id)}
+                    >
                       Accept
                     </Button>
-                    <Button variant="ghost" className="h-8 px-2.5 text-sm" onClick={() => void ops.removeAction(a.id)}>
+                    <Button
+                      variant="ghost"
+                      className="h-8 px-2.5 text-sm"
+                      onClick={() => void ops.removeAction(a.id)}
+                    >
                       Dismiss
                     </Button>
                   </span>
@@ -760,11 +1066,17 @@ function History({ f }: { f: Feature }) {
     <div className="text-sm" data-testid="history">
       {changed ? (
         <>
-          <p>The agents proposed: {decisionText(String(o.decision ?? f.decision), (o.decision_reason as string | null) ?? null)}</p>
+          <p>
+            The agents proposed:{' '}
+            {decisionText(
+              String(o.decision ?? f.decision),
+              (o.decision_reason as string | null) ?? null,
+            )}
+          </p>
           {f.history.decided_by_name && (
             <p className="text-text2">
               Changed by {f.history.decided_by_name}
-              {f.history.decided_at ? `, ${formatDateTime(f.history.decided_at)}` : ""}
+              {f.history.decided_at ? `, ${formatDateTime(f.history.decided_at)}` : ''}
             </p>
           )}
         </>

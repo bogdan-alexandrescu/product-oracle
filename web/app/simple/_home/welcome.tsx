@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import Link from 'next/link';
+import { useState } from 'react';
 
-import { dismissWelcome, useWelcomeCopy } from "@/app/home/_welcome";
-import { HomeCard, HomeRow } from "@/app/simple/_home/cards";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { dismissWelcome, useWelcomeCopy } from '@/app/home/_welcome';
+import { HomeCard, HomeRow } from '@/app/simple/_home/cards';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
 /**
  * qa-onboarding-6: the A1 welcome (#140) on Simple's Home, so an invited member who lands in
@@ -21,7 +21,7 @@ import { errorMessage } from "@/lib/use-query";
  */
 export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismissed: () => void }) {
   const { capsReady } = useMe();
-  const copy = useWelcomeCopy("simple");
+  const copy = useWelcomeCopy('simple');
   // Gone once Dismiss is saved (a reload before that would bring it back); kept with the reason when it could not be.
   const [gone, setGone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -48,12 +48,20 @@ export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismisse
       icon="home"
       title="Welcome to Oracle"
       extra={
-        <button type="button" className="simple-button simple-button-quiet" onClick={() => void dismiss()} disabled={busy}>
-          {busy ? "Dismissing…" : "Dismiss"}
+        <button
+          type="button"
+          className="simple-button simple-button-quiet"
+          onClick={() => void dismiss()}
+          disabled={busy}
+        >
+          {busy ? 'Dismissing…' : 'Dismiss'}
         </button>
       }
     >
-      <p className="simple-small">Oracle keeps the company&apos;s goals, PRDs and plan in one place, each tied to the evidence behind it.</p>
+      <p className="simple-small">
+        Oracle keeps the company&apos;s goals, PRDs and plan in one place, each tied to the evidence
+        behind it.
+      </p>
       <p data-testid="welcome-role" className="font-semibold">
         {copy.role}
       </p>
@@ -63,7 +71,10 @@ export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismisse
             key={s.href}
             testId="welcome-step"
             lead={
-              <span aria-hidden className="tnum grid size-9 place-items-center rounded-full bg-accent-soft font-bold text-accent-ink">
+              <span
+                aria-hidden
+                className="tnum grid size-9 place-items-center rounded-full bg-accent-soft font-bold text-accent-ink"
+              >
                 {i + 1}
               </span>
             }

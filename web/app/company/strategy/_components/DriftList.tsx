@@ -1,21 +1,41 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useId, useState } from "react";
+import Link from 'next/link';
+import { useId, useState } from 'react';
 
-import { Button, Chip, FilterChips, InfoTip, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, FilterChips, InfoTip, Panel } from '@/components/ds';
+import { ErrorNote, INPUT, LoadError, Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-import { CompanyEmpty } from "../../_empty";
-import { FINDING_LABEL, FINDING_STATES, canReopen, canWaive, shortDate, subjectHref, subjectLinkLabel, subjectName, type Finding, type FindingState, type Stack } from "./lib";
+import { CompanyEmpty } from '../../_empty';
+import {
+  FINDING_LABEL,
+  FINDING_STATES,
+  canReopen,
+  canWaive,
+  shortDate,
+  subjectHref,
+  subjectLinkLabel,
+  subjectName,
+  type Finding,
+  type FindingState,
+  type Stack,
+} from './lib';
 
 /** Waive a finding with a reason (the reason is required, as the API); Plan items use it too. */
-export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Finding, "id">; onWaived: (f: Finding) => void; onCancel: () => void }) {
+export function WaiveForm({
+  finding,
+  onWaived,
+  onCancel,
+}: {
+  finding: Pick<Finding, 'id'>;
+  onWaived: (f: Finding) => void;
+  onCancel: () => void;
+}) {
   const id = useId();
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +44,10 @@ export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Findi
     setError(null);
     try {
       const out = await unwrap(
-        api.POST("/v1/strategy/findings/{finding_id}/waive", { params: { path: { finding_id: finding.id } }, body: { reason: reason.trim() } }),
+        api.POST('/v1/strategy/findings/{finding_id}/waive', {
+          params: { path: { finding_id: finding.id } },
+          body: { reason: reason.trim() },
+        }),
       );
       onWaived(out);
     } catch (e) {
@@ -34,7 +57,11 @@ export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Findi
   }
 
   return (
-    <div role="group" aria-label="Waive finding" className="mt-2 flex flex-col gap-2 rounded-button bg-surface2 p-3">
+    <div
+      role="group"
+      aria-label="Waive finding"
+      className="mt-2 flex flex-col gap-2 rounded-button bg-surface2 p-3"
+    >
       <label htmlFor={`${id}-reason`} className="text-sm font-semibold text-text">
         Why waive it?
       </label>
@@ -55,7 +82,7 @@ export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Findi
           Cancel
         </Button>
         <Button variant="primary" disabled={busy || !reason.trim()} onClick={waive}>
-          {busy ? "Waiving…" : "Waive finding"}
+          {busy ? 'Waiving…' : 'Waive finding'}
         </Button>
       </div>
     </div>
@@ -71,7 +98,7 @@ export function FindingRow({
   finding: f,
   stack,
   onWaived,
-  testId = "finding-row",
+  testId = 'finding-row',
 }: {
   finding: Finding;
   stack: Stack | undefined;
@@ -86,7 +113,13 @@ export function FindingRow({
     setReopening(true);
     setError(null);
     try {
-      onWaived(await unwrap(api.POST("/v1/strategy/findings/{finding_id}/reopen", { params: { path: { finding_id: f.id } } })));
+      onWaived(
+        await unwrap(
+          api.POST('/v1/strategy/findings/{finding_id}/reopen', {
+            params: { path: { finding_id: f.id } },
+          }),
+        ),
+      );
     } catch (e) {
       setError(errorMessage(e));
       setReopening(false);
@@ -95,10 +128,15 @@ export function FindingRow({
   const href = subjectHref(f, stack);
   const draft = f.detail?.draft === true;
   return (
-    <li data-testid={testId} data-kind={f.kind} data-status={f.status} className="border-t border-line px-4 py-3 first:border-t-0 max-[600px]:px-3">
+    <li
+      data-testid={testId}
+      data-kind={f.kind}
+      data-status={f.status}
+      className="border-t border-line px-4 py-3 first:border-t-0 max-[600px]:px-3"
+    >
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-semibold text-text">{FINDING_LABEL[f.kind]}</span>
-        {f.severity === "high" && <Chip kind="crit">High</Chip>}
+        {f.severity === 'high' && <Chip kind="crit">High</Chip>}
       </div>
       <p className="mt-0.5 min-w-0 text-text2 [overflow-wrap:break-word]">
         {stack ? (
@@ -109,7 +147,10 @@ export function FindingRow({
             </span>
           </>
         ) : (
-          <span aria-hidden="true" className="inline-block h-3.5 w-32 animate-pulse rounded bg-surface2 align-middle" />
+          <span
+            aria-hidden="true"
+            className="inline-block h-3.5 w-32 animate-pulse rounded bg-surface2 align-middle"
+          />
         )}
       </p>
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
@@ -127,16 +168,18 @@ export function FindingRow({
         {/* pass F F-41: a waiver can be taken back. */}
         {canReopen(f, can) && (
           <Button variant="ghost" disabled={reopening} onClick={reopen}>
-            {reopening ? "Reopening…" : "Reopen"}
+            {reopening ? 'Reopening…' : 'Reopen'}
           </Button>
         )}
       </div>
-      {f.status === "waived" && f.waive_reason && (
+      {f.status === 'waived' && f.waive_reason && (
         <p className="mt-1 text-sm text-text2">
           Waived {shortDate(f.waived_at)}: {f.waive_reason}
         </p>
       )}
-      {f.status === "resolved" && <p className="mt-1 text-sm text-text2">Resolved {shortDate(f.resolved_at)}</p>}
+      {f.status === 'resolved' && (
+        <p className="mt-1 text-sm text-text2">Resolved {shortDate(f.resolved_at)}</p>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {waiving && <WaiveForm finding={f} onCancel={() => setWaiving(false)} onWaived={onWaived} />}
     </li>
@@ -172,9 +215,10 @@ export function DriftList({
       testId="drift-list"
       tools={
         <InfoTip label="strategy drift" align="end">
-          Oracle checks every day, and after a strategy, vision, roadmap or goal changes, whether the goals follow from the strategy and
-          the roadmap from the goals. Drift is advisory: nothing waits on a finding. Waive one with a reason and it stays waived until its
-          subject changes again.
+          Oracle checks every day, and after a strategy, vision, roadmap or goal changes, whether
+          the goals follow from the strategy and the roadmap from the goals. Drift is advisory:
+          nothing waits on a finding. Waive one with a reason and it stays waived until its subject
+          changes again.
         </InfoTip>
       }
     >
@@ -183,7 +227,11 @@ export function DriftList({
         <FilterChips
           label="Finding state"
           testId="finding-state"
-          items={FINDING_STATES.map((s) => ({ value: s.value, label: s.label, count: counts[s.value] }))}
+          items={FINDING_STATES.map((s) => ({
+            value: s.value,
+            label: s.label,
+            count: counts[s.value],
+          }))}
           value={state}
           onChange={onState}
         />
@@ -201,30 +249,36 @@ export function DriftList({
         // qa-company-23: the same empty state as the cards and the stack (bold title, narrow text).
         <CompanyEmpty
           testId="drift-empty"
-          title={state === "open" ? "No open findings" : state === "waived" ? "Nothing waived" : "Nothing resolved"}
+          title={
+            state === 'open'
+              ? 'No open findings'
+              : state === 'waived'
+                ? 'Nothing waived'
+                : 'Nothing resolved'
+          }
         >
           {/* qa-company-13: an empty list still says what Drift looks for; pass F F-45: in one line, the rest behind the (i). */}
-          {state === "open" ? (
+          {state === 'open' ? (
             <span data-testid="drift-what">
               {/* #1590: what shows here sits behind the (i). */}
               <InfoTip label="what shows here" align="end" testId="strategy-drift-tip">
                 Goals and items that do not follow the strategy show here.
-              </InfoTip>{" "}
+              </InfoTip>{' '}
               <InfoTip label="drift" align="end">
-                Oracle checks every day that each goal follows from the product strategy and each roadmap item from a goal, and that the
-                vision and strategy are reviewed on time.
+                Oracle checks every day that each goal follows from the product strategy and each
+                roadmap item from a goal, and that the vision and strategy are reviewed on time.
               </InfoTip>
             </span>
-          ) : state === "waived" ? (
+          ) : state === 'waived' ? (
             <>
-              Waived findings show here.{" "}
+              Waived findings show here.{' '}
               <InfoTip label="waived findings" align="end">
                 A finding someone waived with a reason stays here until its subject changes again.
               </InfoTip>
             </>
           ) : (
             <>
-              Cleared findings show here.{" "}
+              Cleared findings show here.{' '}
               <InfoTip label="resolved findings" align="end">
                 A finding clears once its goal or item lines up with the strategy again.
               </InfoTip>

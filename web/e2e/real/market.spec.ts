@@ -1,22 +1,26 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from '@playwright/test';
 
-import { login, openCompanyTab, openMarketTab } from "./ui";
+import { login, openCompanyTab, openMarketTab } from './ui';
 
 // H7 Competitive digest (PR #541) against the real API: Company › Market's Alternatives and Change log.
-test("market: an owner adds an alternative, sees it listed and opens the Change log", async ({ page }) => {
+test('market: an owner adds an alternative, sees it listed and opens the Change log', async ({
+  page,
+}) => {
   test.setTimeout(30_000);
   await login(page);
-  await openCompanyTab(page, "market");
+  await openCompanyTab(page, 'market');
   // qa-company-20: with no alternative yet the header's button gives way to the empty list's own.
-  await page.getByRole("button", { name: /^Add (alternative|your first alternative)$/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Add alternative" });
-  await dialog.getByLabel("Name").fill("Competitor C");
-  await dialog.getByLabel("Kind").selectOption("direct");
-  await dialog.getByLabel("Website").fill("https://competitor-c.example");
-  await dialog.getByRole("button", { name: "Add alternative" }).click();
+  await page.getByRole('button', { name: /^Add (alternative|your first alternative)$/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add alternative' });
+  await dialog.getByLabel('Name').fill('Competitor C');
+  await dialog.getByLabel('Kind').selectOption('direct');
+  await dialog.getByLabel('Website').fill('https://competitor-c.example');
+  await dialog.getByRole('button', { name: 'Add alternative' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByTestId("alternative-row").filter({ hasText: "Competitor C" })).toContainText("Direct");
+  await expect(
+    page.getByTestId('alternative-row').filter({ hasText: 'Competitor C' }),
+  ).toContainText('Direct');
 
-  await openMarketTab(page, "changes");
-  await expect(page.getByTestId("change-filters")).toBeVisible();
+  await openMarketTab(page, 'changes');
+  await expect(page.getByTestId('change-filters')).toBeVisible();
 });

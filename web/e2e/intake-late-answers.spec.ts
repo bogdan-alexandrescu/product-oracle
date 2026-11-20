@@ -1,9 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from 'node:fs/promises';
 
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { feedbackState, login, openSection, openTab, sectionAction, showAll } from "./helpers";
+import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
+import { feedbackState, login, openSection, openTab, sectionAction, showAll } from './helpers';
 
 /*
  * C5 late answers: an answer given after drafting started becomes a feedback item on the
@@ -18,54 +18,74 @@ import { feedbackState, login, openSection, openTab, sectionAction, showAll } fr
  * tests/test_late_answers_feedback.py).
  */
 
-const ANSWER_ME = "Which metric shows this worked, what is its value today, and what target by when?";
-const REPLY = "Repeat checkout time: 95 s today, 45 s by March.";
+const ANSWER_ME =
+  'Which metric shows this worked, what is its value today, and what target by when?';
+const REPLY = 'Repeat checkout time: 95 s today, 45 s by March.';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("po-mock-scenario", "late-answers");
-    localStorage.setItem("po-interview-follow-up", "off");
+    localStorage.setItem('po-mock-scenario', 'late-answers');
+    localStorage.setItem('po-interview-follow-up', 'off');
   });
 });
 
-const drafting = (page: Page) => page.getByTestId("intake-inspector").filter({ visible: true }).getByTestId("answers-since");
-const bubble = (page: Page, prompt: string) => page.getByTestId("intake-thread").getByTestId("question").filter({ hasText: prompt });
+const drafting = (page: Page) =>
+  page.getByTestId('intake-inspector').filter({ visible: true }).getByTestId('answers-since');
+const bubble = (page: Page, prompt: string) =>
+  page.getByTestId('intake-thread').getByTestId('question').filter({ hasText: prompt });
 
-test("a late answer becomes feedback on the PRD and links back to its question", async ({ page }) => {
+test('a late answer becomes feedback on the PRD and links back to its question', async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  await expect(page.getByTestId("intake-thread")).toBeVisible();
-  await expect(drafting(page)).toContainText("0 answers since drafting started");
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toHaveCount(0);
+  await expect(page.getByTestId('intake-thread')).toBeVisible();
+  await expect(drafting(page)).toContainText('0 answers since drafting started');
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toHaveCount(0);
 
   const mine = bubble(page, ANSWER_ME);
-  await mine.getByRole("button", { name: "Answer", exact: true }).click();
-  const form = mine.getByTestId("answer-question");
-  await form.getByLabel("Your answer").fill(REPLY);
-  await form.getByRole("button", { name: "Send answer" }).click();
-  await expect(mine.getByTestId("answer")).toContainText(REPLY);
-  await expect(drafting(page)).toContainText("1 answer since drafting started");
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await mine.getByRole('button', { name: 'Answer', exact: true }).click();
+  const form = mine.getByTestId('answer-question');
+  await form.getByLabel('Your answer').fill(REPLY);
+  await form.getByRole('button', { name: 'Send answer' }).click();
+  await expect(mine.getByTestId('answer')).toContainText(REPLY);
+  await expect(drafting(page)).toContainText('1 answer since drafting started');
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
 
   // "I don't know" is counted but makes no feedback item.
-  const other = page.getByTestId("intake-thread").getByTestId("question").filter({ hasText: "Asked you" }).filter({ hasNot: page.getByTestId("answer") }).first();
-  await other.getByRole("button", { name: "Answer", exact: true }).click();
-  await other.getByTestId("answer-question").getByRole("button", { name: /^I don't know/ }).click();
-  await expect(drafting(page)).toContainText("2 answers since drafting started");
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  const other = page
+    .getByTestId('intake-thread')
+    .getByTestId('question')
+    .filter({ hasText: 'Asked you' })
+    .filter({ hasNot: page.getByTestId('answer') })
+    .first();
+  await other.getByRole('button', { name: 'Answer', exact: true }).click();
+  await other
+    .getByTestId('answer-question')
+    .getByRole('button', { name: /^I don't know/ })
+    .click();
+  await expect(drafting(page)).toContainText('2 answers since drafting started');
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
 
   // The PRD's Feedback lists it as a whole-draft item, open.
-  await drafting(page).getByRole("link", { name: "Open the PRD's feedback" }).click();
+  await drafting(page).getByRole('link', { name: "Open the PRD's feedback" }).click();
   await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/\d+\?feedback=open/);
-  await openTab(page, "Feedback");
-  await feedbackState(page, "Open");
-  const item = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
+  await openTab(page, 'Feedback');
+  await feedbackState(page, 'Open');
+  const item = page
+    .getByTestId('feedback-item')
+    .filter({ visible: true })
+    .filter({ hasText: REPLY });
   await expect(item).toHaveCount(1);
   await expect(item).toContainText(`Answered after drafting started: ${ANSWER_ME} ${REPLY}`);
-  await expect(item).toContainText("General");
+  await expect(item).toContainText('General');
 
   // Back to its question on the brief.
-  await item.getByTestId("feedback-from-question").click();
+  await item.getByTestId('feedback-from-question').click();
   await expect(page).toHaveURL(new RegExp(`/intakes/${BEFORE_DRAFTING.intakeId}#q-`));
   const id = new URL(page.url()).hash.slice(1);
   await expect(page.locator(`[id="${id}"]`)).toContainText(ANSWER_ME);
@@ -82,42 +102,59 @@ test("a late answer becomes feedback on the PRD and links back to its question",
  * back when shared again; no_claim=what the draft already took (api
  * tests/test_late_answers_feedback.py covers counts and an answer given while private).
  */
-test("a late answer leaves the PRD's feedback when its finding goes back to private", async ({ page }) => {
+test("a late answer leaves the PRD's feedback when its finding goes back to private", async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   const mine = bubble(page, ANSWER_ME);
-  await mine.getByRole("button", { name: "Answer", exact: true }).click();
-  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
-  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await mine.getByRole('button', { name: 'Answer', exact: true }).click();
+  await mine.getByTestId('answer-question').getByLabel('Your answer').fill(REPLY);
+  await mine.getByTestId('answer-question').getByRole('button', { name: 'Send answer' }).click();
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
 
-  const level = async (name: "Private" | "Full") => {
-    await page.getByRole("tab", { name: /^Findings/ }).click();
-    const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
-    await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name }).click();
-    await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+  const level = async (name: 'Private' | 'Full') => {
+    await page.getByRole('tab', { name: /^Findings/ }).click();
+    const finding = page
+      .getByTestId('intake-findings')
+      .getByTestId('finding')
+      .filter({ hasText: 'checkout timing export' });
+    await finding
+      .getByRole('group', { name: 'Who sees this finding' })
+      .getByRole('button', { name })
+      .click();
+    await expect(finding.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
   };
   const listed = async () => {
-    await page.goto("/documents/annual-billing/v/2");
-    await openTab(page, "Feedback");
-    await feedbackState(page, "Open");
+    await page.goto('/documents/annual-billing/v/2');
+    await openTab(page, 'Feedback');
+    await feedbackState(page, 'Open');
     await showAll(page);
     // Loaded: the open comment on the address cards is listed whatever the late answer does.
-    await expect(page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "current seat count" })).toHaveCount(1);
-    return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
+    await expect(
+      page
+        .getByTestId('feedback-item')
+        .filter({ visible: true })
+        .filter({ hasText: 'current seat count' }),
+    ).toHaveCount(1);
+    return page.getByTestId('feedback-item').filter({ visible: true }).filter({ hasText: REPLY });
   };
   await expect(await listed()).toHaveCount(1);
 
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  await level("Private");
+  await level('Private');
   await page.reload();
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toHaveCount(0);
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toHaveCount(0);
   await expect(await listed()).toHaveCount(0);
 
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  await level("Full");
+  await level('Full');
   await page.reload();
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
   await expect(await listed()).toHaveCount(1);
 });
 
@@ -131,44 +168,61 @@ test("a late answer leaves the PRD's feedback when its finding goes back to priv
  * does not read in full once shared again; no_claim=suggestions on it (api
  * tests/test_late_answers_feedback.py covers the rule).
  */
-test("a late answer someone declined stays, its quote withheld, while its finding is private", async ({ page }) => {
+test('a late answer someone declined stays, its quote withheld, while its finding is private', async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   const mine = bubble(page, ANSWER_ME);
-  await mine.getByRole("button", { name: "Answer", exact: true }).click();
-  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
-  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await mine.getByRole('button', { name: 'Answer', exact: true }).click();
+  await mine.getByTestId('answer-question').getByLabel('Your answer').fill(REPLY);
+  await mine.getByTestId('answer-question').getByRole('button', { name: 'Send answer' }).click();
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
 
-  await page.goto("/inbox");
-  const late = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: REPLY });
-  await late.getByRole("button", { name: "Decline", exact: true }).click();
-  await late.getByLabel("Why? (optional)").fill("Settled in the security review.");
-  await late.getByRole("button", { name: "Decline", exact: true }).click();
-  await expect(page.getByTestId("inbox-acted")).toContainText("Declined");
+  await page.goto('/inbox');
+  const late = page
+    .getByTestId('inbox-tab-new')
+    .getByTestId('inbox-feedback')
+    .locator('tr[data-row]')
+    .filter({ hasText: REPLY });
+  await late.getByRole('button', { name: 'Decline', exact: true }).click();
+  await late.getByLabel('Why? (optional)').fill('Settled in the security review.');
+  await late.getByRole('button', { name: 'Decline', exact: true }).click();
+  await expect(page.getByTestId('inbox-acted')).toContainText('Declined');
 
-  const level = async (name: "Private" | "Full") => {
+  const level = async (name: 'Private' | 'Full') => {
     await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-    await page.getByRole("tab", { name: /^Findings/ }).click();
-    const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
-    await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name }).click();
-    await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole('tab', { name: /^Findings/ }).click();
+    const finding = page
+      .getByTestId('intake-findings')
+      .getByTestId('finding')
+      .filter({ hasText: 'checkout timing export' });
+    await finding
+      .getByRole('group', { name: 'Who sees this finding' })
+      .getByRole('button', { name })
+      .click();
+    await expect(finding.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
   };
   const declined = async () => {
-    await page.goto("/documents/annual-billing/v/2");
-    await openTab(page, "Feedback");
-    await feedbackState(page, "Declined");
+    await page.goto('/documents/annual-billing/v/2');
+    await openTab(page, 'Feedback');
+    await feedbackState(page, 'Declined');
     await showAll(page);
-    return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "Settled in the security review." });
+    return page
+      .getByTestId('feedback-item')
+      .filter({ visible: true })
+      .filter({ hasText: 'Settled in the security review.' });
   };
 
-  await level("Private");
+  await level('Private');
   const kept = await declined();
   await expect(kept).toHaveCount(1);
-  await expect(kept).toContainText("withheld while its finding is not shared in full");
+  await expect(kept).toContainText('withheld while its finding is not shared in full');
   await expect(kept).not.toContainText(REPLY);
 
-  await level("Full");
+  await level('Full');
   await expect(await declined()).toContainText(REPLY);
 });
 
@@ -184,110 +238,148 @@ test("a late answer someone declined stays, its quote withheld, while its findin
  * roles and outputs (api tests/test_late_answers_feedback.py lists Feedback, suggestions,
  * the Inbox and staged changes as a viewer, a commenter and an approver).
  */
-test("a late answer's accepted suggestion is withheld with it while its finding is private", async ({ page }) => {
+test("a late answer's accepted suggestion is withheld with it while its finding is private", async ({
+  page,
+}) => {
   const ACCEPTED = `Noted for Success metrics: ${REPLY}`;
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   const mine = bubble(page, ANSWER_ME);
-  await mine.getByRole("button", { name: "Answer", exact: true }).click();
-  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
-  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await mine.getByRole('button', { name: 'Answer', exact: true }).click();
+  await mine.getByTestId('answer-question').getByLabel('Your answer').fill(REPLY);
+  await mine.getByTestId('answer-question').getByRole('button', { name: 'Send answer' }).click();
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
 
   // Oracle's review answered it; the approver accepts an edited answer restating it.
-  await page.goto("/documents/annual-billing/v/2");
-  await openTab(page, "Feedback");
-  await feedbackState(page, "Open");
-  const open = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
-  await open.getByRole("button", { name: "Edit and accept" }).click();
-  await open.getByLabel("Answer").fill(ACCEPTED);
-  await open.getByRole("button", { name: "Accept edited text" }).click();
+  await page.goto('/documents/annual-billing/v/2');
+  await openTab(page, 'Feedback');
+  await feedbackState(page, 'Open');
+  const open = page
+    .getByTestId('feedback-item')
+    .filter({ visible: true })
+    .filter({ hasText: REPLY });
+  await open.getByRole('button', { name: 'Edit and accept' }).click();
+  await open.getByLabel('Answer').fill(ACCEPTED);
+  await open.getByRole('button', { name: 'Accept edited text' }).click();
   await expect(open).toContainText(`Resolution: Answered: ${ACCEPTED}`);
 
-  const level = async (name: "Private" | "Full") => {
+  const level = async (name: 'Private' | 'Full') => {
     await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-    await page.getByRole("tab", { name: /^Findings/ }).click();
-    const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
-    await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name }).click();
-    await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole('tab', { name: /^Findings/ }).click();
+    const finding = page
+      .getByTestId('intake-findings')
+      .getByTestId('finding')
+      .filter({ hasText: 'checkout timing export' });
+    await finding
+      .getByRole('group', { name: 'Who sees this finding' })
+      .getByRole('button', { name })
+      .click();
+    await expect(finding.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
   };
   const done = async () => {
-    await page.goto("/documents/annual-billing/v/2");
-    await openTab(page, "Feedback");
-    await feedbackState(page, "Done");
+    await page.goto('/documents/annual-billing/v/2');
+    await openTab(page, 'Feedback');
+    await feedbackState(page, 'Done');
     await showAll(page);
-    return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "Answered after drafting started" });
+    return page
+      .getByTestId('feedback-item')
+      .filter({ visible: true })
+      .filter({ hasText: 'Answered after drafting started' });
   };
-  await expect((await done()).getByTestId("suggestion-text")).toContainText(ACCEPTED);
+  await expect((await done()).getByTestId('suggestion-text')).toContainText(ACCEPTED);
 
-  await level("Private");
+  await level('Private');
   const kept = await done();
   await expect(kept).toHaveCount(1);
-  await expect(kept).toContainText("withheld while its finding is not shared in full");
-  await expect(kept.getByTestId("suggestion")).toBeVisible();
-  await expect(kept).toContainText("Resolution: Withheld while its finding is not shared in full");
+  await expect(kept).toContainText('withheld while its finding is not shared in full');
+  await expect(kept.getByTestId('suggestion')).toBeVisible();
+  await expect(kept).toContainText('Resolution: Withheld while its finding is not shared in full');
   await expect(kept).not.toContainText(REPLY);
 
-  await level("Full");
-  await expect((await done()).getByTestId("suggestion-text")).toContainText(ACCEPTED);
+  await level('Full');
+  await expect((await done()).getByTestId('suggestion-text')).toContainText(ACCEPTED);
 });
 
-test("a late answer's lines in a version's reports and their export are withheld while its finding is private", async ({ page }) => {
+test("a late answer's lines in a version's reports and their export are withheld while its finding is private", async ({
+  page,
+}) => {
   const ACCEPTED = `Noted for Success metrics: ${REPLY}`;
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   const mine = bubble(page, ANSWER_ME);
-  await mine.getByRole("button", { name: "Answer", exact: true }).click();
-  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
-  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
-  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await mine.getByRole('button', { name: 'Answer', exact: true }).click();
+  await mine.getByTestId('answer-question').getByLabel('Your answer').fill(REPLY);
+  await mine.getByTestId('answer-question').getByRole('button', { name: 'Send answer' }).click();
+  await expect(drafting(page).getByTestId('late-answers-feedback')).toContainText(
+    '1 became feedback for the next draft',
+  );
 
   // The answer is accepted on v2, then a refinement makes v3, whose reports read the item.
-  await page.goto("/documents/annual-billing/v/2");
-  await openTab(page, "Feedback");
-  await feedbackState(page, "Open");
-  const open = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
-  await open.getByRole("button", { name: "Edit and accept" }).click();
-  await open.getByLabel("Answer").fill(ACCEPTED);
-  await open.getByRole("button", { name: "Accept edited text" }).click();
+  await page.goto('/documents/annual-billing/v/2');
+  await openTab(page, 'Feedback');
+  await feedbackState(page, 'Open');
+  const open = page
+    .getByTestId('feedback-item')
+    .filter({ visible: true })
+    .filter({ hasText: REPLY });
+  await open.getByRole('button', { name: 'Edit and accept' }).click();
+  await open.getByLabel('Answer').fill(ACCEPTED);
+  await open.getByRole('button', { name: 'Accept edited text' }).click();
   await expect(open).toContainText(`Resolution: Answered: ${ACCEPTED}`);
-  const users = await openSection(page, "users");
-  await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
-  const refine = users.getByTestId("refine-panel");
-  await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
-  await refine.getByRole("button", { name: "Refine", exact: true }).click();
-  await refine.getByRole("button", { name: "Accept as next version" }).click();
+  const users = await openSection(page, 'users');
+  await sectionAction(users, '3. Users and jobs', /^Ask Oracle to rewrite/);
+  const refine = users.getByTestId('refine-panel');
+  await refine.getByLabel('Instruction').fill('Name the first-time buyer segment explicitly.');
+  await refine.getByRole('button', { name: 'Refine', exact: true }).click();
+  await refine.getByRole('button', { name: 'Accept as next version' }).click();
   await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/3/);
 
   const reports = async () => {
-    await page.goto("/documents/annual-billing/v/3");
-    await openTab(page, "History");
-    const panel = page.getByTestId("reports-panel").filter({ visible: true });
-    await panel.getByRole("tab", { name: "Resolution report" }).click();
+    await page.goto('/documents/annual-billing/v/3');
+    await openTab(page, 'History');
+    const panel = page.getByTestId('reports-panel').filter({ visible: true });
+    await panel.getByRole('tab', { name: 'Resolution report' }).click();
     return panel;
   };
   const exported = async (panel: Awaited<ReturnType<typeof reports>>) => {
-    const download = page.waitForEvent("download");
-    await panel.getByRole("button", { name: "Export reports MD" }).click();
-    return readFile((await (await download).path())!, "utf8");
+    const download = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Export reports MD' }).click();
+    return readFile((await (await download).path())!, 'utf8');
   };
   let panel = await reports();
-  await expect(panel.getByRole("region", { name: "Resolution report" })).toContainText(REPLY);
+  await expect(panel.getByRole('region', { name: 'Resolution report' })).toContainText(REPLY);
   expect(await exported(panel)).toContain(REPLY);
 
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  await page.getByRole("tab", { name: /^Findings/ }).click();
-  const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
-  await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name: "Private" }).click();
-  await expect(finding.getByRole("button", { name: "Private" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole('tab', { name: /^Findings/ }).click();
+  const finding = page
+    .getByTestId('intake-findings')
+    .getByTestId('finding')
+    .filter({ hasText: 'checkout timing export' });
+  await finding
+    .getByRole('group', { name: 'Who sees this finding' })
+    .getByRole('button', { name: 'Private' })
+    .click();
+  await expect(finding.getByRole('button', { name: 'Private' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 
   panel = await reports();
-  const resolution = panel.getByRole("region", { name: "Resolution report" });
-  await expect(resolution).toContainText("Answered after drafting started (withheld while its finding is not shared in full)");
+  const resolution = panel.getByRole('region', { name: 'Resolution report' });
+  await expect(resolution).toContainText(
+    'Answered after drafting started (withheld while its finding is not shared in full)',
+  );
   // The narrative was written from every line, so it is withheld with this one.
-  await expect(resolution).toContainText("the rest of this summary is withheld while one of them is not shared in full");
+  await expect(resolution).toContainText(
+    'the rest of this summary is withheld while one of them is not shared in full',
+  );
   await expect(resolution).not.toContainText(REPLY);
   const md = await exported(panel);
-  expect(md).toContain("Answered after drafting started (withheld while its finding is not shared in full)");
+  expect(md).toContain(
+    'Answered after drafting started (withheld while its finding is not shared in full)',
+  );
   expect(md).not.toContain(REPLY);
 });

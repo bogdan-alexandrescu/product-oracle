@@ -4,7 +4,7 @@
  * api/oracle/raw_tokens.py. Text with footnote links of its own (a PRD section's Markdown,
  * lib/markdown.ts) turns its "[c:id]" into those; everything else drops them here.
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
 /**
  * chat-citations: the last line of defence for an answer's words. Every `[kind:id]` token
@@ -15,7 +15,7 @@ import type { Schemas } from "@/lib/api/client";
 const RAW_TOKEN = /[ \t]*\[(?!c:(?:l\.)?\d{1,4}\])[a-z]{1,3}:[^\]\s[]{0,40}\](?!\()/gi;
 
 export function noRawTokens(text: string): string {
-  return text.replace(RAW_TOKEN, "");
+  return text.replace(RAW_TOKEN, '');
 }
 
 /** Code in an answer, kept as written: a fenced block (to its closing fence or the end) or a `span`. */
@@ -29,10 +29,10 @@ const PARTIAL = /\[(?:[a-z]{1,3}(?::[^\]\s[]{0,40})?)?$/i;
  * no raw token left, outside code only; while it streams (`live`), a token not yet whole is held back.
  */
 export function answerWords(text: string, live = false): string {
-  return (live ? text.replace(PARTIAL, "") : text)
+  return (live ? text.replace(PARTIAL, '') : text)
     .split(CODE)
-    .map((part, i) => (i % 2 ? part : noRawTokens(part.replace(/\[l:(\d{1,4})\]/g, "[c:l.$1]"))))
-    .join("");
+    .map((part, i) => (i % 2 ? part : noRawTokens(part.replace(/\[l:(\d{1,4})\]/g, '[c:l.$1]'))))
+    .join('');
 }
 
 /** One marker with the space before it ("appears [c:c1]." → "appears."). A match starts only at
@@ -50,17 +50,17 @@ export function hasRawTokens(text: string | null | undefined): boolean {
 export function stripRawTokens(text: string): string {
   let out = text;
   for (let i = 0; i < 4; i++) {
-    const next = out.replace(MARKER, "");
+    const next = out.replace(MARKER, '');
     if (next === out) break;
     out = next;
   }
-  return out.replace(OPENER, "");
+  return out.replace(OPENER, '');
 }
 
 /** A feature as an answer names it: its name, and its code when it has one ("F-06"). */
 export type CodedName = { name: string; code: string | null };
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * qa-nov17 ask 1: an answer's small markdown as the plain text a person's message is: no
@@ -69,22 +69,33 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  */
 export function plainText(text: string, features: CodedName[] = []): string {
   const out = stripRawTokens(text)
-    .replace(/\*\*/g, "")
-    .replace(/^[ \t]*#{1,6}[ \t]+(.*?)[ \t#]*$/gm, (_, h: string) => (!h || /[:.?!]$/.test(h) ? h : `${h}:`))
-    .replace(/^([ \t]*)[-*+][ \t]+/gm, "$1• ");
-  const coded = new Map(features.filter((f) => f.code && f.name.trim().length >= 3).map((f) => [f.name.trim(), f.code!]));
+    .replace(/\*\*/g, '')
+    .replace(/^[ \t]*#{1,6}[ \t]+(.*?)[ \t#]*$/gm, (_, h: string) =>
+      !h || /[:.?!]$/.test(h) ? h : `${h}:`,
+    )
+    .replace(/^([ \t]*)[-*+][ \t]+/gm, '$1• ');
+  const coded = new Map(
+    features
+      .filter((f) => f.code && f.name.trim().length >= 3)
+      .map((f) => [f.name.trim(), f.code!]),
+  );
   if (!coded.size) return out;
-  const alts = [...coded.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|");
-  const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "gu");
+  const alts = [...coded.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRe)
+    .join('|');
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, 'gu');
   return out.replace(re, (name: string, at: number, all: string) => {
     const code = coded.get(name)!;
-    return new RegExp(`(?<![\\p{L}\\p{N}-])${escapeRe(code)}[ \\t]*$`, "u").test(all.slice(0, at)) ? name : `${code} ${name}`;
+    return new RegExp(`(?<![\\p{L}\\p{N}-])${escapeRe(code)}[ \\t]*$`, 'u').test(all.slice(0, at))
+      ? name
+      : `${code} ${name}`;
   });
 }
 
 const opt = (s: string | null | undefined) => (s == null ? s : stripRawTokens(s));
 
-type Flow = Schemas["SimpleFlow"];
+type Flow = Schemas['SimpleFlow'];
 
 /** A drawing's words (its title, steps, storyboard cards, screen and notes) as people read them. */
 export function cleanFlow<T extends Flow | null | undefined>(flow: T): T {
@@ -94,8 +105,18 @@ export function cleanFlow<T extends Flow | null | undefined>(flow: T): T {
     title: stripRawTokens(flow.title),
     steps: flow.steps.map(stripRawTokens),
     goal: opt(flow.goal),
-    screen: { ...flow.screen, title: stripRawTokens(flow.screen.title), regions: flow.screen.regions.map(stripRawTokens) },
-    nodes: flow.nodes?.map((s) => ({ ...s, label: stripRawTokens(s.label), actor: opt(s.actor), yes: opt(s.yes), no: opt(s.no) })),
+    screen: {
+      ...flow.screen,
+      title: stripRawTokens(flow.screen.title),
+      regions: flow.screen.regions.map(stripRawTokens),
+    },
+    nodes: flow.nodes?.map((s) => ({
+      ...s,
+      label: stripRawTokens(s.label),
+      actor: opt(s.actor),
+      yes: opt(s.yes),
+      no: opt(s.no),
+    })),
     svg: opt(flow.svg),
     wireframe: opt(flow.wireframe),
     annotations: flow.annotations?.map((a) => ({ ...a, note: stripRawTokens(a.note) })),

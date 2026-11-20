@@ -1,27 +1,28 @@
-"use client";
+'use client';
 
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from 'react';
 
-import { Notice, Page, PageHeader, SegmentedControl } from "@/components/ds";
-import { useMe } from "@/lib/me";
-import { useTheme } from "@/lib/theme";
+import { Notice, Page, PageHeader, SegmentedControl } from '@/components/ds';
+import { useMe } from '@/lib/me';
+import { useTheme } from '@/lib/theme';
 
-import { Gallery } from "./_gallery";
+import { Gallery } from './_gallery';
 
-type Mode = "light" | "dark" | "both";
+type Mode = 'light' | 'dark' | 'both';
 
 /** A developer page (qa-settings-9): it says so, and it stays out of every navigation. */
-const TITLE = "Design system (developers)";
-const DEVELOPER_NOTE = "Developer page: the components the app is built from. Not part of the product.";
+const TITLE = 'Design system (developers)';
+const DEVELOPER_NOTE =
+  'Developer page: the components the app is built from. Not part of the product.';
 
-const DARK_QUERY = "(prefers-color-scheme: dark)";
+const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 function useSystemDark(): boolean {
   return useSyncExternalStore(
     (on) => {
       const mq = window.matchMedia(DARK_QUERY);
-      mq.addEventListener("change", on);
-      return () => mq.removeEventListener("change", on);
+      mq.addEventListener('change', on);
+      return () => mq.removeEventListener('change', on);
     },
     () => window.matchMedia(DARK_QUERY).matches,
     () => false,
@@ -39,7 +40,7 @@ export default function DesignPage() {
   const systemDark = useSystemDark();
   const [both, setBoth] = useState(false);
   // #370: the kit is for whoever may read the company's settings (owners).
-  const owner = can("get_setting_endpoint");
+  const owner = can('get_setting_endpoint');
 
   if (!capsReady || !owner) {
     return (
@@ -49,10 +50,11 @@ export default function DesignPage() {
     );
   }
 
-  const resolved: Exclude<Mode, "both"> = theme === "system" ? (systemDark ? "dark" : "light") : theme;
-  const mode: Mode = both ? "both" : resolved;
+  const resolved: Exclude<Mode, 'both'> =
+    theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
+  const mode: Mode = both ? 'both' : resolved;
   const choose = (m: Mode) => {
-    if (m === "both") return setBoth(true);
+    if (m === 'both') return setBoth(true);
     setBoth(false);
     setTheme(m);
   };
@@ -68,20 +70,29 @@ export default function DesignPage() {
             value={mode}
             onChange={choose}
             items={[
-              { value: "light", label: "Light", testId: "design-mode-light" },
-              { value: "dark", label: "Dark", testId: "design-mode-dark" },
-              { value: "both", label: "Both", testId: "design-mode-both" },
+              { value: 'light', label: 'Light', testId: 'design-mode-light' },
+              { value: 'dark', label: 'Dark', testId: 'design-mode-dark' },
+              { value: 'both', label: 'Both', testId: 'design-mode-both' },
             ]}
           />
         }
       />
       <Notice testId="design-developer-note">{DEVELOPER_NOTE}</Notice>
       {both ? (
-        <div className="grid grid-cols-2 items-start gap-4 max-[1100px]:grid-cols-1" data-testid="design-both">
-          <div className="ds-light min-w-0 rounded-panel bg-bg p-3 text-text" data-theme-preview="light">
+        <div
+          className="grid grid-cols-2 items-start gap-4 max-[1100px]:grid-cols-1"
+          data-testid="design-both"
+        >
+          <div
+            className="ds-light min-w-0 rounded-panel bg-bg p-3 text-text"
+            data-theme-preview="light"
+          >
             <Gallery />
           </div>
-          <div className="ds-dark min-w-0 rounded-panel bg-bg p-3 text-text" data-theme-preview="dark">
+          <div
+            className="ds-dark min-w-0 rounded-panel bg-bg p-3 text-text"
+            data-theme-preview="dark"
+          >
             <Gallery tid="design-dark" />
           </div>
         </div>

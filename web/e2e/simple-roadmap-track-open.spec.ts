@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Card track-open-once: protects = picking the Board, the Waterfall or the Gantt (each starts grouped by
@@ -20,38 +20,50 @@ async function watchGroups(page: Page) {
     const w = window as unknown as { __groups: Set<string> };
     w.__groups = new Set();
     const read = () => {
-      for (const h of document.querySelectorAll('[data-testid="board-group"] h3')) w.__groups.add((h.textContent ?? "").trim());
+      for (const h of document.querySelectorAll('[data-testid="board-group"] h3'))
+        w.__groups.add((h.textContent ?? '').trim());
     };
-    new MutationObserver(read).observe(document.body, { childList: true, subtree: true, characterData: true });
+    new MutationObserver(read).observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
   });
 }
 
-test.describe("Track bands drawn once", () => {
+test.describe('Track bands drawn once', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
   test.beforeEach(async ({ context, page }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
+    await context.addInitScript(
+      (key) => localStorage.setItem(key, 'simple-500'),
+      MOCK_SCENARIO_KEY,
+    );
     await login(page);
   });
 
-  test("the Board opens on its track groups, with no other groups shown first", async ({ page }) => {
-    await page.goto("/simple/roadmap");
-    await expect(page.getByTestId("timeline-row").first()).toBeVisible({ timeout: 15_000 });
+  test('the Board opens on its track groups, with no other groups shown first', async ({
+    page,
+  }) => {
+    await page.goto('/simple/roadmap');
+    await expect(page.getByTestId('timeline-row').first()).toBeVisible({ timeout: 15_000 });
     await watchGroups(page);
-    await page.getByTestId("format-board").click();
-    await expect(page.getByTestId("board-card")).toHaveCount(500, { timeout: 15_000 });
+    await page.getByTestId('format-board').click();
+    await expect(page.getByTestId('board-card')).toHaveCount(500, { timeout: 15_000 });
     // Let a second read, if any, land and redraw.
     await page.waitForTimeout(1500);
     const now = await page.locator('[data-testid="board-group"] h3').allTextContents();
-    const seen = await page.evaluate(() => [...(window as unknown as { __groups: Set<string> }).__groups]);
+    const seen = await page.evaluate(() => [
+      ...(window as unknown as { __groups: Set<string> }).__groups,
+    ]);
     expect(now.length).toBeGreaterThan(0);
     expect(seen.filter((t) => !now.map((x) => x.trim()).includes(t))).toEqual([]);
   });
 
-  test("a Timeline bar scrolled into sight is not under the names column", async ({ page }) => {
-    await page.goto("/simple/roadmap");
-    await expect(page.getByTestId("timeline-row").first()).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("zoom-6m").click();
-    const names = page.getByTestId("timeline-names-head");
+  test('a Timeline bar scrolled into sight is not under the names column', async ({ page }) => {
+    await page.goto('/simple/roadmap');
+    await expect(page.getByTestId('timeline-row').first()).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('zoom-6m').click();
+    const names = page.getByTestId('timeline-names-head');
     const bars = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]');
     // Each of the first movable bars, brought into sight, starts right of the names column.
     for (let n = 0; n < 5; n++) {

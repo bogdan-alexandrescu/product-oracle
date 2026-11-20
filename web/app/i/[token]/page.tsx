@@ -1,18 +1,18 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
+import type { Metadata } from 'next';
+import { Suspense } from 'react';
 
-import type { RouteProps } from "@/lib/route-props";
+import type { RouteProps } from '@/lib/route-props';
 
-import { InterviewChat } from "./_chat";
+import { InterviewChat } from './_chat';
 
 export const metadata: Metadata = {
-  title: "Interview",
+  title: 'Interview',
   // A private one-time link: never indexed, never sent on as a referrer.
   robots: { index: false, follow: false },
-  referrer: "no-referrer",
+  referrer: 'no-referrer',
 };
 
-async function Chat({ params }: { params: RouteProps<{ token: string }>["params"] }) {
+async function Chat({ params }: { params: RouteProps<{ token: string }>['params'] }) {
   const { token } = await params;
   return <InterviewChat token={token} />;
 }

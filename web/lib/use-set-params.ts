@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef } from 'react';
 
 /**
  * Rewrites the page's URL query (null or "" removes a key); the page follows the URL. Each
@@ -22,7 +22,7 @@ export function useSetParams() {
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(asked.current ?? window.location.search);
       for (const [k, v] of Object.entries(patch)) {
-        if (v === null || v === "") next.delete(k);
+        if (v === null || v === '') next.delete(k);
         else next.set(k, v);
       }
       const s = next.toString();

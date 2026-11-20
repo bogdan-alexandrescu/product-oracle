@@ -1,6 +1,6 @@
-import { expect, type Locator, type Page, test } from "./test";
+import { expect, type Locator, type Page, test } from './test';
 
-import { hoverCard, login, openSection, openTab } from "./helpers";
+import { hoverCard, login, openSection, openTab } from './helpers';
 
 /**
  * Change D (owner decision 2026-10-20): a citation keeps the confidence its writer computed.
@@ -8,57 +8,65 @@ import { hoverCard, login, openSection, openTab } from "./helpers";
  * app's low-confidence chip; one with no confidence shows its note instead. All as text.
  */
 
-const NOTE = "owner decision (confirmed, locked) <G1>; not evidence-scored";
+const NOTE = 'owner decision (confirmed, locked) <G1>; not evidence-scored';
 
 async function sourceRow(page: Page, title: string): Promise<Locator> {
-  return page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: title });
+  return page
+    .getByTestId('sources-list')
+    .filter({ visible: true })
+    .getByRole('listitem')
+    .filter({ hasText: title });
 }
 
-test("Sources: each source's confidence beside it, low ones marked, a note when there is no score", async ({ page }) => {
+test("Sources: each source's confidence beside it, low ones marked, a note when there is no score", async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  await openTab(page, "Sources");
+  await page.goto('/documents/annual-billing/v/2');
+  await openTab(page, 'Sources');
 
-  const github = await sourceRow(page, "Card form loses state on back navigation");
-  await expect(github.getByTestId("source-label")).toHaveText("GitHub · High confidence");
-  await expect(github.getByText("Low confidence")).toHaveCount(0);
+  const github = await sourceRow(page, 'Card form loses state on back navigation');
+  await expect(github.getByTestId('source-label')).toHaveText('GitHub · High confidence');
+  await expect(github.getByText('Low confidence')).toHaveCount(0);
 
-  const slack = await sourceRow(page, "#product thread on yearly plans");
-  await expect(slack.getByTestId("source-label")).toHaveText("Slack · High confidence");
+  const slack = await sourceRow(page, '#product thread on yearly plans');
+  await expect(slack.getByTestId('source-label')).toHaveText('Slack · High confidence');
 
   // Low confidence: the app's low-confidence chip (a warn chip), said once (qa4-docs-19: no raw score).
-  const interview = await sourceRow(page, "Customer interview 07");
-  await expect(interview.getByTestId("source-label")).toHaveText("Meeting notes");
-  const low = interview.getByTestId("low-confidence");
-  await expect(low).toHaveText("Low confidence");
+  const interview = await sourceRow(page, 'Customer interview 07');
+  await expect(interview.getByTestId('source-label')).toHaveText('Meeting notes');
+  const low = interview.getByTestId('low-confidence');
+  await expect(low).toHaveText('Low confidence');
   await expect(low).toHaveClass(/bg-warn-bg/);
 
   // No score: the note, as text (its angle brackets are characters, not markup).
-  const goals = await sourceRow(page, "Q4 goals: activation and growth");
-  await expect(goals.getByTestId("source-label")).toHaveText(`Notion · ${NOTE}`);
-  await expect(goals.locator("g1")).toHaveCount(0);
+  const goals = await sourceRow(page, 'Q4 goals: activation and growth');
+  await expect(goals.getByTestId('source-label')).toHaveText(`Notion · ${NOTE}`);
+  await expect(goals.locator('g1')).toHaveCount(0);
 
   // A citation without any of it: the source alone.
-  const funnel = await sourceRow(page, "Funnel export, September");
-  await expect(funnel.getByTestId("source-label")).toHaveText("Google Docs");
+  const funnel = await sourceRow(page, 'Funnel export, September');
+  await expect(funnel.getByTestId('source-label')).toHaveText('Google Docs');
 });
 
-test("citation card: confidence beside the source, low ones marked, the note when unscored", async ({ page }) => {
+test('citation card: confidence beside the source, low ones marked, the note when unscored', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  const problem = await openSection(page, "problem");
+  await page.goto('/documents/annual-billing/v/2');
+  const problem = await openSection(page, 'problem');
 
-  const card = await hoverCard(page, problem.getByTestId("cite-c4"), "GitHub · High confidence");
-  await expect(card.getByTestId("cite-source")).toContainText("GitHub · High confidence");
-  await expect(card.getByTestId("low-confidence")).toHaveCount(0);
+  const card = await hoverCard(page, problem.getByTestId('cite-c4'), 'GitHub · High confidence');
+  await expect(card.getByTestId('cite-source')).toContainText('GitHub · High confidence');
+  await expect(card.getByTestId('low-confidence')).toHaveCount(0);
 
-  await hoverCard(page, problem.getByTestId("cite-c2"), "Meeting notes");
-  await expect(card.getByTestId("cite-source")).toHaveText(/^Meeting notes( · retrieved .*)?$/);
-  await expect(card.getByTestId("low-confidence")).toHaveText("Low confidence");
-  await expect(problem.getByTestId("cite-c2")).toHaveAccessibleName(/low confidence/);
+  await hoverCard(page, problem.getByTestId('cite-c2'), 'Meeting notes');
+  await expect(card.getByTestId('cite-source')).toHaveText(/^Meeting notes( · retrieved .*)?$/);
+  await expect(card.getByTestId('low-confidence')).toHaveText('Low confidence');
+  await expect(problem.getByTestId('cite-c2')).toHaveAccessibleName(/low confidence/);
 
-  const goal = await openSection(page, "goal-trace");
-  await hoverCard(page, goal.getByTestId("cite-c3"), `Notion · ${NOTE}`);
-  await expect(card.getByTestId("cite-source")).toContainText(`Notion · ${NOTE}`);
-  await expect(card.locator("g1")).toHaveCount(0);
+  const goal = await openSection(page, 'goal-trace');
+  await hoverCard(page, goal.getByTestId('cite-c3'), `Notion · ${NOTE}`);
+  await expect(card.getByTestId('cite-source')).toContainText(`Notion · ${NOTE}`);
+  await expect(card.locator('g1')).toHaveCount(0);
 });

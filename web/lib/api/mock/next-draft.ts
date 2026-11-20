@@ -14,22 +14,22 @@
  * is listed next to the accepted suggestions, ticked by default, built with them and marked
  * applied when its section is kept.
  */
-import type { Schemas } from "@/lib/api/client";
-import { wordDiff } from "@/lib/diff";
-import { turnedOff } from "@/lib/format";
-import { plainText } from "@/lib/markdown";
+import type { Schemas } from '@/lib/api/client';
+import { wordDiff } from '@/lib/diff';
+import { turnedOff } from '@/lib/format';
+import { plainText } from '@/lib/markdown';
 
-import type { LlmContext } from "./llm-jobs";
-import { prdRanker } from "./prd-rank";
-import { jobOut } from "./refusal";
-import { reply } from "./typed";
+import type { LlmContext } from './llm-jobs';
+import { prdRanker } from './prd-rank';
+import { jobOut } from './refusal';
+import { reply } from './typed';
 
-type Job = Schemas["LlmJobOut"];
-type Suggestion = Schemas["SuggestionOut"];
-type Feedback = LlmContext["feedback"][number];
-type Doc = LlmContext["documents"][number];
-type Version = LlmContext["versions"][number];
-type Resolution = { feedback_id: string; status: "addressed" | "declined"; note: string | null };
+type Job = Schemas['LlmJobOut'];
+type Suggestion = Schemas['SuggestionOut'];
+type Feedback = LlmContext['feedback'][number];
+type Doc = LlmContext['documents'][number];
+type Version = LlmContext['versions'][number];
+type Resolution = { feedback_id: string; status: 'addressed' | 'declined'; note: string | null };
 type BuiltSection = {
   section_key: string;
   level: number;
@@ -43,7 +43,7 @@ type BuiltSection = {
   /** G4: the discussions' section changes built into it. */
   next_draft_change_ids?: string[];
   resolutions: Resolution[];
-  preview: Schemas["WordOp"][];
+  preview: Schemas['WordOp'][];
 };
 type BatchOutput = {
   base_version: number;
@@ -55,22 +55,30 @@ type BatchOutput = {
   discarded_at?: string;
 };
 
-export const KIND = "refinement_batch" as const;
+export const KIND = 'refinement_batch' as const;
 /** H11 `next_drafts` at Observe: the plan's refusal, and the 409 of Build and the agents' run. */
 export const OBSERVING =
-  "Oracle is set to observe next drafts: it counts staged changes and builds nothing. An owner can change this in Settings › Autonomy.";
+  'Oracle is set to observe next drafts: it counts staged changes and builds nothing. An owner can change this in Settings › Autonomy.';
 
-const observing = (ctx: LlmContext) => ctx.nextDrafts?.().level === "observe";
+const observing = (ctx: LlmContext) => ctx.nextDrafts?.().level === 'observe';
 
 /** H11 Recommend: the sentence saying the staged changes are worth a draft (the API's _worth_a_draft). */
-function worthADraft(ctx: LlmContext, waiting: number, next: number, job: Job | null): string | null {
+function worthADraft(
+  ctx: LlmContext,
+  waiting: number,
+  next: number,
+  job: Job | null,
+): string | null {
   const nd = ctx.nextDrafts?.();
-  if (!nd || nd.level !== "recommend" || job || waiting < nd.min_staged) return null;
+  if (!nd || nd.level !== 'recommend' || job || waiting < nd.min_staged) return null;
   return `${waiting} changes wait: worth building draft ${next}.`;
 }
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
 
@@ -79,11 +87,11 @@ const versionsOf = (ctx: LlmContext, docId: string) =>
 const latestOf = (ctx: LlmContext, docId: string) => versionsOf(ctx, docId).at(-1) ?? null;
 
 export const isStaged = (s: Suggestion | null | undefined): boolean =>
-  !!s && s.kind === "section_text" && s.status === "accepted" && s.applied_in_version == null;
+  !!s && s.kind === 'section_text' && s.status === 'accepted' && s.applied_in_version == null;
 
 /** D12: an open item an approver staged for the agents. */
-export const stagedForAgents = (f: Pick<Feedback, "status" | "staged_for_agents_at">) =>
-  f.status === "open" && !!f.staged_for_agents_at;
+export const stagedForAgents = (f: Pick<Feedback, 'status' | 'staged_for_agents_at'>) =>
+  f.status === 'open' && !!f.staged_for_agents_at;
 
 /**
  * C1e: open / staged / declined / done, from the item's status and its live suggestion.
@@ -92,30 +100,34 @@ export const stagedForAgents = (f: Pick<Feedback, "status" | "staged_for_agents_
  * D12: an open item staged for the agents is Staged too.
  */
 export function feedbackState(
-  status: Feedback["status"],
+  status: Feedback['status'],
   s: Suggestion | null | undefined,
   agents = false,
-): Schemas["FeedbackItemOut"]["state"] {
-  if (isStaged(s)) return "staged";
-  if (status === "declined") return "declined";
-  if (status !== "open") return "done";
-  if (agents) return "staged";
-  if (s?.status === "applied") return "done";
-  return "open";
+): Schemas['FeedbackItemOut']['state'] {
+  if (isStaged(s)) return 'staged';
+  if (status === 'declined') return 'declined';
+  if (status !== 'open') return 'done';
+  if (agents) return 'staged';
+  if (s?.status === 'applied') return 'done';
+  return 'open';
 }
 
 /** The derived state and, when staged, the draft it waits for. */
 export function stateOf(f: Feedback, s: Suggestion | null, latest: number | null) {
   const agents = stagedForAgents(f);
   const state = feedbackState(f.status, s, agents);
-  return { state, staged_for_version: state === "staged" ? (latest ?? 0) + 1 : null, staged_for_agents: agents };
+  return {
+    state,
+    staged_for_version: state === 'staged' ? (latest ?? 0) + 1 : null,
+    staged_for_agents: agents,
+  };
 }
 
 /** D12: the document's items staged for the agents, oldest first. */
-export function agentItems(ctx: LlmContext, docId: string): Schemas["AgentItem"][] {
+export function agentItems(ctx: LlmContext, docId: string): Schemas['AgentItem'][] {
   return ctx.feedback
     .filter((f) => f.document_id === docId && stagedForAgents(f))
-    .sort((a, b) => (a.staged_for_agents_at ?? "").localeCompare(b.staged_for_agents_at ?? ""))
+    .sort((a, b) => (a.staged_for_agents_at ?? '').localeCompare(b.staged_for_agents_at ?? ''))
     .map((f) => ({
       feedback_id: f.id,
       summary: f.summary,
@@ -126,7 +138,10 @@ export function agentItems(ctx: LlmContext, docId: string): Schemas["AgentItem"]
 }
 
 /** G4: a discussion's section change waiting for the document's next draft (`next_draft_changes`). */
-export type NextDraftChangeRow = Omit<Schemas["NextDraftChangeOut"], "text" | "reason" | "applied_in_version"> & {
+export type NextDraftChangeRow = Omit<
+  Schemas['NextDraftChangeOut'],
+  'text' | 'reason' | 'applied_in_version'
+> & {
   text: string | null;
   reason: string | null;
   applied_in_version: number | null;
@@ -136,48 +151,56 @@ export type NextDraftChangeRow = Omit<Schemas["NextDraftChangeOut"], "text" | "r
   created_at: string;
 };
 
-export const PRIVATE_LINE = "From a private discussion";
+export const PRIVATE_LINE = 'From a private discussion';
 
 /** "From discussion <title>", or for a private one the reader is not in, only that. */
-export function originLine(view: Schemas["StagingDiscussion"] | null | undefined): string {
+export function originLine(view: Schemas['StagingDiscussion'] | null | undefined): string {
   return view?.title ? `From discussion ${view.title}` : PRIVATE_LINE;
 }
 
 /** G4: the document's staged next-draft rows, oldest first. */
 export function stagedRows(ctx: LlmContext, docId: string): NextDraftChangeRow[] {
   return (ctx.db.next_draft_changes ?? [])
-    .filter((r) => r.document_id === docId && r.status === "staged")
+    .filter((r) => r.document_id === docId && r.status === 'staged')
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
-type Reason = Schemas["NextDraftReason"];
+type Reason = Schemas['NextDraftReason'];
 const many = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
 
 /** The API's choose_engine: the agents when any chosen item needs them, else Oracle. */
-export function chooseEngine(texts: Schemas["StagedChange"][], agents: Schemas["AgentItem"][]): { engine: "oracle" | "agents"; why: Reason[] } {
+export function chooseEngine(
+  texts: Schemas['StagedChange'][],
+  agents: Schemas['AgentItem'][],
+): { engine: 'oracle' | 'agents'; why: Reason[] } {
   const why: Reason[] = [];
   const general = agents.filter((a) => !a.section_key).map((a) => a.feedback_id);
   const sectioned = agents.filter((a) => a.section_key).map((a) => a.feedback_id);
   const gone = texts.filter((t) => t.section_gone);
   if (general.length)
-    why.push({ code: "whole_draft", text: `${many(general.length, "remark is", "remarks are")} about the whole draft`, feedback_ids: general, suggestion_ids: [] });
+    why.push({
+      code: 'whole_draft',
+      text: `${many(general.length, 'remark is', 'remarks are')} about the whole draft`,
+      feedback_ids: general,
+      suggestion_ids: [],
+    });
   if (sectioned.length)
     why.push({
-      code: "structure",
-      text: `${many(sectioned.length, "item needs", "items need")} more than a section's text changed`,
+      code: 'structure',
+      text: `${many(sectioned.length, 'item needs', 'items need')} more than a section's text changed`,
       feedback_ids: sectioned,
       suggestion_ids: [],
     });
   if (gone.length) {
     const n = new Set(gone.map((t) => t.section_key)).size;
     why.push({
-      code: "section_gone",
-      text: `${many(n, "section", "sections")} to change ${n === 1 ? "is" : "are"} gone`,
+      code: 'section_gone',
+      text: `${many(n, 'section', 'sections')} to change ${n === 1 ? 'is' : 'are'} gone`,
       feedback_ids: [],
       suggestion_ids: gone.map((t) => t.suggestion_id),
     });
   }
-  return { engine: why.length ? "agents" : "oracle", why };
+  return { engine: why.length ? 'agents' : 'oracle', why };
 }
 
 /** The feedback loop's estimate, as the runs mock's cost table makes it (analyst + writer). */
@@ -197,7 +220,7 @@ export function currentJob(ctx: LlmContext, docId: string): Job | null {
     .filter((j) => j.document_id === docId && j.kind === KIND)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
   const out = job?.output as BatchOutput | null | undefined;
-  if (!job || job.status === "cancelled" || out?.applied_version || out?.discarded_at) return null;
+  if (!job || job.status === 'cancelled' || out?.applied_version || out?.discarded_at) return null;
   return job;
 }
 
@@ -206,14 +229,18 @@ function memberName(ctx: LlmContext, id: string | null | undefined): string | nu
   return ctx.memberName?.(id) ?? null;
 }
 
-export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): Schemas["StagedChanges"] {
+export function stagedChanges(
+  ctx: LlmContext,
+  doc: Doc,
+  includeGone: boolean,
+): Schemas['StagedChanges'] {
   const latest = latestOf(ctx, doc.id);
   const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
   const rows = staged(ctx, doc.id);
   let gone = 0;
-  const items: Schemas["StagedChange"][] = [];
+  const items: Schemas['StagedChange'][] = [];
   for (const s of rows) {
-    const key = s.section_key ?? "";
+    const key = s.section_key ?? '';
     const section = latest?.sections.find((x) => x.section_key === key);
     if (!section) gone += 1;
     if (!section && !includeGone) continue;
@@ -228,9 +255,9 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
       feedback_item_id: s.feedback_item_id,
       section_key: key,
       section_heading: section?.heading ?? older?.heading ?? key,
-      feedback_summary: f?.summary ?? "",
+      feedback_summary: f?.summary ?? '',
       // #636 re-review: none of a withheld item's text (the next draft still takes it).
-      text: f?.withheld_at ? "" : (s.edited_text ?? s.text ?? ""),
+      text: f?.withheld_at ? '' : (s.edited_text ?? s.text ?? ''),
       accepted_by: s.decided_by ?? null,
       accepted_by_name: memberName(ctx, s.decided_by),
       accepted_at: s.decided_at ?? null,
@@ -240,14 +267,14 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
       section_locked: locked.has(key),
     });
   }
-  const changes: Schemas["StagedDiscussionChange"][] = [];
+  const changes: Schemas['StagedDiscussionChange'][] = [];
   for (const r of stagedRows(ctx, doc.id)) {
     const section = latest?.sections.find((x) => x.section_key === r.section_key);
     if (!section && !includeGone) continue;
     const view = r.discussion_id ? (ctx.discussion?.(r.discussion_id) ?? null) : null;
     changes.push({
       id: r.id,
-      source: "next_draft_change",
+      source: 'next_draft_change',
       section_key: r.section_key,
       section_heading: section?.heading ?? r.section_key,
       instruction: r.instruction,
@@ -270,9 +297,9 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
   const run = ctx.agentsRun?.(doc.id) ?? null;
   const sent = new Set(run?.sent ?? []);
   const agents = agentItems(ctx, doc.id);
-  const free = <T,>(xs: T[], id: (x: T) => string) => xs.filter((x) => !sent.has(id(x)));
-  const held = <T,>(xs: T[], id: (x: T) => string) => xs.filter((x) => sent.has(id(x)));
-  const agentsRun: Schemas["NextDraftRun"] | null = run
+  const free = <T>(xs: T[], id: (x: T) => string) => xs.filter((x) => !sent.has(id(x)));
+  const held = <T>(xs: T[], id: (x: T) => string) => xs.filter((x) => sent.has(id(x)));
+  const agentsRun: Schemas['NextDraftRun'] | null = run
     ? {
         id: run.id,
         flow: run.flow,
@@ -286,9 +313,13 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     : null;
   const freeItems = free(items, (i) => i.suggestion_id);
   const freeChanges = free(changes, (c) => c.id);
-  const sections = new Set([...freeItems, ...freeChanges].filter((i) => !i.section_gone).map((i) => i.section_key));
+  const sections = new Set(
+    [...freeItems, ...freeChanges].filter((i) => !i.section_gone).map((i) => i.section_key),
+  );
   // H11 Recommend: what still waits to be drafted (not what a run under way was sent).
-  const waiting = [...freeItems, ...freeChanges].filter((i) => !i.section_gone).length + free(agents, (x) => x.feedback_id).length;
+  const waiting =
+    [...freeItems, ...freeChanges].filter((i) => !i.section_gone).length +
+    free(agents, (x) => x.feedback_id).length;
   const next = (latest?.number ?? 0) + 1;
   return {
     document_id: doc.id,
@@ -307,26 +338,36 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
 }
 
 type Chosen = {
-  texts: Schemas["StagedChange"][];
-  agents: Schemas["AgentItem"][];
+  texts: Schemas['StagedChange'][];
+  agents: Schemas['AgentItem'][];
   /** G4: the discussions' section changes the build takes. */
-  rows: Schemas["StagedDiscussionChange"][];
-  staged: Schemas["StagedChanges"];
+  rows: Schemas['StagedDiscussionChange'][];
+  staged: Schemas['StagedChanges'];
 };
 
 /** The staged items a build takes (the API's _chosen), or why not. */
-function chosen(ctx: LlmContext, doc: Doc, input: Schemas["NextDraftIn"]): Chosen | Response {
+function chosen(ctx: LlmContext, doc: Doc, input: Schemas['NextDraftIn']): Chosen | Response {
   const all = stagedChanges(ctx, doc, true);
   const sids = input.suggestion_ids ?? null;
   const fids = input.feedback_ids ?? null;
-  const texts = sids ? all.items.filter((i) => sids.includes(i.suggestion_id)) : all.items.filter((i) => !i.section_gone);
-  if (sids && texts.length !== new Set(sids).size) return fail(422, "every suggestion must be a staged (accepted, not applied) change");
-  const agents = fids ? all.agent_items.filter((a) => fids.includes(a.feedback_id)) : all.agent_items;
-  if (fids && agents.length !== new Set(fids).size) return fail(422, "every feedback item must be staged for the agents");
+  const texts = sids
+    ? all.items.filter((i) => sids.includes(i.suggestion_id))
+    : all.items.filter((i) => !i.section_gone);
+  if (sids && texts.length !== new Set(sids).size)
+    return fail(422, 'every suggestion must be a staged (accepted, not applied) change');
+  const agents = fids
+    ? all.agent_items.filter((a) => fids.includes(a.feedback_id))
+    : all.agent_items;
+  if (fids && agents.length !== new Set(fids).size)
+    return fail(422, 'every feedback item must be staged for the agents');
   const nids = input.next_draft_change_ids ?? null;
-  const rows = nids ? all.next_draft_changes.filter((r) => nids.includes(r.id)) : all.next_draft_changes.filter((r) => !r.section_gone);
-  if (nids && rows.length !== new Set(nids).size) return fail(422, "every discussion change must be staged for the next draft");
-  if (!texts.length && !agents.length && !rows.length) return fail(422, "nothing is staged for the next draft");
+  const rows = nids
+    ? all.next_draft_changes.filter((r) => nids.includes(r.id))
+    : all.next_draft_changes.filter((r) => !r.section_gone);
+  if (nids && rows.length !== new Set(nids).size)
+    return fail(422, 'every discussion change must be staged for the next draft');
+  if (!texts.length && !agents.length && !rows.length)
+    return fail(422, 'nothing is staged for the next draft');
   return { texts, agents, rows, staged: all };
 }
 
@@ -336,55 +377,96 @@ export function runEstimate(ctx: LlmContext, depth: string): number {
 }
 
 /** #574 review: the agents' run under way on a document (as the API's agents_run), with the ids it was sent. */
-export type AgentsRun = Omit<Schemas["NextDraftRun"], "items" | "agent_items" | "next_draft_changes"> & { sent: string[] };
+export type AgentsRun = Omit<
+  Schemas['NextDraftRun'],
+  'items' | 'agent_items' | 'next_draft_changes'
+> & { sent: string[] };
 
 /** The API's refusal while the agents' run is under way: a second build would make what it was sent again. */
 const runRefusal = (run: AgentsRun) =>
-  `the agents' run ${run.id} is writing this document's next draft; build again once it ends: ${globalThis.location?.origin ?? ""}/runs/${run.id}`;
+  `the agents' run ${run.id} is writing this document's next draft; build again once it ends: ${globalThis.location?.origin ?? ''}/runs/${run.id}`;
 
 export type StartRun = (
   doc: Doc,
-  input: { feedback_ids: string[]; suggestion_ids: string[]; next_draft_change_ids: string[]; depth: string; estimate_usd: number },
+  input: {
+    feedback_ids: string[];
+    suggestion_ids: string[];
+    next_draft_change_ids: string[];
+    depth: string;
+    estimate_usd: number;
+  },
 ) => Promise<Response>;
 
 /** POST /v1/feedback/{id}/stage-for-agents (and DELETE): D12 staging for the agents; null for other paths. */
-export async function stageRoute(ctx: LlmContext, req: Request, p: string[], live: (f: Feedback) => Suggestion | null): Promise<Response | null> {
-  if (p[1] !== "feedback" || !p[2] || p[3] !== "stage-for-agents" || !["POST", "DELETE"].includes(req.method)) return null;
+export async function stageRoute(
+  ctx: LlmContext,
+  req: Request,
+  p: string[],
+  live: (f: Feedback) => Suggestion | null,
+): Promise<Response | null> {
+  if (
+    p[1] !== 'feedback' ||
+    !p[2] ||
+    p[3] !== 'stage-for-agents' ||
+    !['POST', 'DELETE'].includes(req.method)
+  )
+    return null;
   const f = ctx.feedback.find((x) => x.id === p[2]);
   if (!f) return fail(404, `Feedback item ${p[2]} not found`);
   const s = live(f);
-  if (isStaged(s)) return fail(409, "already staged as a text change for the next draft");
-  if (f.status !== "open") return fail(409, `the item is ${f.status}, not open`);
-  const on = req.method === "POST";
-  if (on && s?.kind === "section_text" && s.status === "open")
-    return fail(409, "it has a text suggestion: accept it (a text change) or dismiss it first");
-  if (on && !f.staged_for_agents_at) Object.assign(f, { staged_for_agents_at: ctx.now(), staged_for_agents_by: ctx.userId });
+  if (isStaged(s)) return fail(409, 'already staged as a text change for the next draft');
+  if (f.status !== 'open') return fail(409, `the item is ${f.status}, not open`);
+  const on = req.method === 'POST';
+  if (on && s?.kind === 'section_text' && s.status === 'open')
+    return fail(409, 'it has a text suggestion: accept it (a text change) or dismiss it first');
+  if (on && !f.staged_for_agents_at)
+    Object.assign(f, { staged_for_agents_at: ctx.now(), staged_for_agents_by: ctx.userId });
   if (!on) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
   f.updated_at = ctx.now();
   const latest = latestOf(ctx, f.document_id)?.number ?? null;
-  const out = { ...f, resolution_note: shownNote(f, ctx.db), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) };
+  const out = {
+    ...f,
+    resolution_note: shownNote(f, ctx.db),
+    suggestion: shownSuggestion(f, s),
+    ...stateOf(f, s, latest),
+  };
   return on
-    ? reply("/v1/feedback/{feedback_id}/stage-for-agents", "post", out)
-    : reply("/v1/feedback/{feedback_id}/stage-for-agents", "delete", out);
+    ? reply('/v1/feedback/{feedback_id}/stage-for-agents', 'post', out)
+    : reply('/v1/feedback/{feedback_id}/stage-for-agents', 'delete', out);
 }
 
 /** A withheld item's suggestion: what its pushback says instead of its reason (jobs.service.WITHHELD_REASON). */
-export const WITHHELD_REASON = "Withheld while its finding is not shared in full";
+export const WITHHELD_REASON = 'Withheld while its finding is not shared in full';
 
 /** A suggestion as every output serves it (jobs.service.suggestion_out, #636 re-review): on a
  * withheld item (a late answer whose finding is not shared in full) its text, edited text and
  * rationale are left out, and its pushback keeps its sources but not its reason. */
-export function shownSuggestion<S extends Suggestion | null>(f: Pick<Feedback, "withheld_at"> | undefined, s: S): S {
+export function shownSuggestion<S extends Suggestion | null>(
+  f: Pick<Feedback, 'withheld_at'> | undefined,
+  s: S,
+): S {
   if (!s || !f?.withheld_at) return s;
-  return { ...s, text: null, edited_text: null, rationale: null, pushback: s.pushback ? { ...s.pushback, reason: WITHHELD_REASON } : null };
+  return {
+    ...s,
+    text: null,
+    edited_text: null,
+    rationale: null,
+    pushback: s.pushback ? { ...s.pushback, reason: WITHHELD_REASON } : null,
+  };
 }
 
 type Lines = Record<string, unknown>[];
-const listOf = (x: unknown): Lines => (Array.isArray(x) ? x.filter((y): y is Record<string, unknown> => !!y && typeof y === "object") : []);
+const listOf = (x: unknown): Lines =>
+  Array.isArray(x)
+    ? x.filter((y): y is Record<string, unknown> => !!y && typeof y === 'object')
+    : [];
 
 /** The resolutions a refinement (top level) or a next draft (per section) wrote (jobs.service._resolutions_of). */
 function resolutionsOf(out: Record<string, unknown>): Lines {
-  return [...listOf(out.resolutions), ...listOf(out.sections).flatMap((s) => listOf(s.resolutions))];
+  return [
+    ...listOf(out.resolutions),
+    ...listOf(out.sections).flatMap((s) => listOf(s.resolutions)),
+  ];
 }
 
 /** A report's narrative while a line it was written from is withheld (jobs.service.withheld_narrative). */
@@ -402,53 +484,78 @@ export function shownJob<J extends Job | null | undefined>(ctx: LlmContext, job:
   const resolution = out.resolution as { summary?: string; items?: unknown } | undefined;
   const lines = listOf(resolution?.items);
   const hit = lines.filter((l) => withheld.has(String(l.feedback_id)));
-  for (const l of hit) Object.assign(l, { summary: withheld.get(String(l.feedback_id))!.summary, resolution_note: null, explanation: "" });
+  for (const l of hit)
+    Object.assign(l, {
+      summary: withheld.get(String(l.feedback_id))!.summary,
+      resolution_note: null,
+      explanation: '',
+    });
   if (resolution && hit.length) resolution.summary = withheldNarrative(lines.length);
-  for (const r of resolutionsOf(out)) if (withheld.has(String(r.feedback_id)) && r.note) r.note = WITHHELD_REASON;
+  for (const r of resolutionsOf(out))
+    if (withheld.has(String(r.feedback_id)) && r.note) r.note = WITHHELD_REASON;
   return { ...job, output: out } as J;
 }
 
 /** The item's resolution note as outputs serve it (jobs.service.shown_note, oracle_notes): on a
  * withheld item a note Oracle wrote from it (from any of its suggestions, or a refinement's or next
  * draft's resolution note) is withheld with it; a person's note is shown as written. */
-export function shownNote(f: Feedback, db: LlmContext["db"] | undefined): string | null {
+export function shownNote(f: Feedback, db: LlmContext['db'] | undefined): string | null {
   const note = f.resolution_note ?? null;
   if (!f.withheld_at || note == null || !db) return note;
   const fromSuggestions = db.suggestions
     .filter((s) => s.feedback_item_id === f.id)
-    .flatMap((s) => [s.edited_text ?? s.text ? `Answered: ${s.edited_text ?? s.text}` : null, s.rationale, s.pushback?.reason]);
+    .flatMap((s) => [
+      (s.edited_text ?? s.text) ? `Answered: ${s.edited_text ?? s.text}` : null,
+      s.rationale,
+      s.pushback?.reason,
+    ]);
   const fromDrafts = db.jobs
-    .filter((j) => j.document_id === f.document_id && (j.kind === "refinement" || j.kind === KIND) && j.status === "succeeded" && j.output)
-    .flatMap((j) => resolutionsOf(j.output!).filter((r) => r.feedback_id === f.id).map((r) => r.note));
+    .filter(
+      (j) =>
+        j.document_id === f.document_id &&
+        (j.kind === 'refinement' || j.kind === KIND) &&
+        j.status === 'succeeded' &&
+        j.output,
+    )
+    .flatMap((j) =>
+      resolutionsOf(j.output!)
+        .filter((r) => r.feedback_id === f.id)
+        .map((r) => r.note),
+    );
   return [...fromSuggestions, ...fromDrafts].includes(note) ? WITHHELD_REASON : note;
 }
 
 function strip(body: string) {
-  return body.replace(/[ \t]*\[c:[^\]]*\]/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  return body.replace(/[ \t]*\[c:[^\]]*\]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
 }
 
 /** The "model": every affected section rewritten from its staged suggestions. */
 export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
   const ids = (job.input.suggestion_ids as string[] | undefined) ?? [];
-  const used = staged(ctx, job.document_id ?? "", ids);
+  const used = staged(ctx, job.document_id ?? '', ids);
   const keys = new Set(v.sections.map((s) => s.section_key));
-  const skipped: BatchOutput["skipped"] = used
-    .filter((s) => !keys.has(s.section_key ?? ""))
+  const skipped: BatchOutput['skipped'] = used
+    .filter((s) => !keys.has(s.section_key ?? ''))
     .map((s) => ({
       section_key: s.section_key ?? null,
       suggestion_ids: [s.id],
       reason: `the section is not in version ${v.number}`,
     }));
-  const usable = used.filter((s) => keys.has(s.section_key ?? ""));
+  const usable = used.filter((s) => keys.has(s.section_key ?? ''));
   const rowIds = (job.input.next_draft_change_ids as string[] | undefined) ?? [];
-  const rows = stagedRows(ctx, job.document_id ?? "").filter((r) => rowIds.includes(r.id) && keys.has(r.section_key));
+  const rows = stagedRows(ctx, job.document_id ?? '').filter(
+    (r) => rowIds.includes(r.id) && keys.has(r.section_key),
+  );
   const sections: BuiltSection[] = [];
   for (const section of v.sections) {
     const mine = usable.filter((s) => s.section_key === section.section_key);
     const mineRows = rows.filter((r) => r.section_key === section.section_key);
     if (!mine.length && !mineRows.length) continue;
     const body = strip(
-      [...mine.map((s) => s.edited_text ?? s.text ?? ""), ...mineRows.map((r) => r.text ?? `${section.body_md}\n\n${r.instruction}`)]
+      [
+        ...mine.map((s) => s.edited_text ?? s.text ?? ''),
+        ...mineRows.map((r) => r.text ?? `${section.body_md}\n\n${r.instruction}`),
+      ]
         .filter(Boolean)
         .at(-1) ?? section.body_md,
     );
@@ -460,33 +567,39 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
       before: { heading: section.heading, body_md: section.body_md },
       o1c_fixes: [],
       data_points: [],
-      notes: mine.length === 1 ? "Worked the accepted change in." : `Worked ${mine.length} accepted changes in together.`,
+      notes:
+        mine.length === 1
+          ? 'Worked the accepted change in.'
+          : `Worked ${mine.length} accepted changes in together.`,
       suggestion_ids: mine.map((s) => s.id),
       next_draft_change_ids: mineRows.map((r) => r.id),
       resolutions: mine.map((s) => ({
         feedback_id: s.feedback_item_id,
-        status: "addressed",
-        note: "Worked into the next draft",
+        status: 'addressed',
+        note: 'Worked into the next draft',
       })),
-      preview: wordDiff(`${section.heading}\n${section.body_text}`, `${section.heading}\n${plainText(body)}`),
+      preview: wordDiff(
+        `${section.heading}\n${section.body_text}`,
+        `${section.heading}\n${plainText(body)}`,
+      ),
     });
   }
   return {
     base_version: v.number,
-    notes: `${sections.length} section${sections.length === 1 ? "" : "s"} revised together.`,
+    notes: `${sections.length} section${sections.length === 1 ? '' : 's'} revised together.`,
     sections,
     skipped,
     suggestion_ids: usable.map((s) => s.id),
   };
 }
 
-function preview(ctx: LlmContext, stored: Job): Schemas["NextDraftPreview"] {
+function preview(ctx: LlmContext, stored: Job): Schemas['NextDraftPreview'] {
   // #645 re-review: a withheld item's resolution notes are withheld (the build keeps them).
   const job = shownJob(ctx, stored);
   const out = (job.output ?? null) as BatchOutput | null;
   const base = (job.input.version as number | undefined) ?? null;
-  const latest = latestOf(ctx, job.document_id ?? "")?.number ?? null;
-  const done = job.status === "succeeded" && out;
+  const latest = latestOf(ctx, job.document_id ?? '')?.number ?? null;
+  const done = job.status === 'succeeded' && out;
   return {
     job: jobOut(job),
     base_version: base,
@@ -495,7 +608,7 @@ function preview(ctx: LlmContext, stored: Job): Schemas["NextDraftPreview"] {
     stale: !!base && latest != null && latest !== base && !out?.applied_version,
     applied_version: out?.applied_version ?? null,
     discarded: !!out?.discarded_at,
-    notes: done ? out.notes : "",
+    notes: done ? out.notes : '',
     sections: done
       ? out.sections.map((s) => ({
           section_key: s.section_key,
@@ -514,11 +627,18 @@ function preview(ctx: LlmContext, stored: Job): Schemas["NextDraftPreview"] {
             const r = (ctx.db.next_draft_changes ?? []).find((x) => x.id === id);
             if (!r) return [];
             const view = r.discussion_id ? (ctx.discussion?.(r.discussion_id) ?? null) : null;
-            return [{ next_draft_change_id: r.id, instruction: r.instruction, text: r.text, origin: originLine(view) }];
+            return [
+              {
+                next_draft_change_id: r.id,
+                instruction: r.instruction,
+                text: r.text,
+                origin: originLine(view),
+              },
+            ];
           }),
           feedback: s.resolutions.map((r) => ({
             id: r.feedback_id,
-            summary: ctx.feedback.find((f) => f.id === r.feedback_id)?.summary ?? "",
+            summary: ctx.feedback.find((f) => f.id === r.feedback_id)?.summary ?? '',
           })),
         }))
       : [],
@@ -542,20 +662,26 @@ export async function nextDraftRoute(
   },
 ): Promise<Response | null> {
   const { makeJob, enabled } = hooks;
-  if (p[1] !== "documents" || !p[2] || (p[3] !== "staged-changes" && p[3] !== "next-draft")) return null;
+  if (p[1] !== 'documents' || !p[2] || (p[3] !== 'staged-changes' && p[3] !== 'next-draft'))
+    return null;
   const m = req.method;
   const doc = ctx.documents.find((d) => d.slug === p[2] || d.id === p[2]);
-  if (!doc) return fail(404, "Document not found");
-  if (p[3] === "staged-changes" && m === "GET") return reply("/v1/documents/{doc}/staged-changes", "get", stagedChanges(ctx, doc, q.get("include_gone") === "true"));
-  if (p[3] !== "next-draft") return fail(404, "Route not found");
-  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  if (!doc) return fail(404, 'Document not found');
+  if (p[3] === 'staged-changes' && m === 'GET')
+    return reply(
+      '/v1/documents/{doc}/staged-changes',
+      'get',
+      stagedChanges(ctx, doc, q.get('include_gone') === 'true'),
+    );
+  if (p[3] !== 'next-draft') return fail(404, 'Route not found');
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
 
-  if (p[4] === "plan" && m === "POST") {
-    const input = (await body<Schemas["NextDraftPlanIn"]>()) ?? {};
+  if (p[4] === 'plan' && m === 'POST') {
+    const input = (await body<Schemas['NextDraftPlanIn']>()) ?? {};
     const c = chosen(ctx, doc, input);
     if (c instanceof Response) return c;
     const { engine, why } = chooseEngine(c.texts, c.agents);
-    const estimate = engine === "agents" ? runEstimate(ctx, input.depth ?? "standard") : null;
+    const estimate = engine === 'agents' ? runEstimate(ctx, input.depth ?? 'standard') : null;
     const latest = latestOf(ctx, doc.id);
     const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
     const hit = [...c.texts, ...c.rows].filter((t) => locked.has(t.section_key));
@@ -564,14 +690,14 @@ export async function nextDraftRoute(
       ? OBSERVING
       : run
         ? runRefusal(run)
-      : engine === "agents"
-        ? null
-        : !enabled(doc)
-          ? "Refinement is turned off for this document"
-          : hit.length
-            ? `approved and locked, never changed: ${[...new Set(hit.map((t) => `${t.section_heading} (${t.section_key})`))].join(", ")}; untick them`
-            : null;
-    return reply("/v1/documents/{doc}/next-draft/plan", "post", {
+        : engine === 'agents'
+          ? null
+          : !enabled(doc)
+            ? 'Refinement is turned off for this document'
+            : hit.length
+              ? `approved and locked, never changed: ${[...new Set(hit.map((t) => `${t.section_heading} (${t.section_key})`))].join(', ')}; untick them`
+              : null;
+    return reply('/v1/documents/{doc}/next-draft/plan', 'post', {
       engine,
       why,
       text_changes: c.texts.length + c.rows.length,
@@ -581,21 +707,26 @@ export async function nextDraftRoute(
       needs_owner_approval: estimate != null && estimate > OWNER_APPROVAL_USD,
       estimate_usd: estimate,
       refused,
-    } satisfies Schemas["NextDraftPlan"]);
+    } satisfies Schemas['NextDraftPlan']);
   }
 
-  if (p[4] === "run" && m === "POST") {
+  if (p[4] === 'run' && m === 'POST') {
     if (observing(ctx)) return fail(409, OBSERVING);
-    const input = (await body<Schemas["NextDraftRunIn"]>()) ?? {};
+    const input = (await body<Schemas['NextDraftRunIn']>()) ?? {};
     const run = ctx.agentsRun?.(doc.id) ?? null;
     if (run) return fail(409, runRefusal(run));
     const c = chosen(ctx, doc, input);
     if (c instanceof Response) return c;
-    if (chooseEngine(c.texts, c.agents).engine === "oracle") return fail(409, "these changes need no agents; build them with Oracle");
+    if (chooseEngine(c.texts, c.agents).engine === 'oracle')
+      return fail(409, 'these changes need no agents; build them with Oracle');
     const pending = currentJob(ctx, doc.id);
-    if (pending) return fail(409, `Oracle's build of the next draft is pending (job ${pending.id}); apply or discard it first`);
-    if (!hooks.startRun) return fail(503, "runs are not available");
-    const depth = input.depth ?? "standard";
+    if (pending)
+      return fail(
+        409,
+        `Oracle's build of the next draft is pending (job ${pending.id}); apply or discard it first`,
+      );
+    if (!hooks.startRun) return fail(503, 'runs are not available');
+    const depth = input.depth ?? 'standard';
     return hooks.startRun(doc, {
       feedback_ids: c.agents.map((a) => a.feedback_id),
       suggestion_ids: c.texts.map((t) => t.suggestion_id),
@@ -606,127 +737,167 @@ export async function nextDraftRoute(
     });
   }
 
-  if (!p[4] && m === "POST") {
+  if (!p[4] && m === 'POST') {
     if (observing(ctx)) return fail(409, OBSERVING);
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
-    if (!enabled(doc)) return fail(409, turnedOff("refinement"));
+    if (!enabled(doc)) return fail(409, turnedOff('refinement'));
     const run = ctx.agentsRun?.(doc.id) ?? null;
     if (run) return fail(409, runRefusal(run));
     const pending = currentJob(ctx, doc.id);
-    if (pending && ["queued", "running"].includes(pending.status)) {
-      return fail(409, "the next draft is already being built; wait for it or discard it");
+    if (pending && ['queued', 'running'].includes(pending.status)) {
+      return fail(409, 'the next draft is already being built; wait for it or discard it');
     }
-    const input = (await body<Schemas["NextDraftIn"]>()) ?? {};
+    const input = (await body<Schemas['NextDraftIn']>()) ?? {};
     // D12: the built-in engine builds only what needs no agents.
     const c = chosen(ctx, doc, input);
     if (c instanceof Response) return c;
     const plan = chooseEngine(c.texts, c.agents);
-    if (plan.engine === "agents")
+    if (plan.engine === 'agents')
       return json(409, {
-        detail: `these changes need the agents: ${plan.why.map((w) => w.text).join("; ")}`,
-        code: "needs_agents",
+        detail: `these changes need the agents: ${plan.why.map((w) => w.text).join('; ')}`,
+        code: 'needs_agents',
         why: plan.why,
       });
     const ids = input.suggestion_ids ?? null;
     let rows = staged(ctx, doc.id, ids);
     if (ids && rows.length !== new Set(ids).size)
-      return fail(422, "every suggestion must be a staged (accepted, not applied) change");
+      return fail(422, 'every suggestion must be a staged (accepted, not applied) change');
     const keys = new Set(latest.sections.map((s) => s.section_key));
     // Named items whose section is gone are refused; by default they are left out.
-    const gone = new Set(ids ? rows.filter((s) => !keys.has(s.section_key ?? "")).map((s) => s.section_key ?? "?") : []);
-    if (input.next_draft_change_ids) for (const r of c.rows) if (!keys.has(r.section_key)) gone.add(r.section_key);
-    if (!ids) rows = rows.filter((s) => keys.has(s.section_key ?? ""));
-    if (gone.size) return fail(422, `section(s) ${[...gone].join(", ")} are no longer in version ${latest.number}; untick them`);
+    const gone = new Set(
+      ids
+        ? rows.filter((s) => !keys.has(s.section_key ?? '')).map((s) => s.section_key ?? '?')
+        : [],
+    );
+    if (input.next_draft_change_ids)
+      for (const r of c.rows) if (!keys.has(r.section_key)) gone.add(r.section_key);
+    if (!ids) rows = rows.filter((s) => keys.has(s.section_key ?? ''));
+    if (gone.size)
+      return fail(
+        422,
+        `section(s) ${[...gone].join(', ')} are no longer in version ${latest.number}; untick them`,
+      );
     const nd = c.rows.filter((r) => keys.has(r.section_key));
-    if (!rows.length && !nd.length) return fail(422, "nothing is staged for the next draft");
+    if (!rows.length && !nd.length) return fail(422, 'nothing is staged for the next draft');
     const locked = new Set(ctx.lockedKeys(latest));
-    const touched = new Set([...rows.map((r) => r.section_key ?? ""), ...nd.map((r) => r.section_key)]);
-    const hit = latest.sections.filter((s) => locked.has(s.section_key) && touched.has(s.section_key));
+    const touched = new Set([
+      ...rows.map((r) => r.section_key ?? ''),
+      ...nd.map((r) => r.section_key),
+    ]);
+    const hit = latest.sections.filter(
+      (s) => locked.has(s.section_key) && touched.has(s.section_key),
+    );
     if (hit.length)
       return fail(
         409,
-        `approved and locked, never changed: ${hit.map((s) => `${s.heading} (${s.section_key})`).join(", ")}; untick them`,
+        `approved and locked, never changed: ${hit.map((s) => `${s.heading} (${s.section_key})`).join(', ')}; untick them`,
       );
-    const job = makeJob(doc, latest, { suggestion_ids: rows.map((r) => r.id), next_draft_change_ids: nd.map((r) => r.id) });
+    const job = makeJob(doc, latest, {
+      suggestion_ids: rows.map((r) => r.id),
+      next_draft_change_ids: nd.map((r) => r.id),
+    });
     ctx.db.jobs.push(job);
-    return reply("/v1/documents/{doc}/next-draft", "post", job, 201);
+    return reply('/v1/documents/{doc}/next-draft', 'post', job, 201);
   }
 
   const job = ctx.db.jobs.find((j) => j.id === p[4] && j.document_id === doc.id && j.kind === KIND);
-  if (!job) return fail(404, "next-draft build not found");
+  if (!job) return fail(404, 'next-draft build not found');
   const out = job.output as BatchOutput | null;
-  if (!p[5] && m === "GET") return reply("/v1/documents/{doc}/next-draft/{job_id}", "get", preview(ctx, job));
+  if (!p[5] && m === 'GET')
+    return reply('/v1/documents/{doc}/next-draft/{job_id}', 'get', preview(ctx, job));
 
-  if (p[5] === "discard" && m === "POST") {
+  if (p[5] === 'discard' && m === 'POST') {
     if (out?.applied_version) return fail(409, `already applied as version ${out.applied_version}`);
-    if (job.status === "cancelled" || out?.discarded_at) return fail(409, "this next draft was already discarded");
-    if (["queued", "running"].includes(job.status)) Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
+    if (job.status === 'cancelled' || out?.discarded_at)
+      return fail(409, 'this next draft was already discarded');
+    if (['queued', 'running'].includes(job.status))
+      Object.assign(job, { status: 'cancelled', finished_at: ctx.now() });
     else job.output = { ...(out ?? {}), discarded_at: ctx.now() };
-    return reply("/v1/documents/{doc}/next-draft/{job_id}/discard", "post", jobOut(job));
+    return reply('/v1/documents/{doc}/next-draft/{job_id}/discard', 'post', jobOut(job));
   }
 
-  if (p[5] === "apply" && m === "POST") {
-    if (out?.discarded_at) return fail(409, "this next draft was discarded; build it again");
+  if (p[5] === 'apply' && m === 'POST') {
+    if (out?.discarded_at) return fail(409, 'this next draft was discarded; build it again');
     if (out?.applied_version) return fail(409, `already applied as version ${out.applied_version}`);
-    if (job.status !== "succeeded" || !out) return fail(409, "only a finished next-draft build can be applied");
+    if (job.status !== 'succeeded' || !out)
+      return fail(409, 'only a finished next-draft build can be applied');
     const vs = versionsOf(ctx, doc.id);
     const base = vs.find((v) => v.number === out.base_version);
     if (!base || vs.at(-1)!.number !== base.number)
-      return fail(409, "a newer version exists since this draft was built; build it again");
-    const input = (await body<Schemas["NextDraftApply"]>()) ?? {};
+      return fail(409, 'a newer version exists since this draft was built; build it again');
+    const input = (await body<Schemas['NextDraftApply']>()) ?? {};
     const drop = new Set(input.drop_sections ?? []);
     const edits = input.edits ?? {};
     const built = new Map(out.sections.map((s) => [s.section_key, s]));
     const unknown = [...drop, ...Object.keys(edits)].filter((k) => !built.has(k));
-    if (unknown.length) return fail(422, `not in this draft: ${unknown.join(", ")}`);
+    if (unknown.length) return fail(422, `not in this draft: ${unknown.join(', ')}`);
     const kept = out.sections.filter((s) => !drop.has(s.section_key));
-    if (!kept.length) return fail(422, "keep at least one section, or discard the draft");
-    if (Object.keys(edits).some((k) => drop.has(k))) return fail(422, "edits for dropped sections");
+    if (!kept.length) return fail(422, 'keep at least one section, or discard the draft');
+    if (Object.keys(edits).some((k) => drop.has(k))) return fail(422, 'edits for dropped sections');
     const locked = new Set(ctx.lockedKeys(base));
     const hit = kept.filter((s) => locked.has(s.section_key));
     if (hit.length)
       return fail(
         409,
-        `approved and locked since the build, never changed: ${hit.map((s) => `${s.before.heading} (${s.section_key})`).join(", ")}`,
+        `approved and locked since the build, never changed: ${hit.map((s) => `${s.before.heading} (${s.section_key})`).join(', ')}`,
       );
     const replace: Record<string, { heading: string; body: string }> = {};
-    for (const s of kept) replace[s.section_key] = { heading: s.heading, body: strip(edits[s.section_key] ?? s.body_md) };
-    const used = ctx.db.suggestions.filter((s) => kept.some((k) => k.suggestion_ids.includes(s.id)) && s.status === "accepted");
+    for (const s of kept)
+      replace[s.section_key] = {
+        heading: s.heading,
+        body: strip(edits[s.section_key] ?? s.body_md),
+      };
+    const used = ctx.db.suggestions.filter(
+      (s) => kept.some((k) => k.suggestion_ids.includes(s.id)) && s.status === 'accepted',
+    );
     const live = new Set(used.map((s) => s.feedback_item_id));
     const resolutions = kept.flatMap((s) => s.resolutions).filter((r) => live.has(r.feedback_id));
     const next = ctx.importSections(doc, base, replace, resolutions);
     job.output = { ...out, applied_version: next.number, dropped_sections: [...drop] };
     for (const s of ctx.db.suggestions) {
       const dupe =
-        s.kind === "duplicate" &&
+        s.kind === 'duplicate' &&
         used.some((u) => u.feedback_item_id === s.duplicate_of) &&
-        ["open", "accepted"].includes(s.status);
+        ['open', 'accepted'].includes(s.status);
       if (used.includes(s) || dupe)
-        Object.assign(s, { status: "applied", applied_in_version: next.number, updated_at: ctx.now() });
+        Object.assign(s, {
+          status: 'applied',
+          applied_in_version: next.number,
+          updated_at: ctx.now(),
+        });
     }
     // G4: the discussions' changes built into the kept sections are applied.
     const builtRows = new Set(kept.flatMap((k) => k.next_draft_change_ids ?? []));
     for (const r of ctx.db.next_draft_changes ?? [])
-      if (builtRows.has(r.id) && r.status === "staged") Object.assign(r, { status: "applied", applied_in_version: next.number });
+      if (builtRows.has(r.id) && r.status === 'staged')
+        Object.assign(r, { status: 'applied', applied_in_version: next.number });
     hooks.onImported(doc, next);
-    return reply("/v1/documents/{doc}/next-draft/{job_id}/apply", "post", ctx.versionOut(next), 201);
+    return reply(
+      '/v1/documents/{doc}/next-draft/{job_id}/apply',
+      'post',
+      ctx.versionOut(next),
+      201,
+    );
   }
-  return fail(404, "Route not found");
+  return fail(404, 'Route not found');
 }
 
 // ------------------------------------------------------------------ inbox
 
-type InboxItem = Schemas["InboxFeedbackItem"];
+type InboxItem = Schemas['InboxFeedbackItem'];
 
 /** The Inbox's feedback by state, its counts and the staged rows, as GET /v1/inbox returns them. */
 /** An Inbox row shows this much of a suggestion's text, as the API cuts it. */
 const EXCERPT = 280;
-const excerpt = (text: string | null | undefined) => (text == null ? null : text.length <= EXCERPT ? text : `${text.slice(0, EXCERPT)}…`);
+const excerpt = (text: string | null | undefined) =>
+  text == null ? null : text.length <= EXCERPT ? text : `${text.slice(0, EXCERPT)}…`;
 
 export function inboxStates(ctx: LlmContext, seen: string | null) {
   const live = (id: string) =>
-    ctx.db.suggestions.filter((s) => s.feedback_item_id === id && s.status !== "superseded").at(-1) ?? null;
+    ctx.db.suggestions
+      .filter((s) => s.feedback_item_id === id && s.status !== 'superseded')
+      .at(-1) ?? null;
   const counts = { new: 0, open: 0, staged: 0, declined: 0, done: 0 };
   const items: InboxItem[] = [];
   for (const f of ctx.feedback) {
@@ -735,8 +906,9 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     const s = live(f.id);
     const latest = latestOf(ctx, doc.id)?.number ?? null;
     const { state: base, staged_for_version, staged_for_agents } = stateOf(f, s, latest);
-    const state: InboxItem["state"] = base === "open" && (!seen || f.created_at > seen) ? "new" : base;
-    const acting = shownSuggestion(f, s?.status === "open" ? s : null);
+    const state: InboxItem['state'] =
+      base === 'open' && (!seen || f.created_at > seen) ? 'new' : base;
+    const acting = shownSuggestion(f, s?.status === 'open' ? s : null);
     counts[state] += 1;
     items.push({
       id: f.id,
@@ -765,13 +937,13 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     });
   }
   items.sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const stagedRows: Schemas["InboxStaged"][] = ctx.documents.flatMap((doc) => {
+  const stagedRows: Schemas['InboxStaged'][] = ctx.documents.flatMap((doc) => {
     const rows = staged(ctx, doc.id);
     const agents = agentItems(ctx, doc.id).length;
     if (!rows.length && !agents) return [];
     const latest = latestOf(ctx, doc.id);
     const keys = new Set(latest?.sections.map((s) => s.section_key) ?? []);
-    const buildable = rows.filter((s) => keys.has(s.section_key ?? "")).length;
+    const buildable = rows.filter((s) => keys.has(s.section_key ?? '')).length;
     const count = buildable + agents;
     const job = currentJob(ctx, doc.id);
     return [
@@ -790,6 +962,10 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
   });
   // prd-order (as the API's staged_rows): PRDs in the company PRD order, other documents after them by title.
   const rank = prdRanker();
-  stagedRows.sort((a, b) => rank({ id: a.document_id, slug: a.slug }) - rank({ id: b.document_id, slug: b.slug }) || a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+  stagedRows.sort(
+    (a, b) =>
+      rank({ id: a.document_id, slug: a.slug }) - rank({ id: b.document_id, slug: b.slug }) ||
+      a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+  );
   return { items, counts, staged: stagedRows, needs_me: counts.new + counts.open };
 }

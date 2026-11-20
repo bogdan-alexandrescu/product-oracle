@@ -1,14 +1,33 @@
-"use client";
+'use client';
 
-import Link from "next/link";
+import Link from 'next/link';
 
-import { Chip, CodeChip, CodeTag, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
-import { namedText } from "@/lib/codes";
-import { missingFields } from "@/app/baseline/_components/goal-fields";
-import { percent } from "@/lib/goal-tree";
+import {
+  Chip,
+  CodeChip,
+  CodeTag,
+  InfoTip,
+  LinkButton,
+  Notice,
+  Panel,
+  Ring,
+  Sparkline,
+  ToGo,
+} from '@/components/ds';
+import { namedText } from '@/lib/codes';
+import { missingFields } from '@/app/baseline/_components/goal-fields';
+import { percent } from '@/lib/goal-tree';
 
-import { buildRun, type BaselineState } from "./_setup";
-import { assess, changeText, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
+import { buildRun, type BaselineState } from './_setup';
+import {
+  assess,
+  changeText,
+  formatFigure,
+  shownGoals,
+  spanMonths,
+  type GoalView,
+  type Point,
+} from './_goals';
 
 /** One goal: id and title, current over target, confidence ring, trend when there is history, distance to go. */
 function GoalCard({
@@ -33,7 +52,7 @@ function GoalCard({
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
   const p = assess(g, history);
   // prod-2: no current value, no confidence ring: a number beside "–" reads as the goal's score.
-  const noValue = p.state === "none" || !g.currentText;
+  const noValue = p.state === 'none' || !g.currentText;
   return (
     <li
       data-testid={`home-goal-${g.tag}`}
@@ -51,43 +70,72 @@ function GoalCard({
             className="flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-goal font-semibold outline-offset-2 hover:underline"
           >
             {g.code && <CodeTag code={g.code} proposed={g.proposed} />}
-            <span className={`line-clamp-2 min-w-0 font-medium ${g.proposed && !g.code ? "text-warn" : ""}`}>{g.name || g.title}</span>
+            <span
+              className={`line-clamp-2 min-w-0 font-medium ${g.proposed && !g.code ? 'text-warn' : ''}`}
+            >
+              {g.name || g.title}
+            </span>
           </Link>
         ) : (
           <span className="flex min-w-0 flex-1 font-semibold">
-            <CodeChip kind="goal" entityId={g.id} title={g.title} code={g.code} proposed={g.proposed} wrap />
+            <CodeChip
+              kind="goal"
+              entityId={g.id}
+              title={g.title}
+              code={g.code}
+              proposed={g.proposed}
+              wrap
+            />
           </span>
         )}
       </div>
       {/* QA pass D-3: value and confidence wrap to their own rows when a narrow card has no room for both. */}
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <span className="min-w-0 max-w-full" data-testid="goal-figure">
-          {p.state === "none" || (p.state === "notarget" && !g.currentText) ? (
-            <b className="tnum font-display text-[34px] leading-9 font-bold text-text2" aria-label="No current value">
+          {p.state === 'none' || (p.state === 'notarget' && !g.currentText) ? (
+            <b
+              className="tnum font-display text-[34px] leading-9 font-bold text-text2"
+              aria-label="No current value"
+            >
               –
             </b>
-          ) : p.state === "raw" || (p.state === "notarget" && !g.current) ? (
+          ) : p.state === 'raw' || (p.state === 'notarget' && !g.current) ? (
             // Units that do not match, or a side Home cannot read: both as written, no distance.
-            <b className="tnum font-display text-2xl leading-9 font-bold break-words" title={g.currentText!}>
+            <b
+              className="tnum font-display text-2xl leading-9 font-bold break-words"
+              title={g.currentText!}
+            >
               {g.currentText}
             </b>
           ) : (
-            <b className="tnum font-display text-[34px] leading-9 font-bold tracking-[-0.03em]">{formatFigure(g.current!)}</b>
+            <b className="tnum font-display text-[34px] leading-9 font-bold tracking-[-0.03em]">
+              {formatFigure(g.current!)}
+            </b>
           )}
           {g.targetText && (
             // qa-plan-34 (fix4): value and target on one line on a phone too ("38% / 45%").
-            <span className={`tnum ml-1 text-[15px] font-medium text-text2 ${p.state === "raw" ? "break-words" : "whitespace-nowrap"}`}>/ {g.targetText}</span>
+            <span
+              className={`tnum ml-1 text-[15px] font-medium text-text2 ${p.state === 'raw' ? 'break-words' : 'whitespace-nowrap'}`}
+            >
+              / {g.targetText}
+            </span>
           )}
         </span>
         {!noValue &&
           (g.confidence == null ? (
             // qa4-plan-24: no score yet says so and why, never an empty ring with a dash.
-            <span data-testid="goal-confidence" className="ml-auto max-w-28 flex-none text-right text-[13px] leading-4 font-medium text-text2">
+            <span
+              data-testid="goal-confidence"
+              className="ml-auto max-w-28 flex-none text-right text-[13px] leading-4 font-medium text-text2"
+            >
               No confidence yet: add evidence
             </span>
           ) : (
             // The ring says what it is: the evidence's confidence, not the goal's progress.
-            <span className="ml-auto flex flex-none flex-col items-center gap-0.5" data-testid="goal-confidence">
+            <span
+              className="ml-auto flex flex-none flex-col items-center gap-0.5"
+              data-testid="goal-confidence"
+            >
               <Ring value={g.confidence} size={44} label={`Confidence ${g.confidence}`} />
               <span aria-hidden className="text-[12px] leading-4 font-medium text-text2">
                 confidence
@@ -97,9 +145,15 @@ function GoalCard({
       </div>
       {/* The trend's room (the Sparkline's 240 x 40) is kept while it loads, so the band does not
           grow under the page a moment after it is drawn (#520: a goal chip's card below it closed). */}
-      {history === undefined && historyPending && g.currentText && <div aria-hidden className="aspect-[6/1] w-full" data-testid="goal-trend-pending" />}
+      {history === undefined && historyPending && g.currentText && (
+        <div aria-hidden className="aspect-[6/1] w-full" data-testid="goal-trend-pending" />
+      )}
       {historyFailed && (
-        <span data-testid="goal-trend-failed" role="status" className="inline-flex items-center gap-1.5 text-[13px] text-text2">
+        <span
+          data-testid="goal-trend-failed"
+          role="status"
+          className="inline-flex items-center gap-1.5 text-[13px] text-text2"
+        >
           Could not load the trend.
           <InfoTip label="the error" align="start">
             {historyFailed}
@@ -110,7 +164,7 @@ function GoalCard({
         <div className="min-w-0 [&>svg]:h-auto [&>svg]:w-full" data-testid="goal-trend">
           <Sparkline
             values={trend.map((p) => p.value)}
-            target={p.state === "raw" ? undefined : g.target?.value}
+            target={p.state === 'raw' ? undefined : g.target?.value}
             width={240}
             height={40}
             label={`${namedText(g)} trend`}
@@ -119,21 +173,26 @@ function GoalCard({
       )}
       <div className="mt-auto flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 text-[15px]">
         <span data-testid="goal-to-go">
-          {p.state === "togo" ? (
+          {p.state === 'togo' ? (
             <ToGo amount={p.amount!} unit={p.unit} />
-          ) : p.state === "met" ? (
+          ) : p.state === 'met' ? (
             <span className="font-semibold whitespace-nowrap text-pass">{p.text}</span>
-          ) : p.state === "short" ? (
+          ) : p.state === 'short' ? (
             <span className="font-semibold whitespace-nowrap">{p.text}</span>
-          ) : p.state === "none" ? (
+          ) : p.state === 'none' ? (
             <span className="text-text2">{p.text}</span>
-          ) : p.state === "notarget" ? (
-            <span className="font-semibold whitespace-nowrap text-warn" title={`Not measurable yet: missing ${missingFields(g.missing ?? ["target"]).map((f) => f.toLowerCase()).join(", ")}`}>
+          ) : p.state === 'notarget' ? (
+            <span
+              className="font-semibold whitespace-nowrap text-warn"
+              title={`Not measurable yet: missing ${missingFields(g.missing ?? ['target'])
+                .map((f) => f.toLowerCase())
+                .join(', ')}`}
+            >
               {p.text}
             </span>
           ) : null}
         </span>
-        {p.state === "notarget" && canInterview && (
+        {p.state === 'notarget' && canInterview && (
           // B6: a goals interview on it, in the Baseline's goal drawer (nothing starts before the click).
           <Link
             href={`/ground-truth?entity=${g.id}&interview=1`}
@@ -143,7 +202,7 @@ function GoalCard({
             Make measurable
           </Link>
         )}
-        {change != null && change !== 0 && p.state !== "raw" && (
+        {change != null && change !== 0 && p.state !== 'raw' && (
           <span className="tnum text-sm font-semibold text-text2" data-testid="goal-change">
             {changeText(change, g.current, spanMonths(trend!))}
           </span>
@@ -159,22 +218,36 @@ function Subgoals({ g, subs }: { g: GoalView; subs: GoalView[] }) {
   const pr = g.progress;
   return (
     <div className="min-w-0 border-t border-line pt-2 text-sm" data-testid="goal-subgoals">
-      <p className="text-text2" data-testid="goal-rollup" data-source={pr?.source ?? "none"}>
-        {pr?.source === "own" && pr.value != null
+      <p className="text-text2" data-testid="goal-rollup" data-source={pr?.source ?? 'none'}>
+        {pr?.source === 'own' && pr.value != null
           ? `${percent(pr.value)} · own measurement`
-          : pr?.source === "subgoals" && pr.value != null
+          : pr?.source === 'subgoals' && pr.value != null
             ? `${percent(pr.value)} · from subgoals`
-            : "No progress yet"}
+            : 'No progress yet'}
       </p>
       <details className="mt-1" open>
-        <summary className="cursor-pointer font-medium">{subs.length === 1 ? "1 subgoal" : `${subs.length} subgoals`}</summary>
+        <summary className="cursor-pointer font-medium">
+          {subs.length === 1 ? '1 subgoal' : `${subs.length} subgoals`}
+        </summary>
         <ul className="mt-1 flex flex-col gap-1" aria-label={`Subgoals of ${namedText(g)}`}>
           {subs.map((s) => (
-            <li key={s.id} className="flex min-w-0 items-center gap-2" data-testid={`home-goal-${s.tag}`}>
+            <li
+              key={s.id}
+              className="flex min-w-0 items-center gap-2"
+              data-testid={`home-goal-${s.tag}`}
+            >
               <span className="flex min-w-0 flex-1">
-                <CodeChip kind="goal" entityId={s.id} title={s.title} code={s.code} proposed={s.proposed} />
+                <CodeChip
+                  kind="goal"
+                  entityId={s.id}
+                  title={s.title}
+                  code={s.code}
+                  proposed={s.proposed}
+                />
               </span>
-              <span className="tnum flex-none text-text2">{s.progress?.value != null ? percent(s.progress.value) : "–"}</span>
+              <span className="tnum flex-none text-text2">
+                {s.progress?.value != null ? percent(s.progress.value) : '–'}
+              </span>
             </li>
           ))}
         </ul>
@@ -192,7 +265,10 @@ function GoalsSkeleton() {
       className="grid grid-cols-4 divide-x divide-line max-[600px]:grid-cols-1 max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:last-child]:border-b-0"
     >
       {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="flex min-w-0 flex-col gap-3 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3">
+        <li
+          key={i}
+          className="flex min-w-0 flex-col gap-3 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3"
+        >
           <span className="block h-4 w-3/4 animate-pulse rounded bg-surface2" />
           <span className="flex items-center justify-between gap-2">
             <span className="block h-8 w-1/2 animate-pulse rounded bg-surface2" />
@@ -216,7 +292,7 @@ export function GoalsPanel({
   canInterview = false,
   baseline,
   openGoals = false,
-  testId = "home-goals",
+  testId = 'home-goals',
 }: {
   goals: GoalView[] | undefined;
   history: Map<string, Point[]>;
@@ -254,7 +330,9 @@ export function GoalsPanel({
             {confirmed.length > 0 && <Chip kind="pass">{confirmed.length} confirmed</Chip>}
             {proposed.length > 0 && (
               <Chip kind="warn" data-testid="goals-proposed">
-                {proposed.length === 1 ? `${proposed[0].code ?? proposed[0].name} proposed` : `${proposed.length} proposed`}
+                {proposed.length === 1
+                  ? `${proposed[0].code ?? proposed[0].name} proposed`
+                  : `${proposed.length} proposed`}
               </Chip>
             )}
             {more > 0 && (
@@ -263,8 +341,9 @@ export function GoalsPanel({
               </LinkButton>
             )}
             <InfoTip label="goals">
-              Current value over target, from the Ground Truth. Ring: how well the evidence supports the goal. Dashed line: the
-              target. The trend shows when the Ground Truth has recorded earlier values.
+              Current value over target, from the Ground Truth. Ring: how well the evidence supports
+              the goal. Dashed line: the target. The trend shows when the Ground Truth has recorded
+              earlier values.
             </InfoTip>
           </>
         )
@@ -282,18 +361,24 @@ export function GoalsPanel({
           <span className="text-[15px] font-semibold text-text2">No goals yet</span>
           {/* F-31: the (i) names no command or file format. */}
           <InfoTip label="building the Ground Truth" align="start">
-            Oracle reads your sources and proposes your goals; they show here once confirmed. You can also send a
-            Ground Truth file from the command line.
+            Oracle reads your sources and proposes your goals; they show here once confirmed. You
+            can also send a Ground Truth file from the command line.
           </InfoTip>
           {/* qa-onboarding-10, -37, -14, -15: one baseline action on Home. While Set up shows the
               step, its row holds it (start, or open the build under way) and the card points there;
               with Set up hidden, the card opens the build under way, or starts one. */}
           {baseline?.inSetup ? (
             <span className="ml-auto text-[15px] text-text2" data-testid="goals-build-in-setup">
-              {baseline.runId ? "The Ground Truth is building: open it from Set up, above" : "Build the Ground Truth from Set up, above"}
+              {baseline.runId
+                ? 'The Ground Truth is building: open it from Set up, above'
+                : 'Build the Ground Truth from Set up, above'}
             </span>
           ) : baseline?.runId ? (
-            <LinkButton href={buildRun(baseline.runId)} className="ml-auto" data-testid="goals-open-build">
+            <LinkButton
+              href={buildRun(baseline.runId)}
+              className="ml-auto"
+              data-testid="goals-open-build"
+            >
               Open the build
             </LinkButton>
           ) : (

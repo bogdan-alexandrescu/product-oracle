@@ -1,40 +1,61 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import Link from 'next/link';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 
-import { Button, Chip, Icon, InfoTip, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
-import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
-import { ErrorNote, LoadError } from "@/components/ui";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  Icon,
+  InfoTip,
+  Inspector,
+  InspectorSection,
+  LinkButton,
+  NotFoundPanel,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  SegmentedControl,
+  Sheet,
+  Split,
+  type ChipKind,
+} from '@/components/ds';
+import { FRESHNESS, reasonText, type PrdWords } from '@/components/tech-brief';
+import { ErrorNote, LoadError } from '@/components/ui';
+import { ApiError, api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Spec = Schemas["SpecOut"];
-type Design = Schemas["DesignArtifactOut"];
-type Output = Schemas["DesignOutputOut"];
-type Annotation = Schemas["AnnotationOut"];
-type ReviewEvent = Schemas["DesignReviewEventOut"];
-type Verdict = Exclude<Schemas["DesignReviewIn"]["kind"], "comment">;
+type Spec = Schemas['SpecOut'];
+type Design = Schemas['DesignArtifactOut'];
+type Output = Schemas['DesignOutputOut'];
+type Annotation = Schemas['AnnotationOut'];
+type ReviewEvent = Schemas['DesignReviewEventOut'];
+type Verdict = Exclude<Schemas['DesignReviewIn']['kind'], 'comment'>;
 
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 function useIsPhone(): boolean {
-  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE).matches,
+    () => false,
+  );
 }
 /** The app's theme: the system's, or the one picked in the user menu (data-theme on <html>). */
 function subscribeScheme(onChange: () => void) {
-  const mq = window.matchMedia("(prefers-color-scheme: dark)");
-  mq.addEventListener("change", onChange);
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener('change', onChange);
   const watch = new MutationObserver(onChange);
-  watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   return () => {
-    mq.removeEventListener("change", onChange);
+    mq.removeEventListener('change', onChange);
     watch.disconnect();
   };
 }
@@ -44,46 +65,56 @@ function useDarkSurface(): string | null {
     subscribeScheme,
     () => {
       const css = getComputedStyle(document.documentElement);
-      if (!css.colorScheme.includes("dark")) return null;
-      const surface = css.getPropertyValue("--surface").trim();
+      if (!css.colorScheme.includes('dark')) return null;
+      const surface = css.getPropertyValue('--surface').trim();
       // Only a plain colour goes into the frame's style.
-      return /^[#a-z0-9(),.%\s/-]+$/i.test(surface) ? surface : "#1b1f27";
+      return /^[#a-z0-9(),.%\s/-]+$/i.test(surface) ? surface : '#1b1f27';
     },
     () => null,
   );
 }
 
-export const DESIGN_KIND: Record<string, string> = { user_flow: "User flow", wireframe: "Wireframes" };
-export const VERSION_STATUS: Record<Schemas["ArtifactVersionOut"]["status"], { label: string; kind: ChipKind }> = {
-  draft: { label: "Draft", kind: "na" },
-  in_review: { label: "In review", kind: "acc" },
-  approved: { label: "Approved", kind: "pass" },
-  rejected: { label: "Rejected", kind: "crit" },
-  superseded: { label: "Superseded", kind: "na" },
+export const DESIGN_KIND: Record<string, string> = {
+  user_flow: 'User flow',
+  wireframe: 'Wireframes',
 };
-const EVENT: Record<ReviewEvent["kind"], { label: string; kind: ChipKind }> = {
-  comment: { label: "Comment", kind: "na" },
-  approved: { label: "Approved", kind: "pass" },
-  changes_requested: { label: "Changes requested", kind: "warn" },
-  rejected: { label: "Rejected", kind: "crit" },
-  marked_stale: { label: "Marked stale", kind: "warn" },
-  reconciled: { label: "Reconciled", kind: "pass" },
+export const VERSION_STATUS: Record<
+  Schemas['ArtifactVersionOut']['status'],
+  { label: string; kind: ChipKind }
+> = {
+  draft: { label: 'Draft', kind: 'na' },
+  in_review: { label: 'In review', kind: 'acc' },
+  approved: { label: 'Approved', kind: 'pass' },
+  rejected: { label: 'Rejected', kind: 'crit' },
+  superseded: { label: 'Superseded', kind: 'na' },
 };
-const NOTE_LABEL = "Note (required to request changes or reject)";
+const EVENT: Record<ReviewEvent['kind'], { label: string; kind: ChipKind }> = {
+  comment: { label: 'Comment', kind: 'na' },
+  approved: { label: 'Approved', kind: 'pass' },
+  changes_requested: { label: 'Changes requested', kind: 'warn' },
+  rejected: { label: 'Rejected', kind: 'crit' },
+  marked_stale: { label: 'Marked stale', kind: 'warn' },
+  reconciled: { label: 'Reconciled', kind: 'pass' },
+};
+const NOTE_LABEL = 'Note (required to request changes or reject)';
 const TEXTAREA =
-  "min-h-14 w-full rounded-button border border-line-strong bg-surface px-2.5 py-2 text-[15px] text-text placeholder:text-text-faint";
+  'min-h-14 w-full rounded-button border border-line-strong bg-surface px-2.5 py-2 text-[15px] text-text placeholder:text-text-faint';
 
 /** The spec's tech brief: its latest version page. */
 export function briefHref(spec: Spec): string | null {
-  return spec.document_slug ? `/documents/${spec.document_slug}/v/${spec.latest_version ?? 1}` : null;
+  return spec.document_slug
+    ? `/documents/${spec.document_slug}/v/${spec.latest_version ?? 1}`
+    : null;
 }
 
 export function designHref(specId: string, versionId: string): string {
   return `/specs/${specId}/design/${versionId}`;
 }
 
-const MEDIA: Record<string, string> = { "image/svg+xml": "Drawing (SVG)", "text/html": "Web page (HTML)" };
-
+const MEDIA: Record<string, string> = {
+  'image/svg+xml': 'Drawing (SVG)',
+  'text/html': 'Web page (HTML)',
+};
 
 /** A PRD slug the reasons name ("section s-5-2 changed in annual-billing v2"). */
 const SLUG_IN_REASON = /\b(?:in|of) ([a-z0-9]+(?:-[a-z0-9]+)+)\b/;
@@ -93,30 +124,41 @@ const SLUG_IN_REASON = /\b(?:in|of) ([a-z0-9]+(?:-[a-z0-9]+)+)\b/;
  * dependencies, or the slug its staleness reasons name.
  */
 function usePrdWords(spec: Spec | undefined, d: Design | undefined): Words {
-  const view = spec && d ? spec.stale.find((x) => x.artifact_version_id === d.version.id) : undefined;
-  const deps = [...(d?.lineage?.dependencies ?? []), ...(view?.dependencies ?? []), ...(spec?.stale ?? []).flatMap((x) => x.dependencies)];
+  const view =
+    spec && d ? spec.stale.find((x) => x.artifact_version_id === d.version.id) : undefined;
+  const deps = [
+    ...(d?.lineage?.dependencies ?? []),
+    ...(view?.dependencies ?? []),
+    ...(spec?.stale ?? []).flatMap((x) => x.dependencies),
+  ];
   const reasons = (spec?.stale ?? []).flatMap((x) => x.reasons);
   const known =
     spec?.prd?.slug ??
-    deps.find((x) => x.upstream.document_kind === "prd" && x.upstream.document_slug)?.upstream.document_slug ??
+    deps.find((x) => x.upstream.document_kind === 'prd' && x.upstream.document_slug)?.upstream
+      .document_slug ??
     null;
   // A hyphenated word after "in"/"of" ("in real-time") is only a guess: it names the PRD
   // only when a PRD with that slug is found.
-  const guess = known ? null : (reasons.map((r) => SLUG_IN_REASON.exec(r)?.[1]).find(Boolean) ?? null);
+  const guess = known
+    ? null
+    : (reasons.map((r) => SLUG_IN_REASON.exec(r)?.[1]).find(Boolean) ?? null);
   const asked = known ?? guess;
   const docQ = useQuery(`doc|${asked}`, () =>
     // A guess that names no document is an answer (no such PRD); any other failure is not.
     asked
-      ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: asked } } })).catch((e) => {
+      ? unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc: asked } } })).catch((e) => {
           if (e instanceof ApiError && e.status === 404) return null;
           throw e;
         })
       : Promise.resolve(null),
   );
-  const slug = known ?? (guess && docQ.data?.slug === guess && docQ.data.kind === "prd" ? guess : null);
+  const slug =
+    known ?? (guess && docQ.data?.slug === guess && docQ.data.kind === 'prd' ? guess : null);
   const n = slug ? (docQ.data?.latest_version ?? null) : null;
   const versionQ = useQuery(`design-prd-sections|${slug}|${n}`, () =>
-    slug && n ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: slug, n } } })) : Promise.resolve(null),
+    slug && n
+      ? unwrap(api.GET('/v1/documents/{doc}/versions/{n}', { params: { path: { doc: slug, n } } }))
+      : Promise.resolve(null),
   );
   const headings = new Map((versionQ.data?.sections ?? []).map((x) => [x.section_key, x.heading]));
   return {
@@ -132,7 +174,7 @@ function usePrdWords(spec: Spec | undefined, d: Design | undefined): Words {
 type Words = PrdWords & { error: string | null; reload: () => void };
 
 /** A section by its heading ("5.2 Shipping step"), or "a section" while it is not known. */
-const sectionName = (w: PrdWords, key: string) => w.heading(key) ?? "a section";
+const sectionName = (w: PrdWords, key: string) => w.heading(key) ?? 'a section';
 
 /** A design version that is not there, said without its id (the API's 404 names it). */
 const DESIGN_MISSING = "This design doesn't exist or was deleted.";
@@ -147,10 +189,12 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const { me, can, capsReady, capsError } = useMe();
   const phone = useIsPhone();
   const specQ = useQuery(`spec-request|${specId}`, () =>
-    unwrap(api.GET("/v1/spec-requests/{request_id}", { params: { path: { request_id: specId } } })),
+    unwrap(api.GET('/v1/spec-requests/{request_id}', { params: { path: { request_id: specId } } })),
   );
   const designQ = useQuery(`design-artifact|${versionId}`, () =>
-    unwrap(api.GET("/v1/design-artifacts/{version_id}", { params: { path: { version_id: versionId } } })).catch((e) => {
+    unwrap(
+      api.GET('/v1/design-artifacts/{version_id}', { params: { path: { version_id: versionId } } }),
+    ).catch((e) => {
       throw e instanceof ApiError && e.status === 404 ? new ApiError(404, DESIGN_MISSING) : e;
     }),
   );
@@ -202,7 +246,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
 
   const v = d.version;
   const output = d.outputs.find((o) => o.name === picked) ?? d.outputs[0];
-  const canCompare = d.kind === "wireframe" && d.outputs.length >= 2 && d.outputs.length <= 4;
+  const canCompare = d.kind === 'wireframe' && d.outputs.length >= 2 && d.outputs.length <= 4;
   const shown = compare && canCompare ? d.outputs : output ? [output] : [];
   const brief = briefHref(spec);
   const reload = () => {
@@ -216,13 +260,13 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const named = spec.engineering_approver_ids;
   const engineer = named.length === 0 || (!!me?.user_id && named.includes(me.user_id));
   const roles = {
-    comment: can("review_design_artifact", true),
-    approverRole: can("approve_version", true),
-    decide: can("approve_version", engineer) && can("review_design_artifact", engineer),
-    owner: can("review_design_artifact"),
+    comment: can('review_design_artifact', true),
+    approverRole: can('approve_version', true),
+    decide: can('approve_version', engineer) && can('review_design_artifact', engineer),
+    owner: can('review_design_artifact'),
   };
   const fresh = FRESHNESS[v.freshness];
-  const running = v.freshness === "potentially_stale" && !!spec.regeneration_run_id;
+  const running = v.freshness === 'potentially_stale' && !!spec.regeneration_run_id;
   const view = spec.stale.find((s) => s.artifact_version_id === v.id);
   const rawReasons = [...new Set([...(view?.reasons ?? []), ...(d.lineage?.reasons ?? [])])];
   const reasons = [...new Set(rawReasons.map((r) => reasonText(r, words)))];
@@ -236,7 +280,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       </Chip>
     </>
   );
-  const chips = chipsOf("line");
+  const chips = chipsOf('line');
 
   const inspector = (
     <ReviewInspector
@@ -246,7 +290,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       reasons={reasons}
       words={words}
       // qa4-docs-share-42: the pills show once; beside the page header only the sheet repeats them.
-      chips={phone ? chipsOf("na") : undefined}
+      chips={phone ? chipsOf('na') : undefined}
       roles={roles}
       meId={me?.user_id ?? null}
       onChanged={reload}
@@ -259,7 +303,10 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
         testId="page-header"
         back={
           brief ? (
-            <Link href={brief} className="inline-flex items-center gap-1 hover:text-text hover:underline">
+            <Link
+              href={brief}
+              className="inline-flex items-center gap-1 hover:text-text hover:underline"
+            >
               <Icon name="back" size={16} />
               {spec.request.title}
             </Link>
@@ -272,8 +319,11 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
         action={
           phone ? (
             // qa4-docs-share-56: a reader opens the review; only those who can comment are asked to review.
-            <Button variant={roles.comment ? "primary" : "secondary"} onClick={() => setSheetOpen(true)}>
-              {roles.comment ? "Review the design" : "Open the review"}
+            <Button
+              variant={roles.comment ? 'primary' : 'secondary'}
+              onClick={() => setSheetOpen(true)}
+            >
+              {roles.comment ? 'Review the design' : 'Open the review'}
             </Button>
           ) : undefined
         }
@@ -291,10 +341,12 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
             <Link
               key={a.version.id}
               href={designHref(specId, a.version.id)}
-              aria-current={current ? "page" : undefined}
+              aria-current={current ? 'page' : undefined}
               title={`${a.title} · v${a.version.number}`}
               className={`flex-none border-b-2 px-3 py-2 text-[15px] font-semibold whitespace-nowrap max-[600px]:min-w-0 max-[600px]:flex-auto max-[600px]:whitespace-normal max-[600px]:break-words ${
-                current ? "border-accent text-text" : "border-transparent text-text2 hover:text-text"
+                current
+                  ? 'border-accent text-text'
+                  : 'border-transparent text-text2 hover:text-text'
               }`}
             >
               {a.title} · v{a.version.number}
@@ -304,22 +356,24 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       </nav>
       <Split inspector={phone ? undefined : inspector}>
         {words.error && <LoadError what="the PRD" error={words.error} onRetry={words.reload} />}
-        {v.freshness === "potentially_stale" && (
+        {v.freshness === 'potentially_stale' && (
           <Notice
             tone="warn"
             testId="stale-notice"
             action={
               // qa-docs-83/84: one way to the tech brief, named, for those who settle it there.
               <>
-                {running && spec.regeneration_run_id && <LinkButton href={`/runs/${spec.regeneration_run_id}`}>Open the run</LinkButton>}
+                {running && spec.regeneration_run_id && (
+                  <LinkButton href={`/runs/${spec.regeneration_run_id}`}>Open the run</LinkButton>
+                )}
                 {brief && roles.decide && <LinkButton href={brief}>Open the tech brief</LinkButton>}
               </>
             }
           >
-            {running ? "Potentially stale, regeneration running" : "Potentially stale"}
-            {reasons.length > 0 && `: ${reasons.join("; ")}`}.{" "}
+            {running ? 'Potentially stale, regeneration running' : 'Potentially stale'}
+            {reasons.length > 0 && `: ${reasons.join('; ')}`}.{' '}
             {roles.decide
-              ? "Review or reconcile it on the tech brief before approving."
+              ? 'Review or reconcile it on the tech brief before approving.'
               : "The spec's engineering approvers review it on the tech brief before it can be approved."}
           </Notice>
         )}
@@ -328,8 +382,10 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
           .map((o) => (
             <Notice key={o.name} tone="info" testId="sanitised">
               {/* qa4-docs-share-8: plain words, never the sanitiser's raw markup notes. */}
-              {o.removed.length === 1 ? "A part that isn't allowed was" : `${o.removed.length} parts that aren't allowed were`} removed from{" "}
-              {o.title ?? o.name} for safety.
+              {o.removed.length === 1
+                ? "A part that isn't allowed was"
+                : `${o.removed.length} parts that aren't allowed were`}{' '}
+              removed from {o.title ?? o.name} for safety.
             </Notice>
           ))}
         <Panel
@@ -347,17 +403,26 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
                 />
               )}
               {canCompare && (
-                <Button variant="ghost" aria-pressed={compare} onClick={() => setCompare((c) => !c)}>
-                  {compare ? "One at a time" : "Side by side"}
+                <Button
+                  variant="ghost"
+                  aria-pressed={compare}
+                  onClick={() => setCompare((c) => !c)}
+                >
+                  {compare ? 'One at a time' : 'Side by side'}
                 </Button>
               )}
             </>
           }
         >
           {d.outputs.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[15px] text-text2">This version has no files.</p>
+            <p className="px-4 py-8 text-center text-[15px] text-text2">
+              This version has no files.
+            </p>
           ) : (
-            <div data-testid="design-canvas" className={`grid gap-3 bg-surface2 p-4 max-[600px]:p-2 ${shown.length > 1 ? "grid-cols-2 max-[900px]:grid-cols-1" : ""}`}>
+            <div
+              data-testid="design-canvas"
+              className={`grid gap-3 bg-surface2 p-4 max-[600px]:p-2 ${shown.length > 1 ? 'grid-cols-2 max-[900px]:grid-cols-1' : ''}`}
+            >
               {shown.map((o) => (
                 <OutputFrame key={o.name} versionId={v.id} output={o} />
               ))}
@@ -367,7 +432,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5 text-sm">
               <span className="font-semibold text-text2">PRD sections</span>
               {[...new Set(shown.flatMap((o) => o.section_keys))].map((k) => (
-                <Chip key={k} kind={rawReasons.some((r) => r.includes(k)) ? "warn" : "line"}>
+                <Chip key={k} kind={rawReasons.some((r) => r.includes(k)) ? 'warn' : 'line'}>
                   {sectionName(words, k)}
                 </Chip>
               ))}
@@ -377,13 +442,20 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
                   {requirementName(spec, id)}
                 </Chip>
               ))}
-              <span className="ml-auto text-[13px] text-text2">A preview: its links and buttons do nothing.</span>
+              <span className="ml-auto text-[13px] text-text2">
+                A preview: its links and buttons do nothing.
+              </span>
             </div>
           )}
         </Panel>
       </Split>
       {phone && (
-        <Sheet open={sheetOpen} title={`Review · ${d.title}`} onClose={() => setSheetOpen(false)} testId="design-review-sheet">
+        <Sheet
+          open={sheetOpen}
+          title={`Review · ${d.title}`}
+          onClose={() => setSheetOpen(false)}
+          testId="design-review-sheet"
+        >
           {inspector}
         </Sheet>
       )}
@@ -393,7 +465,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
 
 function requirementName(spec: Spec, id: string): string {
   const r = spec.requirements.find((x) => x.id === id);
-  return r?.title ?? "a requirement";
+  return r?.title ?? 'a requirement';
 }
 
 function LoadingState() {
@@ -414,9 +486,11 @@ function LoadingState() {
  * light on the page's dark surface, not a bright white box.
  */
 function asDocument(output: Output, content: string, dark: string | null): string {
-  if (output.media_type === "text/html") return content;
-  const scheme = dark ? `<meta name="color-scheme" content="dark">` : "";
-  const look = dark ? `html,body{background:${dark}}svg{filter:invert(1) hue-rotate(180deg)}` : "html,body{background:#fff}";
+  if (output.media_type === 'text/html') return content;
+  const scheme = dark ? `<meta name="color-scheme" content="dark">` : '';
+  const look = dark
+    ? `html,body{background:${dark}}svg{filter:invert(1) hue-rotate(180deg)}`
+    : 'html,body{background:#fff}';
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">${scheme}<style>html,body{margin:0}svg{display:block;width:100%;height:auto;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}${look}</style></head><body>${content}</body></html>`;
 }
 
@@ -426,13 +500,15 @@ function asDocument(output: Output, content: string, dark: string | null): strin
  */
 function OutputFrame({ versionId, output }: { versionId: string; output: Output }) {
   const dark = useDarkSurface();
-  const q = useQuery(`design-output|${versionId}|${output.name}`, () =>
-    unwrap(
-      api.GET("/v1/design-artifacts/{version_id}/outputs/{name}", {
-        params: { path: { version_id: versionId, name: output.name } },
-        parseAs: "text",
-      }),
-    ) as Promise<string>,
+  const q = useQuery(
+    `design-output|${versionId}|${output.name}`,
+    () =>
+      unwrap(
+        api.GET('/v1/design-artifacts/{version_id}/outputs/{name}', {
+          params: { path: { version_id: versionId, name: output.name } },
+          parseAs: 'text',
+        }),
+      ) as Promise<string>,
   );
   return (
     <figure className="m-0 min-w-0 overflow-hidden rounded-button border border-line-strong bg-surface">
@@ -444,7 +520,7 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
           <summary className="cursor-pointer select-none hover:text-text">Details</summary>
           <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
             <dt>Type</dt>
-            <dd className="text-text">{MEDIA[output.media_type] ?? "A file"}</dd>
+            <dd className="text-text">{MEDIA[output.media_type] ?? 'A file'}</dd>
           </dl>
         </details>
       </figcaption>
@@ -452,14 +528,18 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
         {q.error ? (
           <ErrorNote>{q.error}</ErrorNote>
         ) : q.data == null ? (
-          <span role="status" aria-label={`Loading ${output.title ?? "the file"}`} className="block h-64 animate-pulse rounded bg-surface2" />
+          <span
+            role="status"
+            aria-label={`Loading ${output.title ?? 'the file'}`}
+            className="block h-64 animate-pulse rounded bg-surface2"
+          />
         ) : (
           <iframe
             sandbox=""
             referrerPolicy="no-referrer"
-            title={output.title ?? "A design file"}
+            title={output.title ?? 'A design file'}
             srcDoc={asDocument(output, q.data, dark)}
-            className={`block w-full rounded border-0 ${dark && output.media_type !== "text/html" ? "bg-surface" : "bg-white"} ${output.media_type === "text/html" ? "h-[520px] max-[600px]:h-[440px]" : "h-[360px] max-[600px]:h-[220px]"}`}
+            className={`block w-full rounded border-0 ${dark && output.media_type !== 'text/html' ? 'bg-surface' : 'bg-white'} ${output.media_type === 'text/html' ? 'h-[520px] max-[600px]:h-[440px]' : 'h-[360px] max-[600px]:h-[220px]'}`}
           />
         )}
       </div>
@@ -491,31 +571,54 @@ function ReviewInspector({
   onChanged: () => void;
 }) {
   const v = d.version;
-  const readOnly = v.status === "superseded" || v.status === "rejected";
+  const readOnly = v.status === 'superseded' || v.status === 'rejected';
   // qa4-docs-share-41: Reviews counts verdicts only, not comments.
-  const verdicts = d.reviews.filter((e) => e.kind === "approved" || e.kind === "changes_requested" || e.kind === "rejected").length;
+  const verdicts = d.reviews.filter(
+    (e) => e.kind === 'approved' || e.kind === 'changes_requested' || e.kind === 'rejected',
+  ).length;
   // Anything new on the version (a comment anywhere, a verdict) moves this on.
-  const activity = d.reviews.length + d.outputs.reduce((n, o) => n + o.annotations.reduce((m, a) => m + a.reviews.length, 0), 0);
-  const post = async (body: Schemas["DesignReviewIn"]) => {
-    await unwrap(api.POST("/v1/design-artifacts/{version_id}/reviews", { params: { path: { version_id: v.id } }, body }));
+  const activity =
+    d.reviews.length +
+    d.outputs.reduce((n, o) => n + o.annotations.reduce((m, a) => m + a.reviews.length, 0), 0);
+  const post = async (body: Schemas['DesignReviewIn']) => {
+    await unwrap(
+      api.POST('/v1/design-artifacts/{version_id}/reviews', {
+        params: { path: { version_id: v.id } },
+        body,
+      }),
+    );
     onChanged();
   };
   return (
     <Inspector
       label="Design review"
-      eyebrow={roles.comment ? "Design review" : "Design review · read only"}
+      eyebrow={roles.comment ? 'Design review' : 'Design review · read only'}
       title={`${d.title} v${v.number}`}
       chips={chips}
       stats={[
-        { label: d.outputs.length === 1 ? "File" : "Files", value: d.outputs.length },
-        { label: "Annotations", value: d.outputs.reduce((n, o) => n + o.annotations.length, 0) },
-        { label: "Reviews", value: verdicts, testId: "reviews-stat" },
+        { label: d.outputs.length === 1 ? 'File' : 'Files', value: d.outputs.length },
+        { label: 'Annotations', value: d.outputs.reduce((n, o) => n + o.annotations.length, 0) },
+        { label: 'Reviews', value: verdicts, testId: 'reviews-stat' },
       ]}
     >
       <InspectorSection label={`Verdict on v${v.number}`} testId="verdict">
-        <VerdictSection spec={spec} d={d} roles={roles} readOnly={readOnly} activity={activity} post={post} />
+        <VerdictSection
+          spec={spec}
+          d={d}
+          roles={roles}
+          readOnly={readOnly}
+          activity={activity}
+          post={post}
+        />
       </InspectorSection>
-      <AnnotationsSection spec={spec} words={words} outputs={shown} roles={roles} meId={meId} post={post} />
+      <AnnotationsSection
+        spec={spec}
+        words={words}
+        outputs={shown}
+        roles={roles}
+        meId={meId}
+        post={post}
+      />
       <InspectorSection label="Version reviews · oldest first" testId="version-reviews">
         <div className="flex flex-col gap-3.5">
           {d.reviews.length === 0 ? (
@@ -528,7 +631,12 @@ function ReviewInspector({
           ) : (
             d.reviews.map((e) => <EventRow key={e.id} e={e} meId={meId} />)
           )}
-          {roles.comment && <Composer label={`Comment on v${v.number}`} send={(body) => post({ kind: "comment", body })} />}
+          {roles.comment && (
+            <Composer
+              label={`Comment on v${v.number}`}
+              send={(body) => post({ kind: 'comment', body })}
+            />
+          )}
         </div>
       </InspectorSection>
       <InspectorSection label="Version" testId="version-meta">
@@ -551,52 +659,68 @@ function VerdictSection({
   roles: Roles;
   readOnly: boolean;
   activity: number;
-  post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
+  post: (body: Schemas['DesignReviewIn']) => Promise<void>;
 }) {
   const v = d.version;
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   // qa4-docs-share-41: an error belongs to the moment it was said; it clears once the person
   // moves on (types a note, or anything new lands on the version).
   const [errAt, setErrAt] = useState<{ text: string; at: number } | null>(null);
   const err = errAt && errAt.at === activity ? errAt.text : null;
   const setErr = (text: string | null) => setErrAt(text ? { text, at: activity } : null);
-  const stale = v.freshness === "potentially_stale";
+  const stale = v.freshness === 'potentially_stale';
   if (readOnly) {
-    const latest = spec.design?.find((a) => a.request_id === d.request_id && a.version.id !== v.id)?.version;
-    if (v.status === "superseded" && latest) {
+    const latest = spec.design?.find(
+      (a) => a.request_id === d.request_id && a.version.id !== v.id,
+    )?.version;
+    if (v.status === 'superseded' && latest) {
       return (
-        <Notice tone="info" action={<LinkButton href={designHref(spec.request.id, latest.id)}>Open v{latest.number}</LinkButton>}>
+        <Notice
+          tone="info"
+          action={
+            <LinkButton href={designHref(spec.request.id, latest.id)}>
+              Open v{latest.number}
+            </LinkButton>
+          }
+        >
           v{latest.number} replaced this version. Comments are still allowed; verdicts are not.
         </Notice>
       );
     }
-    return <Notice tone="info">{`Version ${v.number} is ${VERSION_STATUS[v.status].label.toLowerCase()}`}: comments are still allowed; verdicts are not.</Notice>;
+    return (
+      <Notice tone="info">
+        {`Version ${v.number} is ${VERSION_STATUS[v.status].label.toLowerCase()}`}: comments are
+        still allowed; verdicts are not.
+      </Notice>
+    );
   }
   if (!roles.comment) return <Notice tone="info">You can read this review.</Notice>;
   const named = spec.engineering_approvers ?? [];
-  const approvedLine = v.status === "approved" && v.approved_at && (
+  const approvedLine = v.status === 'approved' && v.approved_at && (
     <p className="mb-2 text-sm text-text2">Approved {formatDateTime(v.approved_at)}.</p>
   );
   if (!roles.approverRole) {
     return (
       <>
         {approvedLine}
-        <p className="text-[13px] text-text2">Verdicts are for the spec&apos;s engineering approvers.</p>
+        <p className="text-[13px] text-text2">
+          Verdicts are for the spec&apos;s engineering approvers.
+        </p>
       </>
     );
   }
   const decide = async (kind: Verdict) => {
     // qa-docs-80: said before anything is sent, in plain words.
-    if (kind !== "approved" && !note.trim()) {
-      setErr("Add a note to request changes or reject.");
+    if (kind !== 'approved' && !note.trim()) {
+      setErr('Add a note to request changes or reject.');
       return;
     }
     setBusy(true);
     setErr(null);
     try {
       await post({ kind, body: note.trim() || null });
-      setNote("");
+      setNote('');
     } catch (e) {
       setErr(errorMessage(e));
     } finally {
@@ -607,22 +731,26 @@ function VerdictSection({
   // qa-docs-67: when Approve is off it says why, once (the stale notice is on the page, not here too).
   const approveOff = !roles.decide
     ? null
-    : v.status === "approved"
-      ? "This version is already approved."
+    : v.status === 'approved'
+      ? 'This version is already approved.'
       : stale
-        ? "Approve opens once this version is reviewed or reconciled on the tech brief: it may be stale."
+        ? 'Approve opens once this version is reviewed or reconciled on the tech brief: it may be stale.'
         : null;
   return (
     <div className="flex flex-col gap-2.5">
       {approvedLine}
       <div className="flex flex-wrap gap-2 max-[600px]:[&>button]:flex-1">
-        <Button variant="primary" disabled={off || stale || v.status === "approved"} onClick={() => void decide("approved")}>
+        <Button
+          variant="primary"
+          disabled={off || stale || v.status === 'approved'}
+          onClick={() => void decide('approved')}
+        >
           Approve
         </Button>
-        <Button disabled={off} onClick={() => void decide("changes_requested")}>
+        <Button disabled={off} onClick={() => void decide('changes_requested')}>
           Request changes
         </Button>
-        <Button variant="danger" disabled={off} onClick={() => void decide("rejected")}>
+        <Button variant="danger" disabled={off} onClick={() => void decide('rejected')}>
           Reject
         </Button>
       </div>
@@ -649,20 +777,22 @@ function VerdictSection({
       {err && <ErrorNote>{err}</ErrorNote>}
       {!roles.decide ? (
         <>
-          <Notice tone="info">Only the spec&apos;s engineering approvers (or an owner) decide on it.</Notice>
+          <Notice tone="info">
+            Only the spec&apos;s engineering approvers (or an owner) decide on it.
+          </Notice>
           <p className="text-[13px] text-text2">
             {named.length > 0
-              ? `Engineering approver${named.length === 1 ? "" : "s"} named on this spec: ${named.map((x) => x.name).join(", ")}`
-              : "No engineering approvers are named on this spec."}
+              ? `Engineering approver${named.length === 1 ? '' : 's'} named on this spec: ${named.map((x) => x.name).join(', ')}`
+              : 'No engineering approvers are named on this spec.'}
           </p>
         </>
       ) : (
         <p className="text-[13px] text-text2">
           {roles.owner
-            ? "Owners always decide. Approving supersedes the previously approved version."
+            ? 'Owners always decide. Approving supersedes the previously approved version.'
             : named.length > 0
-              ? "You are a named engineering approver for this spec."
-              : "No engineering approvers are named on this spec, so any approver decides."}
+              ? 'You are a named engineering approver for this spec.'
+              : 'No engineering approvers are named on this spec, so any approver decides.'}
         </p>
       )}
     </div>
@@ -682,22 +812,28 @@ function AnnotationsSection({
   outputs: Output[];
   roles: Roles;
   meId: string | null;
-  post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
+  post: (body: Schemas['DesignReviewIn']) => Promise<void>;
 }) {
   const [quiet, setQuiet] = useState(false);
   const total = outputs.reduce((n, o) => n + o.annotations.length, 0);
-  const counts = { All: total, "Without comments": outputs.reduce((n, o) => n + o.annotations.filter((a) => a.reviews.length === 0).length, 0) };
+  const counts = {
+    All: total,
+    'Without comments': outputs.reduce(
+      (n, o) => n + o.annotations.filter((a) => a.reviews.length === 0).length,
+      0,
+    ),
+  };
   const filter = (
     <span className="inline-flex gap-1">
-      {(["All", "Without comments"] as const).map((label) => {
-        const on = (label === "Without comments") === quiet;
+      {(['All', 'Without comments'] as const).map((label) => {
+        const on = (label === 'Without comments') === quiet;
         return (
           <button
             key={label}
             type="button"
             aria-pressed={on}
-            onClick={() => setQuiet(label === "Without comments")}
-            className={`rounded-full px-2.5 py-0.5 text-[13px] whitespace-nowrap font-semibold ${on ? "bg-accent text-on-accent" : "bg-surface2 text-text2 hover:text-text"}`}
+            onClick={() => setQuiet(label === 'Without comments')}
+            className={`rounded-full px-2.5 py-0.5 text-[13px] whitespace-nowrap font-semibold ${on ? 'bg-accent text-on-accent' : 'bg-surface2 text-text2 hover:text-text'}`}
           >
             {label} <span className="tnum">{counts[label]}</span>
           </button>
@@ -705,10 +841,14 @@ function AnnotationsSection({
       })}
     </span>
   );
-  const label = outputs.length === 1 ? `Annotations · ${outputs[0].title ?? outputs[0].name}` : "Annotations";
+  const label =
+    outputs.length === 1 ? `Annotations · ${outputs[0].title ?? outputs[0].name}` : 'Annotations';
   // qa-docs-83: the heading keeps its line; the filter chips sit below it.
   return (
-    <InspectorSection label={<span data-testid="annotations-heading">{label}</span>} testId="annotations">
+    <InspectorSection
+      label={<span data-testid="annotations-heading">{label}</span>}
+      testId="annotations"
+    >
       {total > 0 && <div className="-mt-1 mb-3 flex flex-wrap gap-1">{filter}</div>}
       {total === 0 ? (
         <p className="text-sm text-text2">No annotations on this file.</p>
@@ -716,12 +856,18 @@ function AnnotationsSection({
         <div className="flex flex-col gap-3">
           {outputs.map((o) => {
             // The number is the annotation's place in the file, as Oracle labels it ("1. id [section]").
-            const rows = o.annotations.map((a, i) => ({ a, n: i + 1 })).filter(({ a }) => !quiet || a.reviews.length === 0);
+            const rows = o.annotations
+              .map((a, i) => ({ a, n: i + 1 }))
+              .filter(({ a }) => !quiet || a.reviews.length === 0);
             return (
               <div key={o.name} className="flex flex-col gap-3">
-                {outputs.length > 1 && <p className="text-[13px] font-semibold text-text2">{o.title ?? o.name}</p>}
+                {outputs.length > 1 && (
+                  <p className="text-[13px] font-semibold text-text2">{o.title ?? o.name}</p>
+                )}
                 {rows.length === 0 ? (
-                  <p className="text-sm text-text2">{quiet ? "Every annotation here has comments." : "No annotations on this file."}</p>
+                  <p className="text-sm text-text2">
+                    {quiet ? 'Every annotation here has comments.' : 'No annotations on this file.'}
+                  </p>
                 ) : (
                   <ul className="flex flex-col gap-3">
                     {rows.map(({ a, n }) => (
@@ -732,7 +878,7 @@ function AnnotationsSection({
                         a={a}
                         n={n}
                         output={o.name}
-                        outputTitle={o.title ?? "this file"}
+                        outputTitle={o.title ?? 'this file'}
                         many={outputs.length > 1}
                         canComment={roles.comment}
                         meId={meId}
@@ -771,11 +917,14 @@ function AnnotationRow({
   many: boolean;
   canComment: boolean;
   meId: string | null;
-  post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
+  post: (body: Schemas['DesignReviewIn']) => Promise<void>;
 }) {
   return (
     <li data-testid="annotation" className="flex min-w-0 items-start gap-2.5">
-      <span aria-hidden className="grid size-[26px] flex-none place-items-center rounded-full bg-accent-soft font-mono text-[13px] font-bold text-accent-ink">
+      <span
+        aria-hidden
+        className="grid size-[26px] flex-none place-items-center rounded-full bg-accent-soft font-mono text-[13px] font-bold text-accent-ink"
+      >
         {n}
       </span>
       <div className="min-w-0 flex-1">
@@ -799,8 +948,10 @@ function AnnotationRow({
           )}
           {canComment && (
             <Composer
-              label={many ? `Comment on annotation ${n} of ${outputTitle}` : `Comment on annotation ${n}`}
-              send={(body) => post({ kind: "comment", body, output, annotation_id: a.id })}
+              label={
+                many ? `Comment on annotation ${n} of ${outputTitle}` : `Comment on annotation ${n}`
+              }
+              send={(body) => post({ kind: 'comment', body, output, annotation_id: a.id })}
             />
           )}
         </div>
@@ -811,14 +962,14 @@ function AnnotationRow({
 
 /** An event's actor is "<principal kind>:<id>" (a member or an API token); "system" is Oracle. */
 const ACTOR_KIND = new Map([
-  ["user", "A member"],
-  ["token", "An API token"],
+  ['user', 'A member'],
+  ['token', 'An API token'],
 ]);
 
 /** The API names each event's author (actor_name); yours reads "<name> (you)". */
 function actorName(e: ReviewEvent, meId: string | null): string {
-  const name = e.actor_name ?? ACTOR_KIND.get(e.actor.split(":")[0]) ?? "Oracle";
-  if (meId && e.actor === `user:${meId}`) return e.actor_name ? `${e.actor_name} (you)` : "You";
+  const name = e.actor_name ?? ACTOR_KIND.get(e.actor.split(':')[0]) ?? 'Oracle';
+  if (meId && e.actor === `user:${meId}`) return e.actor_name ? `${e.actor_name} (you)` : 'You';
   return name;
 }
 
@@ -838,7 +989,7 @@ function EventRow({ e, meId }: { e: ReviewEvent; meId: string | null }) {
 
 /** A comment box: Comment is off until there is text; any refusal from the API shows under it. */
 function Composer({ label, send }: { label: string; send: (body: string) => Promise<void> }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const empty = !text.trim();
@@ -848,7 +999,7 @@ function Composer({ label, send }: { label: string; send: (body: string) => Prom
     setErr(null);
     try {
       await send(text);
-      setText("");
+      setText('');
     } catch (e) {
       setErr(errorMessage(e));
     } finally {
@@ -857,7 +1008,13 @@ function Composer({ label, send }: { label: string; send: (body: string) => Prom
   };
   return (
     <div className="flex flex-col gap-2">
-      <textarea aria-label={label} placeholder={label} className={TEXTAREA} value={text} onChange={(e) => setText(e.target.value)} />
+      <textarea
+        aria-label={label}
+        placeholder={label}
+        className={TEXTAREA}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
       {err && <ErrorNote>{err}</ErrorNote>}
       {/* qa-docs-11: an empty comment cannot be sent; the hint says why the button is off. */}
       <div className="flex flex-wrap items-center gap-2">
@@ -882,19 +1039,32 @@ function MetaRow({ k, children }: { k: string; children: ReactNode }) {
 /** Who approved the version: the name on its latest approval event by that person. */
 function approverName(d: Design, meId: string | null): string {
   const v = d.version;
-  const e = d.reviews.findLast((x) => x.kind === "approved" && x.actor === `user:${v.approved_by}`);
+  const e = d.reviews.findLast((x) => x.kind === 'approved' && x.actor === `user:${v.approved_by}`);
   if (e) return actorName(e, meId);
-  return meId && v.approved_by === meId ? "you" : "a member";
+  return meId && v.approved_by === meId ? 'you' : 'a member';
 }
 
-function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design; reasons: string[]; words: Words; meId: string | null }) {
+function VersionMeta({
+  spec,
+  d,
+  reasons,
+  words,
+  meId,
+}: {
+  spec: Spec;
+  d: Design;
+  reasons: string[];
+  words: Words;
+  meId: string | null;
+}) {
   const v = d.version;
   const p = v.provenance as Record<string, unknown>;
-  const str = (k: string) => (typeof p[k] === "string" || typeof p[k] === "number" ? String(p[k]) : null);
+  const str = (k: string) =>
+    typeof p[k] === 'string' || typeof p[k] === 'number' ? String(p[k]) : null;
   const reqs = Array.isArray(p.requirement_ids) ? (p.requirement_ids as string[]) : [];
-  const runId = str("run_id");
+  const runId = str('run_id');
   const deps = d.lineage?.dependencies ?? [];
-  const prd = words.title ?? "The PRD";
+  const prd = words.title ?? 'The PRD';
   // qa-docs-35/79: names, not ids. The prompt, runner and fingerprints are Oracle's own
   // record: the run that made the version holds them, one click away.
   return (
@@ -903,23 +1073,25 @@ function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design;
       <MetaRow k="Made by">
         {runId ? (
           <>
-            Oracle ·{" "}
+            Oracle ·{' '}
             <Link href={`/runs/${runId}`} className="text-accent-ink hover:underline">
               See how it was made
             </Link>
           </>
-        ) : str("origin") === "upload" ? (
-          "Uploaded"
+        ) : str('origin') === 'upload' ? (
+          'Uploaded'
         ) : (
-          "A person"
+          'A person'
         )}
       </MetaRow>
-      {str("prd_version") && (
+      {str('prd_version') && (
         <MetaRow k="From PRD">
-          {prd} v{str("prd_version")}
+          {prd} v{str('prd_version')}
         </MetaRow>
       )}
-      {reqs.length > 0 && <MetaRow k="Requirements">{reqs.map((id) => requirementName(spec, id)).join(", ")}</MetaRow>}
+      {reqs.length > 0 && (
+        <MetaRow k="Requirements">{reqs.map((id) => requirementName(spec, id)).join(', ')}</MetaRow>
+      )}
       <MetaRow k="Created">
         <span className="tnum">{formatDateTime(v.created_at)}</span>
       </MetaRow>
@@ -935,42 +1107,59 @@ function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design;
         {deps.length > 0
           ? deps.map((dep) => (
               <span key={dep.id} className="block">
-                {dep.upstream.document_slug === words.slug || dep.upstream.document_kind === "prd" ? prd : "A document"}
+                {dep.upstream.document_slug === words.slug || dep.upstream.document_kind === 'prd'
+                  ? prd
+                  : 'A document'}
                 {dep.upstream.version_number != null && ` v${dep.upstream.version_number}`}
-                {dep.upstream.section_key && `, ${sectionName(words, dep.upstream.section_key)}`}{" "}
+                {dep.upstream.section_key &&
+                  `, ${sectionName(words, dep.upstream.section_key)}`}{' '}
                 <Chip kind={FRESHNESS[dep.freshness].kind}>{FRESHNESS[dep.freshness].label}</Chip>
               </span>
             ))
           : words.slug
             ? prd
             : words.error
-              ? "–"
-              : "Nothing recorded"}
+              ? '–'
+              : 'Nothing recorded'}
       </MetaRow>
       {/* qa4-docs-share-43: staleness on its own line, never under "Depends on". */}
-      {reasons.length > 0 && <MetaRow k="May be stale">{reasons.join("; ")}</MetaRow>}
+      {reasons.length > 0 && <MetaRow k="May be stale">{reasons.join('; ')}</MetaRow>}
     </div>
   );
 }
 
 /** The design artifacts of a spec, linked from its tech brief page. */
 export function SpecDesignLinks({ doc }: { doc: string }) {
-  const listQ = useQuery(`spec-requests|${doc}`, () => unwrap(api.GET("/v1/spec-requests")));
+  const listQ = useQuery(`spec-requests|${doc}`, () => unwrap(api.GET('/v1/spec-requests')));
   const requestId = listQ.data?.find((s) => s.document_slug === doc)?.request.id ?? null;
   const specQ = useQuery(`spec-request|${requestId}`, () =>
-    requestId ? unwrap(api.GET("/v1/spec-requests/{request_id}", { params: { path: { request_id: requestId } } })) : Promise.resolve(null),
+    requestId
+      ? unwrap(
+          api.GET('/v1/spec-requests/{request_id}', {
+            params: { path: { request_id: requestId } },
+          }),
+        )
+      : Promise.resolve(null),
   );
   const spec = specQ.data;
   if (!spec || !spec.design?.length) return null;
   return (
-    <div data-testid="spec-design" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button border border-line bg-surface px-4 py-3">
+    <div
+      data-testid="spec-design"
+      className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button border border-line bg-surface px-4 py-3"
+    >
       <span className="text-[13px] font-semibold text-text2">Flows and wireframes</span>
       {spec.design.map((a) => (
         <span key={a.version.id} className="inline-flex flex-wrap items-center gap-1.5">
-          <Link href={designHref(spec.request.id, a.version.id)} className="font-medium text-accent-ink hover:underline">
+          <Link
+            href={designHref(spec.request.id, a.version.id)}
+            className="font-medium text-accent-ink hover:underline"
+          >
             {a.title} · v{a.version.number}
           </Link>
-          <Chip kind={VERSION_STATUS[a.version.status].kind}>{VERSION_STATUS[a.version.status].label}</Chip>
+          <Chip kind={VERSION_STATUS[a.version.status].kind}>
+            {VERSION_STATUS[a.version.status].label}
+          </Chip>
         </span>
       ))}
     </div>

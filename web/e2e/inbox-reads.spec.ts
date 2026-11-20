@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Card inbox-reads-one: protects = one load of the Inbox page reads the whole Inbox once (GET
@@ -11,7 +11,8 @@ import { expect, test, type Page } from "./test";
  */
 
 /** The calls the in-browser mock API has served since this page loaded. */
-const calls = (page: Page) => page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
+const calls = (page: Page) =>
+  page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
 
 /** Waits until no call has been made for a moment (at most a few rounds), then returns them all. */
 async function settledCalls(page: Page): Promise<string[]> {
@@ -28,15 +29,17 @@ async function settledCalls(page: Page): Promise<string[]> {
 /** The whole Inbox's reads: GET /v1/inbox with or without a query, not its counts or my questions. */
 const wholeInbox = (list: string[]) => list.filter((c) => /^GET \/v1\/inbox(\?|$)/.test(c));
 
-for (const path of ["/simple/inbox", "/inbox"]) {
+for (const path of ['/simple/inbox', '/inbox']) {
   test(`${path}: one load of the Inbox reads it once, and records the visit`, async ({ page }) => {
     await login(page);
     await page.goto(path);
     // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's; /inbox keeps "N waiting".
-    const shown = path.startsWith("/simple") ? page.getByTestId("inbox-needs").getByTestId("panel-count").first() : page.getByText(/^\d+ waiting$/).first();
+    const shown = path.startsWith('/simple')
+      ? page.getByTestId('inbox-needs').getByTestId('panel-count').first()
+      : page.getByText(/^\d+ waiting$/).first();
     await expect(shown).toBeVisible({ timeout: 15_000 });
     const seen = await settledCalls(page);
-    expect(wholeInbox(seen)).toEqual(["GET /v1/inbox"]);
-    expect(seen.filter((c) => c === "POST /v1/inbox/seen")).toHaveLength(1);
+    expect(wholeInbox(seen)).toEqual(['GET /v1/inbox']);
+    expect(seen.filter((c) => c === 'POST /v1/inbox/seen')).toHaveLength(1);
   });
 }

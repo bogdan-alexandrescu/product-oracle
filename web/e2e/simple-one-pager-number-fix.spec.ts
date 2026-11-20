@@ -1,9 +1,9 @@
-import { MOCK_MEMBERS } from "../lib/api/mock/fixtures";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { THEME_KEY } from "../lib/theme";
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_MEMBERS } from '../lib/api/mock/fixtures';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { MOCK_MEETINGS_KEY } from '../lib/api/mock/simple-meetings';
+import { THEME_KEY } from '../lib/theme';
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * The one-pager's "Needs a look" numbers get a one-click fix (owner, Nov 5, 'New change op'),
@@ -31,11 +31,11 @@ import { expect, test, type Page } from "./test";
  *   is offered "Use 6" in review, or the refusal says the number changed.
  */
 
-const URL = "/simple/one-pagers/guided-setup";
-const COUNT = "Numbers disagree in “Not this quarter”";
-const PER = "Numbers disagree in “Targets”";
+const URL = '/simple/one-pagers/guided-setup';
+const COUNT = 'Numbers disagree in “Not this quarter”';
+const PER = 'Numbers disagree in “Targets”';
 
-async function setUp(page: Page, scheme: "light" | "dark", scenario = "", meetings = "") {
+async function setUp(page: Page, scheme: 'light' | 'dark', scenario = '', meetings = '') {
   await page.context().addInitScript(
     ([sKey, s, mKey, m, tKey, t]) => {
       if (s) localStorage.setItem(sKey, s);
@@ -47,35 +47,42 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario = "", meetin
   await page.emulateMedia({ colorScheme: scheme });
 }
 
-const FIXED_COUNT = "Fixed: set to 6 in “Not this quarter”";
-const FIXED_PER = "Fixed: set to 200 in “Targets”";
+const FIXED_COUNT = 'Fixed: set to 6 in “Not this quarter”';
+const FIXED_PER = 'Fixed: set to 200 in “Targets”';
 
-const look = (page: Page) => page.getByRole("region", { name: "Needs a look" });
-const fixed = (page: Page) => look(page).getByTestId("needs-look-fixed").getByRole("status");
-const fixedItem = (page: Page, text: string) => look(page).getByTestId("needs-look-fixed").filter({ hasText: text });
-const item = (page: Page, text: string) => look(page).getByRole("listitem").filter({ has: page.getByTestId("needs-look-line").getByText(text, { exact: true }) });
+const look = (page: Page) => page.getByRole('region', { name: 'Needs a look' });
+const fixed = (page: Page) => look(page).getByTestId('needs-look-fixed').getByRole('status');
+const fixedItem = (page: Page, text: string) =>
+  look(page).getByTestId('needs-look-fixed').filter({ hasText: text });
+const item = (page: Page, text: string) =>
+  look(page)
+    .getByRole('listitem')
+    .filter({ has: page.getByTestId('needs-look-line').getByText(text, { exact: true }) });
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, colorScheme: scheme });
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+        colorScheme: scheme,
+      });
 
       test(`an owner fixes a number in one click and undoes it (${where})`, async ({ page }) => {
         await setUp(page, scheme);
         await login(page);
         await page.goto(URL);
-        await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
-        await expect(look(page).getByTestId("needs-look-line")).toHaveText([COUNT, PER]);
-        await expect(item(page, PER).getByRole("button", { name: "Use 200" })).toBeVisible();
-        const use = item(page, COUNT).getByRole("button", { name: "Use 6" });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+        await expect(look(page).getByTestId('needs-look-line')).toHaveText([COUNT, PER]);
+        await expect(item(page, PER).getByRole('button', { name: 'Use 200' })).toBeVisible();
+        const use = item(page, COUNT).getByRole('button', { name: 'Use 6' });
         if (phone) expect((await use.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         await use.click();
-        await expect(look(page).getByTestId("needs-look-line")).toHaveText([PER]);
+        await expect(look(page).getByTestId('needs-look-line')).toHaveText([PER]);
         await expect(fixed(page)).toHaveText([FIXED_COUNT]);
-        await look(page).getByRole("button", { name: "Undo" }).click();
-        await expect(look(page).getByTestId("needs-look-line")).toHaveText([COUNT, PER]);
-        await expect(item(page, COUNT).getByRole("button", { name: "Use 6" })).toBeVisible();
+        await look(page).getByRole('button', { name: 'Undo' }).click();
+        await expect(look(page).getByTestId('needs-look-line')).toHaveText([COUNT, PER]);
+        await expect(item(page, COUNT).getByRole('button', { name: 'Use 6' })).toBeVisible();
         await expect(fixed(page)).toHaveCount(0);
       });
 
@@ -83,53 +90,61 @@ for (const phone of [false, true]) {
         await setUp(page, scheme);
         await login(page);
         await page.goto(URL);
-        await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
-        await item(page, COUNT).getByRole("button", { name: "Use 6" }).click();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+        await item(page, COUNT).getByRole('button', { name: 'Use 6' }).click();
         await expect(fixed(page)).toHaveText([FIXED_COUNT]);
-        await item(page, PER).getByRole("button", { name: "Use 200" }).click();
-        await expect(look(page).getByTestId("needs-look-line")).toHaveCount(0);
+        await item(page, PER).getByRole('button', { name: 'Use 200' }).click();
+        await expect(look(page).getByTestId('needs-look-line')).toHaveCount(0);
         // Both fixes are listed, each with its Undo; the draft bar counts them.
         await expect(fixed(page)).toHaveText([FIXED_COUNT, FIXED_PER]);
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("2 changes");
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText(
+          '2 changes',
+        );
         // A reload reads them from the draft: still listed, each with its Undo.
         await page.reload();
         await expect(fixed(page)).toHaveText([FIXED_COUNT, FIXED_PER]);
-        await expect(look(page).getByRole("button", { name: "Undo" })).toHaveCount(2);
-        await fixedItem(page, FIXED_COUNT).getByRole("button", { name: "Undo" }).click();
-        await expect(look(page).getByTestId("needs-look-line")).toHaveText([COUNT]);
+        await expect(look(page).getByRole('button', { name: 'Undo' })).toHaveCount(2);
+        await fixedItem(page, FIXED_COUNT).getByRole('button', { name: 'Undo' }).click();
+        await expect(look(page).getByTestId('needs-look-line')).toHaveText([COUNT]);
         await expect(fixed(page)).toHaveText([FIXED_PER]);
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
       });
 
-      test(`an approver proposes the fix and the owner accepts it on the item (${where})`, async ({ page }) => {
+      test(`an approver proposes the fix and the owner accepts it on the item (${where})`, async ({
+        page,
+      }) => {
         // The PRD has a decider (Dana Decider); the approver owns its track, so proposes.
-        await setUp(page, scheme, "simple-deciders", "track-owner");
-        await login(page, "approver@example.com");
+        await setUp(page, scheme, 'simple-deciders', 'track-owner');
+        await login(page, 'approver@example.com');
         await page.goto(URL);
-        await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
-        await item(page, COUNT).getByRole("button", { name: "Use 6" }).click();
-        await expect(item(page, COUNT).getByTestId("needs-look-proposal")).toHaveText("Waiting for approval");
-        await expect(item(page, COUNT).getByRole("button", { name: "Withdraw" })).toBeVisible();
-        await expect(item(page, COUNT).getByRole("button", { name: "Use 6" })).toHaveCount(0);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+        await item(page, COUNT).getByRole('button', { name: 'Use 6' }).click();
+        await expect(item(page, COUNT).getByTestId('needs-look-proposal')).toHaveText(
+          'Waiting for approval',
+        );
+        await expect(item(page, COUNT).getByRole('button', { name: 'Withdraw' })).toBeVisible();
+        await expect(item(page, COUNT).getByRole('button', { name: 'Use 6' })).toHaveCount(0);
         // The owner signs in on the same page (the rail's account menu, desktop-wide, as joinMeeting).
         const size = page.viewportSize()!;
         await page.setViewportSize({ width: 1440, height: 900 });
-        await page.goto("/home");
+        await page.goto('/home');
         await signOut(page);
         await login(page);
         await page.setViewportSize(size);
         await page.goto(URL);
-        await expect(item(page, COUNT).getByTestId("needs-look-proposal")).toHaveText(/ proposes 6$/);
-        await item(page, COUNT).getByRole("button", { name: "Accept" }).click();
-        await expect(look(page).getByTestId("needs-look-line")).toHaveText([PER]);
+        await expect(item(page, COUNT).getByTestId('needs-look-proposal')).toHaveText(
+          / proposes 6$/,
+        );
+        await item(page, COUNT).getByRole('button', { name: 'Accept' }).click();
+        await expect(look(page).getByTestId('needs-look-line')).toHaveText([PER]);
       });
 
       test(`a viewer reads no fix (${where})`, async ({ page }) => {
         await setUp(page, scheme);
-        await login(page, "viewer@example.com");
+        await login(page, 'viewer@example.com');
         await page.goto(URL);
-        await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Use 6" })).toHaveCount(0);
+        await expect(page.getByRole('article', { name: 'One-pager' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Use 6' })).toHaveCount(0);
         await expect(look(page)).toHaveCount(0);
       });
     });
@@ -139,53 +154,64 @@ for (const phone of [false, true]) {
 // Fix round 3: the number changed since the page was read (here in a second tab of the same
 // browser, where the mock keeps its state); "Use 6" on the stale page is refused in words,
 // names who changed it, and applies nothing.
-test("a number changed since the page was read is refused in words", async ({ page }) => {
-  await setUp(page, "light");
+test('a number changed since the page was read is refused in words', async ({ page }) => {
+  await setUp(page, 'light');
   await login(page);
   await page.goto(URL);
-  const stale = item(page, COUNT).getByRole("button", { name: "Use 6" });
+  const stale = item(page, COUNT).getByRole('button', { name: 'Use 6' });
   await expect(stale).toBeVisible();
   // A second tab of the same browser is signed in already.
   const other = await page.context().newPage();
   await other.goto(URL);
-  await item(other, COUNT).getByRole("button", { name: "Use 6" }).click();
+  await item(other, COUNT).getByRole('button', { name: 'Use 6' }).click();
   await expect(fixed(other)).toHaveText([FIXED_COUNT]);
   await other.close();
   await stale.click();
-  const said = page.getByRole("alert").filter({ hasText: "This number changed since you read it" });
+  const said = page.getByRole('alert').filter({ hasText: 'This number changed since you read it' });
   await expect(said).toBeVisible();
   await expect(said).toContainText(`Changed by ${MOCK_MEMBERS[0].name}`);
   // Nothing applied: the page now reads the draft as it is, with the one fix made in the other tab.
   await expect(fixed(page)).toHaveText([FIXED_COUNT]);
-  await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+  await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
 });
 
 // Train AS replay review: while the PRD's draft is in review a fix that applies is refused,
 // so the owner is offered none; "Use 6" on a page read before the draft was sent says the
 // API's own words, never that the number changed.
-test("while the PRD's draft is in review the fix waits, and a refusal says why", async ({ page }) => {
-  await setUp(page, "light");
+test("while the PRD's draft is in review the fix waits, and a refusal says why", async ({
+  page,
+}) => {
+  await setUp(page, 'light');
   await login(page);
   await page.goto(URL);
-  await item(page, PER).getByRole("button", { name: "Use 200" }).click();
+  await item(page, PER).getByRole('button', { name: 'Use 200' }).click();
   await expect(fixed(page)).toHaveText([FIXED_PER]);
-  const readBefore = item(page, COUNT).getByRole("button", { name: "Use 6" });
+  const readBefore = item(page, COUNT).getByRole('button', { name: 'Use 6' });
   await expect(readBefore).toBeVisible();
   // A second tab of the same browser sends the draft for approval.
   const other = await page.context().newPage();
   await other.goto(URL);
-  const bar = other.getByRole("status", { name: "Working draft" });
-  await bar.getByRole("button", { name: "Send for approval…" }).click();
-  await other.getByTestId("send-for-approval").getByRole("button", { name: "Send for approval" }).click();
-  await expect(bar.getByTestId("draft-waits-on")).toContainText("Sent for approval · waiting on");
+  const bar = other.getByRole('status', { name: 'Working draft' });
+  await bar.getByRole('button', { name: 'Send for approval…' }).click();
+  await other
+    .getByTestId('send-for-approval')
+    .getByRole('button', { name: 'Send for approval' })
+    .click();
+  await expect(bar.getByTestId('draft-waits-on')).toContainText('Sent for approval · waiting on');
   // In review: the item stays, with no fix to click.
   await expect(item(other, COUNT)).toBeVisible();
-  await expect(item(other, COUNT).getByRole("button", { name: "Use 6" })).toHaveCount(0);
+  await expect(item(other, COUNT).getByRole('button', { name: 'Use 6' })).toHaveCount(0);
   await other.close();
   await readBefore.click();
-  await expect(page.getByRole("alert").filter({ hasText: "This PRD's draft is in review: changes wait until it is approved" })).toBeVisible();
-  await expect(page.getByRole("alert").filter({ hasText: "This number changed since you read it" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('alert')
+      .filter({ hasText: "This PRD's draft is in review: changes wait until it is approved" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'This number changed since you read it' }),
+  ).toHaveCount(0);
   // The page reads the PRD again: the item stays, and its fix waits for the review.
   await expect(item(page, COUNT)).toBeVisible();
-  await expect(item(page, COUNT).getByRole("button", { name: "Use 6" })).toHaveCount(0);
+  await expect(item(page, COUNT).getByRole('button', { name: 'Use 6' })).toHaveCount(0);
 });

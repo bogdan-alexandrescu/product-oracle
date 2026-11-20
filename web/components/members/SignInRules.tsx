@@ -1,35 +1,48 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
-import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
-import { normaliseDomain } from "@/app/settings/sources/CompanyDrive";
-import { Button, Chip, Icon, InfoTip, Notice, Panel, SegmentedControl } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Field, INPUT, SELECT } from '@/app/settings/_components/fields';
+import { normaliseDomain } from '@/app/settings/sources/CompanyDrive';
+import { Button, Chip, Icon, InfoTip, Notice, Panel, SegmentedControl } from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Rules = Schemas["SignInRulesOut"];
-type Rule = Rules["without_invite"];
+type Rules = Schemas['SignInRulesOut'];
+type Rule = Rules['without_invite'];
 
 const RULES: { value: Rule; label: string; line: string }[] = [
   {
-    value: "request",
-    label: "Ask an owner",
-    line: "Someone from these domains who signs in without an invite waits until an owner approves. Requests appear here and in the Inbox.",
+    value: 'request',
+    label: 'Ask an owner',
+    line: 'Someone from these domains who signs in without an invite waits until an owner approves. Requests appear here and in the Inbox.',
   },
-  { value: "join", label: "Join at once", line: "Someone from these domains who signs in without an invite joins at once with the default role." },
-  { value: "refuse", label: "Invite only", line: "Only invited people can join. Others are told to ask an owner." },
+  {
+    value: 'join',
+    label: 'Join at once',
+    line: 'Someone from these domains who signs in without an invite joins at once with the default role.',
+  },
+  {
+    value: 'refuse',
+    label: 'Invite only',
+    line: 'Only invited people can join. Others are told to ask an owner.',
+  },
 ];
-const ROLE_WORD = { owner: "Owner", approver: "Approver", commenter: "Commenter", viewer: "Viewer" } as const;
-const DOMAINS_KEY = "company_email_domains";
+const ROLE_WORD = {
+  owner: 'Owner',
+  approver: 'Approver',
+  commenter: 'Commenter',
+  viewer: 'Viewer',
+} as const;
+const DOMAINS_KEY = 'company_email_domains';
 /** pass-f F-50: the invite form's Add domain asks this panel to add a domain (its detail). */
-export const ADD_DOMAIN_EVENT = "po-add-sign-in-domain";
+export const ADD_DOMAIN_EVENT = 'po-add-sign-in-domain';
 
 const writeSetting = (key: string, value: unknown) =>
-  unwrap(api.PUT("/v1/settings/{key}", { params: { path: { key } }, body: { value } }));
+  unwrap(api.PUT('/v1/settings/{key}', { params: { path: { key } }, body: { value } }));
 
-const H3 = "text-[15px] font-semibold";
+const H3 = 'text-[15px] font-semibold';
 
 /** qa-settings-9: a choice here applies at once; this says it landed. */
 const Saved = () => (
@@ -44,11 +57,11 @@ const Saved = () => (
  * from them without an invite, and the role such a person starts with.
  */
 export function SignInRules() {
-  const q = useQuery("sign-in-rules", () => unwrap(api.GET("/v1/sign-in-rules")));
+  const q = useQuery('sign-in-rules', () => unwrap(api.GET('/v1/sign-in-rules')));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const inputId = useId();
   // The setting just saved, whose "Saved" shows for a moment.
   const [saved, setSaved] = useState<string | null>(null);
@@ -63,7 +76,7 @@ export function SignInRules() {
       setError(null);
       requestAnimationFrame(() => {
         const input = document.getElementById(inputId) as HTMLInputElement | null;
-        input?.scrollIntoView({ block: "center" });
+        input?.scrollIntoView({ block: 'center' });
         input?.focus();
       });
     };
@@ -96,10 +109,11 @@ export function SignInRules() {
     e.preventDefault();
     const domain = normaliseDomain(text);
     if (!domain) return;
-    if (rules?.domains.some((d) => d.domain === domain)) return setError(`${domain} is already on the list.`);
+    if (rules?.domains.some((d) => d.domain === domain))
+      return setError(`${domain} is already on the list.`);
     // The stored list keeps the deployment's domains too, as Settings › Sources saves it.
     const all = rules?.domains.map((d) => d.domain) ?? [];
-    if (await save(DOMAINS_KEY, [...all, domain])) setText("");
+    if (await save(DOMAINS_KEY, [...all, domain])) setText('');
   }
 
   return (
@@ -109,14 +123,19 @@ export function SignInRules() {
         <span className="inline-flex items-center gap-1.5">
           Sign-in
           <InfoTip label="sign-in" align="start">
-            Google sign-in in front of Oracle decides who can reach it at all. These rules decide who becomes a member.
+            Google sign-in in front of Oracle decides who can reach it at all. These rules decide
+            who becomes a member.
           </InfoTip>
         </span>
       }
     >
       <div className="flex flex-col gap-4 p-4 max-[600px]:p-3">
-        {q.error && <LoadError what="the sign-in rules" error={q.error} onRetry={() => void q.reload()} />}
-        {!rules && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}
+        {q.error && (
+          <LoadError what="the sign-in rules" error={q.error} onRetry={() => void q.reload()} />
+        )}
+        {!rules && !q.error && (
+          <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />
+        )}
         {rules && !rules.google_sign_in && (
           // pass-f F-30: one short line; why is behind the (i).
           <Notice testId="google-sign-in-off">
@@ -128,7 +147,9 @@ export function SignInRules() {
             </span>
           </Notice>
         )}
-        {rules?.google_sign_in && rules.new_sign_ins_off && <Notice>New sign-ins are turned off where Oracle is deployed.</Notice>}
+        {rules?.google_sign_in && rules.new_sign_ins_off && (
+          <Notice>New sign-ins are turned off where Oracle is deployed.</Notice>
+        )}
         {rules && (
           <>
             <section aria-label="Company domains" className="flex flex-col gap-2">
@@ -138,18 +159,27 @@ export function SignInRules() {
                     pass-f F-50: why it matters is behind the (i), not on the page. */}
                 <InfoTip label="company domains" align="start">
                   <span data-testid="sign-in-domains-hint">
-                    Who may sign in from Google. It is the same list as Company email domains in Settings › Sources, where
-                    it also decides which Google Drive docs Oracle reads: docs in picked folders owned outside these domains
-                    are skipped.
+                    Who may sign in from Google. It is the same list as Company email domains in
+                    Settings › Sources, where it also decides which Google Drive docs Oracle reads:
+                    docs in picked folders owned outside these domains are skipped.
                   </span>
                 </InfoTip>
                 {saved === DOMAINS_KEY && <Saved />}
               </span>
               <ul aria-label="Company domains" className="flex flex-wrap gap-1.5">
                 {rules.domains.map((d) => (
-                  <li key={d.domain} aria-label={d.domain} data-testid="sign-in-domain" data-from={d.from}>
-                    {d.from === "deployment" ? (
-                      <Chip kind="line" className="font-mono" title="Set where Oracle is deployed; change it there">
+                  <li
+                    key={d.domain}
+                    aria-label={d.domain}
+                    data-testid="sign-in-domain"
+                    data-from={d.from}
+                  >
+                    {d.from === 'deployment' ? (
+                      <Chip
+                        kind="line"
+                        className="font-mono"
+                        title="Set where Oracle is deployed; change it there"
+                      >
                         <Icon name="lock" size={16} />
                         {d.domain}
                       </Chip>
@@ -161,7 +191,14 @@ export function SignInRules() {
                             type="button"
                             aria-label={`Remove ${d.domain}`}
                             disabled={busy || off}
-                            onClick={() => void save(DOMAINS_KEY, rules.domains.filter((x) => x.domain !== d.domain).map((x) => x.domain))}
+                            onClick={() =>
+                              void save(
+                                DOMAINS_KEY,
+                                rules.domains
+                                  .filter((x) => x.domain !== d.domain)
+                                  .map((x) => x.domain),
+                              )
+                            }
                             className="grid size-6 place-items-center rounded-full text-text2 hover:bg-surface2 hover:text-text disabled:opacity-70"
                           >
                             <Icon name="x" size={16} />
@@ -179,7 +216,11 @@ export function SignInRules() {
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={add} aria-label="Add a company domain" className="flex flex-wrap items-end gap-1.5">
+                <form
+                  onSubmit={add}
+                  aria-label="Add a company domain"
+                  className="flex flex-wrap items-end gap-1.5"
+                >
                   <Field label="Add a domain" htmlFor={inputId} className="max-w-72 flex-1">
                     <input
                       id={inputId}
@@ -196,7 +237,13 @@ export function SignInRules() {
                       className={`${INPUT} font-mono`}
                     />
                   </Field>
-                  <Button type="submit" variant="solid" icon="plus" className="h-9" disabled={busy || off || !text.trim()}>
+                  <Button
+                    type="submit"
+                    variant="solid"
+                    icon="plus"
+                    className="h-9"
+                    disabled={busy || off || !text.trim()}
+                  >
                     Add
                   </Button>
                   <Button variant="ghost" className="h-9" onClick={() => setEditing(false)}>
@@ -214,17 +261,23 @@ export function SignInRules() {
               <span className="flex flex-wrap items-center gap-2">
                 <h3 className={H3}>Without an invite</h3>
                 <InfoTip label="without an invite" align="start">
-                  <span data-testid="sign-in-rule-line">{RULES.find((r) => r.value === rules.without_invite)?.line}</span>
+                  <span data-testid="sign-in-rule-line">
+                    {RULES.find((r) => r.value === rules.without_invite)?.line}
+                  </span>
                 </InfoTip>
-                {saved === "sign_in_without_invite" && <Saved />}
+                {saved === 'sign_in_without_invite' && <Saved />}
               </span>
               {/* On a phone the three choices wrap onto rows of their own. */}
               <div className="max-[600px]:[&_[role=group]]:flex-col max-[600px]:[&_[role=group]]:items-stretch">
                 <SegmentedControl
                   label="Without an invite"
-                  items={RULES.map((r) => ({ value: r.value, label: r.label, disabled: off || busy }))}
+                  items={RULES.map((r) => ({
+                    value: r.value,
+                    label: r.label,
+                    disabled: off || busy,
+                  }))}
                   value={rules.without_invite}
-                  onChange={(v) => void save("sign_in_without_invite", v)}
+                  onChange={(v) => void save('sign_in_without_invite', v)}
                 />
               </div>
             </section>
@@ -234,7 +287,8 @@ export function SignInRules() {
                   <span className="inline-flex items-center gap-1.5">
                     Default role
                     <InfoTip label="the default role" align="start">
-                      The role an approved request starts with, and the role of anyone who joins at once.
+                      The role an approved request starts with, and the role of anyone who joins at
+                      once.
                     </InfoTip>
                   </span>
                 }
@@ -242,20 +296,27 @@ export function SignInRules() {
               >
                 <select
                   aria-label="Default role"
-                  value={rules.default_role === "viewer" || rules.default_role === "commenter" ? rules.default_role : ""}
+                  value={
+                    rules.default_role === 'viewer' || rules.default_role === 'commenter'
+                      ? rules.default_role
+                      : ''
+                  }
                   disabled={off || busy}
-                  onChange={(e) => void save("iap_default_role", e.target.value)}
+                  onChange={(e) => void save('iap_default_role', e.target.value)}
                   className={SELECT}
                 >
-                  {rules.default_role !== "viewer" && rules.default_role !== "commenter" && <option value="">{ROLE_WORD[rules.default_role]}</option>}
+                  {rules.default_role !== 'viewer' && rules.default_role !== 'commenter' && (
+                    <option value="">{ROLE_WORD[rules.default_role]}</option>
+                  )}
                   <option value="viewer">Viewer</option>
                   <option value="commenter">Commenter</option>
                 </select>
               </Field>
-              {saved === "iap_default_role" && <Saved />}
-              {(rules.default_role === "approver" || rules.default_role === "owner") && (
+              {saved === 'iap_default_role' && <Saved />}
+              {(rules.default_role === 'approver' || rules.default_role === 'owner') && (
                 <Notice tone="warn">
-                  Anyone from these domains starts as {rules.default_role}. Choose Viewer or Commenter.
+                  Anyone from these domains starts as {rules.default_role}. Choose Viewer or
+                  Commenter.
                 </Notice>
               )}
             </section>

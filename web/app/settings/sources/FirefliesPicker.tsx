@@ -1,21 +1,29 @@
-"use client";
+'use client';
 
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from "@/components/ds";
-import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
-import { calendarDay, dayIn, todayIn, useCompanyZone, zoneDay, zoneTime, zoneWeekday } from "@/lib/dates";
-import { zoneName } from "@/lib/format";
-import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
+import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from '@/components/ds';
+import { api, ApiError, type Schemas, unwrap } from '@/lib/api/client';
+import {
+  calendarDay,
+  dayIn,
+  todayIn,
+  useCompanyZone,
+  zoneDay,
+  zoneTime,
+  zoneWeekday,
+} from '@/lib/dates';
+import { zoneName } from '@/lib/format';
+import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
 
-import { INPUT } from "../_components/fields";
+import { INPUT } from '../_components/fields';
 
-type Meeting = Schemas["FirefliesMeetingOut"];
-type Series = Schemas["FirefliesSeriesOut"];
+type Meeting = Schemas['FirefliesMeetingOut'];
+type Series = Schemas['FirefliesSeriesOut'];
 
 /** A Fireflies source's config as the picker saves it (api: oracle/sources/connectors/fireflies.py). */
 export type FirefliesConfig = {
-  mode: "all" | "selected";
+  mode: 'all' | 'selected';
   date_from?: string;
   date_to?: string;
   /** #401: the zone the days are whole days in, the Company time zone when they were picked (UTC when absent). */
@@ -37,7 +45,9 @@ const TICK_ALL_PAGES = 6;
 const TICK_ALL_MEETINGS = 300;
 
 function strings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+    : [];
 }
 
 /**
@@ -45,14 +55,17 @@ function strings(value: unknown): string[] {
  * all meetings since `from_date` whose title contains one of the strings. It opens on
  * choosing with nothing picked, so saving it as it opens cannot widen it to every meeting.
  */
-export function readFirefliesConfig(config: Record<string, unknown>): { value: FirefliesConfig; titleRule: string[] | null } {
-  if (config.mode === "all" || config.mode === "selected") {
+export function readFirefliesConfig(config: Record<string, unknown>): {
+  value: FirefliesConfig;
+  titleRule: string[] | null;
+} {
+  if (config.mode === 'all' || config.mode === 'selected') {
     return {
       value: {
         mode: config.mode,
-        date_from: typeof config.date_from === "string" ? config.date_from : undefined,
-        date_to: typeof config.date_to === "string" ? config.date_to : undefined,
-        timezone: typeof config.timezone === "string" ? config.timezone : undefined,
+        date_from: typeof config.date_from === 'string' ? config.date_from : undefined,
+        date_to: typeof config.date_to === 'string' ? config.date_to : undefined,
+        timezone: typeof config.timezone === 'string' ? config.timezone : undefined,
         series: strings(config.series),
         meetings: strings(config.meetings),
         labels: (config.labels as Record<string, string> | undefined) ?? {},
@@ -63,8 +76,8 @@ export function readFirefliesConfig(config: Record<string, unknown>): { value: F
   const rule = [...strings(config.title_contains), ...strings(config.meetings)];
   return {
     value: {
-      mode: rule.length ? "selected" : "all",
-      date_from: typeof config.from_date === "string" ? config.from_date.slice(0, 10) : undefined,
+      mode: rule.length ? 'selected' : 'all',
+      date_from: typeof config.from_date === 'string' ? config.from_date.slice(0, 10) : undefined,
       series: [],
       meetings: [],
       labels: {},
@@ -75,7 +88,7 @@ export function readFirefliesConfig(config: Record<string, unknown>): { value: F
 
 /** The config to save: empty dates dropped (their zone with them), labels only for what is picked. */
 export function firefliesConfigToSave(c: FirefliesConfig): Record<string, unknown> {
-  const picked = c.mode === "selected";
+  const picked = c.mode === 'selected';
   const keep = new Set(picked ? [...c.series, ...c.meetings] : []);
   return {
     mode: c.mode,
@@ -89,7 +102,7 @@ export function firefliesConfigToSave(c: FirefliesConfig): Record<string, unknow
 }
 
 export function firefliesReady(c: FirefliesConfig): boolean {
-  if (c.mode === "all") return true;
+  if (c.mode === 'all') return true;
   const picked = c.series.length + c.meetings.length;
   return picked > 0 && c.series.length <= MAX_SERIES && c.meetings.length <= MAX_MEETINGS;
 }
@@ -98,27 +111,33 @@ export function firefliesReady(c: FirefliesConfig): boolean {
 function shortDay(day: string): string {
   const sameYear = day.slice(0, 4) === String(new Date().getFullYear());
   // A no-break space keeps "Sep 1" on one line.
-  return calendarDay(day, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).replace(" ", "\u00a0");
+  return calendarDay(day, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  }).replace(' ', '\u00a0');
 }
 
 /** "Sep 1 – Oct 31" · "since Sep 1" · "until Oct 31" · "". */
-export function firefliesRange(c: Pick<FirefliesConfig, "date_from" | "date_to">): string {
+export function firefliesRange(c: Pick<FirefliesConfig, 'date_from' | 'date_to'>): string {
   if (c.date_from && c.date_to) return `${shortDay(c.date_from)} – ${shortDay(c.date_to)}`;
   if (c.date_from) return `since ${shortDay(c.date_from)}`;
   if (c.date_to) return `until ${shortDay(c.date_to)}`;
-  return "";
+  return '';
 }
 
 /** "All meetings since Sep 1" · "2 series, 5 meetings, since Sep 1". */
 export function firefliesSummary(c: FirefliesConfig): string {
   const range = firefliesRange(c);
-  if (c.mode === "all") return range ? `All meetings ${range}` : "All meetings";
+  if (c.mode === 'all') return range ? `All meetings ${range}` : 'All meetings';
   const parts = [
     ...(c.series.length ? [`${c.series.length} series`] : []),
-    ...(c.meetings.length ? [`${c.meetings.length} meeting${c.meetings.length === 1 ? "" : "s"}`] : []),
+    ...(c.meetings.length
+      ? [`${c.meetings.length} meeting${c.meetings.length === 1 ? '' : 's'}`]
+      : []),
   ];
-  if (!parts.length) return "Nothing picked yet";
-  return [...parts, ...(range ? [range] : [])].join(", ");
+  if (!parts.length) return 'Nothing picked yet';
+  return [...parts, ...(range ? [range] : [])].join(', ');
 }
 
 function useDebounced<T>(value: T, ms = 300): T {
@@ -147,30 +166,69 @@ type MeetingState = {
 };
 
 /** Pages of the connection's meetings for the current search and range. */
-function useMeetings(connectionId: string, search: string, from?: string, to?: string, enabled = true) {
+function useMeetings(
+  connectionId: string,
+  search: string,
+  from?: string,
+  to?: string,
+  enabled = true,
+) {
   const onAuth = useAuthRedirect();
-  const key = `${connectionId}|${search}|${from ?? ""}|${to ?? ""}`;
-  const [state, setState] = useState<MeetingState>({ key: "", rows: [], next: null, loading: false, error: null, retryAt: null });
+  const key = `${connectionId}|${search}|${from ?? ''}|${to ?? ''}`;
+  const [state, setState] = useState<MeetingState>({
+    key: '',
+    rows: [],
+    next: null,
+    loading: false,
+    error: null,
+    retryAt: null,
+  });
 
   const page = (cursor: string | null) =>
     unwrap(
-      api.GET("/v1/connections/{connection_id}/fireflies/meetings", {
+      api.GET('/v1/connections/{connection_id}/fireflies/meetings', {
         params: {
           path: { connection_id: connectionId },
-          query: { search: search || undefined, from: from || undefined, to: to || undefined, cursor: cursor ?? undefined },
+          query: {
+            search: search || undefined,
+            from: from || undefined,
+            to: to || undefined,
+            cursor: cursor ?? undefined,
+          },
         },
       }),
     );
 
   async function load(cursor: string | null, reset: boolean) {
-    setState((s) => ({ ...s, key, loading: true, error: null, retryAt: null, ...(reset ? { rows: [], next: null } : {}) }));
+    setState((s) => ({
+      ...s,
+      key,
+      loading: true,
+      error: null,
+      retryAt: null,
+      ...(reset ? { rows: [], next: null } : {}),
+    }));
     try {
       const got = await page(cursor);
       setState((s) =>
-        s.key !== key ? s : { key, rows: reset ? got.meetings : [...s.rows, ...got.meetings], next: got.next_cursor ?? null, loading: false, error: null, retryAt: null },
+        s.key !== key
+          ? s
+          : {
+              key,
+              rows: reset ? got.meetings : [...s.rows, ...got.meetings],
+              next: got.next_cursor ?? null,
+              loading: false,
+              error: null,
+              retryAt: null,
+            },
       );
     } catch (e) {
-      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
+      if (!onAuth(e))
+        setState((s) =>
+          s.key !== key
+            ? s
+            : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) },
+        );
     }
   }
 
@@ -179,7 +237,9 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
    * meetings: the search's meetings loaded, and whether more are left; null on an error
    * or once `stopped`.
    */
-  async function loadAll(stopped: () => boolean): Promise<{ rows: Meeting[]; capped: boolean } | null> {
+  async function loadAll(
+    stopped: () => boolean,
+  ): Promise<{ rows: Meeting[]; capped: boolean } | null> {
     let rows = state.rows;
     let cursor = state.next;
     if (!cursor) return { rows, capped: false };
@@ -204,7 +264,12 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
       }
       return { rows, capped: cursor != null };
     } catch (e) {
-      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
+      if (!onAuth(e))
+        setState((s) =>
+          s.key !== key
+            ? s
+            : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) },
+        );
       return null;
     }
   }
@@ -214,7 +279,12 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled]);
 
-  return { ...state, more: () => (state.next ? load(state.next, false) : undefined), retry: () => load(null, true), loadAll };
+  return {
+    ...state,
+    more: () => (state.next ? load(state.next, false) : undefined),
+    retry: () => load(null, true),
+    loadAll,
+  };
 }
 
 /** Retry for a failed list, active once the limit's wait (if any) is over. Keyed by `retryAt`. */
@@ -223,7 +293,10 @@ function RetryButton({ retryAt, onRetry }: { retryAt: number | null; onRetry: ()
   useEffect(() => {
     if (retryAt == null) return;
     // setTimeout takes at most 2^31-1 ms (about 24 days).
-    const t = setTimeout(() => setWaiting(false), Math.min(Math.max(0, retryAt - Date.now()), 2 ** 31 - 1));
+    const t = setTimeout(
+      () => setWaiting(false),
+      Math.min(Math.max(0, retryAt - Date.now()), 2 ** 31 - 1),
+    );
     return () => clearTimeout(t);
   }, [retryAt]);
   return (
@@ -233,12 +306,23 @@ function RetryButton({ retryAt, onRetry }: { retryAt: number | null; onRetry: ()
   );
 }
 
-const LIST = "flex max-h-[360px] flex-col overflow-y-auto rounded-button border border-line bg-surface";
+const LIST =
+  'flex max-h-[360px] flex-col overflow-y-auto rounded-button border border-line bg-surface';
 const ROW =
-  "flex min-h-11 cursor-pointer items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0 hover:bg-surface2 has-[:disabled]:cursor-default";
-const CHECK = "size-4 flex-none accent-accent";
+  'flex min-h-11 cursor-pointer items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0 hover:bg-surface2 has-[:disabled]:cursor-default';
+const CHECK = 'size-4 flex-none accent-accent';
 
-function Section({ title, count, children, action }: { title: string; count?: number; children: ReactNode; action?: ReactNode }) {
+function Section({
+  title,
+  count,
+  children,
+  action,
+}: {
+  title: string;
+  count?: number;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={title}>
       <div className="flex min-h-9 items-center gap-2">
@@ -265,9 +349,9 @@ export function FirefliesPicker({
 }) {
   const ids = useId();
   const zone = useCompanyZone();
-  const choosing = value.mode === "selected";
+  const choosing = value.mode === 'selected';
   const ongoing = !value.date_to;
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   // Each search is a Fireflies call from a small browse budget: it waits until typing stops.
   const query = useDebounced(search.trim(), 400);
   // Typing a date changes it on every keystroke (0002, 0020, 0202, 2026): the lists
@@ -281,17 +365,22 @@ export function FirefliesPicker({
 
   // The series list spends the same browse budget: its limit alert waits out the 429 too.
   const [seriesRetryAt, setSeriesRetryAt] = useState<number | null>(null);
-  const series = useQuery(`ff-series|${connectionId}|${from ?? ""}|${to ?? ""}|${zone}|${choosing}`, () =>
-    choosing
-      ? unwrap(
-          api.GET("/v1/connections/{connection_id}/fireflies/series", {
-            params: { path: { connection_id: connectionId }, query: { from: from || undefined, to: to || undefined } },
-          }),
-        ).catch((e: unknown) => {
-          setSeriesRetryAt(retryAtOf(e));
-          throw e;
-        })
-      : Promise.resolve(null),
+  const series = useQuery(
+    `ff-series|${connectionId}|${from ?? ''}|${to ?? ''}|${zone}|${choosing}`,
+    () =>
+      choosing
+        ? unwrap(
+            api.GET('/v1/connections/{connection_id}/fireflies/series', {
+              params: {
+                path: { connection_id: connectionId },
+                query: { from: from || undefined, to: to || undefined },
+              },
+            }),
+          ).catch((e: unknown) => {
+            setSeriesRetryAt(retryAtOf(e));
+            throw e;
+          })
+        : Promise.resolve(null),
   );
   const meetings = useMeetings(connectionId, query, from, to, choosing);
 
@@ -305,7 +394,15 @@ export function FirefliesPicker({
     const rows = listed.filter((s) => s.meeting_count > 1 || pickedSeries.has(s.key));
     const shown = new Set(rows.map((s) => s.key));
     for (const key of value.series) {
-      if (!shown.has(key)) rows.push({ key, title: labels[key] ?? "Picked series", meeting_count: 0, last_date: null, organizer: null, same_title: [] });
+      if (!shown.has(key))
+        rows.push({
+          key,
+          title: labels[key] ?? 'Picked series',
+          meeting_count: 0,
+          last_date: null,
+          organizer: null,
+          same_title: [],
+        });
     }
     return rows;
   }, [series.data, pickedSeries, value.series, labels]);
@@ -324,7 +421,7 @@ export function FirefliesPicker({
   const groups = useMemo(() => {
     const byDay = new Map<string, Meeting[]>();
     for (const m of meetings.rows) {
-      const day = m.date ? dayIn(m.date, zone) : "";
+      const day = m.date ? dayIn(m.date, zone) : '';
       byDay.set(day, [...(byDay.get(day) ?? []), m]);
     }
     return [...byDay.entries()];
@@ -348,17 +445,27 @@ export function FirefliesPicker({
 
   // Tick all: the search's meetings not in a picked series, and what it added, so one
   // click undoes it. Forgotten once the search or dates change.
-  const tickable = meetings.rows.filter((m) => m.series_key == null || !pickedSeries.has(m.series_key));
+  const tickable = meetings.rows.filter(
+    (m) => m.series_key == null || !pickedSeries.has(m.series_key),
+  );
   // `capped`: how many results it read when its page cap stopped it.
-  const [ticked, setTicked] = useState<{ key: string; ids: string[]; capped: number | null } | null>(null);
-  const tickKey = `${query}|${from ?? ""}|${to ?? ""}`;
+  const [ticked, setTicked] = useState<{
+    key: string;
+    ids: string[];
+    capped: number | null;
+  } | null>(null);
+  const tickKey = `${query}|${from ?? ''}|${to ?? ''}`;
   const undo = ticked?.key === tickKey ? ticked.ids : null;
   // Until the list shows what is typed, ticking all would tick another search's results.
-  const settled = search.trim() === query && value.date_from === from && value.date_to === to && !meetings.loading;
+  const settled =
+    search.trim() === query &&
+    value.date_from === from &&
+    value.date_to === to &&
+    !meetings.loading;
 
   // While Tick all loads, the picker as it is now (the person may tick or search meanwhile),
   // and the meetings they tick or untick: Tick all leaves those as they set them.
-  const typedKey = `${search.trim()}|${value.date_from ?? ""}|${value.date_to ?? ""}`;
+  const typedKey = `${search.trim()}|${value.date_from ?? ''}|${value.date_to ?? ''}`;
   const latest = useRef({ value, typedKey });
   useEffect(() => {
     latest.current = { value, typedKey };
@@ -377,12 +484,20 @@ export function FirefliesPicker({
     const series = new Set(now.series);
     const have = new Set(now.meetings);
     const add = rows
-      .filter((m) => (m.series_key == null || !series.has(m.series_key)) && !have.has(m.id) && !touched.current.has(m.id))
+      .filter(
+        (m) =>
+          (m.series_key == null || !series.has(m.series_key)) &&
+          !have.has(m.id) &&
+          !touched.current.has(m.id),
+      )
       .slice(0, Math.max(0, MAX_MEETINGS - now.meetings.length));
     onChange({
       ...now,
       meetings: [...now.meetings, ...add.map((m) => m.id)],
-      labels: { ...now.labels, ...Object.fromEntries(add.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])) },
+      labels: {
+        ...now.labels,
+        ...Object.fromEntries(add.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])),
+      },
     });
     setTicked({ key: tickKey, ids: add.map((m) => m.id), capped: capped ? rows.length : null });
   }
@@ -397,7 +512,10 @@ export function FirefliesPicker({
     const room = missing.slice(0, Math.max(0, MAX_MEETINGS - value.meetings.length));
     set({
       meetings: [...value.meetings, ...room.map((m) => m.id)],
-      labels: { ...labels, ...Object.fromEntries(room.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])) },
+      labels: {
+        ...labels,
+        ...Object.fromEntries(room.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])),
+      },
     });
   }
 
@@ -419,8 +537,8 @@ export function FirefliesPicker({
             value={value.mode}
             onChange={(mode) => set({ mode })}
             items={[
-              { value: "all", label: "All meetings" },
-              { value: "selected", label: "Choose" },
+              { value: 'all', label: 'All meetings' },
+              { value: 'selected', label: 'Choose' },
             ]}
           />
         </div>
@@ -429,7 +547,7 @@ export function FirefliesPicker({
             <Label>From</Label>
             <input
               type="date"
-              value={value.date_from ?? ""}
+              value={value.date_from ?? ''}
               max={value.date_to || undefined}
               onChange={(e) => set({ date_from: e.target.value || undefined })}
               className={`${INPUT} w-[160px]`}
@@ -439,7 +557,7 @@ export function FirefliesPicker({
             <Label>To</Label>
             <input
               type="date"
-              value={value.date_to ?? ""}
+              value={value.date_to ?? ''}
               min={value.date_from || undefined}
               disabled={ongoing}
               onChange={(e) => set({ date_to: e.target.value || undefined })}
@@ -455,11 +573,14 @@ export function FirefliesPicker({
             />
             Ongoing
           </label>
-          <span className="flex h-9 items-center gap-1 text-sm text-text2" data-testid="fireflies-timezone">
+          <span
+            className="flex h-9 items-center gap-1 text-sm text-text2"
+            data-testid="fireflies-timezone"
+          >
             {zoneName(zone)}
             <InfoTip label="time zone" align="end">
-              Dates are whole days in the Company time zone, and meeting times are shown in it. An owner sets it on Settings ›
-              Company.
+              Dates are whole days in the Company time zone, and meeting times are shown in it. An
+              owner sets it on Settings › Company.
             </InfoTip>
           </span>
         </div>
@@ -467,23 +588,28 @@ export function FirefliesPicker({
 
       <div className="flex min-h-9 items-center gap-2 rounded-button bg-surface2 px-3 py-1.5">
         <Label className="hidden flex-none @[520px]:inline">Includes</Label>
-        <span className="tnum min-w-0 flex-1 text-[15px] font-semibold" data-testid="fireflies-summary" aria-live="polite">
+        <span
+          className="tnum min-w-0 flex-1 text-[15px] font-semibold"
+          data-testid="fireflies-summary"
+          aria-live="polite"
+        >
           {firefliesSummary(value)}
         </span>
         <InfoTip label="what a sync takes" align="end">
-          A series is a recurring calendar event: it takes its past meetings and every future one, and new meetings arrive on
-          the next sync. A meeting on no calendar is in no series; pick it on its own. Saving a narrower date range, or dropping a
-          meeting or series, removes the meetings outside your picks at once.
+          A series is a recurring calendar event: it takes its past meetings and every future one,
+          and new meetings arrive on the next sync. A meeting on no calendar is in no series; pick
+          it on its own. Saving a narrower date range, or dropping a meeting or series, removes the
+          meetings outside your picks at once.
         </InfoTip>
       </div>
 
       {titleRule && (
         <div className="flex flex-wrap items-center gap-2" data-testid="title-rule">
           <Chip kind="warn">Title rule</Chip>
-          <span className="min-w-0 text-[15px]">{titleRule.map((t) => `“${t}”`).join(", ")}</span>
+          <span className="min-w-0 text-[15px]">{titleRule.map((t) => `“${t}”`).join(', ')}</span>
           <InfoTip label="title rule" align="end">
-            Saved before meetings could be picked: all meetings whose title contains one of these. Saving replaces it with the
-            choice above.
+            Saved before meetings could be picked: all meetings whose title contains one of these.
+            Saving replaces it with the choice above.
           </InfoTip>
         </div>
       )}
@@ -492,16 +618,29 @@ export function FirefliesPicker({
         <div className="grid min-w-0 gap-4 @[700px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <Section title="Series" count={series.data ? seriesRows.length : undefined}>
             {series.error && (
-              <Notice tone="error" action={<RetryButton key={seriesRetryAt ?? 0} retryAt={seriesRetryAt} onRetry={() => void series.reload()} />}>
+              <Notice
+                tone="error"
+                action={
+                  <RetryButton
+                    key={seriesRetryAt ?? 0}
+                    retryAt={seriesRetryAt}
+                    onRetry={() => void series.reload()}
+                  />
+                }
+              >
                 {series.error}
               </Notice>
             )}
-            {!series.data && !series.error && <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />}
-            {series.data && seriesRows.length === 0 && <p className="px-1 text-[15px] text-text2">No recurring meetings</p>}
+            {!series.data && !series.error && (
+              <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />
+            )}
+            {series.data && seriesRows.length === 0 && (
+              <p className="px-1 text-[15px] text-text2">No recurring meetings</p>
+            )}
             {series.data?.truncated && (
               <Notice testId="fireflies-series-partial" tone="warn">
-                Counts cover the newest {series.data.scanned.toLocaleString("en-US")} meetings. Narrow From and To to count
-                them all.
+                Counts cover the newest {series.data.scanned.toLocaleString('en-US')} meetings.
+                Narrow From and To to count them all.
               </Notice>
             )}
             {sameTitle.map(({ series: s, missing }) => (
@@ -514,8 +653,8 @@ export function FirefliesPicker({
                   </Button>
                 }
               >
-                {missing.length} meeting{missing.length === 1 ? "" : "s"} titled “{s.title}” {missing.length === 1 ? "is" : "are"}{" "}
-                outside this series in these dates.
+                {missing.length} meeting{missing.length === 1 ? '' : 's'} titled “{s.title}”{' '}
+                {missing.length === 1 ? 'is' : 'are'} outside this series in these dates.
               </Notice>
             ))}
             {seriesFull && (
@@ -536,15 +675,18 @@ export function FirefliesPicker({
                         onChange={(e) => toggleSeries(s, e.target.checked)}
                         aria-label={s.title}
                       />
-                      <span className="min-w-0 flex-1 truncate text-[15px] font-medium" title={s.title}>
+                      <span
+                        className="min-w-0 flex-1 truncate text-[15px] font-medium"
+                        title={s.title}
+                      >
                         {s.title}
                       </span>
                       {s.meeting_count > 0 && (
                         <span
                           className="tnum flex-none text-sm text-text2"
-                          title={`${s.meeting_count} meetings${s.last_date ? `, last ${zoneDay(s.last_date, zone)}` : ""}`}
+                          title={`${s.meeting_count} meetings${s.last_date ? `, last ${zoneDay(s.last_date, zone)}` : ''}`}
                         >
-                          {s.meeting_count} · {s.last_date ? zoneDay(s.last_date, zone) : "—"}
+                          {s.meeting_count} · {s.last_date ? zoneDay(s.last_date, zone) : '—'}
                         </span>
                       )}
                     </label>
@@ -560,9 +702,10 @@ export function FirefliesPicker({
             action={
               undo ? (
                 <Button onClick={undoTickAll}>Undo tick all</Button>
-              ) : (meetings.next || tickable.some((m) => !pickedMeetings.has(m.id))) && !meetingsFull ? (
+              ) : (meetings.next || tickable.some((m) => !pickedMeetings.has(m.id))) &&
+                !meetingsFull ? (
                 <Button onClick={() => void tickAll()} disabled={!settled}>
-                  {`Tick all ${tickable.length}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
+                  {`Tick all ${tickable.length}${meetings.next ? '+' : ''} result${tickable.length === 1 && !meetings.next ? '' : 's'}`}
                 </Button>
               ) : null
             }
@@ -578,21 +721,28 @@ export function FirefliesPicker({
             {meetings.error && (
               <Notice
                 tone="error"
-                action={<RetryButton key={meetings.retryAt ?? 0} retryAt={meetings.retryAt} onRetry={() => void meetings.retry()} />}
+                action={
+                  <RetryButton
+                    key={meetings.retryAt ?? 0}
+                    retryAt={meetings.retryAt}
+                    onRetry={() => void meetings.retry()}
+                  />
+                }
               >
                 {meetings.error}
               </Notice>
             )}
             {undo && ticked?.capped != null && (
               <Notice testId="fireflies-tick-all-cap">
-                Ticked the first {ticked.capped} results: Tick all reads at most {TICK_ALL_PAGES} pages ({TICK_ALL_MEETINGS}{" "}
-                meetings) at a time, to spare your Fireflies browsing limit. Load more to tick the rest.
+                Ticked the first {ticked.capped} results: Tick all reads at most {TICK_ALL_PAGES}{' '}
+                pages ({TICK_ALL_MEETINGS} meetings) at a time, to spare your Fireflies browsing
+                limit. Load more to tick the rest.
               </Notice>
             )}
             {meetingsFull && (
               <Notice testId="fireflies-meetings-cap">
-                {MAX_MEETINGS.toLocaleString("en-US")} meetings picked, the most a source takes: unpick one, or pick its
-                series instead.
+                {MAX_MEETINGS.toLocaleString('en-US')} meetings picked, the most a source takes:
+                unpick one, or pick its series instead.
               </Notice>
             )}
             <div className={LIST} role="group" aria-label="Meetings" aria-busy={meetings.loading}>
@@ -609,16 +759,23 @@ export function FirefliesPicker({
                 </MeetingGroup>
               )}
               {groups.map(([day, rows]) => (
-                <MeetingGroup key={day} heading={day ? zoneWeekday(rows[0].date!, zone) : "Undated"} id={`${ids}-${day}`}>
+                <MeetingGroup
+                  key={day}
+                  heading={day ? zoneWeekday(rows[0].date!, zone) : 'Undated'}
+                  id={`${ids}-${day}`}
+                >
                   {rows.map((m) => {
                     const bySeries = m.series_key != null && pickedSeries.has(m.series_key);
                     return (
                       <MeetingRow
                         key={m.id}
                         title={m.title}
-                        meta={[m.date ? zoneTime(m.date, zone) : null, m.duration ? `${Math.round(m.duration)} min` : null]
+                        meta={[
+                          m.date ? zoneTime(m.date, zone) : null,
+                          m.duration ? `${Math.round(m.duration)} min` : null,
+                        ]
                           .filter(Boolean)
-                          .join(" · ")}
+                          .join(' · ')}
                         checked={bySeries || pickedMeetings.has(m.id)}
                         bySeries={bySeries}
                         full={meetingsFull && !pickedMeetings.has(m.id)}
@@ -628,10 +785,15 @@ export function FirefliesPicker({
                   })}
                 </MeetingGroup>
               ))}
-              {!meetings.loading && !meetings.error && meetings.rows.length === 0 && earlier.length === 0 && (
-                <p className="px-3 py-3 text-[15px] text-text2">No meetings</p>
+              {!meetings.loading &&
+                !meetings.error &&
+                meetings.rows.length === 0 &&
+                earlier.length === 0 && (
+                  <p className="px-3 py-3 text-[15px] text-text2">No meetings</p>
+                )}
+              {meetings.loading && (
+                <span className="m-3 block h-3 w-2/3 animate-pulse rounded bg-surface2" />
               )}
-              {meetings.loading && <span className="m-3 block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
             </div>
             {meetings.next && (
               <div>
@@ -647,10 +809,21 @@ export function FirefliesPicker({
   );
 }
 
-function MeetingGroup({ heading, id, children }: { heading: string; id: string; children: ReactNode }) {
+function MeetingGroup({
+  heading,
+  id,
+  children,
+}: {
+  heading: string;
+  id: string;
+  children: ReactNode;
+}) {
   return (
     <div role="group" aria-labelledby={id} className="border-t border-line first:border-t-0">
-      <div id={id} className="sticky top-0 z-[1] bg-surface2 px-3 py-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+      <div
+        id={id}
+        className="sticky top-0 z-[1] bg-surface2 px-3 py-1 text-[13px] font-semibold tracking-[0.02em] text-text2"
+      >
         {heading}
       </div>
       {children}
@@ -675,7 +848,7 @@ function MeetingRow({
   onChange: (on: boolean) => void;
 }) {
   return (
-    <label className={ROW} title={bySeries ? "Included with its series" : undefined}>
+    <label className={ROW} title={bySeries ? 'Included with its series' : undefined}>
       <input
         type="checkbox"
         className={CHECK}

@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo, useSyncExternalStore } from "react";
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useMemo, useSyncExternalStore } from 'react';
 
-import { ScrollStrip } from "@/components/ds";
-import { MOCK_MODE } from "@/lib/api/client";
+import { ScrollStrip } from '@/components/ds';
+import { MOCK_MODE } from '@/lib/api/client';
 
-import { isOpen, MOCK_PLAN_TABS_KEY, PLAN_TABS, type PlanTab } from "./_tabs";
+import { isOpen, MOCK_PLAN_TABS_KEY, PLAN_TABS, type PlanTab } from './_tabs';
 
 /** Entries a test registered in the mock build (never in a real build), as stored. */
 function registeredRaw(): string {
-  if (!MOCK_MODE) return "[]";
+  if (!MOCK_MODE) return '[]';
   try {
-    return localStorage.getItem(MOCK_PLAN_TABS_KEY) ?? "[]";
+    return localStorage.getItem(MOCK_PLAN_TABS_KEY) ?? '[]';
   } catch {
-    return "[]";
+    return '[]';
   }
 }
 
@@ -37,9 +37,9 @@ const noSubscribe = () => () => {};
  * Launches and Changelog keep the strip (app/roadmap/layout.tsx), their link selected there.
  */
 const PAGE_LINKS = [
-  { href: "/plan/reports/latest", label: "Latest report", testId: "plan-alignment-link" },
-  { href: "/roadmap/launches", label: "Launches", testId: "roadmap-launches-link" },
-  { href: "/roadmap/changelog", label: "Changelog", testId: "roadmap-changelog-link" },
+  { href: '/plan/reports/latest', label: 'Latest report', testId: 'plan-alignment-link' },
+  { href: '/roadmap/launches', label: 'Launches', testId: 'roadmap-launches-link' },
+  { href: '/roadmap/changelog', label: 'Changelog', testId: 'roadmap-changelog-link' },
 ];
 
 /**
@@ -49,14 +49,18 @@ const PAGE_LINKS = [
  */
 export function PlanNav() {
   const pathname = usePathname();
-  const raw = useSyncExternalStore(noSubscribe, registeredRaw, () => "[]");
+  const raw = useSyncExternalStore(noSubscribe, registeredRaw, () => '[]');
   // A registered entry whose page has since landed is not listed twice.
-  const extra = useMemo(() => parse(raw).filter((t) => !PLAN_TABS.some((x) => x.key === t.key)), [raw]);
+  const extra = useMemo(
+    () => parse(raw).filter((t) => !PLAN_TABS.some((x) => x.key === t.key)),
+    [raw],
+  );
   // qa4-plan-36: the link actually opened is the one selected: Latest report on the report
   // it opened (latest/page.tsx adds ?latest), the Reports tab on one opened from the list.
   // The layout wraps the strip in Suspense, as useSearchParams needs.
-  const viaLatest = useSearchParams().has("latest");
-  const latestOpen = pathname === "/plan/reports/latest" || (viaLatest && pathname.startsWith("/plan/reports/"));
+  const viaLatest = useSearchParams().has('latest');
+  const latestOpen =
+    pathname === '/plan/reports/latest' || (viaLatest && pathname.startsWith('/plan/reports/'));
   return (
     <div
       data-testid="plan-bar"
@@ -65,7 +69,7 @@ export function PlanNav() {
       <nav aria-label="Plan" data-testid="plan-tabs" className="min-w-0 flex-auto">
         <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
           {[...PLAN_TABS, ...extra].map((t) => {
-            const on = isOpen(t, pathname) && !(t.key === "reports" && latestOpen);
+            const on = isOpen(t, pathname) && !(t.key === 'reports' && latestOpen);
             return (
               <Link
                 key={t.key}
@@ -73,9 +77,9 @@ export function PlanNav() {
                 data-testid={t.testId}
                 aria-label={t.name}
                 title={t.name}
-                aria-current={on ? "page" : undefined}
+                aria-current={on ? 'page' : undefined}
                 className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap max-[600px]:px-2 ${
-                  on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+                  on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
                 }`}
               >
                 {t.label}
@@ -90,15 +94,18 @@ export function PlanNav() {
         className="ml-auto flex flex-wrap items-center gap-1 max-[600px]:ml-0 max-[600px]:w-full max-[600px]:border-t max-[600px]:border-line max-[600px]:pt-1"
       >
         {PAGE_LINKS.map((l) => {
-          const on = l.href === "/plan/reports/latest" ? latestOpen : pathname === l.href || pathname.startsWith(`${l.href}/`);
+          const on =
+            l.href === '/plan/reports/latest'
+              ? latestOpen
+              : pathname === l.href || pathname.startsWith(`${l.href}/`);
           return (
             <Link
               key={l.href}
               href={l.href}
               data-testid={l.testId}
-              aria-current={on ? "page" : undefined}
+              aria-current={on ? 'page' : undefined}
               className={`flex h-8 flex-none items-center rounded-lg px-2.5 text-sm font-semibold whitespace-nowrap ${
-                on ? "bg-accent text-on-accent" : "text-accent-ink hover:bg-surface2"
+                on ? 'bg-accent text-on-accent' : 'text-accent-ink hover:bg-surface2'
               }`}
             >
               {l.label}

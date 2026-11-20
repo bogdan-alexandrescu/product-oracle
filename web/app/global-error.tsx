@@ -1,12 +1,17 @@
-"use client";
+'use client';
 
-import "./globals.css";
+import './globals.css';
 
 /**
  * The root layout itself failed: no shell to draw in, so this page brings its own html and
  * body, on the app's tokens, with Try again and Go to Home.
  */
-export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function GlobalError({
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
   return (
     <html lang="en">
       <head>
@@ -14,7 +19,9 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
       </head>
       <body className="bg-bg text-text">
         <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-6 py-16 text-center">
-          <h1 className="font-display text-[28px] leading-8 font-bold tracking-heading">Something went wrong.</h1>
+          <h1 className="font-display text-[28px] leading-8 font-bold tracking-heading">
+            Something went wrong.
+          </h1>
           <div className="flex flex-wrap justify-center gap-2">
             <button
               type="button"

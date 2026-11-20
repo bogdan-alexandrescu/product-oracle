@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { api, unwrap } from "@/lib/api/client";
-import { useQuery } from "@/lib/use-query";
+import { api, unwrap } from '@/lib/api/client';
+import { useQuery } from '@/lib/use-query';
 
 /*
  * Templates and themes by their names ("Goal-traced PRD", "Clean document"), never their keys
@@ -11,7 +11,7 @@ import { useQuery } from "@/lib/use-query";
 
 /** A key in words, while the names load or for a key no list has: "clean-document" is "Clean document". */
 export function keyWords(key: string): string {
-  const words = key.replace(/[-_]+/g, " ").trim();
+  const words = key.replace(/[-_]+/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
@@ -24,15 +24,19 @@ export type TemplateNames = {
   failed: boolean;
 };
 
-async function loadNames(): Promise<{ templates: Map<string, string>; themes: Map<string, string>; failed: boolean }> {
+async function loadNames(): Promise<{
+  templates: Map<string, string>;
+  themes: Map<string, string>;
+  failed: boolean;
+}> {
   let failed = false;
   const fail = () => {
     failed = true;
     return [];
   };
   const [templates, themes] = await Promise.all([
-    unwrap(api.GET("/v1/templates", { params: { query: { include_archived: true } } })).catch(fail),
-    unwrap(api.GET("/v1/themes", { params: { query: { include_archived: true } } })).catch(fail),
+    unwrap(api.GET('/v1/templates', { params: { query: { include_archived: true } } })).catch(fail),
+    unwrap(api.GET('/v1/themes', { params: { query: { include_archived: true } } })).catch(fail),
   ]);
   return {
     templates: new Map(templates.map((t) => [t.key, t.name])),
@@ -43,7 +47,7 @@ async function loadNames(): Promise<{ templates: Map<string, string>; themes: Ma
 
 /** Names of templates and themes, by key; a key reads in words until the names arrive, or when they could not load. */
 export function useTemplateNames(): TemplateNames {
-  const q = useQuery("template-names", loadNames);
+  const q = useQuery('template-names', loadNames);
   return {
     template: (key) => (key ? (q.data?.templates.get(key) ?? keyWords(key)) : null),
     theme: (key) => (key ? (q.data?.themes.get(key) ?? keyWords(key)) : null),
@@ -52,4 +56,4 @@ export function useTemplateNames(): TemplateNames {
 }
 
 /** The note shown where template names are used, when they could not load. */
-export const NAMES_FAILED = "Template names could not load, so they show in plain words.";
+export const NAMES_FAILED = 'Template names could not load, so they show in plain words.';

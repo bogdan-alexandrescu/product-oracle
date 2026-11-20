@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import Link from 'next/link';
+import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 export type Segment<V extends string> = {
   value: V;
@@ -27,7 +27,7 @@ export function SegmentedControl<V extends string>({
   items,
   value,
   onChange,
-  size = "md",
+  size = 'md',
   fill = false,
 }: {
   /** Accessible name of the group. */
@@ -35,41 +35,54 @@ export function SegmentedControl<V extends string>({
   items: Segment<V>[];
   value: V | null | undefined;
   onChange?: (v: V) => void;
-  size?: "sm" | "md";
+  size?: 'sm' | 'md';
   /** Spread over the row's width, the segments sharing it (a narrow phone's switch). */
   fill?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onKey = (e: KeyboardEvent) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    const els = [...(ref.current?.querySelectorAll<HTMLElement>("[data-seg]") ?? [])];
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const els = [...(ref.current?.querySelectorAll<HTMLElement>('[data-seg]') ?? [])];
     const at = els.indexOf(document.activeElement as HTMLElement);
     if (at < 0) return;
     e.preventDefault();
-    els[(at + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length]?.focus();
+    els[(at + (e.key === 'ArrowRight' ? 1 : -1) + els.length) % els.length]?.focus();
   };
-  const h = `${size === "sm" ? "h-8 text-sm" : "h-9 text-[15px]"} ${fill ? "min-w-0 flex-auto justify-center px-1.5" : size === "sm" ? "px-3" : "px-3.5"}`;
+  const h = `${size === 'sm' ? 'h-8 text-sm' : 'h-9 text-[15px]'} ${fill ? 'min-w-0 flex-auto justify-center px-1.5' : size === 'sm' ? 'px-3' : 'px-3.5'}`;
   return (
     <div
       ref={ref}
       role="group"
       aria-label={label}
       onKeyDown={onKey}
-      className={`${fill ? "flex w-full" : "inline-flex max-w-full flex-none"} overflow-x-auto rounded-button border border-line-strong bg-surface`}
+      className={`${fill ? 'flex w-full' : 'inline-flex max-w-full flex-none'} overflow-x-auto rounded-button border border-line-strong bg-surface`}
     >
       {items.map((it) => {
         const on = it.value === value;
         const cls = `${h} flex items-center gap-2 border-r border-line font-medium whitespace-nowrap last:border-r-0 ${
-          on ? "bg-accent text-on-accent" : "text-text enabled:hover:bg-surface2 disabled:bg-surface2 disabled:text-text2 disabled:opacity-60"
+          on
+            ? 'bg-accent text-on-accent'
+            : 'text-text enabled:hover:bg-surface2 disabled:bg-surface2 disabled:text-text2 disabled:opacity-60'
         } disabled:cursor-not-allowed`;
         const inner = (
           <>
             {it.label}
-            {it.count != null && <b className={`tnum font-semibold ${on ? "text-on-accent" : "text-text2"}`}>{it.count}</b>}
+            {it.count != null && (
+              <b className={`tnum font-semibold ${on ? 'text-on-accent' : 'text-text2'}`}>
+                {it.count}
+              </b>
+            )}
           </>
         );
         return it.href ? (
-          <Link key={it.value} href={it.href} data-seg data-testid={it.testId} aria-current={on ? "page" : undefined} className={cls}>
+          <Link
+            key={it.value}
+            href={it.href}
+            data-seg
+            data-testid={it.testId}
+            aria-current={on ? 'page' : undefined}
+            className={cls}
+          >
             {inner}
           </Link>
         ) : (

@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * QA pass 4, the Simple roadmap's exports and span years (qa4-simple-roadmap-2 on the Gantt's
@@ -18,39 +18,47 @@ declare global {
   }
 }
 
-type Format = "timeline" | "gantt";
+type Format = 'timeline' | 'gantt';
 
 async function open(page: Page, opts: { scenario?: string; url?: string; format?: Format } = {}) {
-  const { scenario = "", url = "/simple/roadmap", format = "timeline" } = opts;
+  const { scenario = '', url = '/simple/roadmap', format = 'timeline' } = opts;
   await page.context().addInitScript(
     ([key, s, themeKey]) => {
       if (s) localStorage.setItem(key, s);
-      localStorage.setItem(themeKey, "light");
+      localStorage.setItem(themeKey, 'light');
       // Keep each SVG picture the export draws onto its canvas.
-      const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
-      Object.defineProperty(HTMLImageElement.prototype, "src", {
+      const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')!;
+      Object.defineProperty(HTMLImageElement.prototype, 'src', {
         ...d,
         set(v: string) {
           const src = String(v);
-          if (src.startsWith("data:image/svg+xml")) (window.__exportSvgs ??= []).push(decodeURIComponent(src.slice(src.indexOf(",") + 1)));
+          if (src.startsWith('data:image/svg+xml'))
+            (window.__exportSvgs ??= []).push(decodeURIComponent(src.slice(src.indexOf(',') + 1)));
           d.set!.call(this, v);
         },
       });
     },
     [MOCK_SCENARIO_KEY, scenario, THEME_KEY] as const,
   );
-  await page.emulateMedia({ colorScheme: "light" });
+  await page.emulateMedia({ colorScheme: 'light' });
   await login(page);
   await page.goto(url);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await page.getByTestId(`format-${format}`).click();
-  await expect(page.getByTestId(`format-${format}`)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`format-${format}`)).toHaveAttribute('aria-pressed', 'true');
 }
 
 /** Clicks Export PNG or PDF, waits for the file, and gives back the picture it was drawn from. */
-async function exported(page: Page, kind: "PNG" | "PDF", format: Format = "timeline"): Promise<string> {
+async function exported(
+  page: Page,
+  kind: 'PNG' | 'PDF',
+  format: Format = 'timeline',
+): Promise<string> {
   const before = await page.evaluate(() => window.__exportSvgs?.length ?? 0);
-  const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: `Export ${kind}` }).click()]);
+  const [file] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: `Export ${kind}` }).click(),
+  ]);
   expect(file.suggestedFilename()).toBe(`roadmap-${format}.${kind.toLowerCase()}`);
   const all = await page.evaluate(() => window.__exportSvgs ?? []);
   // The export's picture is the last one drawn (the logo, if any, is read before it).
@@ -58,30 +66,46 @@ async function exported(page: Page, kind: "PNG" | "PDF", format: Format = "timel
   return all[all.length - 1];
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use(DESKTOP);
 
   // mk-qa4-roadmap: the Timeline names every item in its own column; the Gantt's export is the
   // one that draws bars, and each bar's name must be in the file, by its row.
-  test("qa4-2: every bar in the exported Gantt (PNG and PDF) carries its item name by its row", async ({ page }) => {
-    await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap", format: "gantt" });
+  test('qa4-2: every bar in the exported Gantt (PNG and PDF) carries its item name by its row', async ({
+    page,
+  }) => {
+    await open(page, {
+      scenario: 'simple-plan-lanes',
+      url: '/simple/roadmap?roadmap=onboarding-roadmap',
+      format: 'gantt',
+    });
     await expect(page.locator('g[data-testid="bar"]').first()).toBeVisible();
 
-    for (const kind of ["PNG", "PDF"] as const) {
-      const svg = await exported(page, kind, "gantt");
+    for (const kind of ['PNG', 'PDF'] as const) {
+      const svg = await exported(page, kind, 'gantt');
       const result = await page.evaluate((markup) => {
-        const doc = new DOMParser().parseFromString(markup, "image/svg+xml");
-        const months = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec";
+        const doc = new DOMParser().parseFromString(markup, 'image/svg+xml');
+        const months = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
         // The labels column, as the file writes it: a text per row, outside the chart's bars.
-        const rows = [...doc.querySelectorAll("text")].filter((t) => !t.closest('g[data-testid="bar"]')).map((t) => (t.textContent ?? "").trim());
+        const rows = [...doc.querySelectorAll('text')]
+          .filter((t) => !t.closest('g[data-testid="bar"]'))
+          .map((t) => (t.textContent ?? '').trim());
         // (A cut row leads with its place to return; its name is checked on the page by qa4-19.)
         const bars = [...doc.querySelectorAll('g[data-testid="bar"]:not([data-kind="cut"])')];
         const unnamed: string[] = [];
         for (const g of bars) {
-          const said = g.getAttribute("aria-label") ?? "";
+          const said = g.getAttribute('aria-label') ?? '';
           // QA Nov 12 #6: an estimate-only bar says "No dates yet · estimated …" before its dates.
-          const name = (new RegExp(`^(.*?): (?:No dates yet · estimated )?(?:${months}) \\d`).exec(said)?.[1] ?? said).trim();
-          const named = rows.some((r) => r === name || r.includes(name) || (r.endsWith("…") && name.startsWith(r.slice(0, -1))));
+          const name = (
+            new RegExp(`^(.*?): (?:No dates yet · estimated )?(?:${months}) \\d`).exec(said)?.[1] ??
+            said
+          ).trim();
+          const named = rows.some(
+            (r) =>
+              r === name ||
+              r.includes(name) ||
+              (r.endsWith('…') && name.startsWith(r.slice(0, -1))),
+          );
           if (!named) unnamed.push(name);
         }
         return { bars: bars.length, unnamed };
@@ -91,36 +115,55 @@ test.describe("desktop", () => {
     }
   });
 
-  test("qa4 export footer: the file says the day and the time it was made, in the company's zone", async ({ page }) => {
+  test("qa4 export footer: the file says the day and the time it was made, in the company's zone", async ({
+    page,
+  }) => {
     // 2:49 PM in Los Angeles (the mock company's zone) on Oct 30, 2026.
-    await page.clock.setSystemTime(new Date("2026-10-30T21:49:00Z"));
+    await page.clock.setSystemTime(new Date('2026-10-30T21:49:00Z'));
     await open(page);
-    await expect(page.getByTestId("timeline-bar").first()).toBeVisible();
-    const svg = await exported(page, "PNG");
+    await expect(page.getByTestId('timeline-bar').first()).toBeVisible();
+    const svg = await exported(page, 'PNG');
     const footer = await page.evaluate((markup) => {
-      const doc = new DOMParser().parseFromString(markup, "image/svg+xml");
-      return [...doc.querySelectorAll("svg > text")].map((t) => t.textContent ?? "").find((t) => /\d{4}/.test(t) && /[AP]M/.test(t)) ?? "";
+      const doc = new DOMParser().parseFromString(markup, 'image/svg+xml');
+      return (
+        [...doc.querySelectorAll('svg > text')]
+          .map((t) => t.textContent ?? '')
+          .find((t) => /\d{4}/.test(t) && /[AP]M/.test(t)) ?? ''
+      );
     }, svg);
     expect(footer).toMatch(/^Oct 30, 2026, 2:(49|5\d) PM PDT( · Made with Product Oracle)?$/);
   });
 
   // The Gantt's bars say their dates in words ("<name>: Oct 1 to Nov 2"), with their days on the bar.
-  test("qa4 span years: a bar's spoken dates take this year from the company's day, not the browser's UTC year", async ({ page }) => {
+  test("qa4 span years: a bar's spoken dates take this year from the company's day, not the browser's UTC year", async ({
+    page,
+  }) => {
     // 3 AM on Jan 1, 2027 in UTC is still Dec 31, 2026 in Los Angeles (the company's day).
-    await page.clock.setSystemTime(new Date("2027-01-01T03:00:00Z"));
-    await open(page, { format: "gantt" });
+    await page.clock.setSystemTime(new Date('2027-01-01T03:00:00Z'));
+    await open(page, { format: 'gantt' });
     await expect(page.locator('g[data-testid="bar"]').first()).toBeVisible();
-    const spans = await page.locator('g[data-testid="bar"][data-start][data-end]').evaluateAll((gs) =>
-      gs.map((g) => ({ start: g.getAttribute("data-start") ?? "", end: g.getAttribute("data-end") ?? "", said: g.getAttribute("aria-label") ?? "" })),
-    );
+    const spans = await page
+      .locator('g[data-testid="bar"][data-start][data-end]')
+      .evaluateAll((gs) =>
+        gs.map((g) => ({
+          start: g.getAttribute('data-start') ?? '',
+          end: g.getAttribute('data-end') ?? '',
+          said: g.getAttribute('aria-label') ?? '',
+        })),
+      );
     // A span wholly in 2027 is not in the company's year (2026): it says 2027.
-    const next = spans.filter((s) => s.start.startsWith("2027") && s.end.startsWith("2027"));
+    const next = spans.filter((s) => s.start.startsWith('2027') && s.end.startsWith('2027'));
     expect(next.length).toBeGreaterThan(0);
     // roadmap-dates: an undated item's estimate (Oracle's suggestion) may lie wholly in 2027 too.
-    for (const s of next) expect(s.said, s.said).toMatch(/: ([A-Z][a-z]{2} \d{1,2} to|No dates yet · estimated [A-Z][a-z]{2} \d{1,2} –) [A-Z][a-z]{2} \d{1,2}, 2027/);
+    for (const s of next)
+      expect(s.said, s.said).toMatch(
+        /: ([A-Z][a-z]{2} \d{1,2} to|No dates yet · estimated [A-Z][a-z]{2} \d{1,2} –) [A-Z][a-z]{2} \d{1,2}, 2027/,
+      );
     // A span wholly in 2026 is in the company's year: no year.
-    for (const s of spans.filter((x) => x.start.startsWith("2026") && x.end.startsWith("2026"))) {
-      expect(s.said, s.said).toMatch(/: [A-Z][a-z]{2} \d{1,2} to [A-Z][a-z]{2} \d{1,2}(?!\d|, \d{4})/);
+    for (const s of spans.filter((x) => x.start.startsWith('2026') && x.end.startsWith('2026'))) {
+      expect(s.said, s.said).toMatch(
+        /: [A-Z][a-z]{2} \d{1,2} to [A-Z][a-z]{2} \d{1,2}(?!\d|, \d{4})/,
+      );
     }
   });
 });

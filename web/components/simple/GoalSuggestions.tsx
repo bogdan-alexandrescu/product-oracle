@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 
-import { Button, Sheet, toast } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useCompanyZone, zoneDateTime } from "@/lib/dates";
-import { servedName } from "@/lib/key-results";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { reloadWaiting } from "@/lib/waiting";
+import { Button, Sheet, toast } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useCompanyZone, zoneDateTime } from '@/lib/dates';
+import { servedName } from '@/lib/key-results';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { reloadWaiting } from '@/lib/waiting';
 
-import { FlowPanel, subjectOf } from "./FlowVisual";
+import { FlowPanel, subjectOf } from './FlowVisual';
 
 /**
  * Simple S7: Oracle's suggested features for a goal, wherever a goal shows (the roadmap's
@@ -23,28 +23,29 @@ import { FlowPanel, subjectOf } from "./FlowVisual";
  * can() and the suggestions' own can_accept / can_reject.
  */
 
-export type GoalSuggestion = Schemas["SimpleGoalSuggestion"];
-export type GoalSuggestionsOut = Schemas["SimpleGoalSuggestionsOut"];
-export type GoalBrief = Schemas["SimpleGoalBrief"];
+export type GoalSuggestion = Schemas['SimpleGoalSuggestion'];
+export type GoalSuggestionsOut = Schemas['SimpleGoalSuggestionsOut'];
+export type GoalBrief = Schemas['SimpleGoalBrief'];
 
-const PHONE = "(max-width: 640px)";
+const PHONE = '(max-width: 640px)';
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
     const q = window.matchMedia(PHONE);
     const on = () => setPhone(q.matches);
     on();
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
   }, []);
   return phone;
 }
 
 function detailOf(error: unknown): string {
   const d = (error as { detail?: unknown } | undefined)?.detail;
-  if (typeof d === "string") return d;
-  if (d && typeof d === "object" && "message" in d) return String((d as { message: unknown }).message);
-  return "Oracle could not do that";
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && 'message' in d)
+    return String((d as { message: unknown }).message);
+  return 'Oracle could not do that';
 }
 
 export interface GoalSuggestionsApi {
@@ -55,12 +56,16 @@ export interface GoalSuggestionsApi {
   accept: (s: GoalSuggestion) => Promise<void>;
   reject: (s: GoalSuggestion, reason: string) => Promise<void>;
   /** Declines it as the same as a feature it looks like (with Undo). */
-  duplicate: (s: GoalSuggestion, m: GoalSuggestion["looks_like"][number]) => Promise<void>;
+  duplicate: (s: GoalSuggestion, m: GoalSuggestion['looks_like'][number]) => Promise<void>;
 }
 
 /** Every goal's open suggestions; polls while a goal's suggest job runs. `onChanged` runs after an accept or its undo. */
 export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsApi {
-  const q = useQuery("simple-goal-suggestions", () => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } } })), { keepPrevious: true });
+  const q = useQuery(
+    'simple-goal-suggestions',
+    () => unwrap(api.GET('/v1/simple/goal-suggestions', { params: { query: { status: 'open' } } })),
+    { keepPrevious: true },
+  );
   const pending = !!q.data?.goals.some((g) => g.pending);
   const { reload } = q;
   useEffect(() => {
@@ -79,12 +84,16 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
   const reloadList = () => reloadWaiting(() => q.reload());
   // Undo of a decline: the suggestion is open again.
   const undo = (s: GoalSuggestion) => ({
-    label: "Undo",
+    label: 'Undo',
     onClick: () =>
-      void api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reopen", { params: { path: { suggestion_id: s.id } } }).then(async (r) => {
-        if (!r.data) toast({ message: detailOf(r.error) });
-        await reloadList();
-      }),
+      void api
+        .POST('/v1/simple/goal-suggestions/{suggestion_id}/reopen', {
+          params: { path: { suggestion_id: s.id } },
+        })
+        .then(async (r) => {
+          if (!r.data) toast({ message: detailOf(r.error) });
+          await reloadList();
+        }),
   });
 
   return {
@@ -94,59 +103,108 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
       await q.reload();
     },
     suggest: async (goal) => {
-      const r = await api.POST("/v1/simple/goals/{goal_id}/suggest", { params: { path: { goal_id: goal.id } } });
-      toast({ message: r.data ? `Oracle is suggesting features for ${goal.title}` : detailOf(r.error) });
+      const r = await api.POST('/v1/simple/goals/{goal_id}/suggest', {
+        params: { path: { goal_id: goal.id } },
+      });
+      toast({
+        message: r.data ? `Oracle is suggesting features for ${goal.title}` : detailOf(r.error),
+      });
       await q.reload();
     },
     accept: async (s) => {
-      const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/accept", { params: { path: { suggestion_id: s.id } }, body: {} });
+      const r = await api.POST('/v1/simple/goal-suggestions/{suggestion_id}/accept', {
+        params: { path: { suggestion_id: s.id } },
+        body: {},
+      });
       if (!r.data) {
         toast({ message: detailOf(r.error) });
         await after();
         return;
       }
       const c = r.data.change;
-      if (c.status === "applied")
+      if (c.status === 'applied')
         toast({
           message: `Added ${s.title} as a draft`,
           action: c.can_undo
             ? {
-                label: "Undo",
+                label: 'Undo',
                 onClick: () =>
-                  void api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: c.id } } }).then(async (u) => {
-                    toast({ message: u.data ? "Undone" : detailOf(u.error) });
-                    await after();
-                  }),
+                  void api
+                    .POST('/v1/simple/changes/{change_id}/undo', {
+                      params: { path: { change_id: c.id } },
+                    })
+                    .then(async (u) => {
+                      toast({ message: u.data ? 'Undone' : detailOf(u.error) });
+                      await after();
+                    }),
               }
             : undefined,
         });
       else {
-        const decider = q.data?.goals.find((g) => g.goal.id === s.goal.id || g.goal.key === s.goal.key)?.decider_name;
-        toast({ message: `Proposed ${s.title}: ${decider ? `${decider} decides` : "the company's owners decide"}` });
+        const decider = q.data?.goals.find(
+          (g) => g.goal.id === s.goal.id || g.goal.key === s.goal.key,
+        )?.decider_name;
+        toast({
+          message: `Proposed ${s.title}: ${decider ? `${decider} decides` : "the company's owners decide"}`,
+        });
       }
       await after();
     },
     duplicate: async (s, m) => {
-      const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: `Same as ${lookName(m)}` } });
-      toast({ place: "rail", message: r.data ? `Declined ${s.title} as a duplicate of ${lookName(m)}` : detailOf(r.error), action: r.data ? undo(s) : undefined });
+      const r = await api.POST('/v1/simple/goal-suggestions/{suggestion_id}/reject', {
+        params: { path: { suggestion_id: s.id } },
+        body: { reason: `Same as ${lookName(m)}` },
+      });
+      toast({
+        place: 'rail',
+        message: r.data
+          ? `Declined ${s.title} as a duplicate of ${lookName(m)}`
+          : detailOf(r.error),
+        action: r.data ? undo(s) : undefined,
+      });
       await reloadList();
     },
     reject: async (s, reason) => {
-      const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: reason.trim() || null } });
+      const r = await api.POST('/v1/simple/goal-suggestions/{suggestion_id}/reject', {
+        params: { path: { suggestion_id: s.id } },
+        body: { reason: reason.trim() || null },
+      });
       // Every decline can be undone; the message sits top left, clear of an open drawer.
-      toast({ place: "rail", message: r.data ? `Rejected ${s.title}: Oracle will not suggest it again` : detailOf(r.error), action: r.data ? undo(s) : undefined });
+      toast({
+        place: 'rail',
+        message: r.data
+          ? `Rejected ${s.title}: Oracle will not suggest it again`
+          : detailOf(r.error),
+        action: r.data ? undo(s) : undefined,
+      });
       await reloadList();
     },
   };
 }
 
-const CONFIDENCE: Record<string, string> = { high: "bg-pass-bg text-pass", medium: "bg-warn-bg text-warn", low: "bg-na-bg text-na" };
+const CONFIDENCE: Record<string, string> = {
+  high: 'bg-pass-bg text-pass',
+  medium: 'bg-warn-bg text-warn',
+  low: 'bg-na-bg text-na',
+};
 
 /** The optional reason before a reject. */
-function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (reason: string) => void; onClose: () => void }) {
-  const [reason, setReason] = useState("");
+function RejectDialog({
+  s,
+  onReject,
+  onClose,
+}: {
+  s: GoalSuggestion;
+  onReject: (reason: string) => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState('');
   return (
-    <div data-backdrop="" className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -154,15 +212,22 @@ function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (
         className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-[length:var(--simple-h2)] leading-[var(--simple-h2-leading)] font-semibold">Reject {s.title}</h2>
-        <p className="mb-2 text-[length:var(--simple-small)] text-text2">Oracle will not suggest it again for {servedName(s.goal)}. Saying why is optional.</p>
+        <h2 className="text-[length:var(--simple-h2)] leading-[var(--simple-h2-leading)] font-semibold">
+          Reject {s.title}
+        </h2>
+        <p className="mb-2 text-[length:var(--simple-small)] text-text2">
+          Oracle will not suggest it again for {servedName(s.goal)}. Saying why is optional.
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             onReject(reason);
           }}
         >
-          <label className="block text-[length:var(--simple-small)] font-medium" htmlFor={`reject-${s.id}`}>
+          <label
+            className="block text-[length:var(--simple-small)] font-medium"
+            htmlFor={`reject-${s.id}`}
+          >
             Why (optional)
           </label>
           <input
@@ -191,8 +256,8 @@ function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (
 export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi }) {
   const { can } = useMe();
   // PER_ITEM says owners; the suggestion's own can_accept / can_reject (its decider, an approver too) decides.
-  const accepts = s.can_accept && can("accept_goal_suggestion", true);
-  const rejects = s.can_reject && can("reject_goal_suggestion", true);
+  const accepts = s.can_accept && can('accept_goal_suggestion', true);
+  const rejects = s.can_reject && can('reject_goal_suggestion', true);
   const phone = usePhone();
   const [wide, setWide] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -211,15 +276,20 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
     <li
       data-testid="goal-suggestion"
       data-title={s.title}
-      data-wide={wide && !phone ? "true" : "false"}
+      data-wide={wide && !phone ? 'true' : 'false'}
       className="rounded-[var(--simple-card-radius)] border border-dashed border-accent bg-accent-soft/40 p-3 text-[length:var(--simple-small)]"
     >
       {/* The text takes the card's full width; the actions sit on their own row under it (no thumbnail glyph). */}
       <div className="flex flex-col gap-2">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
-            <span className="text-[length:var(--simple-text)] font-semibold text-text">{s.title}</span>
-            <span className="rounded-full bg-surface2 px-2 text-text2" data-testid="oracle-suggested">
+            <span className="text-[length:var(--simple-text)] font-semibold text-text">
+              {s.title}
+            </span>
+            <span
+              className="rounded-full bg-surface2 px-2 text-text2"
+              data-testid="oracle-suggested"
+            >
               ✦ Oracle suggested
             </span>
           </p>
@@ -229,12 +299,22 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
           </p>
           {/* oracle.simple.quality: it failed its checks twice; the API names them to owners only. */}
           {s.needs_look.length > 0 && (
-            <p role="note" aria-label="Needs a look" className="text-text-faint" data-testid="needs-look">
-              <span className="font-semibold text-text2">Needs a look</span> · {s.needs_look.join(" · ")}
+            <p
+              role="note"
+              aria-label="Needs a look"
+              className="text-text-faint"
+              data-testid="needs-look"
+            >
+              <span className="font-semibold text-text2">Needs a look</span> ·{' '}
+              {s.needs_look.join(' · ')}
             </p>
           )}
           {s.evidence.length > 0 && (
-            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1" data-testid="suggestion-evidence" aria-label="Sources">
+            <ul
+              className="mt-1 flex flex-wrap gap-x-3 gap-y-1"
+              data-testid="suggestion-evidence"
+              aria-label="Sources"
+            >
               <li className="text-text2">Sources:</li>
               {s.evidence.map((e) => (
                 <li key={e.label} className="flex items-center gap-1.5">
@@ -245,7 +325,10 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
                   ) : (
                     <span>{e.label}</span>
                   )}
-                  <span data-testid="confidence" className={`whitespace-nowrap rounded-full px-1.5 text-xs ${CONFIDENCE[e.confidence] ?? ""}`}>
+                  <span
+                    data-testid="confidence"
+                    className={`whitespace-nowrap rounded-full px-1.5 text-xs ${CONFIDENCE[e.confidence] ?? ''}`}
+                  >
                     {e.confidence} confidence
                   </span>
                 </li>
@@ -253,7 +336,14 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
             </ul>
           )}
           {s.looks_like.map((m) => (
-            <LooksLike key={m.id} s={s} m={m} merges={rejects} busy={busy} onDecline={() => void run(() => a.duplicate(s, m))} />
+            <LooksLike
+              key={m.id}
+              s={s}
+              m={m}
+              merges={rejects}
+              busy={busy}
+              onDecline={() => void run(() => a.duplicate(s, m))}
+            />
           ))}
         </div>
         {(accepts || rejects || s.flow) && (
@@ -270,8 +360,13 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
             )}
             {s.flow && (
               // qa4-simple-plan-17: a button like its neighbours (ghost), not a bare label.
-              <Button variant="ghost" aria-expanded={wide} onClick={() => setWide(!wide)} data-testid="flow-open">
-                {wide ? "Hide the flow" : "Show the flow"}
+              <Button
+                variant="ghost"
+                aria-expanded={wide}
+                onClick={() => setWide(!wide)}
+                data-testid="flow-open"
+              >
+                {wide ? 'Hide the flow' : 'Show the flow'}
               </Button>
             )}
           </span>
@@ -279,14 +374,23 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
       </div>
       {wide && !phone && s.flow && (
         // qa-simple-plan-36: the opened flow scrolls into view.
-        <div ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} data-testid="flow-detail-wrap">
-          <FlowPanel subject={subjectOf(s.flow) ?? { kind: "suggestion", id: s.id }} />
+        <div
+          ref={(el) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}
+          data-testid="flow-detail-wrap"
+        >
+          <FlowPanel subject={subjectOf(s.flow) ?? { kind: 'suggestion', id: s.id }} />
         </div>
       )}
       {phone && s.flow && (
-        <Sheet open={wide} title={s.flow.title} onClose={() => setWide(false)} full testId="flow-sheet">
+        <Sheet
+          open={wide}
+          title={s.flow.title}
+          onClose={() => setWide(false)}
+          full
+          testId="flow-sheet"
+        >
           <div className="p-4">
-            <FlowPanel subject={subjectOf(s.flow) ?? { kind: "suggestion", id: s.id }} />
+            <FlowPanel subject={subjectOf(s.flow) ?? { kind: 'suggestion', id: s.id }} />
           </div>
         </Sheet>
       )}
@@ -310,13 +414,32 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
  * same as that feature; nothing is merged).
  */
 /** A look-alike line: its name, and "Duplicate", which asks in place before it declines the suggestion. */
-function LooksLike({ s, m, merges, busy, onDecline }: { s: GoalSuggestion; m: GoalSuggestion["looks_like"][number]; merges: boolean; busy: boolean; onDecline: () => void }) {
+function LooksLike({
+  s,
+  m,
+  merges,
+  busy,
+  onDecline,
+}: {
+  s: GoalSuggestion;
+  m: GoalSuggestion['looks_like'][number];
+  merges: boolean;
+  busy: boolean;
+  onDecline: () => void;
+}) {
   const [asking, setAsking] = useState(false);
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-warn" data-testid="suggestion-looks-like">
+    <div
+      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-warn"
+      data-testid="suggestion-looks-like"
+    >
       <span>
-        Looks like{" "}
-        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">
+        Looks like{' '}
+        <Link
+          href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`}
+          className="font-semibold underline"
+          data-testid="looks-like-link"
+        >
           {lookName(m)}
         </Link>
       </span>
@@ -326,7 +449,12 @@ function LooksLike({ s, m, merges, busy, onDecline }: { s: GoalSuggestion; m: Go
         </Button>
       )}
       {asking && (
-        <span role="group" aria-label="Confirm" data-testid="looks-like-confirm" className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-bg px-2 py-1.5 text-text">
+        <span
+          role="group"
+          aria-label="Confirm"
+          data-testid="looks-like-confirm"
+          className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-bg px-2 py-1.5 text-text"
+        >
           <span>
             Decline {s.title} as a duplicate of {lookName(m)}?
           </span>
@@ -343,12 +471,20 @@ function LooksLike({ s, m, merges, busy, onDecline }: { s: GoalSuggestion; m: Go
 }
 
 /** A look-alike's name: its code and title. */
-const lookName = (m: GoalSuggestion["looks_like"][number]) => `${m.code} ${m.title}`.trim();
+const lookName = (m: GoalSuggestion['looks_like'][number]) => `${m.code} ${m.title}`.trim();
 
 /** A goal's open suggestions: people's (origin "person") and Oracle's. */
-export function goalRows(a: GoalSuggestionsApi, goal: GoalBrief): { people: GoalSuggestion[]; oracle: GoalSuggestion[] } {
-  const rows = (a.data?.suggestions ?? []).filter((s) => s.goal.id === goal.id || s.goal.key === goal.key);
-  return { people: rows.filter((s) => s.origin === "person"), oracle: rows.filter((s) => s.origin !== "person") };
+export function goalRows(
+  a: GoalSuggestionsApi,
+  goal: GoalBrief,
+): { people: GoalSuggestion[]; oracle: GoalSuggestion[] } {
+  const rows = (a.data?.suggestions ?? []).filter(
+    (s) => s.goal.id === goal.id || s.goal.key === goal.key,
+  );
+  return {
+    people: rows.filter((s) => s.origin === 'person'),
+    oracle: rows.filter((s) => s.origin !== 'person'),
+  };
 }
 
 function goalState(a: GoalSuggestionsApi, goal: GoalBrief) {
@@ -360,7 +496,19 @@ function goalState(a: GoalSuggestionsApi, goal: GoalBrief) {
  * "Suggestions" at 0. While Oracle suggests it says so, and the count changes when it is done
  * (never under the reader without a reason).
  */
-export function SuggestionsButton({ goal, api: a, onOpen, className = "", label = "Suggestions" }: { goal: GoalBrief; api: GoalSuggestionsApi; onOpen: (g: GoalBrief) => void; className?: string; label?: string }) {
+export function SuggestionsButton({
+  goal,
+  api: a,
+  onOpen,
+  className = '',
+  label = 'Suggestions',
+}: {
+  goal: GoalBrief;
+  api: GoalSuggestionsApi;
+  onOpen: (g: GoalBrief) => void;
+  className?: string;
+  label?: string;
+}) {
   const state = goalState(a, goal);
   if (!state) return null;
   const { people, oracle } = goalRows(a, goal);
@@ -371,11 +519,11 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "", label 
       data-testid="goal-suggestions-open"
       data-goal={state.goal.key}
       // qa4-simple-plan-20: the name starts with the words shown, and says the count.
-      aria-label={`${state.pending ? "Oracle is suggesting" : label} for ${state.goal.title}${!state.pending && n ? `, ${n} waiting` : ""}`}
+      aria-label={`${state.pending ? 'Oracle is suggesting' : label} for ${state.goal.title}${!state.pending && n ? `, ${n} waiting` : ''}`}
       onClick={() => onOpen(state.goal)}
       className={`simple-small rounded-lg border border-line bg-surface px-3 py-1.5 font-semibold text-accent-ink hover:bg-surface2 ${className}`}
     >
-      {state.pending ? "Oracle is suggesting..." : n ? `${label} · ${n}` : label}
+      {state.pending ? 'Oracle is suggesting...' : n ? `${label} · ${n}` : label}
     </button>
   );
 }
@@ -383,13 +531,34 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "", label 
 /** "Suggest a feature": name, what it does and for whom, the goal set, who decides; folded to
  * one line (a button, "+ Suggest a feature") for the decider. `open` and `onOpen` are the
  * parent's, so the empty state's "Suggest the first feature" can open the same form. */
-function SuggestForm({ goal, decider, decides = false, open, onOpen, focus = false, onSent }: { goal: GoalBrief; decider: string | null; decides?: boolean; open: boolean; onOpen: () => void; focus?: boolean; onSent: () => Promise<void> }) {
-  const [title, setTitle] = useState("");
-  const [outcome, setOutcome] = useState("");
+function SuggestForm({
+  goal,
+  decider,
+  decides = false,
+  open,
+  onOpen,
+  focus = false,
+  onSent,
+}: {
+  goal: GoalBrief;
+  decider: string | null;
+  decides?: boolean;
+  open: boolean;
+  onOpen: () => void;
+  focus?: boolean;
+  onSent: () => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
+  const [outcome, setOutcome] = useState('');
   const [busy, setBusy] = useState(false);
   if (!open)
     return (
-      <Button variant="secondary" data-testid="suggest-form-open" onClick={onOpen} className="self-start">
+      <Button
+        variant="secondary"
+        data-testid="suggest-form-open"
+        onClick={onOpen}
+        className="self-start"
+      >
         + Suggest a feature
       </Button>
     );
@@ -402,14 +571,17 @@ function SuggestForm({ goal, decider, decides = false, open, onOpen, focus = fal
         e.preventDefault();
         setBusy(true);
         try {
-          const r = await api.POST("/v1/simple/goals/{goal_id}/suggestions", { params: { path: { goal_id: goal.id } }, body: { title: title.trim(), outcome: outcome.trim() } });
+          const r = await api.POST('/v1/simple/goals/{goal_id}/suggestions', {
+            params: { path: { goal_id: goal.id } },
+            body: { title: title.trim(), outcome: outcome.trim() },
+          });
           if (!r.data) {
             toast({ message: detailOf(r.error) });
             return;
           }
           toast({ message: `Sent: ${r.data.title}` });
-          setTitle("");
-          setOutcome("");
+          setTitle('');
+          setOutcome('');
           await onSent();
         } finally {
           setBusy(false);
@@ -420,19 +592,44 @@ function SuggestForm({ goal, decider, decides = false, open, onOpen, focus = fal
       <label className="simple-small font-medium" htmlFor={`suggest-title-${goal.key}`}>
         Feature name
       </label>
-      <input id={`suggest-title-${goal.key}`} autoFocus={focus} required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg border border-line bg-bg px-3 py-2" />
+      <input
+        id={`suggest-title-${goal.key}`}
+        autoFocus={focus}
+        required
+        maxLength={200}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="rounded-lg border border-line bg-bg px-3 py-2"
+      />
       <label className="simple-small font-medium" htmlFor={`suggest-outcome-${goal.key}`}>
         What it does, and for whom
       </label>
-      <textarea id={`suggest-outcome-${goal.key}`} required rows={2} maxLength={1000} value={outcome} onChange={(e) => setOutcome(e.target.value)} className="rounded-lg border border-line bg-bg px-3 py-2" />
+      <textarea
+        id={`suggest-outcome-${goal.key}`}
+        required
+        rows={2}
+        maxLength={1000}
+        value={outcome}
+        onChange={(e) => setOutcome(e.target.value)}
+        className="rounded-lg border border-line bg-bg px-3 py-2"
+      />
       <p className="simple-small text-text2" data-testid="suggest-goal">
         Goal: {goal.title}
       </p>
       <p className="simple-small text-text2" data-testid="suggest-decider">
         {/* qa-simple-plan-33: the decider is not told someone else reviews their own suggestion. */}
-        {decides ? "You decide on this goal's suggestions: once sent, you can accept it below." : decider ? `${decider} will review your suggestion.` : "The company's owners will review your suggestion."}
+        {decides
+          ? "You decide on this goal's suggestions: once sent, you can accept it below."
+          : decider
+            ? `${decider} will review your suggestion.`
+            : "The company's owners will review your suggestion."}
       </p>
-      <Button type="submit" variant="solid" className="self-start" disabled={busy || !title.trim() || !outcome.trim()}>
+      <Button
+        type="submit"
+        variant="solid"
+        className="self-start"
+        disabled={busy || !title.trim() || !outcome.trim()}
+      >
         Send suggestion
       </Button>
     </form>
@@ -443,8 +640,8 @@ function SuggestForm({ goal, decider, decides = false, open, onOpen, focus = fal
 function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi }) {
   const { can } = useMe();
   // PER_ITEM says owners; the suggestion's own can_accept / can_reject (its decider, an approver too) decides.
-  const accepts = s.can_accept && can("accept_goal_suggestion", true);
-  const rejects = s.can_reject && can("reject_goal_suggestion", true);
+  const accepts = s.can_accept && can('accept_goal_suggestion', true);
+  const rejects = s.can_reject && can('reject_goal_suggestion', true);
   const zone = useCompanyZone();
   const [rejecting, setRejecting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -459,16 +656,27 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
     }
   };
   return (
-    <li data-testid="person-suggestion" data-title={s.title} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 text-[length:var(--simple-small)]">
+    <li
+      data-testid="person-suggestion"
+      data-title={s.title}
+      className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 text-[length:var(--simple-small)]"
+    >
       <div className="flex flex-col gap-2">
         <div className="min-w-0">
           <p className="text-[length:var(--simple-text)] font-semibold text-text">{s.title}</p>
           <p data-testid="suggestion-outcome">{s.outcome}</p>
           <p className="text-text2" data-testid="suggestion-by">
-            From {s.proposed_by_name ?? "someone"} · {zoneDateTime(s.created_at, zone)}
+            From {s.proposed_by_name ?? 'someone'} · {zoneDateTime(s.created_at, zone)}
           </p>
           {s.looks_like.map((m) => (
-            <LooksLike key={m.id} s={s} m={m} merges={rejects} busy={busy} onDecline={() => void run(() => a.duplicate(s, m))} />
+            <LooksLike
+              key={m.id}
+              s={s}
+              m={m}
+              merges={rejects}
+              busy={busy}
+              onDecline={() => void run(() => a.duplicate(s, m))}
+            />
           ))}
         </div>
         {(accepts || rejects) && (
@@ -501,23 +709,35 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
 }
 
 /** Where the drawer opens: the form open (a goal card's "+ Suggest a feature") or Oracle's tab ("✦ Ask Oracle to suggest"). */
-export type GoalPanelStart = "form" | "oracle";
+export type GoalPanelStart = 'form' | 'oracle';
 
 /** The drawer's body: the form on top, "✦ Ask Oracle to suggest", then the People and Oracle tabs. */
-export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; api: GoalSuggestionsApi; start?: GoalPanelStart }) {
+export function GoalSuggestionList({
+  goal,
+  api: a,
+  start,
+}: {
+  goal: GoalBrief;
+  api: GoalSuggestionsApi;
+  start?: GoalPanelStart;
+}) {
   const { can } = useMe();
   const state = goalState(a, goal);
   const { people, oracle } = goalRows(a, goal);
   // qa-simple-plan-10: opened without a start, on the tab that holds the suggestions.
-  const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" || (start !== "form" && !people.length && oracle.length > 0) ? "oracle" : "people");
+  const [tab, setTab] = useState<'people' | 'oracle'>(
+    start === 'oracle' || (start !== 'form' && !people.length && oracle.length > 0)
+      ? 'oracle'
+      : 'people',
+  );
   const [asking, setAsking] = useState(false);
   // qa-simple-roadmap-24/44: "+ Suggest a feature" starts folded the same way it always did;
   // lifted here (not SuggestForm's own state) so the empty state's "Suggest the first feature"
   // can open the same form.
-  const [formOpen, setFormOpen] = useState(() => !(start !== "form" && !!state?.can_decide));
-  const suggests = can("create_goal_suggestion");
+  const [formOpen, setFormOpen] = useState(() => !(start !== 'form' && !!state?.can_decide));
+  const suggests = can('create_goal_suggestion');
   const more = async () => {
-    setTab("oracle");
+    setTab('oracle');
     setAsking(true);
     try {
       await a.suggest(state?.goal ?? goal);
@@ -526,8 +746,8 @@ export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; a
     }
   };
   const tabs = [
-    { key: "people" as const, label: `People · ${people.length}` },
-    { key: "oracle" as const, label: `✦ Oracle · ${oracle.length}` },
+    { key: 'people' as const, label: `People · ${people.length}` },
+    { key: 'oracle' as const, label: `✦ Oracle · ${oracle.length}` },
   ];
   return (
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
@@ -536,21 +756,38 @@ export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; a
         <>
           <div className="flex flex-wrap items-center gap-2" data-testid="suggest-actions">
             {!formOpen && (
-              <Button variant="secondary" data-testid="suggest-form-open" onClick={() => setFormOpen(true)}>
+              <Button
+                variant="secondary"
+                data-testid="suggest-form-open"
+                onClick={() => setFormOpen(true)}
+              >
                 + Suggest a feature
               </Button>
             )}
             {/* PR9 (owner, Nov 13): one way to ask Oracle, never a second one or a chat link. */}
-            <Button variant="secondary" data-testid="suggest-more" disabled={asking || !!state?.pending} onClick={() => void more()}>
+            <Button
+              variant="secondary"
+              data-testid="suggest-more"
+              disabled={asking || !!state?.pending}
+              onClick={() => void more()}
+            >
               ✦ Ask Oracle to suggest
             </Button>
           </div>
           {formOpen && (
-            <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
-              await reloadWaiting(a.reload);
-              setTab("people");
-              setFormOpen(false);
-            }} />
+            <SuggestForm
+              goal={state?.goal ?? goal}
+              decider={state?.decider_name ?? null}
+              decides={!!state?.can_decide}
+              open
+              onOpen={() => setFormOpen(true)}
+              focus={start === 'form'}
+              onSent={async () => {
+                await reloadWaiting(a.reload);
+                setTab('people');
+                setFormOpen(false);
+              }}
+            />
           )}
         </>
       )}
@@ -563,13 +800,13 @@ export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; a
             aria-selected={tab === t.key}
             data-testid={`suggestions-tab-${t.key}`}
             onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 font-semibold ${tab === t.key ? "border-accent text-text" : "border-transparent text-text2 hover:text-text"}`}
+            className={`-mb-px border-b-2 px-3 py-2 font-semibold ${tab === t.key ? 'border-accent text-text' : 'border-transparent text-text2 hover:text-text'}`}
           >
             {t.label}
           </button>
         ))}
       </div>
-      {tab === "people" ? (
+      {tab === 'people' ? (
         <div role="tabpanel" aria-label="People's suggestions" className="flex flex-col gap-2">
           {people.length ? (
             <ul className="flex flex-col gap-2">
@@ -579,7 +816,7 @@ export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; a
             </ul>
           ) : (
             <p className="simple-small text-text2">
-              No one has suggested a feature for {goal.title} yet.{" "}
+              No one has suggested a feature for {goal.title} yet.{' '}
               {/* qa-simple-plan-35: "+ Suggest a feature" above is the one control that opens the form. */}
             </p>
           )}
@@ -598,7 +835,9 @@ export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; a
               ))}
             </ul>
           ) : (
-            !state?.pending && <p className="simple-small text-text2">Oracle suggests only when asked.</p>
+            !state?.pending && (
+              <p className="simple-small text-text2">Oracle suggests only when asked.</p>
+            )
           )}
         </div>
       )}
@@ -607,7 +846,8 @@ export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; a
 }
 
 /** A goal's suggestions drawer: a side panel on a desktop, a bottom sheet on a phone. */
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * The desktop drawer is modal: focus moves into it, Tab and Shift+Tab stay inside it (a dialog
@@ -616,17 +856,30 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 function useDrawerFocus(open: boolean) {
   const ref = useRef<HTMLElement>(null);
   // The opener as it was before the drawer's own autofocus moved focus in (read while rendering).
-  const [first] = useState(() => (typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null));
+  const [first] = useState(() =>
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   useEffect(() => {
     if (!open) return;
     const opener = first;
     const p = ref.current;
-    if (p && !p.contains(document.activeElement)) (p.querySelector<HTMLElement>("[autofocus], [data-autofocus]") ?? p).focus();
+    if (p && !p.contains(document.activeElement))
+      (p.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? p).focus();
     const onKey = (e: KeyboardEvent) => {
       const at = document.activeElement;
-      if (e.key !== "Tab" || !p) return;
-      if (at && at !== document.body && !p.contains(at) && at.closest('[role="dialog"], [role="alertdialog"]')) return;
-      const els = [...p.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.checkVisibility());
+      if (e.key !== 'Tab' || !p) return;
+      if (
+        at &&
+        at !== document.body &&
+        !p.contains(at) &&
+        at.closest('[role="dialog"], [role="alertdialog"]')
+      )
+        return;
+      const els = [...p.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) =>
+        el.checkVisibility(),
+      );
       if (els.length === 0) return;
       const first = els[0];
       const last = els[els.length - 1];
@@ -638,9 +891,9 @@ function useDrawerFocus(open: boolean) {
         first.focus();
       }
     };
-    document.addEventListener("keydown", onKey);
+    document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener('keydown', onKey);
       if (opener?.isConnected) opener.focus();
     };
   }, [open, first]);
@@ -653,26 +906,30 @@ function useDrawerFocus(open: boolean) {
  * (one scrollbar).
  */
 function useDrawerClose(onClose: () => void, lock: boolean) {
-  const [opener] = useState(() => (typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null));
+  const [opener] = useState(() =>
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       // A dialog over the drawer (Reject) has its own Escape.
       if (document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length > 1) return;
       e.preventDefault();
       close.current();
     };
-    document.addEventListener("keydown", onKey);
+    document.addEventListener('keydown', onKey);
     // On <body>, not <html>: a Sheet (the phone's drawer, the chat) saves and restores <html>'s own.
     const body = document.body.style;
     const overflow = body.overflow;
-    if (lock) body.overflow = "hidden";
+    if (lock) body.overflow = 'hidden';
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener('keydown', onKey);
       if (lock) body.overflow = overflow;
       // Back to the opener, unless what closed it (Ask Oracle in the chat) moved focus into another dialog.
       requestAnimationFrame(() => {
@@ -683,7 +940,17 @@ function useDrawerClose(onClose: () => void, lock: boolean) {
   }, [opener, lock]);
 }
 
-export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void; start?: GoalPanelStart }) {
+export function GoalPanel({
+  goal,
+  api: a,
+  onClose,
+  start,
+}: {
+  goal: GoalBrief;
+  api: GoalSuggestionsApi;
+  onClose: () => void;
+  start?: GoalPanelStart;
+}) {
   const phone = usePhone();
   const drawer = useDrawerFocus(!phone);
   useDrawerClose(onClose, !phone);
@@ -698,17 +965,36 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
     );
   return (
     <>
-    {/* The page behind dims, as under the move dialog; a click on it closes the drawer. */}
-    <div data-backdrop="" data-testid="goal-panel-backdrop" aria-hidden className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-    <aside ref={drawer} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} data-testid="goal-panel" className="fixed top-0 right-0 focus:outline-none bottom-0 z-50 w-[480px] max-w-full overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip">
-      <div className="mb-3 flex items-center gap-2">
-        <h2 className="flex-1 text-lg font-semibold">{title}</h2>
-        <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 rounded text-text2 hover:bg-surface2">
-          ×
-        </button>
-      </div>
-      <GoalSuggestionList goal={goal} api={a} start={start} />
-    </aside>
+      {/* The page behind dims, as under the move dialog; a click on it closes the drawer. */}
+      <div
+        data-backdrop=""
+        data-testid="goal-panel-backdrop"
+        aria-hidden
+        className="fixed inset-0 z-40 bg-black/40"
+        onClick={onClose}
+      />
+      <aside
+        ref={drawer}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        data-testid="goal-panel"
+        className="fixed top-0 right-0 focus:outline-none bottom-0 z-50 w-[480px] max-w-full overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip"
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="flex-1 text-lg font-semibold">{title}</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="h-8 w-8 rounded text-text2 hover:bg-surface2"
+          >
+            ×
+          </button>
+        </div>
+        <GoalSuggestionList goal={goal} api={a} start={start} />
+      </aside>
     </>
   );
 }

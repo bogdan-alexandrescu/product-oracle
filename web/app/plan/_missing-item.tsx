@@ -1,19 +1,23 @@
-"use client";
+'use client';
 
-import Link from "next/link";
+import Link from 'next/link';
 
-import { Button, Notice } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useQuery } from "@/lib/use-query";
+import { Button, Notice } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useQuery } from '@/lib/use-query';
 
-import { prdItemRef, wantedRow } from "./_lib";
+import { prdItemRef, wantedRow } from './_lib';
 
-type SimpleItem = Schemas["SimpleRoadmapItem"];
+type SimpleItem = Schemas['SimpleRoadmapItem'];
 
 /** Where an item off the Plan lives, as one line: "F-06 Team invite nudges is not on the Plan yet: it is in the draft of Guided setup". */
 export function missingLine(i: SimpleItem): string {
   const name = i.code ? `${i.code} ${i.title}` : i.title;
-  const where = i.draft ? (i.prd ? `in the draft of ${i.prd.title}` : "in a draft") : `on the ${i.roadmap.title}`;
+  const where = i.draft
+    ? i.prd
+      ? `in the draft of ${i.prd.title}`
+      : 'in a draft'
+    : `on the ${i.roadmap.title}`;
   return `${name} is not on the Plan yet: it is ${where}`;
 }
 
@@ -37,23 +41,36 @@ export function MissingItem({
   wanted: string;
   prdId: string | null;
   roadmap: string | null;
-  scope: "all" | "approved";
+  scope: 'all' | 'approved';
   onShowDrafts: () => void;
 }) {
-  const q = useQuery("plan|simple-roadmap", () => unwrap(api.GET("/v1/simple/roadmap")));
+  const q = useQuery('plan|simple-roadmap', () => unwrap(api.GET('/v1/simple/roadmap')));
   const withDrafts = useQuery(`plan|missing-item|${scope}`, () =>
-    scope === "approved" ? unwrap(api.GET("/v1/plan", { params: { query: { scope: "all" } } })) : Promise.resolve(null),
+    scope === 'approved'
+      ? unwrap(api.GET('/v1/plan', { params: { query: { scope: 'all' } } }))
+      : Promise.resolve(null),
   );
   if ((q.loading && !q.data) || (withDrafts.loading && !withDrafts.data)) return null;
   const ref = prdItemRef(wanted);
-  const keyed = (q.data?.items ?? []).filter((i) => (ref ? i.key === ref.key && i.prd?.slug === ref.prd : i.key === wanted));
+  const keyed = (q.data?.items ?? []).filter((i) =>
+    ref ? i.key === ref.key && i.prd?.slug === ref.prd : i.key === wanted,
+  );
   const same = roadmap == null ? keyed : keyed.filter((i) => i.roadmap.slug === roadmap);
   const found = same.find((i) => i.prd?.id === prdId) ?? same[0];
-  const draftRow = withDrafts.data ? wantedRow(withDrafts.data.items, wanted, prdId, roadmap) : undefined;
+  const draftRow = withDrafts.data
+    ? wantedRow(withDrafts.data.items, wanted, prdId, roadmap)
+    : undefined;
   if (draftRow) {
-    const name = found ? (found.code ? `${found.code} ${found.title}` : found.title) : draftRow.title;
+    const name = found
+      ? found.code
+        ? `${found.code} ${found.title}`
+        : found.title
+      : draftRow.title;
     return (
-      <Notice testId="plan-missing-item" action={<Button onClick={onShowDrafts}>Show drafts</Button>}>
+      <Notice
+        testId="plan-missing-item"
+        action={<Button onClick={onShowDrafts}>Show drafts</Button>}
+      >
         {name} is only in a draft, and the Plan shows Approved only
       </Notice>
     );
@@ -65,7 +82,10 @@ export function MissingItem({
     <Notice
       testId="plan-missing-item"
       action={
-        <Link href={`/simple/roadmap?item=${encodeURIComponent(found.id)}`} className="font-semibold underline underline-offset-2">
+        <Link
+          href={`/simple/roadmap?item=${encodeURIComponent(found.id)}`}
+          className="font-semibold underline underline-offset-2"
+        >
           Open it on the roadmap
         </Link>
       }
