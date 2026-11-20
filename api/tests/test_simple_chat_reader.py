@@ -746,6 +746,6 @@ async def test_a_failed_agenda_read_tells_the_reader_why(client, meetings, monke
     with caplog.at_level("WARNING", logger="oracle.simple.chat"):
         await read(ctx, actions(), seen)
     m = seen[0]["context"]["meeting"]
-    assert m["agenda_read"] == {"state": "unavailable", "reason": "agenda store down"}
+    assert m["agenda_read"] == {"state": "unavailable", "reason": "RuntimeError"}
     assert "title" not in m
     assert any("agenda store down" in r.getMessage() for r in caplog.records)

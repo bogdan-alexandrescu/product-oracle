@@ -289,13 +289,13 @@ async def test_an_unreadable_access_token_says_why_nothing_was_written(caplog, m
     with caplog.at_level("ERROR", logger="oracle.claude_accounts.credentials"):
         out = await r.refresh_secret("a")
     assert out.reason == "unverified_skipped"
-    assert out.error == "store down"
-    assert any(getattr(rec, "error", None) == "store down" for rec in caplog.records)
+    assert out.error == "RuntimeError"
+    assert any(getattr(rec, "error", None) == "RuntimeError" for rec in caplog.records)
 
 
 async def test_a_store_that_cannot_be_read_carries_its_reason():
     r, s = _refresher({"c-refresh": _pair(timedelta(hours=1))})
     s.fail_reads.add("c-refresh")
     out = await r.refresh_secret("c")
-    assert (out.reason, out.error) == ("store_unavailable", "store down")
+    assert (out.reason, out.error) == ("store_unavailable", "RuntimeError")
     assert "error" not in out.as_dict()

@@ -1575,9 +1575,10 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             async with db.begin_nested():
                 one_ = await meetings.one(db, c.principal, r.meeting_id) if meetings else None
         except Exception as exc:  # noqa: BLE001 - the agenda is context, never required
-            agenda_read = read_state(exc)
+            # The reader is told the error's kind; its text (maybe SQL) goes to the log only.
+            agenda_read = {**read_state(exc), "reason": type(exc).__name__}
             log.warning("chat reader: meeting %s agenda unavailable: %s",
-                        r.meeting_id, agenda_read["reason"])  # fmt: skip
+                        r.meeting_id, exception_text(exc))  # fmt: skip
         # The reader is told whether the agenda was read, could not be (and why), or
         # does not apply: an unread agenda is not an empty one.
         context["meeting"]["agenda_read"] = agenda_read

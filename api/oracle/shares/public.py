@@ -54,6 +54,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import func, select
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
+from starlette.requests import ClientDisconnect
 
 from oracle import audit
 from oracle.config import get_settings
@@ -346,9 +347,9 @@ async def _passcode_of(request: Request) -> str:
             value = data.get("passcode") if isinstance(data, dict) else None
         else:
             value = (await request.form()).get("passcode")
-    except (ValueError, HTTPException, MultiPartException) as exc:
-        # A body that does not parse (bad JSON, a broken form) is no passcode: the
-        # wrong-passcode answer, with the reason logged.
+    except (ValueError, RecursionError, HTTPException, MultiPartException, ClientDisconnect) as exc:
+        # A body that does not parse (bad or too deeply nested JSON, a broken form, a
+        # client gone mid-body) is no passcode: the wrong-passcode answer, reason logged.
         log.info("share passcode body unreadable: %s", exception_text(exc))
         value = None
     return value[:PASSCODE_FORM_MAX] if isinstance(value, str) else ""

@@ -75,8 +75,8 @@ class RefreshOutcome:
     refreshed: bool
     reason: str
     expires_at: datetime | None = None
-    #: Why a read or write failed (the exception's text), kept off ``as_dict``: the
-    #: outcome's ``reason`` is the closed set people see; this is for the logs.
+    #: Why a read or write failed: the exception's class (its text may carry SQL and bound
+    #: values). Kept off ``as_dict``: ``reason`` is the closed set people see.
     error: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -114,9 +114,9 @@ class CredentialRefresher:
         except Exception as exc:  # noqa: BLE001 - any store failure is store_unavailable
             log.warning(
                 "could not read the refresh credential",
-                extra={"account_id": base, "error": exception_text(exc)},
+                extra={"account_id": base, "error": type(exc).__name__},
             )
-            return RefreshOutcome(base, False, "store_unavailable", error=exception_text(exc))
+            return RefreshOutcome(base, False, "store_unavailable", error=type(exc).__name__)
 
         try:
             credential = parse_credential(stored, now=now)
@@ -159,9 +159,9 @@ class CredentialRefresher:
             except Exception as exc:  # noqa: BLE001 - any store failure is publish_failed
                 log.warning(
                     "could not publish a still-valid access token",
-                    extra={"account_id": base, "error": exception_text(exc)},
+                    extra={"account_id": base, "error": type(exc).__name__},
                 )
-                return RefreshOutcome(base, False, "publish_failed", error=exception_text(exc))
+                return RefreshOutcome(base, False, "publish_failed", error=type(exc).__name__)
             return RefreshOutcome(base, True, "published", credential.expires_at)
 
         try:
@@ -194,7 +194,7 @@ class CredentialRefresher:
         except KeyError:
             return _BaseState.NEEDS_PUBLISH, None
         except Exception as exc:  # noqa: BLE001 - any failed read is UNKNOWN; the caller logs why
-            return _BaseState.UNKNOWN, exception_text(exc)
+            return _BaseState.UNKNOWN, type(exc).__name__
         same = stored == access_token
         return (_BaseState.CURRENT if same else _BaseState.NEEDS_PUBLISH), None
 
@@ -220,7 +220,7 @@ class CredentialRefresher:
             except Exception as exc:  # noqa: BLE001 - one account must not stop the sweep
                 log.error(
                     "account refresh raised; continuing with the rest of the pool",
-                    extra={"account_id": base, "error": exception_text(exc)},
+                    extra={"account_id": base, "error": type(exc).__name__},
                 )
-                outcomes.append(RefreshOutcome(base, False, "error", error=exception_text(exc)))
+                outcomes.append(RefreshOutcome(base, False, "error", error=type(exc).__name__))
         return outcomes
