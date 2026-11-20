@@ -3,8 +3,7 @@
 - Never read a whole file over about 2,000 lines. Find the place first (`grep -n`, Grep, or
   the code-graph skill), then read a range: Read with an offset and a limit of a few hundred
   lines, or `sed -n 'START,ENDp'`.
-- The large source files today: `api/oracle/runs/service.py` (about 12k lines),
-  `web/lib/api/mock/server.ts` (about 10k), `web/lib/api/mock/runs.ts`,
+- The large source files today: `web/lib/api/mock/server.ts` (about 10k), `web/lib/api/mock/runs.ts`,
   `web/lib/api/mock/simple-*.ts`, `web/app/simple/priorities/priorities.tsx`,
   `api/tests/test_adapter_v2.py`. Check a file you have not met with `wc -l` first.
 - Generated and bulk files (`web/lib/api/openapi.json`, `web/lib/api/schema.d.ts`,
