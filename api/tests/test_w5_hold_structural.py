@@ -19,9 +19,8 @@ from oracle.runs import service
 from oracle.swarm.runtime import StepStatus, WorkflowStatus, not_reached
 from oracle.swarm.swarmcloud import SwarmCloudRuntime
 from tests.fixtures import seed_auth
-from tests.test_adapter_v2 import on, token_of, use
+from tests.test_adapter_v2 import _run_token_writes, on, token_of, use
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_adapter_v2_round9 import _run_token_writes
 from tests.test_runs import get, started
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).

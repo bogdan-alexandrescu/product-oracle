@@ -631,8 +631,7 @@ async def test_cancel_again_names_no_workflow_id_and_keeps_it_in_refs(
     fails_when=the refusal or the run's note names the workflow's id, or refs loses it;
     no_claim=when Cancel again is offered (test_adapter_v2_round9.py)."""
     from tests.fixtures import seed_auth
-    from tests.test_adapter_v2 import _Clock, on
-    from tests.test_adapter_v2_round9 import _again, _over_after_stop
+    from tests.test_adapter_v2 import _again, _Clock, _over_after_stop, on
     from tests.test_runs import get
 
     tenant_id, auth = await seed_auth()

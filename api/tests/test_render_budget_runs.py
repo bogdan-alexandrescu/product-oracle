@@ -5,9 +5,8 @@ tries again. Not a failed try of a resumed advance (``RESUME_TRIES``)."""
 from oracle.roadmap import doc_dates
 from oracle.runs import service
 from tests.fixtures import seed_auth
-from tests.test_adapter_v2 import _tick_errors, on, use
+from tests.test_adapter_v2 import _segment, _tick_errors, on, use
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_adapter_v2_round9 import _segment
 from tests.test_runs import get, started
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).

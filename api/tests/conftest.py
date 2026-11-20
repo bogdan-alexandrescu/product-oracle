@@ -180,7 +180,7 @@ def _forget_items_checks():
 # reach the built-in rituals' seeding (the ritual ticker, the metrics review's activation):
 # they model a company that already has a confirmed goal, so its built-ins are seeded on.
 _RITUALS_SEEDED_ON = frozenset({
-    "test_adapter_v2_round6",
+    "test_adapter_v2",
     "test_alignment_reports",
     "test_autonomy",
     "test_autonomy_strategy_external",
@@ -237,7 +237,6 @@ _RITUALS_SEEDED_ON = frozenset({
     "test_simple_walk_fixes3_cp_api",
     "test_simple_walk_fixes3_m2_api",
     "test_simple_walk_fixes_api",
-    "test_simple_walk_fixes_review2_api",
     "test_simple_walk_fixes_review_api",
     "test_slack_bridge",
     "test_source_background_sync",
