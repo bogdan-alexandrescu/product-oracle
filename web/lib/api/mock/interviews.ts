@@ -36,9 +36,12 @@ import type {
   PublicTurn,
 } from "@/lib/api/interviews";
 
+import type { Schemas } from "@/lib/api/client";
+
 import { mockUuid } from "./ids";
 import { SPENT } from "./llm-jobs";
 import { jobOut } from "./refusal";
+import { reply, type MockBody } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 /** H9: the one interview preset (the API's `preset` column). */
@@ -285,7 +288,7 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
       messages: publicMessages(r.messages),
       progress: progress(r),
     };
-    return json(200, out);
+    return reply("/v1/public/interviews/{token}", "get", out);
   }
   if (!r.opener || cookie !== r.opener) return refuse(410, "used");
   if (m !== "POST" || p.length !== 5) return fail(404, "Route not found");
@@ -302,7 +305,7 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
     const added: InterviewMessage[] = [own];
     if (r.customer_messages >= MAX_MESSAGES) {
       finish(r, ctx);
-      return json(200, { messages: publicMessages(added), progress: progress(r), done: true } satisfies PublicTurn);
+      return reply("/v1/public/interviews/{token}/messages", "post", { messages: publicMessages(added), progress: progress(r), done: true } satisfies PublicTurn);
     }
     const ack = message("oracle", "ack", ACK, current?.id ?? null);
     r.messages.push(ack);
@@ -313,18 +316,18 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
       r.messages.push(follow);
       added.push(follow);
     } else if (current) added.push(...advance(r));
-    return json(200, { messages: publicMessages(added), progress: progress(r), done: false } satisfies PublicTurn);
+    return reply("/v1/public/interviews/{token}/messages", "post", { messages: publicMessages(added), progress: progress(r), done: false } satisfies PublicTurn);
   }
   if (p[4] === "skip") {
     const current = r.guide[r.position];
-    if (!current) return json(200, { messages: [], progress: progress(r), done: false } satisfies PublicTurn);
+    if (!current) return reply("/v1/public/interviews/{token}/skip", "post", { messages: [], progress: progress(r), done: false } satisfies PublicTurn);
     r.messages.push(message("interviewee", "skip", "", current.id));
     const added = advance(r);
-    return json(200, { messages: publicMessages(added), progress: progress(r), done: false } satisfies PublicTurn);
+    return reply("/v1/public/interviews/{token}/skip", "post", { messages: publicMessages(added), progress: progress(r), done: false } satisfies PublicTurn);
   }
   if (p[4] === "finish") {
     finish(r, ctx);
-    return json(200, { done: true });
+    return reply("/v1/public/interviews/{token}/finish", "post", { done: true });
   }
   return fail(404, "Route not found");
 }
@@ -364,7 +367,7 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
       .filter((r) => !q.get("kind") || r.kind === q.get("kind"))
       .filter((r) => !q.get("preset") || r.preset === q.get("preset"))
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return json(200, rows.map(summary));
+    return reply("/v1/interviews", "get", rows.map(summary));
   }
   if (p.length === 2 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
@@ -398,11 +401,11 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
       opener: null, position: 0, followed_up: false, customer_messages: 0, guide_ready_at: preset ? null : later(GUIDE_MS),
     };
     db.interviews.push(row);
-    return json(201, out(row));
+    return reply("/v1/interviews", "post", out(row), 201);
   }
   const r = db.interviews.find((x) => x.id === p[2]);
   if (!r) return fail(404, "Interview not found");
-  if (p.length === 3 && m === "GET") return json(200, out(r));
+  if (p.length === 3 && m === "GET") return reply("/v1/interviews/{interview_id}", "get", out(r));
   if (!atLeast(ctx.role, "commenter") || !canManage(r)) return fail(403, "Only the interview's creator or an approver can change it");
   if (p.length === 3 && m === "PATCH") {
     const patch = await body<InterviewPatch>();
@@ -430,7 +433,7 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     }
     if (patch.interviewee_company !== undefined) r.interviewee_company = patch.interviewee_company?.trim() || null;
     r.lock_version += 1;
-    return json(200, out(r));
+    return reply("/v1/interviews/{interview_id}", "patch", out(r));
   }
   if (p.length === 4 && m === "POST" && p[3] === "guide") {
     if (r.status !== "draft") return fail(409, "Only a draft interview can be redrafted");
@@ -438,7 +441,7 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     r.guide_job = { id: mockUuid(), status: "queued", error: null };
     r.guide_ready_at = later(GUIDE_MS);
     r.lock_version += 1;
-    return json(200, out(r));
+    return reply("/v1/interviews/{interview_id}/guide", "post", out(r));
   }
   if (p.length === 4 && m === "POST" && p[3] === "link") {
     if (r.token) return fail(409, "A link exists; withdraw it first");
@@ -449,7 +452,12 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     r.link_created_at = now();
     r.link_expires_at = later(LINK_DAYS * 86_400_000);
     r.lock_version += 1;
-    return json(201, { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at, created_at: r.link_created_at } satisfies InterviewLink);
+    return reply(
+      "/v1/interviews/{interview_id}/link",
+      "post",
+      { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at, created_at: r.link_created_at } satisfies InterviewLink,
+      201,
+    );
   }
   // Make a new link (qa-work-43), as api/oracle/interviews/service.py new_link.
   if (p.length === 4 && m === "POST" && p[3] === "new-link") {
@@ -464,13 +472,18 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     r.link_opened_at = null;
     r.opener = null;
     r.lock_version += 1;
-    return json(201, { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at, created_at: r.link_created_at } satisfies InterviewLink);
+    return reply(
+      "/v1/interviews/{interview_id}/new-link",
+      "post",
+      { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at, created_at: r.link_created_at } satisfies InterviewLink,
+      201,
+    );
   }
   if (p.length === 4 && m === "POST" && p[3] === "revoke") {
     if (r.status !== "invited" && r.status !== "in_progress") return fail(409, "Only an open link can be withdrawn");
     r.status = "revoked";
     r.lock_version += 1;
-    return json(200, out(r));
+    return reply("/v1/interviews/{interview_id}/revoke", "post", out(r));
   }
   return fail(404, "Route not found");
 }
@@ -486,7 +499,7 @@ export interface TeamContext extends InterviewsContext {
   /** Records the answer through POST /v1/questions/{id}/answers. */
   recordAnswer: (questionId: string, body: string) => Promise<Response>;
   /** The member's own answer standing on an answered question (brief-answers), else null. */
-  saved: (questionId: string) => { answer: { id: string; body?: string | null }; question: unknown; gap: unknown } | null;
+  saved: (questionId: string) => { answer: Schemas["StakeholderAnswerOut"]; question: Schemas["StakeholderQuestionOut"]; gap: Schemas["KnowledgeGapOut"] | null } | null;
 }
 
 /** Team interviews with a turn still out, until when (ms): the API's turn claim. */
@@ -518,7 +531,7 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
       };
       db.interviews.push(r);
     }
-    return json(200, outOf(r, ctx));
+    return reply("/v1/intakes/{intake_id}/interview", "post", outOf(r, ctx));
   }
   if (p[1] !== "interviews" || p[3] !== "turns") return null;
   if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
@@ -550,7 +563,7 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
     answer: s.answer, question: s.question, gap: s.gap, proposals: [], baseline_proposal_ids: [], change_event_id: null, next_actions: [],
   });
   if (question.status === "answered" && (!saved || !followedUp)) {
-    if (saved && text && saved.answer.body === text) return json(200, { messages: [], recorded: asResult(saved), next_question_id: null });
+    if (saved && text && saved.answer.body === text) return reply("/v1/interviews/{interview_id}/turns", "post", { messages: [], recorded: asResult(saved), next_question_id: null });
     return fail(409, "This question is answered; it is not asked again");
   }
   if (!text && !(input.skip_follow_up && said.length)) return fail(422, "An answer needs a body");
@@ -568,8 +581,8 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
   } else add("interviewee", "skip", "Skip, record my answer");
   // brief-answers: the test's knob loses this turn's reply on the way back once (as the web's
   // proxy cut a slow turn off): the answer is saved, the browser gets a bare 500.
-  const sent = (payload: unknown) => {
-    if (localStorage.getItem("po-mock-lost") !== "turns") return json(200, payload);
+  const sent = (payload: MockBody<"/v1/interviews/{interview_id}/turns", "post">) => {
+    if (localStorage.getItem("po-mock-lost") !== "turns") return reply("/v1/interviews/{interview_id}/turns", "post", payload);
     localStorage.removeItem("po-mock-lost");
     return new Response("Internal Server Error", { status: 500, headers: { "content-type": "text/plain" } });
   };

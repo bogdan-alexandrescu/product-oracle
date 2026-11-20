@@ -26,6 +26,7 @@ import { CUT_ALL, cutDependents, cutRoute, markMeetingProposal, meetingRoute, pr
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 import { liveReply } from "./live";
+import { reply } from "./typed";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
@@ -54,15 +55,17 @@ type Preview =
   | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
   | { kind: "suggestion"; goal_id: string; goal_title: string; title: string; outcome: string; looks_like: { code: string; title: string; why: string }[] }
   | null;
-type Fix = { label: string; op: string; target: Values; before: Values; after: Values };
+type Fix = { label: string; op: Schemas["ChatFix"]["op"]; target: Values; before: Values; after: Values };
 type Mode = "everyone" | "presenter" | "named";
+/** The ops a chat card may carry: the change engine's own, plus the chat's local ones (ChatCardOut.op). */
+type CardOp = Schemas["ChatCardOut"]["op"];
 
 interface StoredCard {
   id: string;
   message_id: string | null;
   thread: string;
   meeting_id: string | null;
-  op: string;
+  op: CardOp;
   target: Values;
   before: Values;
   after: Values;
@@ -113,7 +116,7 @@ interface StoredMessage {
   /** ask-length-limit: where the parts Oracle cannot change yet are changed. */
   links?: { label: string; href: string }[];
   /** #710 in Simple: the live reads Oracle's answer used (chat.ChatMessageOut.live_reads). */
-  live_reads?: Record<string, unknown>[];
+  live_reads?: Schemas["ChatLiveReadOut"][];
   /** Private: a line that failed on a spent Claude pool: when its window clears (chat._spent_until). */
   spent_until?: string;
   /** Private: the reader's job for a pending (or failed) line. */
@@ -424,7 +427,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     viewerInMeeting
       ? { kind: "note", body: "Viewers ask questions here; ask the presenter to make a change.", cards: [] }
       : build();
-  const card = (summary: string, op: string, item: Item | null, target: Values, before: Values, after: Values, preview: Preview = null, flow: Schemas["SimpleFlow"] | null = null): Reply => ({
+  const card = (summary: string, op: CardOp, item: Item | null, target: Values, before: Values, after: Values, preview: Preview = null, flow: Schemas["SimpleFlow"] | null = null): Reply => ({
     kind: "cards",
     // walkc-meeting r2 (5g, chat.HERE_PLAIN): a card with no Preview is not asked to be previewed.
     body: preview ? "Here is the change. Preview it, then apply or discard it." : "Here is the change. Apply or discard it.",
@@ -581,7 +584,7 @@ function personNamed(ctx: ChatCtx, x: string): Person | null {
 
 const words = (x: string) => x.trim().replace(/^["'“‘]|["'”’]$/g, "").trim();
 
-const actionDraft = (summary: string, op: string, item: Item | null, target: Values, before: Values, after: Values, preview: Preview): Draft => ({
+const actionDraft = (summary: string, op: CardOp, item: Item | null, target: Values, before: Values, after: Values, preview: Preview): Draft => ({
   op, target, before, after, summary, item_id: item?.id ?? null, item_title: item?.title ?? null, preview, flow: null, fixes: [],
 });
 
@@ -1156,10 +1159,11 @@ export function takeReaderWrote(): boolean {
  * scripted reads), its reads on the line and no raw [l:n]. With no connection it is not one:
  * the reader hands it to Ask, which says so.
  */
-function liveAnswer(text: string): (Reply & { live_reads: Record<string, unknown>[] }) | null {
+function liveAnswer(text: string): (Reply & { live_reads: Schemas["ChatLiveReadOut"][] }) | null {
   const r = liveReply(text, true);
   if (!r?.reads) return null;
-  return { kind: "answer", body: r.pieces.join("").replace(/\s*\[l:\d{1,4}\]/g, ""), cards: [], live_reads: r.citations };
+  // ./live.ts's citations are each a liveCitation() (ref, source, call, read_at, item_id): a ChatLiveReadOut, plus a `kind` the page adds itself.
+  return { kind: "answer", body: r.pieces.join("").replace(/\s*\[l:\d{1,4}\]/g, ""), cards: [], live_reads: r.citations as Schemas["ChatLiveReadOut"][] };
 }
 
 /** The thread's pending lines, read now (the reader's job ends on the thread's next read). */
@@ -1828,17 +1832,18 @@ function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): strin
   return decides ? null : "Only someone who may change this item undoes it";
 }
 
-function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
+function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): Schemas["ChatCardOut"] {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
   // walkc-meeting (chat.cards_out): an open card's fixes are checked again on each read, on
   // the working state (the meeting's applied changes), never kept from when it was made.
   if (c.status === "open" && "fixes" in check) c.fixes = check.fixes;
-  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, ...rest } = c;
+  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, redo_of: _redo, ...rest } = c;
   void _undo;
   void _by;
   void _flag;
   void _thread;
   void _meeting;
+  void _redo;
   // fix5-cut-dependents: what "Cut it and its dependents" cuts with the item (chat.cards_out).
   const items = c.status === "open" && c.op === "cut" && c.item_id ? itemsFor(db, ctx) : [];
   const waiting = c.item_id && items.length ? cutDependents(items, c.item_id) : [];
@@ -1880,7 +1885,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   return { change_words: null, correct: null, ...rest, flow: bundleFlow(db.visuals, "chat_card", c.id, c.flow), ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx), replaced_by: replacedBy(chat, c), ...(c.status === "open" && replacedBy(chat, c) ? { correct: null } : {}) };
 }
 
-function rulesOut(m: Meeting, ctx: ChatCtx) {
+function rulesOut(m: Meeting, ctx: ChatCtx): Schemas["ChatRulesOut"] {
   const ref = (id: string) => ({ id, name: ctx.names[id] ?? "someone" });
   return {
     change_mode: m.change_mode, change_people: m.change_people.map(ref), presenter: ref(m.presenter_id),
@@ -1891,7 +1896,7 @@ function rulesOut(m: Meeting, ctx: ChatCtx) {
   };
 }
 
-function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, meeting: Meeting | null) {
+function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, meeting: Meeting | null): Schemas["ChatThreadOut"] {
   return {
     understood: true,
     id: t?.id ?? null,
@@ -1992,7 +1997,7 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 }
 
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
-async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents: boolean | string[] = false): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
+async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents: boolean | string[] = false): Promise<Response | { card: Schemas["ChatCardOut"]; result: Schemas["SimpleChangeResult"] }> {
   // fix5-cut-dependents: a cut card applies as cut_with_dependents (one change), and then names every item it cut.
   const use = withDependents ? { op: CUT_ALL, target: c.target, before: withDependents === true ? c.before : { ...c.before, dependents: withDependents }, after: {} } : n == null ? c : c.fixes[n];
   if (c.op === API_OP) {
@@ -2125,7 +2130,7 @@ const OP_TITLE: Record<string, string> = {
 async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
   const items = itemsFor(db, ctx);
   const byId = new Map(items.map((i) => [i.id, i]));
-  const steps: unknown[] = [];
+  const steps: Schemas["WalkStepOut"][] = [];
   for (const i of ctx.role === "viewer" ? [] : items) {
     // A broken link, as chat.broken_links and web/lib/simple-home.ts isBrokenLink (qa-simple-home-3).
     for (const f of i.flags.filter((x) => x.state === "red" && x.fixes.length > 0)) {
@@ -2298,7 +2303,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
   }
 
-  if (p[2] === "walk" && !p[3] && m === "GET") return json(200, await walkOut(db, chat, ctx));
+  if (p[2] === "walk" && !p[3] && m === "GET") return reply("/v1/simple/walk", "get", await walkOut(db, chat, ctx));
 
   // The walk: one Ask thread per person AND page (chat.page_of; Home without a page).
   if (p[2] === "chat" && !p[3] && m === "GET") {
@@ -2307,7 +2312,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (q.get("chat") && !own) return json(404, { detail: "No such chat" });
     const key = own ?? `ask:${ctx.id}:${pageOf(q.get("page"))}`;
     resolvePending(db, chat, key, ctx, s8);
-    return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
+    return reply("/v1/simple/chat", "get", threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
   }
   // chat-reader: Retry a failed line, pick a clarify question's choice, apply a line's open cards in order.
   if (p[2] === "chat" && p[3] === "messages" && p[4] && p[5] && m === "POST") {
@@ -2318,7 +2323,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "retry") {
       if (msg.kind !== "failed" || !msg.retry || !msg.reading) return json(409, { detail: "Only a failed line is read again" });
       Object.assign(msg, { kind: "pending", body: "Reading that…", retry: false });
-      return json(200, out());
+      return reply("/v1/simple/chat/messages/{message_id}/retry", "post", out());
     }
     if (p[5] === "choose") {
       const b = await body();
@@ -2337,7 +2342,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         id, author_kind: "oracle", author_id: null, author_name: "Oracle", at, reply_to: person.id, picked: null, retry: false, choices: [],
         kind: draft ? "cards" : "note", body: draft ? "I understood one change:" : "Say it another way.", card_ids: draft ? storeCards(db, chat, [draft], id, key, meeting) : [],
       });
-      return json(200, out());
+      return reply("/v1/simple/chat/messages/{message_id}/choose", "post", out());
     }
     if (p[5] === "apply-all") {
       const applied: string[] = [];
@@ -2360,7 +2365,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         }
         applied.push(c.id);
       }
-      return json(200, { thread: out(), applied, stopped });
+      return reply("/v1/simple/chat/messages/{message_id}/apply-all", "post", { thread: out(), applied, stopped });
     }
     return null;
   }
@@ -2380,7 +2385,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (chat.threads[key]) Object.assign(chat.threads[key], { page, started_at: chat.threads[key].started_at ?? now() });
     // A chat started under "General" stays General.
     if (chat.threads[key] && !started && b.general === true) chat.threads[key].general = true;
-    return json(200, { ...threadOut(db, chat, chat.threads[key] ?? null, ctx, null), understood });
+    return reply("/v1/simple/chat/messages", "post", { ...threadOut(db, chat, chat.threads[key] ?? null, ctx, null), understood });
   }
   // Recent chats (ask-fresh): the caller's last ten Ask chats from any page; never a meeting's.
   if (p[2] === "chats" && !p[3] && m === "GET") {
@@ -2389,14 +2394,14 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       .map(([key, t]) => chatSummary(key, t, ctx))
       .sort((a, b) => b.last_at.localeCompare(a.last_at))
       .slice(0, 10);
-    return json(200, { items });
+    return reply("/v1/simple/chats", "get", { items });
   }
   if (p[2] === "chats" && p[3] && p[4] === "ask" && m === "PUT") {
     const own = ownChat(chat, ctx, p[3]);
     const askId = String((await body()).ask_id ?? "");
     if (!own || !askId || !(ctx.ownsDiscussion?.(askId) ?? true)) return json(404, { detail: "No such chat" });
     chat.threads[own].ask_id = askId;
-    return json(200, chatSummary(own, chat.threads[own], ctx));
+    return reply("/v1/simple/chats/{chat_id}/ask", "put", chatSummary(own, chat.threads[own], ctx));
   }
 
   if (p[2] === "meetings" && p[3] && p[4] === "chat") {
@@ -2408,13 +2413,13 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const key = `meeting:${meeting.id}`;
     if (!p[5] && m === "GET") {
       resolvePending(db, chat, key, ctx, s8);
-      return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, meeting));
+      return reply("/v1/simple/meetings/{meeting_id}/chat", "get", threadOut(db, chat, chat.threads[key] ?? null, ctx, meeting));
     }
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
       if (!text || text.length > chatTextMax()) return json(422, textRefused(text));
       const understood = say(db, chat, key, meeting, ctx, text);
-      return json(200, { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
+      return reply("/v1/simple/meetings/{meeting_id}/chat/messages", "post", { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
     }
     if (p[5] === "mode" && m === "PUT") {
       if (ctx.id !== meeting.presenter_id) return json(403, { detail: "Only the presenter changes who may apply" });
@@ -2427,7 +2432,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       meeting.change_mode = mode;
       meeting.change_people = mode === "named" ? people : [];
       if (meeting.s8) s8?.setMode(meeting.id, mode, meeting.change_people);
-      return json(200, rulesOut(meeting, ctx));
+      return reply("/v1/simple/meetings/{meeting_id}/chat/mode", "put", rulesOut(meeting, ctx));
     }
     return null;
   }
@@ -2442,14 +2447,14 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const { may, why_not } = mayOf(db, chat, c, ctx);
       if (!may) return json(403, { detail: why_not ?? "You may not discard this card" });
       c.status = "discarded";
-      return json(200, cardOut(db, chat, c, ctx));
+      return reply("/v1/simple/chat/cards/{card_id}/discard", "post", cardOut(db, chat, c, ctx));
     }
     if (p[5] === "undo" && c.op === API_OP) {
       if (c.status !== "applied") return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
       const bar = undoBar(db, chat, c, ctx);
       if (bar) return json(409, { detail: bar });
       c.status = "undone";
-      return json(200, cardOut(db, chat, c, ctx));
+      return reply("/v1/simple/chat/cards/{card_id}/undo", "post", cardOut(db, chat, c, ctx));
     }
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
@@ -2473,7 +2478,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       }
       c.status = "undone";
       if (meeting) meeting.decisions = meeting.decisions.filter((d) => d.card_id !== c.id);
-      return json(200, cardOut(db, chat, c, ctx));
+      return reply("/v1/simple/chat/cards/{card_id}/undo", "post", cardOut(db, chat, c, ctx));
     }
     if (p[5] === "apply") {
       const { may, why_not } = mayOf(db, chat, c, ctx);
@@ -2496,7 +2501,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         c.fixes = asIf(db, c).fixes;
       }
       const out = await applyOne(db, chat, c, ctx, n, s8, withDependents && Array.isArray(b.dependents) ? b.dependents.map(String) : withDependents);
-      return out instanceof Response ? out : json(200, out);
+      return out instanceof Response ? out : reply("/v1/simple/chat/cards/{card_id}/apply", "post", out);
     }
   }
   return null;

@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/branding-types";
 
 import { builtinThemeBackgrounds } from "./lane-f";
+import { reply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type StoredLogo = Omit<BrandLogo, "url">;
@@ -154,14 +155,14 @@ export async function routeBranding(b: BrandingDb, role: Role, req: Request, p: 
     return new Response(fromBase64(bytes), { headers: { "content-type": "image/png" } });
   }
   if (p[0] !== "v1" || p[1] !== "branding") return null;
-  if (p.length === 2 && m === "GET") return json(200, brandingOut(b, role));
+  if (p.length === 2 && m === "GET") return reply("/v1/branding", "get", brandingOut(b, role));
   if (p.length === 2 && m === "PUT") {
     if (role !== "owner") return forbidden();
     const checked = validate(JSON.parse((await req.text()) || "null") as Partial<BrandingIn> | null);
     if ("detail" in checked) return json(422, { detail: checked.detail });
     Object.assign(b, checked.ok);
     b.revision += 1;
-    return json(200, brandingOut(b, role));
+    return reply("/v1/branding", "put", brandingOut(b, role));
   }
   if (p[2] === "logo" && p.length === 3 && (m === "POST" || m === "DELETE")) {
     if (role !== "owner") return forbidden();
@@ -170,26 +171,30 @@ export async function routeBranding(b: BrandingDb, role: Role, req: Request, p: 
     const key = variant === "dark" ? "logo_dark" : "logo";
     if (m === "DELETE") {
       b[key] = null;
-    } else {
-      const form = await req.formData().catch(() => null);
-      const file = form?.get("file");
-      if (!file || typeof file === "string") return json(422, { detail: "Upload a PNG, JPEG or WebP" });
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const size = sniff(bytes);
-      if (!size) return json(422, { detail: "Upload a PNG, JPEG or WebP" });
-      if (bytes.length > BRANDING_LIMITS.logoBytes) return json(422, { detail: "The logo must be at most 512 KB" });
-      if (size.width > BRANDING_LIMITS.logoPx || size.height > BRANDING_LIMITS.logoPx || !size.width || !size.height) {
-        return json(422, { detail: "The logo must be at most 2,000 × 2,000 px" });
-      }
-      const sha = await sha256(bytes);
-      b.assets[sha] = toBase64(bytes);
-      b[key] = { sha256: sha, type: "image/png", width: size.width, height: size.height };
+      // Keep only the bytes a logo still uses.
+      const used = new Set([b.logo?.sha256, b.logo_dark?.sha256]);
+      for (const sha of Object.keys(b.assets)) if (!used.has(sha)) delete b.assets[sha];
+      b.revision += 1;
+      return reply("/v1/branding/logo", "delete", brandingOut(b, role));
     }
+    const form = await req.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!file || typeof file === "string") return json(422, { detail: "Upload a PNG, JPEG or WebP" });
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const size = sniff(bytes);
+    if (!size) return json(422, { detail: "Upload a PNG, JPEG or WebP" });
+    if (bytes.length > BRANDING_LIMITS.logoBytes) return json(422, { detail: "The logo must be at most 512 KB" });
+    if (size.width > BRANDING_LIMITS.logoPx || size.height > BRANDING_LIMITS.logoPx || !size.width || !size.height) {
+      return json(422, { detail: "The logo must be at most 2,000 × 2,000 px" });
+    }
+    const sha = await sha256(bytes);
+    b.assets[sha] = toBase64(bytes);
+    b[key] = { sha256: sha, type: "image/png", width: size.width, height: size.height };
     // Keep only the bytes a logo still uses.
     const used = new Set([b.logo?.sha256, b.logo_dark?.sha256]);
     for (const sha of Object.keys(b.assets)) if (!used.has(sha)) delete b.assets[sha];
     b.revision += 1;
-    return json(200, brandingOut(b, role));
+    return reply("/v1/branding/logo", "post", brandingOut(b, role));
   }
   return json(404, { detail: "Route not found" });
 }

@@ -33,6 +33,7 @@ import { annotate, asWritten, resolved, setNumber } from "./one-pager-checks";
 import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, flowsOfBets, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 import { madeOrder } from "./made-order";
+import { reply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -1054,6 +1055,21 @@ function liveChanges(db: OnePagerDb) {
   return madeOrder(db.changes, (c) => [c.at]).filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
 }
 
+/** The submit/approve endpoints' full SimpleDraftOut (the one-pager page ignores it, reading only errors and reloading). */
+function draftSummary(db: OnePagerDb, ctx: OnePagerCtx, d: NonNullable<OnePagerDb["draft"]>, status: "submitted" | "approved"): Schemas["SimpleDraftOut"] {
+  const done = status === "approved";
+  return {
+    id: d.id, document: db.doc, status, base_version: d.base, version: done ? db.version : (d.submitted_as ?? null),
+    created_by: d.participants[0] ?? ctx.id, created_at: d.submitted_at ?? new Date(mockNowMs()).toISOString(),
+    participant_ids: d.participants, decider: ctx.decider ? { id: ctx.decider, name: ctx.names[ctx.decider] ?? "someone" } : null,
+    changes: liveChanges(db).length, submitted_at: d.submitted_at ?? null, submitted_by: d.submitted_by ?? null,
+    decider_approved: !!db.approval || done, waiting_on: d.waiting_on ?? [], approved_at: done ? new Date(mockNowMs()).toISOString() : null,
+    blocked_by: db.approval?.blocked_by ?? [], can_submit: false, can_resume: !done, can_approve: !done && canApprove(db, ctx),
+    can_publish: false, required_reviewers: ctx.reviewers, change_log: [], published: done, can_withdraw: !done && decides(ctx),
+    decision_notes: [], from_prds: [],
+  };
+}
+
 function out(db: OnePagerDb, ctx: OnePagerCtx, c: Change): Change {
   return {
     ...c,
@@ -1258,7 +1274,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
         },
       });
     }
-    return json(200, onePager(db, ctx));
+    return reply("/v1/simple/one-pagers/{doc}", "get", onePager(db, ctx));
   }
   if (p[2] === "drafts" && p[4] === "submit" && m === "POST" && db.draft && p[3] === db.draft.id) {
     if (!decides(ctx)) return json(403, { detail: "Only an owner or the PRD's decider submits its draft" });
@@ -1283,7 +1299,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     db.changes.forEach((c) => (c.session_open = false));
     const as = ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1) ?? db.version + 1;
     db.draft.submitted_as = as;
-    return json(200, { id: db.draft.id, status: "submitted", version: as, waiting_on: db.draft.waiting_on });
+    return reply("/v1/simple/drafts/{draft_id}/submit", "post", draftSummary(db, ctx, db.draft, "submitted"));
   }
   // inbox-prd-approval-open (drafts.approve): a reviewer's approval leaves the draft waiting on the
   // rest; the decider's, with nobody left, publishes it.
@@ -1300,7 +1316,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     else if (db.approval) db.approval.waiting_on = waiting;
     const done = !!db.approval && !waiting.length;
     if (done) publishOnePager(db);
-    return json(200, { id: d.id, status: done ? "approved" : "submitted", waiting_on: d.waiting_on, decider_approved: !!db.approval || done, can_approve: !done && canApprove(db, ctx) });
+    return reply("/v1/simple/drafts/{draft_id}/approve", "post", draftSummary(db, ctx, d, done ? "approved" : "submitted"));
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
@@ -1319,7 +1335,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       }, db.version + 1);
     }
     d.reminders = { ...(d.reminders ?? {}), ...Object.fromEntries(due.map((i) => [i, at])) };
-    return json(200, { reminded: due.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })), reminded_at: at });
+    return reply("/v1/simple/one-pagers/{doc}/remind", "post", { reminded: due.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })), reminded_at: at });
   }
   if (p[2] !== "changes") return null;
   if (m === "POST" && p.length === 3) {
@@ -1366,7 +1382,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     db.changes.push(c);
     // S10: a bet's new wording comes with its visual (Oracle drafts it with the proposal).
     if (lineId.startsWith("bets-")) requestVisual(db.visuals, "change", c.id, `A bet of the PRD's one-pager, reworded to: ${next}`);
-    return json(201, { change: out(db, ctx, c), flags: [] });
+    return reply("/v1/simple/changes", "post", { change: out(db, ctx, c), flags: [] }, 201);
   }
   const c = db.changes.find((x) => x.id === p[3]);
   if (!c || m !== "POST") return null;
@@ -1389,7 +1405,10 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     c.status = p[4] === "accept" ? "accepted" : "declined";
     c.decided_by = ctx.id;
     c.decided_at = new Date(mockNowMs()).toISOString();
-    return json(200, { change: out(db, ctx, c), flags: [] });
+    const result = { change: out(db, ctx, c), flags: [] };
+    return p[4] === "accept"
+      ? reply("/v1/simple/changes/{change_id}/accept", "post", result)
+      : reply("/v1/simple/changes/{change_id}/decline", "post", result);
   }
   if (p[4] === "undo") {
     // qa-simple-prd-p3-17: a proposal is withdrawn by its author (declined, the PRD untouched).
@@ -1399,7 +1418,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       c.decided_by = ctx.id;
       c.decided_at = new Date(mockNowMs()).toISOString();
       c.decision_reason = "Withdrawn by its author";
-      return json(201, { change: out(db, ctx, c), flags: [] });
+      return reply("/v1/simple/changes/{change_id}/undo", "post", { change: out(db, ctx, c), flags: [] }, 201);
     }
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
@@ -1422,7 +1441,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
 function undone(db: OnePagerDb, ctx: OnePagerCtx, c: OnePagerDb["changes"][number], before: Change["before"], after: Change["after"]): Response {
   const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before, after, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
   db.changes.push(u);
-  return json(201, { change: out(db, ctx, u), flags: [] });
+  return reply("/v1/simple/changes/{change_id}/undo", "post", { change: out(db, ctx, u), flags: [] }, 201);
 }
 
 /** As one_pager._create_number: the number in the words `said` of one section set, with the lines saying the same words. */
@@ -1468,7 +1487,7 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
     c.draft_ids = [db.draft!.id];
   }
   db.changes.push(c);
-  return json(201, { change: out(db, ctx, c), flags: [] });
+  return reply("/v1/simple/changes", "post", { change: out(db, ctx, c), flags: [] }, 201);
 }
 
 /**

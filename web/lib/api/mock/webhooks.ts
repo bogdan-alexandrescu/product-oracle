@@ -19,6 +19,7 @@
  * the token pauses it (tokenRevoked, as oracle.webhooks.service.token_revoked).
  */
 import type { Schemas } from "@/lib/api/client";
+import { reply } from "./typed";
 
 type Role = Schemas["MemberOut"]["role"];
 type WebhookOut = Schemas["WebhookOut"];
@@ -325,11 +326,11 @@ export async function webhooksRoute(ctx: WebhooksContext, req: Request, p: strin
   const db = ctx.db;
   const actor = `user:${ctx.me.id}`;
   const body = async () => (JSON.parse((await req.text()) || "{}") ?? {}) as Record<string, unknown>;
-  if (p[1] === "webhook-event-types") return m === "GET" ? json(200, EVENT_TYPES) : null;
+  if (p[1] === "webhook-event-types") return m === "GET" ? reply("/v1/webhook-event-types", "get", EVENT_TYPES) : null;
   const mine = (h: HookRow) => ctx.me.role === "owner" || h.created_by === ctx.me.id;
 
   if (!p[2]) {
-    if (m === "GET") return json(200, db.hooks.filter(mine).map((h) => hookOut(ctx, h)));
+    if (m === "GET") return reply("/v1/webhooks", "get", db.hooks.filter(mine).map((h) => hookOut(ctx, h)));
     if (m !== "POST") return null;
     const b = await body();
     const name = typeof b.name === "string" ? b.name.trim() : "";
@@ -348,18 +349,18 @@ export async function webhooksRoute(ctx: WebhooksContext, req: Request, p: strin
       secret_rotated_at: ctx.now(), created_at: ctx.now(), created_by: ctx.me.id, secret, previous_secret: null, previous_expires_at: null,
     };
     db.hooks.push(hook);
-    return json(201, { webhook: hookOut(ctx, hook), secret });
+    return reply("/v1/webhooks", "post", { webhook: hookOut(ctx, hook), secret }, 201);
   }
 
   const hook = db.hooks.find((h) => h.id === p[2]);
   if (!hook || !mine(hook)) return refuse(404, "Not found");
 
   if (!p[3]) {
-    if (m === "GET") return json(200, hookOut(ctx, hook));
+    if (m === "GET") return reply("/v1/webhooks/{webhook_id}", "get", hookOut(ctx, hook));
     if (m === "DELETE") {
       db.hooks = db.hooks.filter((h) => h !== hook);
       db.deliveries = db.deliveries.filter((d) => d.webhook_id !== hook.id);
-      return json(204, null);
+      return reply("/v1/webhooks/{webhook_id}", "delete", undefined, 204);
     }
     if (m !== "PATCH") return null;
     const b = await body();
@@ -394,7 +395,7 @@ export async function webhooksRoute(ctx: WebhooksContext, req: Request, p: strin
         notify(ctx, [hook.created_by], "webhook_paused", `${nameOf(ctx, ctx.me.id)} paused your webhook ${hook.name}`, hook, actor, "manual");
       }
     }
-    return json(200, hookOut(ctx, hook));
+    return reply("/v1/webhooks/{webhook_id}", "patch", hookOut(ctx, hook));
   }
 
   if (p[3] === "rotate-secret" && m === "POST") {
@@ -406,20 +407,20 @@ export async function webhooksRoute(ctx: WebhooksContext, req: Request, p: strin
     hook.secret = secret;
     hook.secret_hint = secret.slice(-4);
     hook.secret_rotated_at = ctx.now();
-    return json(200, { webhook: hookOut(ctx, hook), secret });
+    return reply("/v1/webhooks/{webhook_id}/rotate-secret", "post", { webhook: hookOut(ctx, hook), secret });
   }
   if (p[3] === "take-over" && m === "POST") {
     if (ctx.me.role !== "owner") return refuse(403, "Only an owner can take over a webhook");
     if (hook.status !== "paused" || hook.created_by === ctx.me.id) return refuse(409, "Only a paused webhook of someone else can be taken over");
     hook.created_by = ctx.me.id;
-    return json(200, hookOut(ctx, hook));
+    return reply("/v1/webhooks/{webhook_id}/take-over", "post", hookOut(ctx, hook));
   }
   if (p[3] === "test" && m === "POST") {
     const event: EventRow = { id: ctx.uuid(), public_id: publicId(), type: "webhook.test", occurred_at: ctx.now(), data: { message: TEST_MESSAGE } };
     db.events.push(event);
     const d: DeliveryRow = newDelivery(ctx, hook, event.id, null);
     await sendNow(ctx, hook, d);
-    return json(200, deliveryOut(db, d));
+    return reply("/v1/webhooks/{webhook_id}/test", "post", deliveryOut(db, d));
   }
   if (p[3] === "deliveries") {
     const visible = db.deliveries.filter((d) => d.webhook_id === hook.id && (ctx.me.role === "owner" || d.status !== "withheld"));
@@ -431,15 +432,15 @@ export async function webhooksRoute(ctx: WebhooksContext, req: Request, p: strin
         .filter((d) => (!status || d.status === status) && (!type || db.events.find((e) => e.id === d.event)?.type === type) && (!before || d.created_at < before))
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
       const items = rows.slice(0, 50).map((d) => deliveryOut(db, d));
-      return json(200, { items, next_before: rows.length > 50 ? items[items.length - 1].created_at : null });
+      return reply("/v1/webhooks/{webhook_id}/deliveries", "get", { items, next_before: rows.length > 50 ? items[items.length - 1].created_at : null });
     }
     const d = visible.find((x) => x.id === p[4]);
     if (!d) return refuse(404, "Not found");
-    if (!p[5] && m === "GET") return json(200, deliveryOut(db, d));
+    if (!p[5] && m === "GET") return reply("/v1/webhooks/{webhook_id}/deliveries/{delivery_id}", "get", deliveryOut(db, d));
     if (p[5] === "redeliver" && m === "POST") {
       const again = newDelivery(ctx, hook, d.event, d.id);
       await sendNow(ctx, hook, again);
-      return json(200, deliveryOut(db, again));
+      return reply("/v1/webhooks/{webhook_id}/deliveries/{delivery_id}/redeliver", "post", deliveryOut(db, again));
     }
   }
   return null;

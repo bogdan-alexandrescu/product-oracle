@@ -12,6 +12,7 @@ import { goalFigure } from "@/lib/goal-figure";
 import type { BaselineState } from "./baseline";
 import { type ChangeRow, type DiscussionRow, type DiscussionsDb } from "./discussions";
 import { goalCheck, refusedProblems } from "./goals";
+import { reply } from "./typed";
 
 type Role = Schemas["MemberOut"]["role"];
 type Attrs = Record<string, unknown>;
@@ -230,8 +231,9 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
   };
 
   if (isVague) {
-    return json(
-      200,
+    return reply(
+      "/v1/baseline/goals/vague",
+      "get",
       vague().map((g) => ({ entity: entityOut(g), missing: check(g).missing, discussion_id: openOn(g.id)?.id ?? null })),
     );
   }
@@ -246,13 +248,13 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
     if (observing) return refuse(409, GOALS_OBSERVING);
     const input = (await body<{ private?: boolean }>()) ?? {};
     const out = start(goal, !!input.private);
-    return json(out.created ? 201 : 200, out);
+    return reply("/v1/baseline/entities/{goal_id}/interview", "post", out, out.created ? 201 : 200);
   }
   if (isMany) {
     const input = (await body<{ entity_ids?: string[] | null }>()) ?? {};
     const goals = input.entity_ids ? vague().filter((g) => input.entity_ids!.includes(g.id)) : vague();
     if (observing && goals.length > 0) return refuse(409, GOALS_OBSERVING);
-    return json(200, { discussions: goals.map((g) => ({ entity_id: g.id, ...start(g, false) })) });
+    return reply("/v1/baseline/goals/interview", "post", { discussions: goals.map((g) => ({ entity_id: g.id, ...start(g, false) })) });
   }
 
   // #187 b6-goal-only-slice: B6's own Propose and Dismiss are retired for one release (as the API).

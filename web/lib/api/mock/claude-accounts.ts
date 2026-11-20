@@ -18,6 +18,7 @@ import type { Schemas } from "@/lib/api/client";
 import { inWords } from "@/lib/format";
 
 import { mockSettingValue } from "./connections";
+import { reply } from "./typed";
 
 type Account = Schemas["AccountOut"];
 type Stored = Omit<Account, "stale" | "takes_calls" | "spent_by" | "spent_until">;
@@ -369,7 +370,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       pool: poolOf(db),
       time_zone: timeZone(),
     };
-    return json(200, page);
+    return reply("/v1/claude-accounts", "get", page);
   }
   if (!p[2] && m === "POST") {
     const { label, credential } = await body<Schemas["RegisterIn"]>();
@@ -382,14 +383,14 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
     }
     const inner = (parsed.claudeAiOauth ?? parsed) as Record<string, unknown>;
     if (!inner.refreshToken && !inner.refresh_token) return json(422, { detail: "the credential has no refresh token" });
-    return json(201, { account: register(db, label, null), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" });
+    return reply("/v1/claude-accounts", "post", { account: register(db, label, null), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" }, 201);
   }
   if (p[2] === "authorize" && m === "POST") {
     const { label } = await body<Schemas["AuthorizeIn"]>();
     if (!LABEL.test(label)) return json(422, { detail: `account label '${label}' must be lowercase letters, digits and dashes` });
     const state = newState();
     db.pending.push({ state, label });
-    return json(200, {
+    return reply("/v1/claude-accounts/authorize", "post", {
       authorize_url: `https://claude.com/cai/oauth/authorize?code=true&response_type=code&state=${state}`,
       state,
       expires_in_seconds: 900,
@@ -407,7 +408,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       return json(422, { detail: "the sign-in code was not accepted. Codes are single-use and expire quickly. Try Add account once more." });
     }
     db.pending = db.pending.filter((x) => x.state !== state);
-    return json(201, { account: register(db, pending.label, { email: `${pending.label}@example.com`, organization: "Example Studio" }), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" });
+    return reply("/v1/claude-accounts/exchange", "post", { account: register(db, pending.label, { email: `${pending.label}@example.com`, organization: "Example Studio" }), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" }, 201);
   }
   if (p[2] === "fallback") {
     if (m === "PUT") {
@@ -420,30 +421,30 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
         label: `${KIND_NAME[kind]} …${t.slice(-4)}`,
         updated_at: new Date().toISOString(),
       };
-      return json(200, db.fallback);
+      return reply("/v1/claude-accounts/fallback", "put", db.fallback);
     }
     if (m === "DELETE") {
       db.fallback = null;
-      return json(204, undefined);
+      return reply("/v1/claude-accounts/fallback", "delete", undefined, 204);
     }
   }
   if (p[2] === "sweep" && m === "POST") {
     db.sweep = { last_completed_at: new Date().toISOString(), last_outcome: "ok", readable: true };
-    return json(200, { result: {} });
+    return reply("/v1/claude-accounts/sweep", "post", { result: {} });
   }
 
   const row = db.accounts.find((a) => a.account_id === p[2]);
   if (!row) return json(404, { detail: `No Claude account '${p[2]}'` });
   if (p[3] === "holders" && m === "GET") {
     const live = db.holds.filter((h) => h.account_id === row.account_id);
-    return json(200, { account_id: row.account_id, total: live.length, holders: live });
+    return reply("/v1/claude-accounts/{account_id}/holders", "get", { account_id: row.account_id, total: live.length, holders: live });
   }
   if (p[3] === "history" && m === "GET") {
     const spans = db.spans
       .filter((s) => s.account_id === row.account_id)
       .sort((a, b) => (b.since ?? "").localeCompare(a.since ?? ""));
     const limit = Number(q.get("limit") ?? 100);
-    return json(200, {
+    return reply("/v1/claude-accounts/{account_id}/history", "get", {
       account_id: row.account_id,
       from: at(-7 * 24 * HOUR),
       to: new Date().toISOString(),
@@ -460,7 +461,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
     Object.assign(row, { state: to, reason: reason ?? "" });
     const moving = to === "DRAINING" ? db.holds.filter((h) => h.account_id === row.account_id).length : 0;
     for (const h of db.holds) if (h.account_id === row.account_id) h.move = to === "DRAINING" ? "drain" : null;
-    return json(200, { account: out(row), moving });
+    return reply("/v1/claude-accounts/{account_id}/state", "put", { account: out(row), moving });
   }
   if (p[3] === "refresh" && m === "POST") {
     const dead = row.state === "REAUTH_REQUIRED";
@@ -470,7 +471,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       last_refresh_reason: reason,
       ...(dead ? {} : { token_expires_at: at(8 * HOUR) }),
     });
-    return json(200, {
+    return reply("/v1/claude-accounts/{account_id}/refresh", "post", {
       refresh: { account_id: row.account_id, refreshed: !dead, reason, expires_at: dead ? null : row.token_expires_at },
       account: out(row),
     });
@@ -479,7 +480,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
     const closed = db.holds.filter((h) => h.account_id === row.account_id).length;
     db.accounts = db.accounts.filter((a) => a.account_id !== row.account_id);
     db.holds = db.holds.filter((h) => h.account_id !== row.account_id);
-    return json(200, { removed: row.account_id, label: row.label, closed_holds: closed, credential: "deleted" });
+    return reply("/v1/claude-accounts/{account_id}", "delete", { removed: row.account_id, label: row.label, closed_holds: closed, credential: "deleted" });
   }
   return json(404, { detail: "Route" });
 }

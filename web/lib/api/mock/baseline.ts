@@ -15,6 +15,7 @@ import { describe, proposer } from "./describe";
 import { goalCheck, readText, refusedProblems, todayIso, unitOk, type GoalProblem } from "./goals";
 import { MOCK_SCENARIO_KEY, PRODUCT_CHAT_ID, seededItemId } from "./ids";
 import { routeEvidenceLinks } from "./public-links";
+import { reply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type EntityRow = Omit<Schemas["EntityOut"], "evidence_count">;
@@ -1549,7 +1550,7 @@ export async function routeBaseline(
     const payload = { op: input.op, kind: input.kind, fields, reason: input.reason ?? null, origin: "user" };
     // service.propose: the same change still open is that proposal, never a second one.
     const open = s.proposals.find((x) => x.status === "open" && JSON.stringify(x.payload) === JSON.stringify(payload) && (x.entity_id ?? null) === (input.entity_id ?? null));
-    if (open) return json(201, proposalOut(open));
+    if (open) return reply("/v1/baseline/proposals", "post", proposalOut(open), 201);
     const p: ProposalRow = {
       id: newId(),
       entity_id: input.entity_id ?? null,
@@ -1563,7 +1564,7 @@ export async function routeBaseline(
       created_at: now(),
     };
     s.proposals.push(p);
-    return json(201, proposalOut(p));
+    return reply("/v1/baseline/proposals", "post", proposalOut(p), 201);
   }
 
   // Removing evidence: approvers remove any; a commenter only link evidence they added (C2c).
@@ -1577,7 +1578,7 @@ export async function routeBaseline(
     if ((q.get("reason") ?? "").length > 1000) return fail(422, "reason: at most 1000 characters");
     s.evidence = s.evidence.filter((x) => x.id !== ev.id);
     rescoreEntity(s, ev.entity_id);
-    return new Response(null, { status: 204 });
+    return reply("/v1/baseline/evidence/{evidence_id}", "delete", undefined, 204);
   }
 
   if (m !== "GET" && ROLE_ORDER.indexOf(caller.role) < ROLE_ORDER.indexOf("approver")) {
@@ -1587,11 +1588,11 @@ export async function routeBaseline(
   try {
     const [head, id, action] = rest;
 
-    if (head === "review-status" && !id && m === "GET") return json(200, baselineReviewStatus());
+    if (head === "review-status" && !id && m === "GET") return reply("/v1/baseline/review-status", "get", baselineReviewStatus());
     if (head === "graph" && m === "GET") {
-      return json(200, { entities: s.entities.map(entityOut), edges: s.edges.map(edgeOut) });
+      return reply("/v1/baseline/graph", "get", { entities: s.entities.map(entityOut), edges: s.edges.map(edgeOut) });
     }
-    if (head === "trace" && m === "GET") return json(200, traceReport(s));
+    if (head === "trace" && m === "GET") return reply("/v1/baseline/trace", "get", traceReport(s));
 
     if (head === "entities" && !id && m === "GET") {
       const type = q.get("type");
@@ -1600,20 +1601,20 @@ export async function routeBaseline(
       // goal-order: goals in the one goal order, as the API lists them; a goal's name and description as shown
       // (goals.goal_name): no "[n]" stored before the guard. The graph keeps the stored text.
       const out = (type === "goal" ? sortGoals(rows) : rows).map(entityOut);
-      return json(200, out.map((o) => (o.type === "goal" ? { ...o, title: goalName(o.title, o.key), body: withoutPlaceholders(o.body) } : o)));
+      return reply("/v1/baseline/entities", "get", out.map((o) => (o.type === "goal" ? { ...o, title: goalName(o.title, o.key), body: withoutPlaceholders(o.body) } : o)));
     }
 
     if (head === "entities" && !id && m === "POST") {
       const input = await body<Schemas["EntityCreate"]>();
       const e = createEntity(s, input, caller.userId, seen());
       const out: Schemas["EntityWriteOut"] = { applied: true, entity: entityOut(e), proposal: null };
-      return json(201, out);
+      return reply("/v1/baseline/entities", "post", out, 201);
     }
     if (head === "edges" && !id && m === "POST") {
       const input = await body<Schemas["EdgeCreate"]>();
       const e = createEdge(s, input, caller.userId);
       const out: Schemas["EdgeWriteOut"] = { applied: true, edge: edgeOut(e), proposal: null };
-      return json(201, out);
+      return reply("/v1/baseline/edges", "post", out, 201);
     }
 
     if (head === "edges" && id) {
@@ -1622,19 +1623,19 @@ export async function routeBaseline(
       if (!action && m === "PATCH") {
         updateEdge(e, await body<Schemas["EdgePatch"]>(), caller.userId);
         const out: Schemas["EdgeWriteOut"] = { applied: true, edge: edgeOut(e), proposal: null };
-        return json(200, out);
+        return reply("/v1/baseline/edges/{edge_id}", "patch", out);
       }
       if (!action && m === "DELETE") {
         s.edges = s.edges.filter((x) => x.id !== e.id);
         s.evidence = s.evidence.filter((x) => x.edge_id !== e.id);
-        return new Response(null, { status: 204 });
+        return reply("/v1/baseline/edges/{edge_id}", "delete", undefined, 204);
       }
       if (action === "unlock" && m === "POST") {
         Object.assign(e, { locked: false, locked_by: null, locked_at: null });
-        return json(200, edgeOut(e));
+        return reply("/v1/baseline/edges/{edge_id}/unlock", "post", edgeOut(e));
       }
       if (action === "evidence" && m === "POST") {
-        return json(201, evidenceOut(attachEvidence(s, caller, await body<Schemas["EvidenceCreate"]>(), { edge_id: e.id })));
+        return reply("/v1/baseline/edges/{edge_id}/evidence", "post", evidenceOut(attachEvidence(s, caller, await body<Schemas["EvidenceCreate"]>(), { edge_id: e.id })), 201);
       }
     }
 
@@ -1649,7 +1650,7 @@ export async function routeBaseline(
           edges_in: s.edges.filter((x) => x.dst_id === e.id).map(edgeOut),
           open_proposals: s.proposals.filter((p) => p.status === "open" && p.entity_id === e.id).length,
         };
-        return json(200, detail);
+        return reply("/v1/baseline/entities/{entity_id}", "get", detail);
       }
       if (!action && m === "PATCH") {
         const input = await body<Schemas["EntityPatch"]>();
@@ -1668,7 +1669,9 @@ export async function routeBaseline(
           runId: input.run_id,
         });
         const out: Schemas["EntityWriteOut"] = { applied: !proposal, entity: entityOut(e), proposal: proposal && proposalOut(proposal) };
-        return json(proposal ? 202 : 200, out);
+        return proposal
+          ? reply("/v1/baseline/entities/{entity_id}", "patch", out, 202)
+          : reply("/v1/baseline/entities/{entity_id}", "patch", out);
       }
       if ((action === "confirm" || action === "reject") && m === "POST") {
         const status = action === "confirm" ? "confirmed" : "rejected";
@@ -1693,7 +1696,9 @@ export async function routeBaseline(
           });
           if (status === "confirmed") confirmGoalLinks(s, e, caller.userId);
         }
-        return json(200, entityOut(e));
+        return action === "confirm"
+          ? reply("/v1/baseline/entities/{entity_id}/confirm", "post", entityOut(e))
+          : reply("/v1/baseline/entities/{entity_id}/reject", "post", entityOut(e));
       }
       if (action === "merge" && m === "POST") {
         // B2 Merge into…: a duplicate the run created goes into an item of the same type.
@@ -1717,10 +1722,14 @@ export async function routeBaseline(
         }
         s.entities = s.entities.filter((x) => x !== e);
         into.updated_at = now();
-        return json(200, entityOut(into));
+        return reply("/v1/baseline/entities/{entity_id}/merge", "post", entityOut(into));
       }
       if (action === "measurements" && m === "GET") {
-        return json(200, measurements().filter((x) => x.entity_id === e.id).sort((a, b) => b.measured_on.localeCompare(a.measured_on)));
+        return reply(
+          "/v1/baseline/entities/{entity_id}/measurements",
+          "get",
+          measurements().filter((x) => x.entity_id === e.id).sort((a, b) => b.measured_on.localeCompare(a.measured_on)),
+        );
       }
       if (action === "measurements" && m === "POST") {
         const input = await body<Schemas["MeasurementCreate"]>();
@@ -1737,14 +1746,19 @@ export async function routeBaseline(
         }
         Object.assign(row, { value: input.value, note: input.note ?? null, evidence_id: input.evidence_id ?? null, recorded_by: caller.userId });
         syncCurrent(e, `value ${input.value} measured on ${input.measured_on}`);
-        return json(201, row);
+        return reply("/v1/baseline/entities/{entity_id}/measurements", "post", row, 201);
       }
       if (action === "unlock" && m === "POST") {
         Object.assign(e, { locked: false, locked_by: null, locked_at: null });
-        return json(200, entityOut(e));
+        return reply("/v1/baseline/entities/{entity_id}/unlock", "post", entityOut(e));
       }
       if (action === "evidence" && m === "POST") {
-        return json(201, evidenceOut(attachEvidence(s, caller, await body<Schemas["EvidenceCreate"]>(), { entity_id: e.id })));
+        return reply(
+          "/v1/baseline/entities/{entity_id}/evidence",
+          "post",
+          evidenceOut(attachEvidence(s, caller, await body<Schemas["EvidenceCreate"]>(), { entity_id: e.id })),
+          201,
+        );
       }
       if (action === "revisions" && m === "GET") {
         // Newest first, as the API lists them.
@@ -1752,7 +1766,7 @@ export async function routeBaseline(
         const limit = q.get("limit");
         if (limit != null && !(Number(limit) >= 1 && Number(limit) <= 500)) return fail(422, "limit");
         const newest = [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at));
-        return json(200, limit == null ? newest : newest.slice(0, Number(limit)));
+        return reply("/v1/baseline/entities/{entity_id}/revisions", "get", limit == null ? newest : newest.slice(0, Number(limit)));
       }
     }
 
@@ -1760,8 +1774,9 @@ export async function routeBaseline(
       const status = q.get("status");
       const run = q.get("run_id");
       if (run != null && run !== "none" && !UUID_RE.test(run)) return fail(422, "run_id must be a run's id or none");
-      return json(
-        200,
+      return reply(
+        "/v1/baseline/proposals",
+        "get",
         s.proposals
           .filter((p) => !status || p.status === status)
           .filter((p) => run == null || (run === "none" ? p.run_id == null : p.run_id === run))
@@ -1812,7 +1827,9 @@ export async function routeBaseline(
         const closed = closeSiblings(s, p, caller.userId);
         if (closed.length) p.payload = { ...p.payload, closed_as_done: closed };
       }
-      return json(200, proposalOut(p));
+      return action === "accept"
+        ? reply("/v1/baseline/proposals/{proposal_id}/accept", "post", proposalOut(p))
+        : reply("/v1/baseline/proposals/{proposal_id}/reject", "post", proposalOut(p));
     }
 
     if (head === "measurements" && id && !action && m === "DELETE") {
@@ -1821,7 +1838,7 @@ export async function routeBaseline(
       const goal = findEntity(row.entity_id);
       s.measurements = measurements().filter((x) => x.id !== id);
       if (goal) syncCurrent(goal, `measurement of ${row.measured_on} deleted`);
-      return new Response(null, { status: 204 });
+      return reply("/v1/baseline/measurements/{measurement_id}", "delete", undefined, 204);
     }
     if (head === "goals" && id === "fill-from-text" && !action && m === "POST") {
       // An Oracle (agent) write: applied to an unlocked goal, a proposal on a locked one.
@@ -1839,14 +1856,15 @@ export async function routeBaseline(
         if (proposal) proposed += 1;
         else applied += 1;
       }
-      return json(200, { applied, proposed, left_as_text: left } satisfies Schemas["FillFromTextResult"]);
+      return reply("/v1/baseline/goals/fill-from-text", "post", { applied, proposed, left_as_text: left } satisfies Schemas["FillFromTextResult"]);
     }
 
     if (head === "conflicts" && !id && m === "GET") {
       const status = q.get("status");
       const material = q.get("material");
-      return json(
-        200,
+      return reply(
+        "/v1/baseline/conflicts",
+        "get",
         s.conflicts
           .filter((c) => (!status || c.status === status) && (material == null || String(c.material) === material))
           .sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -1877,7 +1895,7 @@ export async function routeBaseline(
         proposal_id: null,
       };
       c.status = "resolved";
-      return json(200, c);
+      return reply("/v1/baseline/conflicts/{conflict_id}/resolve", "post", c);
     }
   } catch (e) {
     if (e instanceof MockError) return fail(e.status, e.message);

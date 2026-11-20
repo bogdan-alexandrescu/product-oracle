@@ -60,6 +60,7 @@ import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type Simp
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 import { agendaRight, agendaRowsOut, editAgenda, restoreAgendaRow, TOPIC_MINS, type AgendaCtx, type AgendaRowDb, type AgendaSheetDb } from "./simple-meeting-agenda";
 import { madeOrder } from "./made-order";
+import { reply } from "./typed";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -968,7 +969,7 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
     const [words, subjects] = describe(ctx, out.change, true);
     const prd = prds(ctx).find((x) => x.slug === m.prd)!;
     record(db, ctx, m, `Proposed: ${words}`, [...subjects, { kind: "document", id: prd.id }], [out.change.id], [String(out.change.target.item_id)]);
-    return json(201, out);
+    return reply("/v1/simple/changes", "post", out, 201);
   }
   const inner = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify(rest) });
   const res = await run(inner);
@@ -988,7 +989,7 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
     // meeting-changes-only-its-agenda (SimpleChangeOut.from_meeting): a change made in it names it.
     const kept = (ctx.roadmap.changes ?? []).find((x) => x.id === c.id);
     if (kept) Object.assign(kept, { from_meeting: { id: m.id, title: m.title }, off_agenda: false });
-    return json(res.status, { ...out, change: { ...c, from_meeting: { id: m.id, title: m.title }, off_agenda: false } });
+    return reply("/v1/simple/changes", "post", { ...out, change: { ...c, from_meeting: { id: m.id, title: m.title }, off_agenda: false } }, res.status);
   }
   return res;
 }
@@ -1243,14 +1244,14 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     // build-rundecide RD1 a (as decisions_page): the runs' stops, unless a goal or a meeting is picked.
     runs: meetingQ || goal ? [] : (ctx.runs?.(prd?.slug ?? null) ?? []),
   };
-  return json(200, out);
+  return reply("/v1/simple/decisions", "get", out);
 }
 
 /** Handles /v1/simple/meetings… and /v1/simple/decisions; null for other routes. */
 export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || (p[2] !== "meetings" && p[2] !== "decisions")) return null;
   const method = req.method;
-  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? json(200, { ...waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0), tasks: tasksWaiting(ctx.roadmap, ctx.me) }) : null;
+  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? reply("/v1/simple/decisions/waiting", "get", { ...waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0), tasks: tasksWaiting(ctx.roadmap, ctx.me) }) : null;
   if (p[2] === "decisions") return method === "GET" ? decisionsPage(ctx, db, q) : null;
   const ps = prds(ctx);
   const now = iso(mockNowMs());
@@ -1259,7 +1260,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (method === "GET") {
       for (const m of db.meetings) endIdle(ctx, db, m);
       const all = [...db.meetings].sort((a, b) => (a.started_at < b.started_at ? 1 : -1)).map((m) => brief(ctx, db, m));
-      return json(200, { upcoming: upcoming(ctx, db), live: all.filter((m) => m.status === "live"), past: all.filter((m) => m.status === "ended") });
+      return reply("/v1/simple/meetings", "get", { upcoming: upcoming(ctx, db), live: all.filter((m) => m.status === "live"), past: all.filter((m) => m.status === "ended") });
     }
     if (method !== "POST") return null;
     const b = (await body(req)) as Partial<Schemas["SimpleMeetingIn"]>;
@@ -1305,7 +1306,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       length_min: length, status: "live", started_at: now, ended_at: null, ended_by: null, minutes: null, minutes_state: null, delivery: null, sent_at: null, approved: null,
     };
     db.meetings.push(m);
-    return json(201, one(ctx, db, m));
+    return reply("/v1/simple/meetings", "post", one(ctx, db, m), 201);
   }
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
@@ -1328,22 +1329,22 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       length_min: occ?.length_min ?? 60,
       occurrence: occ,
     };
-    return json(200, out);
+    return reply("/v1/simple/meetings/options", "get", out);
   }
   const m = db.meetings.find((x) => x.id === p[3]);
   if (!m) return json(404, { detail: "No such meeting" });
   const prd = ps.find((x) => x.slug === m.prd)!;
-  const ok = () => json(200, one(ctx, db, m));
+  const meetingBody = () => one(ctx, db, m);
   endIdle(ctx, db, m);
   settleLater(ctx, db, m);
   settleStuck(m);
-  if (!p[4] && method === "GET") return ok();
+  if (!p[4] && method === "GET") return reply("/v1/simple/meetings/{meeting_id}", "get", meetingBody());
   if (p[4] === "join" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
     if (!m.attendee_ids.includes(ctx.me.id)) m.attendee_ids.push(ctx.me.id);
     m.absent_ids = m.absent_ids.filter((i) => i !== ctx.me.id);
     if (!(m.joined_ids ?? m.attendee_ids).includes(ctx.me.id)) m.joined_ids = [...(m.joined_ids ?? m.attendee_ids), ctx.me.id];
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/join", "post", meetingBody());
   }
   if (p[4] === "rules" && method === "PATCH") {
     if (ctx.me.id !== m.presenter_id) return json(403, { detail: "Only the presenter sets who may change things" });
@@ -1360,14 +1361,14 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     }
     m.change_mode = mode;
     m.change_people = people;
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/rules", "patch", meetingBody());
   }
   // agenda-sheet (meetings.edit_agenda): one op of the Agenda sheet.
   if (p[4] === "agenda" && method === "POST") {
     const b = (await body(req)) as Schemas["SimpleAgendaEditIn"];
     const sheet = agendaSheet(ctx, db, m, prd);
     const err = editAgenda(sheet, agendaCtx(ctx, db, m, prd), b);
-    return err ? json(err.status, { detail: err.detail }) : ok();
+    return err ? json(err.status, { detail: err.detail }) : reply("/v1/simple/meetings/{meeting_id}/agenda", "post", meetingBody());
   }
   if (p[4] === "comments" && method === "POST") {
     const b = (await body(req)) as Partial<Schemas["SimpleMeetingCommentIn"]>;
@@ -1379,7 +1380,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     // out of meeting_decisions, the minutes and the Decisions page.
     const note: MeetingNote = { id: `comment-${crypto.randomUUID()}`, kind: "comment", text, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()), card_id: null };
     (m.notes ??= []).push(note);
-    return json(201, one(ctx, db, m));
+    return reply("/v1/simple/meetings/{meeting_id}/comments", "post", one(ctx, db, m), 201);
   }
   // build-runplan RP2 (meeting_draft): Change dates, Leave out and Approve these N dates on the run's draft.
   if (p[4] === "draft-items" && method === "POST") {
@@ -1394,8 +1395,9 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       // The PRD by its slug (Company > Decisions links to it); the count in the chosen option, so the step says so after a reload (meeting_draft.approve_dates).
       const subject = { kind: "document", id: prd.ids[0]!, ref: prd.slug };
       record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [subject], [], [], `${APPROVED_KEY}:${r.n}`);
+      return reply("/v1/simple/meetings/{meeting_id}/draft-items/approve", "post", meetingBody());
     }
-    return ok();
+    return act.kind === "dates" ? reply("/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates", "post", meetingBody()) : reply("/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out", "post", meetingBody());
   }
   if (p[4] === "approve" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
@@ -1424,7 +1426,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     record(db, ctx, m, `Approved ${prd.title} (${why.length ? `not yet published: ${why.join(" · ")}` : "published"})`, [{ kind: "document", id: prd.id }], []);
     if (prd.slug === ctx.onePager.doc.slug && why.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)), blocked_by: blocked };
     else if (prd.slug === ctx.onePager.doc.slug) publishOnePager(ctx.onePager);
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/approve", "post", meetingBody());
   }
   if (p[4] === "end" && method === "POST") {
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner ends it" });
@@ -1443,7 +1445,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes_job = later || stuck ? "drafting" : job;
     m.minutes_job_at = m.minutes_state === "drafting" ? mockNowMs() : null;
     m.minutes_due = later ? { at: mockNowMs() + MINUTES_LATER_MS, outcome: later } : null;
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/end", "post", meetingBody());
   }
   if (p[4] === "minutes" && p[5] === "redraft" && method === "POST") {
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner drafts again" });
@@ -1455,7 +1457,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/minutes/redraft", "post", meetingBody());
   }
   if (p[4] === "minutes" && method === "PUT") {
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner edits them" });
@@ -1474,7 +1476,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     };
     if (m.minutes_state === "drafting") m.minutes_state = "ready";
     m.minutes_job = null;
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/minutes", "put", meetingBody());
   }
   if (p[4] === "delivery" && p[5] === "retry" && method === "POST") {
     // meetings.retry_delivery: requeue the failed emails or the Slack post for the tick.
@@ -1492,7 +1494,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       d.slack_try = fresh();
       d.slack_status = "queued";
     }
-    return json(200, one(ctx, db, m));
+    return reply("/v1/simple/meetings/{meeting_id}/delivery/retry", "post", one(ctx, db, m));
   }
   if (p[4] === "send" && method === "POST") {
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner sends them" });
@@ -1513,7 +1515,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes_state = "sent";
     m.minutes_job = null;
     m.sent_at = now;
-    return ok();
+    return reply("/v1/simple/meetings/{meeting_id}/send", "post", meetingBody());
   }
   return null;
 }
@@ -1580,7 +1582,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   // GET /v1/simple/decisions/{id} (meetings_router.get_simple_decision): one decision as its Decisions row.
   if (req.method === "GET" && p[1] === "simple" && p[2] === "decisions" && p.length === 4 && p[3] !== "waiting") {
     const { d } = await sheetDecision(db, ctx, p[3]);
-    return d ? json(200, row(ctx, d)) : json(404, { detail: "No such decision" });
+    return d ? reply("/v1/simple/decisions/{decision_id}", "get", row(ctx, d)) : json(404, { detail: "No such decision" });
   }
   if (p[1] === "simple" && p[2] === "decisions" && p.length >= 4 && p[3] !== "waiting") {
     const trash = ctx.trash?.();
@@ -1591,7 +1593,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
       const entry = trash.entries.find((e) => (e.out.root.type === "decision" || e.out.root.type === "question") && e.out.root.id === id);
       if (!entry) return json(404, { detail: "No such decision in Trash" });
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
-      return json(200, restoreFromTrash(trash, entry, now, { items: [], sheet: [...db.decisions, ...(db.questions?.questions ?? []), ...[await ctx.logRow?.(id)].filter((r) => !!r)] }));
+      return reply("/v1/simple/decisions/{decision_id}/restore", "post", restoreFromTrash(trash, entry, now, { items: [], sheet: [...db.decisions, ...(db.questions?.questions ?? []), ...[await ctx.logRow?.(id)].filter((r) => !!r)] }));
     }
     if (req.method !== "DELETE" || p.length !== 4) return null;
     const reason = new URL(req.url, "http://mock").searchParams.get("reason");
@@ -1617,7 +1619,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
       documents: [], versions: [], runs: [], intakes: [],
     };
     trash.entries.push(row);
-    return json(200, { entry: entryOut(row, now, true), change: null, can_restore: true });
+    return reply("/v1/simple/decisions/{decision_id}", "delete", { entry: entryOut(row, now, true), change: null, can_restore: true });
   }
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
   const held = (db.sheet_changes ??= []);
@@ -1637,7 +1639,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
     if (log) toLog(log, { ...structuredClone(h.was), approver_id: log.approver_id }, now, ctx.me.id);
     h.change.undone = true;
     h.change.can_undo = false;
-    return json(200, { change: { ...h.change, id: crypto.randomUUID(), status: "undone", undoes_id: h.change.id, undone: false, at: now }, flags: [] });
+    return reply("/v1/simple/changes/{change_id}/undo", "post", { change: { ...h.change, id: crypto.randomUUID(), status: "undone", undoes_id: h.change.id, undone: false, at: now }, flags: [] });
   }
   if (p.length !== 3) return null;
   const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as Schemas["SimpleChangeIn"];
@@ -1671,7 +1673,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   if (applies && b.op === "withdraw_decision") d.status = "withdrawn";
   else if (applies) writeEdit(d, after, now, ctx.me.id);
   if (applies && log) toLog(log, d, now, ctx.me.id);
-  return json(201, { change, flags: [] });
+  return reply("/v1/simple/changes", "post", { change, flags: [] }, 201);
 }
 
 /** decision_sheet._write for edit_decision: the fields as asked, and who edited it last. */
@@ -1728,7 +1730,9 @@ async function decideSheetChange(db: MeetingsDb, ctx: MeetingsCtx, h: { change: 
     if (log) toLog(log, d, now, c.by);
   }
   Object.assign(c, { status: action === "accept" ? "accepted" : "declined", decided_by: ctx.me.id, decided_at: now, decision_reason: reason, can_decide: false });
-  return json(200, { change: c, flags: [] });
+  return action === "accept"
+    ? reply("/v1/simple/changes/{change_id}/accept", "post", { change: c, flags: [] })
+    : reply("/v1/simple/changes/{change_id}/decline", "post", { change: c, flags: [] });
 }
 
 /**

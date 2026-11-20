@@ -5,6 +5,7 @@
 import type { components } from "../schema";
 
 import { stableUuid } from "./ids";
+import { reply } from "./typed";
 
 type Schemas = components["schemas"];
 export type Progress = Schemas["SimpleGoalMilestone"]["progress"];
@@ -177,16 +178,16 @@ function routeOld(list: MockMilestone[], me: { role: string }, req: Request, p: 
     for (const x of [m, ...(twins.get(m.id) ?? [])]) x.carried_to = id;
     return id;
   };
-  const done = (carried: string[]) => json(200, { carried, old_milestones: oldMilestonesOut(list, me.role, ctx) });
+  const result = (carried: string[]) => ({ carried, old_milestones: oldMilestonesOut(list, me.role, ctx) });
   const { rows, twins } = firsts(list, ctx);
-  if (carry) return done(rows.filter((m) => !needsCall(m, ctx)).map((m) => copy(m, leftOn(m, ctx))));
+  if (carry) return reply("/v1/simple/roadmap/milestones/carry-over", "post", result(rows.filter((m) => !needsCall(m, ctx)).map((m) => copy(m, leftOn(m, ctx)))));
   // A twin's id answers through its first copy.
   const m = rows.find((x) => x.id === p[4] || (twins.get(x.id) ?? []).some((t) => t.id === p[4]));
   if (!m) return list.some((x) => x.id === p[4]) ? json(409, { detail: "That milestone is not waiting on a call" }) : json(404, { detail: "No such milestone" });
   if (!needsCall(m, ctx)) return json(409, { detail: "That milestone still has items: bring it over with the rest" });
-  if (p[5] === "keep") return done([copy(m, [])]);
+  if (p[5] === "keep") return reply("/v1/simple/roadmap/milestones/{milestone_id}/keep", "post", result([copy(m, [])]));
   for (const x of [m, ...(twins.get(m.id) ?? [])]) x.dropped = true;
-  return done([]);
+  return reply("/v1/simple/roadmap/milestones/{milestone_id}/drop", "post", result([]));
 }
 
 
@@ -383,7 +384,7 @@ export async function routeMilestones(
     // SimpleGoalMilestoneIn's kind defaults to delivery, with a goal or not (goal_milestones.create).
     writeKind(m, { ...(b as Record<string, unknown>), kind: b.kind ?? "delivery" }, myName);
     list.push(m);
-    return json(201, milestoneOut(m, db.ids, true));
+    return reply("/v1/simple/roadmap/milestones", "post", milestoneOut(m, db.ids, true), 201);
   }
   const m = list.find((x) => x.id === p[4]);
   if (!m) return json(404, { detail: "No such milestone" });
@@ -400,7 +401,7 @@ export async function routeMilestones(
       const name = "name" in b ? String(b.name).trim() : undefined;
       if (sent.join() === "name" && decidesAsk(m, me)) {
         m.name = name!;
-        return json(200, milestoneOut(m, db.ids, true, false, me));
+        return reply("/v1/simple/roadmap/milestones/{milestone_id}", "patch", milestoneOut(m, db.ids, true, false, me));
       }
       // A change to the PRD's milestone asks its owner (a proposed change to the PRD); it stays put.
       m.pending = null;
@@ -419,7 +420,7 @@ export async function routeMilestones(
         m.pending = { date: b.date ?? m.date, counts_when: b.counts_when ?? null, name: name !== undefined && name !== m.name ? name : null, asked_of: routed[0] ? (me.names?.[routed[0]] ?? null) : null, change_id: id, can_decide: false };
         changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when, ...(name !== undefined ? { name } : {}) }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString(), routed));
       }
-      return json(200, milestoneOut(m, db.ids, true, false, me));
+      return reply("/v1/simple/roadmap/milestones/{milestone_id}", "patch", milestoneOut(m, db.ids, true, false, me));
     }
     if (!canEdit(m.roadmap)) return json(403, { detail: NOT_YOURS });
     if (b.name != null) m.name = b.name;
@@ -428,17 +429,17 @@ export async function routeMilestones(
     if (b.item_ids != null) m.gates = b.item_ids.map(keyOf).filter((k): k is string => !!k);
     if (b.counts_when != null) m.counts_when = b.counts_when;
     writeKind(m, b as Record<string, unknown>, myName);
-    return json(200, milestoneOut(m, db.ids, true));
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}", "patch", milestoneOut(m, db.ids, true));
   }
   if (!p[5] && req.method === "DELETE" && m.prd) return json(409, { detail: "This milestone is the PRD's: it changes in the PRD" });
   if (!canEdit(m.roadmap)) return json(403, { detail: NOT_YOURS });
   if (p[5] === "restore" && req.method === "POST") {
     m.deleted = false;
-    return json(200, milestoneOut(m, db.ids, true));
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}/restore", "post", milestoneOut(m, db.ids, true));
   }
   if (!p[5] && req.method === "DELETE") {
     m.deleted = true;
-    return json(204, null);
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}", "delete", undefined, 204);
   }
   return null;
 }

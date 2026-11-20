@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import type { BaselineState } from "./baseline";
+import { reply } from "./typed";
 import { V2_IDS, type V2Db } from "./v2";
 
 type BlockerRow = Omit<Schemas["BlockerOut"], "gate" | "impacted" | "limit_kind_label">;
@@ -382,13 +383,13 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     const doc = ctx.documents.find((d) => d.id === p[2] || d.slug === p[2]);
     if (!doc) return json(404, { detail: `document '${p[2]}' not found` });
     const linked = db.blockers.filter((b) => b.document_ids.includes(doc.id));
-    if (p[4] === "render") return json(200, render(linked, ctx.v2.blocker_options));
+    if (p[4] === "render") return reply("/v1/documents/{doc}/blocker-strategy/render", "get", render(linked, ctx.v2.blocker_options));
     const blockers = ordered(linked.map((b) => strategy(ctx, db, b)));
     const worst = blockers.find((s) => s.gate.status === "critical") ?? blockers.find((s) => s.gate.status === "warning");
     const readiness: Gate = !blockers.length
       ? { status: "not_applicable", rationale: "No blockers are linked to this document." }
       : (worst?.gate ?? { status: "pass", rationale: blockers.map((s) => s.gate.rationale).join(". ") });
-    return json(200, { document: { id: doc.id, slug: doc.slug, title: doc.title }, readiness, blockers });
+    return reply("/v1/documents/{doc}/blocker-strategy", "get", { document: { id: doc.id, slug: doc.slug, title: doc.title }, readiness, blockers });
   }
 
   if (p[1] === "blockers") {
@@ -398,7 +399,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
         .filter((b) => ["status", "type", "severity", "limit_kind"].every((k) => !q.get(k) || String(b[k as keyof BlockerRow]) === q.get(k)))
         .sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])
         .map((b) => ({ id: b.id, key: b.key, statement: b.statement, type: b.type, limit_kind: b.limit_kind, third_party: b.third_party, severity: b.severity, status: b.status, selected_option_id: b.selected_option_id, document_ids: b.document_ids, gate: gate(b), updated_at: b.updated_at }));
-      return json(200, rows);
+      return reply("/v1/blockers", "get", rows);
     }
     if (p.length === 2 && m === "POST") {
       if (!can("approver")) return forbidden("approver");
@@ -436,11 +437,11 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       db.blockers.push(b);
       event(ctx, b, "status_changed", b.status, { from_status: null, reason: input.reason ?? "Blocker recorded" });
       b.revision = 1;
-      return json(201, { ...strategy(ctx, db, b), evidence });
+      return reply("/v1/blockers", "post", { ...strategy(ctx, db, b), evidence }, 201);
     }
     const b = p[2] ? find(p[2]) : undefined;
     if (!b) return json(404, { detail: "Blocker not found" });
-    if (p.length === 3 && m === "GET") return json(200, strategy(ctx, db, b));
+    if (p.length === 3 && m === "GET") return reply("/v1/blockers/{blocker_id}", "get", strategy(ctx, db, b));
     if (!can(p[3] === "options" ? "commenter" : "approver")) return forbidden(p[3] === "options" ? "commenter" : "approver");
     if (p.length === 3 && m === "PATCH") {
       const patch = await body<Schemas["BlockerPatch"]>();
@@ -491,7 +492,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
           event(ctx, b, "status_changed", "open", { experiment_id: x?.id ?? null, data, reason: `Reclassified as critical and hard: its ${what} was not decided by an owner, so the blocker is open again until an owner decides` });
         }
       }
-      return json(200, strategy(ctx, db, b));
+      return reply("/v1/blockers/{blocker_id}", "patch", strategy(ctx, db, b));
     }
     if (p[3] === "status" && m === "POST") {
       const input = await body<Schemas["BlockerStatusIn"]>();
@@ -502,7 +503,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
         const reopened = input.status === "open" && !["open", "mitigating"].includes(b.status);
         event(ctx, b, reopened ? "reopened" : "status_changed", input.status, { reason: input.reason ?? null, data: { gate: { ...snapshot(b), status: input.status } } });
       }
-      return json(200, strategy(ctx, db, b));
+      return reply("/v1/blockers/{blocker_id}/status", "post", strategy(ctx, db, b));
     }
     if ((p[3] === "accept-risk" || p[3] === "feasibility-scope") && m === "POST" && gating(b) && !can("owner")) {
       const what = p[3] === "accept-risk" ? "accept this risk" : "approve this feasibility scope";
@@ -518,7 +519,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       ctx.v2.assumption_decisions.push(decision);
       b.review_at = input.review_at;
       event(ctx, b, "risk_accepted", "accepted_risk", { reason: input.reason, data: { assumption_decision_id: decision.id, by_decider: can("owner") } });
-      return json(200, strategy(ctx, db, b));
+      return reply("/v1/blockers/{blocker_id}/accept-risk", "post", strategy(ctx, db, b));
     }
     if (p[3] === "feasibility-scope" && m === "POST") {
       const input = await body<Schemas["FeasibilityScopeIn"]>();
@@ -531,7 +532,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       const missing = [!x.owner_id && "an owner", !x.success_threshold?.trim() && "a success threshold", gateAt, live].filter(Boolean);
       if (missing.length) return json(422, { detail: `A feasibility scope needs ${missing.join(", ")}` });
       event(ctx, b, "feasibility_scope_approved", "feasibility_only", { reason: input.reason, experiment_id: x.id, data: { by_decider: can("owner") } });
-      return json(200, strategy(ctx, db, b));
+      return reply("/v1/blockers/{blocker_id}/feasibility-scope", "post", strategy(ctx, db, b));
     }
     if (p[3] === "options" && m === "POST") {
       const input = await body<Schemas["BlockerOptionCreate"]>();
@@ -544,7 +545,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
         created_at: now(), updated_at: now(),
       };
       ctx.v2.blocker_options.push(o);
-      return json(201, { ...o, policy_flags: f, recommended: false });
+      return reply("/v1/blockers/{blocker_id}/options", "post", { ...o, policy_flags: f, recommended: false }, 201);
     }
     if (p[3] === "experiments" && m === "POST") {
       const input = await body<Schemas["FeasibilityExperimentCreate"]>();
@@ -554,7 +555,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
         status: "planned", result: null, evidence_ids: input.evidence_ids ?? [], lock_version: 1, created_at: now(), updated_at: now(),
       };
       ctx.v2.feasibility_experiments.push(x);
-      return json(201, x);
+      return reply("/v1/blockers/{blocker_id}/experiments", "post", x, 201);
     }
     return null;
   }
@@ -566,7 +567,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     if (!can("approver")) return forbidden("approver");
     const input = await body<Schemas["BlockerOptionPatch"]>();
     if (input.lock_version !== o.lock_version) return json(409, { detail: "Someone else changed this since you loaded it; reload and try again" });
-    const view = () => json(200, { ...o, policy_flags: flags(o), recommended: false });
+    const view = () => ({ ...o, policy_flags: flags(o), recommended: false });
     const choosable = (what: string) =>
       o.status === "rejected" || o.compliance !== "compliant" || flags(o).length
         ? json(422, { detail: `Only an option reviewed as compliant can be the ${what}` })
@@ -581,7 +582,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       const f = flags(next);
       if (f.length && input.compliance === "compliant") return (o.lock_version -= 1, json(422, { detail: "Flagged text cannot be marked compliant" }));
       Object.assign(o, next, f.length ? { compliance: "non_compliant", status: "rejected", policy_feasibility: "low" } : {});
-      return view();
+      return reply("/v1/blocker-options/{item_id}", "patch", view());
     }
     // As the API's BlockerOptionDecision: selecting or rejecting needs a reason.
     if ((p[3] === "select" || p[3] === "reject") && !(input as unknown as Schemas["BlockerOptionDecision"]).reason?.trim()) {
@@ -595,18 +596,18 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       o.selected_reason = (input as unknown as Schemas["BlockerOptionDecision"]).reason;
       b.selected_option_id = o.id;
       event(ctx, b, "option_selected", b.status === "open" ? "mitigating" : null, { option_id: o.id, reason: o.selected_reason });
-      return json(200, strategy(ctx, db, b));
+      return reply("/v1/blocker-options/{item_id}/select", "post", strategy(ctx, db, b));
     }
     if (p[3] === "fallback") {
       const refused = o.status === "selected" ? json(409, { detail: "The selected option cannot also be its own fallback" }) : choosable("fallback");
       if (refused) return (o.lock_version -= 1, refused);
       o.status = "fallback";
-      return view();
+      return reply("/v1/blocker-options/{item_id}/fallback", "post", view());
     }
     if (p[3] === "reject") {
       if (b.selected_option_id === o.id) b.selected_option_id = null;
       o.status = "rejected";
-      return view();
+      return reply("/v1/blocker-options/{item_id}/reject", "post", view());
     }
     o.lock_version -= 1;
     return null;
@@ -632,7 +633,7 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
         event(ctx, b, "status_changed", "open", { experiment_id: x.id, reason: `The feasibility experiment ${x.status}; its scope no longer holds` });
       }
     }
-    return json(200, x);
+    return reply("/v1/feasibility-experiments/{item_id}", "patch", x);
   }
   return null;
 }

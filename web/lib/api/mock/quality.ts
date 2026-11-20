@@ -9,6 +9,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { goalFigure } from "@/lib/goal-figure";
 import { DEPOSITS_IDS } from "./blockers";
+import { reply } from "./typed";
 import type { V2Db } from "./v2";
 
 type Role = Schemas["Me"]["role"];
@@ -722,7 +723,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const need = (role: Role) => (atLeast(ctx.role, role) ? null : fail(403, `Requires the ${role} role`));
 
-  if (p[1] === "quality" && p[2] === "criteria" && m === "GET") return json(200, CRITERIA);
+  if (p[1] === "quality" && p[2] === "criteria" && m === "GET") return reply("/v1/quality/criteria", "get", CRITERIA);
 
   if (p[1] === "documents" && p[3] === "versions" && p[4] && ["readiness", "evaluations", "quality-review"].includes(p[5])) {
     const n = Number(p[4]);
@@ -730,7 +731,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
     if (p[5] === "readiness" && m === "GET") {
       const purpose = q.get("purpose") ?? "advisory";
       if (purpose !== "advisory" && purpose !== "publish") return fail(422, "purpose must be advisory or publish");
-      return v ? json(200, dashboard(ctx, v, n, purpose)) : fail(404, "Version not found");
+      return v ? reply("/v1/documents/{doc}/versions/{n}/readiness", "get", dashboard(ctx, v, n, purpose)) : fail(404, "Version not found");
     }
     if (p[5] === "evaluations" && m === "POST" && !p[6]) {
       const denied = need("commenter");
@@ -739,7 +740,12 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       // A snapshot of what the dashboard shows: every registered check.
       const d = dashboard(ctx, v, n);
       const findings = d.items.map((i) => ({ criterion: i.key, status: i.status, rationale: i.rationale, hard: i.hard, section_keys: i.section_keys }));
-      return json(201, storeReport(ctx, v, "rules", findings, { blocked: d.blocked, blocking: d.blocking, errors: d.items.filter((i) => i.error).map((i) => i.key) }));
+      return reply(
+        "/v1/documents/{doc}/versions/{n}/evaluations",
+        "post",
+        storeReport(ctx, v, "rules", findings, { blocked: d.blocked, blocking: d.blocking, errors: d.items.filter((i) => i.error).map((i) => i.key) }),
+        201,
+      );
     }
     if (p[5] === "evaluations" && p[6] === "human" && m === "POST") {
       const denied = need("commenter");
@@ -753,7 +759,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       if (unknown.length) return fail(422, `unknown criteria: ${unknown.join(", ")}; expected one of ${keys.join(", ")}`);
       if (new Set(data.ratings.map((r) => r.criterion)).size !== data.ratings.length) return fail(422, "rate each criterion once");
       const findings = data.ratings.map((r) => ({ criterion: r.criterion, status: r.status, rationale: r.rationale, hard: false, section_keys: r.section_keys ?? [] }));
-      return json(201, storeReport(ctx, v, "human", findings, { note: data.note ?? null }));
+      return reply("/v1/documents/{doc}/versions/{n}/evaluations/human", "post", storeReport(ctx, v, "human", findings, { note: data.note ?? null }), 201);
     }
     if (p[5] === "quality-review" && m === "POST") {
       const denied = need("approver");
@@ -763,7 +769,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       const job = ctx.queueReview?.(v.documentId, n);
       if (!job) return fail(503, "No job queue");
       if (!("id" in job)) return fail(job.status, job.detail);
-      return json(201, job);
+      return reply("/v1/documents/{doc}/versions/{n}/quality-review", "post", job, 201);
     }
     return null;
   }
@@ -778,11 +784,11 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
           (!q.get("state") || stateOf(o) === q.get("state")) &&
           (!q.get("needs_prediction") || String(o.needs_prediction) === q.get("needs_prediction")),
       );
-      return json(200, [...hits].reverse());
+      return reply("/v1/outcomes", "get", [...hits].reverse());
     }
     if (m === "GET" && p[2]) {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
-      return o ? json(200, o) : fail(404, "Outcome not found");
+      return o ? reply("/v1/outcomes/{outcome_id}", "get", o) : fail(404, "Outcome not found");
     }
     const denied = need("approver");
     if (denied) return denied;
@@ -809,7 +815,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         created_at: now, updated_at: now,
       };
       ctx.db.outcomes.push(o);
-      return json(201, o);
+      return reply("/v1/outcomes", "post", o, 201);
     }
     if (m === "PATCH" && p[2] && !p[3]) {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
@@ -838,14 +844,14 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         o.prediction = p;
       }
       Object.assign(o, { updated_at: new Date().toISOString(), lock_version: o.lock_version + 1 });
-      return json(200, o);
+      return reply("/v1/outcomes/{outcome_id}", "patch", o);
     }
     // outcomes-edit (owner, Nov 13): Move to Trash; Settings › Trash restores it.
     if (m === "DELETE" && p[2] && !p[3]) {
       const at = ctx.db.outcomes.findIndex((x) => x.id === p[2]);
       if (at < 0 || !ctx.trash) return fail(404, "Outcome not found");
       const [row] = ctx.db.outcomes.splice(at, 1);
-      return json(200, ctx.trash(row, q.get("reason")));
+      return reply("/v1/outcomes/{outcome_id}", "delete", ctx.trash(row, q.get("reason")));
     }
     if (m === "POST" && p[2] && p[3] === "shipped") {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
@@ -859,7 +865,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         status: "tracking", shipped_at: at, ship_signal: { kind: "manual", refs: [], at, note: data.note ?? null },
         assess_due_on: by && by > after ? by : after, lock_version: o.lock_version + 1,
       });
-      return json(200, o);
+      return reply("/v1/outcomes/{outcome_id}/shipped", "post", o);
     }
     if (m === "POST" && p[2] && p[3] === "assessments") {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
@@ -876,7 +882,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       const suggested_learnings: Schemas["LearningDraft"][] = learnings.map((d) => ({
         outcome_id: d.outcome_id, statement: d.statement, applies_to: d.applies_to, target: d.target, direction: d.direction, weight: d.weight,
       }));
-      return json(200, { outcome: o, suggested_learnings });
+      return reply("/v1/outcomes/{outcome_id}/assessments", "post", { outcome: o, suggested_learnings });
     }
     if (m === "POST" && p[2] && p[3] === "learnings" && p[4]) {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);
@@ -897,18 +903,18 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         Object.assign(draft, { state: "kept", learning_id: l.id });
       } else draft.state = "skipped";
       o.updated_at = new Date().toISOString();
-      return json(200, o);
+      return reply("/v1/outcomes/{outcome_id}/learnings/{index}", "post", o);
     }
     return null;
   }
 
   if (p[1] === "learnings") {
-    if (m === "GET" && p[2] === "signals") return json(200, signals(ctx.db, q.get("applies_to")));
+    if (m === "GET" && p[2] === "signals") return reply("/v1/learnings/signals", "get", signals(ctx.db, q.get("applies_to")));
     if (m === "GET" && !p[2]) {
       const hits = ctx.db.learnings.filter((l) =>
         ["applies_to", "target", "status"].every((k) => !q.get(k) || String(l[k as keyof Learning]) === q.get(k)),
       );
-      return json(200, [...hits].reverse());
+      return reply("/v1/learnings", "get", [...hits].reverse());
     }
     const denied = need("approver");
     if (denied) return denied;
@@ -921,7 +927,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         created_by: ctx.userId, retired_by: null, retired_at: null, created_at: now, updated_at: now,
       };
       ctx.db.learnings.push(l);
-      return json(201, l);
+      return reply("/v1/learnings", "post", l, 201);
     }
     if (m === "POST" && p[2] && p[3] === "retire") {
       const l = ctx.db.learnings.find((x) => x.id === p[2]);
@@ -929,7 +935,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       const { reason } = (await body<Schemas["LearningRetire"]>()) ?? {};
       const now = new Date().toISOString();
       if (l.status !== "retired") Object.assign(l, { status: "retired", retired_reason: reason ?? null, retired_by: ctx.userId, retired_at: now, updated_at: now });
-      return json(200, l);
+      return reply("/v1/learnings/{learning_id}/retire", "post", l);
     }
     return null;
   }

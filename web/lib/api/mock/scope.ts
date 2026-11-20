@@ -12,6 +12,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockName as displayName } from "./people";
 
 import type { DraftRow, RunsContext, RunsDb } from "./runs";
+import { reply } from "./typed";
 
 type PrdScopeOut = Schemas["PrdScopeOut"];
 type FeatureOut = PrdScopeOut["features"][number];
@@ -588,7 +589,7 @@ export function scopeJobRoute(db: RunsDb | undefined, p: string[], now: () => st
   const job = p[1] === "llm-jobs" && p[2] && !p[3] ? jobs?.find((j) => j.id === p[2]) : undefined;
   if (!job) return null;
   if (job.status === "queued" || job.status === "running") Object.assign(job, { status: "succeeded", attempts: 1, started_at: now(), finished_at: now() });
-  return json(200, { ...job, output: job.status === "succeeded" ? job.output : null });
+  return reply("/v1/llm-jobs/{job_id}", "get", { ...job, output: job.status === "succeeded" ? job.output : null });
 }
 
 // ------------------------------------------------------------------------------- routes
@@ -600,13 +601,13 @@ export async function routeScopes(ctx: Ctx, req: Request, p: string[]): Promise<
     const scope = latestScope(ctx.db, p[2]);
     if (!scope) return fail(404, `run ${p[2]} has no PRD scope`);
     prepareScope(scope);
-    return json(200, scope);
+    return reply("/v1/runs/{run_id}/scope", "get", scope);
   }
   if (p[1] !== "prd-scopes" || !p[2]) return null;
   const scope = scopeById(ctx.db, p[2]);
   if (!scope) return fail(404, `PRD scope ${p[2]} not found`);
   prepareScope(scope);
-  if (p.length === 3 && m === "GET") return json(200, reviewOf(ctx, scope));
+  if (p.length === 3 && m === "GET") return reply("/v1/prd-scopes/{scope_id}", "get", reviewOf(ctx, scope));
   if (p[3] !== "items") return fail(404, "Route not found");
 
   // Every write: the approver role, a proposed scope at a pending checkpoint.
@@ -622,7 +623,7 @@ export async function routeScopes(ctx: Ctx, req: Request, p: string[]): Promise<
     if (!f) return fail(422, "parent_id: not a feature of this scope");
     const q = addRequirement(ctx, scope, f, input.text, input.acceptance ?? [], by);
     if (q instanceof Response) return q;
-    return json(201, itemOut({ feature: f, requirement: q }, q, done(ctx, scope, by), scope));
+    return reply("/v1/prd-scopes/{scope_id}/items", "post", itemOut({ feature: f, requirement: q }, q, done(ctx, scope, by), scope), 201);
   }
   const found = findRow(scope, (r) => r.id === p[4]);
   if (!found) return fail(404, `row ${p[4]} not found`);
@@ -632,13 +633,13 @@ export async function routeScopes(ctx: Ctx, req: Request, p: string[]): Promise<
     if (input.lock_version !== (row.lock_version ?? 1)) return fail(409, STALE);
     const refused = applyChange(ctx, scope, found, input, by);
     if (refused) return refused;
-    return json(200, itemOut(found, row, done(ctx, scope, by), scope));
+    return reply("/v1/prd-scopes/{scope_id}/items/{item_id}", "patch", itemOut(found, row, done(ctx, scope, by), scope));
   }
   if (p.length === 5 && m === "DELETE") {
     if (!found.requirement || !added(found.requirement)) return fail(409, "Only a requirement a person added is removed: cut it instead");
     found.feature.requirements = found.feature.requirements.filter((q) => q !== found.requirement);
     done(ctx, scope, by);
-    return new Response(null, { status: 204 });
+    return reply("/v1/prd-scopes/{scope_id}/items/{item_id}", "delete", undefined, 204);
   }
   if (p[5] === "enhance" && p.length === 6 && m === "POST") {
     if (!found.requirement) return fail(422, "Only a requirement is enhanced");
@@ -646,7 +647,7 @@ export async function routeScopes(ctx: Ctx, req: Request, p: string[]): Promise<
     const job = enhanceJob(ctx, scope, found.feature, found.requirement, input.instruction ?? null);
     const db = ctx.db as RunsDb & { scope_jobs?: Job[] };
     (db.scope_jobs ??= []).push(job);
-    return json(202, { ...job, output: null });
+    return reply("/v1/prd-scopes/{scope_id}/items/{item_id}/enhance", "post", { ...job, output: null }, 202);
   }
   if (p[5] === "enhance" && p[7] === "accept" && m === "POST") {
     const job = (ctx.db as RunsDb & { scope_jobs?: Job[] }).scope_jobs?.find((j) => j.id === p[6]);
@@ -657,7 +658,7 @@ export async function routeScopes(ctx: Ctx, req: Request, p: string[]): Promise<
     const refused = applyChange(ctx, scope, found, { text: input.text ?? out.text, acceptance: input.acceptance ?? out.acceptance }, by);
     if (refused) return refused;
     row.origin = "person";
-    return json(200, itemOut(found, row, done(ctx, scope, by), scope));
+    return reply("/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept", "post", itemOut(found, row, done(ctx, scope, by), scope));
   }
   return fail(404, "Route not found");
 }

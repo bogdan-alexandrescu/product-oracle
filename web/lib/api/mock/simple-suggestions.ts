@@ -13,6 +13,7 @@
  * Undo) or rejects.
  */
 import type { Schemas } from "@/lib/api/client";
+import { reply } from "./typed";
 import { bundleFlow, plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { newCompany, stableUuid } from "./ids";
@@ -274,10 +275,10 @@ export async function routeGoalSuggestions(
     if (p[4] === "suggestions") {
       const body = (await req.json().catch(() => ({}))) as { title?: string; outcome?: string };
       const r = fileSuggestion(db, ctx, goal, body.title ?? "", body.outcome ?? "");
-      return "detail" in r ? json(r.status, { detail: r.detail }) : json(201, out(db, r, ctx));
+      return "detail" in r ? json(r.status, { detail: r.detail }) : reply("/v1/simple/goals/{goal_id}/suggestions", "post", out(db, r, ctx), 201);
     }
     const job = (db.goal_jobs![goal] ??= { until: mockNowMs() + SUGGEST_JOB_MS, job_id: crypto.randomUUID(), origin: "on_demand" });
-    return json(200, { goal_id: idOf(db, ctx, goal), pending: true, job_id: job.job_id });
+    return reply("/v1/simple/goals/{goal_id}/suggest", "post", { goal_id: idOf(db, ctx, goal), pending: true, job_id: job.job_id });
   }
   if (!p[3] && m === "GET") {
     const only = q.get("goal_id") ? goalOf(db, ctx, q.get("goal_id")!) : undefined;
@@ -286,7 +287,7 @@ export async function routeGoalSuggestions(
     // A new company has no confirmed goal yet: none to suggest under.
     // goal-order: the goals in the one goal order, as the API lists them and the roadmap groups them.
     const goals = (newCompany() ? [] : goalKeys(db, ctx).filter((g) => !only || g === only)).sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1));
-    return json(200, {
+    return reply("/v1/simple/goal-suggestions", "get", {
       goals: goals.map((g) => {
         const d = goalDecider(db, g, ctx);
         return { goal: { id: idOf(db, ctx, g), key: g, title: titleOf(db, ctx, g), position: goalPositionOf(g) }, pending: !!db.goal_jobs![g], empty: g in GOALS && isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
@@ -303,13 +304,13 @@ export async function routeGoalSuggestions(
   if (p[4] === "reopen") {
     if (s.status !== "rejected") return json(409, { detail: `This suggestion is ${s.status} already` });
     Object.assign(s, { status: "open", reason: null, decided_by_name: null, decided_at: null });
-    return json(200, out(db, s, ctx));
+    return reply("/v1/simple/goal-suggestions/{suggestion_id}/reopen", "post", out(db, s, ctx));
   }
   if (p[4] === "reject") {
     if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
     const reason = (body.reason ?? "").trim();
     Object.assign(s, { status: "rejected", reason: reason || null, decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: new Date(mockNowMs()).toISOString() });
-    return json(200, out(db, s, ctx));
+    return reply("/v1/simple/goal-suggestions/{suggestion_id}/reject", "post", out(db, s, ctx));
   }
   if (p[4] !== "accept") return null;
   if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
@@ -326,5 +327,5 @@ export async function routeGoalSuggestions(
     status: "accepted", change_id: result.change.id, item_id: String(result.change.target.item_id),
     decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: new Date(mockNowMs()).toISOString(),
   });
-  return json(200, result);
+  return reply("/v1/simple/goal-suggestions/{suggestion_id}/accept", "post", result);
 }

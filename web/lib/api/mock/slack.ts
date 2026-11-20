@@ -10,6 +10,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { seedDiscussionReplies, type DiscussionRow, type DiscussionsContext, type DiscussionsDb } from "./discussions";
+import { reply } from "./typed";
 
 type Integration = Schemas["CompanyIntegrationOut"];
 type Role = Schemas["MemberOut"]["role"];
@@ -79,11 +80,15 @@ const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner
  */
 export function slackRoute(integration: Integration | null, me: { role: Role }, req: Request, p: string[]): Response | null {
   if (p[1] !== "company-integrations" || p[2] !== "slack" || req.method !== "GET") return null;
-  if (p[3] === "status") return json(200, slackStatus(integration));
+  if (p[3] === "status") return reply("/v1/company-integrations/slack/status", "get", slackStatus(integration));
   if (p[3] === "channels") {
     if (RANK[me.role] < RANK.commenter) return refuse(403, "Requires the commenter role");
     if (!integration) return refuse(409, "Connect Slack for notifications first");
-    return json(200, new URL(req.url).searchParams.get("mirror") === "true" ? MIRROR_CHANNELS : SLACK_CHANNELS);
+    return reply(
+      "/v1/company-integrations/slack/channels",
+      "get",
+      new URL(req.url).searchParams.get("mirror") === "true" ? MIRROR_CHANNELS : SLACK_CHANNELS,
+    );
   }
   return null;
 }
@@ -100,7 +105,7 @@ export async function discussionSlackRoute(
   if (!(d.started_by === ctx.me.id || RANK[ctx.me.role] >= RANK.approver)) return refuse(403, "Only the starter or an approver can mirror it to Slack");
   if (req.method === "DELETE") {
     d.slack = null;
-    return json(204, null);
+    return reply("/v1/discussions/{discussion_id}/slack", "delete", undefined, 204);
   }
   if (req.method !== "POST") return null;
   if (d.status === "closed") return refuse(409, "This discussion is closed");
@@ -114,7 +119,7 @@ export async function discussionSlackRoute(
   if (!channel) return refuse(422, "Oracle's Slack app is not in that channel");
   const link: Link = { channel_name: channel.name, thread_url: threadUrl(channel.id, d.lock_version), status: "live", error: null };
   d.slack = link;
-  return json(201, link);
+  return reply("/v1/discussions/{discussion_id}/slack", "post", link, 201);
 }
 
 /**

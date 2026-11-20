@@ -32,6 +32,7 @@ import { mockName as displayName } from "./people";
 import { mockUuid } from "./ids";
 import { SPENT } from "./llm-jobs";
 import { readableRefusal } from "./refusal";
+import { reply as typedReply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type RequestOut = Schemas["RequestOut"];
@@ -655,13 +656,13 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         by_channel: Object.fromEntries(Object.entries(byChannel).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))),
         new_this_week: db.requests.filter((r) => Date.parse(r.created_at) >= week).length,
       };
-      return json(200, body);
+      return typedReply("/v1/requests", "get", body);
     }
     if (m === "POST") {
       if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
       const input = await body<Schemas["RequestCreate"]>();
       const created = createRow(input, null);
-      return created instanceof Response ? created : json(201, out(created));
+      return created instanceof Response ? created : typedReply("/v1/requests", "post", out(created), 201);
     }
   }
 
@@ -743,13 +744,21 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
             run_id: null, status: null, active: false, automatic: false, started_at: null, finished_at: null,
             suggestions: 0, found: 0, error: null, daily_skipped: skipped,
           };
-      return json(200, status);
+      return typedReply("/v1/requests/triage", "get", status);
     }
     if (m === "POST") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       if (run && !run.finished_at) return fail(409, "Oracle is already classifying requests");
       db.triage = { id: mockUuid(), created_by: ctx.userId, started_at: now(), finished_at: null };
-      return json(201, { id: db.triage.id, flow: "request_triage", status: "running", estimate_usd: 1.5 });
+      const started: Schemas["RunOut"] = {
+        id: db.triage.id, flow: "request_triage", flow_title: "Request triage", status: "running",
+        spent_usd: 0, created_by: ctx.userId, created_at: db.triage.started_at, started_at: db.triage.started_at,
+        finished_at: null, estimate_usd: 1.5, can_retry: false, can_stop_cancelling: false, can_retry_lookup: false,
+        cancel_again: [], can_dismiss_overrun: false, can_decide: false, can_retry_import: false,
+        knobs: { depth: "quick", roles: {}, checkpoints: {}, goals: [], features: [] }, needs_approval: false,
+        runtime: "fake", notes: [], note_refs: [], segments: [], checkpoints: [], token_read_only: false, open_proposals: 0,
+      };
+      return typedReply("/v1/requests/triage", "post", started, 201);
     }
   }
 
@@ -764,7 +773,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
   if (p[1] === "requests" && p[2] === "release-from-trash" && p.length === 3 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
     const b = await body<{ request_ids?: string[] }>();
-    return json(200, { released: releaseFromTrash(db, b.request_ids ?? [], (id) => ctx.trashedTitle?.(id) != null) });
+    return typedReply("/v1/requests/release-from-trash", "post", { released: releaseFromTrash(db, b.request_ids ?? [], (id) => ctx.trashedTitle?.(id) != null) });
   }
   if (p[1] === "requests" && p[2]) {
     const row = db.requests.find((r) => r.id === p[2]);
@@ -778,7 +787,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         suggested_basis: suggestedBasis(row),
         drafting: rootReplies(row).some((x) => !!x.job_at),
       };
-      return json(200, detail);
+      return typedReply("/v1/requests/{request_id}", "get", detail);
     }
     // port-an-decisions (requests.service.trash_request): an owner deletes it to Settings › Trash.
     if (p.length === 3 && m === "DELETE" && ctx.trash) {
@@ -789,7 +798,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         return fail(409, `${n} ${n === 1 ? "request is" : "requests are"} merged into it ('${merged[0]!.title}'${n > 1 ? " and more" : ""}): reopen them first`);
       }
       db.requests.splice(db.requests.indexOf(row), 1);
-      return json(200, ctx.trash(row, q.get("reason")));
+      return typedReply("/v1/requests/{request_id}", "delete", ctx.trash(row, q.get("reason")));
     }
     if (p.length === 3 && m === "PATCH") {
       if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
@@ -822,17 +831,21 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         if (had && !row.document_id) row.intake_id = null;
       }
       if (fields.length) bump(row);
-      return json(200, out(row));
+      return typedReply("/v1/requests/{request_id}", "patch", out(row));
     }
     if (p[3] === "replies" && p.length === 4 && m === "GET") {
-      return json(200, replies.filter((x) => x.root_request_id === row.id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map(replyOut));
+      return typedReply(
+        "/v1/requests/{request_id}/replies",
+        "get",
+        replies.filter((x) => x.root_request_id === row.id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map(replyOut),
+      );
     }
     if (m === "POST" && p[3] === "replies" && p[4] === "draft" && p.length === 5) {
       if (!mayAct(row)) return forbidden("approver");
       const open = rootReplies(row).filter((x) => x.status === "drafted");
       if (open.some((x) => x.job_at)) return fail(409, "Oracle is drafting these replies already");
       for (const x of open) x.job_at = now();
-      return json(202, { job_id: mockUuid() });
+      return typedReply("/v1/requests/{request_id}/replies/draft", "post", { job_id: mockUuid() }, 202);
     }
     if (m === "POST" && p[3] === "replies" && p[4] === "reopened" && p.length === 5) {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
@@ -841,7 +854,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       const made = told
         .filter((x) => !rootReplies(row).some((y) => y.kind === "reopened" && y.request_id === x.request_id))
         .map((x) => addReply(row, db.requests.find((r) => r.id === x.request_id) ?? row, "reopened"));
-      return json(200, made.map(replyOut));
+      return typedReply("/v1/requests/{request_id}/replies/reopened", "post", made.map(replyOut));
     }
     if (m === "POST" && p[3] === "keep-no" && p.length === 4) {
       const input = await body<Schemas["KeepNoIn"]>();
@@ -852,7 +865,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       ctx.decisions!.reaffirm(row.decision_id!, input.note.trim());
       row.asked_again_since = now();
       bump(row);
-      return json(200, out(row));
+      return typedReply("/v1/requests/{request_id}/keep-no", "post", out(row));
     }
     if (m === "POST" && p.length >= 4) {
       const verb = p.slice(3).join("/");
@@ -967,7 +980,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         row.suggestion = { ...s, accepted: [...new Set([...(s.accepted ?? []), ...parts])].sort() };
       }
       bump(row);
-      return json(200, out(row));
+      if (verb === "qualify") return typedReply("/v1/requests/{request_id}/qualify", "post", out(row));
+      if (verb === "merge") return typedReply("/v1/requests/{request_id}/merge", "post", out(row));
+      if (verb === "disqualify") return typedReply("/v1/requests/{request_id}/disqualify", "post", out(row));
+      if (verb === "reopen") return typedReply("/v1/requests/{request_id}/reopen", "post", out(row));
+      if (verb === "suggestion/decline") return typedReply("/v1/requests/{request_id}/suggestion/decline", "post", out(row));
+      return typedReply("/v1/requests/{request_id}/suggestion/accept", "post", out(row));
     }
   }
 
@@ -984,7 +1002,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         reply.opened_at = now();
         reply.lock_version += 1;
       }
-      return json(200, replyOut(reply));
+      return typedReply("/v1/request-replies/{reply_id}/opened", "post", replyOut(reply));
     }
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     if (!mayAct(root)) return fail(403, "Only the person who filed the request or an approver acts on its replies");
@@ -1014,7 +1032,10 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     reply.lock_version += 1;
     updateLoop(root);
     bump(root);
-    return json(200, replyOut(reply));
+    if (verb === "") return typedReply("/v1/request-replies/{reply_id}", "patch", replyOut(reply));
+    if (verb === "sent") return typedReply("/v1/request-replies/{reply_id}/sent", "post", replyOut(reply));
+    if (verb === "skip") return typedReply("/v1/request-replies/{reply_id}/skip", "post", replyOut(reply));
+    return typedReply("/v1/request-replies/{reply_id}/notify", "post", replyOut(reply));
   }
 
   // --- themes -----------------------------------------------------------------------
@@ -1022,7 +1043,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     if (p.length === 2 && m === "GET") {
       const all = q.get("include_archived") === "true";
       const list = db.themes.filter((t) => all || !t.archived_at).sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
-      return json(200, list.map(themeOut));
+      return typedReply("/v1/request-themes", "get", list.map(themeOut));
     }
     if (!atLeast(ctx.role, "approver")) return forbidden("approver");
     if (p.length === 2 && m === "POST") {
@@ -1037,7 +1058,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         origin: "person", archived_at: null, created_by: ctx.userId, created_at: now(), updated_at: now(), lock_version: 1,
       };
       db.themes.push(theme);
-      return json(201, themeOut(theme));
+      return typedReply("/v1/request-themes", "post", themeOut(theme), 201);
     }
     const theme = db.themes.find((t) => t.id === p[2]);
     if (p[3] === "problem" && p.length === 5 && m === "POST") {
@@ -1053,7 +1074,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         Object.assign(theme, { problem_state: theme.problem ? "confirmed" : "none", problem_suggestion: null });
       } else return null;
       bump(theme);
-      return json(200, themeOut(theme));
+      if (p[4] === "confirm") return typedReply("/v1/request-themes/{theme_id}/problem/confirm", "post", themeOut(theme));
+      return typedReply("/v1/request-themes/{theme_id}/problem/dismiss", "post", themeOut(theme));
     }
     if (p.length === 3 && m === "PATCH") {
       if (!theme) return fail(404, "Theme not found");
@@ -1074,7 +1096,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if (problem.length) Object.assign(theme, { problem_state: theme.problem ? "confirmed" : "none", problem_confirmed_at: now(), problem_suggestion: null });
       theme.archived_at = archived ? (theme.archived_at ?? now()) : null;
       bump(theme);
-      return json(200, themeOut(theme));
+      return typedReply("/v1/request-themes/{theme_id}", "patch", themeOut(theme));
     }
   }
 
@@ -1084,7 +1106,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     const mine = db.candidates.filter((c) => c.owner_user_id === ctx.userId);
     if (p.length === 2 && m === "GET") {
       const status = q.get("status");
-      return json(200, mine.filter((c) => !status || c.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      return typedReply("/v1/request-candidates", "get", mine.filter((c) => !status || c.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)));
     }
     const candidate = mine.find((c) => c.id === p[2]);
     if (!candidate) return fail(404, "Found item not found");
@@ -1092,7 +1114,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     if (candidate.status !== "open") return fail(409, `This item is already ${candidate.status}`);
     if (p[3] === "dismiss") {
       Object.assign(candidate, { status: "dismissed", updated_at: now() });
-      return json(200, candidate);
+      return typedReply("/v1/request-candidates/{candidate_id}/dismiss", "post", candidate);
     }
     if (p[3] === "file") {
       const input = await body<Partial<Schemas["RequestCreate"]>>();
@@ -1106,7 +1128,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       );
       if (created instanceof Response) return created;
       Object.assign(candidate, { status: "filed", request_id: created.id, updated_at: now() });
-      return json(201, out(created));
+      return typedReply("/v1/request-candidates/{candidate_id}/file", "post", out(created), 201);
     }
   }
   return null;

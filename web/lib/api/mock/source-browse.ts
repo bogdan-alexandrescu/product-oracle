@@ -7,6 +7,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { reply } from "./typed";
+
 type Channel = Schemas["SlackChannelOut"];
 type Repo = Schemas["GithubRepoOut"];
 
@@ -102,7 +104,7 @@ export function sourceBrowseRoute(req: Request, p: string[], q: URLSearchParams)
     const archived = q.get("include_archived") === "true";
     const all = CHANNELS.filter((c) => (archived || !c.is_archived) && c.name.includes(needle));
     const { items, next } = page(all, q);
-    return json(200, { channels: items, next_cursor: next });
+    return reply("/v1/connections/{connection_id}/slack/channels", "get", { channels: items, next_cursor: next });
   }
   if (p[3] === "github" && p[4] === "repos") {
     if (search === "ratelimit") return json(429, { detail: "GitHub is busy: try again in 60 seconds" }, { "Retry-After": "60" });
@@ -112,7 +114,7 @@ export function sourceBrowseRoute(req: Request, p: string[], q: URLSearchParams)
       search === "sso"
         ? "1 organization hides its repositories until you authorize this GitHub sign-in for their single sign-on (SAML): on GitHub, open Settings > Applications (or your token's Configure SSO) and authorize it, then reload"
         : null;
-    return json(200, { repos: items, next_cursor: next, sso_hint });
+    return reply("/v1/connections/{connection_id}/github/repos", "get", { repos: items, next_cursor: next, sso_hint });
   }
   return null;
 }

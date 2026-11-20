@@ -16,6 +16,7 @@ import { MOCK_LOGIN } from "./fixtures";
 import { newCompany } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
 import { forgetMockConnection, relinkMockSources } from "./sources";
+import { reply } from "./typed";
 
 type ConnectionRow = Schemas["ConnectionOut"];
 
@@ -520,10 +521,10 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
   const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
 
   if (p[1] === "settings") {
-    if (!p[2] && m === "GET") return json(200, Object.keys(SETTING_DEFAULTS).map((k) => settingOut(db, k)));
+    if (!p[2] && m === "GET") return reply("/v1/settings", "get", Object.keys(SETTING_DEFAULTS).map((k) => settingOut(db, k)));
     const key = p[2];
     if (!(key in SETTING_DEFAULTS)) return json(404, { detail: `Unknown setting '${key}'` });
-    if (m === "GET") return json(200, settingOut(db, key));
+    if (m === "GET") return reply("/v1/settings/{key}", "get", settingOut(db, key));
     if (m === "PUT") {
       const { value: given } = await body<Schemas["SettingIn"]>();
       let value = given;
@@ -577,14 +578,14 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       }
       if (value === null || value === undefined) delete db.settings[key];
       else db.settings[key] = value;
-      return json(200, settingOut(db, key));
+      return reply("/v1/settings/{key}", "put", settingOut(db, key));
     }
   }
 
   if (p[1] === "connections") {
-    if (!p[2] && m === "GET") return json(200, db.connections.filter((c) => yours(db, c, email)).map((c) => out(db, c)));
-    if (p[2] === "providers" && m === "GET") return json(200, PROVIDERS);
-    if (p[2] === "google" && p[3] === "picker-config" && m === "GET") return json(200, MOCK_PICKER_CONFIG);
+    if (!p[2] && m === "GET") return reply("/v1/connections", "get", db.connections.filter((c) => yours(db, c, email)).map((c) => out(db, c)));
+    if (p[2] === "providers" && m === "GET") return reply("/v1/connections/providers", "get", PROVIDERS);
+    if (p[2] === "google" && p[3] === "picker-config" && m === "GET") return reply("/v1/connections/google/picker-config", "get", MOCK_PICKER_CONFIG);
     const provider = PROVIDERS.find((x) => x.key === p[2]);
 
     if (provider && p[3] === "token" && m === "POST") {
@@ -606,7 +607,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       }
       const row = upsert(db, email, provider.key, "token", who, label);
       if (provider.key === "fireflies") row.endpoint_url = endpoint;
-      return json(200, out(db, row));
+      return reply("/v1/connections/{provider}/token", "post", out(db, row));
     }
     if (provider && p[3] === "authorize" && m === "GET") {
       if (!provider.oauth_configured) {
@@ -614,7 +615,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       }
       const who = identity(provider.key, "oauth-token");
       if (typeof who !== "string") upsert(db, email, provider.key, "oauth", who);
-      return json(200, { url: `/settings/connections?connected=${provider.key}` });
+      return reply("/v1/connections/{provider}/authorize", "get", { url: `/settings/connections?connected=${provider.key}` });
     }
 
     if (p[3] === "notion" && p[4] === "pages" && m === "GET") {
@@ -631,7 +632,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
     if (p[3] === "google" && p[4] === "shared-drives" && m === "GET") {
       if (row.provider !== "google") return json(404, { detail: "Not your Google connection" });
       if (reconnectReason(row.provider, row.scopes)) return json(409, { detail: "Reconnect Google to list shared drives" });
-      return json(200, { drives: MOCK_SHARED_DRIVES });
+      return reply("/v1/connections/{connection_id}/google/shared-drives", "get", { drives: MOCK_SHARED_DRIVES });
     }
     if (p[3] === "endpoint" && m === "PUT") {
       if (role !== "owner") return json(403, { detail: "Requires the owner role" });
@@ -647,14 +648,14 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       if (typeof who === "string") return json(400, { detail: who });
       if (who.account_id !== row.account_id) return json(400, { detail: ANOTHER_ACCOUNT });
       Object.assign(row, { endpoint_url: checked.url, status: "active", last_error: null, updated_at: now() });
-      return json(200, out(db, row));
+      return reply("/v1/connections/{connection_id}/endpoint", "put", out(db, row));
     }
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);
       if (db.owners) delete db.owners[row.id];
       // The sources it synced keep the account they lost (as the API's forget_connection).
       forgetMockConnection(row, email);
-      return json(204, undefined);
+      return reply("/v1/connections/{connection_id}", "delete", undefined, 204);
     }
     if (p[3] === "reconnect" && m === "POST") {
       const { token } = (await body<Schemas["ReconnectIn"] | null>()) ?? {};
@@ -664,17 +665,17 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
         if (who.account_id !== row.account_id) return json(400, { detail: "That token belongs to another account" });
         // As the API's reconnect: save() with the token's account, its label kept only on a token connection.
         upsert(db, email, row.provider, "token", who, row.auth_mode === "token" ? row.account_label : null);
-        return json(200, { connection: out(db, row), authorize_url: null });
+        return reply("/v1/connections/{connection_id}/reconnect", "post", { connection: out(db, row), authorize_url: null });
       }
       if (reconnectReason(row.provider, row.scopes)) {
         // Signs in again for drive.readonly, as the real API's authorize_url would; its callback
         // (connect_oauth) saves with no label, so the account takes the name the provider reads now.
         const who = identity(row.provider, "oauth-token", row.account_id);
         if (typeof who !== "string") upsert(db, email, row.provider, "oauth", { ...who, account_id: row.account_id });
-        return json(200, { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
+        return reply("/v1/connections/{connection_id}/reconnect", "post", { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
       }
       Object.assign(row, { status: "active", last_error: null, updated_at: now() });
-      return json(200, { connection: out(db, row), authorize_url: null });
+      return reply("/v1/connections/{connection_id}/reconnect", "post", { connection: out(db, row), authorize_url: null });
     }
   }
   return json(404, { detail: "Route not found" });

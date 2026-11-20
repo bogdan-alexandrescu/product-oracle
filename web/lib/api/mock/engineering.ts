@@ -17,6 +17,7 @@ import { stableUuid } from "./ids";
 import { SPENT } from "./llm-jobs";
 import { readableRefusal } from "./refusal";
 import { sourceRepos } from "./sources";
+import { reply } from "./typed";
 
 type TechBrief = Schemas["TechBriefOut"];
 type CodeMap = Schemas["CodeMapDetail"];
@@ -303,7 +304,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
       .filter((m) => !repo || m.repo.toLowerCase() === repo)
       .filter((m) => !status || m.status === status)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return json(200, out.map((m) => mapOut(m, ctx.me, false)));
+    return reply("/v1/code-maps", "get", out.map((m) => mapOut(m, ctx.me, false)));
   }
   const refused = () => json(403, { detail: "Requires the commenter role" });
   if (!p[2] && req.method === "POST") {
@@ -342,7 +343,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
       reads: 0,
     };
     maps.push(row);
-    return json(201, mapOut(row, ctx.me, false));
+    return reply("/v1/code-maps", "post", mapOut(row, ctx.me, false), 201);
   }
   const row = maps.find((m) => m.id === p[2] && visible(m));
   if (!row) return json(404, { detail: "Code map not found" });
@@ -353,7 +354,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
     }
     if (ctx.slowRead) await new Promise((done) => setTimeout(done, 1000));
     advance(row, ctx);
-    return json(200, mapOut(row, ctx.me, true));
+    return reply("/v1/code-maps/{code_map_id}", "get", mapOut(row, ctx.me, true));
   }
   if (p[3] === "sharing" && req.method === "POST") {
     if (!ctx.me.canWrite) return refused();
@@ -366,7 +367,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
       m.shared_by = sharing === "full" ? ctx.me.id : null;
       m.shared_at = sharing === "full" ? at : null;
     }
-    return json(200, mapOut(row, ctx.me, false));
+    return reply("/v1/code-maps/{code_map_id}/sharing", "post", mapOut(row, ctx.me, false));
   }
   return json(405, { detail: "Method not allowed" });
 }
@@ -385,7 +386,7 @@ export async function routeEngineering(req: Request, p: string[], q: URLSearchPa
   const briefs = seedBriefs();
   if (p[2]) {
     const one = briefs.find((b) => b.id === p[2]);
-    return one ? json(200, one) : json(404, { detail: "Tech brief not found" });
+    return one ? reply("/v1/tech-briefs/{artifact_version_id}", "get", one) : json(404, { detail: "Tech brief not found" });
   }
   let out = briefs;
   const prd = q.get("prd");
@@ -396,5 +397,5 @@ export async function routeEngineering(req: Request, p: string[], q: URLSearchPa
   }
   const feature = q.get("feature");
   if (feature) out = out.filter((b) => b.feature.key === feature);
-  return json(200, out);
+  return reply("/v1/tech-briefs", "get", out);
 }

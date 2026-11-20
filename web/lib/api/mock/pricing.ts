@@ -8,6 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import type { SectionSeed } from "./fixtures";
+import { reply } from "./typed";
 
 type DealOut = Schemas["DealOutcomeOut"];
 type DealIn = Schemas["DealOutcomeIn"];
@@ -377,7 +378,7 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       .filter((d) => !q.get("to") || d.decided_on <= q.get("to")!)
       .filter((d) => !q.get("competitor_id") || d.competitor_id === q.get("competitor_id"))
       .sort((a, b) => b.decided_on.localeCompare(a.decided_on) || b.created_at.localeCompare(a.created_at));
-    return json(200, rows.map(named));
+    return reply("/v1/deal-outcomes", "get", rows.map(named));
   }
   if (p.length === 2 && m === "POST") {
     const b = JSON.parse((await req.text()) || "{}") as Partial<DealIn>;
@@ -407,7 +408,7 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       lock_version: 1,
     };
     db.deals.push(row);
-    return json(201, named(row));
+    return reply("/v1/deal-outcomes", "post", named(row), 201);
   }
   if (p.length === 3 && p[2] === "import" && m === "POST") {
     const text = await req.text();
@@ -452,7 +453,7 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       }
     }
     const unmatched_alternatives = [...unmatched.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, name]) => name);
-    return json(200, { dry_run: dry, created, skipped, unmatched_alternatives } satisfies Schemas["ImportOut"]);
+    return reply("/v1/deal-outcomes/import", "post", { dry_run: dry, created, skipped, unmatched_alternatives } satisfies Schemas["ImportOut"]);
   }
   const row = db.deals.find((d) => d.id === p[2]);
   if (!row || p.length !== 3) return fail(404, "No such win or loss record");
@@ -465,11 +466,11 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
     if (problem) return fail(422, problem);
     next.annual_value = next.annual_value == null ? null : Number(next.annual_value);
     Object.assign(row, next, { lock_version: row.lock_version + 1, updated_at: ctx.now() });
-    return json(200, named(row));
+    return reply("/v1/deal-outcomes/{outcome_id}", "patch", named(row));
   }
   if (m === "DELETE") {
     db.deals.splice(db.deals.indexOf(row), 1);
-    return new Response(null, { status: 204 });
+    return reply("/v1/deal-outcomes/{outcome_id}", "delete", undefined, 204);
   }
   return null;
 }

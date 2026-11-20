@@ -15,6 +15,7 @@ import { mockName as personName } from "./people";
 
 import { NO_GOAL_FLAG, boardGroup, type BoardItem } from "./audience";
 import type { SectionSeed } from "./fixtures";
+import { reply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Audience = Schemas["ShareLinkOut"]["audience"];
@@ -523,7 +524,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
         check: { state: !check ? "none" : check.content_hash === hash ? "checked" : "lapsed", check: check ? checkOut(check, v.number, hash) : null },
         not_ready: notReady(r),
       };
-      return json(200, out);
+      return reply("/v1/roadmaps/{doc}/public-texts", "get", out);
     }
     if (p[3] === "public-texts" && p[4] === "draft" && m === "POST") {
       const v = pick(q.get("version") ? Number(q.get("version")) : null);
@@ -532,7 +533,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
         return json(409, { detail: "Oracle is set to observe words for people outside (Settings, Autonomy); write the public texts yourself" });
       }
       const job = ctx.queueDraft!(doc, v);
-      return typeof job === "string" ? json(409, { detail: job }) : json(202, job);
+      return typeof job === "string" ? json(409, { detail: job }) : reply("/v1/roadmaps/{doc}/public-texts/draft", "post", job, 202);
     }
     if (p[3] === "public-texts" && p[4] && m === "PUT") {
       const v = pick(q.get("version") ? Number(q.get("version")) : null)!;
@@ -575,7 +576,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
         approved_by: input.state === "approved" ? me.id : null,
         approved_at: input.state === "approved" ? ctx.now() : null,
       });
-      return json(200, textOut(ctx, row, item.title));
+      return reply("/v1/roadmaps/{doc}/public-texts/{item_key}", "put", textOut(ctx, row, item.title));
     }
     if (p[3] === "public-page" && m === "PUT") {
       const input = await body<Schemas["PublicPageIn"]>();
@@ -589,7 +590,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       if (blocking.length) return json(422, { detail: { code: "leak_blocking", message: "The public title or intro names something a public reader may not see", findings: blocking } });
       page.public_title = title || null;
       page.public_intro = intro || null;
-      return json(200, { public_title: page.public_title, public_intro: page.public_intro, findings: found });
+      return reply("/v1/roadmaps/{doc}/public-page", "put", { public_title: page.public_title, public_intro: page.public_intro, findings: found });
     }
     if (p[3] === "versions" && p[5] === "public-preview" && m === "GET") {
       const v = pick(Number(p[4]));
@@ -608,7 +609,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
         shown_item_keys: r.rows.filter((x) => x.shown).map((x) => x.item_key), content_hash: contentHash(r),
       };
       ctx.db.checks.push(check);
-      return json(201, checkOut(check, v.number, check.content_hash));
+      return reply("/v1/roadmaps/{doc}/publications/{p}/public-check", "post", checkOut(check, v.number, check.content_hash), 201);
     }
     return null;
   }
@@ -622,7 +623,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     if (!doc) return json(404, { detail: "Document not found" });
     if (!p[4] && m === "GET") {
       const rows = ctx.db.links.filter((l) => l.document_id === doc.id).sort((a, b) => b.created_at.localeCompare(a.created_at));
-      return json(200, rows.map((l) => linkOut(ctx, l)));
+      return reply("/v1/documents/{doc}/share-links", "get", rows.map((l) => linkOut(ctx, l)));
     }
     if (!p[4] && m === "POST") {
       if (doc.kind !== "roadmap") return json(422, { detail: "Only roadmaps are shared by link" });
@@ -647,14 +648,14 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       };
       ctx.db.links.push(link);
       const url = `${typeof location !== "undefined" ? location.origin : "http://localhost"}/s/${link.token}`;
-      return json(201, { link: linkOut(ctx, link), url, passcode: link.passcode, passcode_generated: generated, expires_at: link.expires_at });
+      return reply("/v1/documents/{doc}/share-links", "post", { link: linkOut(ctx, link), url, passcode: link.passcode, passcode_generated: generated, expires_at: link.expires_at }, 201);
     }
     if (p[4] === "revoke-all" && m === "POST") {
       if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
       const live = ctx.db.links.filter((l) => l.document_id === doc.id && !l.revoked_at);
       const { reason } = await body<{ reason: string }>();
       for (const l of live) Object.assign(l, { revoked_at: at, revoked_by: me.id, revoked_reason: reason, inbox_dismissed_at: at });
-      return json(200, { revoked: live.length });
+      return reply("/v1/documents/{doc}/share-links/revoke-all", "post", { revoked: live.length });
     }
     return null;
   }
@@ -663,7 +664,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     const { ids } = await body<{ ids: string[] }>();
     const rows = ctx.db.links.filter((l) => ids.includes(l.id) && l.revoked_at && !l.inbox_dismissed_at);
     for (const l of rows) l.inbox_dismissed_at = at;
-    return json(200, { dismissed: rows.length });
+    return reply("/v1/share-links/dismiss", "post", { dismissed: rows.length });
   }
   const link = ctx.db.links.find((l) => l.id === p[2]);
   if (!link) return json(404, { detail: "share link not found" });
@@ -682,7 +683,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       if (link.audience === "public" && !publicChecked(ctx, doc, pub)) return json(409, { detail: { code: "no_public_check", message: "Check the public version of this publication first" } });
       link.publication_id = pub.id;
     }
-    return json(200, linkOut(ctx, link));
+    return reply("/v1/share-links/{link_id}", "patch", linkOut(ctx, link));
   }
   if (p[3] === "passcode" && m === "POST") {
     const refused = creatorOrOwner();
@@ -691,7 +692,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     const input = await body<{ passcode?: string | null }>();
     const generated = input.passcode == null;
     Object.assign(link, { passcode: generated ? passcode() : input.passcode, passcode_version: link.passcode_version + 1, failures: 0, locked_until: null });
-    return json(200, { link: linkOut(ctx, link), passcode: link.passcode, passcode_generated: generated });
+    return reply("/v1/share-links/{link_id}/passcode", "post", { link: linkOut(ctx, link), passcode: link.passcode, passcode_generated: generated });
   }
   if (p[3] === "revoke" && m === "POST") {
     if (link.audience === "public") {
@@ -701,7 +702,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     const { reason } = await body<{ reason?: string | null }>();
     if (!link.revoked_at) Object.assign(link, { revoked_at: at, revoked_by: me.id, revoked_reason: reason || null });
     link.inbox_dismissed_at ??= at;
-    return json(200, linkOut(ctx, link));
+    return reply("/v1/share-links/{link_id}/revoke", "post", linkOut(ctx, link));
   }
   if (p[3] === "views" && m === "GET") {
     const rows = ctx.db.views.filter((v) => v.link_id === link.id).sort((a, b) => b.viewed_at.localeCompare(a.viewed_at));
@@ -719,7 +720,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       entries: rows.map((r) => ({ viewed_at: r.viewed_at, kind: r.kind, browser_family: r.browser_family, country: r.country })),
       days: [...days.entries()].sort().map(([d, views]) => ({ day: d, views })),
     };
-    return json(200, out);
+    return reply("/v1/share-links/{link_id}/views", "get", out);
   }
   return null;
 }
@@ -967,15 +968,15 @@ export async function routePublicShares(ctx: SharesContext, req: Request, p: str
     return showPage(ctx, link, "page");
   }
   if (p[4] === "status" && m === "GET") {
-    if (!open) return json(200, { state: "locked" });
+    if (!open) return reply("/v1/public/shares/{token}/status", "get", { state: "locked" });
     // allow_download only once the passcode opened the link (owner decision 2026-10-26).
-    if (state(link!, at) !== "active") return json(200, { state: "ended", allow_download: link!.allow_download });
+    if (state(link!, at) !== "active") return reply("/v1/public/shares/{token}/status", "get", { state: "ended", allow_download: link!.allow_download });
     // qa-docs-71: as the API, an active link also names its roadmap, the company, the person
     // who made the link and its end (its day in the Company time zone, as the footer).
     const doc = ctx.documents.find((d) => d.id === link!.document_id);
     const creator = ctx.members.find((x) => x.id === link!.created_by);
     const zone = ctx.zone?.() ?? "America/Los_Angeles";
-    return json(200, {
+    return reply("/v1/public/shares/{token}/status", "get", {
       state: "active",
       allow_download: link!.allow_download,
       title: doc?.title ?? null,

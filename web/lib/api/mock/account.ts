@@ -4,6 +4,7 @@
  * everywhere). Checks and answers mirror oracle/members/tokens.py and oracle/account.
  */
 import type { Schemas } from "@/lib/api/client";
+import { reply } from "./typed";
 
 type Role = Schemas["MemberOut"]["role"];
 type Member = Schemas["MemberOut"];
@@ -197,13 +198,13 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       const rows = db.tokens
         .filter((t) => !db.removed?.includes(t.id) && (!kind || t.kind === kind) && (!user || t.user_id === user))
         .sort((a, b) => a.created_at.localeCompare(b.created_at));
-      return json(200, rows);
+      return reply("/v1/api-tokens", "get", rows);
     }
     const token = db.tokens.find((t) => t.id === p[2]);
     if (!token) return json(404, { detail: `Token ${p[2]} not found` });
     if (m === "DELETE" && !p[3]) {
       token.revoked_at ??= ctx.now();
-      return json(204);
+      return reply("/v1/api-tokens/{token_id}", "delete", undefined, 204);
     }
     if (m === "POST" && p[3] === "remove") {
       // members.service.remove_expired_token: API tokens only, expired and never revoked.
@@ -214,7 +215,7 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
         return json(409, { detail: "Only an expired token can be removed; revoke it instead" });
       }
       (db.removed ??= []).push(token.id);
-      return json(204);
+      return reply("/v1/api-tokens/{token_id}/remove", "post", undefined, 204);
     }
     return null;
   }
@@ -251,7 +252,8 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       signed_in_via: ctx.readOnly ? "api_token" : "browser",
       read_only: !!ctx.readOnly,
     };
-    return json(200, out);
+    if (m === "PATCH") return reply("/v1/me/account", "patch", out);
+    return reply("/v1/me/account", "get", out);
   }
   if (p[2] === "password" && m === "POST") {
     const input = await body<Schemas["PasswordChange"]>();
@@ -278,17 +280,17 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
     db.passwords[me.email] = input.new_password;
     db.failures[me.email] = [];
     revokeMine(ctx.now());
-    return json(204);
+    return reply("/v1/me/password", "post", undefined, 204);
   }
   if (p[2] === "sign-out-everywhere" && m === "POST") {
     const at = ctx.now();
     const revoked = revokeMine(at);
     ctx.endSession();
     const out: Schemas["SignedOutEverywhere"] = { sessions_valid_after: at, ...revoked };
-    return json(200, out);
+    return reply("/v1/me/sign-out-everywhere", "post", out);
   }
   if (p[2] === "tokens") {
-    if (!p[3] && m === "GET") return json(200, mine("personal"));
+    if (!p[3] && m === "GET") return reply("/v1/me/tokens", "get", mine("personal"));
     if (!p[3] && m === "POST") {
       const input = await body<Schemas["PersonalTokenCreate"]>();
       const name = (input.name ?? "").trim();
@@ -319,22 +321,22 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       db.tokens.push(token);
       // Built from pieces so no credential-shaped literal sits in the source.
       const raw = [["po", "mock"].join("_"), ctx.uuid().replaceAll("-", "")].join("");
-      return json(201, { token, secret: raw });
+      return reply("/v1/me/tokens", "post", { token, secret: raw }, 201);
     }
     const token = mine("personal").find((t) => t.id === p[3]);
     if (!token) return json(404, { detail: `API token ${p[3]} not found` });
     if (m === "DELETE") {
       token.revoked_at ??= ctx.now();
-      return json(204);
+      return reply("/v1/me/tokens/{token_id}", "delete", undefined, 204);
     }
   }
   if (p[2] === "oauth-clients") {
-    if (!p[3] && m === "GET") return json(200, mine("mcp_client").map(grantOut));
+    if (!p[3] && m === "GET") return reply("/v1/me/oauth-clients", "get", mine("mcp_client").map(grantOut));
     const grant = mine("mcp_client").find((t) => t.id === p[3]);
     if (!grant) return json(404, { detail: `MCP client grant ${p[3]} not found` });
     if (m === "DELETE") {
       grant.revoked_at ??= ctx.now();
-      return json(204);
+      return reply("/v1/me/oauth-clients/{grant_id}", "delete", undefined, 204);
     }
   }
   return null;

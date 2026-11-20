@@ -10,6 +10,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { goalBucketsDb, seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
+import { reply } from "./typed";
 import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, readerDb, ROADMAPS, TRACKS, trackGoal, trackKeys, trackPlace, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
@@ -220,7 +221,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       items.push({ kind: "milestone", id: ms.id, title: ms.name, where: ms.goal ? (GOALS[ms.goal] ?? ms.goal) : "", at: l?.at ?? null, by_name: name(l?.by), can_decide: decides, decider_name: decides ? null : deciderName, roadmap_id: stableUuid(`simple-doc/${ms.roadmap}`) });
     }
     items.sort((a, b) => ((b.at ?? "") > (a.at ?? "") ? 1 : -1));
-    return json(200, { items });
+    return reply("/v1/simple/removed", "get", { items });
   }
   if (p[2] === "tracks" && m === "GET" && !p[3]) {
     // replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its
@@ -256,16 +257,26 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     const people = Object.entries(ctx.names).map(([id, n]) => ({ id, name: n }));
     // tracks-goal: the company's live goals a track may be tied to (goal_buckets._goals).
     const goals = liveGoals(db).map((g) => ({ id: g.id, name: g.title }));
-    return json(200, { tracks, can_add: owner, add_decider_name: owner ? null : deciderName, people, prds, goals });
+    return reply("/v1/simple/tracks", "get", { tracks, can_add: owner, add_decider_name: owner ? null : deciderName, people, prds, goals });
   }
   if (p[2] === "changes" && m === "POST" && p[4] === "undo" && db.plan_done?.[p[3]]) {
     const after = db.plan_done[p[3]]() ?? {};
     delete db.plan_done[p[3]];
-    return json(201, { change: { id: crypto.randomUUID(), status: "undone", after }, flags: [] });
+    const c: Schemas["SimpleChangeOut"] = {
+      id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [], op: "restore_goal_milestone", target: {}, before: {}, after,
+      status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now(), decided_by: null, decided_at: null, reason: null,
+      decision_reason: null, routed_to: [], undoes_id: p[3], undone: false, can_decide: false, can_undo: false,
+    };
+    return reply("/v1/simple/changes/{change_id}/undo", "post", { change: c, flags: [] }, 201);
   }
   if (p[2] === "changes" && m === "POST" && p[4] === "withdraw" && db.plan_proposed?.includes(p[3])) {
     db.plan_proposed.splice(db.plan_proposed.indexOf(p[3]), 1);
-    return json(200, { change: { id: p[3], status: "declined" }, flags: [] });
+    const c: Schemas["SimpleChangeOut"] = {
+      id: p[3], session_id: null, document_id: null, draft_ids: [], op: "add_track", target: {}, before: {}, after: {},
+      status: "declined", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now(), decided_by: ctx.id, decided_at: now(), reason: null,
+      decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    };
+    return reply("/v1/simple/changes/{change_id}/withdraw", "post", { change: c, flags: [] });
   }
   // tracks-goal (owner Nov 9): accepting a proposed track change (in the decider's Inbox) applies it as it is then, putting on or
   // taking off only its PRD; ./simple-changes.ts then marks it accepted.
@@ -301,7 +312,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     else (db.plan_proposed ??= []).push(res.change.id);
     // tracks-goal (owner Nov 9): it waits in its decider's Inbox (simple_proposals), to accept or decline there.
     if (res.change.status === "proposed" && waits) (db.changes ??= []).push(res.change);
-    return json(201, res);
+    return reply("/v1/simple/changes", "post", res, 201);
   };
   /** A track to Settings › Trash: its features go to no track, kept for a restore (as the API's Trash list, no item ids and no items of its own). */
   const trashTrack = (k: string) => {

@@ -6,6 +6,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { DeletedEntity } from "./impact";
+import { reply } from "./typed";
 
 export interface V2Db {
   modules: Schemas["ModuleDefinitionOut"][];
@@ -297,18 +298,55 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+/** A row's own field by name, without an index signature on its (schema) type. */
+function field(r: object, k: string): unknown {
+  return Object.entries(r).find(([key]) => key === k)?.[1];
+}
+
+function findById<T extends { id: string }>(rows: T[], id: string): T | undefined {
+  return rows.find((r) => r.id === id);
+}
+
+function filterSort<T extends { created_at: string }>(rows: T[], filters: [string, string][]): T[] {
+  return rows
+    .filter((r) => filters.every(([k, v]) => String(field(r, k)) === v))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 /** GET /v1/<v2 path>[/<id>]; null when the path is not a v2 route. `me` is the signed-in user (asked_to=me). */
 export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams, me: string | null = null): Response | null {
   const table = PATHS[p[1]];
   if (!table || req.method !== "GET" || p.length > 3) return null;
-  const rows = db[table] as unknown as Record<string, unknown>[];
   if (p[2]) {
-    const row = rows.find((r) => r.id === p[2]);
-    if (!row) return json(404, { detail: "Not found" });
-    if (table === "evaluation_reports") {
-      return json(200, { ...row, findings: db.evaluation_findings.filter((f) => f.report_id === row.id) });
+    const id = p[2];
+    switch (table) {
+      case "modules": { const row = findById(db.modules, id); return row ? reply("/v1/modules/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "module_versions": { const row = findById(db.module_versions, id); return row ? reply("/v1/module-versions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "template_module_assignments": { const row = findById(db.template_module_assignments, id); return row ? reply("/v1/template-module-assignments/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "compositions": { const row = findById(db.compositions, id); return row ? reply("/v1/compositions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "composition_revisions": { const row = findById(db.composition_revisions, id); return row ? reply("/v1/composition-revisions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "intakes": { const row = findById(db.intakes, id); return row ? reply("/v1/intakes/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "gaps": { const row = findById(db.gaps, id); return row ? reply("/v1/gaps/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "questions": { const row = findById(db.questions, id); return row ? reply("/v1/questions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "answers": { const row = findById(db.answers, id); return row ? reply("/v1/answers/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "assumption_decisions": { const row = findById(db.assumption_decisions, id); return row ? reply("/v1/assumption-decisions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "blocker_options": { const row = findById(db.blocker_options, id); return row ? reply("/v1/blocker-options/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "feasibility_experiments": { const row = findById(db.feasibility_experiments, id); return row ? reply("/v1/feasibility-experiments/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "blocker_events": { const row = findById(db.blocker_events, id); return row ? reply("/v1/blocker-events/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "change_events": { const row = findById(db.change_events, id); return row ? reply("/v1/change-events/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "section_links": { const row = findById(db.section_links, id); return row ? reply("/v1/section-links/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "artifact_dependencies": { const row = findById(db.artifact_dependencies, id); return row ? reply("/v1/artifact-dependencies/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "evaluation_reports": {
+        const row = findById(db.evaluation_reports, id);
+        if (!row) return json(404, { detail: "Not found" });
+        return reply("/v1/evaluation-reports/{item_id}", "get", { ...row, findings: db.evaluation_findings.filter((f) => f.report_id === row.id) });
+      }
+      case "evaluation_findings": { const row = findById(db.evaluation_findings, id); return row ? reply("/v1/evaluation-findings/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "artifact_requests": { const row = findById(db.artifact_requests, id); return row ? reply("/v1/artifact-requests/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "artifact_versions": { const row = findById(db.artifact_versions, id); return row ? reply("/v1/artifact-versions/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "artifact_outputs": { const row = findById(db.artifact_outputs, id); return row ? reply("/v1/artifact-outputs/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
+      case "artifact_review_events": { const row = findById(db.artifact_review_events, id); return row ? reply("/v1/artifact-review-events/{item_id}", "get", row) : json(404, { detail: "Not found" }); }
     }
-    return json(200, row);
   }
   const limit = Number(q.get("limit") ?? 100);
   const offset = Number(q.get("offset") ?? 0);
@@ -317,8 +355,30 @@ export function routeV2(db: V2Db, req: Request, p: string[], q: URLSearchParams,
   const filters = [...q.entries()]
     .filter(([k]) => k !== "limit" && k !== "offset")
     .map(([k, v]): [string, string] => [k, v === "me" ? (me ?? "nobody") : v]);
-  const hits = rows
-    .filter((r) => filters.every(([k, v]) => String(r[k]) === v))
-    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-  return json(200, hits.slice(offset, offset + limit));
+  const page = <T>(rows: T[]) => rows.slice(offset, offset + limit);
+  switch (table) {
+    case "modules": return reply("/v1/modules", "get", page(filterSort(db.modules, filters)));
+    case "module_versions": return reply("/v1/module-versions", "get", page(filterSort(db.module_versions, filters)));
+    case "template_module_assignments": return reply("/v1/template-module-assignments", "get", page(filterSort(db.template_module_assignments, filters)));
+    case "compositions": return reply("/v1/compositions", "get", page(filterSort(db.compositions, filters)));
+    case "composition_revisions": return reply("/v1/composition-revisions", "get", page(filterSort(db.composition_revisions, filters)));
+    case "intakes": return reply("/v1/intakes", "get", page(filterSort(db.intakes, filters)));
+    case "gaps": return reply("/v1/gaps", "get", page(filterSort(db.gaps, filters)));
+    case "questions": return reply("/v1/questions", "get", page(filterSort(db.questions, filters)));
+    case "answers": return reply("/v1/answers", "get", page(filterSort(db.answers, filters)));
+    case "assumption_decisions": return reply("/v1/assumption-decisions", "get", page(filterSort(db.assumption_decisions, filters)));
+    case "blocker_options": return reply("/v1/blocker-options", "get", page(filterSort(db.blocker_options, filters)));
+    case "feasibility_experiments": return reply("/v1/feasibility-experiments", "get", page(filterSort(db.feasibility_experiments, filters)));
+    case "blocker_events": return reply("/v1/blocker-events", "get", page(filterSort(db.blocker_events, filters)));
+    case "change_events": return reply("/v1/change-events", "get", page(filterSort(db.change_events, filters)));
+    case "section_links": return reply("/v1/section-links", "get", page(filterSort(db.section_links, filters)));
+    case "artifact_dependencies": return reply("/v1/artifact-dependencies", "get", page(filterSort(db.artifact_dependencies, filters)));
+    case "evaluation_reports": return reply("/v1/evaluation-reports", "get", page(filterSort(db.evaluation_reports, filters)));
+    case "evaluation_findings": return reply("/v1/evaluation-findings", "get", page(filterSort(db.evaluation_findings, filters)));
+    case "artifact_requests": return reply("/v1/artifact-requests", "get", page(filterSort(db.artifact_requests, filters)));
+    case "artifact_versions": return reply("/v1/artifact-versions", "get", page(filterSort(db.artifact_versions, filters)));
+    case "artifact_outputs": return reply("/v1/artifact-outputs", "get", page(filterSort(db.artifact_outputs, filters)));
+    case "artifact_review_events": return reply("/v1/artifact-review-events", "get", page(filterSort(db.artifact_review_events, filters)));
+    default: return null;
+  }
 }

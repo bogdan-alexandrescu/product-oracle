@@ -23,6 +23,7 @@
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { reply } from "./typed";
 import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { mockName as displayName } from "./people";
 import { baselineReviewStatus } from "./baseline";
@@ -739,7 +740,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
     if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
-    return json(201, summary(db, intake, ctx.userId, ctx));
+    return reply("/v1/intakes", "post", summary(db, intake, ctx.userId, ctx), 201);
   }
 
   // new-prd-from-replaced-prd: what a new PRD replacing this approved PRD carries.
@@ -748,7 +749,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const got = ctx.carried?.(p[3], q.getAll("item_keys"));
     if (!got) return fail(404, "That PRD was not found");
     if ("status" in got) return fail(got.status, got.detail);
-    return json(200, got);
+    return reply("/v1/intakes/replaces/{document_id}/carried", "get", got);
   }
 
   if (p[1] === "intakes" && p[2] && p.length >= 3 && !(p.length === 3 && m === "GET")) {
@@ -777,17 +778,18 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
       intake.lock_version += 1;
       intake.updated_at = now();
-      return json(200, intakeOut(intake, db));
+      return reply("/v1/intakes/{item_id}", "patch", intakeOut(intake, db));
     }
-    if (leaf === "summary" && m === "GET") return json(200, summary(db, intake, ctx.userId, ctx));
-    if (leaf === "new-evidence" && m === "GET") return json(200, summary(db, intake, ctx.userId, ctx).new_evidence);
+    if (leaf === "summary" && m === "GET") return reply("/v1/intakes/{intake_id}/summary", "get", summary(db, intake, ctx.userId, ctx));
+    if (leaf === "new-evidence" && m === "GET") return reply("/v1/intakes/{intake_id}/new-evidence", "get", summary(db, intake, ctx.userId, ctx).new_evidence);
     if (leaf === "evidence" && m === "GET") {
-      if (!q.get("q")) return fail(422, "q is required");
-      return json(200, { intake_id: intake.id, q: q.get("q"), pinned_version: intake.source_snapshot_ids.length, as_of: intake.created_at, hits: [] });
+      const text = q.get("q");
+      if (!text) return fail(422, "q is required");
+      return reply("/v1/intakes/{intake_id}/evidence", "get", { intake_id: intake.id, q: text, pinned_version: intake.source_snapshot_ids.length, as_of: intake.created_at, hits: [] });
     }
     if (leaf === "question-batch" && m === "GET") {
       const n = q.get("batch");
-      return json(200, batchView(db, intake, n ? Number(n) : null, ctx.userId));
+      return reply("/v1/intakes/{intake_id}/question-batch", "get", batchView(db, intake, n ? Number(n) : null, ctx.userId));
     }
     if (leaf === "next-batch" && m === "GET") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver sees the next batch");
@@ -796,24 +798,24 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const questions = db.questions.filter((x) => x.intake_id === intake.id);
       const remaining = questions.filter((x) => x.status === "draft").length;
       const level = questionsLevel(ctx);
-      if (level === "observe") return json(200, { questions: [], remaining, held: QUESTIONS_OBSERVE } satisfies Schemas["NextBatch"]);
+      if (level === "observe") return reply("/v1/intakes/{intake_id}/next-batch", "get", { questions: [], remaining, held: QUESTIONS_OBSERVE } satisfies Schemas["NextBatch"]);
       // Copies: the stored question keeps its person until the batch is asked. At Draft each
       // keeps its own named person, never the reader.
       const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x, level !== "draft") }));
-      return json(200, { questions: cards(db, shown, ctx.userId), remaining, held: null } satisfies Schemas["NextBatch"]);
+      return reply("/v1/intakes/{intake_id}/next-batch", "get", { questions: cards(db, shown, ctx.userId), remaining, held: null } satisfies Schemas["NextBatch"]);
     }
     if (leaf === "composition-inputs" && m === "GET") {
       const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
       const critical = gaps.filter((g) => g.importance === "critical" && !DECIDED.has(g.status));
-      return json(200, {
+      return reply("/v1/intakes/{intake_id}/composition-inputs", "get", {
         template: {}, brief: { title: intake.title, text: intake.brief }, category: "feature", scope: {}, signals: {},
         baseline: {}, sources: {}, stakeholders: { answered: gaps.filter((g) => DECIDED.has(g.status)).length, open: gaps.filter((g) => OPEN.has(g.status)).length },
         outputs: ["prd"], blockers: { open_critical_gap_ids: critical.map((g) => g.id) }, policy: {},
         intake_id: intake.id, baseline_snapshot_id: null, source_snapshot_ids: intake.source_snapshot_ids,
       });
     }
-    if (leaf === "proposals" && m === "GET") return json(200, (db.intake_proposals ?? []).filter((x) => x.intake_id === intake.id));
-    if (leaf === "findings" && m === "GET") return json(200, findingsFor(db, intake, ctx.userId));
+    if (leaf === "proposals" && m === "GET") return reply("/v1/intakes/{intake_id}/proposals", "get", (db.intake_proposals ?? []).filter((x) => x.intake_id === intake.id));
+    if (leaf === "findings" && m === "GET") return reply("/v1/intakes/{intake_id}/findings", "get", findingsFor(db, intake, ctx.userId));
     if (leaf === "findings" && (m === "PATCH" || m === "POST")) {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can share its findings");
       const all = db.intake_findings?.[intake.id] ?? [];
@@ -834,7 +836,9 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
       const set = new Set(changes.map((c) => c.finding_id));
       const out = findingsFor(db, intake, ctx.userId).filter((f) => set.has(f.id));
-      return json(200, m === "PATCH" ? out[0] : out);
+      return m === "PATCH"
+        ? reply("/v1/intakes/{intake_id}/findings/{finding_id}", "patch", out[0])
+        : reply("/v1/intakes/{intake_id}/findings/sharing", "post", out);
     }
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     if (leaf === "ai-read" && m === "POST") {
@@ -848,17 +852,17 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         read: { state: "done", path: "swarmcloud", started_at: now, finished_at: now, sources: 0, added: { items: 0, gaps: 0 }, dropped_refs: 0, failures: 0 },
         on_demand: [...(reads[intake.id]?.on_demand ?? []), now].slice(-READS_PER_DAY),
       };
-      return json(202, aiRead(db, intake));
+      return reply("/v1/intakes/{intake_id}/ai-read", "post", aiRead(db, intake), 202);
     }
     if (leaf === "analyze" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can re-run its analysis");
       syncQuestions(db, intake);
-      return json(200, summary(db, intake, ctx.userId, ctx));
+      return reply("/v1/intakes/{intake_id}/analyze", "post", summary(db, intake, ctx.userId, ctx));
     }
     if (leaf === "repin" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can repin it");
       intake.source_snapshot_ids = [...intake.source_snapshot_ids, uuid()];
-      return json(200, summary(db, intake, ctx.userId, ctx));
+      return reply("/v1/intakes/{intake_id}/repin", "post", summary(db, intake, ctx.userId, ctx));
     }
     if (leaf === "question-batches" && m === "POST") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
@@ -873,7 +877,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
       const asked = askBatch(db, ctx, intake, Number(input?.size ?? q.get("size") ?? 5), assign);
       if (!asked.length) return fail(409, "No questions left to ask");
-      return json(200, batchView(db, intake, asked[0].batch ?? null, ctx.userId));
+      return reply("/v1/intakes/{intake_id}/question-batches", "post", batchView(db, intake, asked[0].batch ?? null, ctx.userId));
     }
     if (leaf === "questions" && p[4] === "withdraw" && m === "POST") {
       // The Undo of a batch Oracle asked on its own: still-waiting questions are withdrawn.
@@ -882,7 +886,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!ids.size) return fail(422, "Name at least one question");
       const done = db.questions.filter((x) => x.intake_id === intake.id && ids.has(x.id) && (x.status === "asked" || x.status === "delegated"));
       for (const x of done) Object.assign(x, { status: "withdrawn", updated_at: now() });
-      return json(200, { question_ids: done.map((x) => x.id) } satisfies Schemas["QuestionsWithdrawn"]);
+      return reply("/v1/intakes/{intake_id}/questions/withdraw", "post", { question_ids: done.map((x) => x.id) } satisfies Schemas["QuestionsWithdrawn"]);
     }
     if (leaf === "runs" && m === "POST") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
@@ -965,12 +969,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         proposal.result = { feedback_item_id: uuid() };
       }
       Object.assign(proposal, { status: "accepted", decided_by: ctx.userId, decided_at: now(), updated_at: now() });
-      return json(200, proposal);
+      return reply("/v1/intake-proposals/{proposal_id}/accept", "post", proposal);
     }
     if (p[3] === "dismiss") {
       const input = await body<Schemas["DismissIn"] | null>();
       Object.assign(proposal, { status: "dismissed", decided_by: ctx.userId, decided_at: now(), decision_note: input?.reason ?? null, updated_at: now() });
-      return json(200, proposal);
+      return reply("/v1/intake-proposals/{proposal_id}/dismiss", "post", proposal);
     }
     return null;
   }
@@ -993,7 +997,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       };
       db.gaps.push(gap);
       syncQuestions(db, intake);
-      return json(201, gap);
+      return reply("/v1/gaps", "post", gap, 201);
     }
     const gap = db.gaps.find((g) => g.id === p[2]);
     if (p.length === 3 && m === "PATCH") {
@@ -1015,7 +1019,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       gap.updated_at = now();
       const intake = gap.intake_id ? findIntake(gap.intake_id) : undefined;
       if (intake) syncQuestions(db, intake);
-      return json(200, gap);
+      return reply("/v1/gaps/{item_id}", "patch", gap);
     }
     if (p[3] === "decisions" && m === "POST") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
@@ -1036,14 +1040,14 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         rationale: input.rationale, decided_by: ctx.userId, decided_at: now(), review_at: input.review_at ?? null, created_at: now(),
       };
       db.assumption_decisions.push(decision);
-      return json(201, { decision, gap });
+      return reply("/v1/gaps/{gap_id}/decisions", "post", { decision, gap }, 201);
     }
     if (p[3] === "research" && m === "POST") {
       if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
       if (!gap) return fail(404, "Gap not found");
       const intake = gap.intake_id ? findIntake(gap.intake_id) : undefined;
       if (!intake) return fail(409, "Only an intake's gap can be researched");
-      return json(201, proposeResearch(db, intake, gap, ctx.userId, null, true));
+      return reply("/v1/gaps/{gap_id}/research", "post", proposeResearch(db, intake, gap, ctx.userId, null, true), 201);
     }
     return null;
   }
@@ -1067,11 +1071,11 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         user_id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role,
         can_write: x.status !== "disabled" && atLeast(x.role, "commenter"),
       }));
-    return json(200, people);
+    return reply("/v1/people", "get", people);
   }
 
   if (p[1] === "inbox" && p[2] === "questions" && p.length === 3 && m === "GET") {
-    return json(200, inboxQuestions(db, ctx));
+    return reply("/v1/inbox/questions", "get", inboxQuestions(db, ctx));
   }
 
   if (p[1] === "questions" && p.length === 2 && m === "POST") {
@@ -1089,7 +1093,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       created_at: now(), updated_at: now(), ...columns,
     };
     db.questions.push(question);
-    return json(201, question);
+    return reply("/v1/questions", "post", question, 201);
   }
 
   if (p[1] === "questions" && p[2] && p.length === 3 && m === "PATCH") {
@@ -1115,7 +1119,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
     }
     question.updated_at = now();
-    return json(200, question);
+    return reply("/v1/questions/{question_id}", "patch", question);
   }
 
   if (p[1] === "questions" && p[2] && p[3] === "answers" && m === "POST") {
@@ -1169,10 +1173,10 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
       if (intake) syncQuestions(db, intake);
     }
-    return json(201, {
+    return reply("/v1/questions/{question_id}/answers", "post", {
       answer, question, gap, proposals, baseline_proposal_ids: [], change_event_id: null,
       next_actions: gap ? nextActions(gap) : [],
-    } satisfies Schemas["AnswerResult"]);
+    } satisfies Schemas["AnswerResult"], 201);
   }
   return null;
 }

@@ -11,6 +11,7 @@ import type { DraftRoadmapCheck, DraftRoadmapOut, DraftRoadmapStatus, DraftRoadm
 import { stableUuid } from "./ids";
 import { readableRefusal } from "./refusal";
 import { finishDraftItemsRun, startDraftItemsRun, type RunsDb } from "./runs";
+import { reply } from "./typed";
 
 type Item = Schemas["RoadmapItemOut"];
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -397,13 +398,13 @@ export async function routeDraftRoadmap(ctx: DraftRoadmapContext, db: DraftRoadm
   const can = (role: Role) => RANK[ctx.role] >= RANK[role];
 
   if (settingsRoute) {
-    if (m === "GET") return json(200, { each_draft: !db.off.includes(doc.id) });
+    if (m === "GET") return reply("/v1/documents/{doc}/roadmap-items/settings", "get", { each_draft: !db.off.includes(doc.id) });
     if (m === "PUT") {
       if (!can("owner")) return json(403, { detail: "Requires the owner role" });
       const input = JSON.parse((await req.text()) || "{}") as { each_draft?: boolean };
       db.off = db.off.filter((id) => id !== doc.id);
       if (input.each_draft === false) db.off.push(doc.id);
-      return json(200, { each_draft: input.each_draft !== false });
+      return reply("/v1/documents/{doc}/roadmap-items/settings", "put", { each_draft: input.each_draft !== false });
     }
     return null;
   }
@@ -413,7 +414,7 @@ export async function routeDraftRoadmap(ctx: DraftRoadmapContext, db: DraftRoadm
   if (!v) return json(404, { detail: "Version not found" });
   const view = q.get("view") === "brief" ? "brief" : "full";
 
-  if (p.length === 6 && m === "GET") return json(200, out(ctx, db, doc, v, view));
+  if (p.length === 6 && m === "GET") return reply("/v1/documents/{doc}/versions/{n}/roadmap-items", "get", out(ctx, db, doc, v, view));
   if (p.length === 7 && p[6] === "derive" && m === "POST") {
     if (!can("approver")) return json(403, { detail: "Requires the approver role" });
     const input = JSON.parse((await req.text()) || "{}") as { depth?: DraftRow["depth"] } | null;
@@ -436,7 +437,7 @@ export async function routeDraftRoadmap(ctx: DraftRoadmapContext, db: DraftRoadm
     };
     Object.assign(row, { status: "queued", requested_via: "derive", requested_by: ctx.userId, requested_at: ctx.now(), run_id: null, error: null, depth: input?.depth ?? "standard" });
     if (!r) db.rows.push(row);
-    return json(202, out(ctx, db, doc, v, "full"));
+    return reply("/v1/documents/{doc}/versions/{n}/roadmap-items/derive", "post", out(ctx, db, doc, v, "full"), 202);
   }
   return null;
 }

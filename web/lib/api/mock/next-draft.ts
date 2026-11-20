@@ -22,6 +22,7 @@ import { plainText } from "@/lib/markdown";
 import type { LlmContext } from "./llm-jobs";
 import { prdRanker } from "./prd-rank";
 import { jobOut } from "./refusal";
+import { reply } from "./typed";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -361,7 +362,10 @@ export async function stageRoute(ctx: LlmContext, req: Request, p: string[], liv
   if (!on) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
   f.updated_at = ctx.now();
   const latest = latestOf(ctx, f.document_id)?.number ?? null;
-  return json(200, { ...f, resolution_note: shownNote(f, ctx.db), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) });
+  const out = { ...f, resolution_note: shownNote(f, ctx.db), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) };
+  return on
+    ? reply("/v1/feedback/{feedback_id}/stage-for-agents", "post", out)
+    : reply("/v1/feedback/{feedback_id}/stage-for-agents", "delete", out);
 }
 
 /** A withheld item's suggestion: what its pushback says instead of its reason (jobs.service.WITHHELD_REASON). */
@@ -542,7 +546,7 @@ export async function nextDraftRoute(
   const m = req.method;
   const doc = ctx.documents.find((d) => d.slug === p[2] || d.id === p[2]);
   if (!doc) return fail(404, "Document not found");
-  if (p[3] === "staged-changes" && m === "GET") return json(200, stagedChanges(ctx, doc, q.get("include_gone") === "true"));
+  if (p[3] === "staged-changes" && m === "GET") return reply("/v1/documents/{doc}/staged-changes", "get", stagedChanges(ctx, doc, q.get("include_gone") === "true"));
   if (p[3] !== "next-draft") return fail(404, "Route not found");
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
@@ -567,7 +571,7 @@ export async function nextDraftRoute(
           : hit.length
             ? `approved and locked, never changed: ${[...new Set(hit.map((t) => `${t.section_heading} (${t.section_key})`))].join(", ")}; untick them`
             : null;
-    return json(200, {
+    return reply("/v1/documents/{doc}/next-draft/plan", "post", {
       engine,
       why,
       text_changes: c.texts.length + c.rows.length,
@@ -646,20 +650,20 @@ export async function nextDraftRoute(
       );
     const job = makeJob(doc, latest, { suggestion_ids: rows.map((r) => r.id), next_draft_change_ids: nd.map((r) => r.id) });
     ctx.db.jobs.push(job);
-    return json(201, job);
+    return reply("/v1/documents/{doc}/next-draft", "post", job, 201);
   }
 
   const job = ctx.db.jobs.find((j) => j.id === p[4] && j.document_id === doc.id && j.kind === KIND);
   if (!job) return fail(404, "next-draft build not found");
   const out = job.output as BatchOutput | null;
-  if (!p[5] && m === "GET") return json(200, preview(ctx, job));
+  if (!p[5] && m === "GET") return reply("/v1/documents/{doc}/next-draft/{job_id}", "get", preview(ctx, job));
 
   if (p[5] === "discard" && m === "POST") {
     if (out?.applied_version) return fail(409, `already applied as version ${out.applied_version}`);
     if (job.status === "cancelled" || out?.discarded_at) return fail(409, "this next draft was already discarded");
     if (["queued", "running"].includes(job.status)) Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
     else job.output = { ...(out ?? {}), discarded_at: ctx.now() };
-    return json(200, jobOut(job));
+    return reply("/v1/documents/{doc}/next-draft/{job_id}/discard", "post", jobOut(job));
   }
 
   if (p[5] === "apply" && m === "POST") {
@@ -706,6 +710,10 @@ export async function nextDraftRoute(
     for (const r of ctx.db.next_draft_changes ?? [])
       if (builtRows.has(r.id) && r.status === "staged") Object.assign(r, { status: "applied", applied_in_version: next.number });
     hooks.onImported(doc, next);
+    // mock-types: apply_next_draft's response is VersionOut, but this file's Version (LlmContext,
+    // from ./llm-jobs.ts) only carries id/document_id/number/created_at/sections - not the schema's
+    // other required fields (content_hash, warnings, brief_source, approval_lapses, ...); blocked
+    // without editing llm-jobs.ts, which is outside this task's 4 files.
     return json(201, { number: next.number, document_id: doc.id, id: next.id });
   }
   return fail(404, "Route not found");

@@ -24,6 +24,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { confirmGoalLinks, type BaselineState } from "./baseline";
+import { reply } from "./typed";
 import { stableUuid } from "./ids";
 import { ANY_CODE as CODE_RE, codeFree, formerKeys, nextFeatureCode, setCode, wantedCode, wholeCode } from "./feature-codes";
 import { closed, roadmapId, type SimpleDb } from "./simple-roadmap";
@@ -510,8 +511,12 @@ function link(baseline: BaselineState, prd: string, code: string, featureId: str
 export async function routeGroundTruthFixes(baseline: BaselineState, simple: SimpleDb | undefined, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   const m = req.method;
   const ref = (e: Entity) => ({ id: e.id, code: ANY_CODE.test(e.key) ? e.key : null, name: e.title });
-  const out = (e: Entity, rest: { status: "done" | "proposed"; code?: string | null; proposal_id?: string | null }) =>
-    json(200, { feature: ref(e), code: null, proposal_id: null, ...rest } satisfies Schemas["GroundTruthFixOut"]);
+  const fixOut = (e: Entity, rest: { status: "done" | "proposed"; code?: string | null; proposal_id?: string | null }): Schemas["GroundTruthFixOut"] => ({
+    feature: ref(e),
+    code: null,
+    proposal_id: null,
+    ...rest,
+  });
   if (p[1] !== "baseline") return null;
   if (p[2] === "entities" && p[3] && p[4] === "code" && !p[5] && (m === "POST" || m === "DELETE")) {
     if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");
@@ -525,13 +530,14 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
       e.key = old;
       delete baseline.codeFrom![e.id];
       revise(baseline, e, before, me.id);
-      return out(e, { status: "done" });
+      return reply("/v1/baseline/entities/{entity_id}/code", "delete", fixOut(e, { status: "done" }));
     }
     const code = nextCode(baseline, simple, e);
     if (typeof code !== "string") return code;
-    if (!atLeast(me.role, "approver")) return out(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id });
+    if (!atLeast(me.role, "approver"))
+      return reply("/v1/baseline/entities/{entity_id}/code", "post", fixOut(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id }));
     giveCode(baseline, simple, e, me.id);
-    return out(e, { status: "done", code });
+    return reply("/v1/baseline/entities/{entity_id}/code", "post", fixOut(e, { status: "done", code }));
   }
   if (p[2] === "entities" && p[3] && p[4] === "own-code" && !p[5] && m === "POST") {
     // fixes.use_own_code: its own code as its key; the number it had is given back, never given again.
@@ -549,7 +555,7 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
     (baseline.codesGiven ??= []).push(want);
     revise(baseline, e, before, me.id);
     confirmGoalLinks(baseline, e, me.id);
-    return out(e, { status: "done", code: want });
+    return reply("/v1/baseline/entities/{entity_id}/own-code", "post", fixOut(e, { status: "done", code: want }));
   }
   if (p[2] === "prd-links" && !p[3] && (m === "POST" || m === "DELETE")) {
     if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");
@@ -560,7 +566,7 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
       const links = baseline.prdLinks?.[prd];
       if (!links?.[code]) return fail(409, "This PRD's feature is not linked.");
       delete links[code];
-      return json(200, { ok: true });
+      return reply("/v1/baseline/prd-links", "delete", { ok: true });
     }
     const body = JSON.parse((await req.text()) || "{}") as Schemas["PrdLinkCreate"];
     const code = body.code.trim();
@@ -570,10 +576,14 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
       const checked = link(trial, body.prd_document_id, code, body.feature_id);
       if (checked instanceof Response) return checked;
       const name = PRD_FEATURES.find((f) => f.code === code)!.name;
-      return out(checked, { status: "proposed", proposal_id: propose(baseline, me.id, checked, { action: "link_prd_feature", prd_document_id: body.prd_document_id, code, name }).id });
+      return reply(
+        "/v1/baseline/prd-links",
+        "post",
+        fixOut(checked, { status: "proposed", proposal_id: propose(baseline, me.id, checked, { action: "link_prd_feature", prd_document_id: body.prd_document_id, code, name }).id }),
+      );
     }
     const linked = link(baseline, body.prd_document_id, code, body.feature_id);
-    return linked instanceof Response ? linked : out(linked, { status: "done" });
+    return linked instanceof Response ? linked : reply("/v1/baseline/prd-links", "post", fixOut(linked, { status: "done" }));
   }
   if (p[2] === "proposals" && p[3] && p[4] === "accept" && m === "POST") {
     const prop = baseline.proposals.find((x) => x.id === p[3]);

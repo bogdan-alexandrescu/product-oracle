@@ -2,6 +2,7 @@ import type { Schemas } from "@/lib/api/client";
 import { cleanFlow } from "@/lib/raw-tokens";
 
 import { stableUuid } from "./ids";
+import { reply } from "./typed";
 
 /**
  * Simple S10 (#723, D26): proposals' visuals (oracle.simple.visuals), with INVENTED
@@ -402,11 +403,11 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
         v.failure = null;
       }
     }
-    return json(200, out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id"), nameOf(db, ctx, kind, id)));
+    return reply("/v1/simple/visuals/{kind}/{subject_id}", "get", out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id"), nameOf(db, ctx, kind, id)));
   }
   if (m === "GET" && p[5] === "versions") {
     const f = v?.versions.find((x) => x.version === Number(p[6]));
-    return f ? json(200, cleanFlow({ ...f, versions: v!.versions.length })) : json(404, { detail: "No such version" });
+    return f ? reply("/v1/simple/visuals/{kind}/{subject_id}/versions/{number}", "get", cleanFlow({ ...f, versions: v!.versions.length })) : json(404, { detail: "No such version" });
   }
   if (m !== "POST") return null;
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -417,7 +418,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     if (!body) return json(422, { detail: "Say what should change" });
     kept();
     v.comments.push({ id: stableUuid(`simple-visual-comment/${key}/${v.comments.length}`), version: v.versions.at(-1)!.version, annotation: (b.annotation as number | null) ?? null, body, by_name: ctx.names[ctx.id] ?? "someone", at, addressed_in: null });
-    return json(201, out(v, kind, id, ctx));
+    return reply("/v1/simple/visuals/{kind}/{subject_id}/comments", "post", out(v, kind, id, ctx), 201);
   }
   if (p[5] === "revise") {
     if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly revises its visual" });
@@ -434,7 +435,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     v.versions.push({ ...cur, version: n, title: `${cur.title} (revised)`, nodes, steps: nodes.map((s) => s.label), svg: drawSvg(`${cur.title} (revised)`, nodes) });
     v.made_by.push(ctx.id);
     for (const c of open) c.addressed_in = n;
-    return json(202, out(v, kind, id, ctx));
+    return reply("/v1/simple/visuals/{kind}/{subject_id}/revise", "post", out(v, kind, id, ctx), 202);
   }
   if (p[5] === "request") {
     if (UNASKABLE.includes(kind)) return json(422, { detail: "Oracle draws this visual with its proposal; it is not asked for" });
@@ -447,12 +448,12 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
       // API's ask_for: the bet's own words are the brief (qa-simple-prd-21), whatever was sent.
       const cur = v ?? add(db, kind, id, BET_WORDS.get(id) || String(b.brief ?? "").trim() || "A bet of the one-pager");
       if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
-      return json(202, out(db.visuals[key], kind, id, ctx, doc, nameOf(db, ctx, kind, id)));
+      return reply("/v1/simple/visuals/{kind}/{subject_id}/request", "post", out(db.visuals[key], kind, id, ctx, doc, nameOf(db, ctx, kind, id)), 202);
     }
     // The job is queued: the panel reads "drawing" until its next read lands the drawing.
     const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "The new flow");
     if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
-    return json(202, out(db.visuals[key], kind, id, ctx, null, nameOf(db, ctx, kind, id)));
+    return reply("/v1/simple/visuals/{kind}/{subject_id}/request", "post", out(db.visuals[key], kind, id, ctx, null, nameOf(db, ctx, kind, id)), 202);
   }
   return null;
 }

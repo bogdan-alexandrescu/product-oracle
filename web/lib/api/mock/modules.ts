@@ -10,6 +10,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { factor, nudgeReason, type Nudge, type Nudges } from "./learned";
+import { reply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type Catalog = Schemas["CatalogModuleDetail"];
@@ -584,18 +585,18 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     if (m === "GET" && !p[2]) {
       const pack = q.get("pack");
       const listed = db.catalog.filter((c) => !pack || c.applies_to.includes(pack));
-      return json(
-        200,
+      return reply(
+        "/v1/module-catalog",
+        "get",
         listed.map((c) => {
-          const out: Partial<Catalog> = { ...c };
-          delete out.contract;
+          const { contract, ...out } = c;
           return out;
         }),
       );
     }
     if (m === "GET" && p[2] && !p[3]) {
       const entry = db.catalog.find((c) => c.key === p[2]);
-      return entry ? json(200, entry) : json(404, { detail: `module ${p[2]} not found` });
+      return entry ? reply("/v1/module-catalog/{key}", "get", entry) : json(404, { detail: `module ${p[2]} not found` });
     }
     if (m === "POST") {
       if (!atLeast(ctx.role, "owner")) return forbidden("owner");
@@ -605,7 +606,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         if (db.catalog.some((c) => c.key === key)) return refused("key_taken", `module ${key} already exists`);
         const created = { ...mod(key, String(contract.title ?? key), (contract.policy as Catalog["policy"]) ?? "optional", 100, [key.replace(/\./g, "-")], (contract.applies_to as string[]) ?? []), builtin: false, origin: "company" as const, contract };
         db.catalog.push(created);
-        return json(201, created);
+        return reply("/v1/module-catalog", "post", created, 201);
       }
       const entry = db.catalog.find((c) => c.key === p[2]);
       if (!entry) return json(404, { detail: `module ${p[2]} not found` });
@@ -613,7 +614,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       if (entry.versions.some((v) => v.version >= version)) return refused("version_not_newer", `version ${version} must be newer than ${entry.version}`);
       entry.versions.push({ version, origin: "company", contract_hash: "1".repeat(64), created_by: ctx.userId, created_at: new Date().toISOString() });
       Object.assign(entry, { version, origin: "company", contract });
-      return json(201, entry);
+      return reply("/v1/module-catalog/{key}/versions", "post", entry, 201);
     }
   }
 
@@ -628,8 +629,9 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       ["smb.services", "SMB services", ["smb_services"]],
       ["enterprise.software", "Enterprise software", ["enterprise_software"]],
     ];
-    return json(
-      200,
+    return reply(
+      "/v1/module-packs",
+      "get",
       packs.map(([id, title, categories]) => ({
         id,
         version: "1.0.0",
@@ -645,20 +647,20 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
   }
 
   if (p[1] === "module-policy") {
-    if (m === "GET") return json(200, db.policy);
+    if (m === "GET") return reply("/v1/module-policy", "get", db.policy);
     if (m === "PUT") {
       if (!atLeast(ctx.role, "owner")) return forbidden("owner");
       const next = await body<Schemas["ModulePolicySettings"]>();
       const unknown = [...(next.required ?? []), ...(next.optional ?? []), ...(next.disabled ?? [])].filter((k) => !db.catalog.some((c) => c.key === k));
       if (unknown.length) return refused("unknown_module", `unknown modules: ${unknown.join(", ")}`);
       db.policy = { required: next.required ?? [], optional: next.optional ?? [], disabled: next.disabled ?? [], default_packs: next.default_packs ?? [], is_default: false, updated_at: new Date().toISOString() };
-      return json(200, db.policy);
+      return reply("/v1/module-policy", "put", db.policy);
     }
   }
 
   if (p[1] === "template-manifests" && p[2]) {
     const manifest = db.manifests[p[2]];
-    if (m === "GET") return manifest ? json(200, manifest) : json(404, { detail: `template '${p[2]}' not found` });
+    if (m === "GET") return manifest ? reply("/v1/template-manifests/{template}", "get", manifest) : json(404, { detail: `template '${p[2]}' not found` });
     if (m === "PUT") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       if (!manifest) return json(404, { detail: `template '${p[2]}' not found` });
@@ -674,7 +676,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         sections_absent: [],
         created_by: ctx.userId,
       }));
-      return json(200, manifest);
+      return reply("/v1/template-manifests/{template}", "put", manifest);
     }
   }
 
@@ -690,7 +692,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const rec = { ...recommend(db, pack, extra, data.template ?? doc?.template ?? "oracle-default", ctx.learned?.()), document_id: doc?.id ?? null };
     applyChanges(db, rec, head, data.changes, ctx, null);
     rec.outline = templateOutline(db, rec, doc?.sections);
-    return json(200, { ...rec, modules: withCanChange(rec.modules, ctx.role) });
+    return reply("/v1/compositions/recommend", "post", { ...rec, modules: withCanChange(rec.modules, ctx.role) });
   }
 
   if (p[1] === "documents" && p[2] && p[3] === "composition") {
@@ -699,7 +701,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const revisions = (db.revisions[doc.id] ??= []);
     const head = revisions[revisions.length - 1] ?? null;
     const current = inForce(revisions);
-    if (m === "GET" && !p[4]) return json(200, inspector(db, doc, ctx.role, ctx.learned?.()));
+    if (m === "GET" && !p[4]) return reply("/v1/documents/{doc}/composition", "get", inspector(db, doc, ctx.role, ctx.learned?.()));
     if (m === "POST" && p[4] === "revisions") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       const data = await body<Schemas["RevisionIn"]>();
@@ -728,7 +730,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         for (const r of revisions) if (r.status === "confirmed" || r.status === "working") r.status = "superseded";
       }
       revisions.push(revisionOf(rec, revisions.length + 1, status === "confirmed" ? current : head, ctx.userId, data.reason, db, status, new Date().toISOString()));
-      return json(201, inspector(db, doc, ctx.role, ctx.learned?.()));
+      return reply("/v1/documents/{doc}/composition/revisions", "post", inspector(db, doc, ctx.role, ctx.learned?.()), 201);
     }
     if (m === "POST" && p[4] === "publish") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
@@ -741,7 +743,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       if (!versionId) return json(409, { detail: `version ${version} is not approved; approve it before publishing` });
       current.status = "published";
       current.document_version_id = versionId;
-      return json(200, compositionOut(current, versionId));
+      return reply("/v1/documents/{doc}/composition/publish", "post", compositionOut(current, versionId));
     }
   }
   return null;

@@ -11,6 +11,7 @@ import type { Schemas } from "@/lib/api/client";
 import type { DraftRow } from "./runs";
 import type { LlmContext } from "./llm-jobs";
 import { originLine, stagedChanges } from "./next-draft";
+import { reply } from "./typed";
 
 type Item = Schemas["StagingItem"];
 type Role = Schemas["Me"]["role"];
@@ -91,7 +92,7 @@ function documentList(ctx: StagingContext, slug: string): Response {
       lock_version: r.lock_version,
     });
   }
-  return json(200, {
+  return reply("/v1/staging", "get", {
     target: { kind: "document", label: doc.title, document_id: doc.id, slug: doc.slug, next_version: staged.next_version },
     items,
     counts: { staged: items.length, suggested: 0 },
@@ -126,7 +127,7 @@ function checkpointList(ctx: StagingContext, id: string): Response {
       section_locked: false,
     };
   });
-  return json(200, {
+  return reply("/v1/staging", "get", {
     target: { kind: "checkpoint", label: WORDS[cp.kind] ?? cp.kind, run_id: cp.run_id, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
     items,
     counts: { staged: items.filter((i) => i.state === "staged").length, suggested: items.filter((i) => i.state === "suggested").length },
@@ -152,7 +153,7 @@ export async function routeStaging(ctx: StagingContext, req: Request, p: string[
     const { lock_version } = JSON.parse((await req.text()) || "{}") as { lock_version?: number };
     if (lock_version !== row.lock_version) return fail(409, "This change changed since you loaded it; look again");
     Object.assign(row, { status: "unstaged", lock_version: row.lock_version + 1 });
-    return json(200, {
+    return reply("/v1/next-draft-changes/{change_id}/unstage", "post", {
       id: row.id,
       document_id: row.document_id,
       section_key: row.section_key,

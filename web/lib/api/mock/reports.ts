@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockSettingValue, setMockSetting } from "./connections";
+import { reply } from "./typed";
 import type { DiscussionsDb } from "./discussions";
 import { mockUuid, seeded } from "./ids";
 import { REPORT_ITEM_MILESTONE_SCENARIO, REPORT_OFF_TRACK_SCENARIO } from "./roadmap";
@@ -279,23 +280,23 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
 
   if (p[1] === "company-integrations") {
     if (!atLeast(me.role, "owner")) return forbidden("owner");
-    if (!p[2] && m === "GET") return json(200, db.integration ? [db.integration] : []);
+    if (!p[2] && m === "GET") return reply("/v1/company-integrations", "get", db.integration ? [db.integration] : []);
     if (p[2] === "slack" && p[3] === "install" && m === "GET") {
       if (db.integration && !needsReconnect(db.integration)) return json(409, { detail: "Slack is already connected; disconnect it first" });
       // The mocked OAuth return: Slack's consent screen is skipped, the install is made (a
       // reconnect keeps the install and gains the bridge's scopes).
       db.integration = db.integration ? { ...db.integration, scopes: slackInstall(me.id, "", "").scopes } : slackInstall(me.id, mockUuid(), now());
-      return json(200, { url: "/settings/notifications?connected=slack" });
+      return reply("/v1/company-integrations/slack/install", "get", { url: "/settings/notifications?connected=slack" });
     }
     if (p[2] === "slack" && p[3] === "channels" && m === "GET") {
       if (!db.integration) return json(409, { detail: "Connect Slack for notifications first" });
-      return json(200, CHANNELS);
+      return reply("/v1/company-integrations/slack/channels", "get", CHANNELS);
     }
     if (p[2] === "slack" && p[3] === "test" && m === "POST") {
       if (!db.integration) return json(409, { detail: "Connect Slack for notifications first" });
       const { channel_id } = await body<Schemas["SlackTestIn"]>();
       if (!CHANNELS.some((c) => c.id === channel_id)) return json(502, { detail: "Slack answered channel_not_found" });
-      return json(200, { sent: true, channel_id });
+      return reply("/v1/company-integrations/slack/test", "post", { sent: true, channel_id });
     }
     if (p[2] && !p[3] && m === "DELETE") {
       if (!db.integration || db.integration.id !== p[2]) return json(404, { detail: "Integration not found" });
@@ -303,7 +304,7 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
       unlinkAll(holder.discussions);
       const setting = reportSetting();
       if (setting.slack_channel) setMockSetting(SETTING, { ...setting, slack_channel: null });
-      return json(204, undefined);
+      return reply("/v1/company-integrations/{integration_id}", "delete", undefined, 204);
     }
     return json(404, { detail: "Route not found" });
   }
@@ -313,8 +314,9 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
       const limit = Number(q.get("limit") ?? 50);
       const offset = Number(q.get("offset") ?? 0);
       const rows = [...db.reports].sort((a, b) => b.generated_at.localeCompare(a.generated_at)).slice(offset, offset + limit);
-      return json(
-        200,
+      return reply(
+        "/v1/alignment-reports",
+        "get",
         rows.map((r) => {
           const { tracks: _t, markdown: _m, unreadable_tracks: _u, needs_attention_as_of_now: _n, ...item } = out(db, r, me.id);
           void [_t, _m, _u, _n];
@@ -340,16 +342,16 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
           : { status: "not_requested", channel: null, posted_at: null, attempts: 0, error: null, next_attempt_at: null },
       });
       db.reports.push(report);
-      return json(201, { ...report, read: false });
+      return reply("/v1/alignment-reports", "post", { ...report, read: false }, 201);
     }
   }
   const row = db.reports.find((r) => r.id === p[2]);
   if (!row) return json(404, { detail: "Report not found" });
-  if (!p[3] && m === "GET") return json(200, out(db, row, me.id));
+  if (!p[3] && m === "GET") return reply("/v1/alignment-reports/{report_id}", "get", out(db, row, me.id));
   if (p[3] === "read" && m === "POST") {
     const readers = (db.reads[row.id] ??= []);
     if (!readers.includes(me.id)) readers.push(me.id);
-    return json(200, out(db, row, me.id));
+    return reply("/v1/alignment-reports/{report_id}/read", "post", out(db, row, me.id));
   }
   if (p[3] === "slack" && m === "POST") {
     if (!atLeast(me.role, "owner")) return forbidden("owner");
@@ -358,12 +360,12 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
       if (!db.integration) return json(409, { detail: "Slack is not connected for notifications: connect it in Settings › Notifications, then retry" });
       row.slack = { ...post(db, row.slack.channel ?? reportSetting().slack_channel), attempts: (row.slack.attempts ?? 0) + 1 };
       row.dismissed = false;
-      return json(200, out(db, row, me.id));
+      return reply("/v1/alignment-reports/{report_id}/slack/retry", "post", out(db, row, me.id));
     }
     if (p[4] === "dismiss") {
       if (row.slack.status !== "failed") return json(409, { detail: "Only a failed Slack post can be dismissed" });
       row.dismissed = true;
-      return json(200, out(db, row, me.id));
+      return reply("/v1/alignment-reports/{report_id}/slack/dismiss", "post", out(db, row, me.id));
     }
   }
   return json(404, { detail: "Route not found" });
