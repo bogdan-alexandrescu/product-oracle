@@ -249,7 +249,7 @@ def _template_specs(body: str | None) -> tuple[Spec, ...] | None:
         return None
     try:
         meta = safe_yaml.load(body[3:end]) or {}
-    except Exception as exc:  # noqa: BLE001 - a template that does not parse names no blocks
+    except safe_yaml.SafeYamlError as exc:  # load raises only this
         log.warning("template front matter could not be parsed: %s", exception_text(exc))
         return None
     blocks = ((meta.get("one_pager") or {}) if isinstance(meta, dict) else {}).get("blocks")

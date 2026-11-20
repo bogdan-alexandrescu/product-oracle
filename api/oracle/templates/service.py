@@ -900,7 +900,7 @@ def slide_groups_of(yaml_text: str | None) -> list[list[str]] | None:
         return None
     try:
         meta = safe_yaml.load(yaml_text)
-    except Exception as exc:  # noqa: BLE001 - a template's metadata is checked when it is saved
+    except safe_yaml.SafeYamlError as exc:  # load raises only this
         log.warning("template slide metadata could not be read: %s", exception_text(exc))
         return None
     groups = meta.get("slides") if isinstance(meta, dict) else None
