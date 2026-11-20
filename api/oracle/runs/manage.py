@@ -32,7 +32,6 @@ from oracle.runs.service import (
     NotFound,
     RunError,
     Unavailable,
-    _advance,
     _art,
     _can_dismiss_overrun,
     _cancel_again_ids,
@@ -40,13 +39,9 @@ from oracle.runs.service import (
     _ceiling,
     _checkpoints,
     _cost_unknown,
-    _creator,
-    _current_attempt,
     _finish,
     _flow,
-    _import_draft,
     _import_failed,
-    _link_requests,
     _segments,
     _set_art,
     _set_knob,
@@ -266,7 +261,7 @@ async def retry_import(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     segments = await _segments(db, run.id)
     segment = next((s for s in segments if s.seq == failed.get("seq")), None)
     art = _art(segment) if segment is not None else {}
-    attempt = _current_attempt(art, segment) if segment is not None else {}
+    attempt = service._current_attempt(art, segment) if segment is not None else {}
     if segment is None or segment.status != "failed" or attempt.get("advanced") != "opening":
         _set_knob(run, "import_failed", None)
         await db.commit()
@@ -417,7 +412,7 @@ async def _accept_new(
             user = await db.get(User, run.created_by)
         token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
         try:
-            principal = _creator(current_tenant(db), user, token)
+            principal = service._creator(current_tenant(db), user, token)
         except LookupError:
             principal = None
     if principal is None:
@@ -751,7 +746,7 @@ async def _retry_draft_import(
     # Committed first: the import runs in its own transaction, with the run's row and the
     # review gate released (no second connection taken while they are held).
     await db.commit()
-    imported = await _import_draft(db, run, kind, markdown)
+    imported = await service._import_draft(db, run, kind, markdown)
     # Locked and checked again: the run may have been cancelled, or another retry imported.
     try:
         run, segment, review, kind = await _retry_checked(db, principal, run_id, seq)
@@ -770,7 +765,7 @@ async def _retry_draft_import(
         _set_knob(run, "document_slug", None)
         await feature_set.fill_document(db, run.id, run.document_id)
         await run_order.fill_document(db, run.id, run.document_id)
-        await _link_requests(db, run)
+        await service._link_requests(db, run)
         service._note_art(
             art,
             f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "
@@ -1021,7 +1016,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                     service._cost_on(
                         run, segments, {"seq": s.seq, "id": s.swarm_workflow_id}, out.final.cost_usd
                     )
-                attempt = _current_attempt(_art(s), s)
+                attempt = service._current_attempt(_art(s), s)
                 label = attempt.get("label") or s.swarm_workflow_id
                 if out.error is not None and not out.ended and not out.gone:
                     s.error = f"cancel not confirmed by the runtime: {service._shown(out.error)}"
@@ -1356,5 +1351,5 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         else:
             done = [s for s in segments if s.status == "succeeded"]
             if done:
-                await _advance(db, run, done[-1], segments, gate=True)
+                await service._advance(db, run, done[-1], segments, gate=True)
     await db.commit()  # the router submits what it queued (submit_queued), outside the gate

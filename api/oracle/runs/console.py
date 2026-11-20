@@ -18,7 +18,6 @@ from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.service import (
     _about,
     _checkpoints,
-    _creator,
     _flow,
     _record_decider,
     _rt,
@@ -271,7 +270,7 @@ async def _take_answer(
                     CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged"
                 )
             )
-            principal = _creator(current_tenant(db), decider, None)
+            principal = service._creator(current_tenant(db), decider, None)
             await eng_check.on_approved(db, principal, run, cp, list(staged))
     if approved and cp.kind == eng_dates.KIND:
         # F4 lane B: a counted console approval records the dates as Oracle's Approve does
@@ -283,7 +282,7 @@ async def _take_answer(
                 .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
                 .order_by(CheckpointAction.created_at, CheckpointAction.id)
             )
-            principal = _creator(current_tenant(db), decider, None)
+            principal = service._creator(current_tenant(db), decider, None)
             await eng_dates.on_approved(db, principal, run, cp, list(staged))
     # H1: a counted answer from the console (or Oracle's own lost post) is the stop's
     # decision: a checkpoint record, unless one was recorded when it was decided here.

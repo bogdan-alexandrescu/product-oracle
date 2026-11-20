@@ -16,10 +16,8 @@ from oracle.runs.models import Run, RunSegment
 from oracle.runs.service import (
     FINAL,
     ITEMS_FILE,
-    _advance,
     _art,
     _attempts_cost,
-    _current_attempt,
     _finish,
     _flow,
     _known_sum,
@@ -635,7 +633,7 @@ async def _harvest(
             return held
     art["files"] = {**art["files"], **files}
     if art["attempts"]:
-        _current_attempt(art, segment)["state"] = "succeeded"
+        service._current_attempt(art, segment)["state"] = "succeeded"
     _set_art(segment, art)
     segment.status = "succeeded"
     segment.finished_at = service._now()
@@ -744,7 +742,7 @@ async def _tick_workflow(
                 service._note(current, workflow.ADVICE["expired"])
                 await service._detach(db, run, cancel=False, state="expired")
             stats.finished += 1
-            if await _advance(db, run, current, segments, wait=wait):
+            if await service._advance(db, run, current, segments, wait=wait):
                 stats.advanced += 1
             break
         # Checkpoint off, or the last round's revision is done: the files are final.
@@ -755,7 +753,7 @@ async def _tick_workflow(
         if entry.get("checkpoint"):
             # Its checkpoint waits in the Inbox only: the workflow has nothing left.
             await service._detach(db, run, cancel=False, state="ended")
-        if await _advance(db, run, current, segments):
+        if await service._advance(db, run, current, segments):
             stats.advanced += 1
     # A segment that started during this check shows what the check read.
     service._record_running(wf, status, segments)
@@ -872,7 +870,7 @@ async def _restart_queued(
     queue is submitted again once, as a new attempt of the same segment with the same
     knobs and a fresh key (:func:`_submit`, which the spend ceiling rules as any other)."""
     art = _art(current)
-    attempt = _current_attempt(art, current)
+    attempt = service._current_attempt(art, current)
     if attempt:
         attempt["state"] = "failed"
     _set_art(current, art)

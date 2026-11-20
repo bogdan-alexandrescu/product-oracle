@@ -22,21 +22,15 @@ from oracle.runs.service import (
     DECIDED,
     FINAL,
     Unavailable,
-    _advance,
     _art,
     _attempts_cost,
     _ceiling,
-    _current_attempt,
     _finish,
     _flow,
     _known_sum,
     _recompute_spend,
     _refs,
     _replay,
-    _resume_advance,
-    _resume_error,
-    _resume_failed,
-    _resuming,
     _rt,
     _segments,
     _set_art,
@@ -101,16 +95,16 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             status = await _rt().status(wf["id"])
         except RuntimeUnavailable:
             status = None  # read again where it is needed, and failing there as before
-    resuming = _resuming(run, segments)
+    resuming = service._resuming(run, segments)
     if resuming is not None:
-        failed = _current_attempt(_art(resuming), resuming).get("resume_failures") or {}
+        failed = service._current_attempt(_art(resuming), resuming).get("resume_failures") or {}
         if failed.get("pass") == stats.pass_id:
             # Tried and counted by this tick's pass already, which runs again after a
             # runtime call: not tried again; its error, which ``reset`` dropped, reported.
-            stats.errors.append(_resume_error(run.id, resuming, failed))
+            stats.errors.append(service._resume_error(run.id, resuming, failed))
         else:
             try:
-                await _resume_advance(db, run, resuming, segments, stats)
+                await service._resume_advance(db, run, resuming, segments, stats)
                 return
             except safe_yaml.ParseBusy:
                 # No free worker: not a failed try (RESUME_TRIES). The tick rolls back,
@@ -121,7 +115,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
                     # Not a failed try (RESUME_TRIES): the tick gives up on this run and
                     # the next tick resumes the advance again.
                     raise
-                run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
+                run, segments = await service._resume_failed(db, run.id, resuming.seq, exc, stats)
         wf = service._live(run)
         if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
             # Its status, cost and the ceiling, a wait's expiry and the workflow's end:
@@ -149,7 +143,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             return
         # Resumed after an overrun with a finished segment not yet advanced.
         done = [s for s in segments if s.status == "succeeded"]
-        if done and await _advance(db, run, done[-1], segments):
+        if done and await service._advance(db, run, done[-1], segments):
             stats.advanced += 1
         await db.commit()
         return
@@ -188,7 +182,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     if art["attempts"]:
         # The running workflow's attempt (one found later may sit after it). On an earlier
         # segment's workflow it keeps what its own agents spent (:func:`_take_cost`).
-        current = _current_attempt(art, running)
+        current = service._current_attempt(art, running)
         if earlier is None:
             current["cost_usd"] = service._higher(status.cost_usd, current.get("cost_usd"))
         current["state"] = status.state
@@ -202,7 +196,11 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     _recompute_spend(run, segments)
     service._record_agents(running, workflow_id, status)
     service._record_wait(
-        run, running, workflow_id, _current_attempt(art, running).get("submitted_at"), status
+        run,
+        running,
+        workflow_id,
+        service._current_attempt(art, running).get("submitted_at"),
+        status,
     )
     art = _art(running)
 
@@ -255,7 +253,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         return
     advanced = False
     if run.status == "running" and running.status == "succeeded":
-        advanced = await _advance(db, run, running, segments)
+        advanced = await service._advance(db, run, running, segments)
         stats.advanced += advanced
     await db.commit()
 

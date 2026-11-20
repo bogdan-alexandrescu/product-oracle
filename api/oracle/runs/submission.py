@@ -23,7 +23,6 @@ from oracle.runs.schemas import QueueWait
 from oracle.runs.service import (
     Unavailable,
     _art,
-    _creator,
     _disarm,
     _flow,
     _knobs,
@@ -1052,7 +1051,7 @@ async def _draft_items_ready(
     user = await db.get(User, run.created_by) if run.created_by else None
     token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
     try:
-        creator: Principal | None = _creator(current_tenant(db), user, token)
+        creator: Principal | None = service._creator(current_tenant(db), user, token)
     except LookupError:
         creator = None
     state, n, note = await eng_dates.start_state(db, run, creator)

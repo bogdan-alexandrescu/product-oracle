@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.runs import service, workflow
 from oracle.runs.models import Run, RunSegment
-from oracle.runs.service import _art, _checkpoints, _current_attempt, _set_art, _set_knob, log
+from oracle.runs.service import _art, _checkpoints, _set_art, _set_knob, log
 from oracle.runtokens import RunToken, mint_run_token, revoke_run_tokens
 from oracle.swarm import Parked, RuntimeUnavailable, WorkflowStatus
 from oracle.swarm.runtime import MCP_SERVER
@@ -221,7 +221,7 @@ async def _pause_workflow(
         if done is None or done.state != "SUCCEEDED" or held is not None:
             art = _art(current)
             if art["attempts"]:
-                _current_attempt(art, current)["state"] = "cancelled"
+                service._current_attempt(art, current)["state"] = "cancelled"
             _set_art(current, art)
             current.status = "pending"
             current.error = (
