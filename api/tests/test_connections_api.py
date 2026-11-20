@@ -54,6 +54,7 @@ async def bob(tenant_id):
 async def test_connect_with_token_stores_it_encrypted_and_never_returns_it(
     client, tenant_id, alice
 ):
+    """Connecting with a token stores it encrypted and never echoes it back."""
     resp = await client.post(
         "/v1/connections/github/token", json={"token": GITHUB_TOKEN}, headers=alice.headers
     )
@@ -84,6 +85,7 @@ async def test_connect_with_token_stores_it_encrypted_and_never_returns_it(
 
 
 async def test_label_override_and_same_account_reconnects_in_place(client, alice):
+    """Reconnecting the same account keeps its row; a new account makes a new one."""
     first = await client.post(
         "/v1/connections/github/token",
         json={"token": GITHUB_TOKEN, "label": "Work GitHub"},
@@ -104,6 +106,7 @@ async def test_label_override_and_same_account_reconnects_in_place(client, alice
 
 
 async def test_rejected_token_unknown_provider_and_provider_down(client, alice):
+    """A rejected token, an unknown provider and a down provider fail distinctly."""
     bad = await client.post(
         "/v1/connections/github/token", json={"token": "nope"}, headers=alice.headers
     )
@@ -124,6 +127,7 @@ async def test_rejected_token_unknown_provider_and_provider_down(client, alice):
 
 
 async def test_user_b_never_sees_or_touches_user_a_connections(client, tenant_id, alice, bob):
+    """A connection belongs to its own user; another cannot see or touch it."""
     conn = await add_connection(tenant_id, alice.id, "github")
     assert (await client.get("/v1/connections", headers=bob.headers)).json() == []
     assert len((await client.get("/v1/connections", headers=alice.headers)).json()) == 1
@@ -137,6 +141,7 @@ async def test_user_b_never_sees_or_touches_user_a_connections(client, tenant_id
 
 
 async def test_other_tenant_cannot_see_connections(client, tenant_id, alice):
+    """Connections never cross company lines, even for a shared user email."""
     from tests.conftest import make_tenant
 
     await add_connection(tenant_id, alice.id, "github")
@@ -146,6 +151,7 @@ async def test_other_tenant_cannot_see_connections(client, tenant_id, alice):
 
 
 async def test_api_tokens_have_no_connections(client, tenant_id):
+    """A machine token has no personal connections; anonymous access is refused."""
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "agent")
         await s.commit()
@@ -155,6 +161,7 @@ async def test_api_tokens_have_no_connections(client, tenant_id):
 
 
 async def test_disconnect_removes_row(client, tenant_id, alice):
+    """Disconnecting removes the connection's row entirely, not just its status."""
     conn = await add_connection(
         tenant_id, alice.id, "github", account_id="7", bundle={"access_token": "t"}
     )
@@ -165,6 +172,7 @@ async def test_disconnect_removes_row(client, tenant_id, alice):
 
 
 async def test_reconnect_with_new_token_same_account_only(client, tenant_id, alice):
+    """Reconnecting with a token for a different account is refused by name."""
     conn = await add_connection(
         tenant_id, alice.id, "github", account_id="42", status="expired", label="user-42"
     )
@@ -187,6 +195,7 @@ async def test_reconnect_with_new_token_same_account_only(client, tenant_id, ali
 
 
 async def test_reconnect_without_token_rechecks_stored_token(client, tenant_id, alice):
+    """Reconnecting without a new token rechecks the one already stored."""
     good = await add_connection(
         tenant_id, alice.id, "github", account_id="42", status="error",
         bundle={"access_token": GITHUB_TOKEN},
@@ -208,6 +217,7 @@ async def test_reconnect_without_token_rechecks_stored_token(client, tenant_id, 
 
 
 async def test_providers_list_reports_oauth_configuration(client, alice):
+    """Listing providers reports each one's key and whether OAuth is configured."""
     resp = await client.get("/v1/connections/providers", headers=alice.headers)
     assert resp.status_code == 200
     by_key = {p["key"]: p for p in resp.json()}

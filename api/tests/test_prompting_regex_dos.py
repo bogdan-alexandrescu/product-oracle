@@ -88,6 +88,7 @@ def _cpu(target: str, head: str, piece: str, times: int, tail: str) -> float:
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("name", sorted(CRAFTED))
 def test_crafted_text_is_cleaned_in_linear_time(name):
+    """Cleaning crafted worst-case text stays within its CPU budget, not regex blowup."""
     took = _cpu(*CRAFTED[name])
     assert took < CPU_LIMIT, f"{name} took {took:.2f}s of CPU"
 
@@ -175,12 +176,14 @@ NORMAL = [
 
 @pytest.mark.parametrize(("body", "heading", "text", "fixes"), NORMAL)
 def test_normal_text_is_cleaned_exactly_as_before(body, heading, text, fixes):
+    """Ordinary section text cleans to the same result as before, no problems left."""
     out = prompting.clean_body(body, heading)
     assert (out.text, out.fixes) == (text, fixes)
     assert prompting.body_problems(out.text) == []
 
 
 def test_a_heading_id_goes_with_its_own_line_only():
+    """A heading's id is stripped with only its own line, never spilling into the next."""
     # Before, the whitespace around an id crossed lines, so the blank line after a
     # heading went with the heading's id. Now the id and the spaces beside it go; the
     # lines stay, and an id never spans two lines.
@@ -205,6 +208,7 @@ ROUTES = {
 
 @pytest.mark.parametrize("route", sorted(ROUTES))
 async def test_section_text_is_capped_at_200k_characters(client, route):
+    """Section text over 200k characters is refused; text at the cap is accepted."""
     r = await seed(token_name="test")
     headers = {"Authorization": f"Bearer {r.token}"}
     method, path, field = ROUTES[route]

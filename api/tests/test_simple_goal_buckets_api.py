@@ -111,6 +111,7 @@ class World:
 
 @pytest.mark.asyncio
 async def test_goal_add_and_edit_per_role(client):
+    """Adding or editing a goal is limited to editors and refuses a blank field."""
     w = await World().build()
     for who in ("commenter", "viewer"):
         out = await w.read(client, who)
@@ -147,6 +148,7 @@ async def test_goal_add_and_edit_per_role(client):
 
 @pytest.mark.asyncio
 async def test_archive_moves_links_and_undo(client):
+    """Archiving a goal moves its linked features to the chosen goal; undo restores it."""
     w = await World().build()
     third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
     r = await client.post(f"{URL}/goals/{w.goals['grow']}/archive", headers=w.as_("viewer"),
@@ -178,6 +180,7 @@ async def test_archive_moves_links_and_undo(client):
 
 
 async def test_archive_moves_items_own_goal_and_undo(client):
+    """Archiving a goal updates only its own link on an item, keeping its other goals."""
     w = await World().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
@@ -206,6 +209,7 @@ async def test_archive_moves_items_own_goal_and_undo(client):
 
 @pytest.mark.parametrize("pick", [False, True])
 async def test_archive_keeps_an_items_other_goal_and_leaves_none_unasked(client, pick):
+    """Archiving a goal resolves every item left with no other goal, even in trash."""
     w = await World().build()
     third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
     grow, quiet, to = (uuid.UUID(x) for x in (w.goals["grow"], w.goals["quiet"], third["id"]))
@@ -240,6 +244,7 @@ async def test_archive_keeps_an_items_other_goal_and_leaves_none_unasked(client,
 
 @pytest.mark.parametrize("pick", [False, True])
 async def test_archive_counts_no_key_result_of_the_goal_as_live(client, pick):
+    """Archiving a goal does not count one of its own key results as another live goal."""
     w = await World().build()
     third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
     grow, to = uuid.UUID(w.goals["grow"]), uuid.UUID(third["id"])
@@ -263,6 +268,7 @@ async def test_archive_counts_no_key_result_of_the_goal_as_live(client, pick):
 @pytest.mark.parametrize("pick", [False, True])
 @pytest.mark.parametrize("under", ["grow", "archived", "trashed"])
 async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, pick, under):
+    """A key result nested under an archived or trashed goal does not count as live."""
     w = await World().build()
     third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
     grow, to = uuid.UUID(w.goals["grow"]), uuid.UUID(third["id"])
@@ -295,6 +301,7 @@ async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, p
 
 @pytest.mark.parametrize("under", ["grow", "proposed", "archived", "trashed"])
 async def test_list_leaves_out_a_key_result_under_a_goal_gone(client, under):
+    """The goal list hides a key result once its ancestor goal is archived or trashed."""
     w = await World().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
@@ -330,6 +337,7 @@ async def test_list_leaves_out_a_key_result_under_a_goal_gone(client, under):
 
 @pytest.mark.asyncio
 async def test_move_feature_and_undo(client):
+    """Moving a feature between goals is limited to editors and can be undone."""
     w = await World().build()
     body = {"from_goal_id": w.goals["grow"], "to_goal_id": w.goals["quiet"]}
     r = await client.post(f"{URL}/features/{w.features['solo']}/move", headers=w.as_("viewer"),

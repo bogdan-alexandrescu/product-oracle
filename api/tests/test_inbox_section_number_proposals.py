@@ -24,6 +24,7 @@ from tests.test_simple_one_pager_numbers import COUNT, DOC, HEAD, HEAD_DOC, fix,
 
 
 async def test_a_proposed_number_fix_reads_as_a_section_number(client):
+    """A proposed section-number fix is named by its section and number throughout."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", DOC)
     f = look(view, COUNT)["fix"]
@@ -51,6 +52,7 @@ async def test_a_proposed_number_fix_reads_as_a_section_number(client):
 
 
 async def test_a_proposed_heading_count_reads_as_a_section_number(client):
+    """A proposed heading-count fix in the Inbox reads like any section-number fix."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     r = await fix(client, ctx, "approver", f)

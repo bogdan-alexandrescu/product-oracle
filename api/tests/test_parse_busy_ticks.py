@@ -30,6 +30,7 @@ def runtime():
 async def test_a_spec_import_that_hits_parse_busy_retries_on_the_next_tick(
     client, runtime, monkeypatch
 ):
+    """A spec import that hits parse_busy keeps retrying on later ticks, not failing."""
     world = await make_world(client)
     owner = world.ctx.as_("owner")
     created = await request_spec(client, world, depth="brief", screens=2)
@@ -61,6 +62,8 @@ async def test_a_spec_import_that_hits_parse_busy_retries_on_the_next_tick(
 
 
 async def test_a_roadmap_version_import_does_not_swallow_parse_busy(monkeypatch):
+    """A roadmap import does not swallow a parse_busy error; it reaches the caller."""
+
     class Db:
         def begin_nested(self):
             return self

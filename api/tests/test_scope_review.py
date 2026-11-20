@@ -126,6 +126,7 @@ async def _action(client, headers, run, cp, **body):
 
 
 async def test_exclude_a_dependency_blocks_and_undo_restores(client, owner, runtime):  # noqa: F811
+    """Excluding a dependency blocks its dependent; undoing it restores both."""
     _, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     scope = await _read(client, auth, scope_id)
@@ -159,6 +160,7 @@ async def test_exclude_a_dependency_blocks_and_undo_restores(client, owner, runt
 
 
 async def test_approve_refused_until_fixed_or_waived(client, owner, runtime):  # noqa: F811
+    """Approving a scope review is refused while a blocking reason is open."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -216,6 +218,7 @@ async def test_approve_refused_until_fixed_or_waived(client, owner, runtime):  #
 
 
 async def test_goals_must_be_confirmed(client, owner, runtime):  # noqa: F811
+    """A scope item's goal contribution must cite a goal confirmed for that run."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     async with tenant_session(tenant_id) as s:
@@ -245,6 +248,7 @@ async def test_goals_must_be_confirmed(client, owner, runtime):  # noqa: F811
 
 
 async def test_commenter_suggests_only(client, owner, runtime):  # noqa: F811
+    """A commenter's scope edits only suggest; an approver must accept them."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     commenter = await as_user(tenant_id, "commenter")
@@ -297,6 +301,7 @@ async def test_commenter_suggests_only(client, owner, runtime):  # noqa: F811
 
 
 async def test_writes_refused_when_stale_or_decided(client, owner, runtime):  # noqa: F811
+    """A scope edit is refused if stale or if the feature set is already decided."""
     _, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     scope = await _read(client, auth, scope_id)
@@ -326,6 +331,7 @@ async def test_writes_refused_when_stale_or_decided(client, owner, runtime):  # 
 
 
 async def test_enhance_queues_the_job_and_accept_sets_the_row(client, owner, runtime):  # noqa: F811
+    """Enhancing a scope item queues a job whose result fills in the item's row."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     scope = await _read(client, auth, scope_id)
@@ -384,6 +390,7 @@ async def test_enhance_queues_the_job_and_accept_sets_the_row(client, owner, run
 
 
 async def test_approve_with_edits_writes_baseline(client, owner, runtime):  # noqa: F811
+    """Approving a scope review with edits writes those edits into the baseline."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -451,6 +458,7 @@ async def test_approve_with_edits_writes_baseline(client, owner, runtime):  # no
 
 
 async def test_send_back_lists_the_changed_rows(client, owner, runtime):  # noqa: F811
+    """Sending a checkpoint back lists exactly the rows that were changed."""
     _, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     scope = await _read(client, auth, scope_id)
@@ -481,6 +489,7 @@ async def test_send_back_lists_the_changed_rows(client, owner, runtime):  # noqa
 
 
 async def test_only_added_requirements_are_removed(client, owner, runtime):  # noqa: F811
+    """Deleting a scope requirement only works for one a person added."""
     _, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     scope = await _read(client, auth, scope_id)
@@ -503,6 +512,7 @@ async def test_only_added_requirements_are_removed(client, owner, runtime):  # n
 
 
 async def test_an_approvers_own_edit_and_add_apply_at_once(client, owner, runtime):  # noqa: F811
+    """An approver's own scope edit and add apply at once, no suggestion needed."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -552,6 +562,7 @@ async def test_an_approvers_own_edit_and_add_apply_at_once(client, owner, runtim
 
 
 async def test_send_back_carries_an_approvers_own_edit(client, owner, runtime):  # noqa: F811
+    """Sending a checkpoint back carries an approver's own already-applied edit."""
     tenant_id, auth = owner
     run, cp, _ = await _open(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -579,6 +590,7 @@ async def test_send_back_carries_an_approvers_own_edit(client, owner, runtime): 
 
 
 async def test_a_staged_edit_left_over_is_not_something_to_send(client, owner, runtime):  # noqa: F811
+    """Send back refuses a leftover staged edit alone as nothing new to send."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     # Staged edit and add actions as an earlier build stored them: Send back does not
@@ -598,6 +610,7 @@ async def test_a_staged_edit_left_over_is_not_something_to_send(client, owner, r
 
 
 async def test_a_requirement_added_to_a_new_feature_is_part_of_it(client, owner, runtime):  # noqa: F811
+    """A requirement added under a new feature is confirmed as part of it."""
     tenant_id, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -627,6 +640,7 @@ async def test_a_requirement_added_to_a_new_feature_is_part_of_it(client, owner,
 
 
 async def test_mcp_refuses_approval_while_a_reason_is_open(client, owner, runtime):  # noqa: F811
+    """The MCP decide_checkpoint tool refuses approval while a reason is open."""
     tenant_id, _ = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -698,6 +712,7 @@ async def test_capabilities_agree_with_the_scope_routes(client, owner, runtime):
 
 
 async def test_each_reason_keeps_its_own_call(client, owner, runtime):  # noqa: F811
+    """Accepting one blocking reason keeps a separately accepted reason intact."""
     _, auth = owner
     run, cp, scope_id = await _open(client, owner, runtime)
     scope = await _read(client, auth, scope_id)

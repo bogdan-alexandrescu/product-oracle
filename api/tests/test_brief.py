@@ -147,6 +147,7 @@ def _sections(version: dict) -> dict[str, dict]:
 
 
 def test_every_builtin_marks_a_brief_with_the_o1f_shape():
+    """Every built-in template's brief follows the required section order."""
     for t in BUILTIN_TEMPLATES:
         check = check_template(builtin_body(t))
         assert check.ok and not check.warnings, (t.key, check.problems, check.warnings)
@@ -210,6 +211,7 @@ def test_every_builtin_marks_a_brief_with_the_o1f_shape():
     ],
 )
 def test_template_brief_validation(body, problems, brief):
+    """A template's brief front matter is validated against known section keys."""
     check = check_template(body)
     # O1g: a template without brief sections is refused, not warned about.
     assert {p.code for p in check.problems} == problems
@@ -218,6 +220,7 @@ def test_template_brief_validation(body, problems, brief):
 
 
 async def test_seeding_adds_the_brief_version_to_unedited_builtins_only(tenant_id):
+    """Seeding adds the new brief version only to templates nobody has edited."""
     async with tenant_session(tenant_id) as s:
         assert await ensure_builtins(s)
         await s.commit()
@@ -267,6 +270,7 @@ async def _make_pre_o1f(s, key):
 async def test_seeding_leaves_an_edited_or_archived_default_template_alone(
     client, tenant_id, change
 ):
+    """Stops the upgrade seeding from overwriting a template someone already edited or removed."""
     h = await _token(tenant_id)
     await seed_company(tenant_id)
     if change == "edited":
@@ -286,6 +290,7 @@ async def test_seeding_leaves_an_edited_or_archived_default_template_alone(
 
 
 async def test_first_edit_of_a_stale_builtin_keeps_the_edit(client, tenant_id):
+    """Editing a stale built-in seeds its brief skeleton before applying the edit."""
     h = await _token(tenant_id)
     await seed_company(tenant_id)
     async with tenant_session(tenant_id) as s:
@@ -309,6 +314,7 @@ async def test_first_edit_of_a_stale_builtin_keeps_the_edit(client, tenant_id):
 
 
 async def test_import_records_brief_sections_from_the_template(client, doc):
+    """Importing a draft records its brief sections from the template's markers."""
     v = (await client.get("/v1/documents/checkout/versions/1", headers=doc)).json()
     # DRAFT has no front matter brief: oracle-default v2's markers apply.
     assert v["brief_source"] == "template"
@@ -324,6 +330,7 @@ async def test_import_records_brief_sections_from_the_template(client, doc):
 
 
 async def test_started_draft_carries_the_brief_in_its_front_matter(client, tenant_id):
+    """A draft started from a template carries its brief list in front matter."""
     h = await _token(tenant_id, "approver")
     out = (
         await client.post(
@@ -344,6 +351,7 @@ async def test_started_draft_carries_the_brief_in_its_front_matter(client, tenan
 
 
 async def test_draft_without_markers_uses_the_full_version_heading(client, tenant_id):
+    """With no brief markers, a draft splits at the Full version heading instead."""
     h = await _token(tenant_id, "approver")
     md = (
         "---\ntitle: Imported\n---\n\n# Imported {#title}\n\n## Summary {#summary}\nShort.\n\n"
@@ -362,6 +370,7 @@ async def test_draft_without_markers_uses_the_full_version_heading(client, tenan
 
 
 async def test_draft_front_matter_brief_wins_and_is_checked(client, tenant_id):
+    """A draft's own brief list overrides the template's and is checked for errors."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     own = DRAFT.replace('template_version: "2"\n', 'template_version: "2"\nbrief: [problem]\n')
@@ -376,6 +385,7 @@ async def test_draft_front_matter_brief_wins_and_is_checked(client, tenant_id):
 
 
 async def test_version_without_a_brief_opens_full_and_has_no_brief_exports(client, tenant_id):
+    """A version with no brief sections opens full and refuses any brief export."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, DETAIL_ONLY, "notes")).status_code == 201
     v = (await client.get("/v1/documents/notes/versions/1", headers=h)).json()
@@ -392,6 +402,7 @@ async def test_version_without_a_brief_opens_full_and_has_no_brief_exports(clien
 
 
 async def test_comments_verdicts_and_diffs_name_the_layer(client, tenant_id, doc):
+    """Comments, verdicts and diffs all report whether they are brief or detail."""
     commenter = await _token(tenant_id, "commenter")
     base = "/v1/documents/checkout/versions/1"
     anchor = {"exact": "Returning buyers", "prefix": "", "suffix": ""}
@@ -447,6 +458,7 @@ def _headings(html: str) -> list[str]:
 
 
 async def test_brief_html_has_the_brief_and_the_sources_appendix(client, doc):
+    """The brief HTML export shows only brief sections plus a sources appendix."""
     base = "/v1/documents/checkout/versions/1/export"
     resp = await client.get(f"{base}?layer=brief&format=html", headers=doc)
     assert resp.status_code == 200
@@ -474,11 +486,13 @@ async def test_brief_html_has_the_brief_and_the_sources_appendix(client, doc):
     "query", ["layer=brief&format=md", "layer=full&format=pptx", "layer=deck&format=md"]
 )
 async def test_formats_not_offered_for_a_layer_are_rejected(client, doc, query):
+    """An export format not offered for its layer is rejected, not silently served."""
     resp = await client.get(f"/v1/documents/checkout/versions/1/export?{query}", headers=doc)
     assert resp.status_code == 422
 
 
 async def test_deck_json_for_present_mode(client, tenant_id, doc):
+    """The Present deck JSON matches the brief sections, theme and slide notes."""
     viewer = await _token(tenant_id, "viewer")
     resp = await client.get("/v1/documents/checkout/versions/1/deck", headers=viewer)
     assert resp.status_code == 200, resp.text
@@ -508,6 +522,7 @@ async def test_deck_json_for_present_mode(client, tenant_id, doc):
 
 
 async def test_deck_slide_variant_follows_the_document_theme(client, tenant_id):
+    """A deck's slide styling follows the document's own theme, not a default one."""
     h = await _token(tenant_id, "approver")
     out = (
         await client.post(
@@ -522,6 +537,7 @@ async def test_deck_slide_variant_follows_the_document_theme(client, tenant_id):
 
 
 async def test_pptx_opens_with_one_slide_per_brief_section(client, tenant_id, doc):
+    """The pptx export has one slide per brief section, plus title and sources."""
     viewer = await _token(tenant_id, "viewer")
     resp = await client.get(
         "/v1/documents/checkout/versions/1/export?layer=deck&format=pptx", headers=viewer
@@ -558,6 +574,7 @@ async def test_pptx_opens_with_one_slide_per_brief_section(client, tenant_id, do
 
 @requires_pdf
 async def test_brief_and_deck_pdfs(client, tenant_id, doc):
+    """Brief and deck PDF exports carry the right sections and page size."""
     viewer = await _token(tenant_id, "viewer")
     base = "/v1/documents/checkout/versions/1/export"
     brief = await client.get(f"{base}?layer=brief&format=pdf", headers=viewer)
@@ -583,6 +600,7 @@ async def test_brief_and_deck_pdfs(client, tenant_id, doc):
 
 
 async def test_roles_for_layers_present_and_preferences(client, tenant_id, doc):
+    """Viewing or presenting needs sign-in; changing the brief needs an approver."""
     base = "/v1/documents/checkout/versions/1"
     for path in (
         f"{base}/deck",
@@ -605,6 +623,7 @@ async def test_roles_for_layers_present_and_preferences(client, tenant_id, doc):
 
 
 async def test_document_view_is_remembered_per_user(client, tenant_id):
+    """A user's document view and other preferences are stored separately per user."""
     viewer = await _token(tenant_id, "viewer")
     other = await _token(tenant_id, "owner")
     assert (await client.get("/v1/me/preferences", headers=viewer)).json() == {
@@ -644,6 +663,7 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
 
 
 async def test_brief_source_is_stored(tenant_id, client, doc):
+    """A document version stores which source decided its brief sections."""
     async with tenant_session(tenant_id) as s:
         v = await s.scalar(select(DocumentVersion))
         assert v.brief_source == "template"

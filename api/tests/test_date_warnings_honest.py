@@ -92,6 +92,7 @@ Order tracking follows on Jan 20, 2027.
 
 
 def test_the_fixture_s_own_item_dates_are_backed():
+    """The fixture's own item dates all have a backing basis, so none are flagged."""
     assert flagged(ITEMS) == []
 
 
@@ -99,6 +100,7 @@ def test_the_fixture_s_own_item_dates_are_backed():
 
 
 def test_a_date_for_another_item_the_sentence_names_is_backed():
+    """A date in one item's sentence naming another item is backed by that item's date."""
     body = ITEMS.replace(
         "Saved baskets ship Dec 1, 2026.",
         "Saved baskets ship Dec 1, 2026; [Gift notes](#now-gift-notes) follow on Dec 15, 2026.",
@@ -107,6 +109,7 @@ def test_a_date_for_another_item_the_sentence_names_is_backed():
 
 
 def test_a_summary_date_of_an_item_it_names_is_backed():
+    """A summary date for an item it names by link is backed by that item's date."""
     body = (
         "## Summary {#summary}\n\n"
         "- [Saved baskets](#now-saved-baskets) first, then gift notes on Dec 15, 2026 and "
@@ -126,6 +129,7 @@ def test_a_summary_date_of_an_item_it_names_is_backed():
 
 
 def test_a_milestone_date_is_the_latest_verified_end_of_its_items():
+    """A milestone date is backed only as the latest confirmed end of its items."""
     body = ITEMS + (
         "\n## Milestones {#milestones}\n\n"
         "| Milestone | Items | Date |\n|---|---|---|\n"
@@ -168,18 +172,21 @@ NOT_CLAIMS = {
 
 @pytest.mark.parametrize("kind", NOT_CLAIMS)
 def test_a_date_that_is_not_a_schedule_claim_is_not_checked(kind):
+    """Non-claim wording is skipped; the same words phrased as a claim are checked."""
     skipped, claim = NOT_CLAIMS[kind]
     assert flagged(f"## Summary {{#summary}}\n\n{skipped}\n\n" + ITEMS) == []
     assert flagged(f"## Summary {{#summary}}\n\n{claim}\n\n" + ITEMS) != []
 
 
 def test_a_history_section_s_dates_are_not_checked():
+    """Dates in a History section are never checked, unlike dates elsewhere."""
     history = "- Oct 28, 2026: gift notes moved to Now.\n\n"
     assert flagged("## History {#history}\n\n" + history + ITEMS) == []
     assert flagged("## Notes {#notes}\n\n" + history + ITEMS) != []
 
 
 def test_a_decision_word_before_an_other_clause_does_not_hide_its_date():
+    """A decision word before another clause does not hide that clause's own date."""
     # Review minor: "Sign-off from legal, then ship on Mar 3" claims a ship date.
     body = "## Summary {#summary}\n\nSign-off from legal, then ship on Mar 3, 2027.\n\n" + ITEMS
     assert flagged(body) == [("summary", "Mar 3, 2027")]
@@ -188,6 +195,7 @@ def test_a_decision_word_before_an_other_clause_does_not_hide_its_date():
 
 
 def test_a_truly_unbacked_date_is_still_flagged():
+    """A date with truly no supporting basis is still flagged."""
     body = ITEMS.replace("Order tracking follows on Jan 20, 2027.", "Order tracking: Feb 2, 2027.")
     assert flagged(body) == [("next-order-tracking", "Feb 2, 2027")]
 
@@ -196,6 +204,7 @@ def test_a_truly_unbacked_date_is_still_flagged():
 
 
 def test_an_owner_s_commitment_backs_the_milestone_date_it_names():
+    """An owner's commitment backs the milestone date it names; without it, it warns."""
     commitment = basis("CMT-9", date(2026, 12, 20), kind="commitment", item="order-tracking")
     body = ITEMS + (
         "\n## Milestones {#milestones}\n\n"
@@ -232,6 +241,7 @@ def _date_warnings(version: dict) -> list[dict]:
 
 
 async def test_warnings_count_each_date_and_item_once(client, owner, runtime):  # noqa: F811
+    """The same unbacked date repeated for one item is warned about only once."""
     _, auth = owner
     await approved_prd(client, auth)
     md = with_line("GA on 2026-12-15. Still GA on Dec 15, 2026, and GA 2026-12-15 again.")
@@ -243,6 +253,7 @@ async def test_warnings_count_each_date_and_item_once(client, owner, runtime):  
 
 
 async def test_warnings_follow_bases_verified_and_withdrawn(client, owner, runtime):  # noqa: F811
+    """A date warning clears once a basis records it, and returns if withdrawn."""
     _, auth = owner
     await approved_prd(client, auth)
     version = await _run_roadmap(client, auth, runtime, with_line("GA on 2026-12-15."))
@@ -270,6 +281,7 @@ def _stored_date_warnings(doc: dict) -> list[dict]:
 
 
 async def test_stored_warnings_follow_a_tracker_re_match(client, owner, runtime):  # noqa: F811
+    """Stored date warnings follow a tracker issue when it is re-matched to an item."""
     # Review minor: re-matching a tracker issue changes the items its basis covers, and
     # the versions list's stored warnings follow.
     from tests.test_tracks import track_of
@@ -305,6 +317,7 @@ async def test_a_basis_change_re_checks_only_each_document_s_latest_version(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """A new basis re-checks only each document's latest version, not older ones."""
     # Review minor: the refresh runs inside the request, so it re-finds the dates of each
     # document's latest version only (an older version's read still re-checks its own).
     from tests.fixtures import import_draft

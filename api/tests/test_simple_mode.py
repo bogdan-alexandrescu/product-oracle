@@ -18,6 +18,7 @@ from tests.test_members import token_with_role
 
 
 async def test_simple_mode_is_off_unless_the_environment_turns_it_on(client, tenant_id):
+    """Simple mode stays hidden until its deployment setting turns it on."""
     # protects=the switch stays hidden in a deployment that never set ORACLE_SIMPLE_MODE;
     # fails_when=the capability is missing or defaults on; no_claim=the web hiding it.
     headers = await token_with_role(tenant_id, "viewer")
@@ -28,6 +29,7 @@ async def test_simple_mode_is_off_unless_the_environment_turns_it_on(client, ten
 
 @pytest.mark.parametrize("role", ["viewer", "commenter", "approver", "owner"])
 async def test_simple_mode_on_answers_every_role(client, tenant_id, monkeypatch, role):
+    """Turning Simple mode on through the setting applies to every role at once."""
     # protects=ORACLE_SIMPLE_MODE turns Simple on for everyone; fails_when=the flag is read
     # per role or not at all; no_claim=which mode a role lands in (the web decides).
     monkeypatch.setattr(get_settings(), "simple_mode", True)
@@ -47,6 +49,7 @@ async def test_simple_mode_on_answers_every_role(client, tenant_id, monkeypatch,
     ],
 )
 async def test_capabilities_name_the_roles_default_mode(client, tenant_id, role, mode):
+    """A role's default landing mode comes from the API, not role names in the web."""
     # protects=the landing without a saved mode (D13: viewers and commenters in Simple,
     # approvers and owners in Detailed) comes from the API, not role names in the web;
     # fails_when=the field is missing or a role gets the other mode; no_claim=the web landing.
@@ -57,6 +60,7 @@ async def test_capabilities_name_the_roles_default_mode(client, tenant_id, role,
 
 
 def test_the_environment_variable_names_the_setting(monkeypatch):
+    """The rollback switch is read from its own named setting, on or off."""
     # protects=the rollback switch's name (ORACLE_SIMPLE_MODE=off); fails_when=the setting
     # is renamed; no_claim=deployment config.
     from oracle.config import Settings
@@ -68,6 +72,7 @@ def test_the_environment_variable_names_the_setting(monkeypatch):
 
 
 async def test_experience_is_unset_until_chosen_then_remembered(client, tenant_id):
+    """A person's chosen view mode is unset until picked, then remembered after."""
     # protects=the remembered mode (D13); fails_when=an unset preference reads as a mode
     # (the role default could never apply) or a choice is not kept; no_claim=the landing.
     headers = await token_with_role(tenant_id, "viewer")
@@ -85,6 +90,7 @@ async def test_experience_is_unset_until_chosen_then_remembered(client, tenant_i
 
 
 async def test_experience_is_each_persons_own_and_checked(client, tenant_id):
+    """Each person's view mode is their own, and only a valid mode is accepted."""
     # protects=one person's switch never moves another; fails_when=the key is shared or
     # any string is stored; no_claim=other preference keys.
     viewer = await token_with_role(tenant_id, "viewer")
@@ -101,6 +107,7 @@ async def test_experience_is_each_persons_own_and_checked(client, tenant_id):
 
 
 async def test_the_old_studio_name_is_refused_and_a_stored_one_reads_as_detailed(client, tenant_id):
+    """The old 'studio' mode name is refused for new saves but still reads as detailed."""
     # protects=the owner's rename of Studio to Detailed (#723) strands no one: a stored
     # 'studio' reads as 'detailed'; fails_when=the API still takes 'studio' or a stored one
     # fails to read; no_claim=the web's words (web/e2e/simple-mode.spec.ts).

@@ -94,6 +94,7 @@ async def get_roadmap(client, ctx: Ctx, role: str) -> dict:
 
 
 async def test_create_list_patch_delete_restore_own_milestone(client):
+    """A milestone's owner can create, patch, delete and restore it; a viewer cannot."""
     ctx = await make_ctx()
     ids = await seed_roadmap(ctx)
     body = {"roadmap_id": ids["roadmap_id"], "name": "Prove it", "date": "2026-11-27",
@@ -142,6 +143,7 @@ async def test_create_list_patch_delete_restore_own_milestone(client):
 
 
 async def test_prd_milestones_appear_dated_and_propose_through_the_change_engine(client):
+    """A PRD milestone reads dated and locked; its edits go through a proposal instead."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         owner = User(email="prdowner@example.com", name="Priya Owner", password_hash="x",

@@ -77,6 +77,7 @@ _DEP_PARKED = {"state": "PARKED", "park_reason": "DEPENDENCY_INCOMPLETE"}
 async def test_a_forged_dependency_park_on_a_review_whose_predecessor_succeeded_holds(
     monkeypatch,
 ):
+    """A dependency-parked review still holds even when its predecessor succeeded."""
     rt = _adapter({WORK: {"state": "SUCCEEDED"}, REVIEW: dict(_DEP_PARKED)})
     status = await rt.status("wf_1")
     assert status.step(REVIEW).park_reason == "DEPENDENCY_INCOMPLETE"
@@ -84,11 +85,13 @@ async def test_a_forged_dependency_park_on_a_review_whose_predecessor_succeeded_
 
 
 async def test_a_dependency_park_on_a_review_whose_predecessor_runs_releases(monkeypatch):
+    """A dependency-parked review releases once its predecessor is really running."""
     rt = _adapter({WORK: {"state": "RUNNING"}, REVIEW: dict(_DEP_PARKED)})
     assert await _hold(monkeypatch, rt) is None
 
 
 async def test_a_task_with_no_state_of_its_own_holds(monkeypatch):
+    """A review whose own task was never actually read still holds."""
     # The row says PARKED and the task says why, but the task itself has no state.
     rt = _adapter({WORK: {"state": "RUNNING"}, REVIEW: {"park_reason": "DEPENDENCY_INCOMPLETE"}})
     status = await rt.status("wf_1")
@@ -97,17 +100,20 @@ async def test_a_task_with_no_state_of_its_own_holds(monkeypatch):
 
 
 async def test_a_predecessor_with_no_state_or_no_task_holds(monkeypatch):
+    """A dependency-parked review holds when its predecessor has no state at all."""
     for before in ({}, None):
         rt = _adapter({WORK: before, REVIEW: dict(_DEP_PARKED)})
         assert await _hold(monkeypatch, rt) == service.HOLD_DECISION, before
 
 
 async def test_a_review_with_no_known_predecessor_holds(monkeypatch):
+    """A dependency-parked review holds when it has no known predecessor step."""
     rt = _adapter({WORK: {"state": "RUNNING"}, REVIEW: dict(_DEP_PARKED)})
     assert await _hold(monkeypatch, rt, ((REVIEW, None),)) == service.HOLD_DECISION
 
 
 def test_task_read_defaults_to_false_and_holds():
+    """A step's task_read defaults to false, so an unconfirmed step still holds."""
     assert StepStatus("s").task_read is False
     step = StepStatus(REVIEW, "t", "PARKED", park_reason="DEPENDENCY_INCOMPLETE")
     before = StepStatus(WORK, "t0", "RUNNING", task_read=True)
@@ -115,6 +121,8 @@ def test_task_read_defaults_to_false_and_holds():
 
 
 async def test_a_status_with_task_read_omitted_holds(monkeypatch):
+    """A workflow status missing task_read on a parked step still holds it."""
+
     class Runtime:
         async def status(self, workflow_id):
             return WorkflowStatus(
@@ -129,6 +137,7 @@ async def test_a_status_with_task_read_omitted_holds(monkeypatch):
 
 
 async def test_the_adapter_sets_task_read_only_for_a_task_it_read():
+    """The adapter marks task_read true only for the task it actually fetched."""
     rt = _adapter({WORK: {"state": "RUNNING"}, REVIEW: None})
     status = await rt.status("wf_1")
     assert status.step(WORK).task_read is True
@@ -137,11 +146,13 @@ async def test_the_adapter_sets_task_read_only_for_a_task_it_read():
 
 @pytest.mark.parametrize("state", ["PENDING", "SKIPPED", "pending", "READY"])
 async def test_pending_or_skipped_from_the_real_adapter_holds(monkeypatch, state):
+    """A predecessor reported pending or skipped still leaves its review held."""
     rt = _adapter({WORK: {"state": "RUNNING"}, REVIEW: {"state": state}})
     assert await _hold(monkeypatch, rt) == service.HOLD_DECISION
 
 
 def test_no_state_list_releases_the_hold():
+    """There is no hardcoded list of not-reached states; task_read decides it."""
     from oracle.swarm import runtime as swarm_runtime
 
     assert not hasattr(swarm_runtime, "NOT_REACHED_STATES")
@@ -151,6 +162,7 @@ def test_no_state_list_releases_the_hold():
 
 
 async def test_an_opened_wait_holds_from_the_live_read(monkeypatch):
+    """An opened wait holds even if its predecessor is forged back to running."""
     rt = _adapter(
         {
             WORK: {"state": "SUCCEEDED"},
@@ -169,6 +181,7 @@ async def test_an_opened_wait_holds_from_the_live_read(monkeypatch):
 
 
 async def test_a_work_step_running_with_later_reviews_dependency_parked_releases(monkeypatch):
+    """A review is released once its own segment's work step actually succeeds."""
     rt = _adapter(
         {
             "a-1-analyst": {"state": "SUCCEEDED"},
@@ -201,6 +214,7 @@ IN_PROGRESS = "SUBMITTED QUEUED PARKED READY LEASED DISPATCHED STARTING RUNNING 
 
 @pytest.mark.parametrize("state", IN_PROGRESS)
 def test_a_known_in_progress_predecessor_releases(state):
+    """A dependency-parked review releases whenever its predecessor is in progress."""
     before = StepStatus(WORK, "t0", state, task_read=True)
     step = StepStatus(REVIEW, "t", "PARKED", park_reason="DEPENDENCY_INCOMPLETE", task_read=True)
     assert not_reached(step, before) is True
@@ -226,6 +240,7 @@ def test_a_known_in_progress_predecessor_releases(state):
     ],
 )
 def test_an_unknown_or_finished_predecessor_state_holds(state):
+    """A dependency-parked review holds for any finished, unknown or malformed state."""
     before = StepStatus(WORK, "t0", state, task_read=True)
     step = StepStatus(REVIEW, "t", "PARKED", park_reason="DEPENDENCY_INCOMPLETE", task_read=True)
     assert not_reached(step, before) is False
@@ -233,6 +248,7 @@ def test_an_unknown_or_finished_predecessor_state_holds(state):
 
 @pytest.mark.parametrize("state", ["FAILED", "CANCELLED", "DEAD_LETTERED", "BACKOFF", "RUNNING "])
 async def test_an_unknown_predecessor_state_from_the_real_adapter_holds(monkeypatch, state):
+    """The real adapter still holds a review whose predecessor's state is unknown."""
     rt = _adapter({WORK: {"state": state}, REVIEW: dict(_DEP_PARKED)})
     assert await _hold(monkeypatch, rt) == service.HOLD_DECISION
 
@@ -246,6 +262,7 @@ def _predecessor(swarm, review: str) -> str:
 
 
 async def test_the_hold_plan_names_each_reviews_predecessor(client, owner):
+    """The hold plan names the real predecessor of every held review in a run."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -282,6 +299,7 @@ async def test_a_forged_review_row_cannot_release_the_hold_end_to_end(client, ow
 
 
 async def test_an_opened_wait_holds_before_oracle_records_its_checkpoint(client, owner):
+    """A run token's writes stay blocked by an opened wait before Oracle has ticked."""
     _, auth = owner
     swarm = on()
     use(swarm)

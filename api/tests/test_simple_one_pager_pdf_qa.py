@@ -120,6 +120,7 @@ def _num(style: str, prop: str) -> float:
 
 
 async def test_milestone_flags_never_overlap_or_leave_the_lanes(client):
+    """Milestone end flags show full names and never overlap or run past the edge."""
     html = await plan_pdf(client)
     right_aligned = "translateX(-100%)" in css_rule(html, ".tl .f")
     flags = re.findall(r"<span class='f(?: l)?' style='([^']*)'>([^<]*)</span>", timeline(html))
@@ -140,6 +141,7 @@ async def test_milestone_flags_never_overlap_or_leave_the_lanes(client):
 
 
 async def test_months_and_ranges_carry_the_year(client):
+    """Timeline months and date ranges always show the year when it is not obvious."""
     html = await plan_pdf(client)
     months = re.findall(r"<span class='mo'[^>]*>([^<]*)</span>", timeline(html))
     assert months[0] == "Nov 2026"
@@ -151,6 +153,7 @@ async def test_months_and_ranges_carry_the_year(client):
 
 
 async def test_every_bar_code_has_its_name(client):
+    """Every feature code on the timeline, bar or key, always shows with its name."""
     html = await plan_pdf(client)
     tl = timeline(html)
     labels = re.findall(r"<span class='bar[^']*'[^>]*>([^<]*)</span>", tl)
@@ -175,6 +178,7 @@ async def test_every_bar_code_has_its_name(client):
 
 
 async def test_holiday_shading_writes_each_stop_in_full(client):
+    """Holiday shading writes each gradient stop in full so the PDF engine draws it."""
     html = await plan_pdf(client)
     off = css_rule(html, ".tl .off")
     assert "background" in off
@@ -184,6 +188,7 @@ async def test_holiday_shading_writes_each_stop_in_full(client):
 
 
 async def test_bars_stay_inside_their_milestone_and_the_page(client):
+    """Timeline bars stay within their milestone and the page, with fixed widths."""
     html = await plan_pdf(client)
     tl = timeline(html)
     # Each lane draws the milestones' end lines in order; the first lane's are M1..M6.
@@ -201,6 +206,7 @@ async def test_bars_stay_inside_their_milestone_and_the_page(client):
 
 
 async def test_done_when_one_marker_owner_name_and_page_numbers(client):
+    """The PDF shows one checkbox style, owner and decider names, and page numbers."""
     html = await plan_pdf(client)
     part = html.split("<section class='part'>")[1]
     done = part[part.index("Done when") : part.index("Targets")]
@@ -217,6 +223,7 @@ async def test_done_when_one_marker_owner_name_and_page_numbers(client):
 
 
 async def test_a_wide_bar_prints_its_name(client):
+    """A bar wide enough for its name prints it in full, with no key needed."""
     data = {**DATA, "milestones": DATA["milestones"][4:5], "features": [
         {"code": "F-10", "name": "Single sign-on", "milestones": ["M5"], "effort": [4],
          "goals": ["Revenue"]},

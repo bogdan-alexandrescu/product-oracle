@@ -26,6 +26,7 @@ def runtime():
 
 
 async def test_brief_run_reports_the_typed_title_before_the_import(client, runtime):
+    """A run started from a brief shows the title typed in, before any document exists."""
     ctx = await company()
     typed = "Example test · Saved carts"
     out = await create_intake(client, ctx, who="approver", title=typed)

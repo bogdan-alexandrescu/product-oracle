@@ -106,6 +106,7 @@ RANK = {G1: 0, G2: 1}
 
 
 def test_codes_are_unique_by_date_undated_last():
+    """Milestones are coded uniquely by date, earliest first, undated ones last."""
     a = gm("M1", "Prove it", "2026-12-10")
     b = gm("M2", "Scale", None)
     c = gm("M1", "Invite", "2026-11-20", goal=G2)
@@ -115,6 +116,7 @@ def test_codes_are_unique_by_date_undated_last():
 
 
 def test_same_date_goes_by_goal_order_then_name():
+    """Milestones sharing a date are coded by their goal's own order, then by name."""
     a = gm("M1", "Zeta", "2026-12-22", goal=G2)
     b = gm("M1", "Beta", "2026-12-22", goal=G1)
     c = gm("M2", "Alpha", "2026-12-22", goal=G1)
@@ -124,6 +126,7 @@ def test_same_date_goes_by_goal_order_then_name():
 
 
 def test_a_prd_milestone_folded_into_its_track_milestone_counts_once():
+    """A PRD milestone matching its track's milestone folds in and shares its code."""
     i = item()
     track = tm("M1 Measured and mapped", "2026-11-27", [i.id])
     prd = gm("M1", "Measured", "2026-11-25", goal=None, prd=True)
@@ -134,6 +137,7 @@ def test_a_prd_milestone_folded_into_its_track_milestone_counts_once():
 
 
 def test_a_goal_milestone_of_another_name_keeps_its_own_code():
+    """A goal milestone named unlike its track's milestone keeps its own code."""
     i = item()
     track = tm("M1 Measured and mapped", "2026-11-27", [])
     own = gm("M1", "Daily scoreboard", "2026-11-20")
@@ -142,6 +146,7 @@ def test_a_goal_milestone_of_another_name_keeps_its_own_code():
 
 
 def test_a_goal_milestone_named_in_brackets_folds_into_its_track_milestone():
+    """Strips bracket formatting so a goal's milestone still merges with its track's."""
     track = tm("M2 · Launch (beta)", None, [])
     own = gm("M2", "[Launch (beta)]", None)
     assign([own], [track], [item(track.id)], RANK)
@@ -189,6 +194,7 @@ def test_a_goal_milestone_does_not_join_another_goals_prd_milestone():
 
 
 def test_a_joined_group_is_dated_by_the_goals_own_milestone():
+    """A group of milestones sharing a code is dated by the goal's own milestone."""
     beta = gm("M1", "Beta", "2026-11-01")
     launch = gm("M1", "Beta launch", "2027-03-01", prd=True)
     pilot = gm("M2", "Pilot", "2026-12-01", goal=G2)
@@ -219,6 +225,7 @@ def test_a_goal_milestone_does_not_join_a_group_holding_another_goals_milestone(
 
 
 def test_a_goal_milestone_joins_a_group_of_its_own_goal():
+    """A goal milestone joins the group of a same-named milestone from its own goal."""
     plain = gm("M2", "Beta", "2026-12-01", goal=None, prd=True)
     prd1 = gm("M2", "Beta", "2026-11-01", prd=True)
     own1 = gm("M1", "Beta", "2026-11-01")
@@ -295,6 +302,7 @@ def test_codes_do_not_depend_on_goal_or_list_order(case):
 
 
 def test_of_two_matching_prd_milestones_the_closest_date_joins():
+    """When two PRD milestones match a goal milestone's name, the closer date joins it."""
     own = gm("M1", "Beta", "2026-11-01")
     exact = gm("M2", "Beta", "2027-03-01", prd=True)
     near = gm("M3", "Beta launch", "2026-11-05", prd=True)
@@ -340,6 +348,7 @@ def clock(monkeypatch):
 
 
 async def test_roadmap_read_codes_and_renumber_on_move(client, clock):
+    """Reading the roadmap codes every milestone, and moving one renumbers them all."""
     ctx = await make_ctx()
     ids = await seed_roadmap(ctx)
     async with tenant_session(ctx.tenant_id) as s:

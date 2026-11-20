@@ -53,6 +53,7 @@ async def _goal(client, ctx, key="activation", attrs=None, **body) -> dict:
 # protects=no goal stores a number without saying what it counts; fails_when=a target saves
 # without unit or comparison; no_claim=whether the number is sensible.
 def test_target_needs_unit():
+    """A goal target given without a unit is flagged as needing a unit."""
     codes = [p["code"] for p in goals.field_problems({"target": 45})]
     assert codes == ["target_needs_unit"]
     assert goals.field_problems({"target": 45, "unit": "%", "comparison": "at_least"}) == []
@@ -78,6 +79,7 @@ def test_target_needs_unit():
     ],
 )
 def test_each_bad_field_has_its_code(attrs, code, where):
+    """Each kind of bad goal field is flagged with its own specific error code."""
     found = goals.field_problems(attrs, on=TODAY)
     assert {"code": code, "where": f"attrs.{where}"} in [
         {"code": p["code"], "where": p["where"]} for p in found
@@ -87,6 +89,7 @@ def test_each_bad_field_has_its_code(attrs, code, where):
 # protects=units are the listed ones or a counted noun; fails_when=a noun with capitals or
 # digits passes, or "teams" fails; no_claim=currency symbols (the form maps them).
 def test_units():
+    """Only known, properly cased unit strings are accepted as valid goal units."""
     for ok in ("%", "USD", "EUR", "GBP", "ms", "s", "min", "h", "days", "teams", "active clinics"):
         assert goals.unit_ok(ok), ok
     for bad in ("$", "Teams", "users2", "a" * 25, ""):
@@ -96,6 +99,7 @@ def test_units():
 # protects=criterion 5: missing lists exactly the absent fields in 3.2's order; fails_when=
 # the order changes or a present field is listed; no_claim=warnings (next test).
 def test_goal_check_missing_in_order():
+    """A goal's missing measurable fields are listed in a fixed, predictable order."""
     assert goals.goal_check({}, on=TODAY)["missing"] == list(goals.MEASURABLE)
     out = goals.goal_check({"metric": "Setups", "horizon": "short"}, on=TODAY)
     assert out == {
@@ -117,6 +121,7 @@ def test_goal_check_missing_in_order():
 # protects=criterion 5: each warning fires on its fixture and not otherwise; fails_when=a
 # warning is missing or fires on a clean goal; no_claim=how the UI shows them.
 def test_goal_check_warnings():
+    """A goal already past or near its target, or with stale data, gets the matching warning."""
     base = {"metric": "Setups", "unit": "%", "comparison": "at_least", "target": 45,
             "horizon": "short", "owner": str(uuid.uuid4())}  # fmt: skip
 
@@ -159,12 +164,14 @@ def test_goal_check_warnings():
     ],
 )
 def test_parse_figure_parity(raw, value, unit, currency, rng):
+    """Free-text goal figures of many shapes parse to the same value, unit and range."""
     f = figures.parse_figure(raw)
     assert f is not None
     assert (f.value, f.unit, f.currency, f.range) == (value, unit, currency, rng)
 
 
 def test_parse_figure_none_and_direction():
+    """Unparseable goal text parses to no figure, and direction and period-end parse correctly."""
     assert figures.parse_figure("soon") is None
     assert figures.parse_figure(True) is None
     assert figures.direction("below 8%") == figures.Direction("down", True)
@@ -178,6 +185,7 @@ def test_parse_figure_none_and_direction():
 
 
 def test_target_words():
+    """A goal's full typed attributes render as one readable target sentence."""
     attrs = {"metric": "New accounts that finish setup within 7 days", "unit": "%",
              "comparison": "at_least", "target": 45, "horizon": "short",
              "due": "2026-12-31"}  # fmt: skip
@@ -193,6 +201,7 @@ def test_target_words():
 # protects=criterion 1: the full typed set saves and reads measurable; fails_when=a valid
 # goal is refused or goal_check is absent; no_claim=the UI.
 async def test_patch_full_typed_set_is_measurable(client, ctx):
+    """Setting every typed field makes a goal measurable, but not other entity types."""
     goal = await _goal(client, ctx)
     assert goal["goal_check"]["measurable"] is False
     resp = await client.patch(
@@ -222,6 +231,7 @@ async def test_patch_full_typed_set_is_measurable(client, ctx):
 # a non-member, a disabled member and a typed name are owner_not_member; fails_when=a bad
 # field saves or the body lacks the code; no_claim=the UI's error placement.
 async def test_bad_fields_are_422_and_nothing_written(client, ctx):
+    """Each kind of invalid goal field patch is rejected as a 422 and writes nothing."""
     goal = await _goal(client, ctx, attrs={"metric": "Setups"})
     async with tenant_session(ctx.tenant_id) as s:
         await s.execute(
@@ -272,6 +282,7 @@ async def test_bad_fields_are_422_and_nothing_written(client, ctx):
 # accepted and locks the goal; fails_when=a bad proposal is stored or acceptance fails;
 # no_claim=proposal sentences.
 async def test_proposals_are_checked_at_creation(client, ctx):
+    """A goal-editing proposal is validated against the same field rules at creation time."""
     goal = await _goal(client, ctx, origin="agent")
     bad = await client.post(
         f"{B}/proposals",
@@ -305,6 +316,7 @@ async def test_proposals_are_checked_at_creation(client, ctx):
 # protects=criterion 10a: a goal that is not measurable is confirmed (allow, flagged) and a
 # feature can trace to it; fails_when=confirm refuses it or the flag goes; no_claim=Home.
 async def test_confirming_a_vague_goal_is_allowed(client, ctx):
+    """Confirming a goal is allowed even while its target is still free text, not yet measurable."""
     goal = await _goal(client, ctx, attrs={"metric": "Churn", "target_text": "below 8%"})
     out = await confirm(client, ctx, goal)
     assert out["status"] == "confirmed"
@@ -316,6 +328,7 @@ async def test_confirming_a_vague_goal_is_allowed(client, ctx):
 # protects=one vague goal never fails a run's merge (criterion 4); fails_when=the import
 # raises or drops the value; no_claim=uses a hand-written baseline.yaml, not agent output.
 async def test_yaml_keeps_bad_goal_field_as_text(client, ctx):
+    """Importing YAML with a badly typed goal field keeps it as text instead of failing."""
     doc = """\
 version: 1
 entities:
@@ -352,6 +365,7 @@ entities:
 # resolution and runs write this way); fails_when=it raises or drops the value;
 # no_claim=proposals on locked goals.
 async def test_agent_write_keeps_bad_value_as_text(client, ctx):
+    """An agent-authored goal write with a bad field value is kept as text, not rejected."""
     goal = await _goal(client, ctx, origin="agent", attrs={"weight": "high"})
     assert goal["attrs"] == {"weight_text": "high"}
 
@@ -359,6 +373,7 @@ async def test_agent_write_keeps_bad_value_as_text(client, ctx):
 # protects=criterion 8: Fill from text applies, proposes on a locked goal, leaves a range as
 # text and makes no model call; fails_when=any count or value differs; no_claim=the UI.
 async def test_fill_from_text(client, ctx, frozen_today):
+    """Filling vague goals from their free text applies the clear ones and proposes the rest."""
     first = await _goal(
         client, ctx, "activation", {"target_text": "45%", "horizon_text": "2026-Q4"}, origin="agent"
     )
@@ -392,6 +407,7 @@ async def test_fill_from_text(client, ctx, frozen_today):
 # protects=criterion 9: goal-weighted scores read numeric weights as before; fails_when=a
 # numeric weight is moved or changed by the checks; no_claim=the scoring formula.
 async def test_numeric_weight_is_unchanged(client, ctx):
+    """A goal's weight stored as a plain number is left unchanged on read."""
     goal = await _goal(client, ctx, attrs={"weight": 0.5})
     assert goal["attrs"] == {"weight": 0.5}
     async with tenant_session(ctx.tenant_id) as s:
@@ -404,6 +420,7 @@ async def test_numeric_weight_is_unchanged(client, ctx):
 # KeyError ('unit_text') or a readable target is dropped because current has no date;
 # no_claim=how the UI lists what is left.
 async def test_fill_from_text_with_current_text(client, ctx, frozen_today):
+    """Filling from text also handles a goal's current-value text the same way as its target."""
     both = await _goal(
         client, ctx, "activation", {"target_text": "45%", "current_text": "40%"}, origin="agent"
     )
@@ -440,6 +457,7 @@ async def _legacy_goal(client, ctx, key: str, attrs: dict) -> dict:
 # problems; a save that touches them is still checked; fails_when=every save of the goal
 # is 422, or a touched bad field saves; no_claim=the migration (its own test).
 async def test_goal_with_old_problems_stays_editable(client, ctx, frozen_today):
+    """A goal with old invalid fields stays editable and reports only fields still wrong."""
     goal = await _legacy_goal(client, ctx, "activation", {"target": 45, "current": 40})
     url = f"{B}/entities/{goal['id']}"
     resp = await client.patch(url, json={"attrs": {"horizon": "short"}}, headers=ctx.as_("owner"))
@@ -464,6 +482,7 @@ async def test_goal_with_old_problems_stays_editable(client, ctx, frozen_today):
 # proposed on; fails_when=owner_not_member refuses a save that leaves the owner alone;
 # no_claim=picking a new owner.
 async def test_goal_whose_owner_left_stays_editable(client, ctx):
+    """A goal keeps working even after its listed owner has left, including re-saving that owner."""
     from oracle.auth.models import User
 
     leaver = ctx.users["commenter"].id

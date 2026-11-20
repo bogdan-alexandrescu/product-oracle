@@ -55,6 +55,7 @@ async def inbox_items(client, ctx) -> dict[str, dict]:
 
 
 async def test_open_suggestion_fields_and_nulls_otherwise(client, ctx, pool, fake):
+    """An Inbox feedback row carries Oracle's suggested fix only when there is one."""
     await import_draft(client, ctx)
     change = await comment(client, ctx, "solution", "Make the checklist skippable.")
     staged = await comment(client, ctx, "goal-trace", "Name the activation metric.")
@@ -106,6 +107,7 @@ async def test_open_suggestion_fields_and_nulls_otherwise(client, ctx, pool, fak
 
 
 async def test_text_and_rationale_cut_to_280_and_edit_wins(client, ctx, pool, fake):
+    """A suggestion's text and rationale shown in the Inbox are cut to 280 chars."""
     await import_draft(client, ctx)
     fid = await comment(client, ctx, "solution", "Spell the whole flow out.")
     long_text = "Teams skip the checklist when they already know the product. " * 8
@@ -145,6 +147,7 @@ async def test_text_and_rationale_cut_to_280_and_edit_wins(client, ctx, pool, fa
 
 
 async def test_pushback_flag(client, ctx, pool, fake):
+    """An Inbox row flags only the item Oracle actually pushed back on, not others."""
     await _baseline(ctx["tenant_id"])
     await import_draft(client, ctx)
     drop = await comment(client, ctx, "solution", "Remove the checklist entirely.")

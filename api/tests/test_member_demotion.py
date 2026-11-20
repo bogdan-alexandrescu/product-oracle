@@ -53,6 +53,7 @@ async def _approved_run(ctx, approver_id, author_id, *, started: bool):
 
 @pytest.mark.parametrize("started", [False, True])
 async def test_a_demoted_owners_spend_approval_is_voided_on_an_unstarted_run(client, started):
+    """Demoting a run's approver voids their spend approval before the run starts."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "spender")
     author = await person(ctx.tenant_id, "approver", "author")
@@ -78,6 +79,7 @@ async def test_their_own_run_approved_by_themselves_is_voided_too(client):
 
 
 async def test_a_promotion_or_an_owner_kept_voids_nothing(client):
+    """Promoting someone, or a role change that still qualifies, voids nothing."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "spender")
     author = await person(ctx.tenant_id, "approver", "author")
@@ -88,6 +90,7 @@ async def test_a_promotion_or_an_owner_kept_voids_nothing(client):
 
 
 async def test_a_demoted_approvers_pending_checkpoint_decision_is_voided(client, runtime):  # noqa: F811
+    """Demoting the approver of a checkpoint voids that decision and resubmits it."""
     from oracle.swarm import RuntimeUnavailable
 
     ctx = await setup(client)
@@ -110,6 +113,7 @@ async def test_a_demoted_approvers_pending_checkpoint_decision_is_voided(client,
 
 
 async def test_a_demotion_that_keeps_the_checkpoint_role_keeps_the_decision(client, runtime):  # noqa: F811
+    """Demoting someone who keeps the checkpoint's required role keeps their decision."""
     from oracle.swarm import RuntimeUnavailable
 
     ctx = await setup(client)
@@ -163,6 +167,7 @@ async def _remove(client, ctx, how: str, user_id) -> None:
 
 @pytest.mark.parametrize("how", ["demoted", "disabled"])
 async def test_a_resume_whose_segment_was_not_submitted_is_voided(client, runtime, how):  # noqa: F811
+    """Removing a spender before their resume's segment is submitted voids it."""
     from sqlalchemy import select
 
     from oracle.models import AuditEvent
@@ -208,6 +213,7 @@ async def test_a_resume_whose_segment_was_not_submitted_is_voided(client, runtim
 
 @pytest.mark.parametrize("how", ["demoted", "disabled"])
 async def test_a_resume_whose_segment_was_submitted_stands(client, runtime, how):  # noqa: F811
+    """A resume submitted before its spender is removed keeps running unaffected."""
     ctx = await setup(client)
     run = await _paused(client, ctx, runtime)
     spender = await person(ctx.tenant_id, "owner", "spender")

@@ -61,11 +61,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the branch's one head, keeping one alembic head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_up_down_up(scratch_db):
+    """Upgrading, downgrading and upgrading again leaves the same tables each time."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _tables() == TABLES
@@ -97,6 +99,7 @@ def _checks() -> str:
 
 
 def test_chat_reader_job_kind_comes_and_goes(scratch_db):
+    """The chat_reader job kind is added by this migration and removed on downgrade."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _checks().count("chat_reader") == 2

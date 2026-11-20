@@ -41,6 +41,7 @@ async def assert_refused(client, intake_id, items, headers, label) -> None:
 
 
 async def test_a_bare_run_header_on_a_person_credential_is_refused(client, fake):  # noqa: F811
+    """A bare run-id header on an ordinary person's credential is refused, every role."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     for who in ("approver", "viewer", "token"):
@@ -48,6 +49,7 @@ async def test_a_bare_run_header_on_a_person_credential_is_refused(client, fake)
 
 
 async def test_a_header_that_does_not_verify_is_refused(client, fake, monkeypatch):  # noqa: F811
+    """A run-binding header that fails to verify, or has expired, is refused."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     author, approver = ctx.users["author"], ctx.users["approver"]
@@ -69,6 +71,7 @@ async def test_a_header_that_does_not_verify_is_refused(client, fake, monkeypatc
 
 
 async def test_a_binding_for_one_user_on_another_users_credential_is_refused(client, fake):  # noqa: F811
+    """A run binding signed for one user is refused on another user's credentials."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     binding = sign_run_binding(ctx.users["author"].id, uuid.uuid4())
@@ -78,6 +81,7 @@ async def test_a_binding_for_one_user_on_another_users_credential_is_refused(cli
 
 
 async def test_a_user_bound_po_token_with_a_bare_header_is_refused(client, fake):  # noqa: F811
+    """A user-bound token with a bare run-id header is refused; without it, it works."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     async with tenant_session(ctx.tenant_id) as s:
@@ -92,6 +96,7 @@ async def test_a_user_bound_po_token_with_a_bare_header_is_refused(client, fake)
 
 
 async def test_a_poa_token_with_a_bare_header_is_refused(client):
+    """An on-behalf-of token with a bare run-id header is refused, not just ignored."""
     _, tok = await full_flow(client)
     bearer = {"Authorization": f"Bearer {tok['access_token']}"}
     assert tok["access_token"].startswith("poa_")
@@ -102,6 +107,7 @@ async def test_a_poa_token_with_a_bare_header_is_refused(client):
 
 
 def test_a_binding_whose_run_is_not_a_string_is_none_not_an_error():
+    """A run binding whose run id is not a string reads as none, never an error."""
     user = uuid.uuid4()
     for bad in (123, None, ["x"]):
         value = service._run_serializer().dumps({"u": str(user), "r": bad})
@@ -109,6 +115,7 @@ def test_a_binding_whose_run_is_not_a_string_is_none_not_an_error():
 
 
 def test_a_valid_binding_round_trips_for_its_user_only():
+    """A signed run binding reads back its run only for the user it was signed for."""
     user, run = uuid.uuid4(), uuid.uuid4()
     value = sign_run_binding(user, run)
     assert service.read_run_binding(value, user) == run
@@ -121,6 +128,7 @@ def _signed_at(monkeypatch, when: int) -> None:
 
 
 def test_a_binding_exactly_at_its_max_age_is_read_and_one_second_later_is_not(monkeypatch):
+    """A run binding reads right up to its max age and is refused one second later."""
     user, run = uuid.uuid4(), uuid.uuid4()
     max_age = get_settings().run_binding_max_age_seconds
     assert max_age == 300
@@ -156,12 +164,14 @@ def _malformed(serializer: URLSafeTimedSerializer) -> str:
 
 
 def test_a_signed_but_malformed_binding_or_cookie_is_none_not_an_error():
+    """A signed but malformed binding or cookie reads as none, not a crash."""
     user = uuid.uuid4()
     assert service.read_run_binding(_malformed(service._run_serializer()), user) is None
     assert service.read_session_cookie(_malformed(service._serializer())) is None
 
 
 async def test_a_signed_but_malformed_binding_or_cookie_fails_closed(client, fake):  # noqa: F811
+    """A malformed signed binding or cookie fails closed at the API, never silently."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     headers = {**ctx.as_("approver"), FORGED: _malformed(service._run_serializer())}
     await assert_refused(client, intake_id, items, headers, "malformed binding")

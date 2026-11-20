@@ -78,6 +78,7 @@ async def _read(client, feat: dict, headers: dict[str, str]) -> tuple[dict, floa
 
 
 async def test_people_see_live_freshness_that_decays_as_the_source_ages(client, ctx):
+    """A feature's confidence decays as its source ages and rises when it updates."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     now = datetime.now(UTC)
     updated = now - timedelta(days=10)
@@ -106,6 +107,7 @@ async def test_people_see_live_freshness_that_decays_as_the_source_ages(client, 
 
 
 async def test_a_run_reads_freshness_as_of_its_pinned_snapshot(client, ctx):
+    """A run reads evidence freshness as of its own pinned snapshot, not live."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     updated = datetime.now(UTC) - timedelta(days=10)
     item = await make_item(ctx, "owner", updated=updated)

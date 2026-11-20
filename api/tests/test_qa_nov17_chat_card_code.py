@@ -31,6 +31,7 @@ def ctx(e: SimpleNamespace) -> SimpleNamespace:
 
 
 def test_change_cards_name_the_item_with_its_code() -> None:
+    """Ask's change card names a moved feature by its code, or by title with no code."""
     e = entry("F-06")
     moved = chat._b_horizon(ctx(e), {"item": "Weekly alert digest", "horizon": "next"})
     assert moved["summary"] == "Move F-06 Weekly alert digest to Next"

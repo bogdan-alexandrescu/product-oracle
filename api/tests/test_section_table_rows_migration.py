@@ -58,6 +58,7 @@ def scratch_db():
 
 
 def test_0015_follows_0014_trace():
+    """The section table rows migration chains directly after the trace migration."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0015_section_table_rows").down_revision == "0014_trace"
 
@@ -81,6 +82,7 @@ def _texts() -> dict[str, str]:
 
 
 def test_upgrade_rewrites_table_rows_and_downgrade_restores_them(scratch_db):
+    """Upgrading rewrites stored table text to match the parser; downgrade restores it."""
     cfg = _cfg()
     upgrade(cfg, "0014_trace")
     t, d, v = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

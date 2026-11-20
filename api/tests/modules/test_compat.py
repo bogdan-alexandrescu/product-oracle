@@ -33,6 +33,7 @@ def _rename_and_reorder(md: str) -> str:
 
 
 async def test_section_ids_hold_under_rename_reorder_and_reimport(client):
+    """A composition's section ids survive a rename, reorder and a new custom section."""
     ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     slug = "placeholder-one-pager"
@@ -73,6 +74,7 @@ async def test_section_ids_hold_under_rename_reorder_and_reimport(client):
 
 
 async def test_front_matter_resolutions_and_brief_keep_working_with_a_composition(client):
+    """Legacy resolutions and brief sections still work with a composition in place."""
     ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     slug = "placeholder-memo"
@@ -94,6 +96,7 @@ async def test_front_matter_resolutions_and_brief_keep_working_with_a_compositio
 
 
 async def test_legacy_documents_are_not_given_a_composition_by_reading_them(client):
+    """Just viewing a legacy document's composition never creates one for it."""
     ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     slug = "placeholder-legacy"

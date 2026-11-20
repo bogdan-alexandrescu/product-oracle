@@ -58,6 +58,7 @@ def scratch_db():
 
 
 def test_chains_on_the_citation_source_head():
+    """The runtime features migration chains on its parent, keeping one history."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0019_citation_confidence chains on it, the intake lane's 0014_intake on that and the
@@ -66,6 +67,7 @@ def test_chains_on_the_citation_source_head():
 
 
 def test_upgrade_creates_the_table_and_downgrade_drops_it(scratch_db):
+    """Upgrading creates the runtime features table and its checks; downgrade drops it."""
     upgrade(_cfg(), PREVIOUS)
     assert not _exists()
     upgrade(_cfg(), REVISION)

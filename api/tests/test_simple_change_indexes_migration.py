@@ -85,6 +85,7 @@ def _timeouts(step: str) -> tuple[str, str]:
 
 
 def test_lock_timeout_does_not_outlive_the_migration(scratch_db):
+    """A migration's lock_timeout setting does not leak past the migration itself."""
     upgrade(_cfg(), PREVIOUS)
     was, now = _timeouts("upgrade")
     assert now == was, (was, now)
@@ -110,6 +111,7 @@ def _timeouts_at_each_index(step: str, monkeypatch) -> list[str]:
 
 
 def test_both_ways_wait_at_most_5s(scratch_db, monkeypatch):
+    """Each index wait during the migration is capped at 5 seconds, both ways."""
     upgrade(_cfg(), PREVIOUS)
     assert _timeouts_at_each_index("upgrade", monkeypatch) == ["5s"] * 4
     command.stamp(_cfg(), REVISION)

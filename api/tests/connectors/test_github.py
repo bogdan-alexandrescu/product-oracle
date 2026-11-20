@@ -102,6 +102,7 @@ def last_cursor(events) -> dict:
 
 
 def test_registered_with_oauth_metadata():
+    """GitHub is registered as a connector with its OAuth authorize and token URLs."""
     connector = get_connector("github")
     assert isinstance(connector, GithubConnector)
     assert isinstance(connector, Connector)
@@ -110,6 +111,7 @@ def test_registered_with_oauth_metadata():
 
 
 async def test_validate():
+    """Validating a GitHub config checks only the user and the configured repo."""
     fake = FakeGithub(full_routes())
     await fake.connector().validate(CONFIG, CREDENTIAL)
     assert fake.paths() == ["/user", REPO]
@@ -130,17 +132,20 @@ async def test_validate():
     ],
 )
 async def test_validate_rejects(config, credential, message):
+    """GitHub config validation rejects bad repo names, path tricks and missing repos."""
     with pytest.raises(ConnectorConfigError, match=message):
         await FakeGithub(full_routes()).connector().validate(config, credential)
 
 
 async def test_validate_auth_error():
+    """A GitHub 401 during validation is surfaced as an auth error, not generic."""
     routes = {"/user": lambda r: httpx.Response(401, json=fixture("error_unauthorized.json"))}
     with pytest.raises(ConnectorAuthError, match="Bad credentials"):
         await FakeGithub(routes).connector().validate(CONFIG, CREDENTIAL)
 
 
 async def test_full_sync():
+    """A full GitHub sync covers every included kind and leaves out draft releases."""
     fake = FakeGithub(full_routes())
     events = await collect(fake.connector())
     items = upserts(events)
@@ -215,6 +220,7 @@ async def test_full_sync():
 
 
 async def test_issues_paginate_with_a_checkpoint_per_page():
+    """Issues are checkpointed after every page so a resume starts from the right one."""
     events = await collect(FakeGithub(full_routes()).connector(), {**CONFIG, "include": ["issues"]})
     kinds = [type(e).__name__ for e in events]
     assert kinds == ["ItemUpsert", "CursorCheckpoint", "ItemUpsert", "CursorCheckpoint"]
@@ -226,6 +232,7 @@ async def test_issues_paginate_with_a_checkpoint_per_page():
 
 
 async def test_incremental_sync_from_cursor():
+    """An incremental sync fetches only the blob whose sha changed, not every file."""
     cursor = last_cursor(await collect(FakeGithub(full_routes()).connector()))
 
     def issues_since(request):
@@ -272,6 +279,7 @@ async def test_incremental_sync_from_cursor():
 
 
 async def test_unchanged_tree_fetches_no_blobs():
+    """An unchanged repo tree produces no sync events and fetches no blobs at all."""
     config = {**CONFIG, "include": ["readme", "docs"]}
     cursor = last_cursor(await collect(FakeGithub(full_routes()).connector(), config))
     fake = FakeGithub(full_routes())
@@ -301,6 +309,7 @@ async def test_a_truncated_tree_clears_the_refetch_flag():
 
 
 def test_the_config_is_normalised():
+    """A GitHub config is normalised to deduped, sorted repos and include values."""
     config = {"repos": [" b/x", "A/y", "a/Y", "b/x"], "include": ["docs", "readme", "docs"]}
     assert GithubConnector().normalize_config(config) == {
         "repos": ["A/y", "b/x"],
@@ -309,6 +318,7 @@ def test_the_config_is_normalised():
 
 
 async def test_dropping_kinds_from_include_deletes_them():
+    """Dropping a kind from include deletes its items, but not issues or pulls."""
     cursor = last_cursor(await collect(FakeGithub(full_routes()).connector()))
     connector = FakeGithub(full_routes()).connector()
     events = await collect(connector, {**CONFIG, "include": ["readme"]}, cursor)
@@ -323,6 +333,7 @@ async def test_dropping_kinds_from_include_deletes_them():
 
 
 async def test_empty_repo_and_public_acl():
+    """An empty repo still syncs its releases, tagged with a public or private acl."""
     fake = FakeGithub(
         {
             "/repos/example-org/gadgets": "repo_gadgets.json",
@@ -345,12 +356,14 @@ async def test_empty_repo_and_public_acl():
 
 
 async def test_sync_auth_error():
+    """A GitHub 401 during sync is raised as an auth error, not left unhandled."""
     routes = {REPO: lambda r: httpx.Response(401, json=fixture("error_unauthorized.json"))}
     with pytest.raises(ConnectorAuthError):
         await collect(FakeGithub(routes).connector())
 
 
 async def test_forbidden_without_rate_limit_is_an_auth_error():
+    """A 403 with no rate limit headers is an auth error, not a rate limit."""
     body = {"message": "Resource not accessible by personal access token"}
     routes = {**full_routes(), f"{REPO}/git/trees/main": lambda r: httpx.Response(403, json=body)}
     with pytest.raises(ConnectorAuthError, match="not accessible"):
@@ -359,6 +372,7 @@ async def test_forbidden_without_rate_limit_is_an_auth_error():
 
 @pytest.mark.timing
 async def test_primary_rate_limit():
+    """A primary GitHub rate limit checkpoints the files already done before it hit."""
     reset = int(time.time()) + 60
     headers = {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(reset)}
     routes = {
@@ -377,6 +391,7 @@ async def test_primary_rate_limit():
 
 
 async def test_secondary_rate_limit_and_429():
+    """GitHub's secondary rate limit and a plain 429 both raise cleanly."""
     secondary = {"message": "You have exceeded a secondary rate limit."}
     routes = {REPO: lambda r: httpx.Response(403, json=secondary, headers={"retry-after": "30"})}
     with pytest.raises(ConnectorRateLimited) as raised:
@@ -390,6 +405,7 @@ async def test_secondary_rate_limit_and_429():
 
 
 async def test_oauth_credential_shape_is_accepted():
+    """An OAuth-shaped GitHub credential with only an access token still syncs."""
     fake = FakeGithub(full_routes())
     events = [
         e

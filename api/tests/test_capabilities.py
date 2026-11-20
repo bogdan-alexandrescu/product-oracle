@@ -56,6 +56,7 @@ def test_every_signed_in_route_has_a_role():
 
 
 def test_operation_roles_cover_every_signed_in_route():
+    """Every signed-in route carries a registered minimum role from the known set."""
     roles = operation_roles(app)
     signed_in = {r.name for _, r in _routes() if get_principal in set(_calls(r.dependant))}
     assert set(roles) == signed_in
@@ -97,6 +98,7 @@ def test_openapi_carries_each_operations_role():
 
 @pytest.mark.parametrize("role", ROLES)
 async def test_capabilities_match_the_route_matrix(client, members_world, role):  # noqa: F811
+    """The capabilities endpoint matches the role matrix for every route and role."""
     resp = await client.get(
         "/v1/me/capabilities", headers=await token_with_role(members_world.tenant_id, role)
     )
@@ -113,6 +115,7 @@ async def test_capabilities_match_the_route_matrix(client, members_world, role):
 
 
 async def test_capabilities_carry_the_engineering_lead_flag(client, members_world):  # noqa: F811
+    """The capabilities response reports whether the user is an engineering lead."""
     from oracle.auth.models import User
     from oracle.tenancy import tenant_session
 
@@ -132,6 +135,7 @@ async def test_capabilities_carry_the_engineering_lead_flag(client, members_worl
 
 
 async def test_capabilities_need_a_sign_in(client):
+    """Reading capabilities without signing in is refused with a 401."""
     assert (await client.get("/v1/me/capabilities")).status_code == 401
 
 

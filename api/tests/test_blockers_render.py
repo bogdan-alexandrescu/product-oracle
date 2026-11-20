@@ -65,6 +65,7 @@ async def _full_strategy(client, ctx) -> dict:
 
 
 async def test_the_brief_section_summarizes_the_strategy(client):
+    """The brief section summarizes the blocker strategy and links to its detail."""
     ctx = await make_ctx()
     await _full_strategy(client, ctx)
     out = await _render(client, ctx)
@@ -79,6 +80,7 @@ async def test_the_brief_section_summarizes_the_strategy(client):
 
 
 async def test_the_full_section_carries_everything_section_6_lists(client):
+    """The full section carries every blocker and strategy field section 6 lists."""
     ctx = await make_ctx()
     await _full_strategy(client, ctx)
     full = (await _render(client, ctx))["full_markdown"]
@@ -125,6 +127,7 @@ async def test_the_full_section_carries_everything_section_6_lists(client):
 
 
 async def test_evidence_lives_in_the_appendix_never_inline(client):
+    """Evidence citations live only in the appendix, never inline in the brief."""
     ctx = await make_ctx()
     await _full_strategy(client, ctx)
     out = await _render(client, ctx)
@@ -146,6 +149,7 @@ async def test_evidence_lives_in_the_appendix_never_inline(client):
 
 
 async def test_the_rendering_imports_as_a_draft_with_brief_and_full_layers(client):
+    """The rendered strategy re-imports as a draft with brief and full layers."""
     ctx = await make_ctx()
     await _full_strategy(client, ctx)
     out = await _render(client, ctx)
@@ -179,6 +183,7 @@ async def test_the_rendering_imports_as_a_draft_with_brief_and_full_layers(clien
 
 
 async def test_user_text_cannot_inject_citations_or_section_ids(client):
+    """User-entered blocker text cannot inject citation markers or section ids."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await create_blocker(
@@ -206,6 +211,7 @@ async def test_user_text_cannot_inject_citations_or_section_ids(client):
 
 
 async def test_no_blockers_says_so(client):
+    """With no blockers, the rendered brief says so and cites nothing."""
     ctx = await make_ctx()
     await make_document(ctx)
     out = await _render(client, ctx)

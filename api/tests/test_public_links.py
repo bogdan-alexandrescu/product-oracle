@@ -107,6 +107,7 @@ async def refused(url: str, routes: dict | None = None, resolve=None, **kw) -> L
     ],
 )
 def test_allowed_urls(url, kind, fetch_url):
+    """A supported Notion, Google Docs or web URL normalizes to its fetch URL."""
     target = classify(url)
     assert target.kind == kind
     assert "#" not in target.url
@@ -131,6 +132,7 @@ def test_allowed_urls(url, kind, fetch_url):
     ],
 )
 def test_refused_urls(url, code):
+    """A bad scheme, malformed URL or unsupported Google link is refused by code."""
     with pytest.raises(LinkError) as info:
         classify(url)
     assert info.value.code == code
@@ -162,6 +164,7 @@ def test_refused_urls(url, code):
     ],
 )
 def test_public_address(address, public):
+    """public_address tells a real public address from private and metadata ranges."""
     assert public_address(address) is public
 
 
@@ -173,6 +176,7 @@ def test_public_address(address, public):
     [["10.0.0.5"], ["127.0.0.1"], ["169.254.169.254"], [PUBLIC_IP, "192.168.0.2"], ["::1"]],
 )
 async def test_host_resolving_to_private_addresses_is_refused(addresses):
+    """A host that resolves to any private address is refused before any request."""
     seen: list[httpx.Request] = []
     fetcher = LinkFetcher(
         transport=site({"https://intranet.example.com/": html("<p>secret</p>")}, seen),
@@ -195,6 +199,7 @@ async def test_host_resolving_to_private_addresses_is_refused(addresses):
     ],
 )
 async def test_private_ip_literals_are_refused(url):
+    """A private IP given directly in a URL is refused without needing a DNS lookup."""
     resolve = resolver()
     error = await refused(url, resolve=resolve)
     assert error.code == "blocked_address"
@@ -202,6 +207,7 @@ async def test_private_ip_literals_are_refused(url):
 
 
 async def test_redirect_to_a_private_host_is_refused():
+    """A redirect that leads to a private host is refused and never followed."""
     seen: list[httpx.Request] = []
     fetcher = LinkFetcher(
         transport=site(
@@ -229,11 +235,13 @@ async def test_redirect_to_a_private_host_is_refused():
     ],
 )
 async def test_redirects_are_checked_like_the_link(location, code):
+    """A redirect's target is checked by the exact same rules as the original link."""
     routes = {"https://blog.example.com/post": redirect(location)}
     assert (await refused("https://blog.example.com/post", routes)).code == code
 
 
 async def test_too_many_redirects():
+    """A redirect chain that goes on too long is refused as unreachable."""
     routes = {f"https://example.com/{i}": redirect(f"/{i + 1}") for i in range(10)}
     error = await refused("https://example.com/0", routes)
     assert error.code == "unreachable" and "too many" in str(error)
@@ -263,6 +271,7 @@ async def test_guarded_transport_never_connects_to_a_private_address():
 
 
 async def test_fetch_sends_no_credentials_and_keeps_no_cookies():
+    """Fetching a public link sends no cookies or credentials, only a named bot."""
     seen: list[httpx.Request] = []
     fetcher = LinkFetcher(
         transport=site(
@@ -289,6 +298,7 @@ async def test_fetch_sends_no_credentials_and_keeps_no_cookies():
 
 @pytest.mark.parametrize("content_type", ["application/pdf", "image/png", "application/json", ""])
 async def test_only_web_pages_and_text(content_type):
+    """A link that is not a web page or plain text is refused as unsupported content."""
     routes = {
         "https://example.com/f": httpx.Response(
             200, content=b"%PDF-1.7", headers={"content-type": content_type}
@@ -298,6 +308,7 @@ async def test_only_web_pages_and_text(content_type):
 
 
 async def test_size_cap_from_content_length_and_while_streaming():
+    """A page over the size cap is refused, upfront or while still streaming."""
     big = b"<p>" + b"a" * 5000 + b"</p>"
     routes = {"https://example.com/big": html(big)}
     error = await refused("https://example.com/big", routes, max_bytes=1000)
@@ -319,6 +330,7 @@ async def test_size_cap_from_content_length_and_while_streaming():
 
 
 async def test_timeouts_and_unreachable():
+    """A slow, unreachable or error host is refused with the right status code."""
     routes = {
         "https://slow.example.com/": httpx.ReadTimeout("slow"),
         "https://down.example.com/": httpx.ConnectError("refused"),
@@ -330,6 +342,7 @@ async def test_timeouts_and_unreachable():
 
 
 async def test_whole_fetch_has_a_deadline(monkeypatch):
+    """A public-link fetch is bounded by one overall deadline, DNS lookup included."""
     monkeypatch.setattr(public_links, "TOTAL_TIMEOUT", 0.05)
 
     async def slow(host, port):
@@ -343,6 +356,8 @@ async def test_whole_fetch_has_a_deadline(monkeypatch):
 
 
 async def test_unresolvable_host():
+    """A host that cannot be resolved is refused as unreachable."""
+
     async def nxdomain(host, port):
         raise OSError("Name or service not known")
 
@@ -355,6 +370,7 @@ async def test_unresolvable_host():
 
 @pytest.mark.parametrize("code", [401, 403])
 async def test_sign_in_status_is_not_public(code):
+    """A page answering sign-in-required (401 or 403) is treated as not public."""
     routes = {"https://example.com/private": httpx.Response(code, text="Sign in")}
     error = await refused("https://example.com/private", routes)
     assert error.code == "not_public"
@@ -362,6 +378,7 @@ async def test_sign_in_status_is_not_public(code):
 
 
 async def test_private_google_doc_redirects_to_sign_in():
+    """A Google Doc that redirects to its sign-in page is treated as not public."""
     export = f"https://docs.google.com/document/d/{GDOC_ID}/export?format=txt"
     routes = {
         export: redirect("https://accounts.google.com/ServiceLogin?service=wise&continue=" + export)
@@ -371,28 +388,33 @@ async def test_private_google_doc_redirects_to_sign_in():
 
 
 async def test_redirect_to_a_login_page_is_not_public():
+    """A redirect to a login page is treated as not public, not as a normal page."""
     routes = {"https://wiki.example.com/page": redirect("/login?next=/page")}
     assert (await refused("https://wiki.example.com/page", routes)).code == "not_public"
 
 
 async def test_private_notion_page_is_not_public():
+    """A Notion page that answers 404 to an anonymous reader is treated as not public."""
     # Notion answers a private (or missing) page with 404 to anonymous readers.
     routes = {NOTION_URL: httpx.Response(404, text="Not found")}
     assert (await refused(NOTION_URL, routes)).code == "not_public"
 
 
 async def test_notion_app_shell_is_not_public():
+    """Notion's logged-out app shell, with no real content, is treated as not public."""
     routes = {NOTION_URL: html(fixture("notion_shell.html"))}
     assert (await refused(NOTION_URL, routes)).code == "not_public"
 
 
 async def test_missing_web_page():
+    """A missing web page is reported as not found, worded the same as not public."""
     error = await refused("https://example.com/gone", {})
     assert error.code == "not_found"
     assert "not public" in str(error)
 
 
 async def test_page_without_text():
+    """A page with no extractable text content is reported as empty."""
     routes = {"https://example.com/empty": html("<html><body><script>x()</script></body></html>")}
     assert (await refused("https://example.com/empty", routes)).code == "empty"
 
@@ -401,6 +423,7 @@ async def test_page_without_text():
 
 
 async def test_google_doc_through_the_public_export():
+    """A public Google Doc fetches through its export link, cleaned of BOM and CR."""
     export = f"https://docs.google.com/document/d/{GDOC_ID}/export?format=txt"
     content = (
         "https://doc-0k-0g-docstext.googleusercontent.com/export/abc/def/1792286475000/"
@@ -435,6 +458,7 @@ async def test_google_doc_through_the_public_export():
 
 
 async def test_google_doc_title_falls_back_to_its_first_line():
+    """A Google Doc with no usable file name takes its title from its first line."""
     export = f"https://docs.google.com/document/d/{GDOC_ID}/export?format=txt"
     routes = {
         export: httpx.Response(
@@ -446,6 +470,7 @@ async def test_google_doc_title_falls_back_to_its_first_line():
 
 
 def test_download_names():
+    """A Content-Disposition header is parsed into a clean name, extension dropped."""
     assert public_links._download_name('attachment; filename="Plan.txt"') == "Plan"
     assert (
         public_links._download_name(
@@ -457,6 +482,7 @@ def test_download_names():
 
 
 async def test_notion_public_page_from_its_html():
+    """A public Notion page's content is extracted, stripped of styling and chrome."""
     routes = {NOTION_URL: html(fixture("notion_public.html"))}
     page = await fetch(NOTION_URL, routes)
     assert page.kind == "notion"
@@ -468,6 +494,7 @@ async def test_notion_public_page_from_its_html():
 
 
 async def test_notion_page_content_block_wins():
+    """Notion's own content block wins over the sidebar for the page text."""
     body = (
         "<html><head><title>Plan | Notion</title></head><body><div class='sidebar'>Menu</div>"
         "<div class='notion-page-content'><p>The plan text.</p></div></body></html>"
@@ -478,6 +505,7 @@ async def test_notion_page_content_block_wins():
 
 
 async def test_web_page_main_text_and_stated_last_change():
+    """A web page's main text is pulled apart from menus, with its last-changed date."""
     url = "https://research.example.com/activation"
     page = await fetch(url, {url: html(fixture("web_article.html"))})
     assert page.kind == "web"
@@ -490,6 +518,7 @@ async def test_web_page_main_text_and_stated_last_change():
 
 
 async def test_last_modified_header_wins_and_future_dates_are_capped():
+    """A page's Last-Modified header sets its date, capped to now if in the future."""
     url = "https://research.example.com/activation"
     stamp = {"last-modified": "Wed, 01 Oct 2026 08:00:00 GMT"}
     page = await fetch(url, {url: html(fixture("web_article.html"), **stamp)})
@@ -501,6 +530,7 @@ async def test_last_modified_header_wins_and_future_dates_are_capped():
 
 
 async def test_json_ld_date_modified_and_body_fallback():
+    """A page's JSON-LD dateModified is read when no header gives a date."""
     body = (
         '<html><head><script type="application/ld+json">{"@graph": [{"@type": "Article",'
         ' "dateModified": "2026-08-01T00:00:00Z"}]}</script></head>'
@@ -513,6 +543,7 @@ async def test_json_ld_date_modified_and_body_fallback():
 
 
 async def test_description_when_the_page_has_no_text():
+    """A page with no body text falls back to its meta description as the shown text."""
     body = (
         '<html><head><meta name="description" content="Only a summary."></head><body></body></html>'
     )
@@ -521,6 +552,7 @@ async def test_description_when_the_page_has_no_text():
 
 
 async def test_plain_text_page_and_charset():
+    """A plain-text page decodes by its declared charset, titled from its first line."""
     url = "https://example.com/notes.txt"
     routes = {
         url: httpx.Response(

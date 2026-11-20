@@ -74,6 +74,7 @@ async def counts(ctx) -> tuple[int, int, int, int]:
 
 
 async def test_import_creates_and_is_idempotent(client, ctx):
+    """Importing the same graph twice creates once, then leaves it unchanged."""
     resp = await push(client, ctx, GRAPH)
     assert resp.status_code == 200, resp.text
     r = resp.json()
@@ -103,6 +104,7 @@ async def test_import_creates_and_is_idempotent(client, ctx):
 
 
 async def test_round_trip(client, ctx):
+    """Exporting a graph and the data it holds round-trips through YAML without loss."""
     goal = await entity(
         client,
         ctx,
@@ -174,6 +176,7 @@ async def test_round_trip(client, ctx):
 
 
 async def test_import_respects_locks(client, ctx):
+    """Importing a change to a locked item proposes it instead of overwriting."""
     await push(client, ctx, GRAPH)
     feat = next(
         e
@@ -205,6 +208,7 @@ async def test_import_respects_locks(client, ctx):
 
 
 async def test_import_keeps_confirmed_goals_and_drops_removed_attrs(client, ctx):
+    """Importing keeps a confirmed goal confirmed and drops attrs the file removed."""
     await push(client, ctx, GRAPH)
     goal = next(
         e
@@ -248,6 +252,7 @@ async def test_import_keeps_confirmed_goals_and_drops_removed_attrs(client, ctx)
     ],
 )
 async def test_import_rejects_bad_files_without_writing(client, ctx, text, code):
+    """A malformed or invalid import file is rejected and nothing is written."""
     resp = await push(client, ctx, text)
     assert resp.status_code == 422, resp.text
     assert code in [e["code"] for e in resp.json()["errors"]]
@@ -255,6 +260,7 @@ async def test_import_rejects_bad_files_without_writing(client, ctx, text, code)
 
 
 async def test_import_needs_an_approver(client, ctx):
+    """Only an approver or above may import a graph."""
     assert (await push(client, ctx, GRAPH, who="commenter")).status_code == 403
     assert (await push(client, ctx, GRAPH, who="approver")).status_code == 200
 
@@ -281,6 +287,7 @@ def run(argv, handler):
 
 
 def test_cli_baseline_push(tmp_path, _env):
+    """The baseline push CLI command sends the file and prints the server's result."""
     path = tmp_path / "graph.yaml"
     path.write_text(GRAPH, encoding="utf-8")
     result = {
@@ -309,6 +316,7 @@ def test_cli_baseline_push(tmp_path, _env):
 
 
 def test_cli_baseline_push_reports_errors(tmp_path, _env):
+    """The push CLI prints the server's rejection errors and a nonzero exit code."""
     path = tmp_path / "graph.yaml"
     path.write_text("version: 2\n", encoding="utf-8")
     body = {
@@ -323,6 +331,7 @@ def test_cli_baseline_push_reports_errors(tmp_path, _env):
 
 
 def test_cli_baseline_push_missing_file(tmp_path, _env):
+    """Pushing a file that does not exist fails locally without calling the server."""
     code, _, err, reqs = run(
         ["baseline", "push", str(tmp_path / "nope.yaml")], lambda r: httpx.Response(200)
     )
@@ -331,6 +340,7 @@ def test_cli_baseline_push_missing_file(tmp_path, _env):
 
 
 def test_cli_baseline_pull(tmp_path, _env):
+    """The pull CLI command saves or prints the server's exported graph."""
     target = tmp_path / "out.yaml"
     code, out, err, reqs = run(
         ["baseline", "pull", "--out", str(target)],

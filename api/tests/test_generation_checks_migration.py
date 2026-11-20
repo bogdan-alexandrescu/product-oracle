@@ -67,11 +67,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the single existing head, keeping one lineage."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_up_down_up(scratch_db):
+    """Upgrading adds the generation-check columns and downgrading removes them, repeatably."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _columns() == COLUMNS

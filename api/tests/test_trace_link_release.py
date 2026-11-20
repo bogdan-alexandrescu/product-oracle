@@ -108,6 +108,7 @@ async def _delete(client, ctx, kind: str, ident: uuid.UUID, via: str) -> None:
 
 @pytest.mark.parametrize("via", VIAS)
 async def test_deleting_an_entity_releases_its_links(client, via):
+    """Deleting an entity releases only the links that targeted it alone."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -199,6 +200,7 @@ async def test_a_kept_link_still_traces_to_its_other_entity(client):
 
 
 async def test_deleting_an_entity_without_links_records_as_before(client):
+    """Deleting an entity with no links records as before, with an empty link list."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     await _delete(client, ctx, "entity", chain["orphan"], "rest")
@@ -212,6 +214,7 @@ async def test_deleting_an_entity_without_links_records_as_before(client):
 
 @pytest.mark.parametrize("via", VIAS)
 async def test_deleting_an_edge_releases_its_evidence_links(client, via):
+    """Deleting an edge releases evidence links left with no target, marks stale."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -264,6 +267,7 @@ async def test_deleting_a_proposed_edge_releases_its_evidence_links(client):
 
 
 async def test_deleting_an_edge_whose_evidence_nothing_cites_records_as_before(client):
+    """Deleting an edge whose evidence nothing cites records as a plain deletion."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     tid = ctx.tenant_id

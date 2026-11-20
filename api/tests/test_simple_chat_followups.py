@@ -44,6 +44,7 @@ async def _decision(w, title: str) -> Decision:
 
 
 async def test_ask_decision_per_role(client):
+    """A decision card applies or proposes by role, recorded with its real approver."""
     w = await world()
     for who in ("owner", "approver"):
         c = await one_card(client, w, who, f"decision: Go weekly for {who}", page=PAGE)
@@ -100,6 +101,7 @@ async def test_ask_decision_per_role(client):
 
 
 async def test_ask_decision_without_a_document_goes_to_an_owner(client):
+    """A decision with no document still proposes, routed to an owner."""
     w = await world()
     c = await one_card(client, w, "commenter", "decision: Freeze on Fridays", page="/simple")
     assert c["may"] == "propose" and c["preview"]["proposed_to"]
@@ -110,6 +112,7 @@ async def test_ask_decision_without_a_document_goes_to_an_owner(client):
 
 
 async def test_meeting_decision_per_role(client):
+    """A decision recorded in a meeting lists there for roles that may apply it."""
     w = await world()
     attendees = [uid(w, x) for x in ("owner", "approver", "commenter", "viewer")]
     mid = (await start(client, w, attendee_ids=attendees))["id"]
@@ -142,6 +145,7 @@ async def test_meeting_decision_per_role(client):
 
 
 async def test_commenter_naming_a_decider_is_told_who_decides(client):
+    """Naming the wrong person in a decision line still routes it to the real decider."""
     w = await world()
     c = await one_card(client, w, "commenter", "decision by Rae Viewer: Go quarterly", page=PAGE)
     assert c["may"] == "propose"
@@ -156,6 +160,7 @@ async def test_commenter_naming_a_decider_is_told_who_decides(client):
 
 
 async def test_ask_decider_only_for_decision_lines(client, monkeypatch):
+    """The decider lookup only runs for decision lines, not for plain questions."""
     from oracle.simple import chat_actions
 
     w = await world()
@@ -174,6 +179,7 @@ async def test_ask_decider_only_for_decision_lines(client, monkeypatch):
 
 
 async def test_card_follows_the_role_at_apply(client):
+    """A card's apply outcome follows the actor's role at apply time, not creation."""
     from oracle.auth.models import User
 
     w = await world()
@@ -191,6 +197,7 @@ async def test_card_follows_the_role_at_apply(client):
 
 
 async def test_meeting_decision_on_the_next_item_clears_it(client):
+    """Changing who owns the agenda's next item clears it from the agenda."""
     w = await world()
     mid = (await start(client, w))["id"]
     title = await _item_title(w)
@@ -211,6 +218,7 @@ async def _item_title(w) -> str:
 
 
 async def test_decider_declines_a_proposal_by_withdrawing_it(client):
+    """Declining a proposed decision on Home withdraws it, not just marks it declined."""
     # protects: Home's Decline of an Ask proposal is a withdraw: Decisions lists it
     # "withdrawn" and the decided list never has it (the review's major; the web's
     # Decline is the spec's).

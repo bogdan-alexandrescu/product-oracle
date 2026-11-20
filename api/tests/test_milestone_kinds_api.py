@@ -117,6 +117,7 @@ async def make(client, ctx: Ctx, ids: dict, **kw) -> dict:
 
 
 async def test_each_kind_round_trips(client):
+    """Each of the six milestone kinds round-trips its fields; an unknown one fails."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     goal = await make(client, ctx, ids, name="Activation doubles", kind="goal",
@@ -159,6 +160,7 @@ async def test_each_kind_round_trips(client):
 
 
 async def test_status_from_items_measure_and_date(client):
+    """A milestone's status follows its items' dates or its measure against its target."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     ok = await make(client, ctx, ids, name="Carts ready", item_ids=[ids["early"]])
@@ -184,6 +186,7 @@ async def test_status_from_items_measure_and_date(client):
 
 
 async def test_a_person_sets_and_clears_the_status(client):
+    """A person can override a milestone's computed status and later clear it."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     m = await make(client, ctx, ids, name="Carts ready", item_ids=[ids["early"]])
@@ -207,6 +210,7 @@ async def test_a_person_sets_and_clears_the_status(client):
 
 
 async def test_a_proposal_carries_kind_and_tracks(client):
+    """A proposal to change a milestone's kind and tracks applies once accepted."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     m = await make(client, ctx, ids, name="Search takes over")
@@ -232,6 +236,7 @@ def targets(body: dict) -> list[dict]:
 
 
 async def test_a_goal_target_shows_and_hides_with_on_roadmap(client):
+    """A goal's milestone target shows on the roadmap only while on_roadmap is set."""
     ctx = await make_ctx()
     ids = await seed(ctx, due="2026-12-15")
     [g] = targets(await read(client, ctx))
@@ -258,6 +263,7 @@ async def test_a_goal_target_shows_and_hides_with_on_roadmap(client):
 
 
 async def test_codes_unique_and_by_date_with_goal_targets(client):
+    """Milestone roadmap codes are unique, ordered by date, and stable on rereads."""
     ctx = await make_ctx()
     ids = await seed(ctx, due="2026-12-15")
     first = await make(client, ctx, ids, name="Carts ready", date="2026-11-27")
@@ -273,6 +279,7 @@ async def test_codes_unique_and_by_date_with_goal_targets(client):
 
 
 async def test_tracks_served_in_order_with_health(client):
+    """Tracks are served in a fixed order, each with its goal and health reason."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     await make(client, ctx, ids, name="Search ready", date="2026-11-27", item_ids=[ids["late"]])
@@ -292,6 +299,7 @@ async def test_tracks_served_in_order_with_health(client):
 
 
 async def test_a_milestone_has_its_own_track(client):
+    """A milestone can be given its own home track, changed, or cleared freely."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     m = await make(client, ctx, ids, name="Checkout beta", home_track_id=ids["checkout"])
@@ -311,6 +319,7 @@ async def test_a_milestone_has_its_own_track(client):
 
 
 async def test_a_falling_goal_reads_its_start_and_direction(client):
+    """A goal that falls toward its target reads its start value and direction."""
     ctx = await make_ctx()
     ids = await seed(ctx, due="2026-12-15")
     async with tenant_session(ctx.tenant_id) as s:
@@ -339,6 +348,7 @@ async def test_a_falling_goal_reads_its_start_and_direction(client):
 
 
 async def test_a_measured_milestone_with_no_reading_past_its_date_is_missed(client):
+    """A measured milestone with no reading by its date is missed, unlike one not due."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     m = await make(client, ctx, ids, name="Five teams", kind="sub_goal", baseline=2, target=5,
@@ -358,6 +368,7 @@ async def send(client, ctx: Ctx, method: str, url: str, role: str, body: dict):
 
 @pytest.mark.parametrize("bad", [1e20, -1e20, 1e14, math.nan, math.inf, -math.inf])
 async def test_numbers_fit_the_column(client, bad):
+    """A milestone number too large or not finite is refused on every write."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     for k in ("baseline", "target", "current"):
@@ -378,6 +389,7 @@ async def test_numbers_fit_the_column(client, bad):
 
 
 async def test_refs_checked_on_create_patch_and_proposal(client):
+    """A milestone's references to other milestones or tracks are checked on write."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
@@ -428,6 +440,7 @@ async def test_refs_checked_on_create_patch_and_proposal(client):
 
 
 async def test_a_goal_is_not_its_own_sub_goal(client):
+    """A goal cannot be made its own sub-goal."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
@@ -439,6 +452,7 @@ async def test_a_goal_is_not_its_own_sub_goal(client):
 
 
 async def test_a_sub_goal_shares_its_goals_roadmap(client):
+    """A sub-goal must share its goal's roadmap, on create or by a later patch."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
@@ -459,6 +473,7 @@ async def test_a_sub_goal_shares_its_goals_roadmap(client):
 
 
 async def test_a_goal_with_sub_goals_keeps_its_kind(client):
+    """A goal with sub-goals keeps its kind until the sub-goals are cleared."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
@@ -482,6 +497,7 @@ async def test_a_goal_with_sub_goals_keeps_its_kind(client):
 
 
 async def test_a_history_track_is_no_milestone_track(client):
+    """A milestone cannot be tied to a track from a replaced, historical PRD."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -508,6 +524,7 @@ async def test_a_history_track_is_no_milestone_track(client):
 
 
 async def test_goals_read_once_per_roadmap_read(client):
+    """Reading the roadmap fetches each goal from the database only once."""
     from sqlalchemy import event
 
     from oracle.db import get_engine

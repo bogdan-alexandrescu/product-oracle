@@ -28,6 +28,7 @@ WINDOW = (date(2026, 10, 1), date(2026, 12, 31))
 
 
 def test_the_effort_reader_reads_effort_else_effort_weeks():
+    """Effort size falls back to weeks only when effort is absent, not unreadable."""
     assert scoring.effort_weeks({"effort": "M"}) == 2.0
     assert scoring.effort_weeks({"effort": 3}) == 3.0
     assert scoring.effort_weeks({"effort_weeks": "1.5"}) == 1.5
@@ -39,6 +40,7 @@ def test_the_effort_reader_reads_effort_else_effort_weeks():
 
 
 def test_service_and_targets_read_effort_through_it():
+    """Scoring and targets read effort size through the one shared reader."""
     assert not hasattr(service, "_number")
     assert not hasattr(targets, "_number")
     for attrs in ({"effort": "L"}, {"effort_weeks": 3}, {"effort": True}, {}):
@@ -53,6 +55,7 @@ def _read() -> service.Read:
 
 
 def test_a_chat_draft_entry_starts_its_effort_before_its_end():
+    """A chat draft's start date is its end date minus its effort size in weeks."""
     prd = Document(title="Example PRD")
     row = RoadmapItem(item_key="example-item", horizon="now", end_date=date(2026, 11, 30),
                       date_source="tracker")  # fmt: skip

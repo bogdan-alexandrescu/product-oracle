@@ -50,6 +50,7 @@ def runtime():
 
 
 async def test_a_plan_item_carries_its_feature_and_requirements(client):
+    """A plan item carries its linked feature and requirements, or none when unlinked."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -83,6 +84,7 @@ async def make_lead(ctx, email: str, role: str = "approver") -> User:
 
 
 async def test_a_request_naming_no_approvers_gets_the_engineering_leads(client, runtime):
+    """A spec request with no named approvers defaults to the PRD's engineering leads."""
     world = await make_world(client)
     lead = await make_lead(world.ctx, "lead@example.com")
     # A lead who is a commenter cannot approve a spec: not a default approver.
@@ -96,6 +98,7 @@ async def test_a_request_naming_no_approvers_gets_the_engineering_leads(client, 
 
 
 async def test_without_leads_a_request_naming_no_approvers_is_any_approver(client, runtime):
+    """Without engineering leads, naming no approvers means any approver can approve."""
     world = await make_world(client)
     created = await request_spec(client, world)
     assert created["spec"]["engineering_approver_ids"] == []
@@ -179,6 +182,7 @@ async def prompt_of(world, run_id: str) -> str:
 
 
 async def test_the_tech_brief_feeds_the_spec(client, runtime):
+    """A tech brief's decisions and sizing feed into the generated spec's prompt."""
     world = await make_world(client)
     brief_id = await add_brief(world)
     created = await request_spec(client, world, tech_brief_version_id=str(brief_id))
@@ -195,6 +199,7 @@ async def test_the_tech_brief_feeds_the_spec(client, runtime):
 
 
 async def test_a_spec_without_a_brief_has_no_brief_lines(client, runtime):
+    """A spec made without a tech brief has no tech-brief lines in its prompt."""
     world = await make_world(client)
     created = await request_spec(client, world)
     assert created["spec"]["tech_brief_version_id"] is None
@@ -202,6 +207,7 @@ async def test_a_spec_without_a_brief_has_no_brief_lines(client, runtime):
 
 
 async def test_the_brief_must_be_an_approved_tech_brief_of_the_prd(client, runtime):
+    """A spec's tech brief must be an approved brief of the same PRD, or it is refused."""
     world = await make_world(client)
     missing = await request_spec(client, world, status=422, tech_brief_version_id=str(uuid.uuid4()))
     assert "tech brief" in missing["detail"]
@@ -223,6 +229,7 @@ async def test_the_brief_must_be_an_approved_tech_brief_of_the_prd(client, runti
 
 
 async def test_the_list_leaves_out_engineering_check_briefs(client, runtime):
+    """The spec list leaves out tech-brief and engineering-check requests."""
     world = await make_world(client)
     await add_brief(world)
     created = await request_spec(client, world)
@@ -268,6 +275,7 @@ async def listed_state(client, world, request_id: str) -> str:
 
 
 async def test_each_spec_says_its_state(client, runtime):
+    """A spec's listed state tracks its run and approval through every stage."""
     world = await make_world(client)
     created = await request_spec(client, world)
     request_id = created["spec"]["request"]["id"]
@@ -310,6 +318,7 @@ async def test_each_spec_says_its_state(client, runtime):
 
 
 async def test_the_spec_flow_says_where_it_starts(client, runtime):
+    """The spec flow reports where a person can start it, in the UI not the API."""
     world = await make_world(client)
     body = (await client.get("/v1/flows", headers=world.ctx.as_("viewer"))).json()
     flow = next(f for f in body["flows"] if f["key"] == "prd_to_spec")

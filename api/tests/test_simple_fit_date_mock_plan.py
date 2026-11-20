@@ -161,6 +161,7 @@ CASES = [
 
 @pytest.mark.parametrize("case", CASES)
 def test_mock_plan_matches_the_engine(case):
+    """The web mock's fit-date plan matches exactly what the real engine computes."""
     raw = contract(FIXTURE)
     scenario, target = case.split("@")
     got = _measured(_plan(raw, float(target), hard=scenario == "fit-date-hard"))

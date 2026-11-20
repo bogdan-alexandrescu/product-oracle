@@ -152,6 +152,7 @@ async def edit(client, ctx: Ctx, who: str, view: dict, line_id: str, text: str, 
 
 
 async def test_fallback_blocks_capped_with_source_keys(client):
+    """A one-pager's built-in blocks each stay within their line cap, with a source."""
     ctx = await world(client)
     view = await get(client, ctx, "viewer")
     assert [b["key"] for b in view["blocks"]] == [
@@ -205,6 +206,7 @@ async def test_can_start_follows_the_meeting_start_rule(client):
 
 
 async def test_cached_per_version_and_section_hash(client):
+    """A one-pager rebuilds only when the PRD's version or its sections' text changes."""
     ctx = await world(client)
     await get(client, ctx)
     await get(client, ctx, "viewer")
@@ -227,6 +229,7 @@ async def test_cached_per_version_and_section_hash(client):
 
 
 async def test_job_answer_held_to_caps_and_keys(client):
+    """A one-pager job answer naming another block's section is held back for owners."""
     ctx = await world(client)
     await get(client, ctx)
     answer = {"blocks": [
@@ -271,6 +274,7 @@ async def test_job_answer_held_to_caps_and_keys(client):
 
 
 def test_template_blocks():
+    """A one-pager's template blocks come from its front matter, or none without it."""
     body = (
         "---\none_pager:\n  blocks:\n    - key: why\n      title: Why now\n"
         "      sections: [problem]\n    - key: plan\n      title: The plan\n"
@@ -283,6 +287,7 @@ def test_template_blocks():
 
 
 async def test_edit_line_per_role(client):
+    """Editing a one-pager line patches every section it rests on, as a change note."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     old = line(view, "bets-1")["text"]
@@ -344,6 +349,7 @@ async def test_edit_line_per_role(client):
 
 
 async def test_submit_publishes_patched_sections(client):
+    """Submitting a one-pager draft publishes its patched sections only once approved."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     r = await edit(
@@ -368,6 +374,7 @@ async def test_submit_publishes_patched_sections(client):
 
 
 async def test_pdf_one_page(client):
+    """A one-pager exports as a single-page PDF naming its own document and version."""
     from oracle.export.pdf import page_count, pdf_available
 
     ctx = await world(client)
@@ -409,6 +416,7 @@ async def test_proposal_reads_the_published_line_when_the_draft_is_hidden(client
 
 
 async def test_proposer_withdraws_their_proposal(client):
+    """Only the person who proposed a one-pager change may withdraw it themselves."""
     ctx = await world(client)
     seen = await get(client, ctx, "commenter")
     old = line(seen, "risks-1")["text"]
@@ -519,6 +527,7 @@ async def test_job_answer_never_moves_a_drafted_line(client):
 
 
 def test_patch_replaces_the_source_fact_or_refuses():
+    """A one-pager patch replaces the exact or truncated line it names, or refuses."""
     body = (
         "- A setup checklist that shows the next step\n"
         "- Invite suggestions from the admin's calendar\n"
@@ -632,6 +641,7 @@ async def remind(client, ctx: Ctx, who: str):
 
 
 async def test_remind_per_role(client):
+    """Only a draft's decider, owner or its track's lead may remind a waiting reviewer."""
     from oracle.models import AuditEvent
     from oracle.roadmap.models import ProductTrack
 
@@ -675,6 +685,7 @@ async def test_remind_per_role(client):
 
 
 async def test_remind_at_most_once_a_day_per_reviewer(client, monkeypatch):
+    """Reminding a reviewer is capped at once a day each, due again after a day passes."""
     from datetime import timedelta
 
     ctx = await world(client)
@@ -748,6 +759,7 @@ async def test_a_one_pager_read_reuses_its_who_for_can_approve(client):
 
 
 async def test_remind_needs_a_submitted_draft(client):
+    """Reminding a reviewer is refused while the draft is still worked, not submitted."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     r = await edit(client, ctx, "decider", view, "bets-2", "Invite suggestions from contacts")

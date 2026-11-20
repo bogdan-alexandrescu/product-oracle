@@ -82,11 +82,13 @@ def docs(monkeypatch):
 
 
 def test_google_asks_for_drive_readonly():
+    """Google's connection scope list asks for drive.readonly, not a narrower scope."""
     assert PROVIDERS["google"].oauth.scopes == ["openid", "email", DRIVE_READONLY]
     assert DRIVE_READONLY == "https://www.googleapis.com/auth/drive.readonly"
 
 
 def test_authorize_url_requests_drive_readonly(google_oauth):
+    """Google's OAuth authorize url requests drive.readonly, never the file-only scope."""
     p = PROVIDERS["google"]
     url = oauth.authorize_url(p, oauth.client_for(p), "state", "challenge")
     scope = parse_qs(urlparse(url).query)["scope"][0].split()
@@ -95,6 +97,8 @@ def test_authorize_url_requests_drive_readonly(google_oauth):
 
 
 async def test_identify_reads_granted_scopes_from_tokeninfo():
+    """Identifying a Google token reads its granted scopes from tokeninfo by POST body."""
+
     def handler(request):
         if request.url.host == "oauth2.googleapis.com":
             assert request.url.path == "/tokeninfo"
@@ -119,6 +123,8 @@ async def test_identify_reads_granted_scopes_from_tokeninfo():
     ],
 )
 async def test_identify_still_works_when_tokeninfo_fails(answer):
+    """Identifying a Google token still works, with empty scopes, if tokeninfo fails."""
+
     def handler(request):
         if request.url.host == "oauth2.googleapis.com":
             return answer
@@ -130,6 +136,7 @@ async def test_identify_still_works_when_tokeninfo_fails(answer):
 
 
 async def test_only_connections_without_drive_readonly_ask_to_reconnect(client, tenant_id):
+    """Only a connection lacking drive.readonly shows a reconnect reason."""
     pat = await make_person(tenant_id, "pat@example.com", "viewer")
     readonly = await add_connection(
         tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-ro", scopes=READONLY
@@ -152,6 +159,7 @@ async def test_only_connections_without_drive_readonly_ask_to_reconnect(client, 
 
 
 async def test_reconnect_without_drive_readonly_signs_in_again(client, tenant_id, google_oauth):
+    """Reconnecting without drive.readonly sends the person through sign-in again."""
     pat = await make_person(tenant_id, "pat@example.com", "viewer")
     old = await add_connection(
         tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-file", scopes=FILE_ONLY,
@@ -166,6 +174,7 @@ async def test_reconnect_without_drive_readonly_signs_in_again(client, tenant_id
 
 
 async def test_reconnect_with_drive_readonly_just_refreshes(client, tenant_id, google_oauth):
+    """Reconnecting with drive.readonly already granted just refreshes the token."""
     pat = await make_person(tenant_id, "pat@example.com", "viewer")
     conn = await add_connection(
         tenant_id, pat.id, "google", auth_mode="oauth", account_id="g-1", scopes=READONLY,
@@ -192,6 +201,7 @@ async def test_reconnect_with_drive_readonly_just_refreshes(client, tenant_id, g
 
 
 async def test_picker_config_for_signed_in_users(client, tenant_id, picker):
+    """The Drive picker config is served to a signed-in person, leaking no secret."""
     viewer = await make_person(tenant_id, "viewer@example.com", "viewer")
     await add_connection(
         tenant_id, viewer.id, "google", auth_mode="oauth", scopes=READONLY,
@@ -205,6 +215,7 @@ async def test_picker_config_for_signed_in_users(client, tenant_id, picker):
 
 
 async def test_picker_config_needs_a_person(client, tenant_id, picker):
+    """The Drive picker config needs a signed-in person and refuses a service token."""
     assert (await client.get("/v1/connections/google/picker-config")).status_code == 401
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "agent")
@@ -217,6 +228,7 @@ async def test_picker_config_needs_a_person(client, tenant_id, picker):
 
 @pytest.mark.parametrize("missing", ["client", "app_id", "api_key"])
 async def test_picker_config_not_configured(client, tenant_id, monkeypatch, missing):
+    """A missing picker setting is reported as not configured, not as a reconnect."""
     if missing != "client":
         monkeypatch.setenv("ORACLE_OAUTH_GOOGLE_CLIENT_ID", CLIENT_ID)
         monkeypatch.setenv("ORACLE_OAUTH_GOOGLE_CLIENT_SECRET", CLIENT_SECRET)
@@ -237,6 +249,7 @@ async def test_picker_config_not_configured(client, tenant_id, monkeypatch, miss
 
 
 def test_picker_key_is_not_in_the_settings_repr(picker):
+    """The picker's api key never shows up in the settings object's repr."""
     assert API_KEY not in repr(get_settings())
 
 
@@ -255,6 +268,7 @@ async def _google_source(tenant_id, user, scopes, config):
 
 
 async def test_picked_files_and_folders_on_drive_readonly(tenant_id, docs):
+    """Files and folders picked through the picker sync on a drive.readonly connection."""
     pat = (await make_person(tenant_id, "pat@example.com")).user
     docs.pages = [[message("1Doc", "text", kind="doc"), message("1InFolder", "t", kind="doc")]]
     config = {"docs": ["1Doc"], "folders": ["1Folder"], "names": {"1Folder": "Specs"}}
@@ -276,6 +290,7 @@ async def test_picked_files_and_folders_on_drive_readonly(tenant_id, docs):
 
 
 async def test_folders_without_drive_readonly_ask_to_reconnect(tenant_id, docs):
+    """Picking a folder without drive.readonly is refused and asks to reconnect."""
     pat = (await make_person(tenant_id, "pat@example.com")).user
     _, resp = await _google_source(tenant_id, pat, FILE_ONLY, {"folders": ["1Folder"]})
     assert resp.status_code == 422
@@ -284,6 +299,7 @@ async def test_folders_without_drive_readonly_ask_to_reconnect(tenant_id, docs):
 
 
 async def test_a_grant_that_loses_drive_readonly_stops_syncing_folders(tenant_id, docs):
+    """A connection that loses drive.readonly stops syncing its folders."""
     pat = (await make_person(tenant_id, "pat@example.com")).user
     conn, resp = await _google_source(tenant_id, pat, READONLY, {"folders": ["1Folder"]})
     source = resp.json()
@@ -305,6 +321,7 @@ async def test_a_grant_that_loses_drive_readonly_stops_syncing_folders(tenant_id
 
 
 async def test_unreadable_items_are_reported_not_a_source_failure(tenant_id, docs):
+    """An unreadable picked item is reported on the source, not a sync failure."""
     pat = (await make_person(tenant_id, "pat@example.com")).user
     docs.pages = [
         [
@@ -341,6 +358,7 @@ async def test_unreadable_items_are_reported_not_a_source_failure(tenant_id, doc
 
 
 def test_item_unavailable_is_a_sync_event():
+    """The unavailable-item sync event carries its id and reason, not a checkpoint."""
     event = ItemUnavailable("1Doc", "No access")
     assert (event.external_id, event.reason) == ("1Doc", "No access")
     assert not isinstance(event, CursorCheckpoint)

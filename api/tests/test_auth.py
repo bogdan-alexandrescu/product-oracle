@@ -9,6 +9,7 @@ from oracle.tenancy import tenant_session
 
 
 async def test_seed_creates_tenant_admin_and_token():
+    """Seeding makes one admin and token per tenant, and never echoes a given password."""
     first = await seed(email="Admin@Example.com", password="s3cret-pass")
     assert first.tenant_created and first.user_created
     assert first.password is None  # supplied, so not echoed back
@@ -28,6 +29,7 @@ async def test_seed_creates_tenant_admin_and_token():
 
 
 async def test_seed_generates_password_when_missing(client):
+    """A generated password from seeding actually logs in."""
     r = await seed()
     assert r.password
     resp = await client.post(
@@ -37,6 +39,7 @@ async def test_seed_generates_password_when_missing(client):
 
 
 async def test_seed_output_shows_secrets_only_when_new():
+    """Seed output shows a generated password only once, never on a later run."""
     first = format_result(await seed())
     assert "password   " in first and "<- generated, shown once" in first
     assert "export ORACLE_API_TOKEN=" in first
@@ -47,6 +50,7 @@ async def test_seed_output_shows_secrets_only_when_new():
 
 
 async def test_login_cookie_me_and_logout(client):
+    """Login sets an httponly cookie and is audited; a wrong password is refused."""
     r = await seed(password="correct horse")
     bad = await client.post(
         "/v1/auth/login", json={"email": "admin@example.com", "password": "wrong"}
@@ -73,6 +77,7 @@ async def test_login_cookie_me_and_logout(client):
 
 
 async def test_a_removed_member_hears_why_only_with_the_right_password(client):
+    """A removed member hears why only once they give the right password."""
     # qa-settings-42: removed (disabled) who gives the right password is refused in words, naming
     # the owner who removed them; a wrong password says no more than for anyone else.
     from oracle.auth.service import create_user
@@ -107,6 +112,7 @@ async def test_a_removed_member_hears_why_only_with_the_right_password(client):
 
 
 async def test_a_removed_member_is_told_to_ask_an_owner_and_the_attempt_is_audited(client):
+    """A remover no longer an owner is not named, but the refusal is still audited."""
     # fix4-settings review (qa-settings-42): a remover who is no longer an owner is not
     # named, and a removed member's refused sign-in is audited on their row.
     from oracle.auth.service import create_user
@@ -151,6 +157,7 @@ async def test_a_removed_member_is_told_to_ask_an_owner_and_the_attempt_is_audit
 
 
 async def test_tampered_cookie_is_rejected(client):
+    """A session cookie whose signature was altered is rejected."""
     await seed(password="pw")
     await client.post("/v1/auth/login", json={"email": "admin@example.com", "password": "pw"})
     value = client.cookies.get("oracle_session")
@@ -159,6 +166,7 @@ async def test_tampered_cookie_is_rejected(client):
 
 
 async def test_bearer_token_auth(client):
+    """A bearer token signs in as its owner and stops working once revoked."""
     r = await seed(token_name="ci")
     resp = await client.get("/v1/me", headers={"Authorization": f"Bearer {r.token}"})
     assert resp.status_code == 200

@@ -19,6 +19,7 @@ async def messages(client, ctx, d_id, who="commenter") -> list[dict]:
 # reply to it, which streams to the final text; fails_when=no reply is made (#402);
 # no_claim=the browser's rendering (E2E).
 async def test_a_first_message_alone_gets_the_reply(client, fake):  # noqa: F811
+    """A first message alone triggers Oracle's streamed, stored reply."""
     ctx, doc = await company(client)
     await with_key(ctx)
     d = await start(client, ctx, subject=section(doc), message={"body": ASK})
@@ -37,6 +38,7 @@ async def test_a_first_message_alone_gets_the_reply(client, fake):  # noqa: F811
 # protects=no first message, no reply; fails_when=Oracle answers an empty discussion;
 # no_claim=the UI.
 async def test_no_first_message_no_reply(client):
+    """No first message means no reply and no messages at all."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     assert d["reply"] is None
@@ -47,6 +49,7 @@ async def test_no_first_message_no_reply(client):
 # (Ask Oracle or @Oracle); fails_when=a team discussion gets an unasked reply, or an asked
 # one none; no_claim=the UI's copy.
 async def test_with_others_only_when_addressed(client):
+    """A private exchange stays quiet unless Oracle is addressed."""
     ctx, doc = await company(client)
     team = {"subject": section(doc), "visibility": "private"}
     team["participants"] = [uid(ctx, "approver")]
@@ -66,6 +69,7 @@ async def test_with_others_only_when_addressed(client):
 # protects=wait=true runs the first message's reply inline, like the composer's (MCP);
 # fails_when=it comes back pending; no_claim=the 120 s cap.
 async def test_wait_returns_the_finished_reply(client, fake):  # noqa: F811
+    """Waiting for a reply returns it already finished, not pending."""
     ctx, doc = await company(client)
     await with_key(ctx)
     resp = await client.post(
@@ -83,6 +87,7 @@ async def test_wait_returns_the_finished_reply(client, fake):  # noqa: F811
 # (201, no reply), so starting again makes no duplicate; fails_when=the start fails or
 # a reply is made past the limit; no_claim=the limit's own maths (test_discussion_replies).
 async def test_the_reply_limit_still_starts_the_discussion(client):
+    """The reply rate limit still lets a new discussion start."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     for i in range(20):

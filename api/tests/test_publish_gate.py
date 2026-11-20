@@ -71,6 +71,7 @@ async def assert_nothing_recorded(ctx: Ctx, doc_id: uuid.UUID) -> None:
 
 
 async def test_approving_a_blocked_prd_is_409_naming_the_blocks(client):
+    """Approving a PRD with an open critical blocker is refused, naming it."""
     ctx = await make_ctx()
     doc_id, blocker = await blocked_prd(client, ctx)
     resp = await client.post(approve_url("checkout-redesign"), headers=ctx.as_("approver"))
@@ -90,6 +91,7 @@ async def test_approving_a_blocked_prd_is_409_naming_the_blocks(client):
 
 
 async def test_clearing_the_block_lets_the_prd_approve(client):
+    """Resolving a blocker lets a previously refused PRD approval succeed."""
     ctx = await make_ctx()
     doc_id, blocker = await blocked_prd(client, ctx)
     assert (
@@ -107,6 +109,7 @@ async def test_clearing_the_block_lets_the_prd_approve(client):
 
 
 async def test_an_unblocked_prd_approves(client):
+    """A PRD with no open blockers approves normally."""
     ctx = await make_ctx()
     doc_id = await make_doc(ctx)
     await add_version(ctx, doc_id, 1)
@@ -116,6 +119,7 @@ async def test_an_unblocked_prd_approves(client):
 
 
 async def test_a_blocked_prd_is_refused_over_mcp_too(client):
+    """A blocked PRD is refused through the MCP tool too, not just the API."""
     ctx = await make_ctx()
     doc_id, _ = await blocked_prd(client, ctx)
     await set_token_role(ctx, "approver")
@@ -159,6 +163,7 @@ async def _publish_only(ctx: ReadinessContext) -> CheckOutcome:
 
 
 async def test_readiness_takes_a_purpose_and_approve_asks_for_publish(client):
+    """Readiness blocks only for a publish purpose; approving a PRD always asks it."""
     ctx = await make_ctx()
     doc_id = await make_doc(ctx)
     await add_version(ctx, doc_id, 1)

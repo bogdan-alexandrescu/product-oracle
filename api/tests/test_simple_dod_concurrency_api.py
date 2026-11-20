@@ -50,6 +50,7 @@ TITLE = "Edit_Title A"
 
 
 async def test_two_sessions_on_one_item(client):
+    """Two sessions on one item both land on different fields; one field conflicts."""
     w = await world(ops=["edit_title"])
     a = w.ids["edit_title-a"]
     dates = {"start_date": "2026-10-01", "end_date": "2026-11-15"}
@@ -80,6 +81,7 @@ async def test_two_sessions_on_one_item(client):
 
 
 async def test_same_instant_conflicts_name_each_fields_writer(client):
+    """A same-instant conflict on a field names whoever actually wrote that field."""
     w = await world(ops=["edit_title"])
     a = w.ids["edit_title-a"]
     seen = {"start_date": "2026-10-01", "end_date": "2026-11-15"}
@@ -103,6 +105,7 @@ async def test_same_instant_conflicts_name_each_fields_writer(client):
 
 
 async def test_two_sessions_at_once(client):
+    """Two sessions racing to edit one item leave exactly one applied, one refused."""
     w = await world(ops=["edit_title"])
     one, two = await asyncio.gather(
         w.post(client, "decider", "edit_title", after={"title": "From the decider"}),
@@ -115,6 +118,7 @@ async def test_two_sessions_at_once(client):
 
 
 async def test_stale_chat_card(client):
+    """A stale chat card's apply is refused, named by who moved it, then reoffered."""
     ctx = await chat_people()
     w = await ChatWorld(ctx).build()
     ledger = w.ids["Ledger v2"]
@@ -145,6 +149,7 @@ async def test_stale_chat_card(client):
 
 
 async def test_stale_relative_chat_card_moves_from_the_new_dates(client):
+    """A stale relative chat card recomputes its shift from the item's newest dates."""
     ctx = await chat_people()
     w = await ChatWorld(ctx).build()
     ledger = w.ids["Ledger v2"]
@@ -185,6 +190,7 @@ async def thread(client, ctx) -> list[dict]:
 
 
 async def test_two_proposals_on_one_field(client):
+    """Accepting one of two proposals on the same field makes the other outdated."""
     w = await world(ops=["edit_title"])
     first = (await w.post(client, "commenter", "edit_title", after={"title": "First"})).json()
     second = (await w.post(client, "approver", "edit_title", after={"title": "Second"})).json()
@@ -213,6 +219,7 @@ async def test_two_proposals_on_one_field(client):
 
 
 async def test_undo_after_someone_else_changed_the_item(client):
+    """An undo lands if a different field changed since, but not if its own field did."""
     w = await world(ops=["edit_title"])
     a = w.ids["edit_title-a"]
     mine = (await w.post(client, "owner", "edit_title")).json()["change"]
@@ -238,6 +245,7 @@ async def test_undo_after_someone_else_changed_the_item(client):
 
 
 async def test_apply_all_stops_in_words_and_reoffers(client):
+    """Apply all explains in plain words why it stopped, leaking no ids or dates."""
     ctx = await chat_people()
     w = await ChatWorld(ctx).build()
     ledger = w.ids["Ledger v2"]

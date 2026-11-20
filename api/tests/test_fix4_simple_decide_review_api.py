@@ -35,6 +35,7 @@ def _migration():
 
 
 async def test_old_comment_decisions_become_comments(client):
+    """A feedback item created as an old-style comment decision is migrated into a real comment."""
     w = await world()
     m = await start(client, w)
     mid = uuid.UUID(m["id"])
@@ -72,6 +73,7 @@ async def test_old_comment_decisions_become_comments(client):
 
 
 def test_the_migration_is_the_one_head():
+    """This migration chains onto the one existing head, keeping the lineage single."""
     cfg = Config(str(API_DIR / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     assert script.get_revision(REVISION).down_revision == ("0092_feedback_discussion")

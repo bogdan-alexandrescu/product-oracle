@@ -60,11 +60,13 @@ def _check() -> str:
 
 
 def test_chains_on_the_single_head():
+    """The eng-dates migration chains onto the branch's one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_up_down_up_keeps_every_other_kind(scratch_db):
+    """Adding the eng-dates checkpoint kind leaves every other checkpoint kind alone."""
     # protects=AC17; fails_when=up drops a kind another lane added, down leaves eng_dates
     # or removes another kind; no_claim=data in other tables.
     upgrade(_cfg(), PREVIOUS)
@@ -80,6 +82,7 @@ def test_up_down_up_keeps_every_other_kind(scratch_db):
 
 
 def test_down_refuses_while_an_eng_dates_checkpoint_exists(scratch_db):
+    """The eng-dates migration refuses to downgrade while a checkpoint uses that kind."""
     # protects=AC17 refusal; fails_when=the downgrade drops the value under a row using
     # it; no_claim=-.
     upgrade(_cfg(), REVISION)

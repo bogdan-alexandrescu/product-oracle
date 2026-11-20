@@ -14,6 +14,7 @@ COMMENT = {"section_key": "problem", "anchor": {"exact": "first week"}, "body": 
 
 
 def test_the_four_roles_in_order():
+    """The four roles rank in a fixed order, and an unknown role never qualifies."""
     assert ROLES == ("viewer", "commenter", "approver", "owner")
     for i, role in enumerate(ROLES):
         for j, min_role in enumerate(ROLES):
@@ -54,6 +55,7 @@ async def _call(client, what: str, headers: dict[str, str]):
 @pytest.mark.parametrize("credential", ["session", "token"])
 @pytest.mark.parametrize("role", ROLES)
 async def test_each_role_reaches_exactly_its_level(client, tenant_id, role, credential):
+    """Each role can call exactly the routes at or below its own level, no more."""
     owner = {"Authorization": f"Bearer {await role_token(tenant_id, 'owner')}"}
     assert (await import_md(client, owner, fixture("legacy_prd_v1.md"))).status_code == 201
     if credential == "session":
@@ -70,11 +72,13 @@ async def test_each_role_reaches_exactly_its_level(client, tenant_id, role, cred
 
 
 async def test_no_credential_is_401(client, tenant_id):
+    """Every protected route returns 401 when called with no credential at all."""
     for what, _ in CALLS:
         assert (await _call(client, what, {})).status_code == 401, what
 
 
 async def test_another_company_cannot_see_or_touch_the_document(client, tenant_id):
+    """A document is invisible and untouchable to a user from another company."""
     owner = {"Authorization": f"Bearer {await role_token(tenant_id, 'owner')}"}
     assert (await import_md(client, owner, fixture("legacy_prd_v1.md"))).status_code == 201
     other = await make_tenant("Other Co")

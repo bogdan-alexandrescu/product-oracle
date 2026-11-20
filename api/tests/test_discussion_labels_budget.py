@@ -50,6 +50,7 @@ async def _labels(slug: str, n: int, roadmaps: int = 1) -> tuple:
 
 
 async def test_item_labels_read_in_a_fixed_budget():
+    """Listing an item's discussion labels stays in a fixed budget."""
     few, labels = await _labels("example-checkout", 3)
     assert labels[2] == "Example Checkout 0 · F-03 Bulk address edit 3", labels
     many, labels = await _labels("example-billing", 12)

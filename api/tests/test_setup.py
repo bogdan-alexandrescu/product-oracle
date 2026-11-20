@@ -62,6 +62,7 @@ def _step(body: dict, key: str) -> dict:
 
 
 async def test_a_new_companys_owner_has_every_step_open(client, owner):
+    """A new company's owner sees every setup step open, none done, in order."""
     # protects=the owner's checklist for a new company; fails_when=a step reads done
     # without its rows, or the order differs; no_claim=the web draws it (eight owner
     # steps, A3's eng_lead, H2's timezone and B1's build_baseline among them).
@@ -91,6 +92,7 @@ async def test_a_new_companys_owner_has_every_step_open(client, owner):
 
 
 async def test_connect_counts_only_the_callers_active_connections(client, tenant_id, owner):
+    """The connect step counts only the caller's own active connections."""
     # protects=Connect tools reads the person's own active connections; fails_when=an
     # errored connection or someone else's counts; no_claim=the provider accepted the token.
     await add_connection(tenant_id, owner.id, "github", account_id="1")
@@ -122,6 +124,7 @@ async def _source_with_items(tenant_id, owner_id, kind, name, items):
 
 
 async def test_sources_counts_the_callers_own_sources_with_items(client, tenant_id, owner):
+    """The sources step counts only the caller's own sources that hold items."""
     # protects=Pick sources reads sources the person owns that hold items;
     # fails_when=another member's source, or an empty source of their own (an Uploads
     # source with no files, qa-onboarding-11), makes it done; no_claim=the sources ever synced.
@@ -149,6 +152,7 @@ async def test_sources_counts_the_callers_own_sources_with_items(client, tenant_
 
 
 async def test_commenters_get_their_own_steps_and_viewers_none(client, tenant_id, owner):
+    """Commenters see only their own setup steps; viewers see none at all."""
     # protects=which steps each role sees; fails_when=a commenter sees owner steps or a
     # viewer sees any; no_claim=approvers (same rule as commenters, not exercised here).
     commenter = await make_person(tenant_id, "commenter@example.com", "commenter")
@@ -161,6 +165,7 @@ async def test_commenters_get_their_own_steps_and_viewers_none(client, tenant_id
 
 
 async def test_only_a_signed_in_person_may_ask(client, tenant_id, owner):
+    """Setup is refused to an API token or a run token; only a person may ask."""
     # protects=setup is a person's; fails_when=a run token or an API token for no member
     # gets steps; no_claim=MCP OAuth clients (they act as a person and pass).
     async with tenant_session(tenant_id) as s:
@@ -180,6 +185,7 @@ async def test_only_a_signed_in_person_may_ask(client, tenant_id, owner):
 
 
 async def test_domains_from_the_environment(client, owner, monkeypatch):
+    """The domains step reads allowed email domains from the environment first."""
     # protects=Company domains reads company_domains() (env or setting); fails_when=the
     # env var is ignored or the single domain is not named; no_claim=narrowing behaviour.
     monkeypatch.setenv("ORACLE_IAP_ALLOWED_DOMAINS", '["example.com"]')
@@ -212,6 +218,7 @@ async def test_domains_from_the_environment(client, owner, monkeypatch):
 
 
 async def test_invite_is_done_with_two_members_or_an_open_invite(client, tenant_id, owner):
+    """Invite team is done with two active members, or one with an open invite."""
     # protects=Invite team's rule; fails_when=a revoked invite or a disabled member counts;
     # no_claim=the invite email was sent.
     async with tenant_session(tenant_id) as s:
@@ -252,6 +259,7 @@ async def test_invite_is_done_with_two_members_or_an_open_invite(client, tenant_
 
 
 async def test_invite_does_not_count_an_expired_invite(client, tenant_id, owner):
+    """An expired invite does not count toward the invite step, nor as invited."""
     # protects=qa4-settings-3: Set up said "2 invited" for two expired invites while Members
     # showed none open; fails_when=an invite past its expiry counts as invited or ticks the
     # step; no_claim=Members' own invite list.
@@ -270,6 +278,7 @@ async def test_invite_does_not_count_an_expired_invite(client, tenant_id, owner)
 
 
 async def test_horizons_done_while_a_row_is_stored(client, owner):
+    """The horizons step is done only while a horizons setting is really stored."""
     # protects=Horizons is done once an owner confirmed (stored) them; fails_when=the
     # defaults read as done, or a reset leaves it done; no_claim=the Company page.
     put = await client.put(
@@ -287,6 +296,7 @@ async def test_horizons_done_while_a_row_is_stored(client, owner):
 
 
 async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant_id, owner):
+    """The timezone step is owner-only and done only once a time zone is stored."""
     # protects=H2's Time zone step (A1's registry): owners only, done once an owner stored
     # company_timezone, open again after a reset; fails_when=the UTC default reads as
     # done, an approver gets the step, or a reset leaves it done; no_claim=the web's
@@ -313,6 +323,7 @@ async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant
 
 
 async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owner):
+    """A second company's setup counts only its own connections and members."""
     # protects=every count is the caller's company's; fails_when=a step reads another
     # company's connections, sources, members, invites or horizons; no_claim=domains
     # (from the environment, the same for every company here).
@@ -339,6 +350,7 @@ async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owne
 
 
 async def test_hidden_is_each_persons_own(client, tenant_id, owner):
+    """Hiding the setup checklist is each person's own preference."""
     # protects=Hide is a per-person preference any role may set; fails_when=a viewer is
     # refused or one person's choice hides another's panel; no_claim=the header chip.
     viewer = await make_person(tenant_id, "viewer@example.com", "viewer")
@@ -358,6 +370,7 @@ async def test_hidden_is_each_persons_own(client, tenant_id, owner):
 
 @pytest.mark.parametrize("members", [2, 50])
 async def test_the_cost_is_fixed_whatever_the_size(tenant_id, owner, members):
+    """Computing setup runs a fixed number of queries, however many members exist."""
     # protects=a fixed number of statements per call; fails_when=a query runs per member,
     # connection or source; no_claim=the statements' speed.
     async with tenant_session(tenant_id) as s:
@@ -389,6 +402,7 @@ async def test_the_cost_is_fixed_whatever_the_size(tenant_id, owner, members):
 
 
 def test_step_keys_are_checked_against_the_registry():
+    """An unknown setup step key is rejected, keeping keys to the known registry."""
     # protects=SetupKey is open to later picks but closed to typos; fails_when=an unknown
     # key validates; no_claim=later picks' steps.
     assert [s.key for s in setup.STEPS] == OWNER_KEYS
@@ -398,6 +412,7 @@ def test_step_keys_are_checked_against_the_registry():
 
 
 async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
+    """Build baseline is the owner's last step, done once a baseline run succeeds."""
     # protects=B1's Build baseline step: owners only, last, done once a baseline run
     # succeeded, dated by its finish; fails_when=a draft, failed or Baseline to PRD run
     # makes it done, or an approver sees it; no_claim=the web's "Built Oct 20" copy.
@@ -436,6 +451,7 @@ async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
 
 
 async def test_invite_says_the_open_invites_beside_the_people(client, tenant_id, owner):
+    """The invite step counts open invites alongside active people, not instead."""
     # protects=qa-onboarding-18: Invite team counts open invites too ("4 people · 3
     # invited"); fails_when=an accepted or revoked invite is counted as open, or open
     # invites are left out; no_claim=the web's wording.
@@ -451,6 +467,7 @@ async def test_invite_says_the_open_invites_beside_the_people(client, tenant_id,
 
 
 async def test_build_baseline_names_the_build_under_way(client, tenant_id, owner):
+    """While a baseline build runs, its step names the run so Home can link to it."""
     # protects=qa-onboarding-10: while a baseline build is under way the step names its run,
     # so Home says Building and links to it; fails_when=a finished, draft or other flow's run
     # is named, or none is named while one runs; no_claim=the web's copy.
@@ -492,6 +509,7 @@ async def _invited(tenant_id, email: str, role: str, accepted_at: datetime):
 
 
 async def test_a_member_who_joined_by_invite_is_welcomed(client, tenant_id, owner):
+    """Anyone who joined by invite sees the welcome message, however long ago."""
     # protects=the welcome is for every member who joined through an invite, however long
     # ago, until they dismiss it (#140 A1 welcome, BGD 2026-10-25: no time window);
     # fails_when=the company's own owner or a member added without an invite is welcomed,
@@ -509,6 +527,7 @@ async def test_a_member_who_joined_by_invite_is_welcomed(client, tenant_id, owne
 
 
 async def test_dismissing_the_welcome_is_each_persons_own(client, tenant_id, owner):
+    """Dismissing the welcome message hides it only for that one person, for good."""
     # protects=Dismiss keeps the welcome away for that person only, any role, however long
     # ago they joined; fails_when=it comes back, a viewer is refused, or one person's
     # dismissal hides another's; no_claim=the web's dismiss button.

@@ -76,6 +76,7 @@ async def seed_goals(ctx) -> dict[str, str]:
 
 
 async def test_baseline_lists_follow_the_rule(client):
+    """Goals list in baseline entities and the graph in their stored position order."""
     ctx = await make_ctx()
     await seed_goals(ctx)
     r = await client.get("/v1/baseline/entities", params={"type": "goal"},
@@ -89,6 +90,7 @@ async def test_baseline_lists_follow_the_rule(client):
 
 
 async def test_simple_roadmap_groups_follow_the_rule(client):
+    """Simple roadmap groups and goal positions follow the same stored ordering rule."""
     ctx = await make_ctx()
     ids = await seed_goals(ctx)
     r = await client.get("/v1/simple/roadmap", params={"group": "goal"},
@@ -101,6 +103,7 @@ async def test_simple_roadmap_groups_follow_the_rule(client):
 
 
 async def test_simple_priorities_buckets_follow_the_rule(client):
+    """Priorities buckets order goals by position, with no-goal buckets last."""
     ctx = await make_people()
     await seed_goals(ctx)
     r = await client.get("/v1/simple/priorities", headers=ctx.as_("owner"))
@@ -111,6 +114,7 @@ async def test_simple_priorities_buckets_follow_the_rule(client):
 
 
 async def test_simple_decisions_goal_filter_follows_the_rule(client):
+    """The decisions page's goal filter list follows the same position order."""
     ctx = await make_people()
     await seed_goals(ctx)
     r = await client.get("/v1/simple/decisions", headers=ctx.as_("owner"))
@@ -119,6 +123,7 @@ async def test_simple_decisions_goal_filter_follows_the_rule(client):
 
 
 async def test_strategy_stack_follows_the_rule(client):
+    """A strategy choice's goals sort by position, unpositioned ones listed last."""
     ctx = await make_ctx()
     await seed_goals(ctx)
     owner = ctx.as_("owner")
@@ -132,6 +137,7 @@ async def test_strategy_stack_follows_the_rule(client):
 
 
 async def test_position_must_be_a_whole_number(client):
+    """A goal's position must be a positive whole number, not zero, text or a fraction."""
     ctx = await make_ctx()
     ids = await seed_goals(ctx)
     url = f"/v1/baseline/entities/{ids['charlie']}"

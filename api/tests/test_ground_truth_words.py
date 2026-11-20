@@ -122,6 +122,7 @@ def _strings(tree: ast.AST):
 
 
 def test_no_person_facing_string_in_oracle_says_an_old_name():
+    """No string literal in the Oracle source still uses the old baseline name."""
     found = []
     for path in sorted(ORACLE.rglob("*.py")):
         for line, value in _strings(ast.parse(path.read_text())):
@@ -185,6 +186,7 @@ def _markup_old_names(root: Path) -> list[str]:
 
 
 def test_no_export_or_email_template_says_an_old_name():
+    """No export or email template still uses the old baseline name."""
     assert not _markup_old_names(ORACLE), "\n".join(_markup_old_names(ORACLE))
 
 
@@ -207,6 +209,7 @@ def test_the_template_check_reads_every_j2_and_html(tmp_path):
 
 
 def test_no_job_prompt_oracle_runs_says_an_old_name():
+    """No prompt file a run uses still uses the old baseline name."""
     found = []
     for name in prompting.CURRENT.values():
         text = (prompting.PROMPTS / f"{name}.md").read_text()
@@ -217,6 +220,7 @@ def test_no_job_prompt_oracle_runs_says_an_old_name():
 
 
 def test_no_api_summary_or_description_says_an_old_name():
+    """No OpenAPI summary or description still uses the old baseline name."""
     from oracle.main import create_app
 
     schema = create_app().openapi()

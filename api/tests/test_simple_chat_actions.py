@@ -88,6 +88,7 @@ async def item(w, key: str) -> RoadmapItem:
 
 
 async def test_set_owner_and_decider_per_role(client):
+    """Set-owner and set-decider cards apply or propose by role; undo clears it."""
     w = await world()
     commenter = w.ctx.users["commenter"].id
     for who, want in (("owner", "applied"), ("decider", "applied"), ("approver", "proposed"),
@@ -118,6 +119,7 @@ async def test_set_owner_and_decider_per_role(client):
 
 
 async def test_new_decider_decides_the_item(client):
+    """Changing an item's decider makes the roadmap's old decider propose, not apply."""
     w = await world()
     c = await one_card(client, w, "owner", "approver decides Cut B")
     assert (await apply(client, w, "owner", c["id"])).status_code == 200
@@ -129,6 +131,7 @@ async def test_new_decider_decides_the_item(client):
 
 
 async def test_unknown_person_gets_a_question(client):
+    """Naming someone not found in the company asks a question instead of guessing."""
     w = await world()
     m = await say(client, w, "owner", "Zelda owns Cut A")
     assert m["kind"] == "question" and m["cards"] == []
@@ -136,6 +139,7 @@ async def test_unknown_person_gets_a_question(client):
 
 
 async def test_meeting_only_actions_refused_outside_a_meeting(client):
+    """Meeting-only chat lines like notes or agenda items are refused elsewhere."""
     w = await world()
     for line in ("note: ship it", "open question: who tests?", "next: Cut A", "skip Cut A"):
         m = await say(client, w, "owner", line)
@@ -145,6 +149,7 @@ async def test_meeting_only_actions_refused_outside_a_meeting(client):
 
 
 async def test_notes_questions_and_agenda_in_a_meeting(client):
+    """Notes, questions and agenda actions record in a meeting; undo removes them."""
     w = await world()
     mt = await start(client, w, attendee_ids=[uid(w, x) for x in ("approver", "commenter",
                                                                   "viewer")])  # fmt: skip
@@ -195,6 +200,7 @@ async def test_notes_questions_and_agenda_in_a_meeting(client):
 
 
 async def test_presenter_mode_bars_direct_actions(client):
+    """In presenter mode, only the presenter may apply a card someone else drafted."""
     w = await world()
     mid = (await start(client, w))["id"]
     r = await client.put(f"{MEETINGS}/{mid}/chat/mode", json={"change_mode": "presenter"},
@@ -207,6 +213,7 @@ async def test_presenter_mode_bars_direct_actions(client):
 
 
 async def test_record_decision_in_a_meeting_and_on_ask(client):
+    """Recording a decision names the right approver, and undo reverses the decision."""
     w = await world()
     mid = (await start(client, w))["id"]
     c = await one_card(client, w, "commenter", "decision by approver: Ship it weekly", mid)
@@ -268,6 +275,7 @@ async def ask_box(client, w, who: str, text: str) -> dict:
 
 
 async def test_questions_and_unknown_lines_go_to_ask(client):
+    """A line nothing recognizes still reaches Ask, never silently dropped."""
     w = await world()
     for line in ("Which team owns billing?", "Tell me how marketing decides pricing",
                  "skip the intro, what is late?", "Who really owns Cut A?",
@@ -287,6 +295,7 @@ async def test_questions_and_unknown_lines_go_to_ask(client):
 
 
 async def test_unknown_person_offers_matching_people(client):
+    """Naming an unmatched person offers the closest matching people to pick from."""
     w = await world()
     async with tenant_session(w.ctx.tenant_id) as s:
         p = await drafts.principal_for(s, w.ctx.tenant_id, w.ctx.users["owner"].id)
@@ -298,6 +307,7 @@ async def test_unknown_person_offers_matching_people(client):
 
 
 async def test_owner_words_name_the_items_own_owner(client):
+    """The word 'owner' in a chat line means the item's own owner, not its track owner."""
     w = await world()
     c = await one_card(client, w, "owner", "approver owns Cut A")
     assert (await apply(client, w, "owner", c["id"])).status_code == 200
@@ -306,6 +316,7 @@ async def test_owner_words_name_the_items_own_owner(client):
 
 
 async def test_page_document_reads_document_routes(client):
+    """Resolving a page to its document works across the page's different URL forms."""
     w = await world()
     async with tenant_session(w.ctx.tenant_id) as s:
         from oracle.docs.models import Document
@@ -322,6 +333,7 @@ async def test_page_document_reads_document_routes(client):
 
 
 async def test_ask_decision_undo_says_ask(client):
+    """Undoing a decision made from the Ask panel records that it was undone there."""
     w = await world()
     c = await one_card(
         client, w, "approver", "decision: Go monthly", page="/simple/prds/payments-prd"
@@ -339,6 +351,7 @@ async def test_ask_decision_undo_says_ask(client):
 
 
 async def test_apply_engine_does_not_reenter_chat_apply(client, monkeypatch):
+    """Applying a card through its own engine does not re-enter the chat apply path."""
     w = await world()
     c = await one_card(client, w, "owner", "commenter owns Cut A")
 
@@ -358,6 +371,7 @@ async def test_apply_engine_does_not_reenter_chat_apply(client, monkeypatch):
 
 
 async def test_set_owner_and_decider_in_a_meeting_per_role(client):
+    """Set-owner and set-decider follow the same per-role rules inside a meeting too."""
     w = await world()
     mid = (await start(client, w, attendee_ids=[uid(w, x) for x in (
         "owner", "approver", "commenter", "viewer")]))["id"]  # fmt: skip
@@ -379,6 +393,7 @@ async def test_set_owner_and_decider_in_a_meeting_per_role(client):
 
 
 async def test_direct_ops_in_a_meeting_for_owner_and_decider(client):
+    """Owner and decider can both make and undo direct actions inside a meeting."""
     w = await world()
     mid = (await start(client, w, attendee_ids=[uid(w, "owner")]))["id"]
     for who in ("owner", "decider"):

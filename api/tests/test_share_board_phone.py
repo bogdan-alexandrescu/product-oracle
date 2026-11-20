@@ -39,6 +39,7 @@ def _stacks(body: str) -> bool:
 
 
 def test_the_board_theme_stacks_its_cards_on_a_phone_screen():
+    """On a narrow phone screen the shared roadmap board's cards stack in one column."""
     css = BOARD.read_text("utf-8")
     blocks = [(q, b) for q, b in _narrow_blocks(css) if _stacks(b)]
     assert blocks, "roadmap-board.css has no narrow-screen rule stacking its cards"
@@ -49,6 +50,7 @@ def test_the_board_theme_stacks_its_cards_on_a_phone_screen():
 
 
 def test_the_link_holders_page_stacks_an_older_theme_copy_too():
+    """The link holder's page also stacks its older board theme on narrow screens."""
     assert any(_stacks(b) for _, b in _narrow_blocks(READER_CSS))
     page = for_reader("<html><head><style>.x{}</style></head><body></body></html>")
     assert "grid-template-columns:minmax(0,1fr)" in page

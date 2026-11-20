@@ -36,17 +36,20 @@ CURRENT = _run(500, 50)
 
 
 def test_older_runs_in_progress_or_queued_are_cancelled():
+    """Older in-progress or queued runs on main are cancelled once superseded."""
     runs = [_run(400, 40), _run(410, 41, "queued"), CURRENT]
     jobs = {400: [_job("api", "in_progress")], 410: []}
     assert _script().superseded(CURRENT, runs, jobs.__getitem__) == [400, 410]
 
 
 def test_the_current_run_and_newer_runs_are_never_cancelled():
+    """The current run and any newer run are never cancelled as superseded."""
     runs = [CURRENT, _run(510, 51)]
     assert _script().superseded(CURRENT, runs, lambda run_id: []) == []
 
 
 def test_a_run_whose_deploy_has_started_is_kept():
+    """A run whose deploy job has already started is kept, not cancelled."""
     runs = [_run(400, 40), _run(410, 41), _run(420, 42)]
     jobs = {
         400: [_job("api", "completed", "success"), _job("Deploy api", "in_progress")],
@@ -57,6 +60,7 @@ def test_a_run_whose_deploy_has_started_is_kept():
 
 
 def test_a_deploy_that_has_not_started_does_not_keep_a_run():
+    """A deploy job that has not started does not protect its run from cancellation."""
     runs = [_run(400, 40), _run(410, 41)]
     jobs = {
         400: [_job("deploy", "queued", started=False)],
@@ -66,5 +70,6 @@ def test_a_deploy_that_has_not_started_does_not_keep_a_run():
 
 
 def test_finished_runs_and_other_branches_are_left_alone():
+    """Completed runs and runs on other branches are left alone by the cancel job."""
     runs = [_run(400, 40, "completed"), _run(410, 41, branch="feature")]
     assert _script().superseded(CURRENT, runs, lambda run_id: []) == []

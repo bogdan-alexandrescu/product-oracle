@@ -80,12 +80,14 @@ ANOTHER_ACCOUNT = (
     ],
 )
 def test_the_endpoint_rule_refuses(url, words):
+    """A Fireflies endpoint URL is refused in plain words for each way it breaks the rules."""
     with pytest.raises(EndpointRefused) as refused:
         check_endpoint(url)
     assert words in str(refused.value)
 
 
 def test_the_endpoint_rule_keeps_https_on_the_default_port():
+    """A plain https endpoint on its default port is accepted and treated as the default."""
     assert check_endpoint(CUSTOM) == CUSTOM
     assert check_endpoint("https://FF.Example.com:443/graphql") == CUSTOM
     # The default reads as none: such a connection behaves exactly as before.
@@ -130,6 +132,7 @@ async def _user_query(endpoint: str, resolve) -> None:
 
 
 async def test_a_host_resolving_to_a_private_address_is_never_connected(connects):
+    """A configured endpoint that resolves to a private address is never connected to."""
     resolve = resolver(["10.1.2.3"])
     with pytest.raises(httpx.ConnectError) as refused:
         await _user_query(CUSTOM, resolve)
@@ -139,6 +142,7 @@ async def test_a_host_resolving_to_a_private_address_is_never_connected(connects
 
 
 async def test_the_default_endpoint_goes_through_the_guard_too(connects):
+    """Even the built-in default Fireflies endpoint goes through the same private-address guard."""
     resolve = resolver(["127.0.0.1"])
     with pytest.raises(httpx.ConnectError):
         await _user_query(DEFAULT_ENDPOINT, resolve)
@@ -210,6 +214,8 @@ async def _validate_with(handler, endpoint: str = CUSTOM) -> list[httpx.Request]
     ],
 )
 async def test_a_redirect_elsewhere_is_refused_and_the_key_stays_home(location):
+    """A redirect to another host or a disallowed port is refused and the key stays local."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "ff.example.com" and request.url.port in (None, 443):
             if request.url.scheme == "https":
@@ -223,6 +229,8 @@ async def test_a_redirect_elsewhere_is_refused_and_the_key_stays_home(location):
 
 
 async def test_a_same_host_redirect_is_followed():
+    """A redirect to a path on the same host is followed, keeping the same method."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/graphql":
             return httpx.Response(308, headers={"Location": "/v2/graphql"})
@@ -234,6 +242,8 @@ async def test_a_same_host_redirect_is_followed():
 
 
 async def test_too_many_redirects_are_refused():
+    """Too many redirects in a row are refused rather than followed forever."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(307, headers={"Location": "/graphql"})
 
@@ -242,6 +252,8 @@ async def test_too_many_redirects_are_refused():
 
 
 async def test_the_key_is_sent_only_to_the_configured_host():
+    """The Fireflies API key is only ever sent to the configured host, even across redirects."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/graphql":
             return httpx.Response(307, headers={"Location": "https://other.example.net/x"})
@@ -266,6 +278,7 @@ async def test_the_key_is_sent_only_to_the_configured_host():
 
 
 async def test_sync_reads_the_configured_endpoint():
+    """Syncing reads meetings from the connection's own configured endpoint, not the default."""
     fake = FakeFireflies(list(SAMPLE), api_url=CUSTOM)
     seen: list[str] = []
 
@@ -285,6 +298,7 @@ async def test_sync_reads_the_configured_endpoint():
 
 
 async def test_a_connection_credential_carries_its_endpoint(tenant_id):
+    """A connection's stored credential carries its endpoint URL alongside the API key."""
     from oracle.connections import service as connections
     from oracle.sources.service import _read_credential
 
@@ -327,6 +341,7 @@ async def _fireflies_connection(tenant_id, user_id, endpoint: str | None) -> uui
 
 
 async def test_browse_reads_the_configured_endpoint(client, tenant_id, browse_fake):
+    """Browsing meetings and series reads from the connection's configured endpoint."""
     _, seen = browse_fake
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     conn = await _fireflies_connection(tenant_id, owner.id, CUSTOM)
@@ -339,6 +354,7 @@ async def test_browse_reads_the_configured_endpoint(client, tenant_id, browse_fa
 
 
 async def test_another_host_browses_on_a_looser_budget(client, tenant_id, browse_fake):
+    """A non-default Fireflies host gets a looser call budget than the default host."""
     assert fireflies_browse.OTHER_HOST_CALLS_PER_MINUTE > fireflies_browse.CALLS_PER_MINUTE
     assert fireflies_browse.OTHER_HOST_CALLS_PER_DAY > fireflies_browse.CALLS_PER_DAY
     owner = await make_person(tenant_id, "owner@example.com", "owner")
@@ -353,6 +369,7 @@ async def test_another_host_browses_on_a_looser_budget(client, tenant_id, browse
 
 
 async def test_fireflies_ai_keeps_its_budget(client, tenant_id):
+    """The default fireflies.ai host keeps its own normal call budget, unaffected by other hosts."""
     fake = FakeFireflies(list(SAMPLE))
     use_provider_http(fake)
     fireflies_browse.reset_limits()
@@ -386,6 +403,7 @@ async def _live_calls(tenant_id, conn_id: uuid.UUID, calls: int, ago: timedelta)
 # picker's budget on an archive host; no_claim=live reads' own limits
 # (tests/test_live_fireflies.py: picker calls never count against them).
 async def test_live_calls_leave_another_hosts_picker_budget(client, tenant_id, browse_fake):
+    """Live background calls to another host leave the picker's own call budget untouched."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     conn = await _fireflies_connection(tenant_id, owner.id, CUSTOM)
     await _live_calls(tenant_id, conn, 119, timedelta(seconds=5))
@@ -407,6 +425,7 @@ async def test_live_calls_leave_another_hosts_picker_budget(client, tenant_id, b
 # counting against Fireflies' own quota in the picker; no_claim=the live routes' side
 # (tests/test_live_fireflies.py::test_graphql_budget_shares_the_pickers).
 async def test_live_calls_share_fireflies_own_quota_with_the_picker(client, tenant_id):
+    """Live background calls and the picker share Fireflies' own default-host call budget."""
     fake = FakeFireflies(list(SAMPLE))
     use_provider_http(fake)
     fireflies_browse.reset_limits()
@@ -443,6 +462,7 @@ def identify():
 
 
 async def test_an_owner_connects_with_an_endpoint_and_sees_it(client, tenant_id, identify):
+    """An owner who connects with a custom endpoint sees that endpoint wherever connections show."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     resp = await client.post(
         "/v1/connections/fireflies/token",
@@ -462,6 +482,7 @@ async def test_an_owner_connects_with_an_endpoint_and_sees_it(client, tenant_id,
 
 
 async def test_a_connection_without_one_reads_the_default(client, tenant_id, identify):
+    """A connection made with no endpoint reads back as using the provider's default endpoint."""
     viewer = await make_person(tenant_id, "viewer@example.com", "viewer")
     resp = await client.post(
         "/v1/connections/fireflies/token", json={"token": API_KEY}, headers=viewer.headers
@@ -475,6 +496,7 @@ async def test_a_connection_without_one_reads_the_default(client, tenant_id, ide
 
 @pytest.mark.parametrize("role", ["approver", "commenter", "viewer"])
 async def test_only_an_owner_sets_an_endpoint_on_connect(client, tenant_id, identify, role):
+    """Only an owner may set a custom endpoint when first connecting; other roles are refused."""
     person = await make_person(tenant_id, f"{role}@example.com", role)
     resp = await client.post(
         "/v1/connections/fireflies/token",
@@ -490,6 +512,7 @@ async def test_only_an_owner_sets_an_endpoint_on_connect(client, tenant_id, iden
 
 @pytest.mark.parametrize("role", ["approver", "commenter", "viewer"])
 async def test_only_an_owner_changes_an_endpoint(client, tenant_id, identify, role):
+    """Only an owner may change an existing connection's endpoint; other roles are refused."""
     person = await make_person(tenant_id, f"{role}@example.com", role)
     conn = await _fireflies_connection(tenant_id, person.id, None)
     resp = await client.put(
@@ -504,6 +527,7 @@ async def test_only_an_owner_changes_an_endpoint(client, tenant_id, identify, ro
 
 
 async def test_an_owner_changes_the_endpoint_with_the_key_again(client, tenant_id, identify):
+    """Changing a connection's endpoint requires entering the API key again."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     conn = await _fireflies_connection(tenant_id, owner.id, None)
     async with tenant_session(tenant_id) as s:
@@ -549,6 +573,7 @@ async def test_an_owner_changes_the_endpoint_with_the_key_again(client, tenant_i
 
 
 async def test_an_endpoint_of_another_account_is_refused(client, tenant_id, identify):
+    """An endpoint belonging to a different account than already connected is refused."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     conn = await _fireflies_connection(tenant_id, owner.id, None)
     resp = await client.put(
@@ -565,6 +590,7 @@ async def test_an_endpoint_of_another_account_is_refused(client, tenant_id, iden
 
 
 async def test_only_fireflies_takes_an_endpoint(client, tenant_id, identify):
+    """Only the Fireflies connection kind accepts an endpoint URL; others reject it."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     resp = await client.post(
         "/v1/connections/github/token",
@@ -590,6 +616,7 @@ async def test_only_fireflies_takes_an_endpoint(client, tenant_id, identify):
     ],
 )
 async def test_the_api_refuses_a_bad_endpoint_in_words(client, tenant_id, identify, url, words):
+    """A bad endpoint is refused with the specific rule it broke named in plain words."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     resp = await client.post(
         "/v1/connections/fireflies/token",
@@ -640,6 +667,7 @@ async def _personal_token(tenant_id, person) -> str:
 
 @pytest.mark.parametrize("role", ["approver", "commenter", "viewer"])
 async def test_mcp_tools_refuse_an_endpoint_below_owner(tenant_id, identify, role):
+    """MCP tools refuse to set or change a connection's endpoint below owner role."""
     from tests.test_mcp import mcp_client, text_of
 
     person = await make_person(tenant_id, f"{role}@example.com", role)
@@ -661,6 +689,7 @@ async def test_mcp_tools_refuse_an_endpoint_below_owner(tenant_id, identify, rol
 
 
 async def test_an_owner_sets_the_endpoint_over_mcp(tenant_id, identify):
+    """An owner can set a connection's endpoint through the MCP tools, not just the web API."""
     from tests.test_mcp import mcp_client, text_of
 
     owner = await make_person(tenant_id, "owner@example.com", "owner")
@@ -675,6 +704,7 @@ async def test_an_owner_sets_the_endpoint_over_mcp(tenant_id, identify):
 
 
 async def test_a_run_token_cannot_set_an_endpoint(tenant_id, identify):
+    """A run token cannot connect or change a connection's endpoint; a person's can."""
     from oracle.swarm import FakeRuntime, set_runtime
     from tests.test_mcp import mcp_client, run_token, text_of
 
@@ -738,6 +768,7 @@ async def test_connecting_again_keeps_an_owner_set_endpoint_from_others(
     "url", ["https://0177.0.0.1/graphql", "https://1.2.3.08/graphql", "https://127.1/graphql"]
 )
 async def test_an_odd_ip_form_is_refused_in_words_not_a_500(client, tenant_id, identify, url):
+    """An oddly formed IP address in an endpoint is refused in words, never a server error."""
     owner = await make_person(tenant_id, "owner@example.com", "owner")
     resp = await client.post(
         "/v1/connections/fireflies/token",

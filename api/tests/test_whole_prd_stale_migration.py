@@ -44,11 +44,13 @@ def _migration():
 
 
 def test_chains_on_the_single_head():
+    """The whole-PRD-stale migration chains onto the branch's single prior head."""
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 async def test_clears_only_the_whole_prd_reason(client, owner, runtime):  # noqa: F811
+    """Clearing whole-PRD staleness leaves an item's own stale reason with its heading."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

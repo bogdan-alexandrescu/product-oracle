@@ -51,6 +51,7 @@ async def pdf(ctx, doc: str = "guided-setup") -> str:
 
 
 async def test_noted_milestones_one_row_each(client):
+    """A plan groups milestones by name into one row, never splitting notes apart."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -109,6 +110,7 @@ title: Checkout redesign
 
 
 async def test_skeleton_prd_one_pager(client):
+    """A blank PRD shows placeholder text everywhere, never leaking template markup."""
     ctx = await make_ctx()
     r = await client.post("/v1/documents/checkout-redesign/versions", content=SKELETON.encode(),
                           headers=MD | ctx.as_("owner"))  # fmt: skip
@@ -131,6 +133,7 @@ LONG = (
 
 
 async def test_stored_lines_read_tidy(client):
+    """A stored block line cuts at a clean word break and keeps the full text too."""
     ctx = await world(client)
     await get(client, ctx, "owner")  # the quick read is stored
     old = LONG[: one_pager.LINE_MAX]

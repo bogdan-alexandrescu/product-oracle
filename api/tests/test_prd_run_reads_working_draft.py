@@ -171,6 +171,7 @@ async def _prompt(w: dict, segment: str | None = None) -> tuple[str, dict]:
 
 
 async def test_the_reader_takes_every_edit_from_the_working_draft():
+    """A run reading the roadmap sees every edit in its working draft, trash included."""
     w = await world()
     rec = await _record(w)
     assert rec is not None and rec.draft
@@ -188,6 +189,7 @@ async def test_the_reader_takes_every_edit_from_the_working_draft():
 
 
 async def test_the_update_run_s_prompt_follows_the_working_draft():
+    """An update run's prompt reflects the working draft's titles, dates and trash."""
     w = await world()
     prompt, knobs = await _prompt(w)
     label = "Company roadmap, working draft (edited Nov 5, 2026, 11:40 PM PST)"
@@ -205,6 +207,7 @@ async def test_the_update_run_s_prompt_follows_the_working_draft():
 
 
 async def test_with_no_working_draft_the_run_reads_the_published_version():
+    """With no working draft, a run reads the published roadmap version instead."""
     w = await world(draft=False)
     rec = await _record(w)
     assert rec is not None and not rec.draft
@@ -220,6 +223,7 @@ async def test_with_no_working_draft_the_run_reads_the_published_version():
 
 
 async def test_a_run_started_by_someone_who_may_not_see_the_draft_reads_the_published_one():
+    """Keeps a run from leaking an unpublished plan's contents to someone barred from it."""
     # The draft's own rule (oracle.simple.drafts.sees): a commenter who took no part in it
     # reads the published version, so the PRD their run writes shows nothing of the draft.
     w = await world(starter="commenter")
@@ -275,6 +279,7 @@ WHO = [
 
 @pytest.mark.parametrize(("starter", "how", "sees"), WHO)
 async def test_the_run_reads_the_draft_only_when_its_starter_may_see_it(starter, how, sees):
+    """A run reads the working draft only when whoever started it is allowed to see it."""
     w = await world(starter=starter)
     if how:
         await _let_in(w, how)
@@ -288,6 +293,7 @@ async def test_the_run_reads_the_draft_only_when_its_starter_may_see_it(starter,
 
 @pytest.mark.parametrize(("starter", "sees"), [("owner", True), ("commenter", False)])
 async def test_build_next_draft_follows_the_same_rule(starter, sees):
+    """Building the next draft follows the same draft-visibility rule as other flows."""
     w = await world(starter=starter, flow="feedback_loop")
     prompt, knobs = await _prompt(w)
     assert knobs["roadmap_read"] == (DRAFT_LABEL if sees else PUBLISHED_LABEL)
@@ -296,6 +302,7 @@ async def test_build_next_draft_follows_the_same_rule(starter, sees):
 
 @pytest.mark.parametrize("target", ["company", "approvers"])
 async def test_a_run_nobody_started_reads_the_published_version(target):
+    """A run nobody started reads the published roadmap, regardless of who may see it."""
     # No starter, nobody who may see the draft: the published version, whoever the PRD's
     # readers are.
     w = await world(starter=None, digest_visibility=target)
@@ -305,6 +312,7 @@ async def test_a_run_nobody_started_reads_the_published_version(target):
 
 
 async def test_a_company_visible_prd_s_run_leaves_out_an_approvers_only_prd_s_items():
+    """A company-visible PRD's run leaves out another PRD's approvers-only items."""
     # The Digest PRD is company-wide (its run reads as a member); Accounts is approvers-only:
     # its title, its items and its item in Trash stay out of what every commenter will read.
     w = await world(accounts="approvers")
@@ -317,6 +325,7 @@ async def test_a_company_visible_prd_s_run_leaves_out_an_approvers_only_prd_s_it
 
 
 async def test_an_approvers_only_prd_s_items_stay_when_nothing_is_hidden():
+    """An approvers-only PRD's items still show when no visibility rule hides them."""
     w = await world()
     prompt, _ = await _prompt(w)
     assert "Sign-in links" in prompt and "Magic link expiry" in prompt
@@ -324,6 +333,7 @@ async def test_an_approvers_only_prd_s_items_stay_when_nothing_is_hidden():
 
 @pytest.mark.parametrize("segment", ["eng_review", "eng_dates"])
 async def test_engineering_steps_read_the_same_roadmap(segment):
+    """Engineering review and dates steps read the same draft, dated from the owner."""
     # Engineering dates start from the owner's dates, not the published ones.
     w = await world()
     prompt, knobs = await _prompt(w, segment)
@@ -333,6 +343,7 @@ async def test_engineering_steps_read_the_same_roadmap(segment):
 
 
 async def test_each_step_keeps_the_roadmap_it_read():
+    """Each run step remembers which roadmap version it read, even after later steps."""
     w = await world()
     await _prompt(w, "feature_set")
     _, knobs = await _prompt(w, "prd_draft")
@@ -340,6 +351,7 @@ async def test_each_step_keeps_the_roadmap_it_read():
 
 
 async def test_a_draft_with_edits_but_no_change_rows_dates_from_when_it_was_made():
+    """A working draft's edited time comes from when it was made, not empty edits."""
     from oracle.simple import roadmap_of_record
 
     w = await world(draft=False)
@@ -359,6 +371,7 @@ async def test_a_draft_with_edits_but_no_change_rows_dates_from_when_it_was_made
 
 
 async def test_a_run_started_with_the_owner_s_personal_token_reads_the_working_draft():
+    """A run started through the owner's personal token reads what the owner can see."""
     # PR 1333: a run started through a personal API token acts as its person, so it reads
     # what they may see: the owner's token reads the working draft, not the published one.
     import uuid
@@ -384,6 +397,7 @@ async def test_a_run_started_with_the_owner_s_personal_token_reads_the_working_d
 
 
 async def test_the_prompt_names_the_working_draft_as_no_one_person_s():
+    """The prompt calls it the roadmap's working draft, never one person's own draft."""
     # PR 1333: any decider's working draft is read (the draft's own rule), so the prompt
     # calls it the roadmap's working draft, not "the owner's".
     w = await world(starter="commenter")

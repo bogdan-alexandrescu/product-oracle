@@ -90,6 +90,7 @@ async def test_an_ask_before_the_chat_opens_keeps_its_own_thread(
     fake,  # noqa: F811
     monkeypatch,
 ):
+    """An Ask started before a meeting's chat opens keeps its own thread apart."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx)
@@ -113,6 +114,7 @@ async def test_an_ask_after_the_chat_opens_keeps_its_own_thread(
     fake,  # noqa: F811
     monkeypatch,
 ):
+    """An Ask started after a meeting's chat has opened still keeps its own thread."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx)

@@ -78,6 +78,7 @@ async def approve(client, ctx: Ctx, draft_id: str, who: str) -> dict:
 
 
 async def test_submit_with_an_added_reviewer(client):
+    """Submitting for review with an extra reviewer waits on them too."""
     ctx = await world(client)
     draft_id = await owner_edits(client, ctx, ("bets-2", "Invite suggestions from shared contacts"))
     r = await submit(client, ctx, draft_id, json={"reviewer_ids": [uid(ctx, "commenter")]})
@@ -104,6 +105,7 @@ async def test_submit_with_an_added_reviewer(client):
 
 
 async def test_added_reviewer_approves_first(client):
+    """An added reviewer who approves first still leaves the required one waiting."""
     ctx = await world(client)
     draft_id = await owner_edits(client, ctx, ("bets-2", "Invite suggestions from shared contacts"))
     r = await submit(client, ctx, draft_id, json={"reviewer_ids": [uid(ctx, "commenter")]})
@@ -115,6 +117,7 @@ async def test_added_reviewer_approves_first(client):
 
 
 async def test_submit_refuses_people_who_are_not_members(client):
+    """Submitting for review refuses a reviewer who is not a current member."""
     ctx = await world(client)
     draft_id = await owner_edits(client, ctx, ("bets-2", "Invite suggestions from shared contacts"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -134,6 +137,7 @@ async def test_submit_refuses_people_who_are_not_members(client):
 
 
 async def test_required_reviewer_named_again_is_not_doubled(client):
+    """Naming the required reviewer again as an added one does not wait on them twice."""
     ctx = await world(client)
     draft_id = await owner_edits(client, ctx, ("bets-2", "Invite suggestions from shared contacts"))
     ids = [uid(ctx, "approver"), uid(ctx, "commenter"), uid(ctx, "commenter")]
@@ -143,6 +147,7 @@ async def test_required_reviewer_named_again_is_not_doubled(client):
 
 
 async def test_readers_see_the_changes_in_review(client):
+    """Readers see every change waiting in review and who must still decide it."""
     ctx = await world(client)
     published = await get(client, ctx, "viewer")
     old2, old3 = line(published, "bets-2")["text"], line(published, "bets-3")["text"]
@@ -185,6 +190,7 @@ async def test_readers_see_the_changes_in_review(client):
 
 
 async def test_working_draft_changes_wait_on_nobody(client):
+    """A change still in a working draft waits on nobody, since it is not sent yet."""
     ctx = await world(client)
     await owner_edits(client, ctx, ("bets-2", "Invite suggestions from shared contacts"))
     view = await get(client, ctx, "viewer")

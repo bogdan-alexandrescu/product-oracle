@@ -66,6 +66,7 @@ async def statements(client, method: str, url: str, headers) -> tuple[int, objec
 
 
 async def test_inbox_reads_each_table_once(client):
+    """Reading the full Inbox on a realistic company stays within its query budget."""
     ctx = await make_ctx()
     await seed_company(ctx)
     await budget.read(client, ctx.as_("owner"))
@@ -75,6 +76,7 @@ async def test_inbox_reads_each_table_once(client):
 
 
 async def test_answers_as_before_inbox_reads(client, monkeypatch):
+    """Reverting the Inbox query fix gives the same answers, just more queries."""
     ctx = await make_ctx()
     await seed_company(ctx)
     now = {who: (await budget.read(client, ctx.as_(who)))[1] for who in READERS}
@@ -101,6 +103,7 @@ def _roadmap_part(inbox: dict) -> int:
 
 
 async def test_counts_are_the_inboxs(client):
+    """The Inbox counts read costs less than the full read while matching its numbers."""
     ctx = await make_ctx()
     await seed_company(ctx)
     for who in READERS:
@@ -114,6 +117,7 @@ async def test_counts_are_the_inboxs(client):
 
 
 async def test_seen_records_the_visit(client):
+    """Marking the Inbox seen records the visit cheaply, moving new items into open."""
     ctx = await make_ctx()
     await seed_company(ctx)
     headers = ctx.as_("owner")

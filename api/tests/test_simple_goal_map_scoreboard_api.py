@@ -75,6 +75,7 @@ async def values(ctx, m: Metric, *vals: float) -> None:
 
 
 async def test_each_goal_says_where_its_reading_comes_from(client):
+    """A goal says which metric it reads from, and why it has no reading yet."""
     ctx, ids = await world()
     goals = {g["id"]: g for g in (await read(client, ctx))["goals"]}
     assert goals[ids["revenue"]]["metric"] is None
@@ -91,6 +92,7 @@ async def test_each_goal_says_where_its_reading_comes_from(client):
 
 
 async def test_choices_are_the_outputs_that_fit(client):
+    """A goal's metric choices are limited to active output metrics matching its unit."""
     ctx, ids = await world()
     daily = await metric(ctx, "Daily revenue", "$")
     await values(ctx, daily, 9000, 11500)
@@ -139,6 +141,7 @@ async def test_pick_a_metric_measures_the_goal(client):
 
 @pytest.mark.parametrize("role", ["commenter", "viewer"])
 async def test_pick_a_metric_needs_approver(client, role):
+    """Picking a goal's metric needs approver rights or higher."""
     ctx, ids = await world()
     daily = await metric(ctx, "Daily revenue", "$")
     r = await client.post(
@@ -150,6 +153,7 @@ async def test_pick_a_metric_needs_approver(client, role):
 
 
 async def test_gaps_and_unplaced_features(client):
+    """The map reports milestone-area gaps and unplaced features, clearing once filled."""
     ctx, ids = await world()
     body = await read(client, ctx, "viewer")
     assert body["gaps"] == [{"milestone": ids["m2"], "area": ids["scale"]}]
@@ -166,6 +170,7 @@ async def test_gaps_and_unplaced_features(client):
 
 
 async def test_lift_says_why(client):
+    """A feature's lift on its milestone is explained by its shipped date and readings."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         f1 = await s.get(RoadmapItem, uuid.UUID(ids["f1"]))
@@ -181,6 +186,7 @@ async def test_lift_says_why(client):
 
 
 async def test_each_reading_says_its_day(client):
+    """Each goal's reading shows the day it was read, or none when there is no reading."""
     ctx, ids = await world()
     goals = {g["id"]: g for g in (await read(client, ctx, "viewer"))["goals"]}
     assert goals[ids["signups"]]["read_on"] == "Nov 3"
@@ -188,6 +194,7 @@ async def test_each_reading_says_its_day(client):
 
 
 async def test_goals_left_off_the_map(client):
+    """Goals unconfirmed, or marked guardrails, are left off the map's off-map list."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         loose = Entity(type="goal", key="raise-activation", title="Raise activation",
@@ -207,6 +214,7 @@ async def test_goals_left_off_the_map(client):
 
 
 async def test_unplaced_reads_as_the_reader(client):
+    """An unplaced feature's name reads a person's own draft, never another's."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         from oracle.simple import drafts
@@ -231,6 +239,7 @@ async def test_unplaced_reads_as_the_reader(client):
 
 
 async def test_pick_an_unknown_metric_is_404(client):
+    """Picking a metric that does not exist is refused with 404."""
     ctx, ids = await world()
     r = await client.post(
         f"{URL}/goals/{ids['revenue']}/metric",

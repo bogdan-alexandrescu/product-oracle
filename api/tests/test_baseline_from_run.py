@@ -151,6 +151,7 @@ WAIVE = {"item_key": "goal:g.retention", "kind": "waive", "answers": ["goal_unde
 
 
 async def test_rows_are_what_the_run_created_changed_or_proposed(client, owner, runtime):
+    """The run review lists exactly what the run created, changed, or proposed."""
     # protects=criterion 1: membership by entities.run_id, entity_revisions.run_id and the
     # run's proposals, each row's change, its edges and the summary; fails_when=a row is
     # missing, an untouched item is listed, or a person's later edit drops the row;
@@ -187,6 +188,7 @@ async def test_rows_are_what_the_run_created_changed_or_proposed(client, owner, 
 
 
 async def test_each_reason_fires_on_its_fixture(client, owner, runtime):
+    """Each review reason fires exactly when its own condition holds."""
     # protects=criterion 2: every code on its row and not otherwise, low_confidence on the
     # company's low threshold; fails_when=a code is missing, extra, or ignores the setting;
     # no_claim=goal_check (B5 not built: the four fields stand in).
@@ -243,6 +245,7 @@ async def test_each_reason_fires_on_its_fixture(client, owner, runtime):
 
 
 async def test_approve_refused_while_goals_undecided(client, owner, runtime):
+    """Approving the checkpoint is refused while any proposed goal is undecided."""
     # protects=owner call c3 at Baseline confirm (criterion 3): 409 blocking_open naming
     # both goals, then 200 after a confirm and a staged waive, and the run moves on;
     # fails_when=approve succeeds with a proposed goal from the run that has no staged
@@ -278,6 +281,7 @@ async def test_approve_refused_while_goals_undecided(client, owner, runtime):
 
 
 async def test_waive_rules(client, owner, runtime):
+    """Waiving needs a reason, only works for the run's own goal, and can be undone."""
     # protects=criterion 4: a commenter's waive is 403, no reason is 422, a goal not from
     # this run is 422, deleting the waive closes the gate again; fails_when=any of them
     # is stored or the gate stays open; no_claim=the web.
@@ -304,6 +308,7 @@ async def test_waive_rules(client, owner, runtime):
 
 
 async def test_send_back_note_carries_staged_look_agains_only(client, owner, runtime):
+    """Sending a run back carries only staged look-again notes, not a stray suggestion."""
     # protects=criterion 5: a staged look again is in the Send back note in 3.1 (7)'s
     # format and in the next attempt's prompt; a commenter's suggestion is not;
     # fails_when=the suggestion is sent or the staged one is missing; no_claim=what the
@@ -339,6 +344,7 @@ async def test_send_back_note_carries_staged_look_agains_only(client, owner, run
 
 
 async def test_review_read_returns_the_same_rows(client, owner, runtime):
+    """The checkpoint's own review read returns the same rows as the run review."""
     # protects=criterion 6: D8's review read of the checkpoint lists from-run's rows (keys,
     # reasons, states); fails_when=its items are empty or differ; no_claim=the web.
     _, auth = owner
@@ -356,6 +362,7 @@ async def test_review_read_returns_the_same_rows(client, owner, runtime):
 
 
 async def test_roles_and_inbox_counts(client, owner, runtime):
+    """A viewer can read the run review, but a commenter cannot merge an item."""
     # protects=criterion 7 and the Inbox summary: a viewer reads from-run, a commenter
     # gets 403 on merge, an unknown run is 404, the Inbox row counts need you and not
     # decided; fails_when=a viewer is refused or a commenter merges; no_claim=D9's child rows.
@@ -384,6 +391,7 @@ async def test_roles_and_inbox_counts(client, owner, runtime):
 
 
 async def test_a_subgoal_follows_its_parent_and_is_decided_before_approve(client, owner, runtime):
+    """Making a goal a subgoal moves its row after its parent, still gating approve."""
     # protects=Subgoals (#469) in the run's rows: a subgoal row comes right after its parent
     # goal's, carries its parent_id, and is a goal to decide (goal_undecided, in the approve
     # gate); fails_when=the rows ignore the tree or a proposed subgoal does not block
@@ -415,6 +423,7 @@ async def test_a_subgoal_follows_its_parent_and_is_decided_before_approve(client
 
 
 async def test_merge_moves_evidence_and_edges(client, owner, runtime):
+    """Merging an entity moves its evidence and edges and rejects its open proposals."""
     # protects=criterion 8: evidence and edges move, a would-be duplicate edge is dropped,
     # open proposals on the source are rejected "Merged into <title>", the source is
     # deleted, the target gets a revision and an audit row is written; fails_when=any of
@@ -472,6 +481,7 @@ async def test_merge_moves_evidence_and_edges(client, owner, runtime):
     ],
 )
 async def test_merge_refusals_change_nothing(client, owner, runtime, source_key, into_key, message):
+    """A merge of the wrong type, source or locked item is refused, changing nothing."""
     # protects=each refusal of 3.3 is 409 and changes nothing; fails_when=a refused merge
     # deletes or moves anything; no_claim=the web's disabled tooltip.
     _, auth = owner
@@ -497,6 +507,7 @@ async def test_merge_refusals_change_nothing(client, owner, runtime, source_key,
 
 
 async def test_merge_refused_when_linked(client, owner, runtime):
+    """Merging an entity a PRD section cites is refused, so the citation is not lost."""
     # protects=a PRD section never loses the item it cites; fails_when=merge deletes an
     # item with section links; no_claim=does not test concurrent edits during a merge.
     from oracle.docs.models import Document
@@ -529,6 +540,7 @@ async def test_merge_refused_when_linked(client, owner, runtime):
 
 
 async def test_revisions_carry_the_run(client, owner, runtime):
+    """A revision from a run's own merge carries its run id; a person's edit does not."""
     # protects=criterion 10: entity_revisions.run_id is set on the run's merge writes and
     # null on a person's edits; fails_when=either is wrong; no_claim=history before the
     # migration (stays null).
@@ -557,6 +569,7 @@ async def test_revisions_carry_the_run(client, owner, runtime):
 
 
 def test_the_gate_registers_baseline_confirm():
+    """The baseline confirm checkpoint is registered, and its goal reason is waivable."""
     # protects=one registry decides every kind; fails_when=baseline_confirm is gated
     # outside it or goal_undecided is not waivable; no_claim=the live reasons (above).
     assert "baseline_confirm" in gate.BLOCKING_SOURCES
@@ -567,6 +580,7 @@ def test_the_gate_registers_baseline_confirm():
 
 
 async def test_a_staged_look_again_leaves_the_goal_undecided(client, owner, runtime):
+    """Staging a look-again on a goal still counts it as undecided and blocks approve."""
     # protects=the tally matches the gate: only a staged waive (Leave proposed) answers
     # goal_undecided, so a staged look again on a goal keeps it "Not decided" in from-run's
     # summary, its row and the Inbox counts while the gate stays closed; fails_when=the
@@ -590,6 +604,7 @@ async def test_a_staged_look_again_leaves_the_goal_undecided(client, owner, runt
 
 
 async def test_a_console_approval_is_held_while_a_goal_is_undecided(client, owner, monkeypatch):
+    """A console approval made while a goal is undecided is held, never followed."""
     # protects=criterion 9 (D3 "Console gate" at Baseline confirm): a counted console MERGE
     # while goals from the run are undecided is recorded, not followed: the checkpoint stays
     # pending with console.needs "confirm" and the line, the run token stays read-only, and

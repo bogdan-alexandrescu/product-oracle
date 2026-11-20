@@ -23,6 +23,7 @@ DAY = dt.date(2026, 10, 31)
 
 
 def test_built_refuses_a_misspelled_or_missing_field_under_tests():
+    """Building a response model refuses a misspelled or missing field under tests."""
     ok = service._built(SimpleDate, date=DAY, source="typed", estimated=False)
     assert ok.model_dump() == {"date": DAY, "source": "typed", "estimated": False}
     with pytest.raises(TypeError, match="estimatd"):
@@ -32,6 +33,7 @@ def test_built_refuses_a_misspelled_or_missing_field_under_tests():
 
 
 def test_built_fields_set_are_the_models_fields(monkeypatch):
+    """Outside tests, a built model's fields_set still only names its real fields."""
     monkeypatch.setattr(service, "_CHECK_BUILT", False, raising=False)
     m = service._built(SimpleDate, date=DAY, source="typed", estimated=True, bogus=1)
     assert m.model_fields_set == {"date", "source", "estimated"}

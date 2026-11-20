@@ -16,6 +16,7 @@ def migrated_db():
 
 
 def test_github_keeps_what_deletes_are_compared_against():
+    """Rescoping a GitHub cursor drops dropped repos but keeps delete comparisons."""
     old = {
         "repos": {
             "example-org/one": {
@@ -44,6 +45,7 @@ def test_github_keeps_what_deletes_are_compared_against():
 
 
 def test_notion_keeps_page_ids_only():
+    """Rescoping a Notion cursor keeps only the picked pages' ids, nothing else."""
     old = {"pages": {"p1": {"edited": "x", "children": ["p2"], "databases": []}}}
     assert NotionConnector().rescope_cursor(old, {"roots": ["p1"]}) == {"pages": {"p1": {}}}
     assert NotionConnector().rescope_cursor(None, {"roots": ["p1"]}) is None
@@ -79,6 +81,7 @@ def test_slack_keeps_what_deletes_are_compared_against_and_refetches():
 
 
 def test_slack_keeps_a_channel_untouched_when_the_range_did_not_change():
+    """Rescoping a Slack cursor refetches a channel only if its date range moved."""
     entry = {"oldest": "3.0", "threads": {}, "messages": ["3.0"]}
     old = {"range": {"since": "2025-01-01"}, "channels": {"C1": entry, "C2": entry}}
     config = {"channels": ["C1", "C3"], "since": "2025-01-01"}

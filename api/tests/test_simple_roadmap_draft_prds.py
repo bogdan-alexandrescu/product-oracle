@@ -67,6 +67,7 @@ async def read(client, w, who: str = "approver") -> list[dict]:
 
 
 async def test_draft_prds_lists_each_prd_with_its_items(client):
+    """Each draft PRD lists its items with dates and owner, and who may change them."""
     w = await world()
     ids = await add_draft(w)
     [d] = await read(client, w)
@@ -85,6 +86,7 @@ async def test_draft_prds_lists_each_prd_with_its_items(client):
     ("who", "n"), [("owner", 1), ("approver", 1), ("commenter", 0), ("viewer", 0)]
 )
 async def test_who_may_read(client, who, n):
+    """A draft limited to approvers stays hidden from commenters and viewers."""
     w = await world()
     ids = await add_draft(w)
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -97,6 +99,7 @@ async def test_who_may_read(client, who, n):
 
 @pytest.mark.parametrize("how", ["replaced", "cancelled"])
 async def test_replaced_or_cancelled_shows_no_layer(client, how):
+    """A replaced or cancelled run leaves no draft layer on the PRD."""
     w = await world()
     ids = await add_draft(w, run_status="cancelled" if how == "cancelled" else "succeeded")
     if how == "replaced":
@@ -109,6 +112,7 @@ async def test_replaced_or_cancelled_shows_no_layer(client, how):
 
 
 async def test_approved_prd_leaves_the_layer(client):
+    """Once a PRD version is approved, its draft layer disappears."""
     w = await world()
     ids = await add_draft(w)
     assert len(await read(client, w)) == 1
@@ -120,6 +124,7 @@ async def test_approved_prd_leaves_the_layer(client):
 
 
 async def test_leave_out_and_change_dates_stay_draft(client):
+    """Dropping a draft item needs approver rights; new dates stay draft-only."""
     w = await world()
     await add_draft(w)
     [d] = await read(client, w)

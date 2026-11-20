@@ -24,6 +24,7 @@ async def ctx():
 
 
 async def test_user_edit_locks_and_writes_revisions(client, ctx):
+    """A new feature gets its code at creation, and editing it relocks to the editor."""
     # A feature added to the Ground Truth gets its code (F-01) as a revision of its own.
     feat = await entity(client, ctx, type="feature", key="guided-setup", attrs={"effort": "M"})
     assert feat["key"] == "F-01"
@@ -75,12 +76,14 @@ async def test_user_edit_locks_and_writes_revisions(client, ctx):
 
 
 async def test_api_token_edits_lock_too(client, ctx):
+    """An API token's edit locks the item to that token, same as a person's edit."""
     feat = await entity(client, ctx, who="token", type="feature", key="saved-carts")
     assert feat["locked"] is True
     assert feat["locked_by"] == str(ctx.token_id)
 
 
 async def test_agent_writes_apply_to_unlocked_and_propose_on_locked(client, ctx):
+    """An agent edit applies unlocked, but only proposes once a person has edited it."""
     agent = await entity(client, ctx, type="feature", key="dark-mode", origin="agent")
     assert agent["origin"] == "agent"
     assert agent["status"] == "proposed"
@@ -166,6 +169,7 @@ async def test_agent_writes_apply_to_unlocked_and_propose_on_locked(client, ctx)
 
 
 async def test_unlock_lets_agents_write_again(client, ctx):
+    """Unlocking an item lets an agent's edit apply directly again."""
     feat = await entity(client, ctx, type="feature", key="team-invites")
     resp = await client.post(f"{B}/entities/{feat['id']}/unlock", headers=ctx.as_("approver"))
     assert resp.json()["locked"] is False
@@ -178,6 +182,7 @@ async def test_unlock_lets_agents_write_again(client, ctx):
 
 
 async def test_user_delete_removes_and_audits(client, ctx):
+    """Deleting a feature removes it and leaves an audit record of the deletion."""
     feat = await entity(client, ctx, type="feature", key="usage-export")
     resp = await client.delete(f"{B}/entities/{feat['id']}", headers=ctx.as_("owner"))
     assert resp.status_code == 204
@@ -190,6 +195,7 @@ async def test_user_delete_removes_and_audits(client, ctx):
 
 
 async def test_entity_validation(client, ctx):
+    """Duplicate keys, bad types, bad key format and unknown ids are all rejected."""
     await entity(client, ctx, type="feature", key="guided-setup")
     dup = await client.post(
         f"{B}/entities",
@@ -212,6 +218,7 @@ async def test_entity_validation(client, ctx):
 
 
 async def test_goals_need_the_confirm_step(client, ctx):
+    """A goal cannot skip the confirm step; only approvers or owners may confirm it."""
     goal = await entity(
         client,
         ctx,
@@ -254,6 +261,7 @@ async def test_goals_need_the_confirm_step(client, ctx):
 
 
 async def test_edges(client, ctx):
+    """A supports edge needs a contribution score, locks on creation, no duplicates."""
     goal = await entity(client, ctx, type="goal", key="activation")
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     other = await entity(client, ctx, type="feature", key="sample-data")
@@ -326,6 +334,7 @@ async def test_edges(client, ctx):
 
 
 async def test_commenter_proposes_new_items(client, ctx):
+    """A commenter can propose a new item, but only an approver can accept it."""
     resp = await client.post(
         f"{B}/proposals",
         json={
@@ -362,6 +371,7 @@ async def test_commenter_proposes_new_items(client, ctx):
 
 
 async def test_accepting_a_stale_create_rolls_back(client, ctx):
+    """Accepting a create proposal whose key is already taken rolls back and fails."""
     fields = {"type": "feature", "key": "bulk-edit", "title": "Bulk edit"}
     p = (
         await client.post(
@@ -389,6 +399,7 @@ async def test_accepting_a_stale_create_rolls_back(client, ctx):
     ],
 )
 async def test_roles(client, ctx, role, read, write, approve, propose):
+    """Each role's read, write, approve and propose rights match what is allowed."""
     goal = await entity(client, ctx, type="goal", key="activation")
     h = ctx.as_(role)
     for path in ("/graph", "/entities", "/edges", "/proposals", "/conflicts", "/trace", "/yaml"):
@@ -415,6 +426,7 @@ async def test_roles(client, ctx, role, read, write, approve, propose):
 
 
 async def test_token_roles_apply(client, ctx):
+    """A token inherits its assigned role, so a viewer token cannot write."""
     await set_token_role(ctx, "viewer")
     resp = await client.post(
         f"{B}/entities",
@@ -425,6 +437,7 @@ async def test_token_roles_apply(client, ctx):
 
 
 async def test_every_baseline_route_requires_auth(client):
+    """Every baseline route refuses an unauthenticated request."""
     for path, item in app.openapi()["paths"].items():
         if not path.startswith(B):
             continue
@@ -451,6 +464,7 @@ async def test_every_baseline_route_requires_auth(client):
 
 
 async def test_other_company_cannot_see_the_graph(client, ctx):
+    """Another tenant cannot see or reach this tenant's graph or entities."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     other = await make_ctx("Other Co")
     resp = await client.get(f"{B}/entities/{feat['id']}", headers=other.as_("owner"))

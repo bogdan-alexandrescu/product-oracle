@@ -128,6 +128,7 @@ async def _events(ctx: Ctx, action="priority_override.reason_checked") -> list[A
 
 
 def test_the_job_is_a_built_in_with_its_token_cap():
+    """The reason-check job is built in with its own token, time and daily call limits."""
     assert "override_reason_check" in gateway.JOBS
     assert kinds.MAX_TOKENS["override_reason_check"] == 600
     assert reason_check.DEADLINE_SECONDS == 10
@@ -135,6 +136,7 @@ def test_the_job_is_a_built_in_with_its_token_cap():
 
 
 async def test_a_contradiction_pushes_back_with_one_message_citing_input_evidence(client, fake):
+    """A reason that contradicts cited evidence blocks the override."""
     ctx, ids, evidence = await _company()
     model = fake(lambda req: contradiction([evidence["address-lookup"][0]]))
     resp = await _post(client, ctx, _move(ids))
@@ -151,6 +153,7 @@ async def test_a_contradiction_pushes_back_with_one_message_citing_input_evidenc
 
 
 async def test_an_answer_citing_an_unknown_id_is_dropped(client, fake):
+    """A model answer citing an unknown evidence id is treated as no contradiction."""
     ctx, ids, evidence = await _company()
     fake(contradiction([evidence["address-lookup"][0], str(uuid.uuid4())]))
     resp = await _post(client, ctx, _move(ids))
@@ -160,6 +163,7 @@ async def test_an_answer_citing_an_unknown_id_is_dropped(client, fake):
 
 
 async def test_no_contradiction_stores_at_once(client, fake):
+    """An override with no contradicting evidence is created right away."""
     ctx, ids, _ = await _company()
     model = fake(NO_CONTRADICTION)
     resp = await _post(client, ctx, _move(ids))
@@ -173,6 +177,7 @@ async def test_no_contradiction_stores_at_once(client, fake):
 
 
 async def test_rules_and_the_reason_message_come_together(client, fake):
+    """Rule-based pushback and a reason contradiction combine, reason message last."""
     ctx, ids, evidence = await _company()
     fake(contradiction(evidence["bulk-edit"]))
     resp = await _post(client, ctx, _move(ids, "bulk-edit", "usage-alerts"))
@@ -184,6 +189,7 @@ async def test_rules_and_the_reason_message_come_together(client, fake):
 
 
 async def test_confirm_makes_no_second_call_and_keeps_the_check_the_person_saw(client, fake):
+    """Confirming an override reuses the check it saw, not a client's own."""
     ctx, ids, evidence = await _company()
     model = fake(contradiction([evidence["address-lookup"][1]]))
     body = _move(ids, evidence_ids=[evidence["address-lookup"][1]])
@@ -242,6 +248,7 @@ async def test_reason_check_falls_back(client, fake, monkeypatch, answer, status
 
 
 async def test_a_short_reason_is_not_sent_to_the_model(client, fake):
+    """A reason too short to be meaningful skips the model check entirely."""
     ctx, ids, _ = await _company()
     model = fake(NO_CONTRADICTION)
     resp = await _post(client, ctx, {**_move(ids), "reason": "Partner"})
@@ -251,6 +258,7 @@ async def test_a_short_reason_is_not_sent_to_the_model(client, fake):
 
 
 async def test_the_daily_cap_counts_each_company_on_its_own(client, fake):
+    """The daily cap on reason checks is counted separately for each company."""
     ctx, ids, _ = await _company()
     other, other_ids, _ = await _company("Other Co")
     model = fake(NO_CONTRADICTION)
@@ -279,6 +287,7 @@ async def test_the_daily_cap_counts_each_company_on_its_own(client, fake):
 
 
 async def test_each_call_is_audited_without_reason_or_evidence_text(client, fake, caplog):
+    """Each reason check is audited by outcome, never logging reason or evidence."""
     caplog.set_level(logging.DEBUG)
     ctx, ids, evidence = await _company()
     fake(contradiction([evidence["address-lookup"][0]]))
@@ -301,6 +310,7 @@ async def test_each_call_is_audited_without_reason_or_evidence_text(client, fake
 
 
 async def test_cited_evidence_is_checked_and_remove_makes_no_call(client, fake):
+    """Cited evidence must belong to the feature; removing an override calls no model."""
     ctx, ids, evidence = await _company()
     model = fake(NO_CONTRADICTION)
     six = [str(uuid.uuid4()) for _ in range(6)]
@@ -344,6 +354,8 @@ async def test_a_private_item_in_the_pushback_is_cited_without_its_title(client,
 
 
 def test_the_prompt_holds_the_reason_cited_evidence_first_and_quoted_data():
+    """The reason-check prompt puts cited evidence first and isolates injected text."""
+
     def item(i, text="x"):
         return reason_check.EvidenceItem(
             id=f"ev-{i}",
@@ -378,6 +390,7 @@ def test_the_prompt_holds_the_reason_cited_evidence_first_and_quoted_data():
 
 
 def test_parsing_keeps_a_message_only_with_known_evidence():
+    """A model's answer counts as a contradiction only when it cites known evidence."""
     allowed = {"a", "b"}
     ok = reason_check.parse_answer(json.dumps(contradiction(["a"])), allowed)
     assert ok[0] == "contradiction" and ok[1]["evidence_ids"] == ["a"]

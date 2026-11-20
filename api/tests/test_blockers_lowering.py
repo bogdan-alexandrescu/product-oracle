@@ -146,6 +146,7 @@ async def _audits(ctx, action: str, entity_id) -> list[AuditEvent]:
     ],
 )
 async def test_an_approver_cannot_lower_a_gating_blocker(client, patch):
+    """An approver cannot lower a gating blocker's severity or type at all."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     before = await _entity(ctx, b["id"])
@@ -171,6 +172,7 @@ async def test_an_approver_cannot_lower_a_gating_blocker_while_its_risk_is_accep
 
 
 async def test_the_lowering_403_names_the_configured_role(client):
+    """Changing the deciding role setting changes who may lower a blocker."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx)
     resp = await client.put(
@@ -185,6 +187,7 @@ async def test_the_lowering_403_names_the_configured_role(client):
 
 
 async def test_an_owner_may_lower_a_gating_blocker(client):
+    """An owner may lower a gating blocker's severity with a reason given."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     resp = await _patch(client, ctx, b["id"], "owner", severity="high", reason="Pilot is small")
@@ -194,6 +197,7 @@ async def test_an_owner_may_lower_a_gating_blocker(client):
 
 
 async def test_an_approver_may_resolve_a_gating_blocker_with_a_reason_audited(client):
+    """Resolving a blocker needs a reason and writes it into a single audit event."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     url = f"/v1/blockers/{b['id']}/status"
@@ -222,6 +226,7 @@ async def test_an_approver_may_resolve_a_gating_blocker_with_a_reason_audited(cl
     ],
 )
 async def test_an_approver_may_lower_a_blocker_that_does_not_gate(client, start, patch):
+    """An approver may lower a blocker that was never gating a document."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx, **start)
     resp = await _patch(client, ctx, b["id"], "approver", **patch)
@@ -267,6 +272,7 @@ async def test_an_approver_cannot_lower_a_blocker_resolved_while_it_gated(client
 
 
 async def test_an_owner_may_lower_a_resolved_blocker_and_an_approver_then_reopen_it(client):
+    """Once an owner lowers a resolved blocker, an approver may edit and reopen it."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     await _resolve(client, ctx, b["id"])
@@ -331,6 +337,7 @@ async def test_reopening_a_blocker_an_approver_lowered_while_resolved_takes_an_o
 async def test_reopening_a_blocker_whose_documents_were_dropped_while_resolved_takes_an_owner(
     client,
 ):
+    """Needs an owner to reopen a blocker whose gated documents changed while it was resolved."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     await _resolve(client, ctx, b["id"])
@@ -403,6 +410,7 @@ async def test_an_approver_may_lower_what_they_raised_while_resolved(client):
 
 
 async def test_an_approver_may_still_edit_a_gating_blocker_without_lowering_it(client):
+    """An approver may edit a gating blocker's other fields without lowering it."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx)
     resp = await _patch(client, ctx, b["id"], "approver", timing="Next quarter", type="hard")
@@ -445,6 +453,7 @@ async def _event_count(ctx) -> int:
 
 
 async def test_reading_the_gate_writes_nothing(client):
+    """Reading the blocker gate and its pages never writes an event or a row."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     entity_id = await _legacy(ctx, doc_id, "legacy-read", type="soft", severity="low")
@@ -475,6 +484,7 @@ async def test_reading_the_gate_writes_nothing(client):
     ],
 )
 async def test_a_legacy_unrecorded_blocker_is_judged_on_its_strategy(client, fields, expected):
+    """A legacy blocker with no gate record is judged purely by its stored strategy."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await _legacy(ctx, doc_id, "legacy-unrecorded", **fields)
@@ -484,6 +494,7 @@ async def test_a_legacy_unrecorded_blocker_is_judged_on_its_strategy(client, fie
 
 
 async def test_an_unreadable_legacy_unrecorded_strategy_fails_closed(client):
+    """A legacy strategy that cannot be parsed fails the gate closed without writing."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await make_entity(
@@ -534,6 +545,7 @@ async def test_a_write_records_the_first_snapshot_of_a_legacy_blocker(client, mo
 
 
 async def test_a_yaml_import_refused_under_b4_is_a_403_with_the_same_text(client):
+    """A YAML import blocked by the B4 gate gets the same 403 text as the UI route."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     data = yaml.safe_load((await client.get("/v1/baseline/yaml", headers=ctx.as_("viewer"))).text)
@@ -564,6 +576,7 @@ async def test_a_yaml_import_refused_under_b4_is_a_403_with_the_same_text(client
     ],
 )
 async def test_a_reopen_by_reclassification_says_so(client, action, summary):
+    """Reopening by reclassification logs why: the decision now needs an owner."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], action, "approver")
@@ -581,6 +594,7 @@ async def test_a_reopen_by_reclassification_says_so(client, action, summary):
 
 @pytest.mark.parametrize("start_running", [False, True])
 async def test_a_reopen_returns_the_scope_experiment_to_planned(client, start_running):
+    """Reopening a blocker returns its feasibility experiment to planned status."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx, severity="high")
     exp = await _decide(client, ctx, b["id"], "feasibility-scope", "approver")
@@ -610,6 +624,7 @@ async def test_a_reopen_returns_the_scope_experiment_to_planned(client, start_ru
 async def test_an_owner_reclassifying_an_approvers_decision_reopens_it_unless_confirmed(
     client, action
 ):
+    """Reopens an accepted risk automatically when it gets worse, unless the owner re-confirms."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], action, "approver")
@@ -621,6 +636,7 @@ async def test_an_owner_reclassifying_an_approvers_decision_reopens_it_unless_co
 
 @pytest.mark.parametrize("action", ["accept-risk", "feasibility-scope"])
 async def test_an_owner_confirming_keeps_an_approvers_decision(client, action):
+    """An owner who confirms an approver's decision keeps it standing."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], action, "approver")
@@ -637,6 +653,7 @@ async def test_an_owner_confirming_keeps_an_approvers_decision(client, action):
 
 
 async def test_an_owners_own_earlier_decision_stands_when_reclassified(client):
+    """An owner's own earlier decision stands even after a later reclassification."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], "accept-risk", "owner")
@@ -647,6 +664,7 @@ async def test_an_owners_own_earlier_decision_stands_when_reclassified(client):
 
 
 async def test_an_approver_cannot_confirm_a_decision(client):
+    """An approver cannot confirm a decision; that action is an owner's alone."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], "accept-risk", "approver")
@@ -708,6 +726,7 @@ async def test_an_approver_cannot_remove_a_document_a_blocker_gates(client, deci
 
 
 async def test_an_approver_may_add_documents_and_narrow_a_blocker_that_does_not_gate(client):
+    """An approver may add or narrow documents on a blocker while it is not gating."""
     ctx = await make_ctx()
     doc_a, doc_b, b = await _two_documents(client, ctx)
     doc_c = await make_document(ctx, "billing-revamp")
@@ -767,6 +786,7 @@ async def test_a_section_linked_document_stays_gated_when_unlisted(client):
 
 @pytest.mark.parametrize("field", ["document_ids", "impacted_and_document_ids"])
 async def test_the_mcp_tool_cannot_remove_a_gated_document_for_an_approver(client, field):
+    """The MCP update tool cannot let an approver drop a blocker's gating document."""
     ctx = await make_ctx()
     doc_a, doc_b, b = await _two_documents(client, ctx)
     requirement = await make_entity(ctx, "requirement", "sync-every-hour")
@@ -825,6 +845,7 @@ async def test_a_confirmation_answers_one_reclassification_only(client):
     ],
 )
 async def test_confirming_with_nothing_to_confirm_is_a_409(client, setup, patch):
+    """Confirming when there is no reopened decision to confirm is a conflict."""
     ctx = await make_ctx()
     patch = dict(patch)
     start = patch.pop("start", "high" if setup else "critical")
@@ -848,6 +869,7 @@ async def test_confirming_with_nothing_to_confirm_is_a_409(client, setup, patch)
 async def test_a_reclassification_that_reopens_or_needs_confirmation_needs_a_reason(
     client, who, confirm
 ):
+    """A reclassification that reopens or needs confirming must give a real reason."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], "accept-risk", "approver")

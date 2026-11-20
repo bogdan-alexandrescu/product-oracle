@@ -73,6 +73,7 @@ async def _personal_token(ctx, who: str) -> str:
 # no row from GET /v1/runs and 404 from the run and its file; fails_when=any member other
 # than the author reads the private analysis or learns the run exists; no_claim=the web.
 async def test_only_the_author_lists_reads_and_downloads_the_read_run(client):
+    """Only the intake's author can list, open or download their private read run."""
     ctx = await company()
     run = await _finished_read(client, ctx)
     run_url = f"/v1/runs/{run.id}"
@@ -102,6 +103,7 @@ async def test_only_the_author_lists_reads_and_downloads_the_read_run(client):
 # and an error (404) from get_run and get_run_artifact; fails_when=an MCP client reads the
 # author's private analysis; no_claim=run tokens of other runs.
 async def test_only_the_authors_mcp_client_reads_the_read_run(client):
+    """An MCP client reaches a read run only when it belongs to the intake's author."""
     ctx = await company()
     run = await _finished_read(client, ctx)
     args = {"run_id": str(run.id), "seq": 1, "name": NAME}
@@ -135,6 +137,7 @@ async def test_only_the_authors_mcp_client_reads_the_read_run(client):
 # every member's discussion) never lists an intake read, not even in its author's own
 # discussion; fails_when=the context names the run; no_claim=the model's reply.
 async def test_the_runs_screen_context_leaves_out_the_intake_read(client):
+    """The runs screen's context never mentions a running intake read."""
     from tests.test_hop_panel import screen_context
 
     ctx = await company()
@@ -154,6 +157,7 @@ async def test_the_runs_screen_context_leaves_out_the_intake_read(client):
 # and no Trash row names it; fails_when=another member trashes, restores or lists the
 # author's private run; no_claim=the author's own Trash (only owners use Trash).
 async def test_another_member_never_trashes_restores_or_lists_the_read_run(client):
+    """Nobody but the read run's author can trash, restore or even list it."""
     from oracle.trash import service as trash_service
 
     ctx = await company()
@@ -187,6 +191,7 @@ async def test_another_member_never_trashes_restores_or_lists_the_read_run(clien
 # attendee) never lists an intake read awaiting cost approval, not even in its author's
 # own ritual; fails_when=the block names the run; no_claim=other runs' cost approvals.
 async def test_the_ritual_cost_approval_block_leaves_out_the_intake_read(client):
+    """A ritual's cost-approval list never surfaces an intake's private read run."""
     from datetime import UTC, datetime, timedelta
 
     from oracle.rituals import blocks as ritual_blocks

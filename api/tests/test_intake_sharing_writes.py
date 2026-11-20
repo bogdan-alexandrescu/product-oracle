@@ -119,6 +119,7 @@ async def author_questions(ctx, intake_id: str) -> tuple[StakeholderQuestion, St
 @pytest.mark.parametrize("level", LEVELS)
 @pytest.mark.parametrize("who", ["viewer", "commenter", "approver", "owner", "run"])
 async def test_the_answer_route_shows_the_question_as_the_reads_do(client, fake, level, who):
+    """An answer's own response matches what every reader of it later sees."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     if level != "private":
         await share_all(client, ctx, intake_id, level)
@@ -150,6 +151,7 @@ async def test_the_answer_route_shows_the_question_as_the_reads_do(client, fake,
 
 
 async def test_the_author_still_sees_their_own_words_in_the_answer(client, fake):
+    """An author still sees their own hidden question text in the answer reply."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     model_q, _ = await author_questions(ctx, intake_id)
     resp = await client.post(
@@ -160,6 +162,7 @@ async def test_the_author_still_sees_their_own_words_in_the_answer(client, fake)
 
 
 async def test_a_proposal_of_a_private_gap_is_404_to_everyone_else(client, fake):
+    """A private gap's research proposal is hidden from everyone but its author."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     model_q, _ = await author_questions(ctx, intake_id)
     resp = await client.post(f"/v1/gaps/{model_q.gap_id}/research", headers=ctx.as_("author"))
@@ -176,6 +179,7 @@ async def test_a_proposal_of_a_private_gap_is_404_to_everyone_else(client, fake)
 
 
 async def test_a_job_after_a_repin_never_restates_private_model_text(client, fake):
+    """A job after sources are deleted never repeats the deleted author's words."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     # The author's items are deleted: the next pin reads none of their sources.
     async with tenant_session(ctx.tenant_id) as s:
@@ -226,6 +230,7 @@ async def test_a_job_after_a_repin_never_restates_private_model_text(client, fak
              "/v1/assumption-decisions"],
 )  # fmt: skip
 async def test_a_viewers_pages_never_shift_because_of_private_rows(client, fake, path):
+    """A paginated list never lets a private row shift a viewer's later pages."""
     ctx, intake_id, _ = await authored_intake(client, fake, role="approver")
     model_q, _ = await author_questions(ctx, intake_id)
     # Public rows first, the author's private ones last (newest: the first page).
@@ -283,6 +288,7 @@ async def _question_of(ctx, gap_id: str) -> str:
 
 @pytest.mark.parametrize("who", ["commenter", "owner"])
 async def test_an_answer_in_another_intake_never_clears_a_critical_gap(client, who):
+    """Answering a gap in one intake never clears the same gap in another intake."""
     ctx = await company()
     doc = await _document(client, ctx)
     # Intake A, on the PRD: blockers matter less here, and a commenter answers them.
@@ -324,6 +330,7 @@ async def test_an_answer_in_another_intake_never_clears_a_critical_gap(client, w
 
 
 async def test_a_later_answer_elsewhere_never_closes_an_open_critical_gap(client):
+    """An answer given elsewhere later never closes an already open critical gap."""
     ctx = await company()
     doc = await _document(client, ctx)
     second = await create_intake(client, ctx, who="approver", document=doc, brief=BLOCKER_BRIEF)
@@ -358,6 +365,7 @@ async def test_a_later_answer_elsewhere_never_closes_an_open_critical_gap(client
 
 
 async def test_conflict_and_stale_finding_ids_cannot_be_guessed(client, fake):
+    """Finding ids cannot be guessed, and a re-analysis keeps their ids and levels."""
     ctx, intake_id, items = await authored_intake(client, fake)
     mine = await read_summary(client, ctx, intake_id, "author")
     [conflict] = [c for c in mine["conflicts"] if c["kind"] == "source"]
@@ -384,6 +392,7 @@ async def test_conflict_and_stale_finding_ids_cannot_be_guessed(client, fake):
 
 
 async def test_a_legacy_stable_conflict_id_keeps_its_level_under_a_new_id(client, fake):
+    """A conflict kept under its old stable id keeps its sharing level under a new id."""
     ctx, intake_id, items = await authored_intake(client, fake)
     iid = uuid.UUID(intake_id)
     async with tenant_session(ctx.tenant_id) as s:
@@ -406,6 +415,7 @@ async def test_a_legacy_stable_conflict_id_keeps_its_level_under_a_new_id(client
 
 
 async def test_question_order_and_batches_reveal_nothing_of_private_sources(client, fake):
+    """Question order and batching are the same whether or not private sources exist."""
     ctx, private_id, _ = await authored_intake(client, fake)
     plain = await create_intake(client, ctx, who="commenter")
 
@@ -421,6 +431,7 @@ async def test_question_order_and_batches_reveal_nothing_of_private_sources(clie
 
 
 async def test_an_approver_asking_the_next_batch_leaves_private_gaps_alone(client, fake):
+    """Asking the next batch skips a private gap until its own author asks it."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     model_q, _ = await author_questions(ctx, intake_id)
     sizes = []
@@ -447,6 +458,7 @@ async def test_an_approver_asking_the_next_batch_leaves_private_gaps_alone(clien
 
 
 async def test_an_intake_jobs_output_is_the_authors_only(client, fake):
+    """Only the author sees an intake job's output; everyone else sees none."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.intake_id == uuid.UUID(intake_id)))

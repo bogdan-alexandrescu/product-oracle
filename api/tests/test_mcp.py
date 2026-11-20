@@ -104,6 +104,7 @@ def text_of(result) -> str:
 
 
 async def test_no_token_is_401_with_resource_metadata(client):
+    """A request with no token gets 401 with the resource metadata header."""
     resp = await client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
     assert resp.status_code == 401
     header = resp.headers["www-authenticate"]
@@ -114,6 +115,7 @@ async def test_no_token_is_401_with_resource_metadata(client):
 
 @pytest.mark.parametrize("token", ["po_unknown", "ort_unknown", "something-else"])
 async def test_unknown_token_is_401_invalid_token(client, token):
+    """An unknown token gets 401 with an invalid_token error."""
     resp = await client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
@@ -126,6 +128,7 @@ async def test_unknown_token_is_401_invalid_token(client, token):
 
 
 async def test_expired_or_revoked_tokens_are_401(client, tenant_id):
+    """An expired or revoked token gets 401."""
     user = await user_with_role(tenant_id, "owner")
     expired = await run_token(tenant_id, ["read:documents"], user.id)
     async with tenant_session(tenant_id) as s:
@@ -148,6 +151,7 @@ async def test_expired_or_revoked_tokens_are_401(client, tenant_id):
 
 
 async def test_run_token_without_a_creator_is_refused(client, tenant_id):
+    """A run token with no recorded creator is refused."""
     token = await run_token(tenant_id, ["read:documents"], created_by=None)
     resp = await client.post(
         "/mcp",
@@ -158,6 +162,7 @@ async def test_run_token_without_a_creator_is_refused(client, tenant_id):
 
 
 async def test_registered_verifier_plugs_in(tenant_id):
+    """A registered external token verifier can authenticate, then be removed."""
     user = await user_with_role(tenant_id, "commenter")
 
     async def verify_test_token(raw: str):
@@ -181,6 +186,7 @@ async def test_registered_verifier_plugs_in(tenant_id):
 
 @pytest.mark.parametrize("mode", ["legacy", "auto"])
 async def test_initialize_and_list_tools(tenant_id, mode):
+    """The MCP tool list hides auth tools and matches each route's real schema."""
     token = await api_token(tenant_id)
     async with mcp_client(token, mode=mode) as c:
         assert c.server_info.name == "product-oracle"
@@ -250,6 +256,7 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
 
 
 async def test_parity_over_the_wire(tenant_id):
+    """The MCP tool list matches REST routes, except tools people should not see."""
     token = await api_token(tenant_id)
     async with mcp_client(token) as c:
         result = await c.list_tools()
@@ -269,6 +276,7 @@ async def test_parity_over_the_wire(tenant_id):
 
 
 async def test_routes_added_later_become_tools(tenant_id):
+    """A route added after startup appears as a tool without a restart."""
     target = create_app()
     token = await api_token(tenant_id)
     async with mcp_client(token, target) as c:
@@ -296,6 +304,7 @@ async def test_routes_added_later_become_tools(tenant_id):
 
 
 async def test_document_round_trip_with_an_api_token(tenant_id):
+    """A document can be pushed, read and listed entirely over MCP with a token."""
     token = await api_token(tenant_id, "owner")
     async with mcp_client(token) as c:
         pushed = await c.call_tool(
@@ -338,6 +347,7 @@ def guarded_app() -> FastAPI:
 
 @pytest.mark.parametrize("role", ROLES)
 async def test_rest_role_checks_apply_to_api_tokens(tenant_id, guarded_app, role):
+    """REST role checks apply the same way to calls made with an API token."""
     token = await api_token(tenant_id, role)
     async with mcp_client(token, guarded_app) as c:
         for rank, min_role in enumerate(ROLES):
@@ -381,10 +391,12 @@ async def test_rest_role_checks_apply_to_api_tokens(tenant_id, guarded_app, role
     ],
 )
 def test_scope_map(method, path, scope):
+    """Each route's required scope matches what the access rules expect."""
     assert required_scope(method, path) == scope
 
 
 async def test_run_token_scopes_limit_tools_and_calls(tenant_id):
+    """A run token's scopes decide which tools it can see and call."""
     owner = await user_with_role(tenant_id, "owner")
     async with mcp_client(await api_token(tenant_id)) as c:
         assert not (
@@ -411,6 +423,7 @@ async def test_run_token_scopes_limit_tools_and_calls(tenant_id):
 
 
 async def test_run_token_acts_for_the_run_creator(tenant_id):
+    """A run token's write is recorded under the run's own creator."""
     pm = await user_with_role(tenant_id, "approver")
     token = await run_token(tenant_id, ["write:drafts", "read:documents"], pm.id)
     async with mcp_client(token) as c:
@@ -424,6 +437,7 @@ async def test_run_token_acts_for_the_run_creator(tenant_id):
 
 
 async def test_run_token_is_limited_by_the_creator_role(tenant_id):
+    """A run token's allowed action still depends on the creator's live role."""
     viewer = await user_with_role(tenant_id, "viewer")
     # A scope-allowed write that REST reserves for commenters: the creator's role decides.
     token = await run_token(tenant_id, ["write:proposals"], viewer.id)
@@ -462,6 +476,7 @@ async def user_token(tenant_id: uuid.UUID, user: User) -> str:
 
 
 async def test_curated_tools_bind_to_the_lanes_routes():
+    """A curated tool is bound to the one route that matches its role."""
     ops = {o.operation_id: o for o in app_operations(app)}
     bound = {}
     for c in CURATED:
@@ -475,6 +490,7 @@ async def test_curated_tools_bind_to_the_lanes_routes():
 
 
 async def test_curated_tools_hidden_until_their_routes_exist(tenant_id):
+    """A curated tool disappears from an app that lacks its underlying route."""
     # An app without the sources and baseline routes lists none of their curated tools.
     from oracle.docs.router import router as docs_router
     from oracle.mcp.server import mount_mcp
@@ -491,6 +507,7 @@ async def test_curated_tools_hidden_until_their_routes_exist(tenant_id):
 
 
 async def test_curated_search_returns_source_confidence(tenant_id):
+    """A curated search result carries the same confidence as its source item."""
     pm = await user_with_role(tenant_id, "commenter")
     token = await user_token(tenant_id, pm)
     async with await _rest(token) as rest:
@@ -516,6 +533,7 @@ async def test_curated_search_returns_source_confidence(tenant_id):
 
 
 async def test_curated_baseline_tools_flag_low_confidence(tenant_id):
+    """A curated baseline tool flags low-confidence entries on a coded feature."""
     token = await api_token(tenant_id, "owner")
     async with await _rest(token) as rest:
         goal = (
@@ -568,6 +586,7 @@ async def test_curated_baseline_tools_flag_low_confidence(tenant_id):
 
 
 async def test_curated_tools_follow_run_token_scopes(tenant_id):
+    """Curated tools and their calls are limited by a run token's own scopes."""
     pm = await user_with_role(tenant_id, "approver")
     token = await run_token(tenant_id, ["read:sources"], pm.id)
     async with mcp_client(token) as c:
@@ -580,6 +599,7 @@ async def test_curated_tools_follow_run_token_scopes(tenant_id):
 
 
 def test_flag_low_confidence_leaves_other_values_alone():
+    """flag_low_confidence only marks values under the threshold, nothing else."""
     value = {"confidence": True, "items": [{"confidence": "high"}, {"confidence": 0.39}], "n": 1}
     assert flag_low_confidence(value, 0.4) == {
         "confidence": True,
@@ -589,6 +609,7 @@ def test_flag_low_confidence_leaves_other_values_alone():
 
 
 async def test_rest_client_fixture_still_works(client):
+    """Mounting the MCP server does not hide the existing REST routes."""
     # The mount does not shadow REST routes.
     assert (await client.get("/v1/documents")).status_code == 401
     assert isinstance(client, httpx.AsyncClient)

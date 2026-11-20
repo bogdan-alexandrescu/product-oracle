@@ -140,6 +140,7 @@ def _digest(body: bytes, tenant_id) -> str:
 
 
 async def test_reads_say_what_they_said_before(client):
+    """A page's full read answers exactly as it did before, down to the last field."""
     ctx = await seed_company()
     got = {}
     for name, (url, role, params) in VIEWS.items():
@@ -187,16 +188,19 @@ async def _warm_statements(client, ctx, url: str, **params) -> int:
 
 
 async def test_roadmap_takes_few_statements(client):
+    """Loading the Roadmap page never makes more than its allotted statements."""
     ctx = await seed_company()
     assert await _warm_statements(client, ctx, ROADMAP) <= ROADMAP_MAX
 
 
 async def test_priorities_takes_few_statements(client):
+    """Loading the Priorities page never makes more than its allotted statements."""
     ctx = await seed_company()
     assert await _warm_statements(client, ctx, PRIORITIES) <= PRIORITIES_MAX
 
 
 async def test_decisions_takes_few_statements(client):
+    """Loading Decisions, filtered or not, makes no more than its allotted statements."""
     ctx = await seed_company()
     assert await _warm_statements(client, ctx, DECISIONS) <= DECISIONS_MAX
     # A filter reads no more.
@@ -205,6 +209,7 @@ async def test_decisions_takes_few_statements(client):
 
 @pytest.mark.skipif(not os.environ.get("READ_PROFILE"), reason="READ_PROFILE=1 only")
 async def test_profile(client):
+    """Profiling a slow read, when asked, reports where its wall and CPU time go."""
     ctx = await seed_company()
     owner = ctx.as_("owner")
     report = []

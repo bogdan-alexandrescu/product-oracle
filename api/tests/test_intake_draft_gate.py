@@ -145,6 +145,7 @@ def _hidden_gap() -> tuple[KnowledgeGap, sharing.Registry]:
 
 
 def test_choose_batch_takes_the_first_drafts_in_order():
+    """Choosing a batch takes the earliest-ranked drafts, skipping excluded ones."""
     gaps = [_gap() for _ in range(4)]
     asked = _draft(gaps[0], 10, status="asked", batch=1)
     drafts = [_draft(g, 20 + i * 10) for i, g in enumerate(gaps[1:])]
@@ -158,6 +159,7 @@ def test_choose_batch_takes_the_first_drafts_in_order():
 
 
 def test_choose_batch_lets_hidden_drafts_ranked_before_the_cut_ride_along():
+    """A hidden draft ranked above the cutoff still rides along into the batch."""
     hidden, reg = _hidden_gap()
     public = [_gap() for _ in range(3)]
     qs = [_draft(public[0], 10), _draft(hidden, 15), _draft(public[1], 20), _draft(public[2], 30)]
@@ -169,6 +171,7 @@ def test_choose_batch_lets_hidden_drafts_ranked_before_the_cut_ride_along():
 
 
 def test_choose_batch_joins_hidden_only_drafts_to_the_latest_batch():
+    """A hidden-only draft joins the latest batch number instead of starting a new one."""
     hidden, reg = _hidden_gap()
     public = _gap()
     qs = [_draft(public, 10, status="asked", batch=3), _draft(hidden, 15)]
@@ -178,6 +181,7 @@ def test_choose_batch_joins_hidden_only_drafts_to_the_latest_batch():
 
 
 def test_draft_gate_counts_shared_critical_blockers_only():
+    """The draft gate counts a shared critical blocker only, never a private one."""
     hidden, reg = _hidden_gap()
     hidden.category = "blockers"
     hidden.importance = "critical"
@@ -196,6 +200,7 @@ def test_draft_gate_counts_shared_critical_blockers_only():
 
 
 async def test_preview_matches_ask(client):
+    """Previewing the next batch shows what asking would, but asks nobody anything."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -247,6 +252,7 @@ async def test_preview_matches_ask_with_the_authors_hidden_questions(client, fak
 
 
 async def test_next_batch_is_for_the_author_or_an_approver(client):
+    """Only the intake's author or an approver may preview its next question batch."""
     ctx = await company()
     out = await create_intake(client, ctx, who="approver")
     intake_id = out["intake"]["id"]
@@ -259,6 +265,7 @@ async def test_next_batch_is_for_the_author_or_an_approver(client):
 
 
 def test_next_batch_is_an_mcp_tool_that_reads_sources():
+    """The next-batch route is a scoped MCP tool whose cards carry evidence too."""
     paths = app.openapi()["paths"]
     assert "get" in paths["/v1/intakes/{intake_id}/next-batch"]
     ops = {(o.method, o.path): o for o in app_operations(app)}
@@ -271,6 +278,7 @@ def test_next_batch_is_an_mcp_tool_that_reads_sources():
 
 
 async def test_next_batch_is_empty_when_nothing_is_left(client):
+    """Previewing after every question is asked returns an empty batch, not an error."""
     ctx = await company()
     out = await create_intake(client, ctx, batch_size=10)
     intake_id = out["intake"]["id"]
@@ -289,6 +297,7 @@ async def test_next_batch_is_empty_when_nothing_is_left(client):
 
 
 async def test_draft_gate_blocks_on_shared_critical(client):
+    """A shared critical question blocks starting a run until an owner validates it."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -316,6 +325,7 @@ async def test_draft_gate_blocks_on_shared_critical(client):
 
 
 async def test_two_open_critical_questions_are_counted(client):
+    """Every open shared critical question is counted and named when a run is blocked."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -328,6 +338,7 @@ async def test_two_open_critical_questions_are_counted(client):
 
 
 async def test_a_private_critical_gap_does_not_block_the_run(client, fake):
+    """A critical gap that is still private does not block a run from starting."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     await add_author(ctx, "approver")
@@ -344,6 +355,7 @@ async def test_a_private_critical_gap_does_not_block_the_run(client, fake):
 
 
 async def test_starting_an_intake_run_waits_for_a_critical_gap_added_later(client, runtime):
+    """A run already created still waits on a critical question raised later."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -373,6 +385,7 @@ async def test_starting_an_intake_run_waits_for_a_critical_gap_added_later(clien
 
 
 async def test_run_pins_answers(client, runtime):
+    """A run only ever sees the answers given before it started, not later ones."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -417,6 +430,7 @@ async def test_run_pins_answers(client, runtime):
 
 
 async def test_the_step_prompt_says_answers_are_pinned(client, runtime):
+    """The draft's prompt tells the writer its answers are pinned, not live."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     run_id = (await _create_run(client, ctx, out["intake"]["id"])).json()["id"]
@@ -429,6 +443,7 @@ async def test_the_step_prompt_says_answers_are_pinned(client, runtime):
 
 
 async def test_answers_since_run_is_zero_before_drafting(client):
+    """An intake with no run yet reports zero answers given since a run started."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     assert out["answers_since_run"] == 0

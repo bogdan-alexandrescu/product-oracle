@@ -64,6 +64,7 @@ def _reads_the_clock(node: ast.AST) -> bool:
 
 
 def test_no_api_code_dates_by_the_servers_day():
+    """No API source file reads today's date from the server's own clock."""
     found = []
     for path in sorted(ORACLE.rglob("*.py")):
         rel = path.relative_to(ORACLE).as_posix()
@@ -74,6 +75,7 @@ def test_no_api_code_dates_by_the_servers_day():
 
 
 def test_the_scan_finds_each_way_of_reading_the_servers_day():
+    """The scanner flagging server-day reads catches every spelling of it."""
     src = (
         "a = date.today()\n"
         "b = datetime.today()\n"
@@ -95,6 +97,7 @@ def test_the_scan_finds_each_way_of_reading_the_servers_day():
 
 
 def test_the_helper_is_the_company_day(monkeypatch):
+    """The company_time helper's today reads the company's own time zone."""
     monkeypatch.setattr(company_time, "now", lambda: EVENING)
     assert company_time.today() == PACIFIC_DAY
     assert company_time.today("Pacific/Auckland") == date(2026, 10, 24)
@@ -104,6 +107,7 @@ def test_the_helper_is_the_company_day(monkeypatch):
 
 
 async def test_company_today_reads_the_company_time_zone(monkeypatch):
+    """A company's own today is read from its stored time zone, not a fixed one."""
     monkeypatch.setattr(company_time, "now", lambda: EVENING)
     tenant_id = await make_tenant("Day Co")
     async with tenant_session(tenant_id) as s:
@@ -111,6 +115,7 @@ async def test_company_today_reads_the_company_time_zone(monkeypatch):
 
 
 async def test_the_roadmap_views_today_is_the_company_day(monkeypatch):
+    """The roadmap view's notion of today is the company's day too."""
     from oracle.roadmap import views
 
     monkeypatch.setattr(company_time, "now", lambda: EVENING)

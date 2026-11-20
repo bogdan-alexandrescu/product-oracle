@@ -56,6 +56,7 @@ async def _three_versions(client):
 
 
 async def test_document_versions_name_their_importer(client):
+    """Each document version names who imported it: a person, a token, or Oracle."""
     auth, member_id, token_id = await _three_versions(client)
     resp = await client.get(DOC, headers=auth)
     assert resp.status_code == 200, resp.text
@@ -68,6 +69,7 @@ async def test_document_versions_name_their_importer(client):
 
 
 async def test_version_list_and_read_name_their_importer(client):
+    """A version's importer name matches whether read from the list or by number."""
     auth, _, _ = await _three_versions(client)
     listed = (await client.get(f"{DOC}/versions", headers=auth)).json()
     assert [v["imported_by_name"] for v in listed] == [

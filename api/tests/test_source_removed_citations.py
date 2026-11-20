@@ -34,6 +34,7 @@ async def remove(tenant_id: uuid.UUID, item_id: uuid.UUID) -> None:
 
 
 async def test_evidence_of_a_removed_item_says_source_removed(client, ctx):
+    """Evidence pointing at a removed source item is flagged source removed."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     kept = await make_item(ctx, "owner", title="kept thread")
     gone = await make_item(ctx, "owner", title="#product thread", content="Top request")
@@ -84,6 +85,7 @@ async def test_evidence_of_a_removed_item_says_source_removed(client, ctx):
 
 
 async def test_the_baseline_yaml_marks_evidence_of_a_removed_item(client, ctx):
+    """A removed item's evidence is marked source_removed in exported yaml."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     gone = await make_item(ctx, "owner")
     kept = await make_item(ctx, "owner", url="https://chat.example.com/archives/C1/p2")
@@ -103,6 +105,7 @@ async def test_the_baseline_yaml_marks_evidence_of_a_removed_item(client, ctx):
 
 
 async def test_section_links_to_a_removed_item_say_source_removed(client):
+    """Section links to a removed item say source removed, direct and shared."""
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
     async with tenant_session(ctx.tenant_id) as s:
         # Evidence copied from the same item.
@@ -162,6 +165,7 @@ async def test_section_links_to_a_removed_item_say_source_removed(client):
 
 
 async def test_blocker_citations_of_a_removed_item_say_source_removed(client, ctx):
+    """Blocker citations of a removed source item say it is from a removed source."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     gone = await make_item(ctx, "owner")
     kept = await make_item(ctx, "owner", url="https://chat.example.com/archives/C1/p2")
@@ -177,6 +181,7 @@ async def test_blocker_citations_of_a_removed_item_say_source_removed(client, ct
 
 
 async def test_priorities_mark_evidence_of_a_removed_item(client, ctx):
+    """Priorities explanations mark evidence from a removed item as such."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     gone = await make_item(ctx, "owner")
     kept = await make_item(ctx, "owner", url="https://chat.example.com/archives/C1/p2")

@@ -90,6 +90,7 @@ async def chat(client, w, mid: str, who: str, text: str) -> None:
 
 
 async def test_an_empty_meeting_invents_nothing(client):
+    """Minutes for a meeting with nothing decided say so, and invent no job answer."""
     w = await world()
     m = await start(client, w)
     out = await end(client, w, m["id"])
@@ -105,6 +106,7 @@ async def test_an_empty_meeting_invents_nothing(client):
 
 
 async def test_two_action_items_are_exactly_those(client, monkeypatch):
+    """Recorded action items are exactly those taken in the meeting, none invented."""
     w = await world()
     m = await start(client, w)
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -143,6 +145,7 @@ async def test_two_action_items_are_exactly_those(client, monkeypatch):
 
 
 async def test_chat_lines_support_questions_and_tasks(client, monkeypatch):
+    """Minutes keep only a chat line's own open questions and tasks, not invented ones."""
     w = await world()
     m = await start(client, w)
     await chat(client, w, m["id"], "approver", "Who signs off the QA plan?")
@@ -181,6 +184,7 @@ async def test_chat_lines_support_questions_and_tasks(client, monkeypatch):
 
 
 async def test_send_adds_no_second_copy_of_a_recorded_item(client):
+    """Sending minutes never adds a second copy of an action item already recorded."""
     w = await world()
     for edited in (False, True):
         m = await start(client, w, title=f"Review {edited}")
@@ -216,11 +220,13 @@ async def test_send_adds_no_second_copy_of_a_recorded_item(client):
 
 
 def test_waits_alone_are_not_an_empty_record():
+    """A minutes record with only a wait listed is not treated as an empty record."""
     assert minutes.Record().empty
     assert not minutes.Record(waits=["Proposal: Rename the ledger"]).empty
 
 
 def test_support_units():
+    """Minutes match a chat line to an item only when its words and date both agree."""
     assert minutes.supports("Ann will write the QA plan by Nov 6", "Write the QA plans")
     assert not minutes.supports("Ann will write the QA plan", "Schedule a follow-up session")
     assert not minutes.supports("anything", "the of and")

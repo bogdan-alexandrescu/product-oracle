@@ -89,6 +89,7 @@ async def collect(conn, config, cursor=None):
 
 
 def test_registered_with_oauth_metadata():
+    """Slack is registered without ever requesting a scope for direct messages."""
     assert isinstance(get_connector("slack"), SlackConnector)
     assert slack.OAUTH["authorize_url"].startswith("https://slack.com/")
     assert "channels:history" in slack.OAUTH["scopes"]
@@ -96,6 +97,7 @@ def test_registered_with_oauth_metadata():
 
 
 async def test_validate_accepts_public_and_private_channels():
+    """Both public and private Slack channels pass config validation fine."""
     fake = FakeSlack(BASE_ROUTES)
     await connector(fake).validate({"channels": ["C0PRODUCT", "C0ROADMAP", "G0LEGACY"]}, CREDENTIAL)
     assert fake.count("conversations.info") == 3
@@ -103,6 +105,7 @@ async def test_validate_accepts_public_and_private_channels():
 
 @pytest.mark.parametrize("channel", ["D0DIRECT", "G0MPIM", "C0IMLIKE"])
 async def test_validate_refuses_direct_messages(channel):
+    """A direct message or group DM channel is refused before any Slack call."""
     fake = FakeSlack(BASE_ROUTES)
     with pytest.raises(ConnectorConfigError, match="DMs are never ingested"):
         await connector(fake).validate({"channels": ["C0PRODUCT", channel]}, CREDENTIAL)
@@ -111,6 +114,7 @@ async def test_validate_refuses_direct_messages(channel):
 
 
 async def test_sync_refuses_direct_messages():
+    """Syncing a direct message channel is refused too, not only when validating."""
     fake = FakeSlack(BASE_ROUTES)
     with pytest.raises(ConnectorConfigError):
         await collect(connector(fake), {"channels": ["G0MPIM"]})
@@ -130,11 +134,13 @@ async def test_sync_refuses_direct_messages():
     ],
 )
 async def test_validate_config_errors(config, credential, match):
+    """Slack validation rejects empty, blank or unknown channels and no token."""
     with pytest.raises(ConnectorConfigError, match=match):
         await connector(FakeSlack(BASE_ROUTES)).validate(config, credential)
 
 
 async def test_invalid_auth():
+    """An invalid Slack token is an auth error in both validation and syncing."""
     fake = FakeSlack({**BASE_ROUTES, "auth.test": "auth_invalid"})
     with pytest.raises(ConnectorAuthError):
         await connector(fake).validate({"channels": ["C0PRODUCT"]}, CREDENTIAL)
@@ -143,6 +149,7 @@ async def test_invalid_auth():
 
 
 async def test_rate_limited_with_retry_after():
+    """A Slack rate limit during history fetch carries its Retry-After delay."""
     limited = httpx.Response(429, headers={"Retry-After": "30"}, json=fixture("ratelimited"))
     fake = FakeSlack({**BASE_ROUTES, "conversations.history": limited})
     with pytest.raises(ConnectorRateLimited) as raised:
@@ -151,6 +158,7 @@ async def test_rate_limited_with_retry_after():
 
 
 async def test_full_sync_messages_threads_and_pagination():
+    """A full sync paginates channel history, fetches each thread and skips joins."""
     fake = FakeSlack(
         {
             **BASE_ROUTES,
@@ -205,6 +213,7 @@ async def test_full_sync_messages_threads_and_pagination():
 
 
 async def test_incremental_sync_updates_threads_with_new_replies():
+    """An incremental sync re-reads a thread's lookback to catch new replies."""
     cursor = {
         "channels": {
             "C0PRODUCT": {
@@ -250,6 +259,7 @@ async def test_incremental_sync_updates_threads_with_new_replies():
 
 
 async def test_checkpoint_per_channel_keeps_other_channels():
+    """Syncing one channel updates only its own cursor entry, leaving others alone."""
     cursor = {"channels": {"C0OTHER": {"oldest": "1750000000.000000", "threads": {}}}}
     fake = FakeSlack({**BASE_ROUTES, "conversations.history": "history_C0ROADMAP"})
     events = await collect(connector(fake), {"channels": ["C0ROADMAP"]}, cursor)
@@ -271,6 +281,7 @@ SINCE_EPOCH = datetime(2025, 10, 10, tzinfo=UTC).timestamp()
 
 @pytest.mark.parametrize("since", ["not-a-date", 20251010, "2025-13-01"])
 async def test_validate_refuses_a_bad_since(since):
+    """An unparsable since date is refused before any Slack call is made."""
     fake = FakeSlack(BASE_ROUTES)
     with pytest.raises(ConnectorConfigError, match="pick a start date"):
         await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
@@ -278,12 +289,14 @@ async def test_validate_refuses_a_bad_since(since):
 
 
 async def test_validate_accepts_since_or_none():
+    """A valid since date, or none at all, both pass Slack config validation."""
     for since in ("2025-10-10", None):
         fake = FakeSlack(BASE_ROUTES)
         await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
 
 
 async def test_since_reads_no_message_before_it():
+    """A since date is enforced both in the API call and by the connector itself."""
     fake = FakeSlack(
         {
             **BASE_ROUTES,
@@ -302,6 +315,7 @@ async def test_since_reads_no_message_before_it():
 
 
 async def test_since_keeps_messages_on_or_after_it():
+    """A message dated exactly on the since date is still kept, not excluded."""
     fake = FakeSlack(
         {
             **BASE_ROUTES,
@@ -317,6 +331,7 @@ async def test_since_keeps_messages_on_or_after_it():
 
 
 async def test_since_bounds_the_thread_lookback_of_an_incremental_sync():
+    """The since date caps an incremental sync's thread lookback from reaching earlier."""
     # The cursor's lookback would reach back before ``since``: ``since`` wins.
     cursor = {"channels": {"C0PRODUCT": {"oldest": f"{SINCE_EPOCH + 3600:.6f}", "threads": {}}}}
     fake = FakeSlack({**BASE_ROUTES, "conversations.history": "history_C0PRODUCT_page2"})

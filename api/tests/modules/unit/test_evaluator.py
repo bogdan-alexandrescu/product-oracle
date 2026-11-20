@@ -74,10 +74,12 @@ INPUTS = {
     ],
 )
 def test_operators(condition, expected):
+    """Every condition operator evaluates to the expected result."""
     assert evaluate(condition, INPUTS).value is expected
 
 
 def test_missing_paths_are_false_and_reported_never_errors():
+    """A condition on a missing input path is false, never an error."""
     ev = evaluate(
         {
             "op": "or",
@@ -96,6 +98,7 @@ def test_missing_paths_are_false_and_reported_never_errors():
 
 
 def test_every_branch_is_explained_without_short_circuit():
+    """An or condition explains every branch, even one not needed to decide."""
     ev = evaluate(
         {
             "op": "or",
@@ -125,6 +128,7 @@ def test_every_branch_is_explained_without_short_circuit():
     ],
 )
 def test_type_mismatch_is_a_typed_error(condition):
+    """Comparing a condition against the wrong value type is a typed error."""
     with pytest.raises(ConditionTypeError) as e:
         evaluate(condition, INPUTS)
     assert isinstance(e.value, ConditionError)
@@ -132,6 +136,7 @@ def test_type_mismatch_is_a_typed_error(condition):
 
 
 def test_walking_through_a_scalar_is_a_path_error():
+    """A condition path that walks into a scalar raises a typed error."""
     with pytest.raises(ConditionPathError):
         evaluate({"op": "eq", "path": "category.sub", "value": "x"}, INPUTS)
 
@@ -149,11 +154,13 @@ def test_walking_through_a_scalar_is_a_path_error():
     ],
 )
 def test_invalid_trees_are_refused_not_run(condition):
+    """A malformed or unsafe condition tree is refused before it runs."""
     with pytest.raises(ConditionInvalidError):
         evaluate(condition, INPUTS)
 
 
 def test_depth_and_size_are_bounded():
+    """A condition tree too deep or too wide is refused."""
     deep = {"op": "true"}
     for _ in range(13):
         deep = {"op": "not", "arg": deep}
@@ -165,12 +172,14 @@ def test_depth_and_size_are_bounded():
 
 
 def test_strings_are_data_never_code():
+    """A string value in a condition's input is only compared, never run."""
     hostile = {"brief": {"decision": "__import__('os').system('exit 1')"}}
     ev = evaluate({"op": "eq", "path": "brief.decision", "value": "choose_between"}, hostile)
     assert ev.value is False
 
 
 def test_deterministic_and_accepts_the_typed_inputs_model():
+    """A condition is deterministic and accepts the typed inputs model."""
     typed = CompositionInputs(category="ai_agent_platform", signals={"tenant_count": 3})
     cond = {"op": "gte", "path": "signals.tenant_count", "value": 2}
     results = {(evaluate(cond, typed).value, evaluate(cond, typed).score) for _ in range(20)}
@@ -192,6 +201,7 @@ def test_prebuilt_nodes_are_bounded_too():
 
 
 def test_prebuilt_nodes_are_bounded_in_size():
+    """A prebuilt condition tree is bounded in size like a parsed one."""
     from oracle.v2.contract import MAX_CONDITION_NODES, AllOf, Presence
 
     leaves = [Presence(op="present", path="brief.title")] * 50

@@ -40,6 +40,7 @@ def _row(inbox: dict, change_id: str) -> dict | None:
 
 
 async def test_an_ask_oracle_proposal_says_it_came_from_ask_oracle(client):
+    """An Inbox proposal made by asking Oracle says so and names who asked."""
     w = await world()
     before = (await _inbox(client, w, "decider"))["total"]
     card = await one_card(client, w, "commenter", "commenter owns Cut A")
@@ -67,6 +68,7 @@ async def test_an_ask_oracle_proposal_says_it_came_from_ask_oracle(client):
 
 
 async def test_a_teammates_proposal_names_the_teammate(client):
+    """A teammate's own proposed change in the Inbox names them, clears once declined."""
     w = await world()
     body = {"op": "cut", "target": {"item_id": w.ids["cut-a"]}, "before": {"cut": False},
             "after": {"cut": True}}  # fmt: skip

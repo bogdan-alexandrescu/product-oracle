@@ -58,6 +58,7 @@ async def _review(tenant_id, version_id, section_key, verdict) -> None:
 
 
 async def test_import_v1_persists_document_sections_and_citations(client):
+    """Importing a PRD draft stores its sections and citations as the markdown states."""
     tenant_id, auth = await seed_auth()
     resp = await import_draft(client, auth, draft("prd_v1.md"))
     assert resp.status_code == 201, resp.text
@@ -95,6 +96,7 @@ async def test_import_v1_persists_document_sections_and_citations(client):
 
 
 async def test_a_draft_citing_the_oracle_baseline_imports(client):
+    """A citation naming a Ground Truth item imports with its ref kept as written."""
     # source 'oracle': the citation's ref is free text naming the baseline item, kept as is.
     tenant_id, auth = await seed_auth()
     await seed_oracle_refs(tenant_id)
@@ -113,6 +115,7 @@ async def test_a_draft_citing_the_oracle_baseline_imports(client):
 
 
 async def test_an_oracle_citation_naming_no_baseline_item_is_refused(client):
+    """A citation claiming a Ground Truth item that does not exist is refused."""
     # Every citation counts in the quality criteria: an oracle ref must name a baseline
     # item this company has ("baseline <kind> <key>"), else the citation is invalid.
     tenant_id, auth = await seed_auth()
@@ -143,6 +146,7 @@ async def test_an_oracle_citation_naming_no_baseline_item_is_refused(client):
 
 
 async def test_an_oracle_citation_naming_a_rejected_item_is_refused(client):
+    """A citation naming a rejected Ground Truth item is refused; it does not count."""
     # #589 review: a rejected baseline item is none (as everywhere else in the baseline).
     tenant_id, auth = await seed_auth()
     await seed_oracle_refs(tenant_id)
@@ -156,6 +160,7 @@ async def test_an_oracle_citation_naming_a_rejected_item_is_refused(client):
 
 
 async def test_parse_problems_and_bad_oracle_refs_are_refused_together(client):
+    """A draft with both a markdown problem and a bad citation reports both at once."""
     # #589 review: one refusal names every problem, not the parse's now and the refs' on
     # the next try.
     tenant_id, auth = await seed_auth()
@@ -172,6 +177,7 @@ async def test_parse_problems_and_bad_oracle_refs_are_refused_together(client):
 
 
 async def test_reads_list_and_markdown(client):
+    """An imported PRD can be read back by slug, id, version, and as raw markdown."""
     _, auth = await seed_auth()
     text = draft("prd_v1.md")
     created = (await import_draft(client, auth, text)).json()
@@ -200,6 +206,7 @@ async def test_reads_list_and_markdown(client):
 
 
 async def test_missing_ids_and_unknown_citations_are_422_naming_each(client):
+    """A draft with missing heading ids or unknown citations is refused, naming each."""
     tenant_id, auth = await seed_auth()
     bad = (
         draft("prd_v1.md")
@@ -230,6 +237,7 @@ async def test_missing_ids_and_unknown_citations_are_422_naming_each(client):
 
 
 async def test_reimport_same_content_returns_existing_version(client):
+    """Reimporting a PRD's unchanged text returns its existing version, not a new one."""
     tenant_id, auth = await seed_auth()
     first = await import_draft(client, auth, draft("prd_v1.md"))
     again = await import_draft(client, auth, draft("prd_v1.md").replace("\n", "\r\n"))
@@ -241,6 +249,7 @@ async def test_reimport_same_content_returns_existing_version(client):
 
 
 async def test_v2_applies_resolutions_and_warns_on_changed_locked_section(client):
+    """Importing a new version warns when an approved section's text actually changed."""
     tenant_id, auth = await seed_auth()
     v1 = (await import_draft(client, auth, draft("prd_v1.md"))).json()
     await _add_feedback(tenant_id, uuid.UUID(v1["document_id"]))
@@ -279,6 +288,7 @@ async def test_v2_applies_resolutions_and_warns_on_changed_locked_section(client
 
 
 async def test_removed_locked_section_is_reported(client):
+    """Removing an approved section in a new version is reported as a warning."""
     tenant_id, auth = await seed_auth()
     v1 = (await import_draft(client, auth, draft("prd_v1.md"))).json()
     await _review(tenant_id, uuid.UUID(v1["id"]), "open-questions", "approved")
@@ -288,6 +298,7 @@ async def test_removed_locked_section_is_reported(client):
 
 
 async def test_unknown_resolution_ids_are_dropped_not_refused(client):
+    """A resolution naming feedback that no longer exists is dropped with a warning."""
     # A resolution whose feedback_id names no item of the document is dropped with a
     # warning; the draft is still imported (Nov 3).
     tenant_id, auth = await seed_auth()
@@ -304,6 +315,7 @@ async def test_unknown_resolution_ids_are_dropped_not_refused(client):
 
 
 async def test_front_matter_document_must_match_target(client):
+    """A draft's own document reference must match the target or it is refused."""
     _, auth = await seed_auth()
     resp = await import_draft(client, auth, draft("prd_v1.md"), doc="other-doc")
     assert resp.status_code == 422
@@ -318,6 +330,7 @@ async def test_front_matter_document_must_match_target(client):
 
 
 async def test_import_into_approved_document_reopens_review(client):
+    """Importing a new version into an approved PRD reopens it for review."""
     tenant_id, auth = await seed_auth()
     await import_draft(client, auth, draft("prd_v1.md"))
     async with tenant_session(tenant_id) as s:
@@ -331,6 +344,7 @@ async def test_import_into_approved_document_reopens_review(client):
 
 
 async def test_documents_are_tenant_isolated(client):
+    """A PRD is invisible to another company's token despite sharing the same slug."""
     _, auth = await seed_auth()
     await import_draft(client, auth, draft("prd_v1.md"))
     other_tenant = await make_tenant("Other Co")
@@ -346,6 +360,7 @@ async def test_documents_are_tenant_isolated(client):
 
 
 async def test_non_utf8_body_is_rejected(client):
+    """A draft body that is not valid text is refused, not imported garbled."""
     _, auth = await seed_auth()
     resp = await client.post(
         f"{DOC}/versions", content=b"\xff\xfe---", headers={**auth, **MARKDOWN}
@@ -355,6 +370,7 @@ async def test_non_utf8_body_is_rejected(client):
 
 
 async def test_a_known_resolution_applies_beside_a_dropped_unknown_one(client):
+    """One resolution can resolve its item while an unknown one is dropped beside it."""
     tenant_id, auth = await seed_auth()
     v1 = (await import_draft(client, auth, draft("prd_v1.md"))).json()
     async with tenant_session(tenant_id) as s:

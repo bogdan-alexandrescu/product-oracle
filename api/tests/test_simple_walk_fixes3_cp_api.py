@@ -42,6 +42,7 @@ GOAL = "Grow weekly sign-ups"
 
 
 def test_every_op_has_a_plain_sentence():
+    """Every change has a plain-word phrase and sentence, with no raw op name showing."""
     ops = typing.get_args(ChangeOp)
     assert len(ops) >= 30
     for op in ops:
@@ -95,6 +96,7 @@ def test_a_goal_sentence_names_the_goal():
 
 
 async def test_change_list_says_an_undone_estimate_in_words(client):
+    """An estimate change and its undo both read in plain words, not the raw op name."""
     ctx = await make_people()
     w = await PriorityWorld(ctx).build()
     r = await w.change(client, "owner", "estimate_feature", "pay-1",
@@ -127,6 +129,7 @@ async def _decision(s, title: str, origin: str, subject: str, approver) -> None:
 
 
 async def test_simple_reads_product_decisions_never_run_approvals(client):
+    """Simple's decision list shows product decisions only, not a run's own approvals."""
     w = await meeting_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == PRD))

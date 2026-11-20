@@ -65,6 +65,7 @@ def links(body: dict, feature: str) -> list[str]:
 
 
 async def test_a_commenter_suggests_putting_a_feature_on_a_milestone(client):
+    """A commenter's suggestion to place a feature waits on a decider's accept."""
     ctx, ids = await world()
     decider = await with_decider(ctx, ids)
     r = await client.post(CHANGES, json=ask(ids["f3"], ids["m1"]), headers=ctx.as_("commenter"))
@@ -89,6 +90,7 @@ async def test_a_commenter_suggests_putting_a_feature_on_a_milestone(client):
 
 
 async def test_a_commenter_suggests_moving_a_feature(client):
+    """A commenter's suggestion to move a feature waits on the owner's accept to apply."""
     ctx, ids = await world()
     decider = await with_decider(ctx, ids)
     r = await client.post(
@@ -104,6 +106,7 @@ async def test_a_commenter_suggests_moving_a_feature(client):
 
 
 async def test_decline_and_withdraw_leave_the_map(client):
+    """Declining or withdrawing a suggested feature link leaves the map unchanged."""
     ctx, ids = await world()
     await with_decider(ctx, ids)
     h = ctx.as_("commenter")
@@ -121,6 +124,7 @@ async def test_decline_and_withdraw_leave_the_map(client):
 
 
 async def test_who_may_suggest(client):
+    """Only a commenter may suggest a link; an owner or approver must act directly."""
     ctx, ids = await world()
     await with_decider(ctx, ids)
     r = await client.post(CHANGES, json=ask(ids["f3"], ids["m1"]), headers=ctx.as_("viewer"))

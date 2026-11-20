@@ -75,6 +75,7 @@ async def test_the_prd_writer_reads_the_engineering_answers_as_decided_with_who_
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """The PRD writer's prompt states the eng review's answers and who decided them."""
     # protects=answers at the Engineering review reach the PRD draft as decided;
     # fails_when=the PRD writer's prompt lacks an answered question, its answer, the stop
     # or the person who answered it; no_claim=what the writer writes with them.
@@ -96,6 +97,7 @@ async def test_a_sent_back_prd_review_carries_the_answers_into_the_next_draft(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """Sending a PRD review back keeps its answers in the next draft's prompt."""
     # protects=Send back to agents at the PRD review keeps the decided answers;
     # fails_when=the next draft's writer prompt drops them; no_claim=the change request.
     tenant_id, auth = owner
@@ -119,6 +121,7 @@ async def test_a_draft_listing_an_answered_question_as_open_is_refused_naming_it
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """Tells a reviewer exactly which stale question to fix, not just that one exists."""
     # protects=the import check refuses a PRD that lists an answered question as open;
     # fails_when=the draft imports, or the refusal does not name the question; no_claim=a
     # paraphrased question.
@@ -143,6 +146,7 @@ async def test_the_decisions_list_each_answer_under_its_stop(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A stop's Decisions list each answer with its question, person and time."""
     # protects=the run page's Decisions show what was decided at the Engineering review;
     # fails_when=the stop's decision lists no answers, or one without its question, answer,
     # person or time; no_claim=the run page's layout.
@@ -186,6 +190,7 @@ async def test_answers_to_the_agents_questions_at_the_feature_set_reach_the_prd_
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """Answers to the agents' feature-set questions reach the PRD writer's prompt."""
     # protects=answers on the Questions from the agents cards of the feature-set stop are
     # decided for the PRD writer and listed under that stop; fails_when=the writer's prompt
     # or the stop's Decisions lack the question or its answer; no_claim=an unanswered card.
@@ -268,6 +273,7 @@ def _prd(open_lines: str, heading: str = "## Open questions {#open-questions}") 
 
 
 def test_a_longer_new_question_that_contains_an_answered_one_imports():
+    """A longer question containing an answered one still imports as open."""
     # protects=a new, longer question is not taken for an answered one; fails_when=a draft
     # listing "Which database should hold the audit trail for the archive?" or "...CSVs or
     # XLSX..." is refused because "Which database?" / "Should exports use CSV?" were
@@ -287,6 +293,7 @@ def test_a_longer_new_question_that_contains_an_answered_one_imports():
 
 
 def test_an_exact_relisting_of_an_answered_question_is_refused_plainly():
+    """The exact same question listed again as open is refused, named plainly."""
     # protects=the same question listed again as open is refused; fails_when=a bullet with
     # its owner and due tail, or a table row, that is the answered question goes through,
     # or the refusal does not name it plainly; no_claim=paraphrases.
@@ -304,6 +311,7 @@ def test_an_exact_relisting_of_an_answered_question_is_refused_plainly():
 
 
 def test_a_risk_line_quoting_an_answered_question_is_not_an_open_question():
+    """Under open questions, only that list is checked, not a risk quoting one."""
     # protects=in "Risks and open questions" only the open-questions list is checked;
     # fails_when=a risk that quotes an answered question refuses the draft, or the same
     # question listed under its Open questions label goes through; no_claim=other
@@ -363,6 +371,7 @@ async def test_a_card_answered_at_a_sent_back_prd_review_reaches_the_next_attemp
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """An answer given at a sent-back PRD review reaches the next attempt's writer."""
     # protects=answers on the PRD review's Questions from the agents cards survive Send
     # back; fails_when=the attempt-2 writer prompt lacks the question, its answer, the
     # person or the stop, or a draft re-listing it as open imports once the attempt's
@@ -412,6 +421,7 @@ async def test_stop_notes_reach_the_writer_with_the_stop_name_person_and_record(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A stop's note reaches the writer with its name, decision number and person."""
     # protects=an approved or sent-back stop's note is stated in the writer's decided block
     # with the stop's name, its D-number, the person and the day; fails_when=it reaches the
     # writer as "eng_review: <note>" with no person; no_claim=other segments' notes.
@@ -452,6 +462,7 @@ async def test_the_feedback_loop_writer_reads_the_answers_too(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """The feedback loop's next-draft writer is also told the stops' answers."""
     # protects=the feedback loop's next draft (a PRD import, checked like the first) is
     # told the answers; fails_when=prompt_lines for next_draft is empty; no_claim=the loop.
     tenant_id, auth = owner
@@ -466,6 +477,7 @@ async def test_the_answerer_is_who_staged_the_answer_not_who_approved(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """An answer is credited to whoever staged it, not whoever approved the stop."""
     # protects=an answer is attributed to the person who gave it (the staged action's
     # created_by/updated_by); fails_when=the approver is named for a lead's answer;
     # no_claim=the console path.
@@ -491,6 +503,7 @@ async def test_reading_the_answers_of_many_stops_is_batched(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """Reading many stops' answers runs in a fixed number of reads, not one each."""
     # protects=pages that load the Decisions of many runs read the stops' answers in a
     # fixed number of reads; fails_when=of_checkpoints reads once per stop (N+1);
     # no_claim=the reads of the rest of the Decisions.
@@ -562,6 +575,7 @@ async def test_reading_the_answers_of_many_stops_is_batched(
 
 
 def test_a_negated_or_longer_question_is_not_an_answered_one():
+    """A negated or longer question is not mistaken for the one already answered."""
     # protects=only the answered question itself, or one of the same length differing in a
     # word, is taken for it; fails_when=a negated copy ("should not") or a question one
     # word longer is refused at import as already answered; no_claim=paraphrases.
@@ -583,6 +597,7 @@ def test_a_negated_or_longer_question_is_not_an_answered_one():
 
 
 def test_only_an_owner_or_due_tail_is_stripped_not_a_due_in_the_question():
+    """Only a listed owner or due tail strips, not a due date inside the question."""
     # protects=the owner and due day are stripped only in their listed forms ("Owner: …",
     # "needed by …", "(due …)"); fails_when="Is the invoice due on delivery?" is read as
     # "Is the invoice" and refused because "Is the invoice?" was answered; no_claim=other
@@ -603,6 +618,7 @@ def test_only_an_owner_or_due_tail_is_stripped_not_a_due_in_the_question():
 
 
 def test_a_question_one_word_apart_is_the_answered_one_but_not_reordered():
+    """A question one word apart matches the answered one, but reordering does not."""
     # protects=an answered question (five words or more; short ones match only word for word)
     # listed again with one word spelt another way is refused, a question with its words in
     # another order or one word longer imports; fails_when=
@@ -631,6 +647,7 @@ def test_a_question_one_word_apart_is_the_answered_one_but_not_reordered():
 
 
 def test_a_needed_by_or_owned_by_mid_sentence_is_part_of_the_question():
+    """Owner or due wording mid-sentence stays part of the question, not stripped."""
     # protects="owned by", "needed by" and "decide by" are stripped only as a tail after a
     # comma, dash, parenthesis or the question's end; fails_when="Is the report needed by
     # finance each week?" is read as "Is the report" and refused because "Is the report?"
@@ -651,6 +668,8 @@ def test_a_needed_by_or_owned_by_mid_sentence_is_part_of_the_question():
 
 
 def test_the_decision_record_names_a_feature_by_its_title_never_its_key():
+    """A stop's decision names a feature by its title, never its internal key."""
+
     # protects=a stop's decision record names an answer's feature by its title, or "a
     # feature in this run" when it has none; fails_when=the record shows the raw key
     # "price-early"; no_claim=the writer's prompt (it cites the key, apart).
@@ -669,6 +688,7 @@ def test_the_decision_record_names_a_feature_by_its_title_never_its_key():
 
 
 def test_a_different_short_question_one_word_apart_imports():
+    """A short question one word apart from an answered one is a new question."""
     # protects=a short question (under 5 words) is the answered one only with the same
     # words, so a different short question one word apart imports; fails_when="Which
     # region?" is refused because "Which database?" was answered at the Engineering
@@ -691,6 +711,7 @@ def test_a_different_short_question_one_word_apart_imports():
 
 
 def test_the_refusal_quotes_the_draft_line_that_matched():
+    """The refusal quotes both the answered question and the draft's own line."""
     # protects=the refusal names the answered question and the draft's own line;
     # fails_when=the message quotes only the answered question; no_claim=table layout.
     answers = [_answered("Should we keep exports for seven years?", "Yes.")]
@@ -704,6 +725,7 @@ def test_the_refusal_quotes_the_draft_line_that_matched():
 
 
 def test_an_owner_word_inside_the_question_is_not_a_tail():
+    """An owner word inside the question itself is not read as a stripped tail."""
     # protects=only a trailing owner tail ("… Owner: Rae") is stripped; fails_when="Who is
     # the owner: finance or ops?" is also read as "Who is the" and refused because "Who is
     # the?" was answered; no_claim=other tail wordings.
@@ -716,6 +738,7 @@ def test_an_owner_word_inside_the_question_is_not_a_tail():
 
 
 def test_a_question_one_content_word_apart_is_a_new_question():
+    """At five words or more, one word apart counts only for known variants."""
     # protects=at five words or more, one word apart is the answered question only when the
     # two words are one word spelt two ways (an abbreviation, a plural, a known synonym such
     # as datastore/database); fails_when="Should we support Firefox on launch?" is refused
@@ -750,6 +773,7 @@ def test_a_question_one_content_word_apart_is_a_new_question():
 
 
 def test_same_question_reads_variants_both_ways():
+    """same_question reads a word-variant pair as equal in either order."""
     # protects=a variant pair is the same either way round; fails_when="yrs" answered lets
     # "years" import; no_claim=variants of two words or more.
     same = stop_answers.same_question
@@ -762,6 +786,7 @@ def test_same_question_reads_variants_both_ways():
 
 
 def test_a_short_word_or_acronym_is_not_read_as_an_abbreviation():
+    """A short word or real acronym is its own word, not an abbreviation."""
     # protects=a two-letter word or a real acronym is its own word, so a question one such
     # word apart is a new question; fails_when="Should we email users about the outage?" is
     # refused because "Should we email us about the outage?" was answered, or PM/platform,
@@ -785,6 +810,7 @@ def test_a_short_word_or_acronym_is_not_read_as_an_abbreviation():
 
 
 def test_british_and_american_spellings_and_listed_abbreviations_are_one_word():
+    """British or American spelling, or a listed abbreviation, is one same word."""
     # protects=one word spelt the British or American way, or by a common abbreviation, is
     # the answered question; fails_when="Should we cancel canceled orders at once?" imports
     # after "... cancelled orders ..." was answered, or licence/license, centre/center,
@@ -814,6 +840,7 @@ def test_british_and_american_spellings_and_listed_abbreviations_are_one_word():
 
 
 def test_a_real_word_is_never_read_as_an_abbreviation_of_a_longer_one():
+    """A real word is never mistaken for an abbreviation of a longer one."""
     # protects=only listed abbreviations stand for a longer word, a plural takes -es only
     # after s, x, z, ch, sh or o, and the British -our and -re endings are read only at a
     # word's end; fails_when="Should the trial end next week?" is refused because "Should the
@@ -846,6 +873,7 @@ def test_a_real_word_is_never_read_as_an_abbreviation_of_a_longer_one():
 
 
 def test_listed_abbreviations_plurals_and_british_endings_still_read_as_one_word():
+    """Listed abbreviations, plain plurals and British endings still match."""
     # protects=the listed abbreviations, a plain -s or -es plural and the British -our and -re
     # endings are the answered question; fails_when="Who reads the rpt each week?" imports
     # after "Who reads the report each week?" was answered, or colour/color, honour/honor,

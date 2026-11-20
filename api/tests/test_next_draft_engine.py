@@ -71,11 +71,13 @@ ROADMAP = SimpleNamespace(kind="roadmap")
 
 
 def test_only_text_changes_go_to_oracle():
+    """Plain text-only changes are built by Oracle, not sent to the agents."""
     plan = choose_engine([change("goal-trace"), change("problem")], [], PRD)
     assert (plan.engine, plan.why) == ("oracle", [])
 
 
 def test_a_whole_draft_remark_goes_to_the_agents_and_says_so():
+    """A whole-draft remark, not a section one, always needs agents, and says why."""
     item = agent_item(None)
     plan = choose_engine([change()], [item], PRD)
     assert plan.engine == "agents"
@@ -88,6 +90,7 @@ def test_a_whole_draft_remark_goes_to_the_agents_and_says_so():
 
 
 def test_section_items_staged_for_the_agents_need_more_than_text():
+    """An agent item needing more than a text edit forces the agents and says why."""
     plan = choose_engine([], [agent_item("problem"), agent_item("users")], PRD)
     assert plan.engine == "agents"
     assert [(w.code, w.text) for w in plan.why] == [
@@ -96,6 +99,7 @@ def test_section_items_staged_for_the_agents_need_more_than_text():
 
 
 def test_a_text_change_whose_section_is_gone_goes_to_the_agents():
+    """A text change to a section that no longer exists is sent to the agents."""
     a, b = change("solution", gone=True), change("solution", gone=True)
     plan = choose_engine([change("goal-trace"), a, b], [], PRD)
     assert plan.engine == "agents"
@@ -105,6 +109,7 @@ def test_a_text_change_whose_section_is_gone_goes_to_the_agents():
 
 
 def test_every_reason_is_listed_in_plain_words():
+    """Every reason the agents are needed is listed in plain words, one per reason."""
     plan = choose_engine(
         [change("risks", gone=True), change("users", gone=True)],
         [agent_item(None), agent_item(None), agent_item("problem")],
@@ -119,6 +124,7 @@ def test_every_reason_is_listed_in_plain_words():
 
 
 def test_locked_sections_and_roadmaps_do_not_change_the_engine_by_themselves():
+    """A locked section or a roadmap document alone does not send work to the agents."""
     # A locked section is the built-in path's refusal (the plan's), not a reason for agents.
     assert choose_engine([change(locked=True)], [], PRD).engine == "oracle"
     assert choose_engine([change("now")], [], ROADMAP).engine == "oracle"
@@ -208,6 +214,7 @@ async def plan(client, auth, **body) -> dict:
 
 
 async def test_only_text_changes_plan_oracle_and_build_the_refinement_batch(client):
+    """Text-only changes plan for Oracle and build as a refinement batch job."""
     ids = await setup(client)
     auth = ids["auth"]
 
@@ -225,6 +232,7 @@ async def test_only_text_changes_plan_oracle_and_build_the_refinement_batch(clie
 
 
 async def test_staging_for_the_agents_moves_an_answered_comment_to_staged(client):
+    """Staging a comment for the agents moves it to staged just like a text change."""
     ids = await setup(client)
     auth = ids["auth"]
     commenter = await as_user(ids["tenant_id"], "commenter")
@@ -264,6 +272,7 @@ async def test_staging_for_the_agents_moves_an_answered_comment_to_staged(client
 
 
 async def test_mixed_items_go_to_the_agents_with_exactly_the_chosen_items(client, runtime):  # noqa: F811
+    """A mixed set of changes sends only the chosen items to agents, not all staged."""
     ids = await setup(client)
     auth = ids["auth"]
     assert (await stage(client, auth, ids["general"])).status_code == 200
@@ -305,6 +314,7 @@ async def test_mixed_items_go_to_the_agents_with_exactly_the_chosen_items(client
 
 
 async def test_the_built_in_path_refuses_agent_items_and_the_run_refuses_text_only(client):
+    """The built-in build refuses agent items; the agent run refuses text-only ones."""
     ids = await setup(client)
     auth = ids["auth"]
     assert (await stage(client, auth, ids["general"])).status_code == 200
@@ -334,6 +344,7 @@ async def test_the_built_in_path_refuses_agent_items_and_the_run_refuses_text_on
 
 
 async def test_an_estimate_over_the_threshold_needs_an_owner(client, runtime, monkeypatch):  # noqa: F811
+    """An estimate over the cost threshold needs the owner's approval before it runs."""
     ids = await setup(client)
     auth = ids["auth"]
     assert (await stage(client, auth, ids["general"])).status_code == 200
@@ -350,6 +361,7 @@ async def test_an_estimate_over_the_threshold_needs_an_owner(client, runtime, mo
 
 
 async def test_the_plan_says_why_a_built_in_build_cannot_start(client):
+    """The plan endpoint says in plain words why a built-in build cannot start."""
     ids = await setup(client)
     auth = ids["auth"]
     resp = await client.put(
@@ -371,6 +383,7 @@ async def test_the_plan_says_why_a_built_in_build_cannot_start(client):
 
 
 async def test_a_gone_section_chosen_goes_to_the_agents(client):
+    """Choosing a change in a section that is gone sends the whole build to the agents."""
     ids = await setup(client)
     auth = ids["auth"]
     no_problem = draft("prd_v1.md").replace("## 2. Problem {#problem}", "## 2. Context {#context}")
@@ -391,6 +404,7 @@ async def test_the_runs_draft_closes_the_items_and_applies_the_text_it_was_sent(
     client,
     runtime,  # noqa: F811
 ):
+    """A run's draft closes items it resolved and applies the exact text it was sent."""
     ids = await setup(client)
     auth = ids["auth"]
     assert (await stage(client, auth, ids["general"])).status_code == 200
@@ -440,6 +454,7 @@ async def test_the_runs_draft_is_parsed_once_and_off_the_event_loop(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """A run's draft markdown is parsed only once, and off the request's event loop."""
     ids = await setup(client)
     auth = ids["auth"]
     assert (await stage(client, auth, ids["general"])).status_code == 200
@@ -478,6 +493,7 @@ async def test_the_new_run_dialog_offers_only_its_flows_and_points_at_the_others
     client,
     runtime,  # noqa: F811
 ):
+    """The new-run dialog offers only its own flows and points elsewhere for the rest."""
     ids = await setup(client)
     auth = ids["auth"]
     flows_out = {f["key"]: f for f in (await client.get("/v1/flows", headers=auth)).json()["flows"]}

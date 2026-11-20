@@ -80,6 +80,7 @@ def scratch_db():
 
 
 def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
+    """Every lane's migration chains onto the shared history as one straight line."""
     # Lanes add 0014_<lane> on top of 0013 (waves.md); the integrator re-chains them in
     # merge order so the chain stays linear, one head.
     script = ScriptDirectory.from_config(_cfg())
@@ -104,6 +105,7 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
 
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):
+    """Migration 0013 keeps legacy rows intact, and downgrading reverses cleanly."""
     cfg = _cfg()
     upgrade(cfg, "0012")
     t, doc, ver = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

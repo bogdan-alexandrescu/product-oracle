@@ -41,6 +41,7 @@ async def user_id(tenant_id: uuid.UUID, email: str) -> uuid.UUID:
 
 
 async def test_a_commenter_leaves_a_general_item_on_the_draft(client):
+    """A commenter can leave general feedback on the whole draft, with a severity."""
     tenant_id, auth = await two_versions(client)
     commenter = await as_user(tenant_id, "commenter", "reviewer@example.com")
 
@@ -74,6 +75,7 @@ async def test_a_commenter_leaves_a_general_item_on_the_draft(client):
 
 
 async def test_roles_and_validation(client):
+    """Only a commenter or higher can leave general feedback, and its body length is enforced."""
     tenant_id, auth = await two_versions(client)
     viewer = await as_user(tenant_id, "viewer")
     commenter = await as_user(tenant_id, "commenter")
@@ -97,6 +99,7 @@ async def test_roles_and_validation(client):
 
 
 async def test_the_review_comments_job_is_queued_for_it(client):
+    """Leaving general feedback queues a review-comments job for the document."""
     tenant_id, auth = await two_versions(client)
     before = (await client.get(f"/v1/documents/{SLUG}/llm-jobs", headers=auth)).json()
     assert [j for j in before if j["kind"] == "review_comments"] == []
@@ -111,6 +114,7 @@ async def test_the_review_comments_job_is_queued_for_it(client):
 
 
 async def test_the_feedback_list_and_the_inbox_show_it(client):
+    """General feedback shows in both the feedback list and the approver's inbox counts."""
     tenant_id, auth = await two_versions(client)
     commenter = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -133,6 +137,7 @@ async def test_the_feedback_list_and_the_inbox_show_it(client):
 
 
 async def test_the_feedback_loop_prompt_prints_it_as_general(client, runtime):  # noqa: F811
+    """The feedback loop's prompt lists a general feedback item correctly labeled as general."""
     tenant_id, auth = await two_versions(client)
     created = (await client.post(url(2), json={"body": REMARK}, headers=auth)).json()
 
@@ -143,6 +148,7 @@ async def test_the_feedback_loop_prompt_prints_it_as_general(client, runtime):  
 
 
 async def test_comment_and_verdict_items_carry_their_author_too(client):
+    """Feedback items made from a comment or a section review carry who authored them too."""
     tenant_id, auth = await two_versions(client)
     approver = await as_user(tenant_id, "approver", "lead@example.com")
     lead = str(await user_id(tenant_id, "lead@example.com"))
@@ -167,6 +173,7 @@ async def test_comment_and_verdict_items_carry_their_author_too(client):
 
 
 async def test_mcp_clients_leave_whole_draft_remarks_with_a_persons_token(client):
+    """MCP clients can leave general feedback with a person's own token, but a viewer is refused."""
     tenant_id, auth = await two_versions(client)
     async with mcp_client(await api_token(tenant_id, "commenter")) as c:
         tools = {t.name: t for t in (await c.list_tools()).tools}

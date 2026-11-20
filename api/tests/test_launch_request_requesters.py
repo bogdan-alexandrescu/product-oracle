@@ -27,6 +27,7 @@ async def _post(client, auth, path: str, body: dict) -> dict:
 
 
 async def test_requests_for_a_launched_feature_get_notes(client, owner, runtime):  # noqa: F811
+    """A launch's requesters are found from its requests, including merged ones."""
     tenant_id, auth = owner
     by_item = await launched_world(client, auth, runtime, tenant_id)
     async with tenant_session(tenant_id) as s:

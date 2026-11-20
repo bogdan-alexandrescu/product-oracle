@@ -150,6 +150,7 @@ async def test_a_cited_source_deleted_blocks_publish(client):
 
 
 async def test_a_citation_by_item_id_is_matched(client):
+    """A citation by a source item's id is matched, so deleting it blocks publish."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
     source_id, item_id = await _source_item(ctx, owner, url=None)
@@ -210,6 +211,7 @@ async def test_a_deleted_connection_blocks_evidence_and_entity_links(client):
 
 
 async def test_a_deleted_source_with_a_direct_section_link_blocks(client):
+    """A deleted source linked directly to a section blocks publishing that section."""
     ctx = await setup(client)
     await approved(client, ctx)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
@@ -263,6 +265,7 @@ async def _owned_by_commenter(client, ctx, key: str = "solution"):
     ],
 )
 async def test_a_section_edit_cannot_reach_other_sections(client, body):
+    """A section edit cannot add, rename or inject another section through its body."""
     ctx = await setup(client)
     commenter = await _owned_by_commenter(client, ctx)
     s1 = await states(client, ctx.auth, 1)
@@ -276,6 +279,7 @@ async def test_a_section_edit_cannot_reach_other_sections(client, body):
 
 
 async def test_a_section_heading_cannot_carry_another_id(client):
+    """A section edit cannot smuggle another section's id through its own heading."""
     ctx = await setup(client)
     s1 = await states(client, ctx.auth, 1)
     resp = await edit(
@@ -291,6 +295,7 @@ async def test_a_section_heading_cannot_carry_another_id(client):
 
 
 async def test_an_owner_resolves_only_their_sections_feedback(client):
+    """A section owner may resolve only their own section's feedback."""
     ctx = await setup(client)
     commenter = await _owned_by_commenter(client, ctx)
     items = {}
@@ -398,6 +403,7 @@ async def test_a_run_token_push_is_an_agent_draft(client):
 
 
 async def test_a_forged_run_header_is_refused(client):
+    """A forged run token header is refused outside Oracle's own in-process call."""
     ctx = await setup(client)
     resp = await client.get(
         f"/v1/documents/{DOC}", headers={**ctx.auth, "x-oracle-run-token": "ort_forged"}
@@ -415,6 +421,7 @@ async def _agent_import(ctx, markdown: str):
 
 
 async def test_an_agent_cannot_remove_or_rename_an_approved_section(client):
+    """An agent cannot remove or rename an approved section; it becomes a patch."""
     ctx = await setup(client)
     for key in ("problem", "risks"):
         assert (await verdict(client, ctx.auth, 1, key)).status_code == 200
@@ -461,6 +468,7 @@ async def test_an_agent_cannot_remove_or_rename_an_approved_section(client):
 
 
 async def test_an_agent_cannot_rewrite_an_approved_sections_citations(client):
+    """An agent's draft cannot rewrite an approved section's own citations."""
     ctx = await setup(client)
     assert (await verdict(client, ctx.auth, 1, "goal-trace")).status_code == 200
     agent = replace(
@@ -479,6 +487,7 @@ async def test_an_agent_cannot_rewrite_an_approved_sections_citations(client):
 
 
 async def test_a_citation_change_changes_the_revision_and_invalidates(client):
+    """Changing only a citation changes its revision and stales just that approval."""
     ctx = await setup(client)
     assert (await verdict(client, ctx.auth, 1, "goal-trace")).status_code == 200
     assert (await verdict(client, ctx.auth, 1, "problem")).status_code == 200
@@ -501,6 +510,7 @@ async def test_a_citation_change_changes_the_revision_and_invalidates(client):
 
 
 async def test_brief_membership_changes_the_revision(client):
+    """Adding a section to the brief layer changes its revision and stales approval."""
     ctx = await setup(client)
     assert (await verdict(client, ctx.auth, 1, "problem")).status_code == 200
     briefed = replace(
@@ -517,6 +527,7 @@ async def test_brief_membership_changes_the_revision(client):
 
 
 async def test_publish_only_the_latest_version_unless_the_company_allows(client):
+    """Publishing an older version is blocked unless the company allows it."""
     ctx = await setup(client)
     await approved(client, ctx)
     v2 = replace(DRAFT, "Owner: product.", "Owner: growth.")
@@ -537,6 +548,7 @@ async def test_publish_only_the_latest_version_unless_the_company_allows(client)
 
 
 async def test_a_decider_set_later_reapproves_the_version(client):
+    """Setting a decider after approval needs that decider's own approval to publish."""
     ctx = await setup(client)
     await approved(client, ctx)
     decider = await person(ctx.tenant_id, "approver", "decider")
@@ -554,6 +566,7 @@ async def test_a_decider_set_later_reapproves_the_version(client):
 
 
 async def test_the_decider_behind_an_api_token_is_the_user(client):
+    """An API token's approval counts as its underlying user for the decider check."""
     ctx = await setup(client)
     decider = await person(ctx.tenant_id, "approver", "decider")
     async with tenant_session(ctx.tenant_id) as s:
@@ -578,6 +591,7 @@ async def test_the_decider_behind_an_api_token_is_the_user(client):
     [("no-such-template", '"1"'), ("oracle-default", '"latest"'), ("oracle-default", '"99"')],
 )
 async def test_an_unresolvable_template_fails_closed(client, template, version):
+    """An unknown or unresolved template version fails closed and blocks publish."""
     templated = replace(
         DRAFT,
         "title: Team calendar PRD\n",
@@ -591,6 +605,7 @@ async def test_an_unresolvable_template_fails_closed(client, template, version):
 
 
 async def test_rest_imports_without_a_base_are_flagged(client):
+    """A REST import without a base is flagged with a note, unlike one with a base."""
     ctx = await setup(client)
     v2 = replace(DRAFT, "Owner: product.", "Owner: growth.")
     resp = await import_md(client, ctx.auth, v2)
@@ -603,6 +618,7 @@ async def test_rest_imports_without_a_base_are_flagged(client):
 
 
 async def test_front_matter_changed_since_the_base_is_a_conflict(client):
+    """A draft with stale front matter conflicts, unless merged with the latest first."""
     ctx = await setup(client)
     v2 = replace(DRAFT, "title: Team calendar PRD\n", "title: Team calendar PRD (renamed)\n")
     assert (await import_md(client, ctx.auth, v2, base=1)).status_code == 201
@@ -617,6 +633,7 @@ async def test_front_matter_changed_since_the_base_is_a_conflict(client):
 
 
 async def test_cli_push_sends_the_base_it_pulled(client, tmp_path):
+    """CLI push sends the base it pulled, so a stale edit on it still conflicts."""
     ctx = await setup(client)
     token = ctx.auth["Authorization"].split(" ", 1)[1]
     code, out, _ = await run_cli(
@@ -634,6 +651,7 @@ async def test_cli_push_sends_the_base_it_pulled(client, tmp_path):
 
 
 async def test_mcp_push_draft_creates_a_document_with_base_zero(client):
+    """A draft pushed with base zero creates a document; an unchanged push still works."""
     from tests.legacy.helpers import mcp_session
 
     tenant_id = (await setup(client)).tenant_id
@@ -686,6 +704,7 @@ async def test_mcp_push_draft_without_a_base_takes_the_latest_version(client):
 
 
 async def test_mcp_push_draft_with_a_stale_base_is_still_a_conflict(client):
+    """An MCP push draft with a stale base still conflicts like the REST import."""
     from tests.legacy.helpers import mcp_session
 
     ctx = await setup(client)
@@ -703,6 +722,7 @@ async def test_mcp_push_draft_with_a_stale_base_is_still_a_conflict(client):
 
 
 async def test_publications_refuse_delete_but_a_company_delete_cascades(client):
+    """A publication or its version cannot be deleted alone; a company delete cascades."""
     ctx = await setup(client)
     await approved(client, ctx)
     resp = await client.post(ctx.v(1, "/publish"), json={}, headers=ctx.auth)
@@ -729,6 +749,7 @@ async def test_publications_refuse_delete_but_a_company_delete_cascades(client):
 
 
 async def test_get_or_create_state_is_race_free(client):
+    """Two concurrent calls to get or create a section's state return the same row."""
     from oracle.review.state import get_or_create_state
 
     ctx = await setup(client)
@@ -778,6 +799,7 @@ async def test_a_revocation_waits_for_a_publish_in_progress(client):
 
 
 def test_normalized_urls():
+    """URL normalization strips scheme case, port, trailing slash and fragment."""
     from oracle.review.publish import normalize_url
 
     assert normalize_url("HTTPS://Example.COM:443/a/b/?q=1#frag") == "https://example.com/a/b?q=1"
@@ -787,6 +809,7 @@ def test_normalized_urls():
 
 
 async def test_an_agent_draft_changing_only_approved_sections_leaves_patches(client):
+    """An agent's draft touching only approved sections keeps their text, as a patch."""
     ctx = await setup(client)
     assert (await verdict(client, ctx.auth, 1, "problem")).status_code == 200
     result = await _agent_import(
@@ -834,6 +857,7 @@ SECTIONS = ["title", "goal-trace", "problem", "solution", "risks", "sources"]
 
 
 async def test_a_demoted_approvers_approvals_stop_counting(client):
+    """Demoting an approver makes their past approvals stop counting toward publish."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     pm = await person(ctx.tenant_id, "approver", "pm")
@@ -869,6 +893,7 @@ async def test_a_demoted_approvers_approvals_stop_counting(client):
 
 
 async def test_a_demoted_designated_decider_blocks(client):
+    """Demoting the document's named decider blocks publish until a current one acts."""
     ctx = await setup(client)
     decider = await person(ctx.tenant_id, "approver", "decider")
     await policy(client, ctx, decider_id=str(decider.user_id))
@@ -884,6 +909,7 @@ async def test_a_demoted_designated_decider_blocks(client):
 
 
 async def test_a_demoted_mandatory_reviewer_blocks(client):
+    """Demoting a mandatory reviewer blocks publish until a current one approves."""
     ctx = await setup(client)
     reviewer = await person(ctx.tenant_id, "approver", "eng-lead")
     await policy(client, ctx, mandatory_reviewer_ids=[str(reviewer.user_id)])
@@ -939,6 +965,7 @@ async def test_a_removed_members_approvals_stop_counting(client):
 
 
 async def test_the_last_owner_cannot_be_removed(client):
+    """The company's last owner cannot be removed."""
     ctx = await setup(client)
     async with tenant_session(ctx.tenant_id) as s:
         [owner] = (await s.scalars(select(User).where(User.role == "owner"))).all()
@@ -972,6 +999,7 @@ async def test_a_removed_members_sources_are_revoked_first(client):
 
 
 async def test_a_revoked_tokens_verdicts_stop_counting(client):
+    """Revoking an API token makes the verdicts it cast stop counting toward publish."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     async with tenant_session(ctx.tenant_id) as s:
@@ -1017,6 +1045,7 @@ FENCED = replace(DRAFT, "A shared calendar view per project.", "A shared calenda
 
 @pytest.mark.usefixtures("local_runtime")
 async def test_an_unclosed_fence_push_draft_keeps_the_approved_section(client):
+    """A pushed draft's unclosed fence closes before swallowing an approved section."""
     from oracle.runs.models import Run
     from oracle.runtokens import mint_run_token
     from tests.legacy.helpers import mcp_session
@@ -1086,6 +1115,7 @@ async def test_the_hold_refuses_a_draft_that_still_loses_an_approved_section(cli
     ],
 )
 def test_compose_closes_a_dangling_fence(body, closing):
+    """Composing markdown closes a section's own dangling fence, leaving others alone."""
     from oracle.docs.parser import parse_draft
     from oracle.jobs.service import compose_markdown
 
@@ -1100,6 +1130,7 @@ def test_compose_closes_a_dangling_fence(body, closing):
 
 
 def test_compose_leaves_closed_fences_and_the_last_section_alone():
+    """Composing markdown leaves an already-closed fence and the last open fence alone."""
     from oracle.jobs.service import compose_markdown
 
     sections = [
@@ -1115,6 +1146,7 @@ def test_compose_leaves_closed_fences_and_the_last_section_alone():
 
 
 def test_normalized_urls_ignore_scheme_www_slash_and_tracking():
+    """URL normalization treats scheme, www, slash and tracking params as one address."""
     from oracle.review.publish import normalize_url
 
     assert normalize_url("http://www.Example.com/a/") == "https://example.com/a"
@@ -1153,6 +1185,7 @@ async def _cited(client, ctx, ref: str, source: str = "web") -> None:
 
 
 async def test_a_citation_url_variant_is_matched(client):
+    """A citation using a URL variant still matches the source item it points to."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
     source_id, _ = await _source(ctx, owner)
@@ -1164,6 +1197,7 @@ async def test_a_citation_url_variant_is_matched(client):
 
 
 async def test_a_citation_by_external_id_is_matched(client):
+    """A citation by a source's external id is matched when that source is deleted."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
     source_id, _ = await _source(ctx, owner, url=None)
@@ -1173,6 +1207,7 @@ async def test_a_citation_by_external_id_is_matched(client):
 
 
 async def test_a_citation_by_evidence_id_is_matched(client):
+    """A citation by an evidence record's id is matched back to its source item."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
     source_id, item_id = await _source(ctx, owner, url="https://x.test/evidence-only")
@@ -1205,6 +1240,7 @@ async def test_a_citation_by_evidence_id_is_matched(client):
     ],
 )
 async def test_citation_source_and_retrieved_at_change_the_revision(client, old, new):
+    """Changing a citation's source or retrieval date stales that section's approval."""
     ctx = await setup(client)
     assert (await verdict(client, ctx.auth, 1, "goal-trace")).status_code == 200
     assert (await import_md(client, ctx.auth, replace(DRAFT, old, new), base=1)).status_code == 201
@@ -1213,6 +1249,7 @@ async def test_citation_source_and_retrieved_at_change_the_revision(client, old,
 
 
 async def test_an_unchanged_retrieved_at_keeps_the_revision(client):
+    """Re-importing with an unchanged retrieval date leaves the approval standing."""
     dated = replace(
         DRAFT, "title: Calendar survey", "title: Calendar survey\n    retrieved_at: 2026-09-01"
     )
@@ -1224,6 +1261,7 @@ async def test_an_unchanged_retrieved_at_keeps_the_revision(client):
 
 
 async def test_a_link_added_after_approval_stales_the_section(client):
+    """Linking a new source to a section after approval stales that approval alone."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     await approve_all(client, ctx.auth, 1)
@@ -1292,6 +1330,7 @@ def _ev(theme=None):
 
 
 def test_a_link_reference_does_not_leak_across_sections():
+    """A link reference defined in one section never resolves inside another section."""
     from oracle.export.render import build_context
 
     ctx = build_context(_ev())
@@ -1300,6 +1339,7 @@ def test_a_link_reference_does_not_leak_across_sections():
 
 
 def test_a_link_reference_does_not_leak_across_themed_sections():
+    """A link reference in one themed group never resolves inside another group."""
     from oracle.export.render import build_themed_context
 
     theme = SimpleNamespace(key="plain", name="Plain", tokens={}, css="")
@@ -1312,6 +1352,7 @@ def test_a_link_reference_does_not_leak_across_themed_sections():
 
 
 async def test_an_open_critical_change_request_blocks_publish(client):
+    """An open critical change request blocks publish until it is addressed."""
     ctx = await setup(client)
     created = await client.post(
         ctx.v(1, "/comments"),
@@ -1343,6 +1384,7 @@ async def test_an_open_critical_change_request_blocks_publish(client):
 
 
 async def test_a_run_draft_closes_only_feedback_on_sections_it_changed(client):
+    """A run's draft resolves feedback only on the sections it actually changed."""
     ctx = await setup(client)
     assert (await verdict(client, ctx.auth, 1, "risks")).status_code == 200
     items = {}
@@ -1393,6 +1435,7 @@ async def test_a_run_draft_closes_only_feedback_on_sections_it_changed(client):
 
 
 async def test_a_run_draft_cannot_decline_feedback(client):
+    """A run's draft cannot decline feedback; only addressing it is accepted."""
     ctx = await setup(client)
     created = await client.post(
         ctx.v(1, "/comments"),
@@ -1508,6 +1551,7 @@ async def lapsed_reviews(ctx, user_id) -> list[SectionReview]:
 
 
 async def test_a_disabled_member_keeps_their_row_and_cannot_sign_in_anywhere(client):
+    """A disabled member keeps their row but is refused on every sign-in path."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     async with tenant_session(ctx.tenant_id) as s:
@@ -1560,6 +1604,7 @@ async def test_a_disabled_member_keeps_their_row_and_cannot_sign_in_anywhere(cli
 
 
 async def test_a_disabled_member_cannot_act_through_mcp_or_a_run(client):
+    """Disabling a member voids their tokens and cancels their running run."""
     from oracle.mcp.auth import verify
 
     ctx = await setup(client)
@@ -1606,6 +1651,7 @@ async def test_a_disabled_creators_run_token_header_is_refused(client):
 
 
 async def test_iap_refuses_a_disabled_email_and_never_provisions_it_again(client, monkeypatch):
+    """A disabled user's IAP sign-in is refused without creating a second account."""
     from oracle.auth import iap
     from oracle.config import get_settings
     from tests import test_iap
@@ -1643,6 +1689,7 @@ async def test_iap_refuses_a_disabled_email_and_never_provisions_it_again(client
 
 
 async def test_disabling_revokes_connections_at_the_provider_and_records_sources(client, provider):
+    """Disabling a member revokes their provider connections but keeps their sources."""
     from oracle import crypto
 
     ctx = await setup(client)
@@ -1713,6 +1760,7 @@ async def test_disabling_revokes_connections_at_the_provider_and_records_sources
 
 
 async def test_the_last_active_owner_cannot_be_disabled(client):
+    """The last active owner cannot be disabled or demoted; disabled ones do not count."""
     ctx = await setup(client)
     async with tenant_session(ctx.tenant_id) as s:
         [owner] = (await s.scalars(select(User).where(User.role == "owner"))).all()
@@ -1728,6 +1776,7 @@ async def test_the_last_active_owner_cannot_be_disabled(client):
 
 
 async def test_delete_is_kept_as_disable(client):
+    """Deleting a member only disables their row; nothing is actually removed."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     assert (await client.delete(f"/v1/members/{pm.user_id}", headers=ctx.auth)).status_code == 204
@@ -1736,6 +1785,7 @@ async def test_delete_is_kept_as_disable(client):
 
 
 async def test_restore_is_owner_only_and_audited(client):
+    """Only an owner restores a disabled member, and a prior session stays dead after."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     other = await person(ctx.tenant_id, "approver", "other")
@@ -1775,6 +1825,7 @@ async def test_restore_is_owner_only_and_audited(client):
 
 
 async def test_a_disabled_member_is_not_a_valid_decider(client):
+    """A disabled member cannot be set as a document's decider."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     assert (await disable(client, ctx, pm.user_id)).status_code == 200
@@ -1790,6 +1841,7 @@ async def test_a_disabled_member_is_not_a_valid_decider(client):
 
 
 async def test_demote_then_promote_never_revives_approvals(client):
+    """Demoting then promoting a member back never revives their old approvals."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     pm = await person(ctx.tenant_id, "approver", "pm")
@@ -1814,6 +1866,7 @@ async def test_demote_then_promote_never_revives_approvals(client):
 
 
 async def test_owner_to_approver_is_not_a_lapse(client):
+    """Moving an owner to approver, a role that still approves, is not a lapse."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "owner", "pm")
     await approved(client, ctx, headers=pm.headers)
@@ -1822,6 +1875,7 @@ async def test_owner_to_approver_is_not_a_lapse(client):
 
 
 async def test_disable_then_restore_never_revives_approvals(client):
+    """Disabling then restoring a member never revives approvals lost while disabled."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     pm = await person(ctx.tenant_id, "approver", "pm")
@@ -1837,6 +1891,7 @@ async def test_disable_then_restore_never_revives_approvals(client):
 
 
 async def test_a_lapsed_version_approval_stops_showing_approved(client):
+    """A lapsed version approval stops the document and its export reading approved."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     await approved(client, ctx, headers=pm.headers)
@@ -1853,6 +1908,7 @@ async def test_a_lapsed_version_approval_stops_showing_approved(client):
 
 
 async def test_role_changes_and_disables_take_the_review_gate(client, monkeypatch):
+    """Changing a role or disabling a member takes the review gate exclusively first."""
     from oracle.review import publish
 
     ctx = await setup(client)
@@ -1876,6 +1932,7 @@ async def test_role_changes_and_disables_take_the_review_gate(client, monkeypatc
 
 
 async def test_a_tokens_approvals_record_it_and_revoking_it_voids_them(client):
+    """A token's approvals record the token and its user, readable by owners only."""
     ctx = await setup(client)
     await policy(client, ctx, section_approval="all_sections")
     pm = await person(ctx.tenant_id, "approver", "pm")
@@ -1926,6 +1983,7 @@ async def test_a_tokens_approvals_record_it_and_revoking_it_voids_them(client):
 
 
 async def test_a_token_revoked_outside_the_endpoint_still_voids_at_gate_time(client):
+    """A token revoked directly in the database still voids its approval at gate time."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     token_id, agent = await member_token(ctx, pm.user_id)
@@ -1950,6 +2008,7 @@ async def test_a_token_revoked_outside_the_endpoint_still_voids_at_gate_time(cli
     ],
 )
 def test_unclosed_fence_ignores_trailing_whitespace_lines(body):
+    """Trailing whitespace or blank lines after an unclosed fence still count it open."""
     from oracle.docs.parser import unclosed_fence
 
     assert unclosed_fence(body) == "```"
@@ -1957,6 +2016,7 @@ def test_unclosed_fence_ignores_trailing_whitespace_lines(body):
 
 @pytest.mark.parametrize("body", ["```\ncode\n```\n  \n", "```\ncode\n```\n\n\n", "Text.\n\n  "])
 def test_a_closed_fence_with_trailing_blanks_is_closed(body):
+    """Trailing blank lines after a closed fence do not make it read as unclosed."""
     from oracle.docs.parser import unclosed_fence
 
     assert unclosed_fence(body) is None
@@ -1964,6 +2024,7 @@ def test_a_closed_fence_with_trailing_blanks_is_closed(body):
 
 @pytest.mark.parametrize("body", ["Intro.\n\n```text\ncode\n   ", "Intro.\n\n```text\ncode\n\n\n"])
 def test_compose_closes_a_fence_with_trailing_blank_lines(body):
+    """Composing markdown closes a fence even when trailing blank lines follow it."""
     from types import SimpleNamespace
 
     from oracle.docs.parser import parse_draft
@@ -1979,6 +2040,7 @@ def test_compose_closes_a_fence_with_trailing_blank_lines(body):
 
 
 def test_compose_refuses_to_lose_a_section(monkeypatch):
+    """Composing markdown refuses to silently drop a section swallowed by a fence."""
     from types import SimpleNamespace
 
     from oracle.docs import parser
@@ -2000,6 +2062,7 @@ def test_compose_refuses_to_lose_a_section(monkeypatch):
 
 
 async def test_a_notion_page_id_citation_is_matched(client):
+    """A citation by a Notion page id is matched, so its deleted source blocks publish."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
     page_id = str(uuid.uuid4())
@@ -2029,6 +2092,7 @@ async def test_a_notion_page_id_citation_is_matched(client):
 
 
 def test_google_docs_edit_view_and_usp_are_one_url():
+    """Google Docs edit, view, preview and share-link variants normalize to one URL."""
     from oracle.review.publish import normalize_url
 
     base = "https://docs.google.com/document/d/AbC123/edit"
@@ -2044,6 +2108,7 @@ def test_google_docs_edit_view_and_usp_are_one_url():
 
 
 def test_percent_encoding_is_normalized():
+    """URL normalization treats equivalent percent-encoded paths as the same URL."""
     from oracle.review.publish import normalize_url
 
     assert normalize_url("https://example.com/a%7Eb") == normalize_url("https://example.com/a~b")
@@ -2056,6 +2121,7 @@ def test_percent_encoding_is_normalized():
 
 
 async def test_a_url_with_a_user_name_is_matched(client):
+    """A citation URL with a user-name prefix still matches its deleted source item."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "source-owner")
     url = "https://reader@example.com/private-survey"
@@ -2121,6 +2187,7 @@ def cookie_headers(resp: httpx.Response) -> dict[str, str]:
 
 
 async def test_a_session_signed_before_a_disable_stays_dead_after_restore(client):
+    """Every session cookie signed before a disable stays refused even after restore."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     email = await email_of(ctx, pm.user_id)
@@ -2158,6 +2225,7 @@ async def test_a_session_signed_while_disabled_is_dead_after_restore(client, mon
 
 
 async def test_an_oauth_code_issued_before_a_disable_is_void_after_restore(client):
+    """An OAuth code issued before a disable is void even after the member is restored."""
     from oracle.mcp.oauth import service as oauth
     from oracle.mcp.oauth.models import OAuthClient
     from tests.test_oauth import REDIRECT, pkce
@@ -2267,6 +2335,7 @@ ROUTES = [
 async def test_a_caller_who_lost_standing_while_waiting_on_the_gate_is_refused(
     client, monkeypatch, route, how
 ):
+    """A caller disabled, demoted or revoked while waiting on the gate is refused."""
     from datetime import UTC, datetime
 
     from oracle.auth.service import create_api_token
@@ -2362,6 +2431,7 @@ async def add_oauth_connection(ctx, user_id):
 async def test_a_disable_calls_providers_after_it_commits_outside_the_gate(
     client, monkeypatch, provider_security4
 ):
+    """Disabling a member revokes provider access only after the disable commits."""
     from sqlalchemy import text
 
     from oracle.connections import service as connections
@@ -2399,6 +2469,7 @@ async def test_a_disable_calls_providers_after_it_commits_outside_the_gate(
 async def test_a_failed_provider_revoke_is_retried_from_the_tick(
     client, monkeypatch, provider_security4
 ):
+    """A provider revoke that failed on disable is retried later by the scheduled tick."""
     from datetime import UTC, datetime
 
     from oracle.connections import service as connections
@@ -2453,6 +2524,7 @@ async def oauth_grant(ctx, user_id) -> tuple[str, str, str, uuid.UUID]:
 
 
 async def test_approvals_through_an_oauth_grant_record_it(client):
+    """An approval through an OAuth grant records that grant and its user."""
     from oracle.audit import AuditEvent
     from oracle.docs.models import DocumentVersion
     from oracle.review.models import SectionReview
@@ -2486,6 +2558,7 @@ async def test_approvals_through_an_oauth_grant_record_it(client):
 
 @pytest.mark.parametrize("how", ["revoke_access", "revoke_refresh", "refresh_reuse"])
 async def test_revoking_an_oauth_grant_voids_its_approvals(client, how):
+    """Revoking an OAuth grant, by token or reuse, voids the approvals it made."""
     from oracle.docs.models import DocumentVersion
     from oracle.review.models import SectionReview
     from tests.review_v2_helpers import approve_all, states, verdict
@@ -2535,6 +2608,7 @@ async def test_revoking_an_oauth_grant_voids_its_approvals(client, how):
 
 
 async def test_a_grant_revoked_outside_the_endpoint_still_voids_at_gate_time(client):
+    """An OAuth grant revoked directly in the database still voids it at gate time."""
     from datetime import UTC, datetime
 
     from sqlalchemy import update
@@ -2558,6 +2632,7 @@ async def test_a_grant_revoked_outside_the_endpoint_still_voids_at_gate_time(cli
 
 
 async def test_a_verdict_through_a_grant_revoked_while_waiting_is_refused(client, monkeypatch):
+    """A verdict is refused if its OAuth grant is revoked while the request waits."""
     from datetime import UTC, datetime
 
     from sqlalchemy import update
@@ -2597,6 +2672,7 @@ def _uuid_forms(page: uuid.UUID) -> list[str]:
 @pytest.mark.parametrize("stored", ["dashed", "undashed"])
 @pytest.mark.parametrize("revoke", ["delete_source", "disable_owner"])
 async def test_a_notion_page_id_in_any_uuid_form_is_matched(client, form, stored, revoke):
+    """A Notion page id cited in any UUID text form still matches its stored item."""
     from oracle.sources.models import Source, SourceItem
     from tests.review_v2_helpers import DRAFT, import_md, replace
 
@@ -2758,6 +2834,7 @@ async def test_a_connections_callback_racing_a_disable_connects_nothing(client, 
 
 
 async def test_a_disable_revokes_the_invites_the_member_created(client):
+    """Disabling a member revokes the invites they created, leaving others alone."""
     from oracle.members.models import Invite
 
     ctx = await setup(client)
@@ -2778,6 +2855,7 @@ async def test_a_disable_revokes_the_invites_the_member_created(client):
 
 
 async def test_a_disable_cancels_the_members_queued_llm_jobs(client):
+    """Disabling a member cancels their own queued jobs, leaving others untouched."""
     from oracle.docs.models import Document
     from oracle.jobs.models import LlmJob
 
@@ -2804,6 +2882,7 @@ async def test_a_disable_cancels_the_members_queued_llm_jobs(client):
 async def test_a_spend_approval_by_a_disabled_approver_is_voided_on_an_unstarted_run(
     client, started
 ):
+    """A run's spend approval by a later-disabled approver is voided before it starts."""
     from datetime import UTC, datetime
     from decimal import Decimal
 
@@ -2846,6 +2925,7 @@ async def test_a_spend_approval_by_a_disabled_approver_is_voided_on_an_unstarted
 
 
 async def test_a_sync_in_flight_does_not_resume_a_disabled_members_source(client, monkeypatch):
+    """A sync running when its owner is disabled does not resume past that point."""
     from oracle import crypto
     from oracle.connections.models import Connection
     from oracle.sources import base
@@ -2905,6 +2985,7 @@ async def test_a_sync_in_flight_does_not_resume_a_disabled_members_source(client
 
 
 async def test_a_revoked_run_token_is_refused_under_the_gate(client):
+    """A revoked run token is refused by the gate even though it once passed."""
     from oracle.auth.deps import Principal
     from oracle.auth.service import caller_refusal
     from oracle.runs.models import Run
@@ -2935,6 +3016,7 @@ async def test_a_revoked_run_token_is_refused_under_the_gate(client):
 
 @pytest.mark.parametrize("field", ["owner_id", "reviewer_ids"])
 async def test_a_disabled_member_cannot_be_a_section_owner_or_reviewer(client, field):
+    """A disabled member cannot be assigned as a section's owner or reviewer."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     assert (await disable(client, ctx, pm.user_id)).status_code == 200
@@ -2947,6 +3029,7 @@ async def test_a_disabled_member_cannot_be_a_section_owner_or_reviewer(client, f
 
 
 async def test_campaign_invitees_by_role_leave_out_disabled_members(client):
+    """A review campaign's invitees by role leave out members who are disabled."""
     from oracle.review.models import Notification
 
     ctx = await setup(client)
@@ -2966,6 +3049,7 @@ async def test_campaign_invitees_by_role_leave_out_disabled_members(client):
 
 
 async def test_the_legacy_version_view_shows_a_lapsed_approval_as_lapsed(client):
+    """The legacy version view shows a demoted approver's lapsed approval and reason."""
     from tests.review_v2_helpers import verdict
 
     pass
@@ -2985,6 +3069,7 @@ async def test_the_legacy_version_view_shows_a_lapsed_approval_as_lapsed(client)
 
 
 async def test_a_disabled_row_does_not_block_the_same_email_in_another_company(client):
+    """A disabled user row in one company does not block the same email in another."""
     from datetime import UTC, datetime
 
     from oracle.auth.service import authenticate_user, create_user
@@ -3012,6 +3097,7 @@ async def test_a_disabled_row_does_not_block_the_same_email_in_another_company(c
 
 
 async def test_a_new_approval_keeps_the_lapsed_history(client):
+    """A new approval after a lapse keeps the lapsed one in history, not erased."""
     pass
     pass
 
@@ -3174,6 +3260,7 @@ APPROVER_ROUTES = ["llm_job_enqueue", "run_start", "run_create"]
 async def test_an_owner_or_approver_write_by_a_caller_who_lost_standing_is_refused(
     client, monkeypatch, route, how
 ):
+    """Owner and approver writes refuse a caller who lost standing, any way."""
     from oracle.jobs.models import LlmJob
     from oracle.review import publish
     from oracle.runs.models import Run
@@ -3254,6 +3341,7 @@ async def test_an_owner_or_approver_write_by_a_caller_who_lost_standing_is_refus
 
 
 async def test_an_active_owner_still_writes_settings_and_policies(client):
+    """An owner who stays active keeps writing settings and policies."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "owner", "owner")
     for what in ROGUE_WRITES:
@@ -3337,6 +3425,7 @@ async def _revoke_failures(client, headers) -> list[dict]:
 async def test_a_failing_revoke_is_retried_by_time_for_24_hours_and_keeps_its_copy(
     client, monkeypatch, provider_security5
 ):
+    """A failed revoke retries with backoff for 24 hours, keeping its copy."""
     from oracle.connections import service as connections
 
     ctx = await setup(client)
@@ -3377,6 +3466,7 @@ async def test_a_failing_revoke_is_retried_by_time_for_24_hours_and_keeps_its_co
 async def test_not_configured_and_unreadable_are_not_a_success(
     client, monkeypatch, provider_security5, outcome
 ):
+    """A revoke not configured or unreadable is pending, never a success."""
     from oracle.connections import service as connections
 
     ctx = await setup(client)
@@ -3391,6 +3481,7 @@ async def test_not_configured_and_unreadable_are_not_a_success(
 
 
 async def test_owners_see_revoke_failures_others_do_not(client, monkeypatch, provider_security5):
+    """Only owners see revoke failures, which also show in the inbox."""
     from oracle.connections import service as connections
 
     ctx = await setup(client)
@@ -3406,6 +3497,7 @@ async def test_owners_see_revoke_failures_others_do_not(client, monkeypatch, pro
 
 
 async def test_retry_runs_now_and_a_success_drops_the_copy(client, monkeypatch, provider_security5):
+    """Retry is owner-only; a success drops the copy and is audited."""
     from oracle.audit import AuditEvent
     from oracle.connections import service as connections
 
@@ -3435,6 +3527,7 @@ async def test_retry_runs_now_and_a_success_drops_the_copy(client, monkeypatch, 
 
 
 async def test_a_failed_retry_keeps_the_item(client, monkeypatch, provider_security5):
+    """A retry that fails again keeps the item and its stored copy."""
     from oracle.connections import service as connections
 
     ctx = await setup(client)
@@ -3454,6 +3547,7 @@ async def test_a_failed_retry_keeps_the_item(client, monkeypatch, provider_secur
 async def test_dismiss_is_owner_only_audited_and_drops_the_copy(
     client, monkeypatch, provider_security5
 ):
+    """Dismiss is owner-only, audited, drops the copy, never retried again."""
     from oracle.audit import AuditEvent
     from oracle.connections import service as connections
 
@@ -3489,6 +3583,7 @@ async def test_dismiss_is_owner_only_audited_and_drops_the_copy(
 async def test_dismiss_by_an_owner_disabled_while_waiting_on_the_gate_is_refused(
     client, monkeypatch, provider_security5
 ):
+    """Dismissing a revoke is refused if the owner lost standing at the gate."""
     from oracle.connections import service as connections
     from oracle.review import publish
 
@@ -3520,6 +3615,7 @@ async def test_dismiss_by_an_owner_disabled_while_waiting_on_the_gate_is_refused
 async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
     client, monkeypatch, provider_security5
 ):
+    """A tick runs follow-ups after runs and jobs, within its time budget."""
     from oracle.connections import service as connections
     from oracle.members import service as members
     from oracle.members.models import MemberFollowUp
@@ -3573,6 +3669,7 @@ async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
 async def test_a_db_error_in_one_follow_up_rolls_it_back_and_the_others_run(
     client, monkeypatch, provider_security5
 ):
+    """A crash saving one queued job's log must not stop the rest of the queue from running."""
     from sqlalchemy import text
 
     from oracle.connections import service as connections
@@ -3640,6 +3737,7 @@ async def test_the_sweep_rechecks_the_member_under_the_gate(client, monkeypatch)
 
 
 async def test_a_disable_waits_for_a_locked_queued_job_and_cancels_it(client):
+    """Disabling a member waits out a job's row lock, then cancels it."""
     from oracle.docs.models import Document
     from oracle.jobs.models import LlmJob
 
@@ -3680,6 +3778,7 @@ async def test_a_disable_waits_for_a_locked_queued_job_and_cancels_it(client):
     ],
 )
 def test_external_key_accepts_any_case_urn_prefix(spelling):
+    """external_key reads a urn:uuid value in any case or spacing."""
     from oracle.review.publish import _as_uuid, external_key
 
     u = uuid.UUID("12345678-9abc-def0-1234-56789abcdef0")
@@ -3822,6 +3921,7 @@ class _Blocked:
 async def test_a_checkpoint_decision_by_an_approver_who_lost_standing_is_refused(
     client, monkeypatch, runtime, how, decision
 ):
+    """A checkpoint decision is refused if the approver lost standing first."""
     ctx = await setup(client)
     run = await _at_checkpoint(client, ctx)
     approver = await person(ctx.tenant_id, "approver", "approver")
@@ -3838,6 +3938,7 @@ async def test_a_checkpoint_decision_by_an_approver_who_lost_standing_is_refused
 
 
 async def test_an_active_approver_still_decides_a_checkpoint(client, runtime):
+    """An approver who stays active can still decide a checkpoint."""
     ctx = await setup(client)
     run = await _at_checkpoint(client, ctx)
     approver = await person(ctx.tenant_id, "approver", "approver")
@@ -3929,6 +4030,7 @@ async def test_a_disable_voids_a_decision_whose_submission_is_waiting_for_a_retr
 async def test_an_approver_section_edit_by_one_who_lost_standing_is_refused(
     client, monkeypatch, how
 ):
+    """A section edit is refused if the approver lost standing at the gate."""
     from oracle.docs.models import DocumentVersion
 
     ctx = await setup(client)
@@ -3943,6 +4045,7 @@ async def test_an_approver_section_edit_by_one_who_lost_standing_is_refused(
 
 
 async def test_an_active_approver_still_edits_any_section(client):
+    """An approver who stays active can still edit any section."""
     ctx = await setup(client)
     approver = await person(ctx.tenant_id, "approver", "approver")
     rev = (await states(client, ctx.auth, 1))["problem"]["revision"]
@@ -3969,6 +4072,7 @@ async def test_an_owner_cancelling_someone_elses_run_after_losing_standing_is_re
 
 
 async def test_an_owner_and_the_creator_still_cancel(client, runtime):
+    """Both the owner and the run's creator can cancel it."""
     ctx = await setup(client)
     author = await person(ctx.tenant_id, "approver", "author")
     owner = await person(ctx.tenant_id, "owner", "owner")
@@ -4006,6 +4110,7 @@ async def _evidence(ctx, added_by=None) -> uuid.UUID:
 async def test_an_approver_removing_evidence_after_losing_standing_is_refused(
     client, monkeypatch, how
 ):
+    """Removing evidence is refused if the approver lost standing first."""
     from oracle.baseline.models import Evidence
 
     ctx = await setup(client)
@@ -4020,6 +4125,7 @@ async def test_an_approver_removing_evidence_after_losing_standing_is_refused(
 
 
 async def test_an_approver_and_the_commenter_who_added_a_link_still_remove_it(client):
+    """An approver and the commenter who added evidence can both remove it."""
     ctx = await setup(client)
     approver = await person(ctx.tenant_id, "approver", "approver")
     commenter = await person(ctx.tenant_id, "commenter", "commenter")
@@ -4049,6 +4155,7 @@ async def _comment(client, ctx) -> str:
 async def test_an_approver_moderating_a_comment_after_losing_standing_is_refused(
     client, monkeypatch, how
 ):
+    """Moderating a comment is refused if the approver lost standing first."""
     ctx = await setup(client)
     comment_id = await _comment(client, ctx)
     approver = await person(ctx.tenant_id, "approver", "approver")
@@ -4065,6 +4172,7 @@ async def test_an_approver_moderating_a_comment_after_losing_standing_is_refused
 
 
 async def test_an_approver_still_moderates_and_an_author_still_edits_their_own(client):
+    """A locking rule added elsewhere must not block normal moderation or self edits."""
     ctx = await setup(client)
     comment_id = await _comment(client, ctx)
     approver = await person(ctx.tenant_id, "approver", "approver")
@@ -4272,6 +4380,7 @@ async def test_a_failed_cancel_of_a_workflow_started_for_a_changed_run_is_retrie
     "spelling", ["{{URN:UUID:{u}}}", "UUID:{u}", "URN:{u}", "Uuid:{h}", "{{urn:uuid:{U}}}"]
 )
 def test_external_key_reads_every_uuid_spelling_in_any_case(spelling):
+    """external_key reads every urn or uuid spelling the same way."""
     from oracle.review.publish import _as_uuid, external_key
 
     u = uuid.UUID("12345678-9abc-def0-1234-56789abcdef0")
@@ -4284,6 +4393,7 @@ def test_external_key_reads_every_uuid_spelling_in_any_case(spelling):
     "stored", ["uuid:{u}", "URN:{u}", "UUID:{h}", "{{URN:UUID:{u}}}", " urn:uuid:{U} "]
 )
 async def test_a_stored_id_in_any_uuid_spelling_reads_as_its_hex_in_sql(client, stored):
+    """Matches a record by its identifier no matter which old text format stored it."""
     from sqlalchemy import literal
 
     from oracle.review.publish import _hex32
@@ -4317,6 +4427,7 @@ async def _due(ctx) -> None:
 
 
 async def test_follow_ups_still_run_when_an_earlier_part_of_the_tick_fails(client, monkeypatch):
+    """A crash in one scheduled job must not undo work a sibling job already finished."""
     from oracle.connections import service as connections
     from oracle.members.models import MemberFollowUp
     from oracle.runs import router as runs_router
@@ -4528,6 +4639,7 @@ async def test_the_gate_is_not_held_while_a_request_body_is_received(client, rou
 
 @pytest.mark.parametrize("route", ["baseline_yaml", "document_version"])
 async def test_a_request_body_over_the_limit_is_refused_before_the_gate(client, monkeypatch, route):
+    """An oversized request body is refused before it takes the gate lock."""
     from oracle.config import get_settings
     from oracle.review import publish
 
@@ -4588,6 +4700,7 @@ def _ended(run) -> None:
 async def test_a_run_cancelled_during_its_import_stays_cancelled(
     client, monkeypatch, runtime, checkpoint
 ):
+    """A run cancelled mid-import stays cancelled; nothing more is submitted."""
     ctx = await setup(client)
     knobs = {} if checkpoint else {"checkpoints": {"baseline_confirm": False}}
     run = await _started(client, ctx, **knobs)
@@ -4610,6 +4723,7 @@ async def test_a_run_cancelled_during_its_import_stays_cancelled(
 async def test_a_run_whose_creator_is_disabled_during_its_import_stays_cancelled(
     client, monkeypatch, runtime, checkpoint
 ):
+    """A run stays cancelled if its creator is disabled mid-import."""
     ctx = await setup(client)
     author = await person(ctx.tenant_id, "approver", "author")
     knobs = {} if checkpoint else {"checkpoints": {"baseline_confirm": False}}
@@ -4681,6 +4795,7 @@ async def test_a_checkpoint_decision_refuses_a_segment_not_in_the_expected_state
 
 
 async def test_a_checkpoint_decision_on_a_cancelled_run_is_refused(client, runtime):
+    """Deciding a checkpoint on a cancelled run is refused as a conflict."""
     ctx = await setup(client)
     run = await _started(client, ctx)
     await _tick_security6(client, ctx)
@@ -4775,6 +4890,7 @@ def _swarm(raw):
 
 
 async def test_an_oversized_artifact_is_refused_without_being_read_in_full():
+    """An oversized artifact is cut off and refused, not read in full."""
     import httpx
 
     from oracle.swarm import swarmcloud
@@ -4804,6 +4920,7 @@ async def test_an_oversized_artifact_is_refused_without_being_read_in_full():
 
 
 async def test_an_artifact_announced_oversized_is_not_read():
+    """An artifact announced oversized is never read at all."""
     import httpx
 
     class Raw:
@@ -4820,6 +4937,7 @@ async def test_an_artifact_announced_oversized_is_not_read():
 
 
 async def test_the_artifacts_read_per_pass_are_capped():
+    """The number of artifacts read in one pass is capped."""
     import httpx
 
     from oracle.swarm import swarmcloud
@@ -4901,6 +5019,7 @@ async def test_a_cancel_records_its_runtime_follow_up_before_the_call(client, ru
 async def test_a_workflow_started_for_a_changed_run_has_its_follow_up_before_the_call(
     client, runtime
 ):
+    """A follow-up row exists before a cancel reaches a started workflow."""
     from oracle.members.models import MemberFollowUp
 
     ctx = await setup(client)
@@ -4937,6 +5056,7 @@ async def _run_estimated(client, ctx) -> dict:
 
 
 async def test_an_unexpected_submission_error_is_recorded_not_a_500(client, runtime):
+    """An unexpected submission error is recorded, not a server error."""
     ctx = await setup(client)
     run = await _run_estimated(client, ctx)
     real = runtime.submit
@@ -4956,6 +5076,7 @@ async def test_an_unexpected_submission_error_is_recorded_not_a_500(client, runt
 
 
 async def test_a_cancel_follow_up_does_not_write_onto_a_segment_requeued_since(client, runtime):
+    """A stale cancel follow-up never overwrites a segment requeued since."""
     from datetime import UTC, datetime
 
     from oracle.members.models import MemberFollowUp
@@ -4990,6 +5111,7 @@ async def test_a_cancel_follow_up_does_not_write_onto_a_segment_requeued_since(c
 
 
 async def test_the_tick_refuses_a_viewer_api_token(client, runtime):
+    """The internal tick refuses a viewer token but runs for an owner's."""
     from oracle.auth.service import create_api_token
 
     ctx = await setup(client)
@@ -5019,6 +5141,7 @@ SPELLINGS = [
 
 @pytest.mark.parametrize("spelling", SPELLINGS)
 async def test_external_key_and_the_sql_read_exactly_the_same_spellings(client, spelling):
+    """external_key and its SQL match parse every id spelling the same way."""
     from sqlalchemy import literal
 
     from oracle.review.publish import _as_uuid, _hex32, external_key
@@ -5133,6 +5256,7 @@ async def test_a_late_decision_cancels_and_submits_with_nothing_held(client, own
 
 @pytest.mark.usefixtures("adapter_v2_env")  # test_adapter_v2's environment
 async def test_a_retried_lost_submission_is_queued_and_nothing_is_held(client, owner, monkeypatch):
+    """Retrying a run with a lost submission queues fresh work, nothing held."""
     tenant_id, auth = owner
     swarm = on()
     probe = probed(swarm, tenant_id)
@@ -5153,6 +5277,7 @@ async def test_a_retried_lost_submission_is_queued_and_nothing_is_held(client, o
 
 @pytest.mark.usefixtures("adapter_v2_env")  # test_adapter_v2's environment
 async def test_an_unconfirmed_cancel_is_retried_by_the_tick_with_nothing_held(client, owner):
+    """An unconfirmed cancel is retried by the tick until confirmed."""
     tenant_id, auth = owner
     swarm = on()
     probe = probed(swarm, tenant_id)
@@ -5173,6 +5298,7 @@ _UNAVAILABLE = {"code": "unavailable", "message": "try later", "detail": {"reaso
 
 @pytest.mark.usefixtures("adapter_v2_env")  # test_adapter_v2's environment
 async def test_a_refused_post_leaves_the_decision_recorded_for_the_tick(client, owner):
+    """A checkpoint decision refused on posting is still recorded once."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -5216,6 +5342,7 @@ async def test_the_tick_keeps_what_a_runs_searches_counted(client, owner):
 
 @pytest.mark.usefixtures("adapter_v2_env")  # test_adapter_v2's environment
 async def test_a_lost_answer_is_replayed_by_the_tick_never_doubled(client, owner):
+    """An answer lost after recording is replayed once, never doubled."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -5270,6 +5397,7 @@ WRITE_ROUTES = {
 
 @pytest.mark.usefixtures("adapter_v2_env")  # test_adapter_v2's environment
 def test_every_run_write_route_is_walked():
+    """Every write route under /v1/runs must be listed, none left out."""
     found = {
         (method, path)
         for path, item in app.openapi()["paths"].items()
@@ -5309,6 +5437,7 @@ def _viewer_on_first_gate(monkeypatch, ctx, user_id) -> list[bool]:
 async def test_a_caller_who_lost_standing_before_the_write_is_refused(
     client, monkeypatch, runtime, route, how
 ):
+    """Every listed run write route refuses a caller who lost standing."""
     method, template = route
     role = WRITE_ROUTES[route]
     ctx = await setup(client)
@@ -5428,6 +5557,7 @@ NO_CALL = {
 
 @pytest.mark.usefixtures("adapter_v2_env")  # test_adapter_v2's environment
 def test_every_run_write_route_says_whether_it_calls_swarmcloud():
+    """Every run write route says if and when it calls SwarmCloud, no gaps."""
     kinds = [set(DURING), AFTER_COMMIT, NO_CALL]
     assert sum(len(k) for k in kinds) == len(set().union(*kinds)), "a route is in two lists"
     assert set().union(*kinds) == set(WRITE_ROUTES), (

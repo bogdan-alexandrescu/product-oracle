@@ -130,6 +130,7 @@ async def _feedback(tenant_id, open_items: int, staged: int, version: int = 2) -
 
 
 async def test_run_review_matches_the_version_the_run_imported(client, owner, runtime):
+    """A run's review is tied to the version it imported, seen the same everywhere."""
     tenant_id, auth = owner
     run, cp = await _waiting(client, auth)
     keys = await _keys(tenant_id)
@@ -161,6 +162,7 @@ async def test_run_review_matches_the_version_the_run_imported(client, owner, ru
 
 
 async def test_a_commenter_reads_the_run_review_without_deciding(client, owner, runtime):
+    """A commenter can read a run's review but cannot decide it."""
     tenant_id, auth = owner
     await _waiting(client, auth)
     commenter = await as_user(tenant_id, "commenter")
@@ -170,6 +172,7 @@ async def test_a_commenter_reads_the_run_review_without_deciding(client, owner, 
 
 
 async def test_approving_the_last_section_approves_the_run_review(client, owner, runtime):
+    """Approving the last section approves the run review and finishes the run."""
     tenant_id, auth = owner
     run, cp = await _waiting(client, auth)
     keys = await _keys(tenant_id)
@@ -187,6 +190,7 @@ async def test_approving_the_last_section_approves_the_run_review(client, owner,
 
 
 async def test_publishing_the_version_approves_the_run_review(client, owner, runtime):
+    """Publishing the version also approves the run's pending review."""
     tenant_id, auth = owner
     run, cp = await _waiting(client, auth)
     resp = await client.post(f"/v1/documents/{DOC}/versions/2/approve", headers=auth)
@@ -198,6 +202,7 @@ async def test_publishing_the_version_approves_the_run_review(client, owner, run
 
 
 async def test_a_publish_the_gate_refuses_decides_nothing(client, owner, runtime, monkeypatch):
+    """When the publish gate refuses, the checkpoint stays undecided."""
     tenant_id, auth = owner
     _, cp = await _waiting(client, auth)
 
@@ -213,6 +218,7 @@ async def test_a_publish_the_gate_refuses_decides_nothing(client, owner, runtime
 async def test_a_failure_in_the_link_keeps_the_review_and_the_checkpoint(
     client, owner, runtime, monkeypatch
 ):
+    """A failure in the review link leaves the checkpoint still decidable."""
     tenant_id, auth = owner
     _, cp = await _waiting(client, auth)
 
@@ -228,6 +234,7 @@ async def test_a_failure_in_the_link_keeps_the_review_and_the_checkpoint(
 
 
 async def test_send_back_carries_the_documents_feedback(client, owner, runtime):
+    """Sending a draft back carries the document's feedback as structured items."""
     tenant_id, auth = owner
     run, cp = await _waiting(client, auth)
     await _feedback(tenant_id, open_items=3, staged=1)
@@ -264,6 +271,7 @@ async def test_send_back_carries_the_documents_feedback(client, owner, runtime):
 
 
 async def test_send_back_with_nothing_open_and_no_note_is_refused(client, owner, runtime):
+    """Sending a draft back needs open feedback or a note; a note alone is enough."""
     tenant_id, auth = owner
     run, cp = await _waiting(client, auth)
     await _feedback(tenant_id, open_items=0, staged=0)
@@ -284,6 +292,7 @@ settings = _v2_settings
 
 
 async def test_send_back_in_workflow_mode_posts_one_finding_per_entry(client, owner, settings):
+    """Sending a draft back in workflow mode posts one finding per feedback entry."""
     tenant_id, auth = owner
     swarm: FakeSwarmCloud = on()
     use(swarm)
@@ -329,6 +338,7 @@ async def _decider(client, tenant_id, auth) -> tuple[uuid.UUID, dict[str, str]]:
 
 
 async def test_only_the_designated_decider_decides_the_run_review(client, owner, runtime):
+    """Only the designated decider may approve or send back a run review."""
     tenant_id, auth = owner
     run, cp = await _waiting(client, auth)
     decider_id, decider = await _decider(client, tenant_id, auth)

@@ -70,6 +70,7 @@ async def _post(client, ctx, who: str, item_id: str, before, after):
 
 
 async def test_panel_places_an_item_in_a_roadmap_milestone(client):
+    """An item's roadmap milestone is picked by a decider, proposed by a commenter."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["im"])
     a = w.ids["im-a"]
@@ -154,6 +155,7 @@ async def test_panel_places_an_item_in_a_roadmap_milestone(client):
 
 
 async def test_company_roadmap_lists_each_prds_milestones_in_one_goal(client):
+    """The company roadmap lists each PRD's own milestones grouped under one goal."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         sd = Seed(s)
@@ -208,6 +210,7 @@ async def test_company_roadmap_lists_each_prds_milestones_in_one_goal(client):
 
 
 async def test_a_proposed_pick_of_a_milestone_deleted_since_is_refused_on_accept(client):
+    """Accepting a milestone pick is refused once that milestone was deleted meanwhile."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["im"])
     a = w.ids["im-a"]
@@ -234,6 +237,7 @@ async def test_a_proposed_pick_of_a_milestone_deleted_since_is_refused_on_accept
 
 
 async def test_undo_back_into_a_milestone_deleted_since_is_refused(client):
+    """Undoing a cleared milestone pick is refused if that milestone was deleted since."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["im"])
     a = w.ids["im-a"]

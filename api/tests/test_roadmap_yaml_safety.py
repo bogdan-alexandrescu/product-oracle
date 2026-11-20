@@ -47,6 +47,7 @@ def _codes(text: str) -> list[str]:
 
 @pytest.mark.timing
 def test_an_alias_bomb_is_refused_quickly_with_a_clear_problem():
+    """A YAML alias bomb is refused quickly with a clear message, never expanded."""
     text = bomb(5)  # ~600 bytes; expanded, 10^6 strings
     assert len(text.encode()) < 1500
     started = time.monotonic()
@@ -57,6 +58,7 @@ def test_an_alias_bomb_is_refused_quickly_with_a_clear_problem():
 
 
 def test_an_anchor_alone_and_a_merge_key_are_refused():
+    """A lone YAML anchor is refused, but an inline merge key with no alias is fine."""
     anchored = ITEMS.replace("confidence: high", "confidence: &c high", 1)
     assert _codes(anchored) == ["yaml_alias"]
     merged = ITEMS.replace(
@@ -69,22 +71,26 @@ def test_an_anchor_alone_and_a_merge_key_are_refused():
 
 
 def test_too_many_nodes_is_refused(monkeypatch):
+    """A YAML document with too many nodes is refused as too large."""
     monkeypatch.setattr(safe_yaml, "MAX_NODES", 50)
     assert _codes(ITEMS) == ["too_large"]
 
 
 def test_too_large_once_parsed_is_refused(monkeypatch):
+    """An items file too large once parsed is refused, even if the raw text was not."""
     monkeypatch.setattr(items_file, "MAX_STORED_BYTES", 200)
     assert _codes(ITEMS) == ["too_large"]
 
 
 def test_the_plain_file_still_loads():
+    """An ordinary, well-formed items file still loads and passes its check."""
     assert check_items(ITEMS).ok
     assert items_file.load_items_yaml(ITEMS)["items"][0]["id"] == "payment-step"
 
 
 @pytest.mark.timing
 async def test_a_person_s_import_refuses_the_bomb(client, owner, runtime):  # noqa: F811
+    """A person's manual import of a YAML bomb is refused fast, items untouched."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -106,6 +112,7 @@ async def test_a_run_s_bomb_waits_at_its_checkpoint_and_is_never_stored(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A run's own YAML bomb waits at its checkpoint and can never be approved away."""
     _, auth = owner
     await approved_prd(client, auth)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": bomb(5)})]

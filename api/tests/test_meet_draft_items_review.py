@@ -31,6 +31,7 @@ class _NoQueries:
 
 
 async def test_effective_of_draft_items_reads_no_drafts():
+    """A draft item's effective title falls back to its own with no draft to merge."""
     row = RoadmapItem(id=uuid.uuid4(), draft_roadmap_id=uuid.uuid4(), item_key="d-1",
                       position=0, title="Draft item", horizon="now")  # fmt: skip
     out = await drafts.effective(_NoQueries(), [row])
@@ -57,6 +58,7 @@ async def _hidden_draft_item(tenant_id) -> uuid.UUID:
 
 
 async def test_explain_drops_a_draft_item_of_a_hidden_prd():
+    """An explanation never cites a draft roadmap item whose PRD the reader can't see."""
     ctx = await make_ctx()
     item = await _hidden_draft_item(ctx.tenant_id)
     async with tenant_session(ctx.tenant_id) as s:
@@ -64,6 +66,7 @@ async def test_explain_drops_a_draft_item_of_a_hidden_prd():
 
 
 async def test_variance_draft_citing_a_draft_item_of_a_hidden_prd_is_withheld():
+    """A variance draft is withheld from a member if it cites a hidden PRD's item."""
     ctx = await make_ctx()
     item = await _hidden_draft_item(ctx.tenant_id)
     row = MetricVariance(id=uuid.uuid4(), oracle_draft="Teams grew after the launch.",

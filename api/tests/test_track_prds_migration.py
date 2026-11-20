@@ -62,6 +62,7 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The track-PRDs migration chains on the branch's single head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # One head, and this migration is on its chain (test_migrations pins the head itself).
@@ -70,6 +71,7 @@ def test_chains_on_the_single_head():
 
 
 def test_upgrade_backfills_and_downgrade_restores(scratch_db):
+    """The track-PRDs migration backfills existing links; downgrade drops the column."""
     upgrade(_cfg(), PREVIOUS)
     tenant, first, second, third = (uuid.uuid4() for _ in range(4))
     track, empty = uuid.uuid4(), uuid.uuid4()

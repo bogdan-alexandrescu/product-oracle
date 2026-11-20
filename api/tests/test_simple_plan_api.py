@@ -147,6 +147,7 @@ async def seed(ctx: Ctx, body: str = FIXTURE, items: tuple[str, ...] = ()) -> di
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_plan_endpoint_per_role(client, role):
+    """The plan endpoint reads the same for every role; only an owner can re-read it."""
     ctx = await make_ctx()
     await seed(ctx)
     r = await client.get(url("guided-setup"), headers=ctx.as_(role))
@@ -167,6 +168,7 @@ async def test_plan_endpoint_per_role(client, role):
 
 
 async def test_new_approved_version_updates_without_duplicating(client):
+    """A new approved version updates the plan in place, never duplicating it."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     assert (await client.get(url("guided-setup"), headers=ctx.as_("viewer"))).status_code == 200
@@ -186,6 +188,7 @@ async def test_new_approved_version_updates_without_duplicating(client):
 
 
 async def test_job_reads_a_prd_without_tables(client):
+    """A PRD with no plan tables gets its plan filled in by a background job."""
     ctx = await make_ctx()
     prose = "# Guided setup\n\nWe ship the checklist first, then invites, then the digest.\n"
     await seed(ctx, prose)
@@ -231,6 +234,7 @@ async def test_job_reads_a_prd_without_tables(client):
 
 
 async def test_roadmap_items_carry_slices_and_dated_milestones(client):
+    """Roadmap items carry their plan slices and dated milestone details."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03", "f-05"))
     body = (await client.get("/v1/simple/roadmap", headers=ctx.as_("viewer"))).json()
@@ -246,6 +250,7 @@ async def test_roadmap_items_carry_slices_and_dated_milestones(client):
 
 
 async def test_dates_to_confirm_follow_the_plan(client):
+    """Suggested slice dates stay inside their milestone's window from the plan."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03", "f-05"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -263,6 +268,7 @@ async def test_dates_to_confirm_follow_the_plan(client):
 
 
 async def test_quarter_label_from_the_plan(client):
+    """The priorities page's quarter label comes from the plan's own span."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03",))
     r = await client.get("/v1/simple/priorities", headers=ctx.as_("viewer"))
@@ -273,6 +279,7 @@ async def test_quarter_label_from_the_plan(client):
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_priorities_carry_the_plan(client, role):
+    """Priorities show the same plan milestones and weeks as the plan itself."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03",))
     r = await client.get("/v1/simple/priorities", headers=ctx.as_(role))
@@ -297,6 +304,7 @@ async def test_priorities_carry_the_plan(client, role):
 
 
 async def test_priority_rows_say_whether_they_are_in_the_plan(client):
+    """A priority row says whether its item is actually part of a PRD's plan."""
     ctx = await make_ctx()
     ids = await seed(ctx, items=("f-03",))
     async with tenant_session(ctx.tenant_id) as s:
@@ -322,6 +330,7 @@ async def test_priority_rows_say_whether_they_are_in_the_plan(client):
      ("commenter", "proposed"), ("viewer", None)],
 )  # fmt: skip
 async def test_accept_a_slice_per_role(client, role, status):
+    """Accepting a date suggestion applies, proposes, or is refused by role."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03",))
     async with tenant_session(ctx.tenant_id) as s:
@@ -423,6 +432,7 @@ PROSE_ANSWER = {
 
 
 async def test_approving_a_version_reads_its_plan(client):
+    """Approving a version queues a plan job whose answer updates the roadmap."""
     ctx = await make_ctx()
     ids = await seed(ctx, items=("f-03",))
     async with tenant_session(ctx.tenant_id) as s:
@@ -448,6 +458,7 @@ async def test_approving_a_version_reads_its_plan(client):
 
 
 async def test_reading_the_plan_writes_nothing(client):
+    """Reading a PRD's plan alone never stores a plan or queues a job."""
     ctx = await make_ctx()
     await seed(ctx, "# Guided setup\n\nInvites first.\n")
     r = await client.get(url("guided-setup"), headers=ctx.as_("viewer"))
@@ -460,6 +471,7 @@ async def test_reading_the_plan_writes_nothing(client):
 
 
 async def test_dates_to_confirm_show_what_accept_applies(client):
+    """The dates a suggestion shows are exactly what accepting it will set."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03",))
     async with tenant_session(ctx.tenant_id) as s:
@@ -478,6 +490,7 @@ async def test_dates_to_confirm_show_what_accept_applies(client):
 
 
 async def test_this_quarters_weeks_follow_the_plan(client):
+    """This quarter's bucket weeks total match the feature's real effort."""
     ctx = await make_ctx()
     await seed(ctx, items=("f-03",))
     async with tenant_session(ctx.tenant_id) as s:
@@ -495,6 +508,7 @@ async def test_this_quarters_weeks_follow_the_plan(client):
 
 
 async def test_chat_this_quarter_is_the_plans_span(client):
+    """Chat's 'this quarter' resolves to the plan's own date span."""
     from tests.test_simple_chat_api import say
 
     ctx = await make_ctx()
@@ -506,6 +520,7 @@ async def test_chat_this_quarter_is_the_plans_span(client):
 
 
 async def test_views_parse_a_version_once(client, monkeypatch):
+    """A PRD version's plan markdown is parsed only once, then reused."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     calls = []
@@ -524,6 +539,7 @@ async def test_views_parse_a_version_once(client, monkeypatch):
 
 
 async def test_views_read_accepted_dates_once(client):
+    """Reading several PRDs' plans queries accepted dates only once total."""
     from sqlalchemy import event
 
     from oracle.db import get_engine

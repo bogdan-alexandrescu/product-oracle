@@ -66,6 +66,7 @@ async def test_a_change_request_in_a_meeting_gets_the_readers_reply(
     fake,  # noqa: F811
     monkeypatch,
 ):
+    """A meeting chat answers a change request once, even if the reply sweep lags."""
     ctx = await make_people()
     w = await World(ctx).build()
     await with_key(ctx)
@@ -92,6 +93,7 @@ async def test_a_change_request_in_a_meeting_gets_the_readers_reply(
 
 
 async def test_a_stray_oracle_line_reads_as_an_answer(client, meetings):  # noqa: F811
+    """An old discussion reply already in a meeting's chat still reads as an answer."""
     ctx = await make_people()
     await World(ctx).build()
     mid = _meeting(ctx, meetings)
@@ -145,6 +147,7 @@ async def test_oracles_ask_on_the_meeting_page_is_still_answered(
 
 
 def test_the_sweep_names_the_chat_engine_once():
+    """The reply sweep always uses the one shared chat engine, never a second copy."""
     from oracle.simple import chat
 
     assert replies.SIMPLE_CHAT is chat.ENGINE

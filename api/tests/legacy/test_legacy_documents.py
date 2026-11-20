@@ -105,6 +105,7 @@ async def _v1(client):
 
 
 async def test_legacy_prd_parses_to_the_pinned_sections(client):
+    """A legacy PRD draft parses into its pinned sections, citations and notes."""
     _, auth, v1 = await _v1(client)
     assert v1["number"] == 1 and v1["warnings"] == []
     assert v1["content_hash"] == V1_CONTENT_HASH
@@ -144,6 +145,7 @@ async def test_legacy_prd_parses_to_the_pinned_sections(client):
 
 
 async def test_markdown_round_trips_byte_for_byte(client):
+    """A legacy draft's markdown round trips byte for byte, and reimport is a no-op."""
     _, auth, _ = await _v1(client)
     md = await client.get(f"/v1/documents/{DOC}/versions/1/markdown", headers=auth)
     assert md.status_code == 200 and md.text == V1
@@ -176,6 +178,7 @@ async def test_markdown_export_is_the_draft_as_plain_markdown_after_front_matter
 
 
 async def test_html_full_export_keeps_citations_out_of_the_body(client):
+    """An HTML export keeps citation markers and notes out of the visible narrative."""
     _, auth, _ = await _v1(client)
     resp = await client.get(f"/v1/documents/{DOC}/versions/1/export?format=html", headers=auth)
     assert resp.status_code == 200
@@ -196,6 +199,7 @@ async def test_html_full_export_keeps_citations_out_of_the_body(client):
 
 
 async def test_brief_layer_exports_only_brief_sections_and_the_appendix(client):
+    """The brief layer export shows only its sections; markdown has no brief layer."""
     _, auth, _ = await _v1(client)
     base = f"/v1/documents/{DOC}/versions/1/export"
     html = (await client.get(f"{base}?format=html&layer=brief", headers=auth)).text
@@ -208,6 +212,7 @@ async def test_brief_layer_exports_only_brief_sections_and_the_appendix(client):
 
 
 async def test_deck_has_one_slide_per_brief_section_with_notes_only_from_notes_blocks(client):
+    """A generated deck has one slide per brief section, with notes only where written."""
     _, auth, _ = await _v1(client)
     deck = await client.get(f"/v1/documents/{DOC}/versions/1/deck", headers=auth)
     assert deck.status_code == 200, deck.text
@@ -228,6 +233,7 @@ async def test_deck_has_one_slide_per_brief_section_with_notes_only_from_notes_b
 
 
 async def test_v2_applies_resolutions_and_diffs_by_section(client):
+    """Importing a new version applies its resolutions and diffs cleanly by section."""
     tenant_id, auth, v1 = await _v1(client)
     await add_feedback(tenant_id, v1["document_id"])
     resp = await import_md(client, auth, V2)
@@ -267,6 +273,7 @@ async def test_v2_applies_resolutions_and_diffs_by_section(client):
 
 
 async def test_unknown_resolution_ids_are_dropped_not_refused(client):
+    """An import with resolutions for feedback that no longer exists still succeeds."""
     _, auth, _ = await _v1(client)
     resp = await import_md(client, auth, V2)  # no feedback items exist
     assert resp.status_code == 201, resp.text
@@ -275,6 +282,7 @@ async def test_unknown_resolution_ids_are_dropped_not_refused(client):
 
 
 async def test_legacy_drafts_without_brief_markers_still_import(client):
+    """A draft with no brief marker still imports fully, just without a brief export."""
     _, auth = await seed_auth()
     detail_only = V1.replace("# Full version {#full}\n\n", "").replace(
         "document: legacy-onboarding", "document: legacy-detail-only"
@@ -297,6 +305,7 @@ async def test_legacy_drafts_without_brief_markers_still_import(client):
 
 @requires_pdf
 async def test_full_and_brief_pdfs_render_with_the_appendix(client):
+    """Both the full and brief PDF exports render real text without raw citation marks."""
     _, auth, _ = await _v1(client)
     base = f"/v1/documents/{DOC}/versions/1/export"
     full = await client.get(f"{base}?format=pdf", headers=auth)

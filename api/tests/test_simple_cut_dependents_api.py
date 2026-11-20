@@ -92,6 +92,7 @@ async def n_changes(ctx) -> int:
 
 
 async def test_cut_with_dependents_is_one_change_undone_as_one(client):
+    """Cutting an item with its dependents is one change one undo fully reverses."""
     ctx, w = await world()
     card = (await say(client, ctx, "owner", "cut Ledger v2"))["cards"][0]
     assert card["op"] == "cut"
@@ -131,6 +132,7 @@ async def test_cut_with_dependents_is_one_change_undone_as_one(client):
 
 
 async def test_cut_keeping_the_dependents_and_an_item_without_any(client):
+    """Cutting alone keeps dependents; with_dependents on a leaf item is refused."""
     ctx, w = await world()
     card = (await say(client, ctx, "owner", "cut Ledger v2"))["cards"][0]
     r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
@@ -149,6 +151,7 @@ async def test_cut_keeping_the_dependents_and_an_item_without_any(client):
 
 
 async def test_cut_with_dependents_follows_roles(client):
+    """Cutting with dependents follows the same propose-or-apply roles as any change."""
     ctx, w = await world()
     card = (await say(client, ctx, "commenter", "cut Ledger v2"))["cards"][0]
     assert card["may"] == "propose"

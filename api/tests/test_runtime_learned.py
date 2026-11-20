@@ -87,6 +87,7 @@ async def rows() -> dict[str, LearnedFeature]:
 
 
 async def test_a_learned_on_survives_a_new_runtime_object():
+    """A feature learned on by one runtime instance reads as on in a fresh one."""
     swarm = on()
     first = process(swarm)
     feats = await first.features()
@@ -120,6 +121,7 @@ async def test_caller_mcp_stays_confirmed_past_the_cache_ttl(monkeypatch):
 
 
 async def test_what_one_instance_learns_the_others_read():
+    """One instance learning a feature is off applies at once to every instance."""
     swarm = on()
     a, b = process(swarm), process(swarm)
     await a.ensure_mcp_server(MCP_URL)
@@ -144,6 +146,7 @@ async def test_what_one_instance_learns_the_others_read():
 
 
 async def test_a_learned_state_still_expires_after_the_ttl(monkeypatch):
+    """A learned feature state expires after its TTL and reads as unknown again."""
     swarm = on(report_capacity=False)
     first = process(swarm, features_ttl=60)
     await first.ensure_mcp_server(MCP_URL)
@@ -177,6 +180,7 @@ async def test_a_learned_state_still_expires_after_the_ttl(monkeypatch):
 
 
 async def test_a_sticky_state_survives_until_swarmcloud_reports_the_feature_on(monkeypatch):
+    """A sticky learned state survives past its TTL until SwarmCloud reports it on."""
     swarm = on(report_capacity=False)
     first = process(swarm, features_ttl=60)
     first.learn("service_answer", "off", "SwarmCloud answered 403 person_required", sticky=True)
@@ -201,6 +205,7 @@ async def test_a_sticky_state_survives_until_swarmcloud_reports_the_feature_on(m
 
 
 async def test_status_and_the_new_run_form_say_on_after_a_restart(client):
+    """After a restart, status and the new run form still read a feature as on."""
     _, auth = await seed_auth()
     swarm = on()
     set_runtime(process(swarm))
@@ -254,6 +259,7 @@ async def test_the_new_run_form_trusts_an_expired_learned_on_on_a_fresh_instance
 
 
 def test_the_configured_runtime_keeps_what_it_learns_in_the_database():
+    """The configured SwarmCloud runtime stores what it learns in the database."""
     runtime = SwarmCloudRuntime.from_settings(
         RuntimeSettings(swarmcloud_url="https://swarm.test", swarmcloud_token="x")
     )
@@ -261,6 +267,8 @@ def test_the_configured_runtime_keeps_what_it_learns_in_the_database():
 
 
 async def test_a_database_failure_keeps_this_process_s_learning(caplog, monkeypatch):
+    """A database failure saving a learned feature still keeps it for this process."""
+
     class Broken:
         async def sync(self, save, forget):
             raise OSError("database unreachable")

@@ -78,11 +78,13 @@ def _key_exists() -> bool:
 
 
 def test_chains_on_mains_head_and_is_the_only_head():
+    """This migration chains after the branch's own head, keeping one alembic head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_adds_the_key_and_downgrade_drops_it(scratch_db):
+    """The migration adds a foreign key, enforces it, and downgrade removes it cleanly."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, u, c = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

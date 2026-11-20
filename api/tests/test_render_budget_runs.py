@@ -14,6 +14,7 @@ settings = _v2_settings
 
 
 async def test_dates_still_being_found_in_a_tick_retry_and_never_fail_the_run(client, monkeypatch):
+    """A run's tick retries while its roadmap's dates are still pending, never failing."""
     tenant_id, auth = await seed_auth()
     use(on())
     run = await started(client, auth)

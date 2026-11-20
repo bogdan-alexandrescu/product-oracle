@@ -66,11 +66,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The webhook delivery-sent migration chains onto the branch's one prior head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading adds host and headers to webhook deliveries; downgrade drops them."""
     upgrade(_cfg(), REVISION)
     assert _columns()["host"] == _columns()["headers"] == "YES"
 

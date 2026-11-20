@@ -55,6 +55,7 @@ def _name(w: World, who: str) -> str:
 
 
 async def test_open_date_suggestion_waits_on_who_may_decide_it(client):
+    """A roadmap date suggestion shows only to who may decide it, gone once dismissed."""
     w = await World().build()
     before = (await _inbox(client, w, "decider"))["total"]
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -83,6 +84,7 @@ async def test_open_date_suggestion_waits_on_who_may_decide_it(client):
 
 
 async def test_open_goal_suggestion_waits_on_who_may_decide_it(client):
+    """An Oracle goal suggestion shows only to its decider and says it is from Oracle."""
     w = await World().build()
     before = (await _inbox(client, w, "decider"))["total"]
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -112,6 +114,7 @@ async def test_open_goal_suggestion_waits_on_who_may_decide_it(client):
 
 
 async def test_draft_approval_names_who_submitted_it(client):
+    """A draft awaiting approval names who submitted it and which roadmap it is for."""
     w = await World().build()
     await w.add(client, "decider", "Guided setup")
     ds = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
@@ -126,6 +129,7 @@ async def test_draft_approval_names_who_submitted_it(client):
 
 
 async def test_draft_waiting_on_the_decider_is_in_their_inbox(client):
+    """A draft awaiting approval shows only in the decider's Inbox, gone once approved."""
     w = await World().build()
     await w.add(client, "decider", "Guided setup")
     ds = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
@@ -148,6 +152,7 @@ async def test_draft_waiting_on_the_decider_is_in_their_inbox(client):
 
 
 async def test_feature_ask_waits_as_asked_and_files_who_asked(client):
+    """Accepting a feature ask in the Inbox files a request crediting whoever asked."""
     from oracle import company_time
 
     w = await World().build()

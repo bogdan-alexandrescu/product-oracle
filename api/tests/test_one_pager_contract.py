@@ -85,6 +85,7 @@ def _dump(data: dict[str, Any]) -> str:
 
 
 def test_one_pager_contract_matches_the_committed_file() -> None:
+    """The API's one-pager output stays in sync with the committed contract file."""
     got = _contract()
     if os.environ.get("ORACLE_WRITE_CONTRACT") == "1":
         CONTRACT.write_text(_dump(got), encoding="utf-8")

@@ -67,6 +67,7 @@ def scratch_db():
 
 
 def test_the_chain_ends_here_after_discussion_replies():
+    """This migration chains after discussion replies, subgoals as the one head."""
     # Subgoals' 0041_subgoals (#345) chains on it; one head.
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0041_subgoals").down_revision == REVISION
@@ -74,6 +75,7 @@ def test_the_chain_ends_here_after_discussion_replies():
 
 
 def test_upgrade_downgrade_upgrade_keeps_the_accounts(scratch_db):
+    """Upgrading, downgrading and upgrading again keeps existing accounts intact."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     tenant = uuid.uuid4()

@@ -67,6 +67,7 @@ def _prompts(ctx: flows.PromptContext, roles: list[str]) -> list[str]:
 
 
 def test_first_and_last_steps_get_the_previous_files_pasted_and_the_problems():
+    """Only a re-run's first and last steps get the previous files and its problems."""
     first, middle, last = _prompts(_ctx(), ["analyst", "architect", "prioritizer"])
     for prompt in (first, last):
         assert HEADER in prompt
@@ -82,6 +83,7 @@ def test_first_and_last_steps_get_the_previous_files_pasted_and_the_problems():
 
 
 def test_with_the_run_token_attached_the_previous_files_are_named_not_pasted():
+    """With a run token attached, a re-run names its previous files, not pasting them."""
     [first, last] = _prompts(_ctx(mcp_attached=True), ["analyst", "prioritizer"])
     for prompt in (first, last):
         assert HEADER in prompt
@@ -91,6 +93,7 @@ def test_with_the_run_token_attached_the_previous_files_are_named_not_pasted():
 
 
 def test_a_long_previous_file_is_cut_at_the_cap():
+    """A long previous file is cut at its character cap, noted as truncated."""
     long = "x" * flows.MAX_PRIOR_CHARS + "TAIL"
     [first] = _prompts(_ctx(previous_files={ITEMS_FILE: long}), ["analyst"])
     assert "x" * flows.MAX_PRIOR_CHARS in first
@@ -99,6 +102,7 @@ def test_a_long_previous_file_is_cut_at_the_cap():
 
 
 def test_no_change_request_or_no_previous_attempt_adds_no_section():
+    """A re-run with no change request or prior attempt adds no previous section."""
     for ctx in (
         _ctx(change_request=None),
         _ctx(previous_attempt=None, previous_files={}, previous_problems=[]),
@@ -112,6 +116,7 @@ def test_no_change_request_or_no_previous_attempt_adds_no_section():
 
 
 def test_check_findings_lists_each_blocking_reason_and_never_a_to_confirm_one():
+    """A re-run's findings list only the blocking reasons, never a confirm-only one."""
     check = {
         "items": 2,
         "problems": [{"code": "unknown_prd_section", "message": NO_SECTION_MESSAGE}],
@@ -145,6 +150,7 @@ def test_check_findings_lists_each_blocking_reason_and_never_a_to_confirm_one():
 
 
 def test_check_findings_with_no_problems_is_empty_and_import_problems_are_summarised():
+    """With no problems, findings are empty; an import problem is one summary line."""
     assert workflow.check_findings(ITEMS_FILE, {"items": 2, "problems": []}, []) == []
     assert workflow.check_findings("prd.md", None, []) == []
     problems = [{"code": "missing_section_id", "message": "heading 'Goals' has no {#id}"}]

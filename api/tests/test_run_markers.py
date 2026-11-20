@@ -51,6 +51,7 @@ def _read(client, headers: dict[str, str]):
 
 
 async def test_both_markers_naming_the_same_run_act_as_that_run(client):
+    """A signed binding alone marks a call as its run; a bare token alone is refused."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     run_id, raw = await _run(ctx.tenant_id, pm.user_id)
@@ -68,6 +69,7 @@ async def test_both_markers_naming_the_same_run_act_as_that_run(client):
 
 
 async def test_a_forged_or_unsigned_run_id_is_refused_beside_a_valid_run_token(client, monkeypatch):
+    """A forged, unsigned or mismatched run binding is refused beside a valid token."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     other = await person(ctx.tenant_id, "approver", "other")
@@ -99,6 +101,7 @@ async def test_a_forged_or_unsigned_run_id_is_refused_beside_a_valid_run_token(c
 
 
 async def test_a_revoked_run_token_is_refused_with_or_without_a_binding(client):
+    """A revoked run token is refused whether or not it carries a binding."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     run_id, raw = await _run(ctx.tenant_id, pm.user_id)

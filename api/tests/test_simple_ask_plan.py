@@ -140,6 +140,7 @@ def fake():
 
 @pytest.mark.parametrize("who", ROLES)
 async def test_the_plan_opens_the_prompt(client, fake, who):
+    """The company's plan is injected first in the prompt, before the page and chat."""
     ctx = await make_ctx()
     await with_key(ctx)
     await plan_world(ctx)
@@ -161,6 +162,7 @@ async def test_the_plan_opens_the_prompt(client, fake, who):
 
 @pytest.mark.parametrize("who", ROLES)
 async def test_a_hidden_prd_never_reaches_the_prompt(client, fake, who):
+    """A hidden PRD's content never reaches the prompt, for any role."""
     ctx = await make_ctx()
     await with_key(ctx)
     await plan_world(ctx)
@@ -172,6 +174,7 @@ async def test_a_hidden_prd_never_reaches_the_prompt(client, fake, who):
 
 
 async def test_a_viewer_gets_no_ask_reply(client, fake):
+    """A viewer cannot open an Ask discussion; the request is refused outright."""
     ctx = await make_ctx()
     await plan_world(ctx)
     r = await client.post(
@@ -185,6 +188,7 @@ async def test_a_viewer_gets_no_ask_reply(client, fake):
 
 
 async def test_studio_pages_keep_their_context(client, fake):
+    """Pages outside Simple get no plan content injected into their Ask prompt."""
     ctx = await make_ctx()
     await with_key(ctx)
     await plan_world(ctx)
@@ -242,6 +246,7 @@ async def answered(client, model: RawFailure, path: str, failed: bool):
 
 
 async def test_a_failing_source_is_one_plain_line(client):
+    """A failing source's raw detail is dropped, leaving one plain sentence."""
     raw = "I don't have anything on M2 to go on. The Fireflies search failed (HTTP 502)."
     done = await answered(client, RawFailure(f"{PLAN_LINE} {raw}"), "/simple", failed=True)
     assert "HTTP" not in done.body and "502" not in done.body and "Fireflies" not in done.body
@@ -250,6 +255,7 @@ async def test_a_failing_source_is_one_plain_line(client):
 
 
 async def test_plan_content_naming_a_tool_is_kept(client):
+    """Plan text that happens to name a tool is kept as is, not mistaken for a failure."""
     text = f"{PLAN_LINE} {TOOL_LINE}"
     done = await answered(client, RawFailure(text), "/simple", failed=False)
     assert done.body == text
@@ -259,6 +265,7 @@ async def test_plan_content_naming_a_tool_is_kept(client):
 
 
 def test_live_tool_failure_reaches_the_model_plainly():
+    """A live tool failure reaches the model plainly; a token caller sees raw HTTP."""
     from oracle.mcp.server import plain_for
 
     raw = b'{"detail":"Fireflies did not answer (HTTP 502). Synced data is still available."}'
@@ -281,6 +288,7 @@ def test_live_tool_failure_reaches_the_model_plainly():
 
 
 def test_plain_failures_units():
+    """plain_failures keeps normal text but folds a real tool failure to one line."""
     assert plan.plain_failures("Slack launch notes are in the PRD.") == (
         "Slack launch notes are in the PRD."
     )

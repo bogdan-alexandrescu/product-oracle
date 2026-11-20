@@ -107,6 +107,7 @@ async def _get(client, ctx: Ctx, path: str):
 
 
 async def test_replaced_prds_roadmap_shows_no_working_draft_in_simple(client):
+    """Simple's drafts and roadmap views show only the current roadmap, not an old one."""
     ctx, ids = await world(client)
     drafts = await _get(client, ctx, "/v1/simple/drafts")
     assert [d["document"]["id"] for d in drafts] == [ids["new_rm"]]
@@ -119,12 +120,14 @@ async def test_replaced_prds_roadmap_shows_no_working_draft_in_simple(client):
 
 
 async def test_replaced_prds_tracks_are_not_in_tracks(client):
+    """A track fed only by a replaced PRD's roadmap does not appear in the tracks list."""
     ctx, _ = await world(client)
     tracks = await _get(client, ctx, "/v1/simple/tracks")
     assert [t["title"] for t in tracks["tracks"]] == ["User Safety"]
 
 
 async def test_replaced_prds_roadmap_makes_no_inbox_row_or_count(client):
+    """Replacing a PRD removes its old draft from the inbox and its counts at once."""
     ctx, ids = await world(client, replace=False)
     before = await _get(client, ctx, "/v1/inbox")
     assert ids["old_draft"] in {str(a["draft_id"]) for a in before["simple_approvals"]}
@@ -137,6 +140,7 @@ async def test_replaced_prds_roadmap_makes_no_inbox_row_or_count(client):
 
 @pytest.mark.parametrize("status", ["submitted", "working"])
 async def test_replaced_prds_roadmap_refuses_approve_and_publish(client, status):
+    """Approving or submitting a replaced PRD's old draft is refused as read-only."""
     ctx, ids = await world(client, old_status=status)
     r = await client.post(f"/v1/simple/drafts/{ids['old_draft']}/approve",
                           headers=ctx.as_("owner"))  # fmt: skip
@@ -150,6 +154,7 @@ async def test_replaced_prds_roadmap_refuses_approve_and_publish(client, status)
 
 
 async def test_replaced_prds_roadmap_takes_no_new_version_or_approval(client):
+    """A replaced PRD's roadmap refuses a new version or an approval, being read-only."""
     ctx, _ = await world(client)
     r = await client.post(f"/v1/documents/{OLD_ROADMAP}/versions", headers={
         **ctx.as_("owner"), "content-type": "text/markdown"},
@@ -163,6 +168,7 @@ async def test_replaced_prds_roadmap_takes_no_new_version_or_approval(client):
 
 
 async def test_replaced_prd_is_reachable_read_only_from_its_replacement(client):
+    """A replaced PRD and its roadmap stay reachable, linked both ways to the new one."""
     ctx, _ = await world(client)
     new = await _get(client, ctx, "/v1/documents/user-safety")
     assert [p["slug"] for p in new["replaces"]] == ["trust-plan"]
@@ -182,6 +188,7 @@ async def _trash(ctx: Ctx, slug: str) -> None:
 
 
 async def test_replaced_prd_never_trashed_stays_read_only_history(client):
+    """A replaced PRD not trashed stays visible as read-only history, with a reason."""
     ctx, ids = await world(client)
     old = await _get(client, ctx, "/v1/documents/trust-plan")
     assert old["read_only"] == "Trust plan is replaced and read-only"
@@ -216,6 +223,7 @@ async def test_replaced_prd_whose_replacement_is_in_trash_is_live_again(client):
 
 
 async def test_history_roadmap_refuses_an_items_import(client):
+    """Importing items into a replaced PRD's roadmap is refused as read-only."""
     ctx, _ = await world(client)
     r = await client.put(f"/v1/roadmaps/{OLD_ROADMAP}/versions/2/items",
                          headers=ctx.as_("owner"), json={"yaml": "items: []\n"})  # fmt: skip
@@ -224,6 +232,7 @@ async def test_history_roadmap_refuses_an_items_import(client):
 
 
 async def test_the_company_roadmap_is_never_history(client):
+    """The company's shared roadmap is never marked read-only, even after a replace."""
     ctx, _ = await world(client, replace=False)
     async with tenant_session(ctx.tenant_id) as s:
         trust = await s.scalar(select(Document).where(Document.slug == "trust-plan"))
@@ -243,6 +252,7 @@ async def test_the_company_roadmap_is_never_history(client):
 
 
 async def test_a_roadmap_fed_by_a_replaced_and_a_live_prd_stays_live(client):
+    """A roadmap still fed by a live PRD stays writable after another PRD is replaced."""
     ctx, ids = await world(client, replace=False, old_status="working")
     async with tenant_session(ctx.tenant_id) as s:
         safety = await s.scalar(select(Document).where(Document.slug == "user-safety"))

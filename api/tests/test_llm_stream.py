@@ -91,6 +91,7 @@ async def _holds(tenant_id) -> int:
 # and the hold is gone afterwards; fails_when=a chunk is lost or reordered, or a hold
 # leaks; no_claim=Claude's real stream.
 async def test_stream_tells_each_chunk_in_order_and_releases_the_hold(tenant_id):
+    """A streamed call delivers chunks in order and frees its hold afterward."""
     acc = await add_account(tenant_id, "alpha")
     seen: list[str] = []
     out = await _stream(tenant_id, StreamingFake(), seen)
@@ -104,6 +105,7 @@ async def test_stream_tells_each_chunk_in_order_and_releases_the_hold(tenant_id)
 # the call, so no text repeats; fails_when=a swap after text, or a repeated chunk;
 # no_claim=the reply's stored body (test_discussion_replies).
 async def test_a_swap_happens_only_before_the_first_text(tenant_id):
+    """A mid-stream swap only happens before the first text is sent."""
     await add_account(tenant_id, "alpha")
     await add_account(tenant_id, "bravo")
     spent = LlmRateLimited("out of quota")
@@ -163,6 +165,7 @@ def _request() -> LlmRequest:
 # partial messages on and tools off, and the readings are kept; fails_when=text comes only
 # at the end or the flags are missing; no_claim=the real claude binary.
 async def test_claude_code_stream_tells_each_delta(tmp_path):
+    """The Claude Code stream reports each text delta as it is produced."""
     script, log, _pid = _script(tmp_path, 0.01)
     seen: list[str] = []
 
@@ -182,6 +185,7 @@ async def test_claude_code_stream_tells_each_delta(tmp_path):
 # protects=a cancelled stream kills Claude Code before it returns; fails_when=the process
 # outlives the call; no_claim=what Claude does with a kill.
 async def test_cancelling_a_claude_code_stream_kills_the_process(tmp_path):
+    """Cancelling a Claude Code stream kills its underlying process."""
     from tests.test_llm_gateway import _running
 
     script, _log, pidfile = _script(tmp_path, 30)
@@ -204,6 +208,7 @@ async def test_cancelling_a_claude_code_stream_kills_the_process(tmp_path):
 # reason from message_start and message_delta; fails_when=a delta is lost or usage is
 # missing; no_claim=Anthropic's exact wire format beyond these events.
 async def test_messages_api_stream_parses_server_sent_events():
+    """The Messages API stream parses server-sent events into text and usage."""
     events = [
         ("message_start", {"message": {"model": "claude-opus-5", "usage": {"input_tokens": 9}}}),
         ("content_block_delta", {"delta": {"type": "text_delta", "text": "Hel"}}),

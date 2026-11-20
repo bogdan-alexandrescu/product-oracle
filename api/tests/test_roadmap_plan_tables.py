@@ -63,6 +63,7 @@ def _codes(run: dict) -> list[str]:
 
 
 def test_the_engineering_plan_reads_the_items_file_and_the_verified_bases():
+    """The engineering plan takes each item's date and basis kind from items and bases."""
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES)
     pay, ship = plan.items
     assert (pay.key, pay.start, pay.end, pay.basis) == ("payment-step", None,
@@ -75,12 +76,14 @@ def test_the_engineering_plan_reads_the_items_file_and_the_verified_bases():
 
 
 def test_without_a_verified_basis_an_item_has_no_date():
+    """With no verified basis, every plan item and milestone shows no date yet."""
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, [])
     assert [(r.end, r.basis) for r in plan.items] == [(None, "no date yet")] * 2
     assert plan.milestones[0].date is None
 
 
 def test_the_tables_read_month_first():
+    """The plan and milestones tables show every date month first, never ISO."""
     lines = plan_tables.table_lines(plan_tables.engineering_plan(check_items(ITEMS).items, BASES))
     assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in lines
     assert "| shipping-step | Shipping step |  | Jan 15, 2027 | team queue | planned |" in lines
@@ -89,6 +92,7 @@ def test_the_tables_read_month_first():
 
 
 def test_the_check_finds_each_problem():
+    """The plan check flags a missing table, an unknown item, and a disagreeing date."""
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     today = date(2026, 11, 4)
     assert plan_tables.check(ROADMAP_MD, plan, today) == []
@@ -109,6 +113,7 @@ def test_the_check_finds_each_problem():
 
 
 def test_the_check_finds_an_item_missing_from_the_plan_table():
+    """The plan check flags an item in roadmap_items.yaml missing from the Plan table."""
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     row = "| shipping-step | Shipping step |  |  | no date yet | planned |\n"
     short = ROADMAP_MD.replace(row, "")
@@ -118,6 +123,7 @@ def test_the_check_finds_an_item_missing_from_the_plan_table():
 
 
 def test_the_check_reads_the_dates_from_words():
+    """The plan check reads a basis word like Estimate from the table, case-blind."""
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     today = date(2026, 11, 4)
     said = ROADMAP_MD.replace("| Nov 30, 2026 | estimate |", "| Nov 30, 2026 | commitment |")
@@ -161,6 +167,7 @@ def test_every_roadmap_template_has_the_plan_sections(t):
 
 
 async def test_the_writer_and_the_critic_are_given_the_tables(client, owner, runtime):  # noqa: F811
+    """Both the roadmap writer and critic prompts carry the plan tables."""
     tenant_id, auth = owner
     await _run(client, auth, tenant_id, runtime, ROADMAP_MD)
     writer, critic = runtime.submitted[1].steps
@@ -173,6 +180,7 @@ async def test_the_writer_and_the_critic_are_given_the_tables(client, owner, run
 
 
 async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):  # noqa: F811
+    """A roadmap draft missing its Plan or Milestones table is refused, not stored."""
     tenant_id, auth = owner
     bare = ROADMAP_MD.replace(PLAN_TABLES, "")
     run = await _run(client, auth, tenant_id, runtime, bare, {"roadmap_items": False})
@@ -185,6 +193,7 @@ async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):  #
 
 
 async def test_a_date_other_than_the_engineering_date_is_refused(client, owner, runtime):  # noqa: F811
+    """A milestone date that disagrees with the engineering plan's date is refused."""
     tenant_id, auth = owner
     moved = ROADMAP_MD.replace("| Beta | Nov 30, 2026 |", "| Beta | Dec 11, 2026 |")
     run = await _run(client, auth, tenant_id, runtime, moved)

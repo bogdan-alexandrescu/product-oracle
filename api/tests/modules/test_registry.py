@@ -40,6 +40,7 @@ def _bumped(key: str, version: str, **changes):
 
 
 async def test_seeding_is_idempotent_and_complete(db):
+    """Seeding the built-in modules is complete the first time and a no-op after."""
     await ensure_seeded(db)
     await db.commit()
     first = await _counts(db)
@@ -52,6 +53,7 @@ async def test_seeding_is_idempotent_and_complete(db):
 
 
 async def test_manifest_policy_follows_the_template_spine(db):
+    """A template's module manifest follows exactly the policy of its own structure."""
     await ensure_seeded(db)
     t = await db.scalar(select(Template).where(Template.key == "prd-rfc"))
     rows = await registry.read_manifest(db, t.id)
@@ -61,6 +63,7 @@ async def test_manifest_policy_follows_the_template_spine(db):
 
 
 async def test_a_new_builtin_release_reaches_untouched_modules(db):
+    """An untouched built-in module picks up a new packaged version automatically."""
     await ensure_seeded(db)
     await db.commit()
     p1, p2 = _bumped("risks.register", "1.1.0", title="Risks and mitigations")
@@ -74,6 +77,7 @@ async def test_a_new_builtin_release_reaches_untouched_modules(db):
 
 
 async def test_a_company_override_is_never_overwritten_by_an_upgrade(db):
+    """A company's module override is never overwritten, only flagged as upgradeable."""
     await ensure_seeded(db)
     data = builtin_contracts()["risks.register"].model_dump(mode="json")
     data.update(version="1.0.1", instructions="Our own risk rubric.")
@@ -91,6 +95,7 @@ async def test_a_company_override_is_never_overwritten_by_an_upgrade(db):
 
 
 async def test_an_archived_module_is_not_upgraded(db):
+    """An archived module is skipped by upgrades and drops out of what is available."""
     await ensure_seeded(db)
     d = await db.scalar(select(ModuleDefinition).where(ModuleDefinition.key == "risks.register"))
     d.archived_at = datetime.now(UTC)
@@ -154,6 +159,7 @@ async def test_edited_and_archived_templates_and_themes_are_untouched(db):
 
 
 async def test_a_company_edited_manifest_is_never_replaced(db):
+    """A company-edited module manifest is never replaced by reseeding defaults."""
     await ensure_seeded(db)
     t = await db.scalar(select(Template).where(Template.key == "one-pager"))
     await registry.write_manifest(
@@ -170,6 +176,7 @@ async def test_a_company_edited_manifest_is_never_replaced(db):
 
 
 async def test_overrides_and_company_modules_are_validated(db):
+    """Creating a module override is checked for its version, key, and dependencies."""
     await ensure_seeded(db)
     data = builtin_contracts()["risks.register"].model_dump(mode="json")
     with pytest.raises(RegistryError) as e:
@@ -193,6 +200,7 @@ async def test_overrides_and_company_modules_are_validated(db):
 
 
 async def test_company_policy_is_checked(db):
+    """A module policy with overlap or unknown names is rejected before it is saved."""
     await ensure_seeded(db)
     with pytest.raises(RegistryError) as e:
         await registry.write_policy(

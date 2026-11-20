@@ -63,17 +63,20 @@ def company_in_los_angeles(monkeypatch):
 
 
 def test_a_raw_utc_time_reads_in_words_in_the_company_zone():
+    """A stored UTC refusal time reads in words in the reader's own timezone."""
     assert readable_refusal(OLD, "America/Los_Angeles") == NOW
     assert readable_refusal(OLD, "Europe/London").endswith("clears Sun Oct 25, 10:00 PM GMT.")
 
 
 def test_text_already_in_words_ends_its_sentence_once():
+    """A refusal already in words keeps its text and gets one closing period."""
     assert readable_refusal(NOW, "America/Los_Angeles") == NOW
     paused = "No Claude account can take this call: every Claude account is paused"
     assert readable_refusal(paused, "America/Los_Angeles") == paused + "."
 
 
 def test_other_errors_keep_their_words_but_lose_raw_times():
+    """Other error text keeps its words but any raw timestamp is made readable."""
     assert readable_refusal(None, "America/Los_Angeles") is None
     assert readable_refusal("The model's answer was not JSON", "UTC") == (
         "The model's answer was not JSON"
@@ -84,6 +87,7 @@ def test_other_errors_keep_their_words_but_lose_raw_times():
 
 
 async def test_a_reports_row_and_the_jobs_list_show_a_stored_refusal_rewritten(client, ctx):  # noqa: F811
+    """Keeps the raw error safe in storage while users only ever see plain text."""
     await import_draft(client, ctx)
     async with tenant_session(ctx["tenant_id"]) as s:
         doc = (await s.execute(select(Document).where(Document.slug == SLUG))).scalar_one()
@@ -116,6 +120,7 @@ async def test_a_reports_row_and_the_jobs_list_show_a_stored_refusal_rewritten(c
 
 
 def test_a_failed_items_refusal_reads_in_the_past():
+    """A failed item's refusal reads in the past tense when shown later."""
     assert readable_refusal(OLD, "America/Los_Angeles", past=True) == PAST
     assert readable_refusal(NOW, "America/Los_Angeles", past=True) == PAST
     other = "No other Claude account can take this call (exhausted): every Claude account is "
@@ -144,18 +149,21 @@ def test_a_failed_items_refusal_reads_in_the_past():
 
 
 def test_text_that_only_looks_like_a_time_passes_through_unchanged():
+    """Keeps an invalid-looking timestamp from being misread and garbling the message."""
     quoted = "The model wrote 2026-13-40T99:99Z where a date goes"
     assert readable_refusal(quoted, "America/Los_Angeles") == quoted
     assert readable_refusal(quoted, "America/Los_Angeles", past=True) == quoted
 
 
 def test_a_time_with_no_offset_is_read_as_utc():
+    """A timestamp with no offset is read as UTC when made readable."""
     assert readable_refusal("Rate limited until 2026-10-18T23:12", "America/Los_Angeles") == (
         "Rate limited until Sun Oct 18, 4:12 PM PDT"
     )
 
 
 async def test_a_queued_jobs_wait_stays_in_the_present(client, ctx):  # noqa: F811
+    """A queued job's wait message stays worded in the present tense."""
     await import_draft(client, ctx)
     async with tenant_session(ctx["tenant_id"]) as s:
         doc = (await s.execute(select(Document).where(Document.slug == SLUG))).scalar_one()
@@ -176,6 +184,7 @@ async def test_a_queued_jobs_wait_stays_in_the_present(client, ctx):  # noqa: F8
 
 
 async def test_a_failed_run_and_segment_read_their_refusal_in_the_past(client, owner, runtime):  # noqa: F811
+    """A failed run and its segment both show their refusal in the past tense."""
     tenant_id, auth = owner
     run = await create(client, auth)
     async with tenant_session(tenant_id) as s:
@@ -196,6 +205,7 @@ async def test_a_failed_run_and_segment_read_their_refusal_in_the_past(client, o
 
 
 async def test_a_running_segments_wait_stays_in_the_present(client, owner, runtime):  # noqa: F811
+    """A still-running segment's wait message stays in the present tense."""
     tenant_id, auth = owner
     run = await create(client, auth)
     async with tenant_session(tenant_id) as s:
@@ -211,6 +221,7 @@ async def test_a_running_segments_wait_stays_in_the_present(client, owner, runti
 
 
 async def test_failed_roadmap_items_read_the_refusal_in_the_past(client, owner, runtime):  # noqa: F811
+    """A failed roadmap item's stored error reads in the past tense."""
     tenant_id, _ = owner
     _, headers = await person(tenant_id, "approver")
     await new_version(client, headers, 1)
@@ -223,6 +234,7 @@ async def test_failed_roadmap_items_read_the_refusal_in_the_past(client, owner, 
 
 
 def test_a_refusal_after_a_lead_in_reads_in_the_past_too():
+    """A refusal with a lead-in prefix still reads in the past tense."""
     # As runs.service writes a draft's failure: "{segment}: {error}" (#604 re-review).
     assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles", past=True) == f"Draft: {PAST}"
     assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles") == f"Draft: {NOW}"
@@ -236,6 +248,7 @@ async def members():
 async def test_a_failed_interview_guide_says_when_it_failed_the_refusal_in_the_past(
     client, members
 ):
+    """A failed interview guide states when it failed, in the past tense."""
     iv = await create_interview(client, members)
     async with tenant_session(members.tenant_id) as s:
         job = await s.get(LlmJob, uuid.UUID(iv["guide_job"]["id"]))
@@ -247,6 +260,7 @@ async def test_a_failed_interview_guide_says_when_it_failed_the_refusal_in_the_p
 
 
 async def test_a_queued_interview_guides_wait_stays_in_the_present(client, members):
+    """A queued interview guide's wait message stays in the present tense."""
     iv = await create_interview(client, members)
     async with tenant_session(members.tenant_id) as s:
         job = await s.get(LlmJob, uuid.UUID(iv["guide_job"]["id"]))
@@ -258,6 +272,7 @@ async def test_a_queued_interview_guides_wait_stays_in_the_present(client, membe
 
 
 async def test_a_failed_triage_says_its_refusal_in_the_past(client, members):
+    """A failed triage states its refusal in the past tense."""
     # As runs.service stores a run's failure: "{segment}: {error}" (#633 re-review).
     async with tenant_session(members.tenant_id) as s:
         s.add(
@@ -277,6 +292,7 @@ async def test_a_failed_triage_says_its_refusal_in_the_past(client, members):
 
 
 async def test_a_running_triages_wait_stays_in_the_present(client, members):
+    """A running triage's wait message stays worded in the present tense."""
     async with tenant_session(members.tenant_id) as s:
         s.add(Run(flow="request_triage", status="running", error=f"triage: {OLD}"))
         await s.commit()
@@ -285,6 +301,7 @@ async def test_a_running_triages_wait_stays_in_the_present(client, members):
 
 
 async def test_a_failed_code_map_says_when_it_failed_the_refusal_in_the_past(client):
+    """A failed code map states when it failed, in the past tense."""
     # codemaps.end_builds stores "The code map run failed: {run.error}" (#633 re-review).
     tenant_id = await make_tenant()
     dev = await make_person(tenant_id, "dev@example.com", "owner")
@@ -305,6 +322,7 @@ async def test_a_failed_code_map_says_when_it_failed_the_refusal_in_the_past(cli
 
 
 async def test_a_failed_triage_reads_in_the_tenants_own_zone(client, members):
+    """A failed triage's time reads in the tenant's own timezone."""
     await company_in_berlin(client, members.as_("owner"))
     async with tenant_session(members.tenant_id) as s:
         s.add(Run(flow="request_triage", status="failed", error=OLD, finished_at=FAILED_AT))
@@ -314,6 +332,7 @@ async def test_a_failed_triage_reads_in_the_tenants_own_zone(client, members):
 
 
 async def test_failed_code_maps_read_in_the_tenants_own_zone(client):
+    """Failed code maps read their time in the tenant's own timezone."""
     tenant_id = await make_tenant()
     dev = await make_person(tenant_id, "dev@example.com", "owner")
     await company_in_berlin(client, dev.headers)
@@ -358,6 +377,7 @@ async def approvers_reads(client, talk, d_id, reply_id) -> tuple[str, str, str]:
 
 
 async def test_a_failed_discussion_reply_reads_its_refusal_in_the_past(client):
+    """A failed discussion reply's refusal reads in the past for approvers."""
     # replies.produce stores str(e) of the gateway's NoClaudeAccount (#644 re-review).
     talk, d_id, reply_id = await failed_reply(client, OLD)
     assert await approvers_reads(client, talk, d_id, reply_id) == (PAST, PAST, PAST)
@@ -371,6 +391,7 @@ async def test_a_failed_discussion_reply_reads_its_refusal_in_the_past(client):
 
 
 async def test_a_failed_discussion_reply_reads_in_the_tenants_own_zone(client):
+    """A failed discussion reply reads its time in the tenant's own timezone."""
     talk, d_id, reply_id = await failed_reply(client, OLD)
     await company_in_berlin(client, talk.as_("owner"))
     assert await approvers_reads(client, talk, d_id, reply_id) == (

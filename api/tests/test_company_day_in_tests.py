@@ -39,6 +39,7 @@ def _machine_day_calls(tree: ast.AST) -> list[int]:
 
 
 def test_no_test_dates_by_the_machines_day():
+    """No test file dates itself by the machine instead of the company day helper."""
     found = []
     for path in sorted(TESTS.rglob("*.py")):
         rel = path.relative_to(TESTS).as_posix()
@@ -49,6 +50,7 @@ def test_no_test_dates_by_the_machines_day():
 
 
 def test_the_company_day_is_pacifics_after_5_pm_pacific():
+    """The test helper's company day rolls over at Pacific midnight, not UTC."""
     from tests.day_helpers import company_today
 
     # 02:00 UTC on Oct 24 is 7 PM PDT on Oct 23: the company's day is still the 23rd.

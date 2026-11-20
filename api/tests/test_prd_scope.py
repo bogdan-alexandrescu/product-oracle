@@ -223,6 +223,7 @@ async def scopes(tenant_id, run_id=None) -> list[PrdScope]:
 
 
 async def test_segment_end_writes_the_proposed_scope_and_the_check(client, owner, runtime):  # noqa: F811
+    """Finishing the feature-set segment writes a proposed scope and its check."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime)
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "feature_set"
@@ -298,6 +299,7 @@ async def test_segment_end_writes_the_proposed_scope_and_the_check(client, owner
 
 
 async def test_approve_refused_with_blocking(client, owner, runtime):  # noqa: F811
+    """Approving a scope with a blocking problem is refused everywhere: REST and MCP."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime, BLOCKING)
     cp = pending(run)
@@ -455,6 +457,7 @@ async def test_known_reads_this_runs_proposals_and_confirmed_goals_only(client, 
 
 
 async def test_approving_a_clean_scope_supersedes_and_continues(client, owner, runtime):  # noqa: F811
+    """Approving a clean scope supersedes an earlier one and lets the run continue."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime)
     # An earlier approved scope of the same document (another run's), with its document.
@@ -484,6 +487,7 @@ async def test_approving_a_clean_scope_supersedes_and_continues(client, owner, r
 
 
 async def test_stop_off_approves_a_clean_scope_by_oracle(client, owner, runtime):  # noqa: F811
+    """With the checkpoint off, Oracle approves a clean scope and the run proceeds."""
     tenant_id, auth = owner
     off = {"baseline_confirm": False, "feature_set": False}
     run = await at_feature_set(client, owner, runtime, checkpoints=off)
@@ -499,6 +503,7 @@ async def test_stop_off_approves_a_clean_scope_by_oracle(client, owner, runtime)
 
 
 async def test_stop_off_fails_the_run_on_a_blocking_problem(client, owner, runtime):  # noqa: F811
+    """With the checkpoint off, a blocking scope problem fails the run, not pauses it."""
     tenant_id, auth = owner
     off = {"baseline_confirm": False, "feature_set": False}
     run = await at_feature_set(client, owner, runtime, BLOCKING, checkpoints=off)
@@ -514,6 +519,7 @@ async def test_stop_off_fails_the_run_on_a_blocking_problem(client, owner, runti
 
 
 async def test_draft_reads_scope(client, owner, runtime):  # noqa: F811
+    """A PRD draft and its priority order stay within the approved scope's features."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime, text=SERVING)
     run = await decide(client, auth, run)
@@ -551,6 +557,7 @@ async def test_the_approve_recheck_and_the_pasted_scope_run_on_the_parse_pool(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """Rechecking an approved scope and pasting it both run on the parse pool."""
     _, auth = owner
     run = await at_feature_set(client, owner, runtime)
     checks: list[str] = []
@@ -576,6 +583,7 @@ async def test_the_approve_recheck_and_the_pasted_scope_run_on_the_parse_pool(
 
 
 def test_prompts_name_the_tool_and_paste_the_scope():
+    """A run's prompts name get_prd_scope, or paste the scope when MCP is absent."""
     from oracle.runs import flows
 
     flow = flows.FLOWS["baseline_to_prd"]
@@ -605,12 +613,14 @@ def test_prompts_name_the_tool_and_paste_the_scope():
 
 
 async def test_document_scope_is_404_without_an_approved_one(client, owner):  # noqa: F811
+    """A document with no approved scope yet answers its scope lookup with a 404."""
     _, auth = owner
     resp = await client.get(f"/v1/documents/{DOC}/scope", headers=auth)
     assert resp.status_code == 404
 
 
 async def test_run_scope_is_404_without_one(client, owner, runtime):  # noqa: F811
+    """A run with no scope of its own answers its scope lookup with a 404."""
     _, auth = owner
     run = await started(client, auth, document=DOC)
     resp = await client.get(f"/v1/runs/{run['id']}/scope", headers=auth)
@@ -618,6 +628,7 @@ async def test_run_scope_is_404_without_one(client, owner, runtime):  # noqa: F8
 
 
 async def test_get_prd_scope_reads_the_tokens_run_and_refuses_people(client, owner, runtime):  # noqa: F811
+    """The scope tool returns a run's own latest scope, refusing a person's call."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime)
     async with tenant_session(tenant_id) as s:
@@ -639,6 +650,7 @@ async def test_get_prd_scope_reads_the_tokens_run_and_refuses_people(client, own
 
 
 async def test_get_prd_scope_falls_back_to_the_documents_approved_scope(client, owner, runtime):  # noqa: F811
+    """A run with no scope of its own falls back to its document's approved scope."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime, text=SERVING)
     run = await decide(client, auth, run)

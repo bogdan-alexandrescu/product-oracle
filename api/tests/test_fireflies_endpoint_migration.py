@@ -68,11 +68,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the single existing head, keeping one lineage."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading adds the endpoint_url column nullable, and downgrading removes it cleanly."""
     upgrade(_cfg(), REVISION)
     assert _columns()["endpoint_url"] == "YES"
     assert _run("SELECT count(*) FROM connections WHERE endpoint_url IS NOT NULL") == [(0,)]

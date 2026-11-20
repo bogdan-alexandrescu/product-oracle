@@ -107,6 +107,7 @@ async def company_rows(ctx: Ctx, company_id: uuid.UUID) -> list[TrackMilestone]:
 
 
 async def test_carry_over_copies_milestones_with_their_items_re_pointed(client):
+    """Carrying over an old milestone copies it to the roadmap, items re-pointed."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     body = await read(client, ctx)
@@ -152,6 +153,7 @@ async def test_carry_over_copies_milestones_with_their_items_re_pointed(client):
 
 
 async def test_a_second_carry_over_copies_nothing(client):
+    """Carrying over old milestones a second time copies nothing already carried."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     r = await client.post(CARRY, headers=ctx.as_("owner"))
@@ -164,6 +166,7 @@ async def test_a_second_carry_over_copies_nothing(client):
 
 
 async def test_keep_copies_and_drop_does_not(client):
+    """Keeping an old milestone copies it forward; dropping it leaves nothing behind."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     pilot = ids["milestones"]["Old pilot"]
@@ -197,6 +200,7 @@ async def test_keep_copies_and_drop_does_not(client):
 
 
 async def test_only_an_owner_acts(client):
+    """Only an owner may carry over, keep or drop an old milestone."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     pilot = ids["milestones"]["Old pilot"]

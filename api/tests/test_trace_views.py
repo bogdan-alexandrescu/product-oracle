@@ -41,6 +41,7 @@ TRACE_ROUTES = [
 
 
 def test_every_trace_route_is_in_openapi_and_an_mcp_tool():
+    """Every trace route is in the OpenAPI schema and exposed as a named MCP tool."""
     paths = app.openapi()["paths"]
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for method, path, name in TRACE_ROUTES:
@@ -57,6 +58,7 @@ def _path(path: str, **kw) -> str:
 
 
 async def test_trace_routes_need_auth(client):
+    """Every trace route refuses a request with no sign in."""
     ids = dict(doc=DOC, n=1, item_id=uuid.uuid4(), entity_id=uuid.uuid4(), change_id=uuid.uuid4())
     for method, path, _ in TRACE_ROUTES:
         resp = await client.request(method, _path(path, **ids), json={})
@@ -64,6 +66,7 @@ async def test_trace_routes_need_auth(client):
 
 
 async def test_a_requirement_trace_shows_the_chain_and_its_linked_decisions(client):
+    """A requirement's trace shows its chain and decisions without unlocking it."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -111,6 +114,7 @@ async def test_a_requirement_trace_shows_the_chain_and_its_linked_decisions(clie
 
 
 async def test_goal_to_feature_traceability_flags_a_feature_serving_no_confirmed_goal(client):
+    """A feature serving no confirmed goal is flagged in the report and its own trace."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     # The existing report still works and flags the orphan feature (F3b).
@@ -145,6 +149,7 @@ async def test_goal_to_feature_traceability_flags_a_feature_serving_no_confirmed
 
 
 async def test_an_unconfirmed_goal_does_not_count(client):
+    """An unconfirmed goal does not count: its requirement is still flagged goal-less."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id, goal_status="proposed")
     t = (
@@ -156,6 +161,7 @@ async def test_an_unconfirmed_goal_does_not_count(client):
 
 
 async def test_a_version_trace_carries_its_anchors(client):
+    """A version's trace carries forward the composition anchors it was built from."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -227,6 +233,7 @@ async def _evidence_setup(client):
 
 
 async def test_section_links_are_created_by_approvers_on_existing_sections(client):
+    """Only an approver can create section links, attached to sections that exist."""
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
     url = f"/v1/documents/{DOC}/versions/1/section-links"
     body = {
@@ -287,6 +294,7 @@ async def test_section_links_are_created_by_approvers_on_existing_sections(clien
 
 
 async def test_an_approved_versions_evidence_links_are_pinned(client):
+    """An approved version's evidence links are pinned; none can be added or removed."""
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
     link = await link_section(
         ctx.tenant_id, v1.document_id, v1.id, "metrics", evidence_id=strong, kind="claims"
@@ -306,6 +314,7 @@ async def test_an_approved_versions_evidence_links_are_pinned(client):
 
 
 async def test_the_evidence_inspector_shows_each_sections_claim_links(client):
+    """The evidence inspector ranks each section's claim links by source strength."""
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
     claim = "Repeat checkout takes under a minute"
     await link_section(
@@ -360,6 +369,7 @@ async def test_the_evidence_inspector_shows_each_sections_claim_links(client):
 
 
 async def test_section_links_are_exported_in_the_appendix_never_in_the_body(client):
+    """Section links export only in the appendix, never as a marker in the body."""
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
     claim = "Repeat checkout takes under a minute"
     await link_section(
@@ -389,6 +399,7 @@ async def test_section_links_are_exported_in_the_appendix_never_in_the_body(clie
 
 
 async def test_a_version_without_links_exports_exactly_as_before(client):
+    """A version with no section links exports exactly as it did before links existed."""
     ctx = await make_ctx()
     await prd_v1(client, ctx)
     html = (
@@ -401,6 +412,7 @@ async def test_a_version_without_links_exports_exactly_as_before(client):
 
 @pytest.mark.parametrize("who", ["viewer", "owner", "token"])
 async def test_trace_views_are_company_scoped(client, who):
+    """Trace views, link deletes and creates all refuse another company's data."""
     a = await make_ctx("Company A")
     b = await make_ctx("Company B")
     chain = await seed_chain(b.tenant_id)
@@ -464,6 +476,7 @@ def local_runtime():
 async def test_a_run_reads_the_inspector_with_read_sources_and_its_users_items_live(
     client, local_runtime
 ):
+    """A run needs read:sources for the inspector, and sees only that an item exists."""
     from tests.test_mcp import mcp_client, run_token, text_of
 
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)

@@ -50,6 +50,7 @@ def _contexts(flow: flows.FlowDef) -> list[flows.PromptContext]:
 
 
 def test_every_run_task_prompt_says_ground_truth():
+    """Every run step's prompt to its agent says Ground Truth, in every context."""
     left: dict[str, list[str]] = {}
     for flow in flows.FLOWS.values():
         for ctx in _contexts(flow):
@@ -64,6 +65,7 @@ def test_every_run_task_prompt_says_ground_truth():
 
 
 def test_every_run_task_tells_its_agents_to_say_ground_truth():
+    """Every run segment's task text tells its agent to say Ground Truth, not baseline."""
     for flow in flows.FLOWS.values():
         for seg in flow.segments:
             line = flows.GROUND_TRUTH_LINE
@@ -72,6 +74,7 @@ def test_every_run_task_tells_its_agents_to_say_ground_truth():
 
 
 def test_every_tool_description_says_ground_truth():
+    """Every MCP tool description names the Ground Truth graph, never the old name."""
     for name, about in flows.MCP_TOOLS.items():
         assert not _left(about), (name, about)
     for tool in CURATED:
@@ -96,5 +99,6 @@ def test_a_discussion_research_answer_names_the_ground_truth():
 
 
 def test_the_allow_list_still_catches_the_graph():
+    """The old-name check still catches the graph but allows a goal's starting value."""
     assert _left("Read the baseline with get_baseline.") == ["Read the baseline with get_baseline."]
     assert not _left("Write baseline.yaml; a goal's baseline is 12%.")

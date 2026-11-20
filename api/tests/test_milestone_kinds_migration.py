@@ -67,11 +67,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """A new migration chains onto the branch's single head, not a fork."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_backfills_kinds_and_downgrade_drops_them(scratch_db):
+    """Backfilling milestone kinds matches each milestone's real type, not a guess."""
     upgrade(_cfg(), PREVIOUS)
     tenant, roadmap, prd, goal, user = (uuid.uuid4() for _ in range(5))
     key_result, prd_ms, plain, key_date = (uuid.uuid4() for _ in range(4))

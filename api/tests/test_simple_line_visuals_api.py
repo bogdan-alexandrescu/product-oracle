@@ -84,6 +84,7 @@ async def ask(client, ctx, who, sid, doc_id):
 
 
 async def test_line_ask_published_by_role(client):
+    """Only a decider or owner may ask Oracle to draw a bet line, if a PRD exists."""
     ctx = await world(client)
     view = await get(client, ctx, "viewer")
     doc_id = view["document"]["id"]
@@ -124,6 +125,7 @@ async def test_line_ask_published_by_role(client):
 
 
 async def test_line_ask_working_draft(client):
+    """A visual for a draft's bet line draws from published words; twice queues once."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     doc_id = view["document"]["id"]
@@ -153,6 +155,7 @@ async def test_line_ask_working_draft(client):
 
 
 async def test_draft_words_never_reach_who_reads_the_published_page(client):
+    """A draft's own words never reach the visual shown on the published page."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     doc_id = view["document"]["id"]
@@ -172,6 +175,7 @@ async def test_draft_words_never_reach_who_reads_the_published_page(client):
 
 
 async def test_editing_a_bet_keeps_its_flow(client):
+    """Editing a bet's words keeps its drawn visual and comments tied to the same line."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     doc_id = view["document"]["id"]
@@ -213,6 +217,7 @@ async def test_editing_a_bet_keeps_its_flow(client):
 
 
 async def test_line_ask_track_owner_without_decider(client):
+    """A track's owner, not an approver, may ask for its line's visual with no decider."""
     ctx = await world(client)
     view = await get(client, ctx, "viewer")
     doc_id = view["document"]["id"]
@@ -243,6 +248,7 @@ GOOD = {"blocks": [
 
 
 async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
+    """Bet visuals are queued only once the one-pager itself has actually been built."""
     ctx = await world(client)
     await get(client, ctx, "owner")  # a writer's read queues the one_pager job
     good = GOOD
@@ -279,6 +285,7 @@ async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
 
 
 async def test_reordered_bets_keep_their_flows(client):
+    """A bet's drawn visual follows it when Oracle's answer reorders the bets."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")  # a writer's read queues the one_pager job
     doc_id = view["document"]["id"]
@@ -315,6 +322,7 @@ async def test_reordered_bets_keep_their_flows(client):
 
 
 async def test_words_keyed_flow_still_found(client):
+    """A visual once keyed by its words is still found under that old key."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     doc_id = uuid.UUID(view["document"]["id"])
@@ -348,6 +356,7 @@ def _upgrade_0092(conn) -> None:
 
 
 async def test_migrated_draft_words_flow_stays_with_the_draft(client):
+    """After migration, a draft's old words-keyed visual stays reachable only from it."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     doc_id = uuid.UUID(view["document"]["id"])
@@ -407,6 +416,7 @@ async def test_the_line_flow_wins_over_a_draft_words_flow(client):
 
 
 async def test_one_pager_job_queues_no_bet_visuals_when_lines_in_use(client):
+    """No bet visuals are queued while a working draft is already using those lines."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")  # a writer's read queues the one_pager job
     r = await edit(client, ctx, "decider", view, "bets-1", "A checklist that invites a teammate")

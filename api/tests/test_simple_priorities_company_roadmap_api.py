@@ -68,6 +68,7 @@ def by_feature(out: dict, w: World) -> dict[str, dict]:
 
 
 async def test_the_owner_may_move_every_row(client):
+    """The owner can move every row; a commenter can move only what is on the roadmap."""
     w = await company_world()
     rows = by_feature(await w.read(client), w)
     assert all(r["can_reorder"] for r in rows.values()), "the owner cannot move a row"
@@ -79,6 +80,7 @@ async def test_the_owner_may_move_every_row(client):
 
 
 async def test_a_move_adds_the_feature_to_the_company_roadmap(client):
+    """Moving a feature onto the roadmap adds it as a real item, not a draft."""
     w = await company_world()
     body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
             "before": {"override": None},
@@ -96,6 +98,7 @@ async def test_a_move_adds_the_feature_to_the_company_roadmap(client):
 
 
 async def test_a_commenter_cannot_add_to_the_company_roadmap(client):
+    """Keeps a comment-only role from quietly placing a feature on the roadmap."""
     w = await company_world()
     body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
             "before": {"override": None}, "after": {"position": 1, "reason": REASON}}  # fmt: skip
@@ -109,6 +112,7 @@ async def test_a_commenter_cannot_add_to_the_company_roadmap(client):
 
 
 async def test_estimate_a_feature_with_no_item(client):
+    """Estimating a feature with no item still produces a score."""
     w = await company_world()
     before = by_feature(await w.read(client), w)["widgets"]
     assert before["effort"] is None and before["item_id"] is None
@@ -121,6 +125,7 @@ async def test_estimate_a_feature_with_no_item(client):
 
 
 async def test_own_key_only_for_a_real_code(client):
+    """A feature shows its own code only when it really has one."""
     w = await company_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         f = await s.get(Entity, uuid.UUID(w.ids["ledger"]))
@@ -132,6 +137,7 @@ async def test_own_key_only_for_a_real_code(client):
 
 
 async def test_a_placeholder_milestone_never_shows(client):
+    """A milestone name that still says 'N agents' is a template, so it never shows."""
     w = await company_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         row = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))
@@ -149,6 +155,7 @@ async def test_a_placeholder_milestone_never_shows(client):
 
 
 async def test_a_bracketed_milestone_name_shows(client):
+    """A bracketed milestone name shows exactly as typed, brackets kept."""
     w = await company_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         row = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))
@@ -164,6 +171,7 @@ async def test_a_bracketed_milestone_name_shows(client):
 
 
 async def test_a_move_reuses_the_features_draft_item(client):
+    """Pinning a feature already tracked by a draft reuses that draft, not a new item."""
     w = await company_world()
     # qa-prio-twins: its draft there is on the roadmap (no "not on it yet").
     before = by_feature(await w.read(client), w)["widgets"]
@@ -186,6 +194,7 @@ async def test_a_move_reuses_the_features_draft_item(client):
 
 
 async def test_a_move_never_gives_the_features_code_to_a_second_item(client):
+    """A move is refused if the feature's code already names another item's title."""
     w = await company_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         (await s.get(Entity, uuid.UUID(w.ids["insights"]))).key = "F-40"

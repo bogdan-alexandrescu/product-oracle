@@ -51,6 +51,7 @@ SPEC = WorkflowSpec(
 
 
 async def test_fake_runtime_defaults_and_scripts():
+    """FakeRuntime follows its given script, then defaults once it runs out."""
     fake = FakeRuntime({"baseline": [Outcome(polls=1, cost_usd=Decimal(3))]})
     assert isinstance(fake, AgentRuntime)
     wid = await fake.submit(SPEC)
@@ -66,6 +67,7 @@ async def test_fake_runtime_defaults_and_scripts():
 
 
 async def test_fake_runtime_answers_for_ids_another_process_submitted():
+    """Another FakeRuntime instance can still answer status for a submitted id."""
     wid = await FakeRuntime().submit(
         WorkflowSpec(
             name="x",
@@ -82,6 +84,7 @@ async def test_fake_runtime_answers_for_ids_another_process_submitted():
 
 
 async def test_runtime_is_chosen_by_settings(monkeypatch):
+    """The runtime is picked from settings, and missing config is named."""
     # SwarmCloud by default; without its settings it says what is missing.
     for key in ("ORACLE_RUNTIME", "ORACLE_SWARMCLOUD_URL", "ORACLE_SWARMCLOUD_TOKEN"):
         monkeypatch.delenv(key, raising=False)
@@ -112,6 +115,7 @@ async def test_runtime_is_chosen_by_settings(monkeypatch):
 
 
 def test_auth_from_settings():
+    """auth_from_settings builds the right auth for each configured method."""
     s = RuntimeSettings(swarmcloud_auth="bearer", swarmcloud_token="t0k")
     assert auth_from_settings(s) == StaticBearer("t0k")
     s = RuntimeSettings(swarmcloud_auth="google_id_token", swarmcloud_audience="aud")
@@ -127,6 +131,7 @@ def test_auth_from_settings():
 
 
 async def test_access_token_from_metadata_is_cached_and_never_leaks():
+    """A metadata-server access token is cached and never shown in its repr."""
     calls: list[httpx.Request] = []
 
     def metadata(request: httpx.Request) -> httpx.Response:
@@ -208,6 +213,7 @@ def _runtime(swarm: FakeSwarm, auth=None) -> SwarmCloudRuntime:
 
 
 async def test_swarmcloud_submit_maps_steps_and_never_sends_the_run_token():
+    """SwarmCloud submit maps steps and metadata, never sending the run token."""
     swarm = FakeSwarm()
     rt = _runtime(swarm)
     assert rt.can_reach_oracle is False and rt.notes() == [NO_MCP_NOTE]
@@ -228,6 +234,7 @@ async def test_swarmcloud_submit_maps_steps_and_never_sends_the_run_token():
 
 
 async def test_swarmcloud_status_cost_artifacts_cancel():
+    """SwarmCloud reports a workflow's status, cost, artifacts and cancels it."""
     swarm = FakeSwarm("RUNNING")
     rt = _runtime(swarm)
     status = await rt.status("wf_1")
@@ -249,6 +256,7 @@ async def test_swarmcloud_status_cost_artifacts_cancel():
 
 
 async def test_swarmcloud_errors_never_carry_the_token():
+    """SwarmCloud errors never carry the bearer token in their message."""
     rt = _runtime(FakeSwarm())
     with pytest.raises(RuntimeUnavailable) as exc:
         await rt.status("wf_missing")
@@ -266,6 +274,7 @@ async def test_swarmcloud_errors_never_carry_the_token():
 
 
 async def test_google_id_token_auth_is_minted_and_cached():
+    """A minted Google id token is cached and reused across SwarmCloud calls."""
     token = jwt.encode(
         {"aud": "swarm-aud", "exp": int(time.time()) + 3600}, "k" * 32, algorithm="HS256"
     )
@@ -290,6 +299,7 @@ async def test_google_id_token_auth_is_minted_and_cached():
 
 
 async def test_swarmcloud_mode_says_so_in_the_runs_notes(client):
+    """SwarmCloud mode notes its MCP limits on the run and the flows list."""
     from tests.fixtures import seed_auth
 
     _, auth = await seed_auth()
@@ -315,6 +325,7 @@ async def test_swarmcloud_mode_says_so_in_the_runs_notes(client):
 
 
 async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
+    """Runtime status reports the tenant it reached, never the auth token."""
     from oracle.swarm import UnconfiguredSwarmCloud
     from tests.fixtures import seed_auth
     from tests.test_priorities import _token
@@ -386,6 +397,7 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
 
 @pytest.mark.timing
 async def test_whoami_has_one_deadline_and_never_echoes_a_token():
+    """whoami has one deadline and never echoes a token back in its error."""
     import asyncio
 
     from oracle.swarm import RuntimeUnavailable
@@ -440,6 +452,7 @@ async def test_whoami_has_one_deadline_and_never_echoes_a_token():
     ],
 )
 def test_error_detail_withholds_bearer_values_however_written(echo):
+    """A bearer value is withheld from error detail however it was written."""
     from oracle.swarm.swarmcloud import _detail
 
     detail = _detail(httpx.Response(403, json={"detail": f"refused {echo} for u-or"}))
@@ -448,6 +461,7 @@ def test_error_detail_withholds_bearer_values_however_written(echo):
 
 
 def test_error_detail_is_bounded_before_redaction(monkeypatch):
+    """Error detail redaction scans only a bounded prefix, however huge the text."""
     from oracle.swarm import swarmcloud
 
     scanned: list[int] = []
@@ -466,6 +480,7 @@ def test_error_detail_is_bounded_before_redaction(monkeypatch):
 
 
 def test_redaction_drops_the_token_the_scan_limit_cuts():
+    """Redaction drops a token the scan limit cuts short, not a fragment of it."""
     from oracle.swarm.swarmcloud import _DETAIL_SCAN_CHARS, _redact
 
     # Seventeen long bearer values shrink to 187 characters, so a JWT that starts ten
@@ -489,6 +504,7 @@ def test_redaction_drops_the_token_the_scan_limit_cuts():
     ],
 )
 def test_redaction_withholds_google_and_github_tokens(secret):
+    """Redaction withholds Google and GitHub tokens wherever they appear."""
     from oracle.swarm.swarmcloud import _redact
 
     out = _redact(f"clone failed: {secret} (exit 128)")
@@ -497,6 +513,7 @@ def test_redaction_withholds_google_and_github_tokens(secret):
 
 
 async def test_failed_task_error_is_redacted_and_capped():
+    """A failed task's error is redacted and capped before it is shown."""
     leak = "git clone https://x-access-token:SECRETVALUE@github.com/o/r.git failed " + "y" * 500
 
     def failed(request: httpx.Request) -> httpx.Response:
@@ -517,6 +534,7 @@ async def test_failed_task_error_is_redacted_and_capped():
 
 
 async def test_refusal_reads_the_reason_and_redacts_code_and_message():
+    """A refusal reads SwarmCloud's reason and redacts its code and message."""
     from oracle.swarm import RecordedAnswer  # noqa: F401 - exported for runtimes
 
     # Built from pieces: a credential-shaped value is never one literal in the source.
@@ -553,6 +571,7 @@ async def test_refusal_reads_the_reason_and_redacts_code_and_message():
 
 
 def test_detail_reads_the_top_level_message():
+    """_detail reads the top-level message, or the nested one when present."""
     from oracle.swarm.swarmcloud import _detail
 
     resp = httpx.Response(422, json={"code": "validation_error", "message": "steps: too many"})
@@ -562,6 +581,7 @@ def test_detail_reads_the_top_level_message():
 
 
 async def test_submission_carries_its_key_in_every_steps_metadata_only():
+    """A submission's key is carried in every step's metadata, not shared."""
     swarm = FakeSwarm()
     rt = _runtime(swarm)
     from dataclasses import replace
@@ -592,6 +612,7 @@ async def test_submission_carries_its_key_in_every_steps_metadata_only():
     ],
 )
 def test_fake_drafts_never_name_the_agent_runtime(name):
+    """A sample draft never names the internal agent runtime that wrote it."""
     # Review minor (as qa-onboarding-30/rirs-16): a sample draft reads as a sample, not as the
     # internal machinery that wrote it.
     text = _default_content(name, "draft", 1, document="example-prd", scope=["price-early"])

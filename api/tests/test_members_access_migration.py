@@ -61,11 +61,13 @@ def scratch_db():
 
 
 def test_one_head():
+    """The members-access migration chains onto its branch's one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == BEFORE
 
 
 def test_upgrade_down_up_keeps_people_and_invites(scratch_db):
+    """The members-access migration sets invite expiry from each invite's own date."""
     cfg = _cfg()
     upgrade(cfg, BEFORE)
     tenant = uuid.uuid4()

@@ -60,6 +60,7 @@ async def _reads(client, ctx, feat, other, link, blocker, headers) -> dict:
 
 
 async def test_every_route_a_run_reads_scores_frozen_at_its_pin(client, ctx):
+    """A run reads every score frozen at its pin, not the live score."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     other = await entity(client, ctx, type="feature", key="bulk-import")
     link = await edge(client, ctx, feat, other, "depends_on")

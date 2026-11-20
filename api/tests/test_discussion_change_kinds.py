@@ -30,6 +30,7 @@ from tests.test_runs import as_user, owner, pending, runtime  # noqa: F401 - fix
 # decision is one of them; fails_when=a kind stays switched off or decision lands under the
 # wrong role; no_claim=the acts themselves (below).
 def test_every_kind_is_available_and_decision_is_proposed_by_commenters():
+    """Every change kind is available and decision is commenter-proposed."""
     assert "decision" in CHANGE_KINDS
     for name, k in kinds.REGISTRY.items():
         assert k.available(None), name
@@ -50,6 +51,7 @@ def test_every_kind_is_available_and_decision_is_proposed_by_commenters():
 # ends the change done; fails_when=no question is made, a viewer asks, or the change stays
 # open; no_claim=the Inbox row (C2's).
 async def test_ask_a_person_creates_their_question(client):
+    """Asking a named person creates their question, once, as a commenter."""
     ctx, _doc = await company(client)
     _tenant[0] = ctx.tenant_id
     goal = await entity(client, ctx, type="goal", key="activation", title="Raise activation")
@@ -75,6 +77,7 @@ async def test_ask_a_person_creates_their_question(client):
 # protects=on a checkpoint item Ask is the item's D8 question action (G4), which asks through
 # C2; fails_when=the question is not on the item; no_claim=the review screen's display.
 async def test_ask_on_a_checkpoint_item_is_a_question_action(review):  # noqa: F811
+    """Asking a person on a checkpoint item records a question action."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -93,6 +96,7 @@ async def test_ask_on_a_checkpoint_item_is_a_question_action(review):  # noqa: F
 # fails_when=the row key is not found or a commenter stages; no_claim=what Approve does with
 # the staged action (C7's tests).
 async def test_scope_feature_is_staged_at_the_feature_set_stop(client, owner, runtime):  # noqa: F811
+    """A scope-feature change stages as an edit only an approver may stage."""
     tenant_id, auth = owner
     _tenant[0] = tenant_id
     run = await at_feature_set(client, owner, runtime)
@@ -127,6 +131,7 @@ async def test_scope_feature_is_staged_at_the_feature_set_stop(client, owner, ru
 # fails_when=a contradicting move is stored unasked, a commenter applies, or the change
 # does not end done with the override; no_claim=the reason check's model (no account here).
 async def test_apply_a_priority_move_shows_c9_pushback_first(client):
+    """A priority move shows pushback first and needs a reason to keep it."""
     ctx = await make_ctx()
     _tenant[0] = ctx.tenant_id
     ids = await _baseline(ctx)
@@ -154,6 +159,7 @@ async def test_apply_a_priority_move_shows_c9_pushback_first(client):
 # protects=a pin with no contradiction is applied at once; fails_when=it asks again or the
 # override is not a pin; no_claim=the ranking's reading.
 async def test_apply_a_priority_pin(client):
+    """Applying a priority pin creates an override at that position."""
     ctx = await make_ctx()
     _tenant[0] = ctx.tenant_id
     ids = await _baseline(ctx)
@@ -173,6 +179,7 @@ async def test_apply_a_priority_pin(client):
 # who decides, an approver who names nobody decides it; fails_when=no decision, a decided
 # one, or a decision without its discussion; no_claim=deciding it (H1's tests).
 async def test_a_decision_change_lands_as_a_proposed_decision(client):
+    """A commenter's decision change becomes proposed, needing an approver."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc), title="Caps or detection")
@@ -207,6 +214,7 @@ async def test_a_decision_change_lands_as_a_proposed_decision(client):
 # fails_when=the decision branch ignores the payload (the original title lands) or a bad
 # edit creates a decision; no_claim=the web form's Edit (it sends no payload for decisions).
 async def test_a_decision_change_is_proposed_with_the_persons_edit(client):
+    """Proposing a decision change uses the person's own edited payload."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc), title="Caps or detection")
@@ -231,6 +239,7 @@ async def test_a_decision_change_is_proposed_with_the_persons_edit(client):
 # offered on the subject; fails_when=Propose a change does not list decision;
 # no_claim=the web form.
 async def test_decision_is_offered_and_written_by_hand(client):
+    """Decision is offered as a kind and can be written by hand too."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     resp = await client.get(f"/v1/discussions/{d['id']}/change-kinds",
@@ -256,6 +265,7 @@ async def test_decision_is_offered_and_written_by_hand(client):
 # fails_when=the action shows as a plain row action, or deciding the stop turns the done
 # change back to suggested; no_claim=the review screen's display.
 async def test_ask_at_a_checkpoint_item_is_linked_to_the_change(review):  # noqa: F811
+    """An ask-person change at a checkpoint links its question to it."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -277,6 +287,7 @@ async def test_ask_at_a_checkpoint_item_is_linked_to_the_change(review):  # noqa
 # Priorities screen and in the mock; fails_when=confirm with no reason keeps the move on the
 # reason Oracle pushed back on; no_claim=the reason check's model.
 async def test_keeping_a_pushed_back_move_needs_a_reason(client):
+    """Keeping a pushed-back move after confirming still needs a reason."""
     ctx = await make_ctx()
     _tenant[0] = ctx.tenant_id
     ids = await _baseline(ctx)
@@ -297,6 +308,7 @@ async def test_keeping_a_pushed_back_move_needs_a_reason(client):
 # exist is refused when it is written, not at Stage; fails_when=it is stored;
 # no_claim=Stage's own check (it stays).
 async def test_a_scope_requirement_must_name_what_exists(client):
+    """A scope requirement change must name something that exists."""
     ctx = await make_ctx()
     goal = await entity(client, ctx, type="goal", key="activation", title="Raise activation")
     d = await start(client, ctx, subject_kind="entity", subject={"entity_id": goal["id"]},

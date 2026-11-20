@@ -40,6 +40,7 @@ PLAIN = render.Style(width=100, unicode=True)
 
 
 def test_the_table_is_cs_status_columns_with_its_marks():
+    """The accounts table marks a stale percent and a never-measured one apart."""
     rows = [
         _account("live", five_hour=_w(0.34, 1.5), seven_day=_w(0.10, 50)),
         _account("old", stale=True, five_hour=_w(0.5, 3), seven_day=_w(0.9, 30)),
@@ -58,6 +59,7 @@ def test_the_table_is_cs_status_columns_with_its_marks():
 
 
 def test_no_footnote_when_every_reading_is_current_and_ascii_has_its_own_marks():
+    """The projected footnote is left off when every reading is current."""
     rows = [_account("live", five_hour=_w(0.2))]
     assert not any("projected" in line for line in render.render_accounts(rows, PLAIN, NOW))
     ascii_lines = render.render_accounts(
@@ -68,6 +70,7 @@ def test_no_footnote_when_every_reading_is_current_and_ascii_has_its_own_marks()
 
 
 def test_a_narrow_terminal_drops_clears_first_and_a_past_reset_says_cleared():
+    """A narrow terminal drops the clears column, and a past reset says cleared."""
     rows = [_account("a-rather-long-account-label", five_hour=_w(0.97, -1), seven_day=_w(0.4))]
     narrow = render.render_accounts(rows, render.Style(width=60), NOW)
     assert "CLEARS" not in narrow[0] and "5H USED" in narrow[0]
@@ -76,6 +79,7 @@ def test_a_narrow_terminal_drops_clears_first_and_a_past_reset_says_cleared():
 
 
 def test_an_empty_pool_says_so():
+    """An empty account pool is reported in its own line, not an empty table."""
     assert "no accounts registered" in render.render_accounts([], PLAIN, NOW)[0]
 
 
@@ -125,6 +129,7 @@ def _api(request: httpx.Request) -> httpx.Response:
 
 
 def test_oracle_accounts_prints_the_pool(monkeypatch):
+    """The accounts command prints a summary, the table, and sweep status or JSON."""
     code, out, err, reqs = _run(["accounts"], _api, monkeypatch)
     assert code == 0, err
     assert str(reqs[0].url) == "http://oracle.test/v1/claude-accounts"
@@ -138,6 +143,7 @@ def test_oracle_accounts_prints_the_pool(monkeypatch):
     "verb,state", [("pause", "PAUSED"), ("resume", "AVAILABLE"), ("drain", "DRAINING")]
 )
 def test_the_state_verbs_resolve_by_label_and_say_what_drain_does(monkeypatch, verb, state):
+    """Pause, resume and drain resolve an account by label; drain explains itself."""
     code, out, err, reqs = _run(
         ["account", verb, "work", "--reason", "held back"], _api, monkeypatch
     )
@@ -149,12 +155,14 @@ def test_the_state_verbs_resolve_by_label_and_say_what_drain_does(monkeypatch, v
 
 
 def test_an_unknown_account_is_refused_with_the_labels(monkeypatch):
+    """An unknown account label is refused with the list of labels that exist."""
     code, _, err, reqs = _run(["account", "pause", "nope"], _api, monkeypatch)
     assert code == 1 and "accounts: spare, work" in err
     assert all(r.method == "GET" for r in reqs)
 
 
 def test_remove_needs_the_label_typed_back(monkeypatch):
+    """Removing an account requires typing its label back, or nothing happens."""
     code, _, err, reqs = _run(["account", "remove", "work"], _api, monkeypatch, stdin="wrok\n")
     assert code == 1 and "nothing was removed" in err
     assert not any(r.method == "DELETE" for r in reqs)
@@ -164,6 +172,7 @@ def test_remove_needs_the_label_typed_back(monkeypatch):
 
 
 def test_add_signs_in_through_the_browser_and_never_prints_the_code(monkeypatch):
+    """Adding an account walks through sign-in and never prints the pasted code."""
     state = "s" * 43
     monkeypatch.setattr(oracle_cli, "_open_browser", lambda url: False)
     monkeypatch.setattr(oracle_cli, "_read_code", lambda prompt: f"c0de-secret#{state}")
@@ -197,6 +206,7 @@ def test_add_signs_in_through_the_browser_and_never_prints_the_code(monkeypatch)
 
 
 def test_tick_prints_the_pool_sweep(monkeypatch):
+    """Tick's summary reports holds reclaimed, credentials refreshed, and failures."""
     result = {
         "runs_checked": 0,
         "segments_finished": 0,

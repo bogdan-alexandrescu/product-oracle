@@ -75,6 +75,7 @@ async def submit(client, ctx):
 
 @pytest.mark.parametrize("gone", ["rejected", "trashed"])
 async def test_a_draft_keeps_a_citation_whose_item_is_gone(client, gone):
+    """A citation whose item was rejected or trashed is kept but flagged, not stripped."""
     ctx = await cited_world(client, gone)
     view = await get(client, ctx, "decider")
     r = await edit(client, ctx, "decider", view, "bets-2", "Invite suggestions from contacts")
@@ -92,6 +93,7 @@ async def test_a_draft_keeps_a_citation_whose_item_is_gone(client, gone):
 
 @pytest.mark.parametrize("change", ["added", "changed"])
 async def test_a_new_citation_of_no_item_is_still_refused(client, change):
+    """A new citation of a nonexistent item is refused, same as an existing bad one."""
     ctx = await cited_world(client, None)
     if change == "added":
         md = CITED.replace(
@@ -108,6 +110,7 @@ async def test_a_new_citation_of_no_item_is_still_refused(client, change):
 
 
 async def test_a_prd_draft_line_with_a_date_is_submitted(client):
+    """A PRD draft line naming a plain date submits without a source problem."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     r = await edit(client, ctx, "decider", view, "bets-1", "A setup checklist live by Dec 15, 2026")

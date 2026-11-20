@@ -112,6 +112,7 @@ def _approval_title(out: dict) -> str:
 
 
 async def test_required_sections_without_reviewers_publish(client):
+    """Approving in a meeting publishes at once when no section needs its own reviewer."""
     ctx = await _world(client)
     m = await _meeting_with_an_edit(client, ctx)
     r = await client.post(f"{MEETINGS}/{m['id']}/approve", headers=ctx.as_("decider"))
@@ -127,6 +128,7 @@ async def test_required_sections_without_reviewers_publish(client):
 
 
 async def test_absent_required_reviewer_waits(client):
+    """Approving with a required reviewer absent leaves the draft unpublished for now."""
     ctx = await _world(client, reviewer=True)
     m = await _meeting_with_an_edit(client, ctx)
     r = await client.post(f"{MEETINGS}/{m['id']}/approve", headers=ctx.as_("decider"))
@@ -160,6 +162,7 @@ async def _approved_with_absent_section_reviewer(client):
 
 
 async def test_section_reviewer_absent_waits_then_approves(client):
+    """A draft held for an absent section reviewer publishes once they approve."""
     ctx, _, out = await _approved_with_absent_section_reviewer(client)
     rae = str(ctx.users["reviewer"].id)
     title = _approval_title(out)
@@ -183,6 +186,7 @@ async def test_section_reviewer_absent_waits_then_approves(client):
 
 
 async def test_section_reviewer_approves_in_studio_publishes(client):
+    """Approving a held section's review from Detailed publishes the Simple draft too."""
     ctx, _, _ = await _approved_with_absent_section_reviewer(client)
     r = await client.put(
         "/v1/documents/guided-setup/versions/2/sections/build/review",
@@ -196,6 +200,7 @@ async def test_section_reviewer_approves_in_studio_publishes(client):
 
 
 async def test_live_poll_reads_holds_without_recomputing(client, monkeypatch):
+    """Reading a live meeting reuses a draft's stored holds, not recomputing them."""
     ctx, m, _ = await _approved_with_absent_section_reviewer(client)
 
     async def boom(*a, **k):
@@ -211,6 +216,7 @@ async def test_live_poll_reads_holds_without_recomputing(client, monkeypatch):
 
 
 def test_published_words_match_the_banner():
+    """The banner's wording names every waiting reviewer and reason, joined with a dot."""
     rae, sam = uuid.uuid4(), uuid.uuid4()
     d = SimpleNamespace(status="submitted", waiting_on=[rae, sam],
                         blocked_by=["Sections Scope need a reviewer"])  # fmt: skip

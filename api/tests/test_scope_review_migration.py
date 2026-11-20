@@ -61,11 +61,13 @@ def scratch_db():
 
 
 def test_chains_on_mains_head_and_is_the_only_head():
+    """The scope review migration chains on main's head and stays the only head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
+    """Upgrading the scope review migration backfills rows; downgrade reverses it."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, run, scope, item = (uuid.uuid4() for _ in range(4))

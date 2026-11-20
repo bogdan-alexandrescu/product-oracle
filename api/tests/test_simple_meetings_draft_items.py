@@ -48,6 +48,7 @@ async def add_draft_items(w, *, only: bool) -> None:
 
 
 async def test_meeting_for_prd_with_only_draft_items(client):
+    """A PRD whose items are only on a draft roadmap still lists and ends its meeting."""
     w = await world()
     await add_draft_items(w, only=True)
     m = await start(client, w)
@@ -63,6 +64,7 @@ async def test_meeting_for_prd_with_only_draft_items(client):
 
 
 async def test_meeting_lists_only_real_roadmaps(client):
+    """A meeting lists only roadmaps with published items, not ones still in draft."""
     w = await world()
     await add_draft_items(w, only=False)
     m = await start(client, w)

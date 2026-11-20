@@ -71,6 +71,7 @@ FIVE = [f("a", 5), f("b", 4), f("c", 3), f("d", 2), f("e", 1)]
 
 
 def test_no_overrides_leaves_the_formula_order_and_sets_formula_rank():
+    """With no overrides, priority order and formula_rank stay exactly as scored."""
     base = rank(FIVE)
     out = apply_overrides(base, [])
     assert keys(out) == ["a", "b", "c", "d", "e"]
@@ -79,6 +80,7 @@ def test_no_overrides_leaves_the_formula_order_and_sets_formula_rank():
 
 
 def test_a_move_goes_directly_above_its_anchor():
+    """A move places a feature directly above its chosen anchor."""
     out = apply_overrides(rank(FIVE), [move("d", "b")])
     assert keys(out) == ["a", "d", "b", "c", "e"]
     d = out["features"][1]
@@ -89,12 +91,14 @@ def test_a_move_goes_directly_above_its_anchor():
 
 
 def test_a_pin_holds_its_rank_and_clamps_to_the_list():
+    """A pin holds a feature at its chosen rank, clamped to the end of a shorter list."""
     assert keys(apply_overrides(rank(FIVE), [pin("e", 1)])) == ["e", "a", "b", "c", "d"]
     assert keys(apply_overrides(rank(FIVE), [pin("a", 3)])) == ["b", "c", "a", "d", "e"]
     assert keys(apply_overrides(rank(FIVE), [pin("a", 99)])) == ["b", "c", "d", "e", "a"]
 
 
 def test_overrides_chain_in_creation_order():
+    """Multiple overrides apply one after another, in the order they were made."""
     out = apply_overrides(rank(FIVE), [pin("e", 1, 1), move("d", "e", 2)])
     assert keys(out) == ["d", "e", "a", "b", "c"]
 
@@ -118,12 +122,14 @@ def test_dependencies_win():
 
 
 def test_a_move_whose_anchor_is_gone_is_dropped():
+    """A move or pin whose anchor feature is gone is dropped and reported as dropped."""
     out = apply_overrides(rank(FIVE), [move("e", "gone"), move("ghost", "a", 2)])
     assert keys(out) == ["a", "b", "c", "d", "e"]
     assert out["dropped"] == ["o1", "o2"]
 
 
 def test_cycles_keep_their_members_together():
+    """An override on a cycle member still keeps the whole cycle together."""
     features = [f("a", 5, deps=["b"]), f("b", 4, deps=["a"]), f("c", 3)]
     out = apply_overrides(rank(features), [pin("c", 1)])
     assert keys(out)[0] == "c"
@@ -146,6 +152,7 @@ def codes(messages) -> list[str]:
 
 
 def test_no_confirmed_goal_fires_when_it_passes_a_goal_feature():
+    """Moving a goalless feature above a goal-serving one is flagged, naming both."""
     features = [f("goal-a", 3), f("goal-b", 2), f("loner", goal=False)]
     msgs = _check(features, move("loner", "goal-b"))
     [msg] = [m for m in msgs if m["code"] == "no_confirmed_goal"]
@@ -156,6 +163,7 @@ def test_no_confirmed_goal_fires_when_it_passes_a_goal_feature():
 
 
 def test_no_confirmed_goal_misses_when_it_passes_only_goalless_features():
+    """No warning fires when a goalless feature only passes other goalless features."""
     features = [f("goal-a", 3), f("loner-a", goal=False), f("loner-b", goal=False)]
     base = keys(rank(features))
     assert base[-1] == "loner-b"
@@ -163,6 +171,7 @@ def test_no_confirmed_goal_misses_when_it_passes_only_goalless_features():
 
 
 def test_low_confidence_fires_below_the_threshold_and_misses_at_it():
+    """A low-confidence pin above a surer feature warns below the threshold, not at it."""
     features = [f("sure", 2, conf=0.72, sources=4), f("shaky", 1, conf=0.31)]
     [msg] = [m for m in _check(features, pin("shaky", 1)) if m["code"] == "low_confidence"]
     assert msg["message"] == "Confidence 0.31 is below 0.4; Sure has 0.72 from 4 sources."
@@ -173,11 +182,13 @@ def test_low_confidence_fires_below_the_threshold_and_misses_at_it():
 
 
 def test_low_confidence_misses_when_the_passed_feature_is_below_it_too():
+    """Low confidence is not flagged when the feature it passes is just as unsure."""
     features = [f("weak", 2, conf=0.35), f("weaker", 1, conf=0.3)]
     assert "low_confidence" not in codes(_check(features, pin("weaker", 1)))
 
 
 def test_against_score_fires_at_three_places_and_twice_the_score():
+    """A score warning fires only past three places moved and double the score."""
     features = [f("a", 10), f("b", 9), f("c", 8), f("d", 2.4), f("x", 1.2)]
     msgs = _check(features, move("x", "c"))  # 5 -> 3: two places
     assert "against_score" not in codes(msgs)
@@ -187,6 +198,7 @@ def test_against_score_fires_at_three_places_and_twice_the_score():
 
 
 def test_against_score_misses_under_twice_the_score():
+    """The against-score warning needs the score gap to reach double exactly."""
     features = [f("a", 2.3), f("b", 2.3), f("c", 2.3), f("x", 1.2)]
     assert "against_score" not in codes(_check(features, pin("x", 1)))
     features = [f("a", 2.4), f("b", 2.3), f("c", 2.3), f("x", 1.2)]
@@ -194,6 +206,7 @@ def test_against_score_misses_under_twice_the_score():
 
 
 def test_open_blocker_fires_entering_the_top_three_and_misses_at_four():
+    """An open blocker is flagged only when its feature moves into the top three spots."""
     features = [f("a", 5), f("b", 4), f("c", 3), f("d", 2), f("e", 1)]
     blockers = {"e": ["Card vault limits"]}
     [msg] = [
@@ -206,6 +219,7 @@ def test_open_blocker_fires_entering_the_top_three_and_misses_at_four():
 
 
 def test_a_change_with_no_contradiction_has_no_messages():
+    """A move with nothing wrong produces no pushback messages at all."""
     features = [f("a", 2), f("b", 1.9)]
     assert _check(features, move("b", "a")) == []
 
@@ -305,6 +319,7 @@ async def _create(client, ctx: Ctx, who="approver", **body):
 
 
 async def test_a_move_with_no_contradiction_is_stored_and_read(client):
+    """Creating a move override stores it, and the plain formula order stays available."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     assert [r["key"] for r in await _ranking(client, ctx)] == FORMULA
@@ -373,6 +388,7 @@ async def test_pushback_once(client):
 
 
 async def test_a_pin_is_held_below_its_prerequisite(client):
+    """A pin that would jump above its prerequisite is held just below it instead."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     resp = await _create(client, ctx, feature_id=str(ids["one-click"]), kind="pin", position=1)
@@ -408,6 +424,7 @@ async def test_a_move_that_leaves_the_order_as_it_is_is_refused(client):
 
 
 async def test_a_second_override_replaces_the_first_and_remove_ends_it(client):
+    """A new override replaces the old one; only an approver can remove it."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     first = await _create(client, ctx, feature_id=str(ids["usage-alerts"]), kind="pin", position=1)
@@ -458,6 +475,7 @@ async def test_a_second_override_replaces_the_first_and_remove_ends_it(client):
 
 
 async def test_overrides_apply_under_every_method(client):
+    """An override holds a feature's rank no matter which scoring method is chosen."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     resp = await _create(client, ctx, feature_id=str(ids["usage-alerts"]), kind="pin", position=1)
@@ -536,6 +554,7 @@ async def test_overrides_reach_readers(client, local_runtime):
 
 
 async def test_roles_and_validation(client):
+    """Creating an override is role-gated, and its fields are validated."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     feature = str(ids["usage-alerts"])
@@ -574,6 +593,7 @@ async def test_roles_and_validation(client):
 
 
 async def test_a_rejected_anchor_no_longer_applies(client):
+    """An override whose anchor is later rejected stops applying but stays logged."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     resp = await _create(
@@ -596,6 +616,7 @@ async def test_a_rejected_anchor_no_longer_applies(client):
 
 
 async def test_a_kept_override_is_recorded_in_the_decision_log(client):
+    """Confirming an override past its pushback records the reason in the decision log."""
     from oracle.decisions.models import Decision
 
     ctx = await make_ctx()
@@ -617,6 +638,7 @@ async def test_a_kept_override_is_recorded_in_the_decision_log(client):
 
 
 async def test_overrides_are_company_scoped(client):
+    """Priority overrides are scoped to one company; another cannot see or delete them."""
     ctx = await make_ctx()
     ids = await _baseline(ctx)
     resp = await _create(client, ctx, feature_id=str(ids["usage-alerts"]), kind="pin", position=1)
@@ -770,11 +792,13 @@ def _run(sql: str, **params):
 
 
 def test_the_chain_ends_here_after_agent_staging():
+    """The priority_overrides migration chains directly after the prior head revision."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0022_priority_snapshot_runs"
 
 
 def test_upgrade_adds_priority_overrides_and_downgrade_drops_it():
+    """The priority_overrides table enforces one active override per feature."""
     asyncio.run(_reset_schema(SCRATCH_URL))
     try:
         cfg = _cfg()

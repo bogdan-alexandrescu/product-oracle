@@ -116,6 +116,7 @@ def _kind(value: Any) -> str:
 
 
 def test_the_fixture_is_roadmap_item_out():
+    """The roadmap items mock fixture has exactly the fields the real API model has."""
     fixture = _fixture()
     assert fixture["roadmap"] == "usage-alerts-roadmap" and fixture["version"] == 1
     assert [i["item_key"] for i in fixture["items"]] == ["item-behaviour", "item-metrics"]
@@ -128,6 +129,7 @@ def test_the_fixture_is_roadmap_item_out():
 
 
 async def test_the_real_items_route_serves_the_fixtures_fields(client, owner, runtime):  # noqa: F811
+    """The real items route serves every field the web's items tab fixture promises."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

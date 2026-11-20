@@ -141,6 +141,7 @@ async def applied_by(client, w, who: str, card: dict) -> dict:
 
 
 async def test_chat_notes_record_who_and_when(client):
+    """Chat notes and open questions keep who wrote them and when, shown by name."""
     w = await mt.world()
     m = await mt.start(client, w, attendee_ids=[mt.uid(w, x) for x in ("approver", "commenter")])
     mid = m["id"]
@@ -165,6 +166,7 @@ async def test_chat_notes_record_who_and_when(client):
 
 
 async def test_chat_agenda_moves_record_who_and_when(client):
+    """Agenda next and skip moves update the agenda's next item and skipped list."""
     w = await mt.world()
     mid = (await mt.start(client, w))["id"]
     nxt = await ca.one_card(client, w, "commenter", "next: Cut A", mid)
@@ -178,6 +180,7 @@ async def test_chat_agenda_moves_record_who_and_when(client):
 
 
 async def test_chat_agenda_next_undo_restores_exactly(client):
+    """Undoing an agenda move restores the agenda to exactly its prior state."""
     w = await mt.world()
     mid = (await mt.start(client, w))["id"]
     # The roadmap the meeting reviews is pinned in its agenda (meeting scope) and stays.
@@ -214,6 +217,7 @@ async def test_chat_agenda_next_undo_restores_exactly(client):
 
 
 async def test_meeting_end_records_who_and_when(client):
+    """Ending a meeting records who ended it and when, closing its session too."""
     w = await mt.world()
     m = await mt.start(client, w)
     out = await mt.end(client, w, m["id"])
@@ -239,6 +243,7 @@ async def test_meeting_end_records_who_and_when(client):
 
 
 async def test_meeting_join_records_who_and_when(client):
+    """Joining a meeting adds the attendee and logs who joined as its own event."""
     w = await mt.world()
     m = await mt.start(client, w, attendee_ids=[mt.uid(w, "approver")])
     assert mt.uid(w, "commenter") not in [a["id"] for a in m["attendees"]]
@@ -281,6 +286,7 @@ async def read_key_dates(client, w, who: str) -> list[tuple]:
 
 
 async def test_remove_key_date_undo_restores_exactly(client):
+    """Removing a key date undoes exactly; a stale remove is refused with its value."""
     w = await key_date_world()
     kd = await published_key_date(w)
     published = await key_date_row(w, kd)
@@ -310,6 +316,7 @@ async def test_remove_key_date_undo_restores_exactly(client):
 
 
 async def test_remove_key_date_waits_in_the_working_draft(client):
+    """A removed key date waits in the draft and vanishes only once approved."""
     w = await key_date_world()
     kd = await published_key_date(w)
     published = await key_date_row(w, kd)
@@ -360,6 +367,7 @@ def flag_body(w, op: str) -> dict:
 
 @pytest.mark.parametrize("op", list(FLAG_OPS))
 async def test_draft_flag_ops_wait_in_the_working_draft(client, op):
+    """Flag changes wait in a draft; the roadmap stays untouched until approved."""
     w = await draft_flag_world(op)
     field, value = next(iter(FLAG_OPS[op][1].items()))
     published = await snapshot(w, op, published=True)
@@ -394,6 +402,7 @@ async def test_draft_flag_ops_wait_in_the_working_draft(client, op):
 
 @pytest.mark.parametrize("op", list(FLAG_OPS))
 async def test_draft_flag_ops_refuse_a_stale_before(client, op):
+    """A flag change made against a stale value is refused with the current one."""
     w = await draft_flag_world(op)
     r = await client.post(CHANGES, json=flag_body(w, op), headers=w.ctx.as_("decider"))
     assert r.status_code == 201, r.text
@@ -414,6 +423,7 @@ async def test_draft_flag_ops_refuse_a_stale_before(client, op):
 
 
 async def test_merge_item_returns_the_checker_flags(client):
+    """Merging an item returns the same flags the roadmap then shows for all touched."""
     w = await AddWorld().build()
     draft = (await w.add(client, "owner", "Import from spreadsheets"))["change"]["target"][
         "item_id"
@@ -437,6 +447,7 @@ async def test_merge_item_returns_the_checker_flags(client):
 
 
 async def test_decide_question_returns_no_flags(client):
+    """Deciding a question returns no flags; deciding it twice or stale is refused."""
     from tests.baseline_helpers import make_ctx
     from tests.test_simple_prd_questions import page, seed
 

@@ -31,6 +31,7 @@ BRIEFS = "version: 1\ncode_map: {used: false, repos: []}\nfeatures:\n" + "".join
 
 
 async def test_console_approval_with_blocking_is_held(client, owner, monkeypatch):  # noqa: F811
+    """A blocked checkpoint is held until a console reviewer approves it there."""
     tenant_id, auth = owner
     await seed_baseline(tenant_id)
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)

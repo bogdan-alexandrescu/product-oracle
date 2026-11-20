@@ -42,6 +42,7 @@ def _old_notes(text: str) -> str | None:
 
 
 def test_the_same_result_as_the_regexes_on_random_bodies():
+    """The fast comment and notes stripping matches the regexes it replaced."""
     rng = random.Random(20261020)
     for _ in range(5000):
         text = "".join(rng.choice(_PIECES) for _ in range(rng.randint(0, 30)))
@@ -52,6 +53,7 @@ def test_the_same_result_as_the_regexes_on_random_bodies():
 
 @pytest.mark.timing
 def test_many_unclosed_openers_are_linear():
+    """Stripping comments and notes stays fast even with many unclosed openers."""
     for body in ("x " + "<!--" * 262_144, "```notes\n" * 116_508):
         started = time.monotonic()
         layers.slide_body(body)

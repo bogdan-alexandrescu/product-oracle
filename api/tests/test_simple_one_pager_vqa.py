@@ -38,6 +38,7 @@ def _sec(key: str, heading: str, body: str) -> Section:
 
 
 def test_needs_a_look_says_each_item_once():
+    """A number-versus-list mismatch is flagged once, even if restated twice."""
     summary = _sec(
         "summary",
         "Summary",
@@ -59,6 +60,7 @@ def test_needs_a_look_says_each_item_once():
 
 
 def test_who_has_it_is_never_a_confidence_label():
+    """Who has it never returns a confidence label as the audience."""
     leads = _sec(
         "users", "Users", "- Studio admins: set up alone\n- Low confidence: we met three studios"
     )
@@ -95,6 +97,7 @@ title: Studio setup
 
 
 async def test_long_problem_line_edited_whole(client):
+    """A long problem line shows clipped but edits against its full text."""
     assert len(LONG) > one_pager.LINE_MAX and len(LONG.split()) <= one_pager.PROBLEM_WORDS
     ctx = await make_ctx()
     r = await client.post("/v1/documents/studio-setup/versions", content=LONG_PRD.encode(),

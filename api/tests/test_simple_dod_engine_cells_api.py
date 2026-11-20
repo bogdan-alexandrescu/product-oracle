@@ -105,6 +105,7 @@ async def count(ctx, model, *where) -> int:
 
 
 async def test_estimate_feature_decider_applies_approver_proposes(client):
+    """An approver's estimate proposes; a decider's applies, and undo clears both."""
     ctx = await make_people()
     w = await PriWorld(ctx).build()
     before = {"goal_value": None, "effort": 8}
@@ -129,6 +130,7 @@ async def test_estimate_feature_decider_applies_approver_proposes(client):
 
 
 async def test_estimate_feature_accept_is_outdated_after_a_later_estimate(client):
+    """Accepting an estimate once a later one has landed is refused as outdated."""
     ctx = await make_people()
     w = await PriWorld(ctx).build()
     before = {"goal_value": None, "effort": 8}
@@ -164,6 +166,7 @@ async def overlay_line(ctx, line_id: str) -> str | None:
 
 
 async def test_edit_line_plain_approver_proposes_and_multi_step_undo(client):
+    """An approver's line edit proposes; edits can only be undone in their own order."""
     ctx = await op_tests.world(client)
     view = await op_tests.get(client, ctx, "approver")
     old = op_tests.line(view, "bets-1")["text"]
@@ -209,6 +212,7 @@ async def test_edit_line_plain_approver_proposes_and_multi_step_undo(client):
 
 
 async def test_edit_line_accept_is_outdated_after_the_line_changed(client):
+    """Accepting a line edit once the line has changed again is refused as outdated."""
     ctx = await op_tests.world(client)
     view = await op_tests.get(client, ctx, "approver")
     r = await op_tests.edit(client, ctx, "approver", view, "bets-1", "A checklist for admins")
@@ -232,6 +236,7 @@ async def test_edit_line_accept_is_outdated_after_the_line_changed(client):
 
 
 async def test_name_decider_role_matrix(client):
+    """Naming a question's decider proposes, and waits only in the decider's inbox."""
     ctx = await make_ctx()
     await q_tests.seed(ctx)
     q = next(x for x in (await q_tests.page(client, ctx))["questions"] if x["code"] == "Q3")
@@ -282,6 +287,7 @@ async def test_name_decider_role_matrix(client):
 
 
 async def test_open_question_proposal_follows_a_renamed_decider(client):
+    """An open proposal follows its question to a newly named decider, not the old."""
     ctx = await make_ctx()
     await q_tests.seed(ctx)
     q = next(x for x in (await q_tests.page(client, ctx))["questions"] if x["code"] == "Q3")
@@ -315,6 +321,7 @@ async def test_open_question_proposal_follows_a_renamed_decider(client):
 
 
 async def test_add_key_date_accept_never_overwrites(client):
+    """Accepting a key-date proposal never overwrites one added directly; both stay."""
     w = await kd_tests.world()
     launch = kd_tests.LAUNCH
     r = await kd_tests.post(client, w, "approver", "add_key_date", None, launch)
@@ -358,6 +365,7 @@ async def test_add_key_date_accept_never_overwrites(client):
 
 
 async def test_override_priority_pushback_through_the_engine(client):
+    """A priority override with no confirmed goal is pushed back, but may be kept."""
     ctx = await make_people()
     w = await PriWorld(ctx).build()
     pin = {"position": 1, "reason": REASON}
@@ -400,6 +408,7 @@ async def test_override_priority_pushback_through_the_engine(client):
 
 
 async def test_draft_without_owner_through_add_and_confirm(client):
+    """Adding an item with no track owner flags it as a draft without an owner."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)

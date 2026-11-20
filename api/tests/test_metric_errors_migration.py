@@ -72,11 +72,13 @@ def _metric(tenant: uuid.UUID, title: str, error: str | None) -> uuid.UUID:
 
 
 def test_chains_on_the_single_head():
+    """The metric-errors migration chains onto the branch's one existing head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_old_posthog_text_becomes_the_fixed_sentence(scratch_db):
+    """A stored PostHog error that leaked a table name becomes the generic text."""
     upgrade(_cfg(), PREVIOUS)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)

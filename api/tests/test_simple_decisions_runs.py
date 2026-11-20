@@ -35,6 +35,7 @@ AT = dt.datetime(2026, 10, 20, 18, 0, tzinfo=dt.UTC)
 
 
 async def test_runs_group_lists_each_stop(client):
+    """Decisions lists each run's checkpoint stops, including a retried attempt."""
     w = await world()
     owner, lead = w.ctx.users["owner"], w.ctx.users["approver"]
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -117,6 +118,7 @@ async def _reads(client, w):
 
 
 async def test_runs_group_reads_do_not_grow_with_runs(client):
+    """Reading the Decisions page costs the same queries, however many runs exist."""
     w = await world()
     await _runs_with_a_stop(w, 1)
     runs, one = await _reads(client, w)
@@ -136,6 +138,7 @@ def _dates(changed: int, accepted: int = 1) -> dict:
 
 
 async def test_dates_stop_says_how_many_dates_changed(client):
+    """Only the dates checkpoint counts how many dates a run's step actually changed."""
     w = await world()
     owner, lead = w.ctx.users["owner"], w.ctx.users["approver"]
     runs = {}

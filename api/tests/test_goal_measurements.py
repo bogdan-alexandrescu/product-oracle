@@ -45,6 +45,7 @@ async def _attrs(client, ctx, goal) -> dict:
 # move it; deleting the latest rolls back; fails_when=current follows the last write rather
 # than the latest day; no_claim=Home's trend.
 async def test_record_updates_current_to_latest_by_date(client, ctx):
+    """A goal's current value is its latest-dated record, not the last one entered."""
     goal = await _goal(client, ctx)
     today = _today()
     resp = await _record(client, ctx, goal, 38, today - timedelta(days=5), note="October export")
@@ -81,6 +82,7 @@ async def test_record_updates_current_to_latest_by_date(client, ctx):
 # protects=one row per goal per day; fails_when=a second same-day value adds a row;
 # no_claim=notes.
 async def test_same_day_replaces(client, ctx):
+    """A second measurement on the same day replaces the first instead of adding a row."""
     goal = await _goal(client, ctx)
     today = _today()
     await _record(client, ctx, goal, 38, today)
@@ -95,6 +97,7 @@ async def test_same_day_replaces(client, ctx):
 # protects=approvers and owners record, everyone reads; fails_when=a commenter records or
 # deletes; no_claim=API tokens.
 async def test_roles(client, ctx):
+    """Only an owner can record or delete a measurement; a viewer can still read it."""
     goal = await _goal(client, ctx)
     assert (await _record(client, ctx, goal, 38, _today(), who="commenter")).status_code == 403
     row = (await _record(client, ctx, goal, 38, _today(), who="owner")).json()
@@ -107,6 +110,7 @@ async def test_roles(client, ctx):
 # protects=422 when the entity is not a goal, the goal has no unit yet, or the date is in
 # the future; fails_when=any of those records; no_claim=evidence links.
 async def test_refusals(client, ctx):
+    """A measurement is refused for a non-goal, a metric-less goal, or a future date."""
     today = _today()
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     assert (await _record(client, ctx, feat, 1, today)).status_code == 422
@@ -130,6 +134,7 @@ async def _company_zone(client, ctx, zone: str) -> None:
 # fails_when=today's value is refused as "in the future" before UTC's midnight;
 # no_claim=the date picker's default (the UI).
 async def test_today_is_the_companys_day(client, ctx, monkeypatch):
+    """A measurement's date is judged in the company's own time zone, not in UTC."""
     # 09:00 on 21 October in Auckland is still 20 October in UTC.
     monkeypatch.setattr(goals, "now", lambda: datetime(2026, 10, 20, 20, 0, tzinfo=UTC))
     goal = await _goal(client, ctx)

@@ -34,6 +34,7 @@ ACTIONS = "/v1/trace/staleness/actions"
 
 
 def test_the_trace_handler_is_registered_for_every_upstream_subject():
+    """The staleness handler is registered for every subject that can go stale."""
     reg = {r.name: r for r in changes.handlers()}
     assert "trace.mark_stale" in reg
     subjects = reg["trace.mark_stale"].subjects
@@ -51,6 +52,7 @@ def test_the_trace_handler_is_registered_for_every_upstream_subject():
 
 
 async def test_a_changed_section_marks_its_stub_artifact_stale_and_never_rewrites_it(client):
+    """Flags a spec as outdated instead of quietly rewriting it without review."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     _, spec = await stub_artifact(ctx.tenant_id, v1.document_id, v1.id)
@@ -97,6 +99,7 @@ async def test_a_changed_section_marks_its_stub_artifact_stale_and_never_rewrite
 
 
 async def test_an_import_of_the_same_content_marks_nothing(client):
+    """Importing identical content again marks nothing stale."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     _, spec = await stub_artifact(ctx.tenant_id, v1.document_id, v1.id)
@@ -112,6 +115,7 @@ async def test_an_import_of_the_same_content_marks_nothing(client):
 
 
 async def test_a_changed_requirement_marks_entity_and_section_dependencies(client):
+    """A changed requirement marks its section dependency and the criteria for it."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -151,6 +155,7 @@ async def test_a_changed_requirement_marks_entity_and_section_dependencies(clien
 
 
 async def test_an_agent_write_to_a_locked_requirement_is_a_proposal_and_marks_nothing(client):
+    """An agent's write to a locked requirement is only a proposal, marking nothing."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -166,6 +171,7 @@ async def test_an_agent_write_to_a_locked_requirement_is_a_proposal_and_marks_no
 
 
 async def test_decision_blocker_status_and_composition_changes_mark_downstream(client):
+    """A decision, a blocker change and a composition change all mark outputs stale."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -240,6 +246,7 @@ async def test_decision_blocker_status_and_composition_changes_mark_downstream(c
 
 
 async def test_a_source_permission_change_marks_sections_whose_evidence_came_from_it(client):
+    """Revoking a source's permission marks stale the sections sourced from it."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -267,6 +274,7 @@ async def test_a_source_permission_change_marks_sections_whose_evidence_came_fro
 
 
 async def test_review_and_reconcile_are_recorded_human_actions(client):
+    """Only an approver may review or reconcile staleness; reconciling needs a reason."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     _, spec = await stub_artifact(ctx.tenant_id, v1.document_id, v1.id)
@@ -338,6 +346,7 @@ async def test_review_and_reconcile_are_recorded_human_actions(client):
 
 
 async def test_staleness_actions_are_company_scoped(client):
+    """Staleness actions and the staleness list never reach another company's artifact."""
     a = await make_ctx("Company A")
     b = await make_ctx("Company B")
     v1 = await prd_v1(client, b)
@@ -355,6 +364,7 @@ async def test_staleness_actions_are_company_scoped(client):
 
 
 async def test_a_roadmap_built_from_the_prd_goes_stale_when_a_linked_section_changes(client):
+    """A roadmap built from a PRD goes stale when the PRD section it links changes."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     roadmap_md = f"""---
@@ -421,6 +431,7 @@ From [the metrics](/documents/{DOC}/v/1#metrics).
 
 
 async def test_dependencies_can_be_registered_for_a_stub_artifact(client):
+    """Dependencies can be registered for a stub artifact, rejecting unknown sections."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -453,6 +464,7 @@ async def test_dependencies_can_be_registered_for_a_stub_artifact(client):
 
 
 async def test_links_carry_forward_and_still_reach_a_reconciled_dependency(client):
+    """Unchanged section links carry forward and still reach a reconciled dependency."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -497,6 +509,7 @@ async def test_links_carry_forward_and_still_reach_a_reconciled_dependency(clien
 
 
 def test_a_title_less_item_is_named_by_its_kind_never_its_key():
+    """An item with no title is named by its kind in words, never by its internal key."""
     # protects=the review's staleness _label note: stored review bodies name items by title,
     # and an item with a blank title by its kind in words; fails_when=the baseline key
     # ("p.slow-setup") shows; no_claim=how the bodies are composed (tested above).

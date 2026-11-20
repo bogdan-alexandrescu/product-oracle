@@ -27,6 +27,7 @@ def _doc_columns() -> set[str]:
 
 
 def test_0056_up_down_up(scratch_db):  # noqa: F811
+    """The public_texts migration allows one text per item, by quarter not day."""
     cfg = _cfg()
     upgrade(cfg, "0071_roadmap_audience")
     assert _tables() == set() and _doc_columns() == set()

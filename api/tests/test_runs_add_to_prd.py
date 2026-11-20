@@ -62,6 +62,7 @@ async def _run(client, ctx, expect: int = 201, flow: str = "baseline_to_prd", **
 
 
 async def test_a_prd_run_names_the_features_to_add_and_patch_keeps_them(client):
+    """A PRD run names the features it will add, kept by code when patched later."""
     ctx = await company()
     made = await _features(client, ctx)
     # Each joined with a code (F-01, F-02); its old key still names it.
@@ -86,6 +87,7 @@ async def test_a_prd_run_names_the_features_to_add_and_patch_keeps_them(client):
 
 
 async def test_an_unknown_or_rejected_feature_or_another_flow_is_422(client):
+    """Adding an unknown, rejected, or wrong-flow feature to a PRD run is rejected."""
     ctx = await company()
     await _features(client, ctx)
     resp = await _run(client, ctx, expect=422, features=["old-idea"])
@@ -105,6 +107,7 @@ def _prompt(segment: str, features: list[tuple[str, str]]) -> str:
 
 
 def test_the_baseline_and_feature_set_prompts_keep_the_features_to_add():
+    """The baseline and feature-set prompts list the features a run is told to add."""
     for segment in ("baseline", "feature_set"):
         prompt = _prompt(segment, [("export-logs", "Export logs")])
         assert "Features to add: add these Ground Truth features to this PRD." in prompt
@@ -134,6 +137,7 @@ async def _adding(w: dict, status: str, *, document: bool = True) -> Run:
 
 @pytest.mark.parametrize("status", ["running", "awaiting_checkpoint"])
 async def test_a_feature_a_live_run_adds_is_not_in_no_prd(status):
+    """A feature a live run is adding is not counted as being in no PRD."""
     w = await world(roadmap=False)
     await _adding(w, status)
     summary = await _summary(w, "export-logs")
@@ -142,6 +146,7 @@ async def test_a_feature_a_live_run_adds_is_not_in_no_prd(status):
 
 
 async def test_a_new_prd_s_run_names_the_prd_by_its_slug():
+    """A feature being added to a brand new PRD is named by that PRD's slug."""
     w = await world(roadmap=False)
     await _adding(w, "running", document=False)
     summary = await _summary(w, "export-logs")
@@ -150,6 +155,7 @@ async def test_a_new_prd_s_run_names_the_prd_by_its_slug():
 
 @pytest.mark.parametrize("status", ["draft", "cancelled", "failed", "succeeded"])
 async def test_a_run_not_started_or_stopped_adds_nothing(status):
+    """A run that never started or that stopped early leaves a feature in no PRD."""
     # A draft run (the dialog closed before Start), a stopped one, or one that finished
     # without keeping it: the feature is in no PRD.
     w = await world(roadmap=False)
@@ -159,6 +165,7 @@ async def test_a_run_not_started_or_stopped_adds_nothing(status):
 
 
 async def test_the_run_adding_it_does_not_count_for_itself():
+    """A run adding a feature does not count itself as already adding it elsewhere."""
     w = await world(roadmap=False)
     run = await _adding(w, "running")
     async with tenant_session(w["tenant"]) as s:

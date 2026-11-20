@@ -30,6 +30,7 @@ def d(y: int, m: int, day: int, estimated: bool = False) -> Dated:
 
 
 def test_an_invented_start_is_no_broken_link():
+    """An invented start date is never the dependency link that is actually broken."""
     dep = Node("a", "Search index", d(2026, 10, 1), d(2026, 11, 10))
     item = Node("b", "Search page", d(2026, 10, 1, True), d(2026, 12, 15), depends_on=["a"])
     assert constraints.check([dep, item])["b"] == []
@@ -43,6 +44,7 @@ def test_an_invented_start_is_no_broken_link():
 
 
 def test_estimated_starts_follow_dependencies():
+    """An estimated start moves to begin right after the dependency it follows ends."""
     got = dates.after_dependencies(
         {
             "a": Resolved(d(2026, 10, 1), d(2026, 11, 10)),
@@ -61,6 +63,7 @@ def test_estimated_starts_follow_dependencies():
 
 
 def test_accepted_suggestion_moved_by_a_dependency_reads_its_dependencies():
+    """A suggestion moved by a dependency still reads its basis as dependencies."""
     est = lambda y, m, day: d(y, m, day, True)  # noqa: E731
     got = dates.after_dependencies(
         {

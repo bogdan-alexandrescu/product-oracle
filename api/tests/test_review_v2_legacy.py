@@ -19,6 +19,7 @@ BASE = f"/v1/documents/{DOC}"
 
 
 async def test_legacy_review_flow_is_unchanged_and_v2_state_adds_to_it(client):
+    """Legacy per-version review still works; the new section-state view adds to it."""
     tenant_id, auth = await seed_auth()
     v1 = await import_md(client, auth, V1)
     assert v1.status_code == 201
@@ -60,6 +61,7 @@ async def test_legacy_review_flow_is_unchanged_and_v2_state_adds_to_it(client):
 
 
 async def test_mcp_import_takes_a_base_version(client):
+    """Importing a version through MCP takes a base version and refuses a stale one."""
     _, auth = await seed_auth()
     assert (await import_md(client, auth, V1)).status_code == 201
     token = auth["Authorization"].split(" ", 1)[1]

@@ -184,6 +184,7 @@ async def actions(ctx: Ctx) -> list[str]:
     ],
 )
 def test_issue_facts_read_every_state_the_connector_writes(state, reason, expected, raw):
+    """Issue facts read every open, closed and reopened state GitHub can send."""
     facts = github.github_issue_facts(issue_event(state=state, reason=reason).content)
     assert facts["state"] == expected and facts["raw_status"] == raw
     assert facts["milestone"] == "Beta" and facts["repository"] == REPO
@@ -192,6 +193,7 @@ def test_issue_facts_read_every_state_the_connector_writes(state, reason, expect
 
 
 def test_milestone_due_round_trip():
+    """A milestone's due date round-trips, or is None when GitHub sends none."""
     assert github.github_milestone_due(milestone_event().content) == date(2026, 11, 30)
     assert github.github_milestone_due(milestone_event(due=None).content) is None
     assert github.github_milestone_due(issue_event().content) is None
@@ -201,6 +203,7 @@ def test_milestone_due_round_trip():
 
 
 async def test_link_an_issue_to_an_approved_item(client):
+    """A roadmap item is found and linked to a GitHub issue by number, title or URL."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     source = await github_source(ctx, "approver")
@@ -242,6 +245,7 @@ async def test_link_an_issue_to_an_approved_item(client):
 
 
 async def test_link_by_url_and_refusals(client):
+    """Linking by URL works; a wrong item, a pull request or unknown issue refused."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     source = await github_source(
@@ -263,6 +267,7 @@ async def test_link_by_url_and_refusals(client):
 
 
 async def test_link_a_draft_item_then_the_track_starts(client):
+    """Linking a draft item's issue keeps it tracked once its track later starts."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -287,6 +292,7 @@ async def test_link_a_draft_item_then_the_track_starts(client):
 
 
 async def test_a_draft_items_issue_stays_once_the_track_starts(client):
+    """A draft item's linked issue stays tracked and visible once its track starts."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -314,6 +320,7 @@ async def test_a_draft_items_issue_stays_once_the_track_starts(client):
 
 
 async def test_a_second_link_conflicts_then_moves(client):
+    """Linking an already-linked issue to a new item conflicts, naming the first."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     si = await item_id(ctx, await github_source(ctx, "approver"))
@@ -331,6 +338,7 @@ async def test_a_second_link_conflicts_then_moves(client):
 
 
 async def test_another_members_issue_is_not_found(client):
+    """Another member's own issue stays invisible to search, name unrevealed."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     theirs = await item_id(ctx, await github_source(ctx, "owner"))
@@ -346,6 +354,7 @@ async def test_another_members_issue_is_not_found(client):
 
 
 async def test_sync_keeps_the_record_fresh(client):
+    """Syncing an issue or milestone update keeps the tracked record's state fresh."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     source = await github_source(ctx, "approver")
@@ -375,6 +384,7 @@ async def test_sync_keeps_the_record_fresh(client):
 
 
 async def test_a_deleted_source_relinks_or_marks_lost(client):
+    """Deleting a linked source relinks to another copy, or marks it lost otherwise."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     mine = await github_source(ctx, "approver")
@@ -399,6 +409,7 @@ async def test_a_deleted_source_relinks_or_marks_lost(client):
 
 
 async def test_a_deleted_item_marks_the_record_lost(client):
+    """Deleting the linked source item marks the tracker record lost."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     source = await github_source(ctx, "approver")
@@ -416,6 +427,7 @@ async def test_a_deleted_item_marks_the_record_lost(client):
 
 
 async def test_unlink_clears_the_item(client):
+    """Unlinking a tracker record clears its item and track, updating alignment counts."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     si = await item_id(ctx, await github_source(ctx, "approver"))
@@ -436,6 +448,7 @@ async def test_unlink_clears_the_item(client):
 
 
 async def test_scoping_and_roles(client):
+    """Tracker search and linking need an engineering role, scoped to one's company."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     si = await item_id(ctx, await github_source(ctx, "commenter"))
@@ -479,6 +492,7 @@ async def test_scoping_and_roles(client):
 
 
 async def test_no_request_reaches_github(client, monkeypatch):
+    """Reading and linking tracker issues never sends an outbound request to GitHub."""
     ctx = await make_ctx()
     await seed_prd_a(ctx)
     si = await item_id(ctx, await github_source(ctx, "approver"))

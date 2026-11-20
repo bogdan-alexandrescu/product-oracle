@@ -61,6 +61,7 @@ def decision(number: int, title: str, item_id, approver_id, status: str = "propo
 
 
 async def test_card_fields_owner_reasons_and_decisions(client):
+    """The roadmap card shows a feature's owner, its reasons, and its open decisions."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -101,6 +102,7 @@ async def test_card_fields_owner_reasons_and_decisions(client):
 
 
 async def test_can_decide_per_role(client):
+    """Only the owner, or an approver who owns its track, may decide an item."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -122,6 +124,7 @@ async def test_can_decide_per_role(client):
 
 @pytest.mark.timing
 async def test_card_fields_keep_the_read_bulk(client):
+    """The roadmap card's extra fields never push a 500-item read past its time budget."""
     ctx = await make_ctx()
     await seed_many(ctx)
     headers = ctx.as_("owner")

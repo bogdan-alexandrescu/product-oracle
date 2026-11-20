@@ -285,6 +285,7 @@ async def card_as(client, ctx: Ctx, who: str, card_id: str, meeting: uuid.UUID |
 
 
 async def test_requests_become_cards_for_each_op_family(client):
+    """A recognized chat line opens a card of the right kind; nothing is applied yet."""
     ctx = await make_people()
     w = await World(ctx).build()
     lines = {
@@ -324,6 +325,7 @@ async def test_requests_become_cards_for_each_op_family(client):
 
 
 async def test_ambiguous_or_unknown_gets_one_question(client):
+    """An ambiguous item asks one question; an unknown one waits for the reader."""
     ctx = await make_people()
     await World(ctx).build()
     m = await say(client, ctx, "owner", "move alert to Q2")
@@ -342,6 +344,7 @@ async def test_ambiguous_or_unknown_gets_one_question(client):
 
 
 async def test_questions_are_answered_from_oracle_data(client):
+    """A plain question is answered straight from Oracle's data, with no card made."""
     ctx = await make_people()
     await World(ctx).build()
     owns = await say(client, ctx, "commenter", "who owns Ledger v2?")
@@ -355,6 +358,7 @@ async def test_questions_are_answered_from_oracle_data(client):
 
 
 async def test_ask_panel_cards_follow_ones_own_permissions(client):
+    """Ask-panel cards follow the same per-role apply rules as any other change."""
     ctx = await make_people()
     w = await World(ctx).build()
     # The owner applies, then undoes.
@@ -391,6 +395,7 @@ async def test_ask_panel_cards_follow_ones_own_permissions(client):
 
 
 async def test_preview_then_discard_leaves_nothing(client):
+    """Discarding a previewed card leaves no change; applying it after is refused."""
     ctx = await make_people()
     w = await World(ctx).build()
     card = (await say(client, ctx, "owner", "move Ledger v2 to March 3"))["cards"][0]
@@ -433,6 +438,7 @@ MAY = {
 
 @pytest.mark.parametrize("mode", ["everyone", "presenter", "named"])
 async def test_meeting_change_mode_decides_who_applies(client, meetings, mode):
+    """A meeting's change mode decides which attendees may apply a card there."""
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, mode, ("decider",) if mode == "named" else ())
@@ -465,6 +471,7 @@ async def test_meeting_change_mode_decides_who_applies(client, meetings, mode):
 
 
 async def test_viewer_in_a_meeting_only_asks(client, meetings):
+    """A viewer in a meeting can only ask; their lines are still seen by others."""
     ctx = await make_people()
     await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
@@ -483,6 +490,7 @@ async def test_viewer_in_a_meeting_only_asks(client, meetings):
 
 
 async def test_applied_card_is_a_meeting_decision(client, meetings):
+    """Applying a card in a meeting records it as that meeting's own decision."""
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
@@ -519,6 +527,7 @@ async def test_applied_card_is_a_meeting_decision(client, meetings):
 
 
 async def test_undo_of_a_meeting_card_reverses_its_decision(client, meetings):
+    """Undoing a card applied in a meeting reverses the decision it had recorded."""
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
@@ -539,6 +548,7 @@ async def test_undo_of_a_meeting_card_reverses_its_decision(client, meetings):
 
 
 async def test_meeting_mode_bars_discard(client, meetings):
+    """A presenter-only meeting also blocks anyone else from discarding a card."""
     ctx = await make_people()
     await World(ctx).build()
     mid = _meeting(ctx, meetings, "presenter")
@@ -552,6 +562,7 @@ async def test_meeting_mode_bars_discard(client, meetings):
 
 
 async def test_meeting_apply_uses_the_meeting_session(client, meetings, monkeypatch):
+    """Applying a card inside a meeting uses that meeting's own change session."""
     from oracle.simple import changes
 
     ctx = await make_people()
@@ -576,6 +587,7 @@ async def test_meeting_apply_uses_the_meeting_session(client, meetings, monkeypa
 
 
 async def test_meeting_fix_is_a_decision_titled_with_the_fix(client, meetings):
+    """Applying a fix inside a meeting records a decision titled with the fix itself."""
     ctx = await make_people()
     await World(ctx).build(overlap=True)
     mid = _meeting(ctx, meetings, "everyone")
@@ -594,6 +606,7 @@ async def _card_status(ctx: Ctx, card_id: str) -> str:
 
 
 async def test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing(client, meetings):
+    """A meeting that refuses the decision write leaves the card open, nothing changed."""
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
@@ -613,6 +626,7 @@ async def test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing(cli
 
 
 async def test_meeting_apply_with_a_failing_decision_write_writes_nothing(client, meetings):
+    """A failing decision write during apply leaves the card open and nothing changed."""
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
@@ -640,6 +654,7 @@ async def _proposed_decisions(ctx: Ctx, *titles: str) -> list[Decision]:
 
 
 async def test_walk_lists_only_the_next_meetings_agenda(client, meetings):
+    """The walk lists an agenda decision only for someone attending that meeting."""
     ctx = await make_people()
     await World(ctx).build()
     on, off = await _proposed_decisions(ctx, "Pick the import format", "Name the API")
@@ -660,6 +675,7 @@ async def test_walk_lists_only_the_next_meetings_agenda(client, meetings):
 
 
 async def test_meeting_chat_without_meetings_module_is_404(client, monkeypatch):
+    """With the meetings module missing, meeting chat routes answer 404, not an error."""
     monkeypatch.setitem(sys.modules, "oracle.simple.meetings", None)
     ctx = await make_people()
     mid = uuid.uuid4()
@@ -672,6 +688,7 @@ async def test_meeting_chat_without_meetings_module_is_404(client, monkeypatch):
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_new_ops_per_role(client, role):
+    """New ops like milestones and feature asks still follow the per-role apply rule."""
     ctx = await make_people()
     w = await World(ctx).build()
     milestone = {"name": "beta", "date": "2027-03-01", "date_source": "typed"}
@@ -703,6 +720,7 @@ async def test_new_ops_per_role(client, role):
 
 
 async def test_set_milestone_before_is_name_and_date(client):
+    """A milestone change is refused unless its before matches the name and date."""
     ctx = await make_people()
     w = await World(ctx).build()
     target = {"item_id": w.ids["Bulk import"]}
@@ -728,6 +746,7 @@ async def test_set_milestone_before_is_name_and_date(client):
 
 
 async def test_walk_order_undo_and_fixes(client, meetings):
+    """The walk lists broken links, agenda items and proposals in a fixed order."""
     ctx = await make_people()
     w = await World(ctx).build(overlap=True)
     mid = _meeting(ctx, meetings, "everyone")
@@ -769,6 +788,7 @@ async def test_walk_order_undo_and_fixes(client, meetings):
 
 
 async def test_walk_lists_every_broken_link_home_counts(client):
+    """A cut item with something depending on it shows on the walk as a broken link."""
     ctx = await make_people()
     w = await World(ctx).build()
     card = (await say(client, ctx, "owner", "cut Ledger v2"))["cards"][0]

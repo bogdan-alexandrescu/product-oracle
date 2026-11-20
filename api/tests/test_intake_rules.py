@@ -55,6 +55,7 @@ async def _decide(client, ctx, gap_id: str, who: str, decision: str = "validate"
 
 
 async def test_a_commenters_answer_never_clears_a_critical_blocker(client):
+    """A commenter's answer never clears a critical blocker; an owner alone may."""
     ctx = await company()
     out, q = await _blocker_intake(client, ctx)
     assert gaps_by_category(out)["blockers"]["importance"] == "critical"
@@ -77,6 +78,7 @@ async def test_a_commenters_answer_never_clears_a_critical_blocker(client):
 
 
 async def test_an_owners_answer_settles_a_critical_gap(client):
+    """An owner's own answer to a critical gap settles it without a separate review."""
     ctx = await company()
     out, q = await _blocker_intake(client, ctx)
     result = await answer(client, ctx, q["id"], who="owner", body="Partner raised our quota.")
@@ -85,6 +87,7 @@ async def test_an_owners_answer_settles_a_critical_gap(client):
 
 
 async def test_validating_an_unanswered_critical_gap_takes_an_owner(client):
+    """Validating an unanswered critical gap still takes an owner, not an approver."""
     ctx = await company()
     out = await create_intake(client, ctx)
     critical = [g for g in out["gaps"] if g["importance"] == "critical"
@@ -97,6 +100,7 @@ async def test_validating_an_unanswered_critical_gap_takes_an_owner(client):
 
 
 async def test_an_approver_validates_an_answered_critical_gap_that_is_not_a_blocker(client):
+    """Lets staff clear a critical question once answered, saving owner sign-off for blockers."""
     ctx = await company()
     out = await create_intake(client, ctx)
     q = question_for(await batch(client, ctx, out["intake"]["id"]), "success_metric")
@@ -109,6 +113,7 @@ async def test_an_approver_validates_an_answered_critical_gap_that_is_not_a_bloc
 
 
 async def test_lowering_a_critical_gaps_importance_takes_an_owner(client):
+    """Lowering a critical gap's importance takes an owner; raising one takes less."""
     ctx = await company()
     out, q = await _blocker_intake(client, ctx)
     gap = gaps_by_category(out)["blockers"]
@@ -131,6 +136,7 @@ async def test_lowering_a_critical_gaps_importance_takes_an_owner(client):
 async def test_moving_an_intake_with_an_open_critical_blocker_off_its_prd_takes_an_owner(
     client,
 ):
+    """Unlinking an intake from its PRD with an open critical blocker takes an owner."""
     ctx = await company()
     out, _ = await _blocker_intake(client, ctx)
     intake_id = out["intake"]["id"]
@@ -146,6 +152,7 @@ async def test_moving_an_intake_with_an_open_critical_blocker_off_its_prd_takes_
 
 
 async def test_later_non_answers_never_rewrite_a_decided_gap(client):
+    """A later non-answer never overwrites a gap's status once an owner has decided it."""
     ctx = await company()
     out = await create_intake(client, ctx)
     intake_id = out["intake"]["id"]
@@ -174,6 +181,7 @@ async def test_later_non_answers_never_rewrite_a_decided_gap(client):
 
 
 async def test_linking_an_intake_to_a_prd_takes_an_approver(client):
+    """Linking an intake to a PRD document takes an approver, not its own author."""
     ctx = await company()
     doc = await _document(client, ctx)
     await create_intake(client, ctx, document=doc, expect=403)
@@ -188,6 +196,7 @@ async def test_linking_an_intake_to_a_prd_takes_an_approver(client):
 
 
 async def test_the_author_or_an_approver_asks_the_next_batch(client):
+    """Only the intake's author or an approver can ask for its next question batch."""
     ctx = await company()
     out = await create_intake(client, ctx, who="approver", batch_size=1)
     url = f"/v1/intakes/{out['intake']['id']}/question-batches?size=1"
@@ -217,6 +226,7 @@ async def _events(ctx, action: str) -> list[AuditEvent]:
 
 
 async def test_reads_that_return_excerpts_are_audited(client):
+    """Only a read that actually shows a source excerpt is logged as an evidence read."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]

@@ -317,3 +317,19 @@ def intake_local_runtime(request):
     set_runtime(FakeRuntime())
     yield
     set_runtime(None)
+
+
+def pytest_collection_modifyitems(items) -> None:
+    """#1577: every test says in a one-line docstring why it exists (the behaviour it protects)."""
+    bare = sorted(
+        {
+            item.nodeid.split("[")[0]
+            for item in items
+            if isinstance(item, pytest.Function) and not (item.function.__doc__ or "").strip()
+        }
+    )
+    if bare:
+        raise pytest.UsageError(
+            "These tests have no docstring; add one line saying why each exists:\n  "
+            + "\n  ".join(bare)
+        )

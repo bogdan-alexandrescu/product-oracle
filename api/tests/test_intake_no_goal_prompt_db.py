@@ -7,6 +7,7 @@ from tests.intake_helpers import all_questions, company, create_intake
 
 
 async def test_proposed_goal_only_asks_the_no_goal_question(client):
+    """A company with only proposed goals is asked if it has a goal, not which one."""
     ctx = await company()
     await entity(
         client, ctx, type="goal", key="repeat-purchases", title="Grow repeat purchases",
@@ -22,6 +23,7 @@ async def test_proposed_goal_only_asks_the_no_goal_question(client):
 
 
 async def test_a_confirmed_goal_elsewhere_asks_which_goal(client):
+    """A confirmed goal elsewhere makes the intake ask which goal it serves."""
     ctx = await company()
     goal = await entity(client, ctx, type="goal", key="faster-support", title="Faster support")
     await confirm(client, ctx, goal)

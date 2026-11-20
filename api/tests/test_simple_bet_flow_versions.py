@@ -133,6 +133,7 @@ def shown(view: dict) -> list[tuple[str, str | None]]:
 
 
 async def test_flow_stays_on_its_bet_after_a_bet_is_added_above(client):
+    """Adding a bet above an existing one leaves each bet's drawn flow on its own bet."""
     ctx = await world(client)
     by_brief = await drawn(client, ctx)
     assert len(by_brief) == 4
@@ -149,6 +150,7 @@ async def test_flow_stays_on_its_bet_after_a_bet_is_added_above(client):
 
 
 async def test_a_shifted_page_reads_each_flow_on_its_own_bet(client):
+    """After items shift position, each flow still reads off its own original bet."""
     ctx = await world(client)
     by_brief = await drawn(client, ctx)
     await next_version(client, ctx)
@@ -173,6 +175,7 @@ async def test_a_shifted_page_reads_each_flow_on_its_own_bet(client):
 
 
 async def test_the_moved_bets_own_flow_stays_when_it_is_reworded(client):
+    """Rewording a moved bet keeps its own drawn flow attached to it."""
     ctx = await world(client)
     by_brief = await drawn(client, ctx)
     await next_version(client, ctx)
@@ -216,6 +219,7 @@ async def approve(client, ctx, markdown: str, number: int) -> None:
 
 
 async def test_each_flow_stays_when_a_later_version_drops_a_bet(client):
+    """Dropping a bet in a later version leaves the remaining bets' flows untouched."""
     ctx = await world(client)
     by_brief = await drawn(client, ctx)
     await next_version(client, ctx)
@@ -238,6 +242,7 @@ async def test_each_flow_stays_when_a_later_version_drops_a_bet(client):
 
 
 async def test_flows_of_bets_keeps_the_flow_a_person_touched(client):
+    """When two flows tie, the one a person commented on is kept over the other."""
     ctx = await world(client)
     await drawn(client, ctx)
     doc_id = uuid.UUID((await get(client, ctx, "decider"))["document"]["id"])
@@ -259,6 +264,7 @@ async def test_flows_of_bets_keeps_the_flow_a_person_touched(client):
 
 
 def test_a_tie_keeps_the_flow_a_person_touched():
+    """A tie between equally-worded flows picks the earliest one not already claimed."""
     # Two flows drawn from the same words; the bet at the first one's place.
     old = [["Setup checklist"], ["Setup checklist"]]
     assert visuals.pair_alike(old, [["A setup checklist"]]) == {0: 0}

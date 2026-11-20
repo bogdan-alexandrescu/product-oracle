@@ -179,6 +179,7 @@ async def read(client, ctx: Ctx, role: str = "owner") -> dict:
 
 @pytest.mark.parametrize("role", ["owner", "approver", "commenter", "viewer"])
 async def test_map_reads_goals_guardrail_areas_milestones_features(client, role):
+    """The goal map read returns goals, the guardrail, areas, milestones and features."""
     ctx, ids = await world()
     body = await read(client, ctx, role)
     goals = {g["id"]: g for g in body["goals"]}
@@ -221,6 +222,7 @@ async def test_map_reads_goals_guardrail_areas_milestones_features(client, role)
 
 
 async def test_milestone_status_follows_its_gate(client):
+    """A milestone's status and due date follow its target date and measured readings."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         m2 = await s.get(TrackMilestone, uuid.UUID(ids["m2"]))
@@ -235,6 +237,7 @@ async def test_milestone_status_follows_its_gate(client):
 
 
 async def test_add_and_reorder_areas(client):
+    """Areas can be added and reordered, but reordering must include every area."""
     ctx, ids = await world()
     r = await client.post(f"{URL}/areas", json={"name": "Rep hiring"}, headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
@@ -250,6 +253,7 @@ async def test_add_and_reorder_areas(client):
 
 
 async def test_edit_goal_keeps_history(client):
+    """Editing a goal's target records who changed it, kept in the goal's history."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         owner = ctx.users["owner"]
@@ -273,6 +277,7 @@ async def test_edit_goal_keeps_history(client):
 
 
 async def test_propose_a_milestone(client):
+    """A proposed milestone starts unconfirmed; a duplicate name is refused."""
     ctx, ids = await world()
     before = await _count(ctx)
     r = await client.post(
@@ -323,6 +328,7 @@ async def test_a_proposal_comes_after_the_goals_previous_milestone_by_default(cl
 
 
 async def test_comes_after_is_stored_edited_and_orders_the_columns(client):
+    """A milestone's comes-after order can be edited, but never into a loop."""
     ctx, ids = await world()
     r = await client.post(
         f"{URL}/milestones",
@@ -371,6 +377,7 @@ async def test_deleted_and_ungated_milestones(client):
 
 @pytest.mark.parametrize("threshold", [0, -5])
 async def test_a_threshold_must_be_above_zero(client, threshold):
+    """A milestone's threshold must be above zero, on create and on edit."""
     ctx, ids = await world()
     r = await client.post(
         f"{URL}/milestones",
@@ -410,6 +417,7 @@ async def test_gate_reading_follows_the_goal(client, monkeypatch):
 
 
 async def test_readings_load_only_the_last_7_days_and_the_latest():
+    """Goal readings load only the last seven days and latest value, in few queries."""
     ctx, ids = await world()
     signups = uuid.UUID(ids["signups"])
     async with tenant_session(ctx.tenant_id) as s:
@@ -434,6 +442,7 @@ async def test_readings_load_only_the_last_7_days_and_the_latest():
 
 
 async def test_set_and_confirm_a_gate(client):
+    """Confirming a milestone's gate records the confirmer, clearing it as proposed."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         (await s.merge(ctx.users["approver"])).name = "Abe Approver"
@@ -465,6 +474,7 @@ async def _count(ctx: Ctx) -> int:
 
 
 async def test_attach_a_feature(client):
+    """Attaching a feature to a milestone adds the link without duplicating it."""
     ctx, ids = await world()
     body = {"feature": ids["f1"], "milestone": ids["m2"], "area": ids["onboard"]}
     r = await client.post(f"{URL}/links", json=body, headers=ctx.as_("owner"))
@@ -497,6 +507,7 @@ async def test_attach_a_feature_not_yet_on_the_map_to_its_cell(client):
 
 
 async def test_each_link_keeps_its_own_expected_lift(client):
+    """Each feature-to-milestone link keeps its own expected lift and confidence."""
     ctx, ids = await world()
     body = {"feature": ids["f1"], "milestone": ids["m2"], "area": ids["scale"],
             "expected": "+2 a day", "confidence": "low"}  # fmt: skip
@@ -511,6 +522,7 @@ async def test_each_link_keeps_its_own_expected_lift(client):
 
 @pytest.mark.parametrize("trashed", [False, True])
 async def test_a_prd_milestone_out_of_its_plan_is_off_the_map(client, trashed):
+    """A PRD milestone whose plan is gone or trashed is left off the goal map."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == "growth-prd"))
@@ -530,6 +542,7 @@ async def test_a_prd_milestone_out_of_its_plan_is_off_the_map(client, trashed):
 
 @pytest.mark.parametrize("role", ["commenter", "viewer"])
 async def test_edits_need_approver(client, role):
+    """Editing the goal map's areas, goals, milestones and links needs approver rights."""
     ctx, ids = await world()
     h = ctx.as_(role)
     calls = [
@@ -600,6 +613,7 @@ async def test_only_the_company_roadmap_feeds_the_map(client):
 
 
 async def test_goals_come_in_priority_order(client):
+    """Goals are listed in their set priority order, not insertion order."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         for key, place in (("revenue", 1), ("signups", 2), ("conv", 3)):
@@ -611,6 +625,7 @@ async def test_goals_come_in_priority_order(client):
 
 
 async def test_a_guardrail_goal_is_never_a_goal_card(client):
+    """A guardrail goal never shows as a goal card, even with no other guardrail set."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -638,6 +653,7 @@ async def test_a_guardrail_goal_is_never_a_goal_card(client):
 
 
 async def test_a_merged_feature_leaves_the_map(client):
+    """A feature merged into another leaves the map, keeping only the merged-into one."""
     ctx, ids = await world()
     r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
         "op": "merge_item", "target": {"item_id": ids["f1"], "into_id": ids["f2"]},
@@ -649,6 +665,7 @@ async def test_a_merged_feature_leaves_the_map(client):
 
 
 async def test_a_feature_name_that_leads_with_its_code_reads_without_it(client):
+    """A feature's own leading code is stripped from its shown name, kept as its code."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         f1 = await s.get(RoadmapItem, uuid.UUID(ids["f1"]))
@@ -672,6 +689,7 @@ async def test_a_feature_name_that_leads_with_its_code_reads_without_it(client):
 
 
 async def test_a_goal_name_stored_with_a_placeholder_reads_without_it(client):
+    """A goal's stored placeholder markers are stripped from its shown name."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         g = await s.get(Entity, uuid.UUID(ids["signups"]))
@@ -683,6 +701,7 @@ async def test_a_goal_name_stored_with_a_placeholder_reads_without_it(client):
 
 
 async def test_every_feature_and_unplaced_entry_carries_its_code(client):
+    """Every feature and unplaced entry carries its code, matching the roadmap's own."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         f1 = await s.get(RoadmapItem, uuid.UUID(ids["f1"]))

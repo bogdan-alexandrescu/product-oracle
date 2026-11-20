@@ -151,6 +151,7 @@ def texts(view: dict, key: str) -> list[str]:
 
 
 async def test_who_measures_codes_and_marks(client):
+    """A clear one-pager shows each bet's code, its measure and source, and its mark."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", "team-invites")
     assert block(view, "problem")["who"] == "New workspace admins; Team leads"
@@ -176,6 +177,7 @@ async def test_who_measures_codes_and_marks(client):
 
 
 async def test_needs_a_look_for_owners_only(client):
+    """A one-pager's mismatched counts show under Needs a look, for owners only."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", "team-invites")
     looks = view["needs_look"]
@@ -197,6 +199,7 @@ async def test_needs_a_look_for_owners_only(client):
 
 
 async def test_without_users_or_measures(client):
+    """A one-pager with no named users or measures shows neither, and no look item."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", "faster-export")
     assert block(view, "problem")["who"] is None
@@ -206,6 +209,7 @@ async def test_without_users_or_measures(client):
 
 
 async def test_draw_the_flow_only_for_those_who_may(client):
+    """Only an owner may draw a flow for a bet line, and never for an outcome line."""
     ctx = await clear_world(client)
     for who, may in (("owner", True), ("approver", False), ("commenter", False), ("viewer", False)):
         view = await get(client, ctx, who, "faster-export")
@@ -234,6 +238,7 @@ def _answer(problem: str) -> dict:
 
 
 async def test_problem_naming_no_one_is_asked_again(client, monkeypatch):
+    """A problem statement naming no one is sent back to the job to try again, once."""
     # Only the who-check here: the job's quality checks (oracle.simple.quality) have their own
     # tests, and this answer's empty "Not doing" would fail them.
     monkeypatch.setattr(one_pager.quality, "one_pager", lambda *a, **k: [])
@@ -274,6 +279,7 @@ def _sec(key: str, heading: str, body: str) -> Section:
 
 
 def test_pure_checks():
+    """A one-pager's checks read only real content, not template placeholder text."""
     users = _sec("users", "Who has it", "Admins of new teams with fewer than ten people.")
     assert checks.who_has_it([users]) == "Admins of new teams with fewer than ten people"
     assert checks.who_has_it([_sec("problem", "Problem and who has it", "Admins stall.")]) is None
@@ -299,6 +305,7 @@ def test_pure_checks():
 
 
 def test_review_who_marks_codes():
+    """Personas win over a leading customers heading, and a mark needs its own note."""
     stories = _sec(
         "stories",
         "User stories",
@@ -337,6 +344,7 @@ def test_review_who_marks_codes():
 
 
 async def test_words_keyed_flow_on_a_bet_with_a_code(client):
+    """A bet's drawn flow still matches once its words gain a feature code, by its key."""
     import uuid
 
     from oracle.simple import visuals
@@ -363,6 +371,7 @@ async def test_words_keyed_flow_on_a_bet_with_a_code(client):
 
 
 async def test_edit_starts_from_the_prds_words(client):
+    """Editing a one-pager line starts from the PRD's own words, when it was reworded."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", "team-invites")
     bets = block(view, "bets")["lines"]
@@ -375,6 +384,7 @@ async def test_edit_starts_from_the_prds_words(client):
 
 
 async def test_draw_the_flow_agrees_with_the_request(client):
+    """Who may request a bet's flow is exactly who the line says may draw it."""
     ctx = await clear_world(client)
     for who in ("owner", "approver", "commenter", "viewer"):
         view = await get(client, ctx, who, "faster-export")

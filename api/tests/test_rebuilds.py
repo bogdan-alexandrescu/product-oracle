@@ -30,6 +30,7 @@ async def _name_owner(tenant_id, name="Avery Example"):
 
 
 async def test_a_running_run_reads_its_step_of_its_steps_and_who_started_it(client, owner, runtime):
+    """A running rebuild shows its step, who started it, and the version it will make."""
     tenant_id, auth = owner
     await _name_owner(tenant_id)
     run = await started(client, auth, checkpoints={"eng_dates": False})
@@ -54,6 +55,7 @@ async def test_a_running_run_reads_its_step_of_its_steps_and_who_started_it(clie
 
 
 async def test_a_run_at_a_stop_waits_on_a_person_with_their_action(client, owner, runtime):
+    """A rebuild waiting at a stop names who it waits on and what moves it on."""
     tenant_id, auth = owner
     await _name_owner(tenant_id)
     run = await started(client, auth, checkpoints={"eng_dates": False})
@@ -68,6 +70,7 @@ async def test_a_run_at_a_stop_waits_on_a_person_with_their_action(client, owner
 
 
 async def test_a_run_not_started_reads_as_scheduled(client, owner, runtime):
+    """A run that has not started yet shows as scheduled in the rebuild list."""
     _, auth = owner
     run = await create(client, auth)
     [rb] = (await _rebuilds(client, auth))["rebuilds"]
@@ -75,6 +78,7 @@ async def test_a_run_not_started_reads_as_scheduled(client, owner, runtime):
 
 
 async def test_a_failed_run_says_where_it_stopped(client, owner, runtime):
+    """A failed rebuild shows which step it stopped at and its error message."""
     tenant_id, auth = owner
     run = await started(client, auth, checkpoints={"eng_dates": False})
     async with tenant_session(tenant_id) as s:
@@ -92,6 +96,7 @@ async def test_a_failed_run_says_where_it_stopped(client, owner, runtime):
 
 
 async def test_the_new_version_reads_done_until_it_is_approved(client, owner, runtime):
+    """A finished rebuild shows done until its version is approved, then disappears."""
     tenant_id, auth = owner
     run = await started(client, auth, checkpoints={"eng_dates": False})
     for _ in range(5):
@@ -113,6 +118,7 @@ async def test_the_new_version_reads_done_until_it_is_approved(client, owner, ru
 
 
 async def test_a_reader_who_may_not_see_runs_still_reads_the_sign(client, owner, runtime):
+    """Someone who may not see runs directly still reads the rebuild sign."""
     tenant_id, auth = owner
     await started(client, auth, checkpoints={"eng_dates": False})
     viewer = await as_user(tenant_id, "viewer")
@@ -136,6 +142,7 @@ async def test_a_roadmap_run_carries_the_prd_it_reads(client, runtime):
 
 
 async def test_a_prd_run_carries_no_source(client, owner, runtime):
+    """A PRD rebuild not fed from a source reports no source for it."""
     _, auth = owner
     await create(client, auth)
     [rb] = (await _rebuilds(client, auth))["rebuilds"]
@@ -143,6 +150,7 @@ async def test_a_prd_run_carries_no_source(client, owner, runtime):
 
 
 async def test_a_document_the_reader_may_not_see_has_no_sign(client, owner, runtime):
+    """A rebuild for a document the reader cannot see shows no sign to them."""
     tenant_id, auth = owner
     async with tenant_session(tenant_id) as s:
         s.add(Document(slug="example-prd", title="Example PRD", kind="prd", visibility="approvers"))
@@ -156,6 +164,7 @@ async def test_a_document_the_reader_may_not_see_has_no_sign(client, owner, runt
 
 
 async def test_the_prd_count_is_what_the_reader_may_see(client, owner, runtime):
+    """A roadmap's PRD count on the sign counts only the PRDs the reader may see."""
     tenant_id, auth = owner
     async with tenant_session(tenant_id) as s:
         s.add(
@@ -175,6 +184,7 @@ async def test_the_prd_count_is_what_the_reader_may_see(client, owner, runtime):
 
 
 async def test_another_tenants_runs_are_not_listed(client, owner, runtime):
+    """Another company's runs never appear in this company's rebuild list."""
     _, auth = owner
     await started(client, auth, checkpoints={"eng_dates": False})
     other = await as_user(await make_tenant("Other Example Co"), "owner")
@@ -252,6 +262,7 @@ async def test_a_run_writing_a_new_prd_is_listed_as_new_until_its_first_version(
 
 
 async def test_a_scheduled_run_for_a_new_prd_is_new(client, owner, runtime):
+    """A scheduled run for a document that does not exist yet is marked as new."""
     _, auth = owner
     await create(client, auth, document="team-onboarding-example")
     [rb] = (await _rebuilds(client, auth))["rebuilds"]

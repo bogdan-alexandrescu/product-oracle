@@ -47,6 +47,7 @@ async def _run(client, auth, runtime, **body) -> dict:
 
 
 async def test_no_roadmap_from_an_unapproved_prd(client, runtime):
+    """A roadmap cannot be built from a PRD that has no approved version yet."""
     _, auth = await seed_auth()
     assert (await import_md(client, auth, fixture("legacy_prd_v1.md"))).status_code == 201
     resp = await client.post(
@@ -58,6 +59,7 @@ async def test_no_roadmap_from_an_unapproved_prd(client, runtime):
 
 
 async def test_roadmap_records_the_approved_prd_version_and_keeps_it(client, runtime):
+    """A roadmap keeps the exact PRD version it was built from, even after edits."""
     tenant_id, auth = await seed_auth()
     v1 = (await import_md(client, auth, fixture("legacy_prd_v1.md"))).json()
     approve = await client.post(f"/v1/documents/{DOC}/versions/1/approve", headers=auth)
@@ -109,6 +111,7 @@ async def test_roadmap_records_the_approved_prd_version_and_keeps_it(client, run
 
 
 async def test_a_roadmap_draft_pushed_by_hand_keeps_its_kind(client):
+    """A hand-pushed roadmap draft keeps its kind, and a PRD can never import as one."""
     _, auth = await seed_auth()
     resp = await import_md(client, auth, ROADMAP_MD, doc=ROADMAP)
     assert resp.status_code == 201, resp.text

@@ -38,6 +38,7 @@ SHAPES = {"body": _body, "headings": _headings}
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 def test_parse_draft_is_linear_on_a_space_run(shape):
+    """Parsing a draft stays fast on a crafted run of spaces, not a stalling attack."""
     text = SHAPES[shape]()
     start = time.process_time()
     try:
@@ -51,6 +52,7 @@ def test_parse_draft_is_linear_on_a_space_run(shape):
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 async def test_import_is_linear_on_a_space_run(client, shape):
+    """Importing a draft stays fast on an adversarial run of spaces, not a stall."""
     _, auth = await seed_auth()
     text = SHAPES[shape]()
     start = time.process_time()
@@ -63,6 +65,7 @@ async def test_import_is_linear_on_a_space_run(client, shape):
 @pytest.mark.timing
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 async def test_honest_import_after_four_big_posts(client, shape):
+    """Another person's import is not starved behind four big parses started at once."""
     tenant, auth = await seed_auth()
     big = SHAPES[shape](50)  # ~1 MB
     assert len(big.encode()) < 1024 * 1024
@@ -89,6 +92,7 @@ async def test_honest_import_after_four_big_posts(client, shape):
 
 
 def test_regexes_keep_their_behaviour_on_normal_text():
+    """Citation-strip and section-id regexes still match the old ones on normal text."""
     strip = CITATION_STRIP_RE.sub
     assert strip("", "Users drop off [c:c1] at shipping.") == "Users drop off at shipping."
     assert strip("", "[c:c1] first\t[c:c2]") == " first"
@@ -109,6 +113,7 @@ def _fast(fn, limit=0.15):
 
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_citation_re_is_linear_on_open_markers():
+    """Matching citations stays fast on many unterminated '[c:' markers in a row."""
     from oracle.docs.parser import CITATION_RE
 
     text = ("[c:" * 6_600 + "\n") * 50
@@ -118,6 +123,7 @@ def test_citation_re_is_linear_on_open_markers():
 
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_quality_bullets_are_linear_on_blank_lines():
+    """Finding bullet lines stays fast on huge runs of blank lines, finding real ones."""
     from oracle.quality.text import _BULLET
 
     for text in ("\n" * 20_000, " \n" * 10_000, "\n" * 20_000 + "x", "-" + " \n" * 10_000 + "x"):
@@ -128,6 +134,7 @@ def test_quality_bullets_are_linear_on_blank_lines():
 
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_template_title_line_is_linear():
+    """Replacing a template's title line stays fast on adversarial bodies."""
     from oracle.templates.service import draft_skeleton
 
     def skeleton(body: str) -> str:
@@ -159,6 +166,7 @@ def test_template_title_line_is_linear():
 @pytest.mark.parametrize("unit", ["](", "](a", "https://", "a.b/"])
 @pytest.mark.parametrize("lines", [1, 20])
 def test_source_words_check_is_linear_on_link_openers(unit, lines):
+    """The source-words check stays fast on long runs of link-opening characters."""
     from tests.review_v2_helpers import DRAFT, replace
 
     line = unit * (20_000 // len(unit))
@@ -183,6 +191,7 @@ def _heading_shapes():
 @pytest.mark.parametrize("shape", sorted(_heading_shapes()))
 @pytest.mark.parametrize("kind", ["issue", "source"])
 def test_source_words_check_is_linear_on_long_headings(shape, kind):
+    """The source-words check stays fast with many long headings, finding each one."""
     make = _heading_shapes()[shape]
     body = "See be#1357.\n" if kind == "issue" else "- docs/notes.md\n"
     key = "" if kind == "issue" else "sources-"

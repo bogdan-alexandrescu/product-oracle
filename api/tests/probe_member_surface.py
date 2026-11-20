@@ -563,6 +563,7 @@ async def _fetch_files(client, ctx, s: dict, who: str, sec: Secrets, out: Out) -
 
 
 async def test_probe_member_surface(client, runtime):
+    """A manual probe walks a role's whole read surface for leaks."""
     started = time.monotonic()
     part = PART
     assert part, "set PROBE_PART (see the module docstring)"

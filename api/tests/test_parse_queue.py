@@ -63,6 +63,7 @@ def bearer(raw: str) -> dict[str, str]:
 
 @pytest.mark.timing
 async def test_one_person_has_two_parses_and_the_rest_get_429(client, monkeypatch):
+    """One person may run only two parses at once; further ones from them get a 429."""
     tenant, auth = await seed_auth()
     other = bearer(await api_token(tenant))
     gate = Gate(monkeypatch)
@@ -82,6 +83,7 @@ async def test_one_person_has_two_parses_and_the_rest_get_429(client, monkeypatc
 
 @pytest.mark.timing
 async def test_a_wait_for_a_worker_past_the_limit_is_503(client, monkeypatch):
+    """Waiting too long for a free parse worker ends in a 503, not a long hang."""
     tenant, auth = await seed_auth()
     monkeypatch.setattr(safe_yaml, "QUEUE_SECONDS", 0.5)
     gate = Gate(monkeypatch)
@@ -108,6 +110,7 @@ def runtime():
 
 
 async def test_a_tick_without_a_worker_retries_on_the_next_tick(client, runtime, monkeypatch):
+    """A tick that finds no parse worker retries later instead of failing the run."""
     from oracle.docs import service as docs_service
 
     _, auth = await seed_auth()
@@ -137,6 +140,7 @@ async def test_a_tick_without_a_worker_retries_on_the_next_tick(client, runtime,
 
 
 async def test_cancelled_callers_keep_the_slot_until_the_workers_finish():
+    """A cancelled caller's parse slot stays held until its worker actually finishes."""
     release = threading.Event()
     running = []
 
@@ -167,6 +171,8 @@ async def test_cancelled_callers_keep_the_slot_until_the_workers_finish():
 
 
 async def test_submit_failure_frees_the_slot(monkeypatch):
+    """A failed submit to the parse pool still frees the caller's slot."""
+
     class Dead:
         def submit(self, *a, **k):
             raise RuntimeError("cannot schedule new futures after shutdown")
@@ -179,6 +185,7 @@ async def test_submit_failure_frees_the_slot(monkeypatch):
 
 
 async def test_busy_response_has_retry_after(client, monkeypatch):
+    """A busy parse response tells the caller how long to wait before trying again."""
     tenant, auth = await seed_auth()
     gate = Gate(monkeypatch)
     posts = [asyncio.create_task(import_draft(client, auth, f"BLOCK {i}")) for i in range(3)]
@@ -191,6 +198,7 @@ async def test_busy_response_has_retry_after(client, monkeypatch):
 
 
 def test_nested_citation_markers_are_stripped_to_nothing():
+    """Nested citation markers are stripped away entirely, leaving no partial markup."""
     from oracle.docs.parser import strip_citations
 
     assert strip_citations("claim [c:[c:x]a] end") == "claim end"
@@ -199,6 +207,7 @@ def test_nested_citation_markers_are_stripped_to_nothing():
 
 @pytest.mark.timing
 def test_deeply_nested_citation_markers_leave_nothing_citation_re_reads():
+    """Deeply nested or huge citation markers strip quickly and leave none behind."""
     import time
 
     from oracle.docs.parser import CITATION_RE, strip_citations
@@ -216,12 +225,14 @@ def test_deeply_nested_citation_markers_leave_nothing_citation_re_reads():
 
 
 def test_blocker_lines_strip_nested_citation_markers():
+    """A blocker line also strips nested citation markers, not just plain ones."""
     from oracle.blockers.render import _inline
 
     assert _inline("claim [c:[c:x]a] end") == "claim end"
 
 
 async def test_the_budget_is_in_force_inside_the_parse():
+    """The CPU budget check runs and passes while inside an active parse."""
     from oracle import parse_budget
 
     assert await safe_yaml.run_parse_within(parse_budget.active, seconds=1) is True
@@ -229,6 +240,7 @@ async def test_the_budget_is_in_force_inside_the_parse():
 
 @pytest.mark.timing
 async def test_a_parse_past_its_budget_is_refused_near_the_cap_and_frees_the_slot():
+    """A parse past its CPU budget is stopped near the cap and frees its slot."""
     from oracle import parse_budget
 
     ended = threading.Event()
@@ -260,6 +272,7 @@ async def test_a_parse_past_its_budget_is_refused_near_the_cap_and_frees_the_slo
 
 
 async def test_a_caller_cancelled_while_queued_does_not_run_its_parse(monkeypatch):
+    """Cancelling a caller while queued stops its parse from ever running."""
     from concurrent.futures import ThreadPoolExecutor
 
     pool = ThreadPoolExecutor(max_workers=1)
@@ -283,6 +296,7 @@ async def test_a_caller_cancelled_while_queued_does_not_run_its_parse(monkeypatc
 
 
 async def test_a_submit_that_fails_after_queueing_does_not_run_the_parse(monkeypatch):
+    """A parse already queued is never run if submitting it to the pool later fails."""
     from concurrent.futures import ThreadPoolExecutor
 
     pool = ThreadPoolExecutor(max_workers=1)
@@ -312,6 +326,7 @@ async def test_a_submit_that_fails_after_queueing_does_not_run_the_parse(monkeyp
 
 
 def test_the_design_check_stops_at_its_budget():
+    """The design check and its sanitizers stop at the CPU budget as they run."""
     # The design check refuses as 'took over N seconds' (specs.service): it must check the
     # budget as it goes, or that refusal only comes at the caller's wall (4 x N).
     from oracle import parse_budget

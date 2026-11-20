@@ -76,6 +76,7 @@ async def _prd_text(client, ctx, mid: str, who: str) -> str:
 
 
 async def test_the_reader_reads_the_working_draft_the_meeting_shows(client):
+    """A meeting's chat reads PRD text with its own unsaved edit already applied."""
     ctx = await op.world(client)
     m = await _meeting_with_an_edit(client, ctx)
     shown = await op.get(client, ctx, "decider")
@@ -91,6 +92,7 @@ async def test_the_reader_reads_the_working_draft_the_meeting_shows(client):
 
 
 async def test_who_cannot_see_the_draft_reads_the_saved_version(client):
+    """Someone barred from a meeting's draft reads the PRD's last saved text."""
     ctx = await op.world(client)
     m = await _meeting_with_an_edit(client, ctx)
     shown = await op.get(client, ctx, "commenter")
@@ -102,6 +104,7 @@ async def test_who_cannot_see_the_draft_reads_the_saved_version(client):
 
 
 async def test_the_prd_text_carries_no_raw_tokens(client):
+    """The PRD text shown in chat never carries raw citation or section markers."""
     ctx = await op.world(client)
     m = await _meeting_with_an_edit(client, ctx)
     text = await _prd_text(client, ctx, m["id"], "decider")
@@ -111,6 +114,7 @@ async def test_the_prd_text_carries_no_raw_tokens(client):
 
 
 async def test_the_version_named_is_the_one_whose_text_is_read(client):
+    """The PRD version a meeting names matches the version whose text it reads."""
     ctx = await op.world(client)
     v2 = op.PRD.replace("Fewer support tickets about setup", "Half the setup tickets")
     r = await client.post("/v1/documents/guided-setup/versions", content=v2.encode(),
@@ -126,6 +130,8 @@ async def test_the_version_named_is_the_one_whose_text_is_read(client):
 
 
 async def test_an_unpatchable_section_keeps_the_front_matter_and_title(client, monkeypatch):
+    """When a section edit cannot be patched, the PRD keeps its front matter."""
+
     def refuse(*_a, **_k):
         raise ChangeError(409, "Section could not be patched")
 

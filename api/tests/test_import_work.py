@@ -76,19 +76,23 @@ def probe() -> dict:
 
 
 def test_no_password_is_hashed_on_import(probe):
+    """Importing the app does no password hashing before anything signs in."""
     assert probe["at_import"]["hash"] == 0
 
 
 def test_the_leak_check_table_is_not_built_on_import(probe):
+    """Importing the app does not build the leaked-password table until needed."""
     assert probe["at_import"]["decomposition"] < SCAN
 
 
 def test_the_leak_check_table_is_built_on_first_use(probe):
+    """The leaked-password table builds on first use; capital I counts as i and l."""
     assert probe["after_use"]["decomposition"] >= SCAN
     assert probe["mixed"] not in ("i", "l", "I"), "a capital I stands for both i and l"
 
 
 def test_a_wasted_check_costs_one_argon2_step_each_time(monkeypatch):
+    """A decoy password check costs one hash step first, one verify each time after."""
     from argon2 import PasswordHasher
 
     from oracle.auth import service

@@ -60,11 +60,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """Migration 0085 sits after the branch's current head, keeping one lineage."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_up_down_up(scratch_db):
+    """Migration 0085 upgrade, downgrade and upgrade again leave the same tables."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _tables() == TABLES

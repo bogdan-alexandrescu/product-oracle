@@ -91,6 +91,7 @@ async def move(client, ctx: Ctx, role: str, track_id: str, to: str, code: int = 
 
 
 async def test_tracks_read_in_the_stored_order_and_move_one_step(client):
+    """Tracks read in their saved order, and moving one only shifts it one step."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     start = ["Checkout", "Search", "Gift wrap"]
@@ -138,6 +139,7 @@ async def test_tracks_read_in_the_stored_order_and_move_one_step(client):
 
 
 async def test_one_who_does_not_decide_proposes_a_move(client):
+    """Someone who cannot decide only proposes a track move, for an owner to accept."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     row = next(t for t in await tracks(client, ctx, "approver") if t["title"] == "Search")

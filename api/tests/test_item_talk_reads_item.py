@@ -124,6 +124,7 @@ async def talk(client, w: World, line: str, ask, key: str = "b", who: str = "com
 
 
 async def test_item_context_carries_what_its_panel_shows(client):
+    """The item context sent to chat matches what its own panel shows."""
     w = await talk_world()
     ask, seen = reader([], "-", "-")
     await talk(client, w, "what does it depend on?", ask)
@@ -147,6 +148,7 @@ async def test_item_context_carries_what_its_panel_shows(client):
 
 @pytest.mark.parametrize("named", ["id", "key", "code", "label"])
 async def test_a_read_naming_the_item_reads_it(client, named):
+    """An item can be read by its id, key, code or label alike."""
     w = await talk_world()
     value = {"id": w.ids["move_dates-b"], "key": "move_dates-b", "code": "F-26",
              "label": "F-26 Reliability work"}[named]  # fmt: skip
@@ -173,6 +175,7 @@ async def test_a_read_naming_the_item_reads_it(client, named):
 
 
 async def test_the_roadmap_read_keeps_the_item(client):
+    """A roadmap read still keeps the linked item's own details intact."""
     w = await talk_world()
     ask, seen = reader([{"action": "get_simple_roadmap", "args": {}}],
                        '\\"title\\": \\"Reliability work\\"',
@@ -191,6 +194,7 @@ async def test_the_roadmap_read_keeps_the_item(client):
 
 
 async def test_a_list_read_of_an_item_with_no_feature(client):
+    """Listing links for an item with no feature still reads cleanly."""
     w = await talk_world()
     ask, seen = reader([{"action": "list_edges", "args": {"entity_id": w.ids["move_dates-a"]}}],
                        "[", "Adaptive pacing has no links yet.")  # fmt: skip
@@ -202,6 +206,7 @@ async def test_a_list_read_of_an_item_with_no_feature(client):
 
 
 async def test_reader_prompt_is_v7(client):
+    """The reader prompt is the current version and names the dated fields it needs."""
     from oracle.jobs import prompting
 
     name, text = prompting.current("chat_reader")
@@ -214,6 +219,7 @@ async def test_reader_prompt_is_v7(client):
 
 
 async def test_every_item_shape_is_read(client):
+    """Every item shape, coded title or PRD-linked, is read correctly."""
     w = await talk_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         b = await s.get(RoadmapItem, uuid.UUID(w.ids["move_dates-b"]))

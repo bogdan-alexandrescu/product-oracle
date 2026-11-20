@@ -42,6 +42,7 @@ def _plain(text, codes=None, questions=None):
     ],
 )
 def test_the_text_reads_plainly(text, want):
+    """Review text turns ISO dates, citations and confidence numbers into plain words."""
     # protects=walk-eng-check ITEM 11: ISO dates month first, citation ids, confidence
     # numbers and bare question ids gone; fails_when=any raw token is left or a plain
     # sentence (a quarter, a version) changes; no_claim=the agents' own wording.
@@ -49,6 +50,7 @@ def test_the_text_reads_plainly(text, want):
 
 
 def test_known_questions_and_codes_go_by_their_words():
+    """A question id or feature code in review text is replaced by its own words."""
     # protects=ITEM 11 "codes with their names"; fails_when=a brief's question id or a
     # feature key shows alone; no_claim=codes the review does not know.
     codes = {"price-early": "Show the price early"}
@@ -63,6 +65,7 @@ def test_known_questions_and_codes_go_by_their_words():
 
 
 def test_a_question_id_never_reads_open():
+    """A question id in review text never reads as an open question either way."""
     # protects=walk-eng-check review minor: an id the text names may be a question already
     # answered, so it never reads "an open question"; an id of another brief's question is
     # quoted as that question; fails_when="an open decision" or "an open question" shows, or
@@ -88,6 +91,7 @@ def test_a_question_id_never_reads_open():
 
 
 def test_the_dates_review_payload_reads_plainly():
+    """The dates check payload drops ISO dates and citations, keeps structured fields."""
     # protects=ITEM 11 on the Engineering dates stop: assumptions and the no-date reason;
     # fails_when=the payload shown keeps an ISO date, a citation or a confidence, or a
     # structured field (the proposed date, the key) changes; no_claim=the web's own render.
@@ -119,6 +123,7 @@ def test_the_dates_review_payload_reads_plainly():
 
 
 def test_the_flows_tell_the_architects_to_write_plainly():
+    """The tech brief and dates flows tell the model to write dates and ids plainly."""
     # protects=ITEM 11 at the source; fails_when=the tech brief or dates task does not ask
     # for month-first dates and no ids or confidence numbers in prose; no_claim=the model.
     for task in (flows.TECH_BRIEF_TASK, flows.ENG_DATES_TASK):
@@ -148,6 +153,7 @@ features:
 
 
 async def test_the_engineering_check_shows_the_approach_plainly(client):
+    """A run's engineering review shows the approach rewritten into plain, dated text."""
     # protects=ITEM 11 on the run review read: the architect's approach as the check shows
     # it; fails_when=the run's payload keeps the ISO date, the question id, the citation or
     # the confidence; no_claim=the stored file (kept as written).

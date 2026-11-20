@@ -9,6 +9,7 @@ from oracle import safe_yaml
 
 
 async def test_run_parse_is_limited_per_person():
+    """Each person can hold only a limited number of parse slots at a time."""
     release = threading.Event()
     try:
         with safe_yaml.parse_owner("alice"):
@@ -27,6 +28,7 @@ async def test_run_parse_is_limited_per_person():
 
 
 async def test_run_parse_waits_at_most_the_queue_limit(monkeypatch):
+    """Waiting for a parse slot gives up after the queue's own time limit, not forever."""
     monkeypatch.setattr(safe_yaml, "QUEUE_SECONDS", 0.3)
     release = threading.Event()
     try:

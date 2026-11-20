@@ -66,6 +66,7 @@ async def _numbers(ctx, roadmap_id: str) -> list[int]:
 
 
 async def test_a_never_approved_roadmap_publishes_a_draft_with_no_base(client):
+    """A draft with no base version still publishes on a never-approved roadmap."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     draft_id = await _draft_without_base(client, ctx, w, never_approved=True)
@@ -77,6 +78,7 @@ async def test_a_never_approved_roadmap_publishes_a_draft_with_no_base(client):
 
 
 async def test_an_approved_roadmap_publishes_a_draft_with_no_base(client):
+    """A draft with no base version still publishes once the roadmap was approved."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     draft_id = await _draft_without_base(client, ctx, w, never_approved=False)

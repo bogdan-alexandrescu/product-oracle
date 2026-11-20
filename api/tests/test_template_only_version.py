@@ -9,6 +9,7 @@ def _codes(version: dict) -> list[str]:
 
 
 async def test_skeleton_version_is_template_only_until_a_draft_replaces_it(client, tenant_id):
+    """A PRD's skeleton version stays template_only until a draft adds real content."""
     h = await _token(tenant_id, "approver")
     body = {"kind": "prd", "title": "Saved wishlists", "template": "one-pager"}
     out = (await client.post("/v1/drafts", json=body, headers=h)).json()
@@ -32,6 +33,7 @@ async def test_skeleton_version_is_template_only_until_a_draft_replaces_it(clien
 
 
 async def test_imported_first_version_is_not_template_only(client, tenant_id):
+    """An imported first version is never marked template_only."""
     h = await _token(tenant_id, "approver")
     md = "---\ndocument: gift-notes\ntitle: Gift notes\n---\n# Gift notes {#title}\n\nA note.\n"
     resp = await client.post(

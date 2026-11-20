@@ -110,6 +110,7 @@ def said(answer: str) -> str:
 
 
 async def test_simple_ask_question_reads_live(client, sources, claude):  # noqa: F811
+    """Ask on a live question opens a scoped MCP token limited to the live tools."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx, PLAN)
@@ -151,6 +152,7 @@ async def test_simple_ask_question_reads_live(client, sources, claude):  # noqa:
 
 @pytest.mark.parametrize("where", ["meeting", "shared"])
 async def test_shared_or_meeting_chat_gets_no_live_tools(client, sources, claude, meetings, where):  # noqa: F811
+    """A shared or meeting chat gets no live tools and mints no live token."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx, PLAN)
@@ -189,6 +191,7 @@ async def started_token(claude) -> str:  # noqa: F811
 
 @pytest.mark.parametrize("why", ["expired", "down", "cap"])
 async def test_a_refused_or_failed_live_read_is_oracles_answer(client, sources, claude, why):  # noqa: F811
+    """A refused or failed live read is folded into Oracle's answer as one line."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx, PLAN)
@@ -229,6 +232,7 @@ async def test_a_refused_or_failed_live_read_is_oracles_answer(client, sources, 
 
 
 async def test_one_read_and_one_failure_says_the_failure_plainly(client, sources, claude):  # noqa: F811
+    """One read that succeeds and one that fails: the failure is stated plainly."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx, PLAN)
@@ -254,6 +258,7 @@ async def test_one_read_and_one_failure_says_the_failure_plainly(client, sources
 
 @pytest.mark.timing
 async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypatch):  # noqa: F811
+    """A long live run renews its lease so a slow reply is not cut off early."""
     monkeypatch.setattr(replies, "LEASE", timedelta(seconds=1))
     ctx = await make_people()
     await World(ctx).build()
@@ -286,6 +291,7 @@ async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypa
 
 @pytest.mark.parametrize("bad", ["Not an answer at all", "FAIL"])
 async def test_a_retried_live_run_mints_no_second_token(client, sources, claude, bad):  # noqa: F811
+    """Retrying a live run after a bad reply reuses its token, minting no second one."""
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx, PLAN)
@@ -310,6 +316,7 @@ async def test_a_retried_live_run_mints_no_second_token(client, sources, claude,
 
 
 async def test_ending_a_live_run_keeps_its_jobs_own_cancel():
+    """Ending a live run cancels cleanly even while its own job is also being canceled."""
     from oracle.simple.chat import _LiveRun
 
     async def slow_to_stop():

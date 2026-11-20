@@ -79,6 +79,7 @@ def row(out: dict, title: str) -> dict:
 
 
 async def test_a_track_adds_with_no_prd(client):
+    """A track can be added with no PRD, and one who cannot decide only proposes it."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     added = (await change(client, ctx, "owner", "add_track", {},
@@ -114,6 +115,7 @@ async def test_a_track_adds_with_no_prd(client):
 
 
 async def test_edit_track_sets_and_clears_the_goal_and_the_prd(client):
+    """A track's goal can be set and cleared again, and only a live goal is accepted."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     tid = {"track_id": ids["track_id"]}
@@ -185,6 +187,7 @@ async def test_a_prd_keeps_one_track(client):
 
 
 async def test_a_prd_set_on_a_track_adopts_its_issues_and_roadmap(client):
+    """Setting a track's PRD also adopts that PRD's own roadmap and tracked issues."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         sd = Seed(s)
@@ -214,6 +217,7 @@ async def test_a_prd_set_on_a_track_adopts_its_issues_and_roadmap(client):
 
 @pytest.mark.filterwarnings("error:.*fully NULL primary key")
 async def test_a_feature_on_a_track_with_no_prd_reads_everywhere(client):
+    """A feature on a track with no PRD still reads everywhere the track is shown."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         sd = Seed(s)

@@ -68,6 +68,7 @@ async def _commenter(ctx, email="second.commenter@example.com"):
 # its owner's name (never an id alone), and get_metric returns it; fails_when=a commenter
 # or viewer adds one, or owner_name is missing; no_claim=the Metrics page.
 async def test_create_list_and_roles(client, ctx, clock):
+    """Creating a metric needs approver or above; reading it works for any role."""
     for who in ("commenter", "viewer"):
         assert (await create(client, ctx, who=who)).status_code == 403
     resp = await create(client, ctx)
@@ -87,6 +88,7 @@ async def test_create_list_and_roles(client, ctx, clock):
 # protects=the 422s of the spec's error list; fails_when=any of them is stored;
 # no_claim=the Add metric sheet's own checks.
 async def test_refusals(client, ctx, clock):
+    """A metric is refused for a bad unit, a wrong kind, a cycle, or a bad bar."""
     assert (await create(client, ctx, unit="furlongs/fortnight!")).status_code == 422
     assert (await create(client, ctx, kind="input")).status_code == 422
     output = (await create(client, ctx)).json()
@@ -109,6 +111,7 @@ async def test_refusals(client, ctx, clock):
 # protects=criterion 6 (unit): linking a teams metric to a % goal is 422 with the spec's
 # message; a % metric links; fails_when=units are not compared; no_claim=goal values.
 async def test_goal_link_needs_the_goals_unit(client, ctx, clock):
+    """A metric linked to a goal must share the goal's unit."""
     goal = await pct_goal(client, ctx)
     resp = await create(client, ctx, goal_id=goal["id"])
     assert resp.status_code == 422
@@ -123,6 +126,7 @@ async def test_goal_link_needs_the_goals_unit(client, ctx, clock):
 # fails_when=a non-Monday or future week is stored, or a non-owner commenter records;
 # no_claim=PostHog values (test_metrics_posthog.py).
 async def test_values_by_hand(client, ctx, clock):
+    """Only a metric's assigned owner can record its value by hand, at a valid week."""
     metric = (await create(client, ctx)).json()
     resp = await _put(client, ctx, metric, LAST_WEEK, 412, who="commenter")
     assert resp.status_code == 200, resp.text
@@ -147,6 +151,7 @@ async def test_values_by_hand(client, ctx, clock):
 # protects=409 for a value on a PostHog metric (its values are read, never typed);
 # fails_when=a person overwrites a read value; no_claim=Pull now.
 async def test_no_typed_value_on_a_posthog_metric(client, ctx, clock, fake_posthog):
+    """A metric pulled from PostHog refuses a value typed in by hand."""
     from tests.metrics_helpers import connect
 
     assert (await connect(client, ctx)).status_code == 200
@@ -158,6 +163,7 @@ async def test_no_typed_value_on_a_posthog_metric(client, ctx, clock, fake_posth
 # restore brings it back; fails_when=a stale write lands or archive deletes;
 # no_claim=definition versions (test_metrics_posthog.py).
 async def test_patch_archive_restore(client, ctx, clock):
+    """Patching a metric checks its lock version; archiving hides it till restored."""
     metric = (await create(client, ctx)).json()
     url = f"{M}/{metric['id']}"
     resp = await client.patch(url, json={"title": "Active teams", "lock_version": 1},
@@ -184,6 +190,7 @@ async def test_patch_archive_restore(client, ctx, clock):
 # Better variance with its band; MetricOut's change carries it; fails_when=no row, two
 # rows, or the band is not prev +- 2 x typical; no_claim=possible causes' content.
 async def test_a_jump_makes_one_open_variance(client, ctx, clock):
+    """An unusual jump opens one variance, and a repeat value adds no second row."""
     metric, found = await _with_variance(client, ctx)
     assert found["metric_id"] == metric["id"]
     assert found["week_start"] == LAST_WEEK.isoformat()
@@ -205,6 +212,7 @@ async def test_a_jump_makes_one_open_variance(client, ctx, clock):
 # 403; an explanation under 10 characters is 422; fails_when=a commenter who does not own
 # the metric explains, or a short text is stored; no_claim=the Inbox row.
 async def test_explain_roles(client, ctx, clock):
+    """Only the variance's owner can explain it, and a short explanation is refused."""
     _, var = await _with_variance(client, ctx)
     url = f"{V}/{var['id']}/explain"
     other = await _commenter(ctx)
@@ -226,6 +234,7 @@ async def test_explain_roles(client, ctx, clock):
 # Noise is an approver's (a commenter, even the owner, is 403); fails_when=a far day is
 # stored or a commenter marks noise; no_claim=the Find out Inbox row.
 async def test_unknown_and_noise(client, ctx, clock):
+    """Marking a variance unknown needs a future date; only an approver flags noise."""
     _, var = await _with_variance(client, ctx)
     today = clock.now.date()
     resp = await client.post(f"{V}/{var['id']}/unknown",
@@ -249,6 +258,7 @@ async def test_unknown_and_noise(client, ctx, clock):
 # fails_when=any reads or changes the other company's row; no_claim=database-level
 # isolation beyond the tenant session.
 async def test_another_companys_ids_are_404(client, ctx, clock):
+    """Another company's metric or variance ids are 404 to this company's calls."""
     metric, var = await _with_variance(client, ctx)
     other = await make_ctx("Other Co")
     mid, vid = metric["id"], var["id"]
@@ -275,6 +285,7 @@ async def test_another_companys_ids_are_404(client, ctx, clock):
 # and gets 403 on every write; fails_when=a run reads nothing or writes a value;
 # no_claim=people's MCP clients (they follow REST roles).
 async def test_run_token_reads_but_never_writes(client, ctx, clock):
+    """A run token scoped to read baseline can read metrics but never write them."""
     from oracle.mcp.scopes import required_scope
     from oracle.swarm import FakeRuntime, set_runtime
     from tests.test_mcp import mcp_client, run_token, text_of
@@ -314,6 +325,7 @@ async def test_run_token_reads_but_never_writes(client, ctx, clock):
 # row; fails_when=the fixed 10% flags it anyway; no_claim=the rule's other branches
 # (test_metrics_variance.py).
 async def test_an_owners_higher_threshold_flags_nothing_at_twelve_percent(client, ctx, clock):
+    """A metric with a higher owner threshold does not flag a change under it."""
     metric = (await create(client, ctx, threshold_pct=20)).json()
     for week, value in zip(weeks_back(4), [100, 101, 100, 112], strict=True):
         assert (await _put(client, ctx, metric, week, value)).status_code == 200
@@ -326,6 +338,7 @@ async def test_an_owners_higher_threshold_flags_nothing_at_twelve_percent(client
 # fails_when=a null title, description, unit, direction or owner reaches the service;
 # no_claim=the other 422s (test_refusals).
 async def test_patch_with_a_null_required_field_is_422(client, ctx, clock):
+    """Patching a metric's required field to null is refused, leaving it unchanged."""
     metric = (await create(client, ctx)).json()
     for field in ("title", "description", "unit", "direction", "owner_id"):
         resp = await client.patch(f"{M}/{metric['id']}", json={field: None, "lock_version": 1},
@@ -339,6 +352,7 @@ async def test_patch_with_a_null_required_field_is_422(client, ctx, clock):
 # fails_when=spaces pad a short text past 10 (and "short" is stored), or trailing spaces
 # push a 1,000-character text over; no_claim=the words on screen.
 async def test_an_explanation_is_trimmed_before_its_length_is_checked(client, ctx, clock):
+    """A variance explanation is trimmed before its minimum length is checked."""
     _, var = await _with_variance(client, ctx)
     url = f"{V}/{var['id']}/explain"
     padded = {"explanation": "     short      "}
@@ -357,6 +371,7 @@ async def test_an_explanation_is_trimmed_before_its_length_is_checked(client, ct
 # fails_when=only the edited week is rechecked; no_claim=a variance a person answered
 # (it stays).
 async def test_a_value_by_hand_rechecks_the_next_week(client, ctx, clock):
+    """Changing an older value re-checks whether the next week is still a variance."""
     metric, var = await _with_variance(client, ctx)
     before = LAST_WEEK - timedelta(weeks=1)
 
@@ -379,6 +394,7 @@ async def test_a_value_by_hand_rechecks_the_next_week(client, ctx, clock):
 # for the user) still sees them; fails_when=rows match principal.id, the token's id;
 # no_claim=how each credential resolves to a principal (oracle.auth.deps).
 async def test_inbox_rows_match_the_person_not_the_token(client, ctx, clock):
+    """An inbox row made by a token is attributed to the person, not the token."""
     import uuid
 
     from oracle.auth.deps import Principal

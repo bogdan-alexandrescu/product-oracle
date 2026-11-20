@@ -71,6 +71,7 @@ def drafted(m: dict) -> list[tuple[str, str, str, str]]:
 
 
 async def test_the_meeting_reads_the_runs_draft(client):
+    """A review meeting shows a run's draft dates, sorted into the right roadmap spot."""
     w = await world()
     await add_draft(w)
     m = await start(client, w)
@@ -86,12 +87,14 @@ async def test_the_meeting_reads_the_runs_draft(client):
 
 
 async def test_a_meeting_with_no_draft_reads_none(client):
+    """A meeting for a PRD with no draft roadmap reads that roadmap as none."""
     w = await world()
     m = await start(client, w)
     assert m["draft_roadmap"] is None
 
 
 async def test_change_dates_and_leave_out_stay_draft(client):
+    """Changing a draft item's dates or leaving it out never touches the real roadmap."""
     w = await world()
     await add_draft(w)
     m = await start(client, w)
@@ -122,6 +125,7 @@ async def test_change_dates_and_leave_out_stay_draft(client):
 
 
 async def test_approve_these_dates_puts_them_on_the_roadmap(client):
+    """Only the decider may approve a draft's dates, putting every item on the roadmap."""
     w = await world()
     await add_draft(w)
     m = await start(client, w)

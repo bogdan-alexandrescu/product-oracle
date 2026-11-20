@@ -20,6 +20,7 @@ def _prompt(flow: flows.FlowDef, seg: flows.SegmentDef, role: str) -> str:
 
 
 def test_every_step_that_proposes_says_to_name_each_code_in_a_reason():
+    """Every step that can propose a change is told to name each code in its reason."""
     proposing = [
         (flow, seg)
         for flow in flows.FLOWS.values()
@@ -36,6 +37,7 @@ def test_every_step_that_proposes_says_to_name_each_code_in_a_reason():
 
 
 def test_a_step_that_cannot_propose_does_not_carry_the_reason_rule():
+    """A step that cannot propose a change carries no rule naming codes."""
     flow = flows.FLOWS["prd_to_roadmap"]
     ctx = flows.PromptContext(
         run_id="run-1",
@@ -51,5 +53,6 @@ def test_a_step_that_cannot_propose_does_not_carry_the_reason_rule():
 
 
 def test_the_propose_change_tool_says_to_name_each_code_in_its_reason():
+    """The propose_change tool's own description carries the rule to name each code."""
     tool = next(c for c in curated.CURATED if c.name == "propose_change")
     assert flows.PROPOSAL_REASON_CODES in tool.about

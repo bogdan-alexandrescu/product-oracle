@@ -59,6 +59,7 @@ async def _count(tenant_id) -> int:
 # misses the week, stores it twice or re-queries a stored or claimed week; no_claim=the
 # hourly cadence of the scheduler itself.
 async def test_one_tick_stores_the_missing_week_once(client, ctx, clock, fake_posthog):
+    """A tick stores a missing week's value once, never re-querying a stored week."""
     assert (await connect(client, ctx)).status_code == 200
     metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
     assert await _count(ctx.tenant_id) == 12
@@ -94,6 +95,7 @@ async def test_one_tick_stores_the_missing_week_once(client, ctx, clock, fake_po
 # across the outbound HTTP calls, blocking edits and Pull now meanwhile; no_claim=the
 # lock's length in a real deployment.
 async def test_no_row_lock_is_held_while_posthog_answers(client, ctx, clock, fake_posthog):
+    """A metric's row is not locked while waiting on PostHog's answer to a pull."""
     assert (await connect(client, ctx)).status_code == 200
     metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
     clock.at(NOW + timedelta(days=7))
@@ -118,6 +120,7 @@ async def test_no_row_lock_is_held_while_posthog_answers(client, ctx, clock, fak
 # company's metric is pulled in the same pass; fails_when=a failure stops the other
 # company, retries every tick, or never reaches error; no_claim=the Inbox row (lane 2).
 async def test_failures_retry_hourly_then_error(client, ctx, clock, fake_posthog):
+    """A failing pull retries hourly, errors after a day, and spares other companies."""
     assert (await connect(client, ctx)).status_code == 200
     metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
     other = await make_ctx("Other Co")
@@ -158,6 +161,7 @@ async def test_failures_retry_hourly_then_error(client, ctx, clock, fake_posthog
 # through a user writer (locking) or an agent writer (a proposal), or a person can still
 # record; no_claim=the chart.
 async def test_goal_link_writes_the_goals_value(client, ctx, clock):
+    """Recording a linked metric's value writes the goal's current value directly."""
     goal = await pct_goal(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
         locked = (await s.get(Entity, goal["id"])).locked
@@ -198,6 +202,7 @@ async def test_goal_link_writes_the_goals_value(client, ctx, clock):
 # protects=the reading writer changes only current and current_as_of; fails_when=it can
 # write any other goal field; no_claim=other entity types.
 async def test_the_reading_writer_writes_only_the_value(client, ctx):
+    """A writer scoped to a reading changes only the value, not the goal's fields."""
     from oracle.baseline import service
 
     goal = await pct_goal(client, ctx)
@@ -213,6 +218,7 @@ async def test_the_reading_writer_writes_only_the_value(client, ctx):
 # protects=criterion 7: H3 judges a linked goal on the metric's value, with source
 # "metric"; fails_when=the source reads "measurement"; no_claim=the verdict rule.
 async def test_h3_reads_the_metric_source(client, ctx, clock):
+    """A goal's actual value is read from its linked metric when one exists."""
     goal = await pct_goal(client, ctx)
     metric = (await create(client, ctx, unit="%", goal_id=goal["id"])).json()
     await client.put(f"/v1/metrics/{metric['id']}/values/{LAST_WEEK}", json={"value": 43},
@@ -228,6 +234,7 @@ async def test_h3_reads_the_metric_source(client, ctx, clock):
 # fails_when=launches are listed by date only or the definition change is missing;
 # no_claim=changelog and decision causes' wording.
 async def test_causes_put_the_goals_launch_first(client, owner, runtime):
+    """Possible causes list a metric's own goal's launch before an unrelated one."""
     from tests.launch_helpers import launched_world
 
     tenant_id, auth = owner

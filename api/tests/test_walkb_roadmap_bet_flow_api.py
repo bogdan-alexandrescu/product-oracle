@@ -32,6 +32,7 @@ def clock(monkeypatch):
 
 
 async def test_item_from_a_prd_shows_its_bets_flow(client):
+    """A roadmap item shows the flow of its own PRD line, never another item's."""
     ctx = await world(client)
     view = await one_pager(client, ctx, "decider")
     doc_id = view["document"]["id"]

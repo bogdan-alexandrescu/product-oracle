@@ -67,6 +67,7 @@ def _codes(resp) -> list[str]:
 
 
 def test_dates_are_found_in_the_text_not_in_sources_links_or_horizons():
+    """Date detection finds body text dates but skips links and horizons."""
     found = doc_dates.dates_in(
         "Beta 2026-11-30, GA Dec 15, 2026 and 3rd January 2027; not 2026-13-01, "
         "Q4 2026, November 2026 or ENG-2026-11-30"
@@ -90,6 +91,7 @@ def test_dates_are_found_in_the_text_not_in_sources_links_or_horizons():
 
 
 async def test_a_person_s_import_refuses_an_unverified_date(client, owner, runtime):  # noqa: F811
+    """A person's import is refused for writing a date no basis supports."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -129,6 +131,7 @@ async def test_a_person_s_import_refuses_an_unverified_date(client, owner, runti
 
 
 async def test_a_manual_roadmap_without_a_prd_refuses_any_date(client, owner):  # noqa: F811
+    """A roadmap with no PRD of its own refuses any date, even a linked one."""
     _, auth = owner
     md = WITHOUT_PLAN.replace("document: checkout-redesign-roadmap", "document: loose-roadmap")
     # No PRD of its own (no provenance, no track, no ``prd:``): a PRD its text links to
@@ -146,6 +149,7 @@ async def test_a_manual_roadmap_without_a_prd_refuses_any_date(client, owner):  
 
 
 async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime):  # noqa: F811
+    """A run's import marks an unverified date and lists it as a warning."""
     _, auth = owner
     await approved_prd(client, auth)
     from tests.test_roadmap import ITEMS
@@ -182,6 +186,7 @@ async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime): 
 
 
 async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owner, runtime):  # noqa: F811
+    """Withdrawing a basis marks its dates withdrawn, not the approved text."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

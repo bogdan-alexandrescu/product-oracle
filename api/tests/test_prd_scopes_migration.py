@@ -65,11 +65,13 @@ def scratch_db():
 
 
 def test_chains_on_mains_head_and_is_the_only_head():
+    """The prd_scopes migration chains onto the branch's head, staying the only one."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
+    """Upgrading adds prd_scopes tables without touching existing seeded rows."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, run, cp, doc = (uuid.uuid4() for _ in range(4))

@@ -60,6 +60,7 @@ def key_dates(body: dict) -> list[tuple[str, str, str | None]]:
 
 
 async def test_prd_milestones_are_key_date_lines(client):
+    """Priorities lists a PRD's milestones as key dates, like the roadmap does."""
     ctx = await make_ctx()
     ids = await seed(ctx, items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -97,6 +98,7 @@ async def test_prd_milestones_are_key_date_lines(client):
 
 
 async def test_plan_milestone_on_a_prd_key_date_is_listed_once(client):
+    """A plan milestone that matches a PRD key date is shown once, not twice."""
     ctx = await make_ctx()
     ids = await seed(ctx, items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -141,6 +143,7 @@ async def test_plan_milestone_on_a_prd_key_date_is_listed_once(client):
 
 
 async def test_plan_milestone_matches_a_prd_key_date_as_the_roadmap_does(client):
+    """Milestones match a PRD key date by name or code the same way the roadmap does."""
     ctx = await make_ctx()
     ids = await seed(ctx, FIXTURE.replace("Open to all", "Große Öffnung"), items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:

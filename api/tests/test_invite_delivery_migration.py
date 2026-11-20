@@ -70,6 +70,7 @@ def _columns() -> list[str]:
 
 
 def test_the_chain_after_feedback_agent_staging():
+    """The new migration chains on its predecessor, keeping a single head."""
     script = ScriptDirectory.from_config(_cfg())
     # 0022_baseline_flow (B1) and the train's revisions chain on it; one head.
     assert script.get_revision(REVISION).down_revision == "0021_feedback_agent_staging"
@@ -77,6 +78,7 @@ def test_the_chain_after_feedback_agent_staging():
 
 
 def test_upgrade_adds_the_delivery_columns_and_downgrade_drops_them(scratch_db):
+    """The delivery columns add with safe defaults and drop again cleanly."""
     cfg = _cfg()
     upgrade(cfg, "0021_feedback_agent_staging")
     tenant = uuid.uuid4()

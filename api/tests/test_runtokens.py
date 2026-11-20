@@ -25,6 +25,7 @@ async def _run(db) -> uuid.UUID:
 
 
 async def test_mint_and_verify(db, tenant_id):
+    """A minted run token verifies back to its tenant, run and scopes, never raw."""
     run_id = await _run(db)
     raw = await mint_run_token(db, run_id, ["read:sources", "write:proposals"], ttl_seconds=600)
     await db.commit()
@@ -44,6 +45,7 @@ async def test_mint_and_verify(db, tenant_id):
 
 
 async def test_unknown_tokens_are_refused(db):
+    """A tampered, malformed or empty run token never verifies."""
     run_id = await _run(db)
     raw = await mint_run_token(db, run_id, SCOPES, ttl_seconds=60)
     await db.commit()
@@ -54,6 +56,7 @@ async def test_unknown_tokens_are_refused(db):
 
 
 async def test_expired_token_is_refused(db):
+    """An expired run token no longer verifies."""
     run_id = await _run(db)
     raw = await mint_run_token(db, run_id, ["read:baseline"], ttl_seconds=60)
     await db.execute(update(RunToken).values(expires_at=datetime.now(UTC) - timedelta(seconds=1)))
@@ -62,6 +65,7 @@ async def test_expired_token_is_refused(db):
 
 
 async def test_revoke_only_affects_that_run(db):
+    """Revoking a run's tokens invalidates only that run's, not another run's."""
     run_a, run_b = await _run(db), await _run(db)
     a1 = await mint_run_token(db, run_a, ["read:documents"], ttl_seconds=60)
     a2 = await mint_run_token(db, run_a, ["write:drafts"], ttl_seconds=60)
@@ -77,6 +81,7 @@ async def test_revoke_only_affects_that_run(db):
 
 
 async def test_unknown_or_missing_scopes_are_refused(db):
+    """Minting a token with an unknown, empty or zero-ttl scope is refused."""
     run_id = await _run(db)
     with pytest.raises(UnknownScopeError, match="admin"):
         await mint_run_token(db, run_id, ["read:sources", "admin"], ttl_seconds=60)
@@ -88,6 +93,7 @@ async def test_unknown_or_missing_scopes_are_refused(db):
 
 
 async def test_the_database_refuses_unknown_scopes_too(db):
+    """The database itself rejects a token row whose scope is outside the known set."""
     from sqlalchemy.exc import IntegrityError
 
     run_id = await _run(db)
@@ -104,6 +110,7 @@ async def test_the_database_refuses_unknown_scopes_too(db):
 
 
 async def test_cannot_mint_for_another_tenants_run(db):
+    """A tenant cannot mint or revoke tokens for a run owned by another tenant."""
     run_id = await _run(db)
     await db.commit()
     other = await make_tenant("Other Co")

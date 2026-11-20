@@ -31,6 +31,7 @@ async def _inbox(client, w, who: str) -> dict:
 
 
 async def test_the_owners_inbox_row_says_what_the_meeting_asked(client):
+    """A meeting's proposed cut shows in the owner's Inbox naming the meeting and item."""
     w = await world()
     b = await with_roadmap_b(w)
     before = (await _inbox(client, w, "reviewer2"))["total"]
@@ -51,6 +52,7 @@ async def test_the_owners_inbox_row_says_what_the_meeting_asked(client):
 
 
 async def test_an_answered_proposal_leaves_the_inbox(client):
+    """Declining a meeting's proposal leaves it undone; accepting it applies the cut."""
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)
@@ -77,6 +79,7 @@ async def test_an_answered_proposal_leaves_the_inbox(client):
 
 
 async def test_someone_else_does_not_get_it(client):
+    """A meeting's proposed cut shows only in the inbox of who must decide it."""
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)

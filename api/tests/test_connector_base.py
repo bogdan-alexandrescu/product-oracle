@@ -45,6 +45,7 @@ def registry(monkeypatch):
 
 
 async def test_protocol_register_and_sync(registry):
+    """A connector registers once, is found by name, and syncs items then checkpoints."""
     connector = register(FakeConnector())
     assert isinstance(connector, Connector)
     assert get_connector("fake") is connector
@@ -67,9 +68,11 @@ async def test_protocol_register_and_sync(registry):
 
 
 def test_item_kind_is_checked():
+    """An item's kind is checked against the allowed set."""
     with pytest.raises(ValueError):
         ItemUpsert(external_id="x", kind="dm", title=None, url=None, author=None, content="hi")
 
 
 def test_rate_limit_carries_retry_after():
+    """A connector rate-limit error carries its retry-after value."""
     assert ConnectorRateLimited(retry_after=30).retry_after == 30

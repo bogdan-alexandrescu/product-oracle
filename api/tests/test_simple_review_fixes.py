@@ -159,6 +159,7 @@ async def unlocked(client, w: World) -> None:
 
 
 async def test_detailed_approve_settles_the_draft(client):
+    """Approving a one-pager in Detailed settles its Simple draft and publishes it."""
     w = await world(reviewers=("approver",))
     d = (await submitted(client, w))["draft"]
     assert [x["draft_id"] for x in (await inbox(client, w, "approver"))["simple_approvals"]] == [
@@ -176,6 +177,7 @@ async def test_detailed_approve_settles_the_draft(client):
 
 
 async def test_absent_reviewer_section_review_settles(client):
+    """A section review with no other required reviewer still settles the draft."""
     w = await world(reviewers=("approver",))
     d = (await submitted(client, w))["draft"]
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
@@ -195,6 +197,7 @@ async def test_absent_reviewer_section_review_settles(client):
 
 @pytest.mark.parametrize("verdict", ["changes_requested", "rejected"])
 async def test_a_blocking_verdict_returns_the_draft(client, verdict):
+    """A blocking review verdict sends the draft back to working, not approved."""
     w = await world(reviewers=("approver",))
     s = await submitted(client, w)
     d, change = s["draft"], s["change"]
@@ -238,6 +241,7 @@ async def required_keys(w: World, n: int) -> set[str]:
 @pytest.mark.parametrize("section", ["required", "optional"])
 @pytest.mark.parametrize("verdict", ["changes_requested", "rejected"])
 async def test_any_non_approved_verdict_returns_the_draft(client, section, verdict):
+    """Any non-approved verdict on a section returns the draft to working, edits kept."""
     # Owner decision 2026-10-26 (#734 review): a required or an optional section's
     # verdict other than approved returns the draft, its changes kept and undoable.
     w = await world(reviewers=("approver",))
@@ -273,6 +277,7 @@ async def test_any_non_approved_verdict_returns_the_draft(client, section, verdi
 
 @pytest.mark.parametrize("author", ["owner", "decider"])
 async def test_withdraw(client, author):
+    """Withdrawing a submitted draft returns it to working, its author or decider only."""
     w = await world(reviewers=("approver",))
     s = await submitted(client, w, who=author)
     d, change = s["draft"], s["change"]
@@ -299,6 +304,7 @@ async def test_withdraw(client, author):
 
 @pytest.mark.parametrize("owner_role", ["viewer", "commenter", "approver"])
 async def test_track_owner_decides_only_as_approver(client, owner_role):
+    """A track owner decides a suggestion only once they also hold the approver role."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         u = User(email="trackowner@example.com", name="Tao Owner", password_hash="x",
@@ -328,6 +334,7 @@ async def test_track_owner_decides_only_as_approver(client, owner_role):
 
 
 async def test_open_proposals_follow_the_current_decider(client):
+    """An open proposal is routed to whoever is the roadmap's decider right now."""
     ctx = await make_people()
     w = await World(ctx).build(decider=False, ops=["edit_title"])
     prop = (await w.post(client, "commenter", "edit_title")).json()["change"]
@@ -347,6 +354,7 @@ async def test_open_proposals_follow_the_current_decider(client):
 
 
 async def test_suggestions_go_through_the_change_engine(client):
+    """Accepting or editing a date suggestion runs through the same change engine."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates", "edit_title"])
     owner = ctx.as_("owner")
@@ -388,6 +396,7 @@ async def test_suggestions_go_through_the_change_engine(client):
 
 
 async def test_dates_accepted_into_a_draft_stay_a_viewer_s_suggested_estimate(client):
+    """Once accepted into a draft, a date still reads as an estimate, not as fixed."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     viewer = by_key(await roadmap(client, w, "viewer"))
@@ -404,6 +413,7 @@ async def test_dates_accepted_into_a_draft_stay_a_viewer_s_suggested_estimate(cl
 
 
 async def test_stale_suggestion_is_409_outdated(client):
+    """Accepting a date suggestion is refused once the tracker has set newer dates."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     sid = w.suggestion["move_dates-u"]
@@ -424,6 +434,7 @@ async def test_stale_suggestion_is_409_outdated(client):
 
 
 async def test_dismissed_quiet_30_days_and_never_the_same_dates(client, clock, monkeypatch):
+    """A dismissed date suggestion stays quiet for 30 days, then may be offered again."""
     fixed = {"start": date(2026, 11, 9), "end": date(2026, 12, 4)}
     monkeypatch.setattr(
         dates, "suggest", lambda *a, **k: dates.Suggestion(fixed["start"], fixed["end"], "rule")
@@ -461,6 +472,7 @@ async def test_dismissed_quiet_30_days_and_never_the_same_dates(client, clock, m
 
 
 async def test_copied_forward_keeps_accepted_dates_and_risks():
+    """Carrying an item forward to a new PRD version keeps its dates, source and risks."""
     for f in ("start_date", "end_date", "date_source", "accepted_risks", "draft"):
         assert f in items_mod.COPIED, f
     ctx = await make_people()
@@ -486,6 +498,7 @@ async def test_copied_forward_keeps_accepted_dates_and_risks():
 
 
 async def test_concurrent_starts_and_refreshes_are_not_500(client):
+    """Starting or refreshing from two sessions at once never fails; the second waits."""
     ctx = await make_people()
     await World(ctx).build(decider=True, ops=["move_dates"])
     me = drafts.Principal(tenant_id=ctx.tenant_id, kind="user", role="approver",
@@ -514,6 +527,7 @@ async def test_concurrent_starts_and_refreshes_are_not_500(client):
 
 
 async def test_failed_daily_regeneration_backs_off(clock, monkeypatch):
+    """A failed daily suggestion refresh backs off a day before trying again."""
     ctx = await make_people()
     calls: list = []
 
@@ -543,6 +557,7 @@ async def test_failed_daily_regeneration_backs_off(clock, monkeypatch):
 
 
 async def test_fix_locks_dependents_before_reading(client, monkeypatch):
+    """Fixing dependents locks every affected item before it rereads any of them."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["shift_dependents"])
     # A third item depends on -b and overlaps it: the fix moves it too.
@@ -578,6 +593,7 @@ async def test_fix_locks_dependents_before_reading(client, monkeypatch):
 
 
 async def test_approve_in_meeting_with_different_deciders(client):
+    """Approving a draft in a meeting settles only the drafts whose decider matches."""
     w = await world()
     ctx = w.ctx
     async with tenant_session(ctx.tenant_id) as s:
@@ -604,6 +620,7 @@ async def test_approve_in_meeting_with_different_deciders(client):
 
 
 async def test_draft_lists_its_changes(client):
+    """A draft's change log names who made each change, when, and if in a meeting."""
     w = await world()
     meeting = await client.post(SESSIONS, json={"kind": "meeting"}, headers=w.ctx.as_("decider"))
     assert (

@@ -34,6 +34,7 @@ def endpoint():
 
 
 async def test_every_member_reads_and_only_an_owner_changes(client, tenant_id, owner):
+    """Every role reads the account pool, but only an owner can change it."""
     a = await add_account(tenant_id, "work")
     for role in ("viewer", "commenter", "approver"):
         person = await make_person(tenant_id, f"{role}@example.com", role)
@@ -59,6 +60,7 @@ async def test_every_member_reads_and_only_an_owner_changes(client, tenant_id, o
 async def test_the_paste_route_needs_a_refresh_token_and_returns_no_key_material(
     client, tenant_id, owner
 ):
+    """Pasting a credential needs a refresh token and never echoes key material."""
     no_refresh = await client.post(
         BASE, json={"label": "work", "credential": '{"accessToken": "a-only"}'},
         headers=owner.headers,
@@ -87,6 +89,7 @@ async def test_the_paste_route_needs_a_refresh_token_and_returns_no_key_material
 
 
 async def test_the_browser_sign_in_end_to_end(client, tenant_id, owner, endpoint):
+    """The browser sign-in flow completes end to end without leaking its verifier."""
     started = await client.post(
         f"{BASE}/authorize", json={"label": "personal"}, headers=owner.headers
     )
@@ -135,6 +138,7 @@ async def _sign_in(client, owner, label: str) -> dict:
 async def test_the_sign_in_keeps_the_claude_account_it_was_for_and_the_list_serves_it(
     client, tenant_id, owner, endpoint
 ):
+    """A sign-in records which Claude account it was for, and the list shows it."""
     # #405: after the sign-in a person can see WHICH Claude account the row holds.
     added = await _sign_in(client, owner, "personal")
     assert added["claude_email"] == "ada@example.com"
@@ -163,6 +167,7 @@ async def test_the_sign_in_keeps_the_claude_account_it_was_for_and_the_list_serv
 async def test_below_owner_the_pool_reads_without_the_account_holder(
     client, tenant_id, owner, role
 ):
+    """Roles below owner read the account pool but never see who holds an account."""
     # BGD 2026-10-25: every role reads the pool, but who holds an account (its Claude email
     # and organisation) is an owner's to see.
     a = await add_account(tenant_id, "personal")
@@ -192,6 +197,7 @@ async def test_below_owner_the_pool_reads_without_the_account_holder(
 async def test_an_api_token_below_owner_reads_the_pool_without_the_account_holder(
     client, tenant_id
 ):
+    """An API token below owner also reads the pool without seeing the holder."""
     a = await add_account(tenant_id, "personal")
     await edit_row(tenant_id, a.account_id, claude_email="ada@example.com")
     async with tenant_session(tenant_id) as s:
@@ -205,6 +211,7 @@ async def test_an_api_token_below_owner_reads_the_pool_without_the_account_holde
 
 
 async def test_only_whoever_started_a_sign_in_can_finish_it(client, tenant_id, owner, endpoint):
+    """Only whoever started a sign-in can finish it; another owner is refused."""
     other = await make_person(tenant_id, "other-owner@example.com", "owner")
     s = (await client.post(f"{BASE}/authorize", json={"label": "x"}, headers=owner.headers)).json()
     refused = await client.post(
@@ -220,6 +227,7 @@ async def test_only_whoever_started_a_sign_in_can_finish_it(client, tenant_id, o
 
 
 async def test_a_wrong_state_a_bad_code_and_a_slow_sign_in(client, tenant_id, owner, endpoint):
+    """A mismatched state, a bad code or a stale sign-in are all refused with 422."""
     s = (await client.post(f"{BASE}/authorize", json={"label": "x"}, headers=owner.headers)).json()
     mismatch = await client.post(
         f"{BASE}/exchange", json={"state": s["state"], "code": "c0de#other-state"},
@@ -242,6 +250,7 @@ async def test_a_wrong_state_a_bad_code_and_a_slow_sign_in(client, tenant_id, ow
 
 
 async def test_the_listing_is_honest_about_staleness_and_absence(client, tenant_id, owner):
+    """The account listing is honest when usage was never or not recently seen."""
     await add_account(tenant_id, "never")
     await add_account(tenant_id, "live", windows={"five_hour": window(0.4)})
     await add_account(
@@ -262,6 +271,7 @@ async def test_the_listing_is_honest_about_staleness_and_absence(client, tenant_
 
 
 async def test_state_changes_drain_and_audit(client, tenant_id, owner):
+    """Changing an account's state validates it, drains its holders and is audited."""
     a = await add_account(tenant_id, "work")
     await store.acquire_hold(tenant_id, a.account_id, now=now(), task_id="reporting")
     url = f"{BASE}/{a.account_id}/state"
@@ -287,6 +297,7 @@ async def test_state_changes_drain_and_audit(client, tenant_id, owner):
 async def test_an_expired_hold_is_not_served_as_a_holder_even_before_the_sweep(
     client, tenant_id, owner
 ):
+    """An expired hold is excluded from the holders list even before it is swept."""
     a = await add_account(tenant_id, "work")
     await store.acquire_hold(tenant_id, a.account_id, now=now() - timedelta(hours=4))
     holders = (await client.get(f"{BASE}/{a.account_id}/holders", headers=owner.headers)).json()
@@ -294,6 +305,7 @@ async def test_an_expired_hold_is_not_served_as_a_holder_even_before_the_sweep(
 
 
 async def test_history_pages_without_losing_spans_that_share_an_instant(client, tenant_id, owner):
+    """Paging account history returns every span, even several sharing an instant."""
     a = await add_account(tenant_id, "work")
     t = now() - timedelta(hours=1)
     ids = []
@@ -331,12 +343,14 @@ async def test_history_pages_without_losing_spans_that_share_an_instant(client, 
     ],
 )
 async def test_a_malformed_window_or_cursor_is_a_422_never_a_500(client, tenant_id, owner, params):
+    """A malformed history window or cursor is rejected with 422, never a crash."""
     a = await add_account(tenant_id, "work")
     resp = await client.get(f"{BASE}/{a.account_id}/history", params=params, headers=owner.headers)
     assert resp.status_code == 422
 
 
 async def test_a_window_longer_than_the_retention_is_a_422(client, tenant_id, owner):
+    """A history window longer than the retention period is rejected with 422."""
     a = await add_account(tenant_id, "work")
     params = {
         "from": (now() - timedelta(days=91)).isoformat(),
@@ -349,6 +363,7 @@ async def test_a_window_longer_than_the_retention_is_a_422(client, tenant_id, ow
 async def test_removing_an_account_closes_its_holds_and_deletes_its_credential(
     client, tenant_id, owner
 ):
+    """Makes sure removing an account frees its hold and erases its credential, not just itself."""
     a = await add_account(tenant_id, "work")
     await store.acquire_hold(tenant_id, a.account_id, now=now())
     resp = await client.delete(f"{BASE}/{a.account_id}", headers=owner.headers)
@@ -367,6 +382,7 @@ async def test_removing_an_account_closes_its_holds_and_deletes_its_credential(
 
 
 async def test_another_companys_account_is_not_found(client, tenant_id, owner):
+    """Another company's account is never found; it looks like it doesn't exist."""
     from tests.conftest import make_tenant
 
     other = await make_tenant("Other Co")
@@ -380,6 +396,7 @@ async def test_another_companys_account_is_not_found(client, tenant_id, owner):
 
 
 async def test_the_fallback_credential_is_write_only(client, tenant_id, owner):
+    """The fallback credential can be set and typed but is never read back raw."""
     url = f"{BASE}/fallback"
     refused = await client.put(url, json={"token": "not-a-claude-token"}, headers=owner.headers)
     assert refused.status_code == 422 and "Not a Claude credential" in refused.json()["detail"]
@@ -398,6 +415,7 @@ async def test_the_fallback_credential_is_write_only(client, tenant_id, owner):
 
 
 async def test_an_api_token_with_the_owner_role_can_manage_the_pool(client, tenant_id):
+    """An API token with the owner role can manage the account pool too."""
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "cli")  # tokens default to owner
         await s.commit()
@@ -407,6 +425,7 @@ async def test_an_api_token_with_the_owner_role_can_manage_the_pool(client, tena
 
 
 async def test_tick_sweeps_the_pool(client, tenant_id, owner, endpoint):
+    """The scheduled tick reclaims expired holds and refreshes account usage."""
     from oracle.claude_accounts.usage import UsageUnavailable
 
     async def fetch(token):
@@ -426,6 +445,7 @@ async def test_tick_sweeps_the_pool(client, tenant_id, owner, endpoint):
 
 
 async def test_the_sweep_forgets_sign_ins_nobody_finished(client, tenant_id, owner):
+    """The sweep removes a sign-in nobody finished before it went stale."""
     await client.post(f"{BASE}/authorize", json={"label": "x"}, headers=owner.headers)
     async with tenant_session(tenant_id) as db:
         row = await db.scalar(select(ClaudeAccountSignin))
@@ -442,6 +462,7 @@ async def test_the_sweep_forgets_sign_ins_nobody_finished(client, tenant_id, own
 async def test_an_account_over_its_weekly_limit_reads_spent_as_the_pool_decides(
     client, tenant_id, owner
 ):
+    """An account over its weekly cap reports as spent, so the pool takes no calls."""
     from oracle.claude_accounts.accounts import choose, eligibility
 
     spent = await add_account(
@@ -471,6 +492,7 @@ async def test_an_account_over_its_weekly_limit_reads_spent_as_the_pool_decides(
 
 
 async def test_an_account_with_room_takes_calls_and_the_pool_with_it(client, tenant_id, owner):
+    """An account with room left takes calls, and so does the pool overall."""
     await add_account(tenant_id, "roomy", windows={"five_hour": window(0.3)})
     await add_account(tenant_id, "five-hour", windows={"five_hour": window(0.9)})
     page = (await client.get(BASE, headers=owner.headers)).json()
@@ -489,6 +511,7 @@ async def test_an_account_with_room_takes_calls_and_the_pool_with_it(client, ten
 async def test_a_paused_account_is_not_spent_and_a_paused_pool_takes_no_calls(
     client, tenant_id, owner
 ):
+    """Keeps a deliberately paused account from being mislabeled as out of spending budget."""
     from oracle.claude_accounts.accounts import AccountState
 
     await add_account(tenant_id, "resting", state=AccountState.PAUSED)
@@ -506,6 +529,7 @@ async def test_a_paused_account_is_not_spent_and_a_paused_pool_takes_no_calls(
 async def test_with_no_account_the_pool_takes_calls_only_through_a_fallback(
     client, tenant_id, owner
 ):
+    """Lets a fallback credential keep calls working when no account has been registered yet."""
     empty = (await client.get(BASE, headers=owner.headers)).json()
     assert empty["pool"] == {
         "takes_calls": False,
@@ -527,6 +551,7 @@ async def test_with_no_account_the_pool_takes_calls_only_through_a_fallback(
 
 
 async def test_the_page_gives_the_company_time_zone(client, tenant_id, owner):
+    """The account pool page reports the company's configured time zone."""
     put = await client.put(
         "/v1/settings/company_timezone", json={"value": "Europe/Berlin"}, headers=owner.headers
     )
@@ -571,6 +596,7 @@ async def _gateway_answer(tenant_id):
 async def test_a_spent_pool_with_a_fallback_takes_calls_on_it_as_the_gateway_does(
     client, tenant_id, owner
 ):
+    """Checks the page's fallback claim matches what the gateway actually does when spent."""
     await add_account(
         tenant_id,
         "weekly",
@@ -598,6 +624,7 @@ async def test_a_spent_pool_with_a_fallback_takes_calls_on_it_as_the_gateway_doe
 async def test_a_spent_pool_without_a_fallback_takes_no_calls_as_the_gateway_refuses(
     client, tenant_id, owner
 ):
+    """A spent pool with no fallback takes no calls, matching the gateway's refusal."""
     await add_account(
         tenant_id, "weekly", windows={"seven_day": window(0.95, timedelta(days=2, hours=13))}
     )

@@ -65,6 +65,7 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The item-milestone-codes migration chains onto the single revision head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # One head, and this migration is on its chain (test_migrations pins the head itself).
@@ -80,6 +81,7 @@ def _upgraded(ix: dict[str, str]) -> None:
 
 
 def test_up_down_up(scratch_db):
+    """Item-milestone-codes migrates up, down and up, keeping its index intact."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     _upgraded(_indexes())

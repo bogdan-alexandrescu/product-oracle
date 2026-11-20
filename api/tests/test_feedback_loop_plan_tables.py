@@ -63,6 +63,7 @@ async def _versions(tenant_id) -> list[int]:
 
 
 async def test_the_loop_writer_is_given_the_roadmaps_plan_tables(client, owner, runtime):  # noqa: F811
+    """The feedback loop writer's prompt includes the roadmap's plan table, dated month first."""
     _, auth = owner
     await _loop(client, auth, runtime, NEXT_MD)
     prompt = runtime.submitted[-1].steps[-1].prompt
@@ -75,6 +76,7 @@ async def test_the_loop_writer_is_given_the_roadmaps_plan_tables(client, owner, 
 
 
 async def test_a_loop_draft_without_the_plan_tables_is_refused(client, owner, runtime):  # noqa: F811
+    """A loop draft missing the Plan table is refused with a clear reason, not silently accepted."""
     tenant_id, auth = owner
     run = await _loop(client, auth, runtime, NEXT_MD.replace(PLAN_TABLES, ""))
     assert _codes(run) == ["missing_plan_table", "missing_milestones_table"]
@@ -83,6 +85,7 @@ async def test_a_loop_draft_without_the_plan_tables_is_refused(client, owner, ru
 
 
 async def test_a_loop_draft_with_another_date_is_refused(client, owner, runtime):  # noqa: F811
+    """A loop draft that moves a milestone date off the roadmap's own date is refused."""
     tenant_id, auth = owner
     moved = NEXT_MD.replace("| Beta | Nov 30, 2026 |", "| Beta | Dec 11, 2026 |")
     run = await _loop(client, auth, runtime, moved)
@@ -91,6 +94,7 @@ async def test_a_loop_draft_with_another_date_is_refused(client, owner, runtime)
 
 
 async def test_a_loop_draft_missing_an_item_names_the_roadmap_not_a_file(client, owner, runtime):  # noqa: F811
+    """A plan table missing a roadmap item is refused and blames the roadmap, not a file."""
     _, auth = owner
     short = NEXT_MD.replace("| shipping-step | Shipping step |  |  | no date yet | planned |\n", "")
     run = await _loop(client, auth, runtime, short)
@@ -100,6 +104,7 @@ async def test_a_loop_draft_missing_an_item_names_the_roadmap_not_a_file(client,
 
 
 async def test_a_loop_draft_with_the_plan_tables_is_imported(client, owner, runtime):  # noqa: F811
+    """A loop draft that matches the roadmap's plan tables imports as a new version."""
     tenant_id, auth = owner
     run = await _loop(client, auth, runtime, NEXT_MD)
     assert run["status"] == "succeeded", run
@@ -157,6 +162,7 @@ async def test_a_loop_draft_keeping_a_shipped_row_is_imported(client, owner, run
 
 
 async def test_the_loop_brief_shows_a_shipped_row_with_its_status(client, owner, runtime):  # noqa: F811
+    """The loop brief shows a shipped item's row with its status, alongside the still-open ones."""
     _, auth = owner
     run = await _loop_after_shipped(client, auth, runtime, None)
     prompt = runtime.submitted[-1].steps[-1].prompt
@@ -167,6 +173,7 @@ async def test_the_loop_brief_shows_a_shipped_row_with_its_status(client, owner,
 
 
 async def test_the_loop_writer_is_told_it_cannot_add_or_remove_items(client, owner, runtime):  # noqa: F811
+    """The loop writer is told plainly it cannot add or remove roadmap items itself."""
     _, auth = owner
     await _loop(client, auth, runtime, NEXT_MD)
     prompt = runtime.submitted[-1].steps[-1].prompt
@@ -189,6 +196,7 @@ async def test_a_loop_draft_flipping_a_shipped_row_is_refused(client, owner, run
 
 
 async def test_a_loop_draft_moving_a_shipped_row_to_next_prd_is_refused(client, owner, runtime):  # noqa: F811
+    """A loop draft that moves a shipped row back onto the next PRD is refused."""
     _, auth = owner
     next_prd = SHIPPED_ROW.replace("| shipped |", "| next PRD |")
     run = await _loop_after_shipped(

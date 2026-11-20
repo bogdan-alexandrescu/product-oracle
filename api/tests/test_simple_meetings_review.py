@@ -73,6 +73,7 @@ def no_visuals(monkeypatch) -> None:
 
 
 async def test_decided_flow_is_linked(client, monkeypatch):
+    """A meeting decision on a draft item links its drawn flow, even once none remains."""
     w = await world()
     item = uuid.UUID(w.ids["edit_title-a"])
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -109,6 +110,7 @@ async def test_decided_flow_is_linked(client, monkeypatch):
 
 
 async def test_filtered_decisions_reach_older_ones(client):
+    """A PRD-filtered decisions list still reaches an old decision past the page size."""
     w = await world()
     async with tenant_session(w.ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == PRD))
@@ -130,6 +132,7 @@ async def test_filtered_decisions_reach_older_ones(client):
 
 
 async def test_idle_meeting_ends(client):
+    """A meeting idle past its limit reads as ended, with minutes, once it is read."""
     w = await world()
     m = await start(client, w)
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
@@ -150,6 +153,7 @@ async def test_idle_meeting_ends(client):
 
 
 async def test_one_meeting_per_occurrence(client):
+    """Only one meeting may be started for the same ritual occurrence."""
     from oracle.rituals.models import Ritual, RitualOccurrence
 
     w = await world()
@@ -176,6 +180,7 @@ async def test_one_meeting_per_occurrence(client):
 
 
 async def test_change_and_its_meeting_decision_commit_together(client, monkeypatch):
+    """A meeting change and its recorded decision commit together, or neither is saved."""
     w = await world()
     m = await start(client, w)
 

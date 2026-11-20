@@ -12,6 +12,7 @@ SLUG = "checkout-redesign"
 
 
 async def test_the_feedback_list_names_each_items_author(client):
+    """A feedback item's author name shows on it and in the list, even a name set after signup."""
     tenant_id, auth = await seed_auth()
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     commenter = await as_user(tenant_id, "commenter", "dana.reyes@example.com")

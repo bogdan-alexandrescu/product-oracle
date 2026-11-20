@@ -57,6 +57,7 @@ def _goal_ms(n: int) -> list[SimpleGoalMilestone]:
 
 
 def test_assign_reads_each_code_a_bounded_number_of_times(monkeypatch):
+    """Assigning roadmap codes reads each goal's code a bounded number of times."""
     real = roadmap_codes._gm_code
     reads = 0
 
@@ -80,6 +81,7 @@ def clock(monkeypatch):
 
 
 async def test_assign_answers_the_same_codes_on_the_company_seed(client, clock, monkeypatch):
+    """Roadmap code assignment gives the same codes on the seeded company data."""
     ctx = await seed_company()
     real = roadmap_codes.assign
     seen: list = []

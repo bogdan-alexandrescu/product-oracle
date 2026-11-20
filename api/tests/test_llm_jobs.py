@@ -175,6 +175,7 @@ def review_answer(items: list[dict]):
 
 
 async def test_feedback_queues_one_job_that_classifies_groups_and_suggests(client, ctx, pool, fake):
+    """New feedback on a version all lands on one queued review job."""
     await import_draft(client, ctx)
     a = await comment(client, ctx, "solution", "Make the checklist skippable.")
     b = await comment(client, ctx, "solution", "Users must be able to skip the checklist.")
@@ -269,6 +270,7 @@ async def test_feedback_queues_one_job_that_classifies_groups_and_suggests(clien
 
 
 async def test_accepting_an_answer_replies_and_closes_the_item(client, ctx, pool, fake):
+    """Accepting an answer suggestion replies on the comment and can't be redone."""
     await import_draft(client, ctx)
     q = await comment(client, ctx, "problem", "Where does the half figure come from?")
     fake.script["review_comments"].append(
@@ -336,6 +338,7 @@ async def _baseline(tenant_id):
 
 
 async def test_pushback_needs_reasoning_and_sources_and_is_raised_once(client, ctx, pool, fake):
+    """A pushback needs its own reasoning and real sources or it is dropped."""
     await _baseline(ctx["tenant_id"])
     await import_draft(client, ctx)
     drop = await comment(client, ctx, "solution", "Remove the checklist entirely.")
@@ -426,6 +429,7 @@ async def test_pushback_needs_reasoning_and_sources_and_is_raised_once(client, c
 
 
 async def test_dismissing_with_decline_takes_the_advice(client, ctx, pool, fake):
+    """Dismissing with decline keeps the model's own resolution note."""
     await import_draft(client, ctx)
     drop = await comment(client, ctx, "solution", "Remove the checklist entirely.")
     fake.script["review_comments"].append(
@@ -447,6 +451,7 @@ async def test_dismissing_with_decline_takes_the_advice(client, ctx, pool, fake)
 
 
 async def test_locked_sections_get_no_text_and_cannot_be_refined(client, ctx, pool, fake):
+    """An approved section gets no suggestion text, and refining it is refused."""
     await import_draft(client, ctx)
     await verdict(client, ctx, "problem", "approved")
     f = await comment(client, ctx, "problem", "Say 'most', not 'half'.")
@@ -527,6 +532,7 @@ async def _accepted_solution_suggestion(client, ctx, fake) -> tuple[str, str, st
 
 
 async def test_refinement_keeps_ids_and_o1c_and_imports_the_next_version(client, ctx, pool, fake):
+    """A refinement keeps suggestion ids and citation fixes in its preview."""
     v1 = await import_draft(client, ctx)
     await verdict(client, ctx, "problem", "approved")
     a, b, sid = await _accepted_solution_suggestion(client, ctx, fake)
@@ -593,6 +599,7 @@ async def test_refinement_keeps_ids_and_o1c_and_imports_the_next_version(client,
 
 
 async def test_an_approver_instruction_refines_and_their_edit_wins(client, ctx, pool, fake):
+    """An approver's own edit overrides the model's refined text on apply."""
     await import_draft(client, ctx)
     resp = await client.post(
         V(1, "/sections/problem/refine"),
@@ -617,6 +624,7 @@ async def test_an_approver_instruction_refines_and_their_edit_wins(client, ctx, 
 
 
 async def test_a_refinement_of_an_outdated_version_is_refused(client, ctx, pool, fake):
+    """Refining or applying against an outdated version is refused."""
     await import_draft(client, ctx)
     resp = await client.post(
         V(1, "/sections/problem/refine"), json={"instruction": "Shorter."}, headers=ctx["headers"]
@@ -634,6 +642,7 @@ async def test_a_refinement_of_an_outdated_version_is_refused(client, ctx, pool,
 
 
 async def test_a_refined_body_past_the_200k_cap_fails_the_job(client, ctx, pool, fake):
+    """A refined body over the 200,000 character cap fails its job."""
     # Model output is capped like an approver's edit: the house rules never read more.
     await import_draft(client, ctx)
     resp = await client.post(
@@ -648,6 +657,7 @@ async def test_a_refined_body_past_the_200k_cap_fails_the_job(client, ctx, pool,
 
 
 async def test_refine_needs_an_accepted_suggestion_or_an_instruction(client, ctx, pool, fake):
+    """Refining needs either an accepted suggestion or a typed instruction."""
     await import_draft(client, ctx)
     resp = await client.post(V(1, "/sections/problem/refine"), json={}, headers=ctx["headers"])
     assert resp.status_code == 422
@@ -687,6 +697,7 @@ async def test_a_refinement_with_an_open_fence_keeps_every_section(
 async def test_a_refinement_that_would_lose_a_section_is_refused(
     client, ctx, pool, fake, monkeypatch
 ):
+    """Applying a refinement that would drop a section is refused."""
     from oracle.jobs import service as jobs_service
 
     job_id = await _refined_problem_job(client, ctx, fake, "Teams stall.")
@@ -728,6 +739,7 @@ async def test_a_refinement_that_would_add_a_section_is_refused(
 
 
 async def test_a_heading_in_a_refined_last_section_stays_in_it(client, ctx, pool, fake):
+    """A heading added inside a refined last section stays part of it."""
     await import_draft(client, ctx)
     resp = await client.post(
         V(1, "/sections/sources/refine"), json={"instruction": "More."}, headers=ctx["headers"]
@@ -745,6 +757,7 @@ async def test_a_heading_in_a_refined_last_section_stays_in_it(client, ctx, pool
 
 
 def test_lost_sections_reports_an_added_section():
+    """A heading added after the expected sections is caught, not missed as removed."""
     from oracle.jobs.service import lost_sections
 
     md = "# T {#title}\n\n## A {#a}\n\nx\n\n## B {#b}\n\ny\n"
@@ -758,6 +771,7 @@ def test_lost_sections_reports_an_added_section():
 async def test_reports_explain_resolutions_and_what_changed_with_new_sources(
     client, ctx, pool, fake
 ):
+    """A report explains what was resolved and what new sources were added."""
     await import_draft(client, ctx)
     f = await comment(client, ctx, "problem", "Give the number for invites.")
     async with tenant_session(ctx["tenant_id"]) as s:
@@ -831,6 +845,7 @@ async def test_reports_explain_resolutions_and_what_changed_with_new_sources(
 
 
 async def test_reports_of_a_version_without_a_job_are_empty(client, ctx):
+    """A version with no job yet has empty reports, not an error."""
     await import_draft(client, ctx)
     reports = (await client.get(V(1, "/reports"), headers=ctx["headers"])).json()
     assert reports["resolution"] is None and reports["latest_job"] is None
@@ -842,6 +857,7 @@ async def test_reports_of_a_version_without_a_job_are_empty(client, ctx):
 
 
 async def test_a_transient_failure_is_retried_once(client, ctx, pool, fake):
+    """A transient failure is retried once automatically before it's reported."""
     await import_draft(client, ctx)
     f = await comment(client, ctx, "problem", "Why half?")
     fake.script["review_comments"] += [
@@ -855,6 +871,7 @@ async def test_a_transient_failure_is_retried_once(client, ctx, pool, fake):
 
 
 async def test_a_second_transient_failure_fails_and_a_person_can_retry(client, ctx, pool, fake):
+    """A second transient failure fails the job, but a person can retry it."""
     await import_draft(client, ctx)
     f = await comment(client, ctx, "problem", "Why half?")
     fake.script["review_comments"] += ["not json at all", LlmUnavailable("Overloaded")]
@@ -877,6 +894,7 @@ async def test_a_second_transient_failure_fails_and_a_person_can_retry(client, c
 
 
 async def test_no_claude_account_fails_clearly_with_the_pools_reason(client, ctx, fake):
+    """With no Claude account at all, the job fails with the pool's own reason."""
     await import_draft(client, ctx)
     await comment(client, ctx, "problem", "Why half?")
     summary = await tick(client, ctx)
@@ -889,6 +907,7 @@ async def test_no_claude_account_fails_clearly_with_the_pools_reason(client, ctx
 
 
 async def test_a_spent_pool_reports_its_next_reset(client, ctx, fake):
+    """A spent pool's failed job records when the account window next resets."""
     await add_account(
         ctx["tenant_id"],
         "spent",
@@ -904,6 +923,7 @@ async def test_a_spent_pool_reports_its_next_reset(client, ctx, fake):
 
 
 async def test_a_paused_pool_says_so(client, ctx, fake):
+    """A paused pool's failed job records that the pool is paused."""
     await add_account(ctx["tenant_id"], "personal", state=AccountState.PAUSED)
     await import_draft(client, ctx)
     await comment(client, ctx, "problem", "Why half?")
@@ -913,6 +933,7 @@ async def test_a_paused_pool_says_so(client, ctx, fake):
 
 
 async def test_cancel_a_queued_job_and_one_that_is_running(client, ctx, pool, fake):
+    """A queued job cancels outright; a running job's answer is dropped on cancel."""
     await import_draft(client, ctx)
     f = await comment(client, ctx, "problem", "Why half?")
     [job] = await jobs(client, ctx)
@@ -940,6 +961,7 @@ async def test_cancel_a_queued_job_and_one_that_is_running(client, ctx, pool, fa
 
 
 async def test_jobs_run_one_at_a_time_per_document(client, ctx, pool, fake):
+    """Jobs on the same document run one at a time; other documents run alongside."""
     await import_draft(client, ctx)
     other = DRAFT_V1.replace("onboarding-revamp", "billing-revamp")
     resp = await client.post(
@@ -966,6 +988,7 @@ async def test_jobs_run_one_at_a_time_per_document(client, ctx, pool, fake):
 
 
 async def test_a_job_left_running_by_a_stopped_worker_is_reclaimed(client, ctx, pool, fake):
+    """A job left running by a stopped worker is picked up again and retried."""
     await import_draft(client, ctx)
     f = await comment(client, ctx, "problem", "Why half?")
     job_id = await worker.claim_next(ctx["tenant_id"])
@@ -991,6 +1014,7 @@ OLD_NAMES = ("Review comments", "Reporting", "Refinement", "Handle new feedback"
 
 
 async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake):
+    """An owner can turn a job kind off for one document, blocking new jobs of it."""
     await import_draft(client, ctx)
     url = f"/v1/documents/{SLUG}/llm-jobs/settings"
     assert (await client.get(url, headers=ctx["headers"])).json() == {
@@ -1024,6 +1048,7 @@ async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake
 
 
 async def test_retrying_a_job_whose_switch_is_off_names_the_switch_plainly(client, ctx, pool, fake):
+    """A retry on a switched-off job kind names the switch in plain words."""
     await import_draft(client, ctx)
     await comment(client, ctx, "problem", "Why half?")
     fake.script["review_comments"] += ["not json at all", LlmUnavailable("Overloaded")]
@@ -1045,6 +1070,7 @@ SETTING_KEYS = {"review_comments", "reporting", "refinement", "quality_review", 
 
 
 async def test_the_settings_keys_the_plain_labels_map_to_are_the_apis_and_the_mocks(client, ctx):
+    """The job settings keys match both the API and the mock's contract."""
     await import_draft(client, ctx)
     resp = await client.get(f"/v1/documents/{SLUG}/llm-jobs/settings", headers=ctx["headers"])
     assert resp.status_code == 200, resp.text
@@ -1055,6 +1081,7 @@ async def test_the_settings_keys_the_plain_labels_map_to_are_the_apis_and_the_mo
 
 
 async def test_roles(client, ctx, pool, fake):
+    """Every role can read a document's jobs, reports and suggestions."""
     await import_draft(client, ctx)
     f = await comment(client, ctx, "solution", "Make it skippable.")
     fake.script["review_comments"].append(
@@ -1107,6 +1134,7 @@ async def test_roles(client, ctx, pool, fake):
 
 
 async def test_a_commenters_comment_still_queues_the_job(client, ctx, pool, fake):
+    """A commenter's own comment still queues the review job."""
     await import_draft(client, ctx)
     commenter = await token_with_role(ctx["tenant_id"], "commenter")
     resp = await client.post(
@@ -1119,6 +1147,7 @@ async def test_a_commenters_comment_still_queues_the_job(client, ctx, pool, fake
 
 
 async def test_tick_needs_an_owner_or_token_and_reports_jobs(client, ctx, pool, fake):
+    """Ticking needs an owner or a token, and reports how many jobs ran."""
     await import_draft(client, ctx)
     approver = await token_with_role(ctx["tenant_id"], "approver")
     # Tokens may tick (the CLI's way); the tick summary carries the jobs line.
@@ -1130,6 +1159,7 @@ async def test_tick_needs_an_owner_or_token_and_reports_jobs(client, ctx, pool, 
 
 
 def test_clean_body_follows_o1c_and_keeps_section_ids():
+    """clean_body strips citation markers and links and shifts headings down."""
     out = prompting.clean_body(
         "## Solution {#solution}\nA checklist [c:c1] (see https://example.com/x).\n"
         "### Detail {#detail}\n![chart](https://example.com/c.png) [study](https://e.x/s)\n"
@@ -1143,6 +1173,7 @@ def test_clean_body_follows_o1c_and_keeps_section_ids():
 
 
 def test_parse_answer_finds_the_json_object():
+    """parse_answer finds the JSON object in a free-form model reply."""
     assert prompting.parse_answer('Sure.\n```json\n{"a": 1}\n```') == {"a": 1}
     assert prompting.parse_answer('Here: {"a": {"b": 2}} done') == {"a": {"b": 2}}
     with pytest.raises(prompting.AnswerError):
@@ -1150,6 +1181,7 @@ def test_parse_answer_finds_the_json_object():
 
 
 def test_every_kind_has_a_versioned_prompt():
+    """Every job kind has its own versioned prompt file in place."""
     for kind in ("review_comments", "reporting", "refinement"):
         name, text = prompting.current(kind)
         assert name.startswith(f"{kind}.v") and len(text) > 500
@@ -1161,6 +1193,7 @@ def test_every_kind_has_a_versioned_prompt():
 
 
 async def test_section_rows_unchanged_by_suggestions(client, ctx, pool, fake):
+    """Accepting a suggestion leaves version 1's own section hashes unchanged."""
     v1 = await import_draft(client, ctx)
     f = await comment(client, ctx, "solution", "Make it skippable.")
     fake.script["review_comments"].append(

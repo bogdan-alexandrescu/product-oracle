@@ -92,6 +92,7 @@ class Two:
 
 
 async def test_cross_prd_dependency_names_its_stored_key(client):
+    """A cross-PRD dependency is read and removed by whichever key names it."""
     t = await Two().build()
     c = (await t.read(client))["c"]
     assert c["depends_on"] == [t.b]
@@ -105,6 +106,7 @@ async def test_cross_prd_dependency_names_its_stored_key(client):
 
 
 async def test_rename_keeps_the_code(client):
+    """Renaming a feature's title keeps its assigned code on the new title."""
     t = await Two().build(title_a="F-07 Alpha")
     a = (await t.read(client))["a"]
     assert (a["code"], a["title"]) == ("F-07", "Alpha")
@@ -120,6 +122,7 @@ async def test_rename_keeps_the_code(client):
 
 
 async def test_set_depends_refuses_a_loop(client):
+    """Setting a dependency that would make a cycle, direct or indirect, is refused."""
     t = await Two().build()
     # c depends on b (by its feature key): b may not depend on c.
     r = await t.post(client, "set_depends", t.b, {"depends_on": []}, {"depends_on": ["c"]})
@@ -136,6 +139,7 @@ async def test_set_depends_refuses_a_loop(client):
 
 
 async def test_merge_refuses_a_loop(client):
+    """Merging an item into another is refused if it would self-depend."""
     w = await World().build()
     c = (await w.add(client, "owner", "Import wizard"))["change"]
     iid = c["target"]["item_id"]
@@ -153,6 +157,7 @@ async def test_merge_refuses_a_loop(client):
 
 
 async def test_set_prd_moves_the_track_with_it(client):
+    """Changing an item's PRD moves its track with it; undo restores both."""
     t = await Two().build()
     a = (await t.read(client))["a"]
     assert a["track"]["id"] == str(t.track.id)
@@ -176,6 +181,7 @@ async def _job(s, iid: str) -> LlmJob:
 
 
 async def test_oracle_draft_never_overwrites_a_person(client):
+    """Oracle's drafted fields never overwrite a person's edit made meanwhile."""
     w = await World().build()
     c = (await w.add(client, "owner", "Import from files"))["change"]
     iid = c["target"]["item_id"]
@@ -221,6 +227,7 @@ async def test_oracle_draft_never_overwrites_a_person(client):
 
 
 async def test_a_person_edit_over_oracles_draft_stays(client):
+    """A later edit stays; a conflicting one names who changed it first."""
     w = await World().build()
     c = (await w.add(client, "owner", "Import from files"))["change"]
     iid = c["target"]["item_id"]
@@ -258,6 +265,7 @@ async def test_a_person_edit_over_oracles_draft_stays(client):
 
 
 async def test_oracle_filled_reads_only_the_items_changes(client):
+    """Filling Oracle's draft reads only the target item's own change history."""
     w = await World().build()
     iid = (await w.add(client, "owner", "Import from files"))["change"]["target"]["item_id"]
 
@@ -353,6 +361,7 @@ async def _remove(client, ctx, c: dict, dep: str):
 
 
 async def test_dependency_by_code_is_read_and_removable(client):
+    """A dependency recorded by a feature code reads and removes by that code."""
     ctx, b, c = await _world(depends_on=["f-03"])
     items = by_key(await get(client, ctx, "owner"))
     assert items["c"]["depends_on"] == [b]
@@ -365,6 +374,7 @@ async def test_dependency_by_code_is_read_and_removable(client):
 
 
 async def test_dependency_by_a_title_code_is_read(client):
+    """A dependency recorded by a code in another item's title still reads."""
     ctx, b, c = await _world(depends_on=["F-19"], b={"title": "F-19 Pipeline",
                                                      "prd_section_key": None})  # fmt: skip
     items = by_key(await get(client, ctx, "owner"))
@@ -373,6 +383,7 @@ async def test_dependency_by_a_title_code_is_read(client):
 
 
 async def test_two_keys_for_one_dependency_both_go(client):
+    """Removing one dependency clears it under every key it was recorded by."""
     ctx, b, c = await _world(depends_on=["b", "ledger-sync"])
     items = by_key(await get(client, ctx, "owner"))
     assert items["c"]["depends_on"] == [b]
@@ -388,6 +399,7 @@ def _typed(start: date, end: date) -> dict:
 
 
 async def test_done_dependency_is_no_broken_link(client):
+    """A dependency on an item marked done is never a broken ordering link."""
     late = {**_typed(date(2026, 10, 1), date(2026, 12, 15)), "shipped": True}
     ctx, b, c = await _world(depends_on=["b"], b=late,
                              **_typed(date(2026, 11, 10), date(2026, 12, 20)))  # fmt: skip
@@ -397,6 +409,7 @@ async def test_done_dependency_is_no_broken_link(client):
 
 
 async def test_cut_item_link_does_not_count(client):
+    """A dependency on a cut item is never flagged as a broken ordering link."""
     late = _typed(date(2026, 10, 1), date(2026, 12, 15))
     ctx, b, c = await _world(depends_on=["b"], b=late, cut=True,
                              **_typed(date(2026, 11, 10), date(2026, 12, 20)))  # fmt: skip
@@ -406,6 +419,7 @@ async def test_cut_item_link_does_not_count(client):
 
 
 async def test_priorities_read_the_items_dependencies(client):
+    """The priorities view reports each item's dependencies from roadmap data."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)

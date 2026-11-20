@@ -41,6 +41,7 @@ MAP_IDS = {"module:billing", "module:notifications"}
 
 
 def test_unknown_ids_are_grouped_one_line_each_with_the_features_citing_them():
+    """Unknown code ids in a brief are reported once each, naming every citing feature."""
     # protects=the refusal list names each unknown id once with the features that cite
     # it; fails_when=one line per feature and id (55 lines for a few ids).
     summary = check._summarize(UNMAPPED, FEATURES, MAP_IDS, {REPO})
@@ -58,6 +59,7 @@ def test_unknown_ids_are_grouped_one_line_each_with_the_features_citing_them():
 
 
 def test_the_check_names_the_repository_with_no_map():
+    """The brief check names any repository with no code map, no matter its case."""
     # protects=the stop says which repository the run's maps do not cover; fails_when=
     # the summary has no unmapped_repos, or lists a repository a map covers.
     summary = check._summarize(UNMAPPED, FEATURES, MAP_IDS, {REPO.upper()})
@@ -71,6 +73,7 @@ def test_the_check_names_the_repository_with_no_map():
 
 
 def test_a_repository_named_as_a_url_or_with_git_is_the_map_s_repository():
+    """A repository named as a URL, with .git, or by case still matches its code map."""
     # protects=a repository the briefs name as a URL, an ssh address or with .git matches
     # the map's owner/name; fails_when=exact matching shows a false "No code map covers".
     for name in (
@@ -95,6 +98,7 @@ def test_a_repository_named_as_a_url_or_with_git_is_the_map_s_repository():
 
 
 def test_unknown_ids_with_no_repository_named_still_say_no_map_covers_them():
+    """Unknown ids with no repository named are still flagged as having no map at all."""
     # protects=a brief citing a third repository's ids without naming it still tells the
     # stop that no map covers them; fails_when=only grouped ids show, with no no-map line.
     unnamed = UNMAPPED.replace('  unmapped: ["example-org/shop"]\n', "")
@@ -108,6 +112,7 @@ def test_unknown_ids_with_no_repository_named_still_say_no_map_covers_them():
 
 
 def test_unmapped_must_be_a_list_of_text():
+    """A code map's unmapped field must be a list of names, or it is flagged bad."""
     # protects=the new field's shape; fails_when=a mistyped unmapped crashes or passes.
     bad = UNMAPPED.replace('unmapped: ["example-org/shop"]', "unmapped: example-org/shop")
     assert any(
@@ -118,6 +123,7 @@ def test_unmapped_must_be_a_list_of_text():
 
 
 def test_the_task_shows_the_shape_with_a_one_line_example():
+    """The architect's brief task shows the shape to write, with a worked example."""
     # protects=the shape the architect writes, shown exactly; fails_when=the example or
     # the "assumptions is a list of text" rule is dropped.
     task = flows.TECH_BRIEF_TASK
@@ -127,6 +133,7 @@ def test_the_task_shows_the_shape_with_a_one_line_example():
 
 
 def test_the_architect_lines_list_the_citable_ids_the_rule_and_the_self_check():
+    """The architect's prompt lists only the ids it can see, plus the cite-only rule."""
     # protects=the prompt's list of citable ids (at most 40 per kind, the rest through
     # get_code_map with the map's id), the cite-only rule and the self-check; fails_when=
     # any of them is missing.
@@ -169,6 +176,7 @@ def unmapped_runtime():
 async def test_the_stop_reads_grouped_ids_and_the_unmapped_repository(
     client, eng_flow, unmapped_runtime
 ):
+    """The engineering stop's prompt carries the run's code ids, grouping unknown ones."""
     # protects=the architect's prompt carries the run's ids, and the stop's check stores
     # the grouped problems and the repository with no map; fails_when=the prompt lacks
     # the ids or the rule, or the stored check repeats an id per feature.

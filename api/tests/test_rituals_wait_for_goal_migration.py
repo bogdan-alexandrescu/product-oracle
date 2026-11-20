@@ -60,11 +60,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The rituals-wait-for-goal migration chains onto the single head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_up_down_up(scratch_db):
+    """The rituals-wait-for-goal column appears on upgrade, gone on downgrade."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _has_column()

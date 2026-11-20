@@ -105,6 +105,7 @@ async def _slugs(client, headers) -> set[str]:
 
 
 async def test_dependents_resolver_lists_what_goes_along(client, owner, runtime):
+    """Deleting a PRD previews every roadmap, spec and run that would go with it."""
     _, auth, run = await _world(client, owner, runtime)
     resp = await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)
     assert resp.status_code == 200, resp.text
@@ -272,6 +273,7 @@ async def test_regenerate_estimate_names_inputs_by_title_and_version_never_slug(
 async def test_delete_a_prd_trashes_its_dependents_and_restore_brings_them_back(
     client, owner, runtime
 ):
+    """Deleting a PRD hides it and its dependents from every read until restored."""
     tenant_id, auth, run = await _world(client, owner, runtime)
     assert {PRD, ROADMAP, SPEC} <= await _slugs(client, auth)
 
@@ -315,6 +317,7 @@ async def test_delete_a_prd_trashes_its_dependents_and_restore_brings_them_back(
 
 
 async def test_inbox_drops_the_checkpoints_of_a_trashed_run(client, owner, runtime):
+    """A run with an open checkpoint must be cancelled before it can go to Trash."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     async with tenant_session(tenant_id) as s:
@@ -368,6 +371,7 @@ async def test_a_trashed_intakes_answers_leave_the_answer_list(client, owner):
 
 
 async def test_delete_and_restore_an_intake(client, owner):
+    """A deleted intake disappears from its list and read until it is restored."""
     tenant_id, auth = owner
     async with tenant_session(tenant_id) as s:
         intake = ProductIntake(title="Faster checkout", brief="Buyers abandon at shipping.")
@@ -388,6 +392,7 @@ async def test_delete_and_restore_an_intake(client, owner):
 
 
 async def test_a_published_document_needs_a_second_confirmation(client, owner, monkeypatch):
+    """Deleting a document with a published copy needs an explicit confirmation."""
     _, auth = owner
     await approved_prd(client, auth)
 
@@ -436,6 +441,7 @@ async def _reads(client, headers) -> dict[str, str]:
 
 
 async def test_rows_pointing_at_a_trashed_document_leave_every_read(client, owner, runtime):
+    """Deleting a PRD scrubs every mention of it from notifications, plan and home."""
     tenant_id, auth, run = await _world(client, owner, runtime)
     user_id, me = await _member(tenant_id, "owner")
     async with tenant_session(tenant_id) as s:
@@ -473,6 +479,7 @@ async def test_rows_pointing_at_a_trashed_document_leave_every_read(client, owne
 
 
 async def test_deleting_a_single_dependent_leaves_its_prd(client, owner, runtime):
+    """Deleting a roadmap on its own leaves its PRD and spec untouched."""
     tenant_id, auth, run = await _world(client, owner, runtime)
     resp = await client.request("DELETE", f"/v1/documents/{ROADMAP}", headers=auth)
     assert resp.status_code == 200, resp.text
@@ -532,6 +539,7 @@ def test_every_document_link_is_filtered_or_exempt():
 
 
 def test_oracle_action_is_in_the_model_registry():
+    """OracleAction is registered as a real table in the model registry."""
     import oracle.models as registry
 
     assert registry.OracleAction.__tablename__ == "oracle_actions"
@@ -542,6 +550,7 @@ def test_oracle_action_is_in_the_model_registry():
 
 
 async def test_only_owners_delete_restore_and_see_trash(client, owner, runtime):
+    """Only an owner may delete, view or restore from Trash; others are refused."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     for role in ("approver", "commenter", "viewer"):
@@ -566,6 +575,7 @@ async def test_only_owners_delete_restore_and_see_trash(client, owner, runtime):
 async def test_regenerate_a_roadmap_estimates_runs_and_imports_the_next_version(
     client, owner, runtime
 ):
+    """Regenerating a roadmap estimates its cost, then runs and imports a version."""
     tenant_id, auth = owner
     await seed_baseline(tenant_id)
     await approved_prd(client, auth)
@@ -614,6 +624,7 @@ async def test_regenerate_a_roadmap_estimates_runs_and_imports_the_next_version(
 
 
 async def test_regenerate_roles_and_kinds(client, owner, runtime):
+    """Regenerating a document needs approver role, and only with its own run."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     for role in ("commenter", "viewer"):
@@ -634,6 +645,7 @@ async def test_regenerate_roles_and_kinds(client, owner, runtime):
 
 
 async def test_the_documents_decider_regenerates_whatever_their_role(client, owner, runtime):
+    """A document's chosen decider can regenerate it as a commenter; others cannot."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     decider_id, decider = await _member(tenant_id, "commenter")
@@ -656,6 +668,7 @@ async def test_the_documents_decider_regenerates_whatever_their_role(client, own
 
 
 async def test_the_ticker_purges_trash_after_30_days(client, owner, monkeypatch):
+    """Trash entries are purged only once a full 30 days have passed."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)
@@ -691,6 +704,7 @@ async def test_the_ticker_purges_trash_after_30_days(client, owner, monkeypatch)
 
 
 async def test_run_tokens_never_delete_restore_purge_or_regenerate(client, owner, runtime):
+    """A run's own token can never delete, restore, purge or regenerate anything."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)).json()
@@ -728,6 +742,7 @@ async def test_run_tokens_never_delete_restore_purge_or_regenerate(client, owner
 
 
 async def test_body_less_writes_refuse_other_origins(client, owner):
+    """A delete or restore refuses a request from another origin, a CSRF guard."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     cookie = await as_user(tenant_id, "owner")
@@ -753,6 +768,7 @@ async def test_body_less_writes_refuse_other_origins(client, owner):
 
 
 async def test_purge_now_from_trash(client, owner):
+    """Purging a trash entry removes it for good; restoring it after that fails."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)).json()
@@ -827,6 +843,7 @@ def test_no_query_can_leak_a_trashed_row():
 
 
 def test_every_router_is_scanned():
+    """The route scanner finds every router file, including the trash router."""
     routers = [p for p in _sources() if p.name.endswith("router.py")]
     assert len(routers) > 20
     assert (API_DIR / "oracle/trash/router.py").exists()

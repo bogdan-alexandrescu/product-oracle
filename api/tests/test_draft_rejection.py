@@ -51,6 +51,7 @@ def _problems(markdown: str):
 
 
 def test_the_summary_counts_knock_on_references_against_the_rejected_citations():
+    """A rejected draft's summary counts every reference hurt by each bad citation."""
     problems = _problems(bad_source_draft())
     assert len(problems) == 126
     assert sum(p.code == "invalid_citation" for p in problems) == 24
@@ -63,6 +64,7 @@ def test_the_summary_counts_knock_on_references_against_the_rejected_citations()
 
 
 def test_the_summary_groups_every_cause_largest_first():
+    """A rejected draft's summary lists its biggest causes of trouble first."""
     markdown = "\n".join(
         [
             "---",
@@ -101,6 +103,7 @@ def test_the_summary_groups_every_cause_largest_first():
 
 
 def test_a_single_unknown_problem_reads_as_its_message():
+    """A single unclassified problem's summary is simply its own message."""
     problems = _problems("# No front matter {#title}\n")
     assert summary("prd.md", problems) == (
         "Oracle refused prd.md: draft must start with YAML front matter between '---' lines."
@@ -114,6 +117,7 @@ def _citations_draft(citations: list[str], body: str) -> str:
 
 
 def test_invalid_citations_are_grouped_per_bad_field():
+    """A citation wrong two ways is grouped under each fault, not counted a third time."""
     # a2 is wrong in two fields: it counts in the source group and in the confidence group,
     # not as a cause of its own.
     problems = _problems(
@@ -135,6 +139,7 @@ def test_invalid_citations_are_grouped_per_bad_field():
 
 
 def test_a_second_invalid_citation_with_the_same_id_does_not_replace_the_first():
+    """A second citation reusing an id is refused too, without replacing the first."""
     # Both "d" are refused; the references to "d" count against the first one.
     problems = _problems(
         _citations_draft(
@@ -171,6 +176,7 @@ def test_the_findings_are_capped_and_summarise_knock_ons():
 
 
 def test_the_findings_say_how_many_problems_were_not_stored():
+    """A draft's findings say how many problems were left off past the stored limit."""
     problems = [p.model_dump(mode="json") for p in _problems(bad_source_draft())]
     lines = rejection.findings("prd.md", problems[: rejection.MAX_PROBLEMS], total=len(problems))
     assert lines[-1] == (
@@ -200,6 +206,7 @@ def runtime():
 
 
 async def test_a_refused_draft_carries_its_problems_and_summary(runtime, client):
+    """A refused PRD draft stores its capped problems, their true total, and a summary."""
     tenant_id, auth = await seed_auth()
     runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": bad_source_draft()})]
     run = await started(client, auth, document="example-prd", checkpoints=OFF)
@@ -250,6 +257,7 @@ async def test_a_refused_draft_carries_its_problems_and_summary(runtime, client)
 
 
 async def test_an_imported_draft_has_no_problems(runtime, client):
+    """A cleanly imported draft carries no error, no problems and no rejection."""
     _, auth = await seed_auth()
     run = await started(client, auth, document="example-prd", checkpoints=OFF)
     for _ in range(4):

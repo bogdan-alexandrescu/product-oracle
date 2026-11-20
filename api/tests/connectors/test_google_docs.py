@@ -111,6 +111,7 @@ async def collect(conn, config, cursor=None):
 
 
 def test_registered_with_oauth_metadata():
+    """Google Docs is registered with only the read-only Drive scope, nothing wider."""
     assert isinstance(get_connector("google_docs"), GoogleDocsConnector)
     assert google_docs.OAUTH["token_url"] == "https://oauth2.googleapis.com/token"
     # Picked files and folders, folders read in full (S5, 'Drive folders', 2026-10-19).
@@ -118,12 +119,14 @@ def test_registered_with_oauth_metadata():
 
 
 async def test_validate():
+    """Validating Google Docs checks the account and each picked item once."""
     fake = FakeDrive()
     await connector(fake).validate(CONFIG, CREDENTIAL)
     assert fake.calls == ["about", f"file:{PRODUCT}", "file:1DocListedExample"]
 
 
 async def test_validate_checks_picked_items_in_bounded_batches():
+    """Validating many picked docs batches requests, never more than the cap."""
     docs = [f"1DocMany{i:02d}" for i in range(23)]
     in_flight, peak, seen = 0, 0, []
 
@@ -148,6 +151,7 @@ async def test_validate_checks_picked_items_in_bounded_batches():
 
 
 async def test_validate_caps_how_many_items_a_source_picks():
+    """Picking more items than the max is refused before any Drive call is made."""
     fake = FakeDrive()
     many = {"docs": [f"1DocMany{i:04d}" for i in range(google_docs.MAX_PICKED + 1)]}
     with pytest.raises(ConnectorConfigError, match=f"at most {google_docs.MAX_PICKED}"):
@@ -168,6 +172,7 @@ async def test_validate_caps_how_many_items_a_source_picks():
     ],
 )
 async def test_validate_config_errors(config, credential, match):
+    """Google Docs validation catches a missing pick, wrong kind, and a bad token."""
     with pytest.raises(ConnectorConfigError, match=match):
         await connector(FakeDrive()).validate(config, credential)
 
@@ -189,6 +194,7 @@ async def test_without_company_domains_every_folder_doc_is_skipped_and_says_why(
 
 
 async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():
+    """A full sync recurses into subfolders and orders items by oldest change first."""
     fake = FakeDrive(FULL_ROUTES)
     events = await collect(connector(fake), CONFIG)
 
@@ -250,6 +256,7 @@ async def test_full_sync_recurses_folders_and_falls_back_to_plain_text():
     ("status", "name"), [(400, "error_export_unsupported"), (403, "error_export_size")]
 )
 async def test_markdown_export_fallback(status, name):
+    """When a markdown export is refused, the doc still syncs via a plain text export."""
     fake = FakeDrive(
         {
             "export:1DocListedExample:text/markdown": error(name, status),
@@ -263,6 +270,7 @@ async def test_markdown_export_fallback(status, name):
 
 
 async def test_incremental_sync_exports_changes_and_deletes_removed_docs():
+    """An incremental sync exports only the changed doc and deletes trashed ones."""
     first = await collect(connector(FakeDrive(FULL_ROUTES)), CONFIG)
     cursor = first[-1].cursor
 
@@ -296,6 +304,7 @@ async def test_incremental_sync_exports_changes_and_deletes_removed_docs():
 
 
 async def test_removed_listed_doc_is_deleted():
+    """A picked doc that Drive no longer has is deleted from the synced set."""
     cursor = {"modified_since": None, "files": {"1DocGoneExample": "2026-09-01T00:00:00.000Z"}}
     events = await collect(connector(FakeDrive()), {"docs": ["1DocGoneExample"]}, cursor)
     assert events[0] == ItemDelete("1DocGoneExample")
@@ -303,6 +312,7 @@ async def test_removed_listed_doc_is_deleted():
 
 
 async def test_expired_token():
+    """An expired Google token is an auth error in both validate and sync."""
     fake = FakeDrive({"about": error("error_401", 401), f"list:{PRODUCT}": error("error_401", 401)})
     with pytest.raises(ConnectorAuthError):
         await connector(fake).validate(CONFIG, CREDENTIAL)
@@ -318,6 +328,7 @@ async def test_expired_token():
     ],
 )
 async def test_rate_limited(response):
+    """A Drive rate limit response, however it is coded, carries its retry delay."""
     fake = FakeDrive({**FULL_ROUTES, "export:1DocListedExample:text/markdown": response})
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(fake), CONFIG)
@@ -333,6 +344,7 @@ PICKED = {
 
 
 async def test_picked_docs_sync_without_listing_any_folder():
+    """Picked docs sync without listing any folder, since that scope cannot list."""
     fake = FakeDrive()
     await connector(fake).validate(PICKED, CREDENTIAL)
     events = await collect(connector(fake), PICKED)
@@ -345,6 +357,7 @@ async def test_picked_docs_sync_without_listing_any_folder():
 
 
 async def test_unreadable_picked_docs_are_reported_per_item():
+    """An unreadable picked doc is reported on its own without blocking the rest."""
     cursor = {
         "modified_since": None,
         "files": {"1DocUnsharedExample": "2026-09-01T00:00:00.000Z"},
@@ -364,6 +377,7 @@ async def test_unreadable_picked_docs_are_reported_per_item():
 
 
 async def test_export_refused_for_one_doc_is_reported_per_item():
+    """A doc whose export is refused is retried next time, without blocking others."""
     refused = error("error_403_insufficient", 403)
     fake = FakeDrive(
         {
@@ -380,6 +394,7 @@ async def test_export_refused_for_one_doc_is_reported_per_item():
 
 
 def test_names_must_be_a_map_of_strings():
+    """The names option for Google Docs must be a map of strings, not a list."""
     from oracle.sources.base import ConnectorConfigError
     from oracle.sources.connectors.google_docs import _options
 
@@ -396,6 +411,7 @@ def test_names_must_be_a_map_of_strings():
     ],
 )
 def test_names_name_only_what_is_picked_and_are_short(names):
+    """A custom name can only label a picked doc and must stay under its length cap."""
     from oracle.sources.base import ConnectorConfigError
     from oracle.sources.connectors.google_docs import _options
 

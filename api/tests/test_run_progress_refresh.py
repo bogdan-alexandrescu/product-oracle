@@ -36,6 +36,7 @@ def _running(run: dict) -> dict:
 
 
 async def test_a_run_that_could_not_be_checked_is_named_with_why_and_not_counted(client, owner):
+    """An unreachable run is named with a plain reason, left out of the count."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -63,6 +64,7 @@ async def test_a_run_that_could_not_be_checked_is_named_with_why_and_not_counted
 async def test_a_run_whose_check_broke_is_named_without_the_error_s_class(
     client, owner, monkeypatch
 ):
+    """A run whose check crashed is named without the error's class or stack."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -95,6 +97,7 @@ async def test_a_run_whose_pass_ran_with_an_import_error_is_checked_not_unchecke
 
 
 async def test_an_ended_run_still_watched_is_not_counted_as_active(client, owner):
+    """An ended run is not counted active even if still watched by the ticker."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -113,6 +116,7 @@ async def test_an_ended_run_still_watched_is_not_counted_as_active(client, owner
 
 
 async def test_every_tick_moves_a_running_run_s_checked_time(client, owner):
+    """Each tick moves a running run's checked time forward."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -149,6 +153,7 @@ async def test_a_pass_that_records_no_agents_still_moves_the_checked_time(
 
 
 async def test_the_runtime_s_last_event_is_the_agent_s_last_work(client, owner):
+    """An agent's last event, not a missing heartbeat, is shown as its last work."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -168,6 +173,7 @@ async def test_the_runtime_s_last_event_is_the_agent_s_last_work(client, owner):
 
 
 async def test_proposals_written_count_as_the_agent_s_last_work(client, owner):
+    """Proposals an agent writes count as its last work and are tallied."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -191,6 +197,7 @@ async def test_proposals_written_count_as_the_agent_s_last_work(client, owner):
 
 
 async def test_a_reported_cost_is_reported(client, owner):
+    """A segment's reported cost is shown as that cost, not hidden."""
     _, auth = owner
     swarm = on()
     use(swarm)

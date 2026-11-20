@@ -29,14 +29,17 @@ from oracle.tenancy import tenant_session
     ],
 )
 def test_role_order(role, min_role, allowed):
+    """A role is allowed only at or above the role a route requires."""
     assert has_role(role, min_role) is allowed
 
 
 def test_roles_are_ordered_lowest_first():
+    """Roles are ordered from least to most privileged."""
     assert ROLES == ("viewer", "commenter", "approver", "owner")
 
 
 def test_unknown_min_role_is_a_programming_error():
+    """Requiring an unknown role is a programming error, not a login refusal."""
     with pytest.raises(ValueError):
         require_role("admin")  # type: ignore[arg-type]
 
@@ -70,6 +73,7 @@ async def _as_token_with_role(role: str) -> tuple[str, object]:
 
 @pytest.mark.parametrize("role", ROLES)
 async def test_require_role_with_api_tokens(guarded, role):
+    """An API token's own role gates every route by its rank."""
     token, _ = await _as_token_with_role(role)
     headers = {"Authorization": f"Bearer {token}"}
     for rank, min_role in enumerate(ROLES):
@@ -83,6 +87,7 @@ async def test_require_role_with_api_tokens(guarded, role):
 
 
 async def test_require_role_with_a_user_session(guarded, client):
+    """A signed-in user's current role, not their token, gates each route."""
     r = await seed(password="correct horse")
     async with tenant_session(r.tenant_id) as s:
         await s.execute(update(User).values(role="commenter"))
@@ -96,10 +101,12 @@ async def test_require_role_with_a_user_session(guarded, client):
 
 
 async def test_require_role_needs_authentication(guarded):
+    """An unauthenticated request to a role-gated route is refused."""
     assert (await guarded.get("/viewer")).status_code == 401
 
 
 async def test_me_reports_the_user_role(client):
+    """Me reports a user's current role, which updates as soon as it changes."""
     r = await seed(password="correct horse")
     login = await client.post(
         "/v1/auth/login", json={"email": "admin@example.com", "password": "correct horse"}
@@ -114,6 +121,7 @@ async def test_me_reports_the_user_role(client):
 
 
 async def test_me_reports_the_token_role(client):
+    """A bare token with no user reports its own role, defaulting to owner."""
     r = await seed()
     async with tenant_session(r.tenant_id) as s:
         _, raw = await create_api_token(s, "bot")
@@ -129,6 +137,7 @@ async def test_me_reports_the_token_role(client):
 
 
 async def test_a_token_for_a_user_acts_as_that_user(client):
+    """A token tied to a user always acts with that user's current role."""
     # The seeded token acts as the admin: the user's role (not the token's), the user's id.
     r = await seed(token_name="cli")
     headers = {"Authorization": f"Bearer {r.token}"}
@@ -153,6 +162,7 @@ async def test_a_token_for_a_user_acts_as_that_user(client):
 
 
 def test_v1_routers_are_mounted():
+    """Every v1 API area is actually mounted and reachable."""
     # Every v1 lane has landed; their own tests cover the routes.
     paths = app.openapi()["paths"]
     for prefix in ("/v1/members", "/v1/sources", "/v1/baseline", "/v1/priorities", "/v1/runs"):

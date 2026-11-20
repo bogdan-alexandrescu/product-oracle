@@ -61,6 +61,7 @@ async def _access_failures(client, headers) -> list[dict]:
 
 
 async def test_a_revoke_failing_past_24_hours_becomes_an_inbox_item(client, owner, iap, mail):
+    """A failing access revoke becomes an inbox item only after 24 hours."""
     tenant_id, headers = owner
     follow_up_id = await _failing_revoke(client, tenant_id, headers, iap)
     # Within the 24 hours: retried by the tick, not in the Inbox yet.
@@ -99,6 +100,7 @@ async def test_a_revoke_failing_past_24_hours_becomes_an_inbox_item(client, owne
 
 
 async def test_no_longer_needed_closes_the_item(client, owner, iap, mail):
+    """Re-inviting someone closes their failing access revoke item."""
     tenant_id, headers = owner
     await _failing_revoke(client, tenant_id, headers, iap)
     await _age(tenant_id)
@@ -115,6 +117,7 @@ async def test_no_longer_needed_closes_the_item(client, owner, iap, mail):
 
 
 async def test_owner_retry_runs_it_now_and_is_audited(client, owner, iap, mail):
+    """An owner's manual retry runs now, audited as the owner's attempt."""
     tenant_id, headers = owner
     follow_up_id = await _failing_revoke(client, tenant_id, headers, iap)
     await _age(tenant_id)
@@ -138,6 +141,7 @@ async def test_owner_retry_runs_it_now_and_is_audited(client, owner, iap, mail):
 
 
 async def test_approvers_neither_see_nor_retry_it(client, owner, iap, mail):
+    """An approver cannot see or retry an owner-only failing access item."""
     tenant_id, headers = owner
     follow_up_id = await _failing_revoke(client, tenant_id, headers, iap)
     await _age(tenant_id)
@@ -155,6 +159,7 @@ async def test_approvers_neither_see_nor_retry_it(client, owner, iap, mail):
 
 
 async def test_retry_refuses_another_origin(client, owner, iap, mail):
+    """Retrying a failing access item needs the app's own origin."""
     tenant_id, headers = owner
     follow_up_id = await _failing_revoke(client, tenant_id, headers, iap)
     await _age(tenant_id)
@@ -178,6 +183,7 @@ async def test_retry_refuses_another_origin(client, owner, iap, mail):
 
 
 async def test_run_and_read_only_tokens_cannot_retry(client, iap):
+    """A read-only, run, or run-bound token cannot retry a failing item."""
     # No mail fixture: its public URL would move the OAuth issuer the bearer needs.
     from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
     from oracle.auth.service import sign_run_binding
@@ -208,6 +214,7 @@ async def test_run_and_read_only_tokens_cannot_retry(client, iap):
 async def test_the_item_holds_googles_message_with_the_status(
     client, owner, iap, mail, monkeypatch
 ):
+    """A failing access item keeps Google's own error message."""
     tenant_id, headers = owner
     await _invite(client, headers, ADDRESS)
     real = iap_access.GoogleIapClient("oracle-prod", FakeAuth())

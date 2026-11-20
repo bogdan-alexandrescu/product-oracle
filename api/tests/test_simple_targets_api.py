@@ -191,6 +191,7 @@ class World:
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_permission_matrix(client, role):
+    """Only an owner or decider applies a change directly; others only propose it."""
     ctx = await make_people()
     w = await World(ctx).build()
     applies = role in ("owner", "decider")
@@ -215,6 +216,7 @@ async def test_permission_matrix(client, role):
 
 @pytest.mark.parametrize("op", OPS)
 async def test_accept_applies_decline_does_not(client, op):
+    """Declining a proposed change applies nothing; accepting it does, just once."""
     ctx = await make_people()
     w = await World(ctx).build()
     first = (await w.post(client, "commenter", op)).json()["change"]
@@ -238,6 +240,7 @@ async def test_accept_applies_decline_does_not(client, op):
 
 @pytest.mark.parametrize("op", OPS)
 async def test_undo_restores(client, op):
+    """Undo puts a change back exactly as it was before, and only runs once."""
     ctx = await make_people()
     w = await World(ctx).build()
     r = await w.post(client, "decider", op)
@@ -283,6 +286,7 @@ OTHER = {
 
 @pytest.mark.parametrize("op", EDITS)
 async def test_stale_before_is_409(client, op):
+    """A change based on stale data is refused, naming who changed it first."""
     ctx = await make_people()
     w = await World(ctx).build()
     proposal = (await w.post(client, "commenter", op)).json()["change"]
@@ -305,6 +309,7 @@ async def test_stale_before_is_409(client, op):
 
 
 async def test_override_rules(client):
+    """A priority override needs a real reason and replaces any earlier pin on it."""
     ctx = await make_people()
     w = await World(ctx).build()
     for after in (
@@ -371,6 +376,7 @@ async def test_override_clear_goes_back_to_oracles_rank(client):
 
 
 async def test_launch_task_needs_a_live_launch(client):
+    """A launch task can only be added to a feature with a live launch."""
     ctx = await make_people()
     w = await World(ctx).build()
     r = await w.post(client, "owner", "add_launch_task", target={"item_id": w.ids["y"]})
@@ -379,6 +385,7 @@ async def test_launch_task_needs_a_live_launch(client):
 
 
 async def test_action_item_without_an_item(client):
+    """An action item can stand with no linked item, and routes to its owner."""
     ctx = await make_people()
     w = await World(ctx).build()
     loose = {"target": {}, "before": {}}

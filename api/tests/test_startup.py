@@ -201,6 +201,7 @@ def loaded_scripts(monkeypatch):
 
 
 def test_at_head_no_migration_script_is_loaded(at_head, served, loaded_scripts):
+    """At head, startup serves the app without loading a migration script."""
     startup.main()
 
     import oracle.main
@@ -210,6 +211,7 @@ def test_at_head_no_migration_script_is_loaded(at_head, served, loaded_scripts):
 
 
 def test_one_revision_behind_is_upgraded_before_serving(at_head, served, loaded_scripts):
+    """One revision behind, startup upgrades the database before it serves."""
     command.downgrade(_cfg(), "-1")
     behind = _stored()
     assert behind != {_head()}
@@ -223,6 +225,7 @@ def test_one_revision_behind_is_upgraded_before_serving(at_head, served, loaded_
 
 
 def test_empty_database_is_migrated(at_head, served):
+    """An empty database is migrated to head before startup serves the app."""
     asyncio.run(_reset_schema(SCRATCH_URL))
 
     startup.main()
@@ -232,6 +235,7 @@ def test_empty_database_is_migrated(at_head, served):
 
 
 def test_migrate_only_brings_the_database_to_head_without_serving(at_head, served):
+    """Keeps a migration-only run from also starting the web server by mistake."""
     command.downgrade(_cfg(), "-1")
     assert _stored() != {_head()}
 
@@ -242,6 +246,7 @@ def test_migrate_only_brings_the_database_to_head_without_serving(at_head, serve
 
 
 def test_migrate_at_start_off_serves_without_migrating(at_head, served, monkeypatch):
+    """With migrate-at-start off, startup serves without migrating the database."""
     command.downgrade(_cfg(), "-1")
     behind = _stored()
     monkeypatch.setenv("ORACLE_MIGRATE_AT_START", "0")
@@ -285,12 +290,14 @@ def statements(monkeypatch):
 
 
 def test_at_head_check_is_one_read_without_alembic(at_head, statements):
+    """Checking if the database is at head is one read, with no alembic import."""
     assert startup.migrate(SCRATCH_URL) is False
 
     assert statements == ["SELECT version_num FROM alembic_version"]
 
 
 def test_empty_database_check_is_one_read(at_head, monkeypatch, statements):
+    """Migrating an empty database still reads its stored version only once."""
     asyncio.run(_reset_schema(SCRATCH_URL))
     statements.clear()
     upgrades: list[str] = []
@@ -310,6 +317,7 @@ HEAVY = ("mcp", "mcp_types", "pypdf", "sqlglot", "jinja2")
 
 
 def test_app_import_leaves_heavy_libraries_unloaded():
+    """Importing the app's module loads no heavy libraries at import time."""
     code = (
         f"import sys; import oracle.main; print(sorted(m for m in {HEAVY!r} if m in sys.modules))"
     )
@@ -332,6 +340,7 @@ ONE_CPU = ["taskset", "-c", "0"] if shutil.which("taskset") else []
 
 @pytest.mark.timing
 def test_app_import_within_budget():
+    """Importing the app and building its role map stay within their time budget."""
     code = (
         "import gc, time; gc.disable(); t = time.perf_counter(); import oracle.main; "
         "i = time.perf_counter(); from oracle.capabilities import capabilities; "
@@ -366,6 +375,7 @@ included = [
 
 
 def test_routes_are_built_at_first_use():
+    """Routes are left unbuilt until their first request actually uses them."""
     code = _ROUTES + (
         "built = sorted(r.path for r in included if 'dependant' in vars(r))\n"
         "print(len(included), built)\n"
@@ -378,6 +388,7 @@ def test_routes_are_built_at_first_use():
 
 
 def test_declared_settings_match_fastapis_build():
+    """A route's declared settings match what FastAPI builds on its first read."""
     code = _ROUTES + (
         "drift = []\n"
         "for r in included:\n"
@@ -393,6 +404,7 @@ def test_declared_settings_match_fastapis_build():
 
 
 def test_role_map_builds_no_route():
+    """Building the role map does not build any route along the way."""
     code = _ROUTES + (
         "from oracle.capabilities import capabilities\n"
         "capabilities(oracle.main.app, 'viewer', engineering_lead=True)\n"
@@ -408,6 +420,7 @@ def _endpoint() -> dict:
 
 
 def test_a_route_read_during_its_build_waits_for_it(monkeypatch):
+    """A route read while it is being built waits for that build to finish."""
     import threading
 
     from fastapi.routing import APIRoute
@@ -431,6 +444,7 @@ def test_a_route_read_during_its_build_waits_for_it(monkeypatch):
 
 
 def test_a_failed_build_is_tried_again(monkeypatch):
+    """A route whose build failed is retried, not left stuck on the error."""
     from fastapi.routing import APIRoute
 
     from oracle.routing import LazyAPIRoute
@@ -449,6 +463,8 @@ def test_a_failed_build_is_tried_again(monkeypatch):
 
 
 def test_a_failed_check_stops_the_start(served, monkeypatch):
+    """A failed head check stops startup before it serves the app."""
+
     def unreachable(connect_args):
         raise OSError("connection refused")
 
@@ -461,6 +477,7 @@ def test_a_failed_check_stops_the_start(served, monkeypatch):
 
 
 def test_head_check_runs_outside_the_importing_process(at_head, served, monkeypatch, tmp_path):
+    """The head check runs in another process, apart from the one importing the app."""
     seen = tmp_path / "check.txt"
 
     def recording(connect_args):
@@ -476,6 +493,7 @@ def test_head_check_runs_outside_the_importing_process(at_head, served, monkeypa
 
 
 def test_a_failed_import_does_not_wait_on_the_check():
+    """A failed app import does not wait on the slow head check to finish."""
     code = (
         "import sys, time\n"
         "from oracle import startup\n"
@@ -493,6 +511,7 @@ def test_a_failed_import_does_not_wait_on_the_check():
 
 
 def test_defer_build_only_on_oracles_models():
+    """Deferred model building applies only to Oracle's own pydantic models."""
     code = (
         "import pydantic, pydantic_settings, oracle.main\n"
         "from oracle.base_model import BaseModel\n"
@@ -515,6 +534,7 @@ def test_defer_build_only_on_oracles_models():
 
 
 def test_lazy_module_imports_once(monkeypatch):
+    """A lazy module imports its target module only once, however often it is used."""
     import importlib
     import json
 
@@ -533,10 +553,12 @@ def test_lazy_module_imports_once(monkeypatch):
 
 
 def test_script_head_is_alembics_head():
+    """script_head reads the same head alembic's own script directory reports."""
     assert startup.script_head() == _head()
 
 
 def test_unreadable_script_means_full_upgrade(tmp_path: Path):
+    """An unreadable revision id in a script means startup runs a full upgrade."""
     versions = API_DIR / "migrations" / "versions"
     for path in versions.glob("*.py"):
         (tmp_path / path.name).write_text(path.read_text())
@@ -554,6 +576,7 @@ def _copy_versions(to: Path) -> None:
 
 
 def test_merge_revision_means_full_upgrade(tmp_path: Path):
+    """A merge revision with two parents means startup runs a full upgrade."""
     _copy_versions(tmp_path)
     head = _head()
     parent = ScriptDirectory.from_config(_cfg()).get_revision(head).down_revision
@@ -570,6 +593,7 @@ def test_merge_revision_means_full_upgrade(tmp_path: Path):
 
 
 def test_tuple_down_revision_means_full_upgrade(tmp_path: Path):
+    """A one-item tuple down_revision still means startup runs a full upgrade."""
     _copy_versions(tmp_path)
     # One parent, written as a one-item tuple (Alembic accepts it): not a plain string.
     (tmp_path / "9999_tuple.py").write_text(
@@ -580,6 +604,7 @@ def test_tuple_down_revision_means_full_upgrade(tmp_path: Path):
 
 
 def test_unreadable_script_file_stops_the_start(tmp_path: Path):
+    """An unreadable migration script file raises instead of failing silently."""
     _copy_versions(tmp_path)
     (tmp_path / "9999_bad.py").write_bytes(b'revision = "9999_bad"\n\xff\xfe\n')
     with pytest.raises(UnicodeDecodeError):
@@ -595,6 +620,7 @@ def _oracle_loggers() -> list[logging.Logger]:
 
 
 def test_migrating_in_process_keeps_app_logging(at_head):
+    """Migrating in the same process keeps the app's own logging enabled."""
     command.downgrade(_cfg(), "-1")
     # The harness's own migration (tests/conftest.py) ran alembic.ini's logging config.
     for logger in _oracle_loggers():
@@ -609,6 +635,7 @@ def test_migrating_in_process_keeps_app_logging(at_head):
 
 
 def test_image_starts_through_startup():
+    """The image starts through startup.main, never alembic upgrade directly."""
     dockerfile = (API_DIR / "Dockerfile").read_text()
     cmd = [line for line in dockerfile.splitlines() if line.startswith("CMD")]
     assert cmd == ['CMD ["python", "-m", "oracle.startup"]']
@@ -628,6 +655,7 @@ def test_image_starts_through_startup():
 
 
 def test_image_ships_the_apps_bytecode():
+    """The image compiles the app's bytecode after copying in its sources."""
     lines = (API_DIR / "Dockerfile").read_text().splitlines()
     compiles = [i for i, line in enumerate(lines) if line.startswith("RUN python -m compileall")]
     assert len(compiles) == 1
@@ -644,6 +672,7 @@ def _free_port() -> int:
 
 
 def test_start_as_the_image_does_serves_at_head(at_head, tmp_path: Path):
+    """Started as the image does, the app serves once the database is at head."""
     port = _free_port()
     out = tmp_path / "start.log"
     env = {**os.environ, "ORACLE_DATABASE_URL": SCRATCH_URL, "PORT": str(port)}
@@ -683,6 +712,7 @@ async def _set_stored(revision: str) -> None:
 
 
 def test_rolled_back_image_exits_1_without_serving(at_head, tmp_path: Path):
+    """An image behind a newer database's migrations exits 1 without serving."""
     # A newer image migrated the database to a revision this image's scripts do not have.
     asyncio.run(_set_stored("9999_from_a_newer_image"))
     out = tmp_path / "start.log"

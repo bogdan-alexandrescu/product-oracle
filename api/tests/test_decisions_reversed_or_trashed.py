@@ -77,6 +77,7 @@ def _about(doc_id: uuid.UUID) -> list[dict]:
 
 
 async def test_drafting_readers_leave_out_decisions_about_trash(client, ctx):
+    """Drafting readers leave out decisions whose subject is a roadmap now in Trash."""
     doc_id = await _roadmap(ctx)
     gone_open = await propose(client, ctx, title="Cut bulk export", subjects=_about(doc_id))
     kept_open = await propose(client, ctx, title="Keep the weekly digest")
@@ -121,6 +122,7 @@ def _left_out_line(d: dict, title: str) -> str:
 
 
 async def test_roadmap_read_says_which_decisions_were_left_out(client):
+    """The roadmap read names which decision is left out once its subject hits Trash."""
     w = await world()
     doc_id = await _roadmap(w.ctx)
     item = {"kind": "roadmap_item", "id": w.ids["edit_title-a"], "ref": "edit_title-a"}
@@ -148,6 +150,7 @@ async def test_roadmap_read_says_which_decisions_were_left_out(client):
 
 
 async def test_roadmap_read_names_a_reversed_decision_as_left_out(client):
+    """The roadmap read also names a reversed decision as left out, not just trashed."""
     # Train AK review: the draft banner's left-out line names a reversed decision too; the
     # read must carry it (decided_in reads lapsed decisions, standing.split leaves them out).
     w = await world()
@@ -172,6 +175,7 @@ async def test_roadmap_read_names_a_reversed_decision_as_left_out(client):
 
 
 async def test_one_pager_read_says_which_decisions_were_left_out(client):
+    """The one-pager read also names which decision was left out once trashed."""
     from tests import test_simple_one_pager_api as op
 
     ctx = await op.world(client)
@@ -196,6 +200,7 @@ async def test_one_pager_read_says_which_decisions_were_left_out(client):
 
 
 async def test_review_due_keeps_a_decision_about_trash(client, ctx):
+    """A decision's review-due reminder still fires, noting its subject is now trashed."""
     doc_id = await _roadmap(ctx)
     gone = await propose(client, ctx, title="Cut saved filters", subjects=_about(doc_id))
     await decide(client, ctx, gone["number"])
@@ -214,6 +219,7 @@ async def test_review_due_keeps_a_decision_about_trash(client, ctx):
 
 
 async def test_split_leaves_out_lapsed_decisions(client, ctx):
+    """Splitting decisions drops reversed, withdrawn and superseded ones from the plan."""
     from oracle.decisions import standing
 
     standing_one = await propose(client, ctx, title="Keep the weekly digest")
@@ -234,6 +240,7 @@ async def test_split_leaves_out_lapsed_decisions(client, ctx):
 
 
 async def test_company_decisions_marks_a_decision_about_a_trashed_roadmap(client, ctx):
+    """A decision about a trashed roadmap is marked so, cited directly or by meeting."""
     doc_id = await _roadmap(ctx)
     named = await propose(client, ctx, title="Cut bulk export", subjects=_about(doc_id))
     in_meeting = await propose(client, ctx, title="Cut saved filters")
@@ -273,6 +280,7 @@ async def test_company_decisions_marks_a_decision_about_a_trashed_roadmap(client
 
 
 async def test_reversing_a_decision_notes_the_open_drafts_that_cited_it(client, clock):
+    """Reversing a decision notes affected drafts, dated in the company's local zone."""
     w = await world()
     assert (await edit_title(client, w, "decider")).status_code == 201
     item = {"kind": "roadmap_item", "id": w.ids["edit_title-a"], "ref": "edit_title-a"}

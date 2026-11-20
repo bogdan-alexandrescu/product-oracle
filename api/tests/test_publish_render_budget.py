@@ -115,6 +115,7 @@ async def change_version(ctx: Ctx, content_hash: str) -> None:
 
 
 async def test_publish_never_renders_under_the_gate_or_the_row_lock(client, monkeypatch):
+    """A publish renders off the event loop, never under the review gate or row lock."""
     ctx = await setup(client)
     await approved(client, ctx)
     slow = SlowPublish(monkeypatch)
@@ -148,6 +149,7 @@ async def test_publish_never_renders_under_the_gate_or_the_row_lock(client, monk
 
 
 async def test_a_version_changed_during_its_render_is_rendered_once_more(client, monkeypatch):
+    """A version changed during its render is rendered once more with the new content."""
     ctx = await setup(client)
     await approved(client, ctx)
     slow = SlowPublish(monkeypatch)
@@ -171,6 +173,7 @@ async def test_a_version_changed_during_its_render_is_rendered_once_more(client,
 async def test_a_version_changed_during_both_renders_is_refused_and_can_be_retried(
     client, monkeypatch
 ):
+    """A version changed during both renders is refused, and can be published again."""
     ctx = await setup(client)
     await approved(client, ctx)
     slow = SlowPublish(monkeypatch)
@@ -202,6 +205,7 @@ async def test_a_version_changed_during_both_renders_is_refused_and_can_be_retri
 
 
 async def test_publish_takes_the_person_s_export_place(client, monkeypatch):
+    """A publish takes the same export place as a person's export, busying each other."""
     ctx = await setup(client)
     await approved(client, ctx)
     held = Held(monkeypatch)
@@ -235,6 +239,7 @@ async def test_publish_takes_the_person_s_export_place(client, monkeypatch):
 
 
 async def test_publish_counts_in_the_company_s_two_places(client, monkeypatch):
+    """A publish also fills the company's shared export places, not just the person's."""
     ctx = await setup(client)
     await approved(client, ctx)
     held = Held(monkeypatch)
@@ -256,6 +261,7 @@ async def test_publish_counts_in_the_company_s_two_places(client, monkeypatch):
 
 
 async def test_a_publish_waiting_past_the_queue_cap_is_busy(client, monkeypatch):
+    """A publish that waits past the queue cap is refused busy, holding no place."""
     held = Held(monkeypatch)
     monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
     a, b = await _company(client, "A Co"), await _company(client, "B Co")
@@ -283,6 +289,7 @@ async def test_a_publish_waiting_past_the_queue_cap_is_busy(client, monkeypatch)
 
 
 async def test_the_published_pdf_renders_on_the_export_pool_in_a_place(client, monkeypatch):
+    """A published PDF renders on the export pool and takes a place, busying a repeat."""
     from oracle.export import pdf
 
     ctx = await setup(client)

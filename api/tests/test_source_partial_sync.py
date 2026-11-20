@@ -50,11 +50,13 @@ async def _sync(a, source_id):
 
 
 async def test_a_new_source_was_never_synced(a, tenant_id, slack):
+    """A source never synced reports no last-synced and no partial-sync time."""
     src = await _source(a, tenant_id)
     assert src["last_synced_at"] is None and src["partly_synced_at"] is None
 
 
 async def test_a_rate_limit_after_a_checkpoint_reads_partly_synced(a, tenant_id, slack):
+    """A sync stopped by a rate limit after a checkpoint reports a partial sync."""
     src = await _source(a, tenant_id)
     slack.pages = [[message("m1", "one")], [message("m2", "two")], [message("m3", "three")]]
     slack.fail = {1: ConnectorRateLimited(retry_after=30)}
@@ -76,6 +78,7 @@ async def test_a_rate_limit_after_a_checkpoint_reads_partly_synced(a, tenant_id,
 
 
 async def test_a_rate_limit_before_any_checkpoint_stores_nothing(a, tenant_id, slack):
+    """A sync that fails before any checkpoint stores nothing, no partial sync."""
     src = await _source(a, tenant_id)
     slack.pages = [[message("m1", "one")], [message("m2", "two")]]
     slack.fail = {0: ConnectorRateLimited()}
@@ -87,6 +90,7 @@ async def test_a_rate_limit_before_any_checkpoint_stores_nothing(a, tenant_id, s
 
 
 async def test_a_partial_sync_after_a_finished_one_keeps_both_times(a, tenant_id, slack):
+    """A later partial sync after a full one keeps both the full and partial times."""
     src = await _source(a, tenant_id)
     slack.pages = [[message("m1", "one")]]
     first = (await _sync(a, src["id"]))["source"]

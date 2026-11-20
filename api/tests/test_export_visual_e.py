@@ -81,6 +81,7 @@ def _pptx_texts(content: bytes) -> list[list[str]]:
 
 
 async def test_e6_no_export_shows_an_iso_date(client, long_doc):
+    """No export or the deck ever shows a raw ISO date; all read month first."""
     h = long_doc
     seen = {}
     for q in ("format=html", "layer=brief&format=html", "layer=deck&format=html"):
@@ -107,6 +108,7 @@ async def test_e6_no_export_shows_an_iso_date(client, long_doc):
 
 @requires_pdf
 async def test_e6_pdfs_show_no_iso_date(client, long_doc):
+    """No PDF export, at any layer, ever shows a raw ISO date."""
     for q in ("format=pdf", "layer=brief&format=pdf", "layer=deck&format=pdf"):
         resp = await client.get(f"{BASE}/export?{q}", headers=long_doc)
         assert resp.status_code == 200
@@ -121,6 +123,7 @@ def _lines(text: str, size_pt: float, width_emu: int) -> int:
 
 
 async def test_e8_a_long_title_fits_the_title_slide_and_the_footer_the_slide(client, long_doc):
+    """A long title shrinks to fit its title slide, truncated in the footer."""
     resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=long_doc)
     prs = Presentation(io.BytesIO(resp.content))
     first = list(prs.slides)[0]
@@ -149,6 +152,7 @@ async def test_e8_a_long_title_fits_the_title_slide_and_the_footer_the_slide(cli
 
 
 async def test_e9_a_long_section_goes_on_continuation_slides(client, long_doc):
+    """A long section splits across numbered slides, none missing content."""
     deck = (await client.get(f"{BASE}/deck", headers=long_doc)).json()
     headings = [s["heading"] for s in deck["slides"]]
     risks = [s for s in deck["slides"] if s["heading"].startswith("Top risks")]
@@ -175,6 +179,7 @@ async def test_e9_a_long_section_goes_on_continuation_slides(client, long_doc):
 
 
 async def test_e12_a_goal_in_the_items_table_has_its_name(client, long_doc):
+    """A goal shown in a deck's items table carries its name, not just its code."""
     deck = (await client.get(f"{BASE}/deck", headers=long_doc)).json()
     items = next(s for s in deck["slides"] if s["heading"] == "Features by milestone")
     assert "G2 Retention" in _visible(items["html"])
@@ -184,6 +189,7 @@ async def test_e12_a_goal_in_the_items_table_has_its_name(client, long_doc):
 
 
 async def test_e15_the_no_brief_refusal_names_the_prd_by_its_title(client, tenant_id):
+    """A brief export with no brief is refused, naming the PRD by title, not slug."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, DETAIL_ONLY, "notes")).status_code == 201
     resp = await client.get(
@@ -212,6 +218,7 @@ def _paragraph_draft() -> str:
 
 
 def test_e9_one_paragraph_longer_than_a_slide_is_split_at_sentences():
+    """A paragraph too long for one slide splits at sentences, none lost."""
     budget = deck_module.SLIDE_LINES
     pages = deck_module.slide_pages(ONE_PARAGRAPH, budget)
     assert len(pages) >= 2
@@ -223,6 +230,7 @@ def test_e9_one_paragraph_longer_than_a_slide_is_split_at_sentences():
 
 
 def test_e9_a_long_list_item_and_table_row_are_split():
+    """A long list item or table row splits across slides, losing no text."""
     budget = deck_module.SLIDE_LINES
     item = "- " + ONE_PARAGRAPH
     pages = deck_module.slide_pages(item, budget)
@@ -238,6 +246,7 @@ def test_e9_a_long_list_item_and_table_row_are_split():
 
 
 async def test_e9_a_paragraph_longer_than_a_slide_stays_above_the_pptx_footer(client, tenant_id):
+    """A paragraph split across PPTX slides never overlaps the footer."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, _paragraph_draft())).status_code == 201
     deck = (await client.get(f"{BASE}/deck", headers=h)).json()
@@ -259,12 +268,14 @@ async def test_e9_a_paragraph_longer_than_a_slide_stays_above_the_pptx_footer(cl
 
 
 def test_e11_a_date_never_wraps_between_its_parts():
+    """A rendered date is joined by no-break spaces so it never wraps a line."""
     assert render_module.days_in_words("needed by 2026-11-15.") == (
         f"needed by Nov{NBSP}15,{NBSP}2026."
     )
 
 
 async def test_e11_dates_on_slides_and_in_the_pptx_hold_together(client, long_doc):
+    """A date on a slide and in its PPTX both hold together, not plain-spaced."""
     deck = (await client.get(f"{BASE}/deck", headers=long_doc)).json()
     html = " ".join(s["html"] for s in deck["slides"])
     assert f"needed by Nov{NBSP}1,{NBSP}2026" in html
@@ -281,12 +292,14 @@ async def test_e11_dates_on_slides_and_in_the_pptx_hold_together(client, long_do
 
 
 def test_e6_a_freeform_snapshot_is_not_doubled():
+    """A snapshot phrase already saying as of is not doubled into as of as of."""
     for text in ("sources as of the Oct 16 pull", "Sources as of the Oct 16 pull"):
         assert render_module.snapshot_in_words(text, "UTC") == "the Oct 16 pull"
     assert render_module.snapshot_in_words("as of the Oct 16 pull", "UTC") == "the Oct 16 pull"
 
 
 def test_e8_a_continuation_heading_fits_its_box():
+    """A continuation heading, with its (n of m) suffix, still fits its box."""
     width = pptx_module.WIDTH - 2 * pptx_module.MARGIN
     heading = LONG_TITLE + " (2 of 3)"
     size, height = pptx_module.heading_fit(heading, width)
@@ -296,6 +309,7 @@ def test_e8_a_continuation_heading_fits_its_box():
 
 
 async def test_e8_a_long_section_title_in_the_pptx_ends_above_the_body(client, tenant_id):
+    """A long section title on a PPTX slide wraps but ends above the body."""
     h = await _token(tenant_id, "approver")
     md = _draft().replace("## Top risks {#top-risks}", f"## Top risks: {LONG_TITLE} {{#top-risks}}")
     assert (await _import(client, h, md)).status_code == 201
@@ -314,6 +328,7 @@ async def test_e8_a_long_section_title_in_the_pptx_ends_above_the_body(client, t
 
 
 async def test_e15_present_mode_without_a_brief_does_not_say_export(client, tenant_id):
+    """Present mode with no brief refuses without telling the user to export."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, DETAIL_ONLY, "notes")).status_code == 201
     resp = await client.get("/v1/documents/notes/versions/1/deck", headers=h)
@@ -325,6 +340,7 @@ async def test_e15_present_mode_without_a_brief_does_not_say_export(client, tena
 
 @requires_pdf
 async def test_e9_a_paragraph_longer_than_a_slide_is_whole_in_the_deck_pdf(client, tenant_id):
+    """A paragraph too long for one slide still appears whole, once, in the PDF."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, _paragraph_draft())).status_code == 201
     resp = await client.get(f"{BASE}/export?layer=deck&format=pdf", headers=h)
@@ -357,6 +373,7 @@ def _no_code(text: str) -> None:
 
 
 async def test_r3_a_code_block_is_one_line_on_its_slide(client, tenant_id):
+    """A code block on a slide becomes one plain linked line, not raw code."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, _code_draft())).status_code == 201
     deck = (await client.get(f"{BASE}/deck", headers=h)).json()
@@ -386,6 +403,7 @@ async def test_r3_a_code_block_is_one_line_on_its_slide(client, tenant_id):
 
 @requires_pdf
 async def test_r3_a_code_block_is_one_plain_line_in_the_deck_pdf(client, tenant_id):
+    """A code block in a deck PDF becomes one plain line with no working link."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, _code_draft())).status_code == 201
     deck = (await client.get(f"{BASE}/deck", headers=h)).json()
@@ -404,6 +422,7 @@ async def test_r3_a_code_block_is_one_plain_line_in_the_deck_pdf(client, tenant_
 
 
 def test_r3_a_table_row_with_one_long_cell_fills_its_slides():
+    """A table row with one very long cell fills mostly that cell's column."""
     budget = deck_module.SLIDE_LINES
     table = "| Feature | Outcome |\n| --- | --- |\n| Saved carts | " + ONE_PARAGRAPH + " |"
     pages = deck_module.slide_pages(table, budget)
@@ -419,6 +438,7 @@ def test_r3_a_table_row_with_one_long_cell_fills_its_slides():
 
 
 def test_r3_document_stamps_hold_together():
+    """A document timestamp keeps its day and time joined without wrapping."""
     from datetime import UTC, datetime
 
     at = datetime(2026, 10, 30, 21, 49, tzinfo=UTC)
@@ -443,6 +463,7 @@ def _code_lines(text: str) -> list[str]:
 
 
 def test_r3_an_indented_code_block_is_one_line():
+    """An indented code block collapses to one line linking to the full PRD."""
     out = deck_module.code_left_out(INDENTED, HREF)
     assert _code_lines(out) == [CODE_LINE], out
     assert "step 7 of the rollout" not in out
@@ -450,6 +471,7 @@ def test_r3_an_indented_code_block_is_one_line():
 
 
 def test_r3_every_fence_is_one_line_and_never_joins_a_paragraph():
+    """Every fenced code block becomes its own line, never joined to a paragraph."""
     out = deck_module.code_left_out(MIXED, HREF)
     assert _code_lines(out) == [
         "Code: 2 lines, in the full PRD",
@@ -468,6 +490,7 @@ def test_r3_every_fence_is_one_line_and_never_joins_a_paragraph():
 
 
 async def test_r3_an_indented_code_block_is_one_line_on_its_slide(client, tenant_id):
+    """An indented code block on a slide becomes one line linked to the PRD."""
     h = await _token(tenant_id, "approver")
     assert (await _import(client, h, _draft().replace(RISKS, INDENTED))).status_code == 201
     deck = (await client.get(f"{BASE}/deck", headers=h)).json()
@@ -492,6 +515,7 @@ ON_ITEM = {
 
 @pytest.mark.parametrize("body", ON_ITEM.values(), ids=ON_ITEM.keys())
 def test_r4_code_on_a_list_item_line_is_one_item(body):
+    """Code written on a list item's own line collapses to one item, not code."""
     out = deck_module.code_left_out(body, HREF)
     html = render_module._markdown().render(out)
     items = [re.sub(r"<[^>]+>", "", x).strip() for x in re.findall(r"<li>(.*?)</li>", html, re.S)]
@@ -500,6 +524,7 @@ def test_r4_code_on_a_list_item_line_is_one_item(body):
 
 
 def test_r4_a_lone_carriage_return_is_a_line_break():
+    """A lone carriage return in a document's text is read as a plain line break."""
     out = deck_module.code_left_out("Steps:\r\r```\rship the carts\r```\rAfter.", HREF)
     assert _code_lines(out) == ["Code: 1 line, in the full PRD"], out
     assert "ship the carts" not in out and "\r" not in out
@@ -507,6 +532,7 @@ def test_r4_a_lone_carriage_return_is_a_line_break():
 
 
 def test_r4_a_line_that_only_looks_like_a_fence_is_text():
+    """A line that only looks like a code fence, unclosed, is read as text."""
     units = deck_module._units("```a`b\n\nFirst paragraph.\n\nSecond paragraph.")
     assert [u.text for u in units] == ["```a`b", "First paragraph.", "Second paragraph."]
 
@@ -540,6 +566,7 @@ ON_NEXT_LINE = {
 
 @pytest.mark.parametrize("body", ON_NEXT_LINE.values(), ids=ON_NEXT_LINE.keys())
 def test_r5_code_under_a_bare_list_marker_stays_in_its_item(body):
+    """Code written under a bare list marker stays inside that same item."""
     out = deck_module.code_left_out(body, HREF)
     html = render_module._markdown().render(out)
     items = [re.sub(r"<[^>]+>", "", x).strip() for x in re.findall(r"<li>(.*?)</li>", html, re.S)]

@@ -161,6 +161,7 @@ widgets run
 
 
 def test_registered_with_oauth_metadata():
+    """Notion is registered as a connector with its own OAuth token endpoint."""
     connector = get_connector("notion")
     assert isinstance(connector, NotionConnector)
     assert isinstance(connector, Connector)
@@ -179,10 +180,12 @@ def test_registered_with_oauth_metadata():
     ],
 )
 def test_normalize_id(value, expected):
+    """A Notion page id is recognised whether dashed, undashed or inside a URL."""
     assert notion.normalize_id(value) == expected
 
 
 async def test_validate():
+    """Validating a Notion config checks the user and each root page or database."""
     fake = FakeNotion(full_routes())
     await fake.connector().validate({"roots": [ROOT, DB]}, CREDENTIAL)
     assert fake.requests == [
@@ -203,11 +206,13 @@ async def test_validate():
     ],
 )
 async def test_validate_rejects(config, credential, message):
+    """Notion validation rejects a missing root, bad id, no token or an unshared page."""
     with pytest.raises(ConnectorConfigError, match=message):
         await FakeNotion(full_routes()).connector().validate(config, credential)
 
 
 async def test_validate_auth_error():
+    """A Notion 401 while validating is surfaced as an auth error, not generic."""
     routes = {
         "GET /users/me": lambda r: httpx.Response(401, json=fixture("error_unauthorized.json"))
     }
@@ -216,6 +221,7 @@ async def test_validate_auth_error():
 
 
 async def test_full_sync():
+    """A full Notion sync walks pages depth first, root before its children and rows."""
     fake = FakeNotion(full_routes())
     events = await collect(fake.connector())
     items = upserts(events)
@@ -269,6 +275,7 @@ async def test_full_sync():
 
 
 async def test_database_root():
+    """A root that cannot be read as a page is still read as a database of rows."""
     routes = full_routes()
     routes[f"GET /pages/{DB}"] = lambda r: httpx.Response(
         400, json={"object": "error", "status": 400, "code": "validation_error", "message": "x"}
@@ -279,6 +286,7 @@ async def test_database_root():
 
 
 async def test_incremental_sync_and_deletes():
+    """An incremental sync deletes an archived page's whole subtree, not just itself."""
     cursor = last_cursor(await collect(FakeNotion(full_routes()).connector()))
 
     routes = full_routes()
@@ -306,6 +314,7 @@ async def test_incremental_sync_and_deletes():
 
 
 async def test_unchanged_pages_are_not_refetched():
+    """Pages unchanged since the last sync are not refetched at all."""
     cursor = last_cursor(await collect(FakeNotion(full_routes()).connector()))
     fake = FakeNotion(full_routes())
     events = await collect(fake.connector(), cursor=cursor)
@@ -316,6 +325,7 @@ async def test_unchanged_pages_are_not_refetched():
 
 
 async def test_unshared_page_is_deleted():
+    """A page that is no longer shared is deleted along with everything under it."""
     cursor = last_cursor(await collect(FakeNotion(full_routes()).connector()))
     routes = full_routes()
     routes[f"GET /pages/{CHILD}"] = not_found
@@ -324,6 +334,7 @@ async def test_unshared_page_is_deleted():
 
 
 async def test_unshared_root_deletes_everything_under_it():
+    """Unsharing the root page deletes every item ever synced from under it."""
     cursor = last_cursor(await collect(FakeNotion(full_routes()).connector()))
     routes = full_routes()
     routes[f"GET /pages/{ROOT}"] = not_found
@@ -334,6 +345,7 @@ async def test_unshared_root_deletes_everything_under_it():
 
 
 async def test_sync_auth_error():
+    """A Notion 401 mid-sync is raised as an auth error, not a generic one."""
     routes = {
         f"GET /pages/{ROOT}": lambda r: httpx.Response(401, json=fixture("error_unauthorized.json"))
     }
@@ -342,6 +354,7 @@ async def test_sync_auth_error():
 
 
 async def test_rate_limit_with_retry_after():
+    """A rate limit partway through a sync still keeps the items already upserted."""
     routes = full_routes()
     routes[f"GET /blocks/{CHILD}/children"] = lambda r: httpx.Response(
         429, json=fixture("error_rate_limited.json"), headers={"Retry-After": "7"}
@@ -355,6 +368,7 @@ async def test_rate_limit_with_retry_after():
 
 
 async def test_checkpoints_every_n_pages(monkeypatch):
+    """A Notion sync checkpoints every few pages, not only once at the very end."""
     monkeypatch.setattr(notion, "CHECKPOINT_EVERY", 2)
     events = await collect(FakeNotion(full_routes()).connector())
     kinds = ["U" if isinstance(e, ItemUpsert) else "C" for e in events]
@@ -362,6 +376,8 @@ async def test_checkpoints_every_n_pages(monkeypatch):
 
 
 def test_markdown_edge_cases():
+    """Notion blocks render to markdown correctly even for columns and equations."""
+
     def para(*spans):
         return {"type": "paragraph", "paragraph": {"rich_text": list(spans)}}
 
@@ -394,6 +410,7 @@ OTHER = "77777777-7777-4777-8777-777777777777"
 
 
 async def test_the_old_pages_key_is_refused_naming_roots():
+    """The old 'pages' config key is refused everywhere 'roots' is now required."""
     # Validation never accepted a pages-only config, so no source carries the old key.
     fake = FakeNotion(full_routes())
     with pytest.raises(ConnectorConfigError, match='"roots"'):
@@ -420,6 +437,7 @@ def _search_routes(seen: list[dict]):
 
 
 async def test_search_shared_lists_pages_and_databases_with_parents():
+    """Searching shared pages returns pages and databases with their parent and icon."""
     seen: list[dict] = []
     fake = FakeNotion(_search_routes(seen))
     client = httpx.AsyncClient(transport=httpx.MockTransport(fake))
@@ -461,6 +479,7 @@ async def test_search_shared_lists_pages_and_databases_with_parents():
 
 
 async def test_search_shared_errors():
+    """A rate limit or auth failure from Notion search is raised, not swallowed."""
     limited = FakeNotion(
         {
             "POST /search": lambda r: httpx.Response(
@@ -482,6 +501,7 @@ async def test_search_shared_errors():
 
 
 async def test_search_shared_403_is_a_missing_capability_not_a_bad_token():
+    """A 403 for a missing search capability is its own error, not a bad token."""
     forbidden = FakeNotion(
         {
             "POST /search": lambda r: httpx.Response(
@@ -495,6 +515,7 @@ async def test_search_shared_403_is_a_missing_capability_not_a_bad_token():
 
 
 async def test_search_shared_skips_malformed_results():
+    """Malformed entries in a Notion search result are skipped, not crashed on."""
     good = fixture("search_roadmap.json")["results"][0]
     body = {
         "object": "list",
@@ -538,4 +559,5 @@ async def test_search_shared_skips_malformed_results():
     ],
 )
 def test_icon(icon, shown):
+    """Only a safe emoji or public https icon URL is shown; others are hidden."""
     assert notion._icon(icon) == shown

@@ -118,6 +118,7 @@ async def start(client, ctx, run_id: str, expect: int = 200) -> dict:
 
 
 async def test_a_review_approved_29_days_ago_is_reusable(client):
+    """A baseline reviewed 29 days ago still counts as reusable, not stale."""
     ctx = await make_ctx()
     cp_id, at = await review(ctx, 29)
     # A draft Baseline to PRD run has not started: it builds nothing.
@@ -133,6 +134,7 @@ async def test_a_review_approved_29_days_ago_is_reusable(client):
 
 
 async def test_a_review_approved_31_days_ago_is_too_old(client):
+    """A baseline review older than 30 days is too old to reuse."""
     ctx = await make_ctx()
     await review(ctx, 31, flow="baseline_to_prd")
     out = await status_of(client, ctx)
@@ -141,6 +143,7 @@ async def test_a_review_approved_31_days_ago_is_too_old(client):
 
 
 async def test_no_approved_review_is_never_reviewed(client):
+    """With no approved review, status reads never reviewed, not reusable."""
     ctx = await make_ctx()
     # A run with its stop off leaves no review.
     await build(ctx, "baseline", "succeeded", checkpoint="skipped")
@@ -151,6 +154,7 @@ async def test_no_approved_review_is_never_reviewed(client):
 
 
 async def test_a_running_baseline_build_is_under_way(client):
+    """A baseline build still running blocks reuse as build under way."""
     ctx = await make_ctx()
     await review(ctx, 2)
     await build(ctx, "baseline", "running")
@@ -160,6 +164,7 @@ async def test_a_running_baseline_build_is_under_way(client):
 
 
 async def test_a_prd_run_waiting_at_confirm_the_baseline_is_under_way(client):
+    """A PRD run waiting at its baseline checkpoint still counts as under way."""
     ctx = await make_ctx()
     await review(ctx, 2)
     await build(ctx, "baseline_to_prd", "awaiting_checkpoint", checkpoint="pending")
@@ -167,6 +172,7 @@ async def test_a_prd_run_waiting_at_confirm_the_baseline_is_under_way(client):
 
 
 async def test_a_prd_run_past_its_baseline_is_not_a_build(client):
+    """A PRD run that skipped its baseline checkpoint no longer blocks reuse."""
     ctx = await make_ctx()
     await review(ctx, 2)
     await build(ctx, "baseline_to_prd", "awaiting_checkpoint", checkpoint="skipped")
@@ -185,6 +191,7 @@ async def test_a_prd_run_awaiting_approval_that_reuses_is_not_a_build(client):
 
 
 async def test_a_prd_run_awaiting_approval_that_rebuilds_is_under_way(client):
+    """A PRD run awaiting approval to rebuild the baseline is under way."""
     ctx = await make_ctx()
     await review(ctx, 2)
     await build(ctx, "baseline_to_prd", "awaiting_approval")
@@ -192,6 +199,7 @@ async def test_a_prd_run_awaiting_approval_that_rebuilds_is_under_way(client):
 
 
 async def test_review_status_is_an_mcp_read_refused_to_run_tokens(client):
+    """The baseline review status is an open MCP read tool, refused with no sign in."""
     ops = {(o.method, o.path): o for o in app_operations(app)}
     op = ops[("GET", STATUS)]
     assert not op.excluded and op.tool_name == "get_baseline_review_status"
@@ -205,6 +213,7 @@ async def test_review_status_is_an_mcp_read_refused_to_run_tokens(client):
 
 
 async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
+    """An intake run reuses a reusable baseline at zero cost, skipping that build."""
     ctx = await make_ctx()
     cp_id, at = await review(ctx, 9)
     out = await intake_with_source(client, ctx)
@@ -258,6 +267,7 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
 
 
 async def test_an_intake_run_rebuilds_when_the_baseline_is_not_reusable(client, runtime):
+    """An intake run with a stale baseline estimates and runs the full build."""
     ctx = await make_ctx()
     await review(ctx, 40)
     out = await intake_with_source(client, ctx)
@@ -283,6 +293,7 @@ def workflow_settings(monkeypatch):
 
 
 async def test_workflow_mode_submits_no_baseline_step(client, workflow_settings):
+    """In workflow mode a run reusing its baseline submits no baseline step."""
     ctx = await make_ctx()
     await review(ctx, 3)
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
@@ -303,6 +314,7 @@ async def test_workflow_mode_submits_no_baseline_step(client, workflow_settings)
 
 
 async def test_start_refuses_when_a_build_started_after_the_estimate(client, runtime):
+    """Starting a run is refused if its baseline began building after the estimate."""
     ctx = await make_ctx()
     await review(ctx, 3)
     run = await plain_run(client, ctx, reuse_baseline=True)
@@ -318,6 +330,7 @@ async def test_start_refuses_when_a_build_started_after_the_estimate(client, run
 
 
 async def test_estimate_refuses_a_review_that_went_stale(client, runtime):
+    """Estimating a run refuses to reuse a baseline whose review went stale."""
     ctx = await make_ctx()
     cp_id, _ = await review(ctx, 3)
     run = await plain_run(client, ctx, reuse_baseline=True)
@@ -332,6 +345,7 @@ async def test_estimate_refuses_a_review_that_went_stale(client, runtime):
 
 
 async def test_a_plain_run_without_the_knob_still_builds_the_baseline(client, runtime):
+    """A run that never set the reuse-baseline knob still builds its baseline."""
     ctx = await make_ctx()
     await review(ctx, 3)
     run = await plain_run(client, ctx)
@@ -359,6 +373,7 @@ async def _awaiting_approval(client, ctx) -> dict:
 
 
 async def test_approve_starts_a_run_reusing_a_still_reusable_baseline(client, runtime):
+    """Approving a run still reusing its baseline skips the baseline build."""
     ctx = await make_ctx()
     await review(ctx, 3)
     run = await _awaiting_approval(client, ctx)
@@ -374,6 +389,7 @@ async def test_approve_starts_a_run_reusing_a_still_reusable_baseline(client, ru
 
 
 async def test_approve_refuses_a_review_that_went_stale(client, runtime):
+    """Approving a run refuses to start if its reused baseline's review is stale."""
     ctx = await make_ctx()
     cp_id, _ = await review(ctx, 3)
     run = await _awaiting_approval(client, ctx)

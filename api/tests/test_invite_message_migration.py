@@ -82,6 +82,7 @@ def _invite(tenant: uuid.UUID, address: str, **message) -> uuid.UUID:
 # protects=one head, this one, right after subgoals; fails_when=a second head or a gap in
 # the chain; no_claim=what the column does.
 def test_the_chain_ends_here():
+    """The new migration chains after the branch's own single head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -90,6 +91,7 @@ def test_the_chain_ends_here():
 # characters is refused by the database too; fails_when=the column is missing, not
 # nullable, unbounded, or left behind by the downgrade; no_claim=the API's trimming.
 def test_message_column_up_down_up(scratch_db):
+    """The message column adds, enforces its length limit, and drops cleanly."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     assert _columns() == []

@@ -92,6 +92,7 @@ async def _disconnect(client, alice, conn_id) -> None:
 
 
 async def test_disconnect_leaves_the_source_without_a_connection(client, tenant_id, alice, fake):
+    """Disconnecting a source keeps data to relink it; the publish gate stays revoked."""
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
     await _disconnect(client, alice, conn["id"])
@@ -121,6 +122,7 @@ async def test_disconnect_leaves_the_source_without_a_connection(client, tenant_
 async def test_the_same_account_connecting_again_links_it_and_a_sync_reads_through_it(
     client, tenant_id, alice, fake
 ):
+    """Reconnecting the same account relinks the source and a sync reads through it."""
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
     await _disconnect(client, alice, conn["id"])
@@ -144,6 +146,7 @@ async def test_the_same_account_connecting_again_links_it_and_a_sync_reads_throu
 async def test_another_account_is_not_linked_by_itself_but_can_be_picked(
     client, tenant_id, alice, fake
 ):
+    """A different account is not auto-linked, but can be picked and then sticks."""
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
     await _disconnect(client, alice, conn["id"])
@@ -171,6 +174,7 @@ async def test_another_account_is_not_linked_by_itself_but_can_be_picked(
 
 
 async def test_another_persons_same_account_is_not_linked(client, tenant_id, alice, fake):
+    """Another person's same external account is never auto-linked to your source."""
     bob = await make_person(tenant_id, "bob@example.com", "owner")
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
@@ -181,6 +185,7 @@ async def test_another_persons_same_account_is_not_linked(client, tenant_id, ali
 
 
 async def test_picking_a_connection_of_another_provider_is_refused(client, tenant_id, alice, fake):
+    """Picking a connection of the wrong provider kind for a source is refused."""
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
     await _disconnect(client, alice, conn["id"])
@@ -195,6 +200,7 @@ async def test_picking_a_connection_of_another_provider_is_refused(client, tenan
 
 
 async def test_relinking_clears_only_the_no_connection_error(client, tenant_id, alice, fake):
+    """Relinking a source clears only the no-connection error, not another one."""
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
     await _disconnect(client, alice, conn["id"])
@@ -207,6 +213,7 @@ async def test_relinking_clears_only_the_no_connection_error(client, tenant_id, 
 
 
 async def test_relinking_keeps_another_sync_error(client, tenant_id, alice, fake):
+    """Relinking a source keeps a different stored sync error untouched."""
     conn = await _connect(client, alice, TOKEN)
     src = await _source(client, alice, conn["id"])
     await _disconnect(client, alice, conn["id"])
