@@ -104,3 +104,29 @@ test.describe("PRDs list, no PRDs yet", () => {
     await expect(page.getByTestId("prds-empty")).toBeVisible();
   });
 });
+
+test("a roadmap item's history that could not be read says so, never no history", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/annual-billing/v/2/roadmap");
+  const visible = (id: string) => page.getByTestId(id).filter({ visible: true });
+  await visible("roadmap-item-row").filter({ hasText: "Public signup" }).click();
+  await expect(visible("item-history").locator("li")).toHaveText(["Draft v1 · Next", "Draft v2 · Now"]);
+  await expect(visible("item-history").getByTestId("load-error")).toHaveCount(0);
+
+  await failGets(page, "/v1/roadmap-items/history");
+  await page.reload();
+  await visible("roadmap-item-row").filter({ hasText: "Public signup" }).click();
+  await expect(visible("item-history").getByTestId("load-error")).toContainText("Could not load the history.");
+  await expect(visible("item-history").locator("li")).toHaveCount(0);
+});
+
+test("Publish: a version that could not be read says so, never every section reviewed", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/visit-reminders/publish");
+  await expect(page.getByTestId("publish-button")).toHaveText("Publish v1");
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toHaveCount(0);
+
+  await failGets(page, "/v1/documents/visit-reminders/versions/1");
+  await page.reload();
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toBeVisible();
+});
