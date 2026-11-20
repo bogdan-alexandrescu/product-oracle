@@ -197,7 +197,7 @@ def test_a_warning_keeps_its_ids_in_refs():
 def test_feedback_an_agent_s_draft_left_open_is_named_by_section():
     """protects=#396 the Warnings panel's "these stay open" names sections by heading;
     fails_when=it lists feedback ids, or refs loses them; no_claim=which feedback a run may
-    close (test_review_v2_security_2.py)."""
+    close (test_review_v2_security.py)."""
     a, b, c = (str(uuid.uuid4()) for _ in range(3))
     headings = {"problem": "Problem", "risks": "Risks"}
     message, refs = wording.feedback_left_open({a: "problem", b: "risks", c: None}, headings)
@@ -598,7 +598,7 @@ async def test_regenerate_while_the_spec_s_run_is_going_says_so_in_the_app_s_wor
 ):
     """protects=#396 fixes 3 item 2: Regenerate on a spec whose run has not ended, as
     served; fails_when=the detail names the run's id, or refs loses it; no_claim=when a spec
-    may be regenerated (test_specs_review2.py)."""
+    may be regenerated (test_specs.py)."""
     from tests import specs_helpers as h
 
     world = await h.make_world(client)
@@ -629,7 +629,7 @@ async def test_cancel_again_names_no_workflow_id_and_keeps_it_in_refs(
 ):
     """protects=#396 fixes 3 item 2: Cancel again in the Inbox, refused and done, as served;
     fails_when=the refusal or the run's note names the workflow's id, or refs loses it;
-    no_claim=when Cancel again is offered (test_adapter_v2_round9.py)."""
+    no_claim=when Cancel again is offered (test_adapter_v2.py)."""
     from tests.fixtures import seed_auth
     from tests.test_adapter_v2 import _again, _Clock, _over_after_stop, on
     from tests.test_runs import get

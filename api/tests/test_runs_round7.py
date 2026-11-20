@@ -36,8 +36,9 @@ from tests.test_review_v2_security import (
     _lose_on_first_gate,
     _read,
     _run,
-    _started,  # the FakeRuntime fixture
+    _started,
 )
+from tests.test_review_v2_security import runtime as runtime  # the FakeRuntime fixture
 from tests.test_runs import decide, get, started, tick
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).

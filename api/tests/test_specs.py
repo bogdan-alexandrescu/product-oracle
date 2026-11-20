@@ -1237,7 +1237,7 @@ def _move_to_end(md: str, heading: str) -> str:
 
 
 # Round 4 (E1 'Added sections, visible', owner, 2026-10-20): an added section that takes
-# Oracle's heading is refused (tests/test_specs_review4.py); one inserted in the same place
+# Oracle's heading is refused (tests/test_specs.py); one inserted in the same place
 # under its own heading shows as proposed.
 INSERTED = "## Shipping notes {#shipping-notes}\n\n- Free shipping on every order.\n\n"
 
@@ -3409,7 +3409,7 @@ def _problems(body: str):
 
 
 # A line over the cap is refused by the draft parse, before any markdown parse
-# (tests/test_specs_review9.py): the structure check never sees one.
+# (tests/test_specs.py): the structure check never sees one.
 
 
 def test_a_line_just_under_the_cap_is_parsed():
