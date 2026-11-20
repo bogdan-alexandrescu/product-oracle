@@ -117392,7 +117392,14 @@
             "title": "Estimate Usd"
           },
           "spent_usd": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Spent Usd"
           },
           "created_by": {
@@ -117760,7 +117767,6 @@
           "flow",
           "flow_title",
           "status",
-          "spent_usd",
           "created_at",
           "knobs",
           "needs_approval",
@@ -118272,7 +118278,14 @@
             "title": "Estimate Usd"
           },
           "spent_usd": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Spent Usd"
           },
           "created_by": {
@@ -118521,7 +118534,6 @@
           "flow",
           "flow_title",
           "status",
-          "spent_usd",
           "created_at"
         ],
         "title": "RunSummary"
@@ -122351,9 +122363,15 @@
             "title": "Submitted At"
           },
           "cost_usd": {
-            "type": "number",
-            "title": "Cost Usd",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
           },
           "note": {
             "anyOf": [
@@ -122556,7 +122574,14 @@
             "title": "Estimate Usd"
           },
           "cost_usd": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Cost Usd"
           },
           "workflow_id": {
@@ -122747,11 +122772,6 @@
             ],
             "title": "Checked At"
           },
-          "cost_reported": {
-            "type": "boolean",
-            "title": "Cost Reported",
-            "default": false
-          },
           "proposals_written": {
             "type": "integer",
             "title": "Proposals Written",
@@ -122779,7 +122799,6 @@
           "scopes",
           "checkpoint",
           "checkpoint_on",
-          "cost_usd",
           "artifacts",
           "attempts"
         ],
