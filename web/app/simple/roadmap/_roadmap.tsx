@@ -703,6 +703,7 @@ function DecisionTray({
   planned = [],
   proposals,
   proposalsFailed,
+  proposalsLoading,
   act,
   canChange,
   onDecide,
@@ -726,6 +727,8 @@ function DecisionTray({
   proposals: Change[];
   /** #1586: the open proposals could not be read: their reason and Try again, never "None waiting". */
   proposalsFailed?: { error: string; retry: () => void } | null;
+  /** #1586 review: the open proposals are still being read: Loading, never "None waiting". */
+  proposalsLoading?: boolean;
   act: Act;
   canChange: boolean;
   onDecide: (c: Change, how: "accept" | "decline") => void;
@@ -951,6 +954,8 @@ function DecisionTray({
       )}
       <section id="tray-dates" className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Dates to confirm</h3>
+        {/* #1586 review: the parts' own dates that could not be read say why, never rows with no part lines. */}
+        {dateRows.length > 0 && open.error && !open.data && <LoadError what="the dates of the parts" error={open.error} onRetry={() => void open.reload()} />}
         {dateRows.length ? (
           <ul>
             {dateRows.map(({ item: i, s, parts }) => (
@@ -987,6 +992,8 @@ function DecisionTray({
           <LoadError what="the proposals" error={proposalsFailed.error} onRetry={proposalsFailed.retry} />
         ) : others.length ? (
           <ul>{others.map(row)}</ul>
+        ) : proposalsLoading ? (
+          <Loading />
         ) : (
           <p className="text-sm text-text2">None waiting.</p>
         )}
@@ -1026,6 +1033,8 @@ function DecisionTray({
               <SuggestionCard key={s.id} s={s} api={suggestions} />
             ))}
           </ul>
+        ) : !suggestions.data ? (
+          <Loading />
         ) : (
           <p className="text-sm text-text2">None waiting.</p>
         )}
@@ -1622,6 +1631,7 @@ export function SimpleRoadmap() {
   // roadmap): no roadmap's Needs a decision lists or counts it.
   const allProposals = (proposals.data ?? []).filter((c) => !(c.op === "add_feature_ask" && !c.document_id));
   const proposalsFailed = proposals.error && !proposals.data ? { error: proposals.error, retry: () => void proposals.reload() } : null;
+  const proposalsLoading = !proposals.data && !proposals.error;
   const decides = can("accept_simple_change") || data.items.some((i) => i.can_decide);
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
@@ -2190,6 +2200,7 @@ export function SimpleRoadmap() {
                     items={byId}
                     proposals={allProposals.filter((c) => c.target.item_id === it.id)}
                     proposalsFailed={proposalsFailed}
+                    proposalsLoading={proposalsLoading}
                     phone={sheet}
                     style={style}
                     act={act}
@@ -2270,6 +2281,7 @@ export function SimpleRoadmap() {
                 items={byId}
                 proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
                 proposalsFailed={proposalsFailed}
+                proposalsLoading={proposalsLoading}
                 phone={phone}
                 style={{ position: "relative", left: 0, top: 0, width: "100%", border: 0, boxShadow: "none" }}
                 act={act}
@@ -2331,6 +2343,7 @@ export function SimpleRoadmap() {
             items={byId}
             proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
             proposalsFailed={proposalsFailed}
+            proposalsLoading={proposalsLoading}
             phone={phone}
             style={{ left: card.left, top: card.top }}
             act={act}
@@ -2405,6 +2418,7 @@ export function SimpleRoadmap() {
           planned={data.milestones}
           proposals={allProposals}
           proposalsFailed={proposalsFailed}
+          proposalsLoading={proposalsLoading}
           act={act}
           canChange={canChange}
           onDecide={(c, how) => void onDecide(c, how)}

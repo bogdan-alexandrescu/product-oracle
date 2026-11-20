@@ -2552,6 +2552,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
       </p>
+      {tasks.failed}
       {/* As with a dated plan: two columns only where a feature's row fits a card (31rem). */}
       <ul className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-[var(--simple-gap)]">
         {buckets.map((b, k) => {
@@ -2895,6 +2896,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
       </p>
+      {tasks.failed}
       {/* Two columns only where a feature's row fits a card (31rem); beside a 768 px window's sidebar one, as on a phone. */}
       <ul className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-4">
         {goals.map((g) => {

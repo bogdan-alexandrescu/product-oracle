@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { NotInGt } from "@/components/simple/FeatureName";
+import { LoadError, Loading } from "@/components/ui";
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { GOAL_CHANGED_EVENT } from "@/lib/api/simple-chat";
@@ -256,6 +257,19 @@ export function GoalForm({ start, goal, order, title, year, linked, onSave, onCa
 function OwnerField({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
   const people = usePeople();
   const list = people.data ?? [];
+  // #1586 review: members that could not be read say why, never a list with no one to pick.
+  if (people.error && !people.data)
+    return (
+      <Field label="Owner">
+        <LoadError what="the people" error={people.error} onRetry={() => void people.reload()} />
+      </Field>
+    );
+  if (!people.data)
+    return (
+      <Field label="Owner">
+        <Loading />
+      </Field>
+    );
   return (
     <Field label="Owner">
       <select value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className={INPUT}>
