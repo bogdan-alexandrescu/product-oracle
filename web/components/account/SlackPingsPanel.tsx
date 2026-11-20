@@ -80,7 +80,7 @@ export function SlackPingsPanel() {
         {pings && (
           <ul className="space-y-2">
             {PINGS.map((p) => (
-              <li key={p.key}>
+              <li key={p.key} className="flex items-start gap-1.5">
                 {/* F-24: on a phone the whole row is the tap target, at least 44 px high, as the weekly report's. */}
                 <label className="flex items-start gap-2 max-[600px]:min-h-11 max-[600px]:gap-3">
                   <input
@@ -91,11 +91,12 @@ export function SlackPingsPanel() {
                     className="mt-1 size-4 flex-none accent-[var(--accent)] max-[600px]:mt-0 max-[600px]:size-6"
                     data-testid={`ping-${p.key}`}
                   />
-                  <span>
-                    <span className="font-medium">{p.label}</span>
-                    <span className="block text-sm text-text2">{p.detail}</span>
-                  </span>
+                  <span className="font-medium">{p.label}</span>
                 </label>
+                {/* #1590: what each ping covers sits behind the (i). */}
+                <InfoTip label={p.label} align="start" testId={`ping-${p.key}-tip`}>
+                  {p.detail}
+                </InfoTip>
               </li>
             ))}
           </ul>

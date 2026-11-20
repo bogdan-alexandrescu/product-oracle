@@ -73,8 +73,9 @@ test("no service to ask is 2", () => {
 // The script end to end, against a local server standing in for the services.
 const SCRIPT = fileURLToPath(new URL("../scripts/deploy-serves.ts", import.meta.url));
 
-async function serving(routes: Record<string, [number, string]>) {
+async function serving(routes: Record<string, [number, string]>, seen: (string | undefined)[] = []) {
   const server = createServer((req, res) => {
+    seen.push(req.headers.authorization);
     const [code, body] = routes[req.url ?? ""] ?? [404, "not found"];
     res.writeHead(code, { "content-type": "application/json" });
     res.end(body);
@@ -102,11 +103,12 @@ function scratchRepo() {
   return { dir, target, later, other, remove: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-async function run(args: string[], cwd?: string) {
+async function run(args: string[], cwd?: string, env: Record<string, string> = {}) {
   // Async, so the stand-in server above keeps answering while the script runs.
   return new Promise<number | null>((done) => {
     const child = spawn(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", SCRIPT, ...args], {
       cwd,
+      env: { ...process.env, ORACLE_VERSION_TOKEN: "", ...env },
       stdio: "ignore",
     });
     child.on("exit", (code) => done(code));
@@ -131,6 +133,20 @@ test("deploy-serves exits 0, 1 or 2", async () => {
     assert.equal(await check("/api", "/unstamped"), 2);
     assert.equal(await check("/api", "/stranger"), 2);
     assert.equal(await run([repo.target, "http://127.0.0.1:1/version"], repo.dir), 2);
+  } finally {
+    await s.close();
+    repo.remove();
+  }
+});
+
+test("deploy-serves sends ORACLE_VERSION_TOKEN as a bearer token, and nothing without it", async () => {
+  const repo = scratchRepo();
+  const seen: (string | undefined)[] = [];
+  const s = await serving({ "/api": [200, JSON.stringify({ git_sha: repo.target })] }, seen);
+  try {
+    assert.equal(await run([repo.target, `${s.base}/api`], repo.dir, { ORACLE_VERSION_TOKEN: "example-id-token" }), 0);
+    assert.equal(await run([repo.target, `${s.base}/api`], repo.dir), 0);
+    assert.deepEqual(seen, ["Bearer example-id-token", undefined]);
   } finally {
     await s.close();
     repo.remove();

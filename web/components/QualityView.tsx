@@ -11,6 +11,7 @@ import {
   Chip,
   DataTable,
   FilterChips,
+  InfoTip,
   Inspector,
   InspectorSection,
   Notice,
@@ -644,13 +645,16 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
             empty="No criteria match this filter"
           />
           {readiness && (
-            <p className="border-t border-line px-4 py-2.5 text-[13px] text-text2 max-[600px]:px-3" data-testid="latest-report">
+            <p className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-[13px] text-text2 max-[600px]:px-3" data-testid="latest-report">
               {/* The rules run each time the page opens (evaluated_at is the request's clock): the time shown is the last saved check's. */}
-              {readiness.latest_report ? `Last saved check ${zoneDateTime(readiness.latest_report.created_at, zone)}` : "No saved check yet"}
-              {" · "}the rules check this version each time you open the page
-              {/* qa-docs-60 / qa-docs-59: what saving keeps, and that a rating is not a saved check. */}
-              {maySnapshot && "; Save this check to History keeps this result to compare later"}. Ratings are kept on their own, in
-              History. No numeric score: the policy is advisory and only a critical hard check blocks.
+              <span>{readiness.latest_report ? `Last saved check ${zoneDateTime(readiness.latest_report.created_at, zone)}` : "No saved check yet"}</span>
+              {/* #1590: how checks and ratings are kept sits behind the (i). */}
+              <InfoTip label="saved checks" align="start" testId="latest-report-tip">
+                The rules check this version each time you open the page
+                {/* qa-docs-60 / qa-docs-59: what saving keeps, and that a rating is not a saved check. */}
+                {maySnapshot && "; Save this check to History keeps this result to compare later"}. Ratings are kept on their own, in History.
+                No numeric score: the policy is advisory and only a critical hard check blocks.
+              </InfoTip>
             </p>
           )}
         </Panel>
@@ -1207,11 +1211,12 @@ function EmptyHistory({ n, maySnapshot, mayRate, mayQueue }: { n: number; maySna
   const list = steps.length > 1 ? `${steps.slice(0, -1).join(", ")} or ${steps[steps.length - 1]}` : steps[0];
   return (
     <span data-testid="history-empty" className="flex flex-col gap-1">
-      <span>No evaluation reports for v{n} yet</span>
-      <span className="text-sm">
-        {list
-          ? `To add one, ${list}.`
-          : "A report appears here when someone saves this check, rates a criterion or asks Oracle to review."}
+      {/* #1590: what adds a report sits behind the (i). */}
+      <span className="flex items-center gap-1.5">
+        <span>No evaluation reports for v{n} yet</span>
+        <InfoTip label="adding a report" align="start" testId="history-empty-tip">
+          {list ? `To add one, ${list}.` : "A report appears here when someone saves this check, rates a criterion or asks Oracle to review."}
+        </InfoTip>
       </span>
     </span>
   );

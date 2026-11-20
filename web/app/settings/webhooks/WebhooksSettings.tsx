@@ -143,7 +143,12 @@ export function WebhooksSettings() {
               rowProps={() => ({ "data-testid": "webhook-row" })}
               empty={
                 <span data-testid="webhooks-empty" className="flex flex-col items-center gap-3">
-                  <span>No webhooks yet. Add one to tell Slack, Zapier or your own tools when runs change.</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    No webhooks yet.
+                    <InfoTip label="webhooks" align="start" testId="webhooks-empty-tip">
+                      Add one to tell Slack, Zapier or your own tools when runs change.
+                    </InfoTip>
+                  </span>
                   {can("create_webhook") && (
                     <Button icon="plus" onClick={() => setCreating(true)}>
                       Add your first webhook

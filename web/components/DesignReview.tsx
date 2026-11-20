@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, InfoTip, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
 import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
 import { ErrorNote, LoadError } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
@@ -519,7 +519,12 @@ function ReviewInspector({
       <InspectorSection label="Version reviews · oldest first" testId="version-reviews">
         <div className="flex flex-col gap-3.5">
           {d.reviews.length === 0 ? (
-            <p className="text-sm text-text2">No reviews yet. Comments and verdicts on this version show here.</p>
+            <p className="flex items-center gap-1.5 text-sm text-text2">
+              No reviews yet.
+              <InfoTip label="version reviews" align="start" testId="version-reviews-tip">
+                Comments and verdicts on this version show here.
+              </InfoTip>
+            </p>
           ) : (
             d.reviews.map((e) => <EventRow key={e.id} e={e} meId={meId} />)
           )}

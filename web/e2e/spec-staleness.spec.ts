@@ -34,6 +34,11 @@ test("an approver reviews a potentially stale spec, the label clears and Approve
   await confirm.getByRole("button", { name: "Cancel" }).click();
 
   await panel.getByRole("button", { name: "Review" }).click();
+  // #1590: the how-to sits behind its (i), not on the page.
+  await expect(page.getByText("Mark this version reviewed against the changed PRD.").filter({ visible: true })).toHaveCount(0);
+  await panel.getByTestId("mark-reviewed-tip").click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Mark this version reviewed against the changed PRD.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await panel.getByLabel("Note (optional)").fill("Checked against the new shipping estimate wording");
   await panel.getByRole("button", { name: "Mark reviewed" }).click();
   await expect(panel).toContainText("Under review");

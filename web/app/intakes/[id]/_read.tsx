@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, InfoTip } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 
 import { plural } from "@/lib/format";
@@ -146,12 +146,14 @@ export function ReadLine({
           {doneNote(read)}
         </p>
       )}
-      {/* qa-docs-86: one plain line on what each Oracle button does. */}
+      {/* qa-docs-86: what each Oracle button does, behind the (i) (#1590). */}
       {(showButton || mayDraft) && (
-        <p data-testid="intake-oracle-help" className="basis-full text-[13px] text-text2">
-          {showButton && <>{label}: Oracle reads the brief and its sources, and lists what it assumed and what is still open. </>}
-          {mayDraft && <>Draft with Oracle: Oracle writes the PRD from the brief and the answers so far.</>}
-        </p>
+        <span data-testid="intake-oracle-help" className="inline-flex">
+          <InfoTip label="the Oracle buttons" align="start" testId="intake-oracle-tip">
+            {showButton && <>{label}: Oracle reads the brief and its sources, and lists what it assumed and what is still open. </>}
+            {mayDraft && <>Draft with Oracle: Oracle writes the PRD from the brief and the answers so far.</>}
+          </InfoTip>
+        </span>
       )}
     </div>
   );

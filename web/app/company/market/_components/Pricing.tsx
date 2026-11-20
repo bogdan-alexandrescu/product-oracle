@@ -95,6 +95,12 @@ export function Pricing() {
           <CompanyEmpty
             testId="pricing-empty"
             title="No pricing memos yet"
+            tip={
+              <>
+                A memo sets out one pricing question, two to four options and the evidence for each, before the pricing owner decides the price.
+                {mayCreate && " Start one when a pricing question comes up."}
+              </>
+            }
             action={
               mayCreate ? (
                 <Button icon="plus" onClick={() => setCreating(true)}>
@@ -103,8 +109,7 @@ export function Pricing() {
               ) : undefined
             }
           >
-            A memo sets out one pricing question, two to four options and the evidence for each, before the pricing owner decides the price.
-            {mayCreate ? " Start one when a pricing question comes up." : " Owners and approvers write them."}
+            {!mayCreate && "Owners and approvers write them."}
           </CompanyEmpty>
         ) : (
           <DataTable

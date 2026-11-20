@@ -208,6 +208,7 @@ export function WinLoss() {
             <CompanyEmpty
               testId="deals-empty"
               title="No win or loss records yet"
+              tip="Record why each deal was won, lost or churned, one at a time or from a CSV file of your deals. Pricing memos count these records as evidence."
               action={
                 mayAdd || mayImport ? (
                   <>
@@ -220,10 +221,7 @@ export function WinLoss() {
                   </>
                 ) : undefined
               }
-            >
-              Record why each deal was won, lost or churned, one at a time or from a CSV file of your deals. Pricing memos count these
-              records as evidence.
-            </CompanyEmpty>
+            />
           )
         ) : (
           <DataTable

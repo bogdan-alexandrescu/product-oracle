@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 
-import { Button, Notice } from "@/components/ds";
+import { Button, InfoTip, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -69,8 +69,12 @@ export function PlanSteps({
         {mayAct ? (
           <Settle output={output} review={proposal.action === "review"} onChanged={onChanged} />
         ) : (
-          <p className="text-sm text-text2">
-            You decide on this {isDoc ? output.category.replace("_", " ") : "output"}, so you can regenerate it. Settling its staleness needs an approver.
+          // #1590: who may settle stays one visible line; why this reader may still regenerate sits behind the (i).
+          <p className="flex items-center gap-1.5 text-sm text-text2">
+            Settling its staleness needs an approver.
+            <InfoTip label="settling staleness" align="start" testId="settle-tip">
+              You decide on this {isDoc ? output.category.replace("_", " ") : "output"}, so you can regenerate it.
+            </InfoTip>
           </p>
         )}
       </Step>
@@ -94,7 +98,12 @@ export function PlanSteps({
                 Estimate and start it on the run page
               </Link>
             ) : (
-              <p className="text-sm text-text2">On the run page, once the draft run is proposed.</p>
+              <p className="flex items-center gap-1.5 text-sm text-text2">
+                After step 2
+                <InfoTip label="estimating the run" align="start" testId="estimate-tip">
+                  On the run page, once the draft run is proposed.
+                </InfoTip>
+              </p>
             )}
           </Step>
         </>
@@ -240,7 +249,13 @@ function ProposeStep({ requestId, may, proposed, onProposed }: { requestId: stri
           Propose regeneration
         </Button>
       </div>
-      <p className="text-sm text-text2">Creates a draft run; nothing is rewritten until someone estimates and starts it.</p>
+      {/* #1590: the disclosure stays one short line; the rest is behind the (i). */}
+      <p className="flex items-center gap-1.5 text-sm text-text2">
+        Nothing is rewritten until the run starts.
+        <InfoTip label="proposing a draft run" align="start" testId="propose-tip">
+          Creates a draft run; nothing is rewritten until someone estimates and starts it.
+        </InfoTip>
+      </p>
       {error && <Notice tone="error">{error}</Notice>}
     </div>
   );
