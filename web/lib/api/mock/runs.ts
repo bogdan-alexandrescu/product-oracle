@@ -6,6 +6,7 @@
  */
 import { SHOP_BRIEFS } from "./engcheck-shop";
 import type { Schemas } from "@/lib/api/client";
+import { rawReply, reply } from "./typed";
 import { mockName as displayName } from "./people";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
@@ -2224,12 +2225,12 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
-  if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
+  if (p[1] === "flows" && m === "GET") return reply("/v1/flows", "get", flowCatalog());
   if (p[1] === "inbox" && m === "GET") {
     for (const r of ctx.db.runs) recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
-    return json(200, inbox(ctx));
+    return reply("/v1/inbox", "get", inbox(ctx));
   }
-  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx, true));
+  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return reply("/v1/internal/tick", "post", tick(ctx, true));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
   if (p[1] === "documents" && p.length === 4 && p[3] === "scope" && m === "GET") {
     const doc = ctx.documents.find((d) => d.id === p[2] || d.slug === p[2]);
@@ -2241,7 +2242,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       .flat()
       .filter((x) => x.status === "approved" && ofDoc(x))
       .sort((a, b) => (b.approved_at ?? "").localeCompare(a.approved_at ?? ""))[0];
-    return found ? json(200, found) : fail(404, `document ${p[2]} has no approved PRD scope`);
+    return found ? reply("/v1/documents/{doc}/scope", "get", found) : fail(404, `document ${p[2]} has no approved PRD scope`);
   }
   // C7: the feature-set stop's rows (./scope.ts), and a run's latest scope.
   const scoped = await routeScopes(ctx, req, p);
@@ -2250,8 +2251,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 
   if (p.length === 2 && m === "GET") {
     const status = new URL(req.url).searchParams.get("status");
-    return json(
-      200,
+    return reply(
+      "/v1/runs",
+      "get",
       ctx.db.runs
         .filter((r) => !status || r.status === status)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -2377,14 +2379,14 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       open_proposals: 0,
     };
     ctx.db.runs.push(run);
-    return json(201, run);
+    return reply("/v1/runs", "post", run, 201);
   }
 
   const r = ctx.db.runs.find((x) => x.id === p[2]);
   if (!r) return fail(404, `run ${p[2]} not found`);
   // As oracle.runs.service.recheck_briefs: the run, its review's gate and Approve read one check.
   recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
-  const done = (status = 200) => {
+  const done = () => {
     refresh(r);
     // As the API: a checkpoint is decided by its approver role or above; an engineering stop
     // by the engineering leads and owners once one is named (A3, ctx.mayDecide).
@@ -2406,14 +2408,14 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_retry: s.seq === retryable,
     }));
     const can_decide = checkpoints.some((c) => c.status === "pending" && c.can_decide);
-    return json(status, { ...r, document_title: docTitle(ctx, r), error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    return reply("/v1/runs/{run_id}", "get", { ...r, document_title: docTitle(ctx, r), error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
   if (p.length === 4 && p[3] === "scope" && m === "GET") {
     // C6: the run's latest scope, any status.
     const latest = [...(ctx.db.scopes?.[r.id] ?? [])].sort((a, b) => a.segment_seq - b.segment_seq || a.attempt - b.attempt).pop();
-    return latest ? json(200, latest) : fail(404, `run ${r.id} has no PRD scope`);
+    return latest ? reply("/v1/runs/{run_id}/scope", "get", latest) : fail(404, `run ${r.id} has no PRD scope`);
   }
   if (p.length === 3 && m === "PATCH") {
     if (r.status !== "draft") return fail(409, "only a draft run can be changed");
@@ -2465,7 +2467,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;
     const budget = r.knobs.budget_usd ?? null;
-    return json(200, {
+    return reply("/v1/runs/{run_id}/estimate", "post", {
       run_id: r.id,
       depth: r.knobs.depth,
       total_usd: total,
@@ -2482,7 +2484,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       needs_approval: total > THRESHOLD,
       budget_usd: budget,
       within_budget: budget == null || total <= budget,
-    } satisfies Schemas["EstimateOut"]);
+    });
   }
   if (action === "start" && m === "POST") {
     if (r.status !== "draft") return fail(409, `run is ${r.status}, not a draft`);
@@ -2593,7 +2595,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
     if (cp.status === "pending" || !cp.review || cp.review.kind === "edits") return fail(404, "no review was sent back at this checkpoint");
-    return new Response(renderReview(cp.review, cp.decided_at), { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
+    return rawReply("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml", "get", new Response(renderReview(cp.review, cp.decided_at), { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } }));
   }
   if (action === "checkpoints" && p[4] && p[5] !== "decide") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
@@ -2744,7 +2746,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
-  if (action === "decisions" && m === "GET") return json(200, decisionsOf(ctx, r));
+  if (action === "decisions" && m === "GET") return reply("/v1/runs/{run_id}/decisions", "get", decisionsOf(ctx, r));
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     const raw = new URL(req.url).searchParams.get("attempt");
@@ -2755,7 +2757,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (agents) {
       const original = ctx.db.artifacts[`${key}|agents`];
       if (original == null) return fail(404, `no edits were applied to '${p[6]}': the file served is the agents'`);
-      return new Response(original, { headers: { "content-type": "text/plain" } });
+      return rawReply("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", "get", new Response(original, { headers: { "content-type": "text/plain" } }));
     }
     if (raw != null && Number(raw) !== current) {
       if (Number(raw) !== s?.previous_attempt?.attempt) {
@@ -2765,7 +2767,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     const content = ctx.db.artifacts[key];
     if (content == null) return fail(404, `artifact '${p[6]}' not found`);
-    return new Response(content, { headers: { "content-type": "text/plain" } });
+    return rawReply("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", "get", new Response(content, { headers: { "content-type": "text/plain" } }));
   }
   return fail(404, "Route not found");
 }
@@ -4717,7 +4719,7 @@ async function routeAgentQuestions(ctx: RunsContext, r: RunOut, cp: CheckpointOu
   // The step after the stop's segment that runs (one whose stop is off is skipped).
   const next = seq != null ? (r.segments.find((s) => s.seq > seq && s.status !== "skipped")?.title ?? null) : null;
   const may = mayStage(ctx, r, cp, role);
-  const out = () => json(200, agentQuestionsOut(stored, me, next, cp.status === "pending" && may));
+  const out = () => reply("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions", "get", agentQuestionsOut(stored, me, next, cp.status === "pending" && may));
   if (rest.length === 1 && req.method === "GET") return out();
   if (rest.length !== 3 || rest[2] !== "answer" || req.method !== "PUT") return fail(404, "Not Found");
   if (!may) return fail(403, `Requires the ${cp.approver_role} role`);
@@ -4738,7 +4740,7 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   const role = me?.role ?? ctx.userRole ?? null;
   if (rest[0] === "agent-questions") return routeAgentQuestions(ctx, r, cp, req, rest, role);
   const draft = draftOf(ctx, cp.id);
-  const out = () => json(200, reviewOut(ctx, r, cp, draft, role));
+  const out = () => reply("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", "get", reviewOut(ctx, r, cp, draft, role));
   if (rest[0] === "review" && rest.length === 1 && m === "GET") return out();
   const stage = (rest[0] === "actions" && rest[2] === "stage") || rest[0] === "note";
   const stages = mayStage(ctx, r, cp, role);
