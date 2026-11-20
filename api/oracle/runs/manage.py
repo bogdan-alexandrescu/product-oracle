@@ -40,7 +40,6 @@ from oracle.runs.service import (
     _advance,
     _after_search,
     _art,
-    _attach_for_cancel,
     _can_dismiss_overrun,
     _cancel_again_ids,
     _cancel_call,
@@ -55,7 +54,6 @@ from oracle.runs.service import (
     _creator,
     _credential_end,
     _current_attempt,
-    _duration,
     _end_workflow,
     _finish,
     _flow,
@@ -1042,7 +1040,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             if wf is None:
                 # One workflow per segment: cancelled like the run's workflow below, and
                 # cancelled again by the tick (its cost read) until SwarmCloud confirms.
-                wf = _attach_for_cancel(run, s, s.swarm_workflow_id)
+                wf = service._attach_for_cancel(run, s, s.swarm_workflow_id)
             else:
                 out = done.get(s.swarm_workflow_id) or await _cancel_call(
                     {"id": s.swarm_workflow_id}
@@ -1102,7 +1100,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                 until = _credential_end(lost)
                 if isinstance(result, str):
                     if wf is None:
-                        wf = _attach_for_cancel(run, s, result, label, since, until)
+                        wf = service._attach_for_cancel(run, s, result, label, since, until)
                         _adopt(segments, wf)
                     else:
                         _add_attempt(s, result, label, "cancelled", mode=lost.get("mode"))
@@ -1117,7 +1115,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                         )
                 elif result is not None:  # neither found nor ruled out
                     if wf is None:
-                        wf = _attach_for_cancel(run, s, None, label, since, until)
+                        wf = service._attach_for_cancel(run, s, None, label, since, until)
                     else:
                         _search_for(
                             run,
@@ -1328,7 +1326,7 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
             f"Retried from the Inbox by an approver: submission {label} was neither found "
             "nor ruled out, so the segment was submitted again under a new key. If the lost "
             "one landed it runs without Oracle's data (its token is revoked) until Oracle "
-            f"finds it: Oracle looks for it every {_duration(STUCK_LOOKUP_SECONDS)}, then "
+            f"finds it: Oracle looks for it every {service._duration(STUCK_LOOKUP_SECONDS)}, then "
             "cancels it and counts its cost.",
         )
         _set_art(segment, art)
