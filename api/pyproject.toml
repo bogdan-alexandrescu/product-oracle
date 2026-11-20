@@ -63,6 +63,11 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["B008"]
 
+# #1567: the api shards run under --cov; relative paths let CI combine their data files.
+[tool.coverage.run]
+source = ["oracle"]
+relative_files = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
