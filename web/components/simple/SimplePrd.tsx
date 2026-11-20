@@ -11,6 +11,7 @@ import { withDays } from "@/components/MarkdownBody";
 import { numbersOf, ownNumber } from "@/components/PrdLook";
 import { NotInGt } from "@/components/simple/FeatureName";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas, type SectionOut } from "@/lib/api/client";
 import { buildCodeIndex, lookupCode, nameCodes, splitCodes, type CodeIndex } from "@/lib/code-index";
 import { parseBlocks, type Inline } from "@/lib/markdown";
@@ -42,12 +43,13 @@ function withTableNames(index: CodeIndex, sections: SectionOut[]): CodeIndex {
 /** The PRD version the one-pager reads, every section (GET /v1/documents/{doc}/versions/{n}). */
 export function usePrdSections(doc: string | null, n: number) {
   const q = useQuery(`simple-prd|${doc}|${n}`, () =>
-    doc ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch(() => null) : Promise.resolve(null),
+    doc ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })) : Promise.resolve(null),
   );
   const sections = useMemo(() => (q.data?.sections ?? []) as SectionOut[], [q.data]);
   const codes = useMemo(() => withTableNames(buildCodeIndex(sections.map((s) => ({ section_key: s.section_key, heading: s.heading, body_md: s.body_md }))), sections), [sections]);
   const nums = useMemo(() => numbersOf(sections), [sections]);
-  return { sections, codes, nums, loading: q.loading };
+  // #1586: a failed read keeps its reason, so the page says so instead of drawing no PRD.
+  return { sections, codes, nums, loading: q.loading, error: q.error, reload: q.reload };
 }
 
 export type PrdSections = ReturnType<typeof usePrdSections>;
@@ -198,6 +200,12 @@ export function PrdContents({ prd, blocks }: { prd: PrdSections; blocks: View["b
 export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
   const { sections, codes, nums } = prd;
   const read = sections.filter((s) => s.level >= 2);
+  if (prd.error)
+    return (
+      <div className="simple-noprint" data-testid="prd-whole">
+        <LoadError what="the whole PRD" error={prd.error} onRetry={() => void prd.reload()} />
+      </div>
+    );
   if (!read.length) return null;
   return (
     <div className="simple-prd-whole simple-noprint" data-testid="prd-whole">

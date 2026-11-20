@@ -18,6 +18,7 @@ import {
   Meter,
   type Column,
 } from "@/components/ds";
+import { LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type DocumentSummary, type Schemas, type VersionOut } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -188,22 +189,32 @@ const VERDICT_BAR: Record<string, string> = {
   rejected: "bg-crit",
 };
 
-/** The goals a document's latest version traces to, tagged as Home tags them; loaded for the selected row only. */
-function useTracedGoals(slug: string | null | undefined, n: number | null | undefined, goals: GoalIndex): RowGoal[] | undefined {
+type TracedGoals = { goals: RowGoal[] | undefined; error: string | null; reload: () => Promise<void> };
+
+/**
+ * The goals a document's latest version traces to, tagged as Home tags them; loaded for the selected row only.
+ * #1586: a failed read keeps its reason, never reads as "no goals".
+ */
+function useTracedGoals(slug: string | null | undefined, n: number | null | undefined, goals: GoalIndex): TracedGoals {
   const trace = useQuery(`home|trace|${slug}@${n}`, () =>
-    !slug || n == null
-      ? Promise.resolve(null)
-      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/trace", { params: { path: { doc: slug, n } } })).catch(() => null),
+    !slug || n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/trace", { params: { path: { doc: slug, n } } })),
   );
-  if (trace.loading) return undefined;
+  if (trace.loading || trace.error) return { goals: undefined, error: trace.error, reload: trace.reload };
   const ids = [...new Set(trace.data?.sections.flatMap((s) => s.goals.map((g) => g.id)) ?? [])];
-  return ids
+  const traced = ids
     .map((id) => goals.get(id))
     .filter((g): g is RowGoal => !!g)
     .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
+  return { goals: traced, error: null, reload: trace.reload };
 }
 
-function GoalsSection({ goals }: { goals: RowGoal[] | undefined }) {
+function GoalsSection({ traced: { goals, error, reload } }: { traced: TracedGoals }) {
+  if (error)
+    return (
+      <InspectorSection label="Goals" testId="inspector-goals">
+        <LoadError what="the goals" error={error} onRetry={() => void reload()} />
+      </InspectorSection>
+    );
   if (!goals || goals.length === 0) return null;
   return (
     <InspectorSection label="Goals" testId="inspector-goals">
@@ -222,15 +233,14 @@ function GoalsSection({ goals }: { goals: RowGoal[] | undefined }) {
 function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: "prd" }>; openItems: number | undefined; goalIndex: GoalIndex }) {
   const d = f.doc;
   const n = d.latest_version;
-  const goals = useTracedGoals(d.slug, n, goalIndex);
+  const traced = useTracedGoals(d.slug, n, goalIndex);
   const version = useQuery(`home|version|${d.slug}|${n}`, () =>
     n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: d.slug, n } } })),
   );
   // Readiness needs a composition; without one the blockers stay unknown, never zero.
+  // #1586: a failed read says so and why (the Blockers section), never "no blockers".
   const readiness = useQuery(`home|readiness|${d.slug}|${n}`, () =>
-    n == null
-      ? Promise.resolve(null)
-      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc: d.slug, n } } })).catch(() => null),
+    n == null ? Promise.resolve(null) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc: d.slug, n } } })),
   );
   const v: VersionOut | null | undefined = version.data;
   const sections = v?.sections ?? [];
@@ -244,8 +254,11 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
   const named = useQuery(`home|blockers|${d.id}|${ids.join(",")}`, (): Promise<Schemas["BlockerSummary"][]> =>
     ids.length === 0
       ? Promise.resolve([])
-      : unwrap(api.GET("/v1/blockers", { params: { query: { document_id: d.id } } })).catch(() => []),
+      : unwrap(api.GET("/v1/blockers", { params: { query: { document_id: d.id } } })),
   );
+  // #1586: blockers whose names could not be read say so, never a line per check's heading.
+  const blockersFailed = readiness.error ? readiness : ids.length > 0 && named.error ? named : null;
+  const naming = ids.length > 0 && named.loading;
   const statement = new Map((named.data ?? []).map((b) => [b.id, b.statement]));
   // QA pass D-5: each line opens its blocker (as Publish's Resolve does); a check with no named
   // blocker opens the PRD's Publish page, where its blocks are listed.
@@ -320,27 +333,37 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           </div>
         </InspectorSection>
       )}
-      {blockers.length > 0 && (
-        <InspectorSection
-          label="Blockers"
-          testId="inspector-blockers"
-          tools={<Chip kind="crit">{blockers.filter((b) => b.hard).length || blockers.length} critical</Chip>}
-        >
-          {blockers.map((b) => (
-            <div key={b.key} className="flex min-h-8 min-w-0 items-center gap-2 py-1" data-testid="inspector-blocker-row">
-              {/* qa-company-25: a long blocker wraps to two lines, then ends in an ellipsis (the title holds it all). */}
-              <span className="inline-flex min-w-0 items-start gap-2.5" title={b.title} data-testid="inspector-blocker">
-                <Icon name="alert" size={16} className="mt-[3px] flex-none text-crit" />
-                <span className="line-clamp-2 min-w-0 break-words">{b.title}</span>
-              </span>
-              <LinkButton href={b.href} className="ml-auto flex-none" aria-label={`${mayResolve ? "Resolve" : "Open"} ${b.title}`}>
-                {mayResolve ? "Resolve" : "Open"}
-              </LinkButton>
-            </div>
-          ))}
+      {blockersFailed ? (
+        <InspectorSection label="Blockers" testId="inspector-blockers">
+          <LoadError what="the blockers" error={blockersFailed.error!} onRetry={() => void blockersFailed.reload()} />
         </InspectorSection>
+      ) : naming ? (
+        <InspectorSection label="Blockers" testId="inspector-blockers">
+          <Loading />
+        </InspectorSection>
+      ) : (
+        blockers.length > 0 && (
+          <InspectorSection
+            label="Blockers"
+            testId="inspector-blockers"
+            tools={<Chip kind="crit">{blockers.filter((b) => b.hard).length || blockers.length} critical</Chip>}
+          >
+            {blockers.map((b) => (
+              <div key={b.key} className="flex min-h-8 min-w-0 items-center gap-2 py-1" data-testid="inspector-blocker-row">
+                {/* qa-company-25: a long blocker wraps to two lines, then ends in an ellipsis (the title holds it all). */}
+                <span className="inline-flex min-w-0 items-start gap-2.5" title={b.title} data-testid="inspector-blocker">
+                  <Icon name="alert" size={16} className="mt-[3px] flex-none text-crit" />
+                  <span className="line-clamp-2 min-w-0 break-words">{b.title}</span>
+                </span>
+                <LinkButton href={b.href} className="ml-auto flex-none" aria-label={`${mayResolve ? "Resolve" : "Open"} ${b.title}`}>
+                  {mayResolve ? "Resolve" : "Open"}
+                </LinkButton>
+              </div>
+            ))}
+          </InspectorSection>
+        )
       )}
-      <GoalsSection goals={goals} />
+      <GoalsSection traced={traced} />
     </Inspector>
   );
 }
@@ -363,7 +386,7 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
   const detailQ = useQuery(`home|run|${run.id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: run.id } } })));
   const detail: RunOut | undefined = detailQ.data;
   const doc = runDoc(run, docs);
-  const goals = useTracedGoals(doc?.slug, doc?.latest_version, goalIndex);
+  const traced = useTracedGoals(doc?.slug, doc?.latest_version, goalIndex);
   const name = runLabel(run, doc?.title);
   return (
     <Inspector
@@ -405,7 +428,7 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
       <InspectorSection label="Cost">
         <InspectorRow value={<RunCost run={run} />}>{run.status === "awaiting_approval" ? "Estimate" : "Spent"}</InspectorRow>
       </InspectorSection>
-      <GoalsSection goals={goals} />
+      <GoalsSection traced={traced} />
       {run.document_slug && run.document_id && (
         <InspectorSection>
           <Link href={`/documents/${run.document_slug}`} className="font-medium text-accent-ink hover:underline">

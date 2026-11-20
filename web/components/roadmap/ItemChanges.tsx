@@ -1,7 +1,9 @@
 "use client";
 
 import { Chip, InspectorSection } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import type { Schemas } from "@/lib/api/client";
+import type { Query } from "@/lib/use-query";
 
 import { horizonLabel } from "./item-row";
 import { changeChips, changeLine, type ItemChange } from "./useItemsDiff";
@@ -45,7 +47,15 @@ export function WhatChanged({ change, since, titles }: { change: ItemChange; sin
 }
 
 /** The inspector's History (E3): "Draft v1 · Next", "Roadmap v1 · Now · approved", "Draft v3 · dropped", newest last. */
-export function ItemHistory({ history }: { history: Schemas["RoadmapItemHistoryOut"] | null | undefined }) {
+export function ItemHistory({ q }: { q: Query<Schemas["RoadmapItemHistoryOut"] | null> }) {
+  // #1586: a history that could not be read says so, never reads as no history.
+  if (q.error)
+    return (
+      <InspectorSection label="History" testId="item-history">
+        <LoadError what="the history" error={q.error} onRetry={() => void q.reload()} />
+      </InspectorSection>
+    );
+  const history = q.data;
   if (!history?.entries.length) return null;
   return (
     <InspectorSection label="History" testId="item-history">

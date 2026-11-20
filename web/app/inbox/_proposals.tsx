@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button, Chip, InfoTip, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { Named, NotInGt } from "@/components/simple/FeatureName";
-import { useItemRef } from "@/components/simple/WaitingItems";
+import { itemRefOf, useItemRef } from "@/components/simple/WaitingItems";
 import { calendarDay } from "@/lib/dates";
 import { formatDateRange, formatDateTime } from "@/lib/format";
 
@@ -23,7 +23,7 @@ const panelHref = (documentId: string, itemId: string) => `/simple/roadmap?roadm
 /** The feature's name, opening its feature panel when it is on a roadmap. */
 function FeatureName({ name, itemId, documentId }: { name: string; itemId?: string | null; documentId?: string | null }) {
   // simple-home-qa-nov12 #4: the item's code before its name, as its panel reads it.
-  const ref = useItemRef(itemId);
+  const ref = itemRefOf(useItemRef(itemId));
   const named = <Named item={{ code: ref?.code, title: name }} />;
   // simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden.
   const flag = ref && <NotInGt item={ref} />;

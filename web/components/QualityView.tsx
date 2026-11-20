@@ -22,7 +22,7 @@ import {
   type ChipKind,
   type Column,
 } from "@/components/ds";
-import { INPUT } from "@/components/ui";
+import { INPUT, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { blockedLabel } from "@/lib/blocked";
 import { dayIn, useCompanyZone, zoneDateTime, zoneDay } from "@/lib/dates";
@@ -130,7 +130,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   );
   const readiness = readinessQ.data;
   const versionQ = useQuery(`version|${doc}|${n}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch(() => undefined),
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
   );
   const jobsQ = useQuery(`quality-jobs|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/llm-jobs", { params: { path: { doc } } })).then((all) =>
@@ -444,6 +444,8 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       draft={draftOf(item.key)}
       onDraft={(dr) => setDrafts((prev) => ({ ...prev, [item.key]: dr }))}
       sections={sections}
+      // #1586: sections that could not be read say so, never an empty section picker.
+      sectionsFailed={versionQ.error ? <LoadError what="the sections" error={versionQ.error} onRetry={() => void versionQ.reload()} /> : null}
       nameOf={nameOf}
       busy={busy === "rate"}
       onSubmit={() => submit(item)}
@@ -696,6 +698,7 @@ function CriterionInspector({
   draft,
   onDraft,
   sections,
+  sectionsFailed,
   nameOf,
   busy,
   onSubmit,
@@ -719,6 +722,8 @@ function CriterionInspector({
   draft: Draft;
   onDraft: (d: Draft) => void;
   sections: { section_key: string; heading: string }[];
+  /** Shown in place of the section picker when the sections could not be read. */
+  sectionsFailed: ReactNode;
   nameOf: (id: string | null | undefined) => string;
   busy: boolean;
   onSubmit: () => void;
@@ -892,6 +897,7 @@ function CriterionInspector({
             blind={blind}
             onBlind={onBlind}
             sections={sections}
+            sectionsFailed={sectionsFailed}
             busy={busy}
             onSubmit={onSubmit}
           />
@@ -916,6 +922,7 @@ function RatingForm({
   blind,
   onBlind,
   sections,
+  sectionsFailed,
   busy,
   onSubmit,
 }: {
@@ -924,6 +931,7 @@ function RatingForm({
   blind: boolean;
   onBlind: (on: boolean) => void;
   sections: { section_key: string; heading: string }[];
+  sectionsFailed: ReactNode;
   busy: boolean;
   onSubmit: () => void;
 }) {
@@ -978,7 +986,8 @@ function RatingForm({
               <span aria-hidden>×</span>
             </button>
           ))}
-          {left.length > 0 && (
+          {sectionsFailed}
+          {!sectionsFailed && left.length > 0 && (
             <select
               aria-label="Add a section"
               className={`${INPUT} w-auto max-w-full`}

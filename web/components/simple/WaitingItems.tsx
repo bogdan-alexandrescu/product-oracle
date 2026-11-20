@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { LoadError } from "@/components/ui";
 import { toast } from "@/components/ds/Toast";
 import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
@@ -77,25 +78,35 @@ function loadItems(): Promise<Map<string, ItemRef>> {
   return itemsHit;
 }
 
-/** A roadmap item by its id (or its date suggestion's id); undefined when not on the roadmap or not read yet. */
-export function useItemRef(id: string | null | undefined): ItemRef | undefined {
-  const [ref, setRef] = useState<{ id: string; ref: ItemRef | undefined } | null>(null);
+/**
+ * A roadmap item by its id (or its date suggestion's id), read three ways (#1586): loading, failed
+ * with its reason, or answered (ref undefined: not on the roadmap, or no id).
+ */
+export type ItemRefRead = { state: "loading" } | { state: "failed"; error: string } | { state: "answered"; ref: ItemRef | undefined };
+
+export function useItemRef(id: string | null | undefined): ItemRefRead {
+  const [read, setRead] = useState<{ id: string; read: ItemRefRead } | null>(null);
   useEffect(() => {
     if (!id) return;
     let alive = true;
-    loadItems()
-      .then((items) => alive && setRef({ id, ref: items.get(id) }))
-      .catch(() => undefined);
+    loadItems().then(
+      (items) => alive && setRead({ id, read: { state: "answered", ref: items.get(id) } }),
+      (e: unknown) => alive && setRead({ id, read: { state: "failed", error: errorMessage(e) } }),
+    );
     return () => {
       alive = false;
     };
   }, [id]);
-  return id && ref?.id === id ? ref.ref : undefined;
+  if (!id) return { state: "answered", ref: undefined };
+  return read?.id === id ? read.read : { state: "loading" };
 }
+
+/** An answered read's item; undefined while loading, when it failed, or when not on the roadmap. */
+export const itemRefOf = (r: ItemRefRead): ItemRef | undefined => (r.state === "answered" ? r.ref : undefined);
 
 /** A roadmap item's code by its id (or its date suggestion's id); null when it has none or is not read yet. */
 export function useItemCode(id: string | null | undefined): string | null {
-  return useItemRef(id)?.code ?? null;
+  return itemRefOf(useItemRef(id))?.code ?? null;
 }
 
 /** The roadmap item a waiting row is about: a broken link's or a date's item (from its link). */
@@ -212,21 +223,29 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
   const [fixed, setFixed] = useState<ReadonlySet<string>>(new Set());
   const breaks = item.kind === "broken_link" ? (links ?? [item]).filter((b) => !fixed.has(b.key)) : [];
   // A decision-log call decides in place with its options (GET /v1/decisions/{number}).
+  // #1586: a read that failed keeps its reason, shown with Try again in place of the Decide buttons.
   const [call, setCall] = useState<Schemas["DecisionOut"] | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
     if (item.kind !== "decision") return;
     let alive = true;
-    unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: item.ref_id } } }))
-      .then((d) => alive && setCall(d))
-      .catch(() => undefined);
+    unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: item.ref_id } } })).then(
+      (d) => {
+        if (!alive) return;
+        setCall(d);
+        setCallError(null);
+      },
+      (e: unknown) => alive && setCallError(errorMessage(e)),
+    );
     return () => {
       alive = false;
     };
-  }, [item.kind, item.ref_id]);
+  }, [item.kind, item.ref_id, tries]);
   // A broken link fixes in place too, as Home's broken-links card does: "Fix the link" opens its
   // fixes (the item and its dependency read from the roadmap, as the change engine needs them).
   const [fixing, setFixing] = useState(false);
-  const ref = useItemRef(itemOf(item));
+  const ref = itemRefOf(useItemRef(itemOf(item)));
   const code = ref?.code ?? null;
   // simple-home-qa-nov14 #2: the feature's name opens its one panel where the page gives an opener.
   const open = useOpenFeature();
@@ -298,7 +317,9 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
         </span>
       </div>
       <div className="flex flex-wrap gap-2 max-[600px]:w-full">
-        {item.kind === "broken_link" ? (
+        {item.kind === "decision" && callError && !call ? (
+          <LoadError what="the decision" error={callError} onRetry={() => setTries((t) => t + 1)} />
+        ) : item.kind === "broken_link" ? (
           <button type="button" className="simple-button simple-button-primary" aria-expanded={fixing} onClick={() => setFixing((f) => !f)}>
             {item.action}
           </button>

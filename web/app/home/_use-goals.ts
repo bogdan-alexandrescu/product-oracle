@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import { api, unwrap } from "@/lib/api/client";
-import { useQuery } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { goalViews, historyOf, measurementPoints, shownGoals, type GoalView, type Point } from "./_goals";
 
@@ -20,6 +20,8 @@ export function useGoals(scope: string, { short = false }: { short?: boolean } =
   history: Map<string, Point[]>;
   /** The trends are loading: a goal with a current value and no history yet keeps its trend's room meanwhile. */
   historyPending: boolean;
+  /** #1586: each goal whose trend could not be read, with the reason; never drawn as "no trend". */
+  historyFailed: Map<string, string>;
   error: string | null;
   loading: boolean;
 } {
@@ -34,24 +36,43 @@ export function useGoals(scope: string, { short = false }: { short?: boolean } =
     `${scope}|history|${tracked.join(",")}`,
     async () => {
       // B5: the trend uses a goal's measurements when it has two or more, else its revisions.
+      // #1586: a goal whose reads fail keeps the reason, so its card says the trend could not load.
       const lists = await Promise.all(
-        tracked.map(async (id) => {
-          const path = { params: { path: { entity_id: id } } };
-          if (measured.has(id)) {
-            const rows = await unwrap(api.GET("/v1/baseline/entities/{entity_id}/measurements", path)).catch(() => []);
-            if (rows.length >= 2) return measurementPoints(rows);
+        tracked.map(async (id): Promise<Point[] | { failed: string }> => {
+          try {
+            const path = { params: { path: { entity_id: id } } };
+            if (measured.has(id)) {
+              const rows = await unwrap(api.GET("/v1/baseline/entities/{entity_id}/measurements", path));
+              if (rows.length >= 2) return measurementPoints(rows);
+            }
+            const revisions = await unwrap(
+              api.GET("/v1/baseline/entities/{entity_id}/revisions", {
+                params: { path: { entity_id: id }, query: { limit: TREND_REVISIONS } },
+              }),
+            );
+            return historyOf(revisions);
+          } catch (e) {
+            return { failed: errorMessage(e) };
           }
-          const revisions = await unwrap(
-            api.GET("/v1/baseline/entities/{entity_id}/revisions", {
-              params: { path: { entity_id: id }, query: { limit: TREND_REVISIONS } },
-            }),
-          ).catch(() => []);
-          return historyOf(revisions);
         }),
       );
-      return new Map<string, Point[]>(tracked.map((id, i) => [id, lists[i]]));
+      const history = new Map<string, Point[]>();
+      const failed = new Map<string, string>();
+      tracked.forEach((id, i) => {
+        const l = lists[i];
+        if (Array.isArray(l)) history.set(id, l);
+        else failed.set(id, l.failed);
+      });
+      return { history, failed };
     },
     { keepPrevious: true },
   );
-  return { goals, history: historyQ.data ?? new Map(), historyPending: historyQ.loading, error: goalsQ.error, loading: goalsQ.loading };
+  return {
+    goals,
+    history: historyQ.data?.history ?? new Map(),
+    historyPending: historyQ.loading,
+    historyFailed: historyQ.data?.failed ?? new Map(),
+    error: goalsQ.error,
+    loading: goalsQ.loading,
+  };
 }

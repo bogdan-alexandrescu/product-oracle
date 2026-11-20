@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { toast } from "@/components/ds/Toast";
 import { ChatCard } from "@/components/simple/chat/ChatCard";
+import { LoadError } from "@/components/ui";
 import { recommendsLine, type Answer, type Question } from "@/components/simple/questions/Questions";
 import { useItemCode } from "@/components/simple/WaitingItems";
 import { api, unwrap } from "@/lib/api/client";
@@ -52,16 +53,24 @@ const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, 
  * first, then the other judgement calls), then the next meeting's agenda and the proposals.
  * A decision on the agenda is one step, the agenda's.
  */
-/** A read's answer, or undefined when it failed. */
-const settle = <T,>(p: Promise<T>): Promise<T | undefined> => p.catch(() => undefined);
+/** A read that failed: what it was ("the decisions waiting for you") and the reason it gave. */
+type Failed = [what: string, reason: string];
 
-async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null }> {
-  // The walk's own steps are the pass; a decisions read that fails leaves its steps out, never the whole walk.
+async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null; failed: Failed[] }> {
+  // The walk's own steps are the pass; a decisions read that fails leaves its steps out, never the
+  // whole walk, and is carried out (failed) to say so with its reason, never read as none (#1586).
+  const failed: Failed[] = [];
+  /** A read's answer, or undefined when it failed (noted in failed as `what`). */
+  const settle = <T,>(p: Promise<T>, what: string): Promise<T | undefined> =>
+    p.catch((e: unknown) => {
+      failed.push([what, detail(e)]);
+      return undefined;
+    });
   const [w, waitingR, inboxR, meetingsR] = await Promise.all([
     walk(),
-    settle(unwrap(api.GET("/v1/simple/decisions/waiting"))),
-    settle(loadInbox()),
-    settle(unwrap(api.GET("/v1/simple/meetings"))),
+    settle(unwrap(api.GET("/v1/simple/decisions/waiting")), "the decisions waiting for you"),
+    settle(loadInbox(), "the inbox"),
+    settle(unwrap(api.GET("/v1/simple/meetings")), "the meetings"),
   ]);
   const waiting = waitingR ?? { questions: [] as Question[] };
   const inbox = inboxR ?? { decisions: [] as Awaited<ReturnType<typeof loadInbox>>["decisions"] };
@@ -70,7 +79,7 @@ async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null
   const asked = new Set(waiting.questions.map((q) => q.id));
   const rows = inbox.decisions.filter((d) => d.counts && d.reason === "needs_decision" && !agenda.has(d.id) && !asked.has(d.id));
   // As Home's card: Oracle's run approvals are never product decisions, nor a PRD's question read twice.
-  const others = (await Promise.all(rows.map((d) => settle(unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))))))
+  const others = (await Promise.all(rows.map((d) => settle(unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } })), `the decision ${d.title}`))))
     .filter((d): d is NonNullable<typeof d> => !!d)
     .filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
   const decisions: DecisionStep[] = [
@@ -94,7 +103,7 @@ async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null
     })),
   ];
   const broken = w.steps.filter((s) => s.kind === "broken_link");
-  return { steps: [...broken, ...decisions, ...w.steps.filter((s) => s.kind !== "broken_link")], meeting: meetingsR?.upcoming[0] ?? null };
+  return { steps: [...broken, ...decisions, ...w.steps.filter((s) => s.kind !== "broken_link")], meeting: meetingsR?.upcoming[0] ?? null, failed };
 }
 
 /**
@@ -111,12 +120,14 @@ export function Walk({ onDone }: { onDone: () => void }) {
   const [at, setAt] = useState(0);
   const [done, setDone] = useState<Done[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState<Failed[]>([]);
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try {
       const r = await loadSteps();
       setSteps(r.steps);
       setMeeting(r.meeting);
+      setFailed(r.failed);
       setError(null);
     } catch (e) {
       setError(detail(e));
@@ -129,6 +140,7 @@ export function Walk({ onDone }: { onDone: () => void }) {
         if (!live) return;
         setSteps(r.steps);
         setMeeting(r.meeting);
+        setFailed(r.failed);
       })
       .catch((e) => live && setError(detail(e)));
     return () => {
@@ -265,7 +277,11 @@ export function Walk({ onDone }: { onDone: () => void }) {
         </p>
       )}
       {!steps && !error && <p className="simple-small">Loading what waits for you…</p>}
-      {steps && total === 0 && (
+      {/* #1586: a decisions read that failed says so with its reason, never as nothing waiting. */}
+      {failed.map(([what, reason], n) => (
+        <LoadError key={`${n}-${what}`} what={what} error={reason} onRetry={() => void load()} />
+      ))}
+      {steps && total === 0 && failed.length === 0 && (
         <p className="simple-small" data-testid="walk-empty">
           Nothing waits for you. You are up to date.
         </p>

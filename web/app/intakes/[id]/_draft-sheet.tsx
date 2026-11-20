@@ -172,7 +172,11 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
   async function refused(e: unknown) {
     if (e instanceof ApiError && e.code === "baseline_not_reusable") {
       setReuse(false);
-      const fresh = await getReviewStatus().catch(() => null);
+      // #1586: why it cannot be reused, read again; a read that failed is shown, not left out.
+      const fresh = await getReviewStatus().catch((r) => {
+        setError(errorMessage(r));
+        return null;
+      });
       if (fresh) review.setData(() => fresh);
       setNotice(`${fresh ? reasonText(fresh) : "The current Ground Truth can no longer be used"}: Oracle rebuilds it first.`);
       return;
