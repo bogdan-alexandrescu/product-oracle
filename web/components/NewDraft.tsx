@@ -1394,15 +1394,16 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
                 </span>
               )}
             </label>
-            <label className="block">
+            <div className="block">
+              {/* #1590: how much to write sits behind the (i), outside the label so the label still names the text box. */}
               <span className="mb-1.5 flex items-center gap-1 text-[15px] font-semibold text-text">
-                What problem does it solve?
-                {/* #1590: how much to write sits behind the (i). */}
+                <label htmlFor={`${id}-problem`}>What problem does it solve?</label>
                 <InfoTip label="the brief" align="start" testId="brief-length-tip" id={`${id}-problem-hint`}>
                   {`A couple of sentences is enough (at least ${PROBLEM_MIN} characters).`}
                 </InfoTip>
               </span>
               <textarea
+                id={`${id}-problem`}
                 className={`${INPUT} h-auto min-h-24 py-2`}
                 rows={4}
                 value={problem}
@@ -1419,7 +1420,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
                   {problemError}
                 </span>
               )}
-            </label>
+            </div>
           </Panel>
 
           <Panel as="div" bodyClassName="flex flex-col gap-5 p-4">

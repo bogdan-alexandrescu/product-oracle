@@ -259,13 +259,13 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               <Button
                 onClick={saveDetails}
                 disabled={!detailsChanged || !nameValue.trim() || busy !== null}
-                aria-describedby={detailsReason ? "details-save-reason" : undefined}
+                aria-describedby={detailsReason || detailsUnchanged ? "details-save-reason" : undefined}
               >
                 {busy === "details" ? "Saving…" : "Save details"}
               </Button>
               {detailsUnchanged && (
                 // #1590: why Save details is disabled sits behind the (i).
-                <InfoTip label="saving the details" align="start" testId="template-meta-save-tip">
+                <InfoTip label="saving the details" align="start" testId="template-meta-save-tip" id="details-save-reason">
                   Change the name or description to save them.
                 </InfoTip>
               )}
@@ -365,13 +365,13 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
                 icon="check"
                 onClick={saveVersion}
                 disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
-                aria-describedby={saveReason ? "version-save-reason" : undefined}
+                aria-describedby={saveReason || saveUnchanged ? "version-save-reason" : undefined}
               >
                 {busy === "version" ? "Saving…" : "Save as new version"}
               </Button>
               {saveUnchanged && (
                 // #1590: why Save as new version is disabled sits behind the (i).
-                <InfoTip label="saving a new version" align="start" testId="template-save-tip">
+                <InfoTip label="saving a new version" align="start" testId="template-save-tip" id="version-save-reason">
                   Change the template to save a new version.
                 </InfoTip>
               )}
