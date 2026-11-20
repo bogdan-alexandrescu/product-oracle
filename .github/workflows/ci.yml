@@ -233,6 +233,9 @@ jobs:
           make openapi
           git diff --exit-code -- web/lib/api || (echo "Run 'make openapi' and commit the result" && exit 1)
       - run: npm run lint
+      # Logic and render tests beside their module (#1583); Playwright keeps the flows a person drives.
+      - name: Unit tests (Vitest)
+        run: npm run test:unit
       # A spec that measures elapsed time is tagged @timing, so it runs alone in e2e-timing.
       - name: Timing specs are tagged @timing
         run: node scripts/check-timing-tags.mjs
