@@ -129,11 +129,7 @@ def test_upgrade_downgrade_round_trip(scratch_db):
     assert _run("SELECT count(*) FROM users") == [(1,)]
     with pytest.raises(Exception, match="ck_users_role"):
         _run("UPDATE users SET role = 'viewer'")
-
-    upgrade(cfg, "head")
-    assert V1_TABLES <= _tables()
-    command.downgrade(cfg, "base")
-    assert _tables() == {"alembic_version"}
+    # The whole chain up, down to empty and up again: tests/test_migration_graph.py.
 
 
 def test_models_match_migrations(scratch_db):

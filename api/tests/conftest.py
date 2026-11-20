@@ -130,15 +130,24 @@ async def _install_cleanup(url: str) -> None:
     await engine.dispose()
 
 
-# Set when a test takes a database connection from any engine's pool: a test that took
-# none wrote nothing, and its clean-up makes no round trip.
+# Set when a test takes a database connection from any engine's pool, or one is still
+# out (a wider fixture's session) at its end: a test with neither wrote nothing, and its
+# clean-up makes no round trip.
 _used_database = False
+_connections_out = 0
 
 
 @event.listens_for(Pool, "checkout")
-def _note_database_use(*_args) -> None:
-    global _used_database
+def _note_checkout(*_args) -> None:
+    global _used_database, _connections_out
     _used_database = True
+    _connections_out += 1
+
+
+@event.listens_for(Pool, "checkin")
+def _note_checkin(*_args) -> None:
+    global _connections_out
+    _connections_out -= 1
 
 
 @pytest.fixture(autouse=True)
@@ -146,7 +155,7 @@ async def _truncate_after_test(migrated_db):
     global _used_database
     _used_database = False
     yield
-    if not _used_database:
+    if not _used_database and _connections_out <= 0:
         return
     names = [t.name for t in Base.metadata.sorted_tables]
     async with get_engine().begin() as conn:
