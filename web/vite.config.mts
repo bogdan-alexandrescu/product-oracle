@@ -3,10 +3,10 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, loadEnv, type Plugin, type UserConfig } from 'vite';
+import { defineConfig, loadEnv, type Connect, type Plugin, type UserConfig } from 'vite';
 
-import { appCsp } from './lib/csp';
-import { ROUTE_FILE_IGNORE } from './lib/route-files';
+import { appCsp } from './lib/csp.ts';
+import { ROUTE_FILE_IGNORE } from './lib/route-files.ts';
 
 /**
  * #1581: the web's Vite config for dev, build and preview, after ai-studio's createViteConfig.
@@ -19,15 +19,15 @@ const API_PATHS = ['/v1', '/uploads', '/healthz'];
 
 /** #1569: the commit this build serves at /version (nginx answers it in the image). */
 function versionRoute(): Plugin {
-  const serve = (server: { middlewares: { use: (path: string, fn: never) => void } }) =>
-    server.middlewares.use('/version', ((
-      _req: unknown,
-      res: { setHeader: (k: string, v: string) => void; end: (b: string) => void },
-    ) => {
+  type Server = { middlewares: Connect.Server };
+  // Nothing is returned: a returned function would run as a hook after Vite's own middlewares.
+  const serve = (server: Server) => {
+    server.middlewares.use('/version', (_req, res) => {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'no-store');
       res.end(JSON.stringify({ git_sha: process.env.ORACLE_GIT_SHA || 'unknown' }));
-    }) as never);
+    });
+  };
   return { name: 'oracle-version', configureServer: serve, configurePreviewServer: serve };
 }
 
@@ -67,7 +67,12 @@ export function createViteConfig(command: 'build' | 'serve', mode: string): User
     // Tailwind's output goes through Lightning CSS only: PostCSS rejects some arbitrary-property
     // rules Tailwind makes from text in the source (a citation such as "[c:x]").
     css: { transformer: 'lightningcss' },
-    define: { 'import.meta.env.VITE_ORACLE_SIMPLE_MODE': JSON.stringify(simple ? '1' : '') },
+    // The flags are read as process.env.VITE_* so the Playwright specs, which import app modules
+    // in Node, can load them too; the build writes in their values.
+    define: {
+      'process.env.VITE_API_MOCKS': JSON.stringify(mock ? '1' : ''),
+      'process.env.VITE_ORACLE_SIMPLE_MODE': JSON.stringify(simple ? '1' : ''),
+    },
     server: {
       port: 3000,
       proxy,

@@ -115,9 +115,9 @@ test('a link to a detail section opens the full document at it, once; the brief 
   await page.goto('/documents/usage-alerts-roadmap/v/1');
   await expect(page.getByTestId('document-sections').filter({ visible: true })).toBeVisible();
   await page.evaluate(() =>
-    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
-      '/documents/referral-link/v/2#s-feature-detail',
-    ),
+    (
+      window as unknown as { __poRouter: { navigate: (o: { href: string }) => void } }
+    ).__poRouter.navigate({ href: '/documents/referral-link/v/2#s-feature-detail' }),
   );
   await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2#s-feature-detail$/);
   await expect(sections(page)).toHaveAttribute('data-view', 'full');

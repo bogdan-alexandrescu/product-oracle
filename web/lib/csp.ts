@@ -12,7 +12,7 @@
  * fonts are allowed: the picker's dialog and theme previews (sandboxed srcdoc frames,
  * which inherit this policy; theme CSS may use no URL but data:) use them.
  *
- * #1581: one list for both servers: vite.config.ts sends it from `vite dev` and `vite preview`,
+ * #1581: one list for both servers: vite.config.mts sends it from `vite dev` and `vite preview`,
  * and nginx/security-headers.conf carries the production policy (lib/csp.test.ts keeps it equal).
  */
 const NOTION_ICONS = [

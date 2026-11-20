@@ -6,7 +6,7 @@ import { expect, test } from 'vitest';
 import { appCsp } from './csp';
 
 /*
- * #1581: one CSP for `vite dev`/`vite preview` (vite.config.ts) and nginx.
+ * #1581: one CSP for `vite dev`/`vite preview` (vite.config.mts) and nginx.
  * protects=the image sending another policy than the one the app is tested under;
  * fails_when=nginx/security-headers.conf's policy is not appCsp(false) word for word;
  * no_claim=the header on each nginx location (the nginx config includes the file in each).

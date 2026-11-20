@@ -27,6 +27,11 @@ declare module '@tanstack/react-router' {
   }
 }
 
+// The mock build hands specs its router, to move inside the app as a link would.
+if (process.env.VITE_API_MOCKS === '1') {
+  (window as unknown as { __poRouter?: typeof router }).__poRouter = router;
+}
+
 // A chunk from an older deploy is gone (nginx answers 404, no-store): load the new build once.
 window.addEventListener('vite:preloadError', () => {
   if (sessionStorage.getItem('oracle-reloaded') === location.href) return;
