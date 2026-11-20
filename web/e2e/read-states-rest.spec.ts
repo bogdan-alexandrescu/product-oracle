@@ -110,3 +110,21 @@ test("Decisions: a linked item's evidence that could not be read says so, never 
   await expect(evidence).not.toContainText("No evidence on this item");
   await expect(evidence.getByRole("checkbox")).toHaveCount(0);
 });
+
+test("Brief: goals that could not be read say so, never no confirmed company goal yet", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await page.goto("/documents/new");
+  await page.getByRole("textbox", { name: "Title" }).fill("Saved carts for repeat buyers");
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers lose their cart between visits.");
+  await page.getByRole("button", { name: "Continue" }).first().click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  const goals = page.getByTestId("intake-goals");
+  await expect(goals).toContainText("No goal chosen yet");
+  await expect(goals.getByTestId("load-error")).toHaveCount(0);
+  const url = await calledUrl(page, /^\/v1\/baseline\/entities\?(?=.*type=goal)(?=.*status=confirmed)/);
+
+  await failGets(page, url);
+  await page.reload();
+  await seesReason(page, page.getByTestId("intake-goals"), "the goals");
+  await expect(page.getByTestId("intake-goals")).not.toContainText(/No goal chosen yet|No confirmed company goal yet/);
+});
