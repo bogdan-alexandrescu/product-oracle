@@ -24,6 +24,7 @@ import base64
 import copy
 import hashlib
 import io
+import logging
 import re
 import uuid
 import warnings
@@ -45,6 +46,8 @@ from oracle.branding_models import BrandAsset
 from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.tenancy import current_tenant
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "BrandAsset",
@@ -122,7 +125,8 @@ def reencode_logo(data: bytes) -> tuple[bytes, int, int]:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise InvalidLogo(TOO_LARGE) from None
-    except Exception:  # noqa: BLE001 - any decoder failure is "not an image we take"
+    except Exception as exc:  # noqa: BLE001 - any decoder failure is "not an image we take"
+        log.warning("logo could not be decoded: %s", exception_text(exc))
         raise InvalidLogo(NOT_AN_IMAGE) from None
     return out.getvalue(), img.width, img.height
 

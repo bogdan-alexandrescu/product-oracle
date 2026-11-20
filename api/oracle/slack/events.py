@@ -38,6 +38,7 @@ from oracle.config import get_settings
 from oracle.discussions import replies, service
 from oracle.discussions.models import Discussion, DiscussionMessage
 from oracle.discussions.schemas import DiscussionMessageIn
+from oracle.errors import exception_text
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
 from oracle.members.names import display_name
@@ -310,8 +311,8 @@ async def slack_events(request: Request) -> dict[str, Any]:
         return {}
     try:
         await handle(tenant_id, event_id, event)
-    except Exception as e:
-        log.warning("slack events: event %s failed (%s)", event_id, type(e).__name__)
+    except Exception as e:  # noqa: BLE001 - a bad Slack event must not break the webhook
+        log.warning("slack events: event %s failed: %s", event_id, exception_text(e))
         try:
             async with tenant_session(tenant_id) as db:
                 await audit.record(

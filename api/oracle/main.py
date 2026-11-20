@@ -257,7 +257,8 @@ def create_app() -> FastAPI:
         try:
             async with get_engine().connect() as conn:
                 await conn.execute(text("SELECT 1"))
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - reported to the caller as unreachable
+            log.warning("healthz database check failed: %s", exception_text(exc))
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return Health(status="error", database="unreachable")
         return Health(status="ok", database="ok")

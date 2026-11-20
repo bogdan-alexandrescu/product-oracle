@@ -78,7 +78,7 @@ def _timed(fn, *args, **kwargs):
     start = time.perf_counter()
     try:
         return fn(*args, **kwargs), None, time.perf_counter() - start
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - any failure is the probe's own result
         return None, exc, time.perf_counter() - start
 
 

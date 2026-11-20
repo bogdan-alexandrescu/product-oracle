@@ -29,6 +29,7 @@ import asyncio
 import contextlib
 import contextvars
 import functools
+import logging
 import math
 import re
 import threading
@@ -46,6 +47,8 @@ from yaml.resolver import Resolver
 
 from oracle import parse_budget
 from oracle.errors import exception_text
+
+log = logging.getLogger(__name__)
 
 try:  # libyaml's event parser: the same events, much faster than the pure-Python one.
     from yaml.cyaml import CParser as _EventParser
@@ -311,6 +314,7 @@ def load(text: str, *, limit: int | None = None) -> Any:
     except (ValueError, OverflowError, TypeError, ArithmeticError) as exc:
         raise SafeYamlError(f"a value could not be read: {exception_text(exc)[:200]}") from None
     except Exception as exc:  # noqa: BLE001 - one error type for every failure
+        log.warning("YAML could not be read: %s", exception_text(exc))
         raise SafeYamlError(
             f"the YAML could not be read: {type(exc).__name__}", code="unreadable_yaml"
         ) from None

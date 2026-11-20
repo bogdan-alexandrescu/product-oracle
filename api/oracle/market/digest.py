@@ -102,7 +102,7 @@ def _load(files: dict[str, str], name: str, key: str, notes: Counter[str]) -> li
         return []
     try:
         data = safe_yaml.load(raw)
-    except Exception:
+    except safe_yaml.SafeYamlError:
         notes[f"{name} could not be read"] += 1
         return []
     if not isinstance(data, dict) or data.get("version") != 1:

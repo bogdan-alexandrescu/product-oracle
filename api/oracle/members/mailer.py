@@ -30,6 +30,7 @@ from oracle.company_time import DEFAULT_ZONE, in_words
 from oracle.config import get_settings
 from oracle.members.iap_access import google_refusal
 from oracle.members.schemas import plain_address
+from oracle.swarm.runtime import RuntimeUnavailable
 from oracle.swarm.swarmcloud import GoogleAccessToken
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -236,7 +237,7 @@ class DelegatedTokenMinter:
             raise MailError(f"Google could not be reached: {type(exc).__name__}") from None
         except (ValueError, KeyError, TypeError):
             raise MailError("Google answered with no token") from None
-        except Exception:  # the service account's own token (metadata server)
+        except RuntimeUnavailable:  # raised by GoogleAccessToken.header
             raise MailError("Oracle has no access token for its service account") from None
         self._token, self._expires_at = token, time.time() + ttl
         return token

@@ -20,6 +20,7 @@ that raises counts as a warning. Each check runs in a savepoint. Checks read; th
 write or commit.
 """
 
+import logging
 import uuid
 from collections.abc import Awaitable, Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -30,6 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.base_model import BaseModel
 from oracle.errors import exception_text
+
+log = logging.getLogger(__name__)
 
 Status = Literal["pass", "warning", "critical", "not_applicable"]
 # Who asks: the dashboard ("advisory") or the publish transaction ("publish").
@@ -135,6 +138,7 @@ async def evaluate(ctx: ReadinessContext, keys: Iterable[str] | None = None) -> 
             if not isinstance(outcome, CheckOutcome):
                 raise TypeError(f"returned {type(outcome).__name__}, not a CheckOutcome")
         except Exception as e:  # noqa: BLE001 - a failing check is a result, not a crash
+            log.warning("readiness check %s failed: %s", reg.key, exception_text(e))
             results.append(
                 CheckResult(
                     key=reg.key,

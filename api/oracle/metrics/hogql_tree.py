@@ -1,13 +1,17 @@
 """The HogQL syntax-tree checks behind :func:`oracle.metrics.posthog.check_query`, apart
 so sqlglot loads at a metric's first check, not with the app."""
 
+import logging
 from typing import ClassVar
 
 import sqlglot
 from sqlglot import exp
 from sqlglot.dialects.clickhouse import ClickHouse
 
+from oracle.errors import exception_text
 from oracle.metrics.posthog import ALLOWED_TABLES, QueryRefused
+
+log = logging.getLogger(__name__)
 
 
 class _HogQL(ClickHouse):
@@ -41,7 +45,8 @@ def parse(text: str) -> exp.Select:
     (fail closed) or it is anything else."""
     try:
         statements = sqlglot.parse(text, read=_HogQL)
-    except Exception:  # any parser failure, not only ParseError, refuses the query
+    except Exception as exc:  # noqa: BLE001 - any parser failure, not only ParseError, refuses
+        log.warning("HogQL query could not be parsed: %s", exception_text(exc))
         raise QueryRefused("query: HogQL could not be read as one SELECT") from None
     if len(statements) != 1 or statements[0] is None:
         raise QueryRefused("query: one statement only")
