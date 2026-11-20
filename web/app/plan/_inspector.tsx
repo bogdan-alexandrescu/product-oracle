@@ -8,7 +8,7 @@ import { AskTeammate } from "@/components/AskTeammate";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
 import { DiscussSubject, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { DecidedWho } from "@/components/simple/DecidedWho";
-import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, Sheet, ToGo } from "@/components/ds";
+import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, LinkButton, Notice, Sheet, ToGo } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { RequestSpecDialog, SPEC_STATE, specFor, specHref, useSpecs } from "@/components/RequestSpec";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -568,7 +568,14 @@ function DriftCard({ d, onChanged }: { d: PlanDrift; onChanged?: () => Promise<v
           Waived{d.waived_at ? ` ${formatDate(d.waived_at)}` : ""}: {d.waive_reason}
         </span>
       )}
-      {d.status === "open" && d.finding_id == null && <span className="text-sm text-text2">Measured on the draft roadmap. It can be waived once the roadmap is approved.</span>}
+      {/* #1590: when it can be waived sits behind the (i). */}
+      {d.status === "open" && d.finding_id == null && (
+        <span className="inline-flex">
+          <InfoTip label="waiving" align="start" testId="plan-drift-draft-tip">
+            Measured on the draft roadmap. It can be waived once the roadmap is approved.
+          </InfoTip>
+        </span>
+      )}
       {may && !waiving && (
         <span>
           <Button onClick={() => setWaiving(true)}>Waive…</Button>

@@ -223,7 +223,12 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
       <Button type="submit" disabled={locked || pending || name.trim() === (account.name ?? "")}>
         {pending ? "Saving…" : saved ? "Saved" : "Save"}
       </Button>
-      <span className="basis-full text-[13px] text-text2">Shown to your teammates instead of your email.</span>
+      {/* #1590: where the name shows sits behind the (i). */}
+      <span className="mb-2 inline-flex">
+        <InfoTip label="your name" align="start" testId="account-name-tip">
+          Shown to your teammates instead of your email.
+        </InfoTip>
+      </span>
       {locked && (
         <span id="name-read-only" data-testid="name-read-only" role="note" className="basis-full text-[13px] font-medium text-warn">
           {READ_ONLY}

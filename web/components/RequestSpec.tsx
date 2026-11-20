@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 
 import { Field, Frame } from "@/components/DateBasisDialog";
-import { Button, Notice, SegmentedControl, type ChipKind } from "@/components/ds";
+import { Button, InfoTip, Notice, SegmentedControl, type ChipKind } from "@/components/ds";
 import { PersonPicker, type Person } from "@/components/PersonPicker";
 import { sizeText } from "@/components/tech-brief";
 import { INPUT } from "@/components/ui";
@@ -135,7 +135,12 @@ export function RequestSpecDialog({
 
   return (
     <Frame title="Request an engineering spec" onClose={onClose} testId="request-spec-dialog">
-      <p className="text-text2">Oracle drafts the spec from the approved PRD in a run. You see its estimate before it starts.</p>
+      {/* #1590: how the spec is drafted sits behind the (i). */}
+      <span className="inline-flex">
+        <InfoTip label="engineering specs" align="start" side="bottom" testId="request-spec-tip">
+          Oracle drafts the spec from the approved PRD in a run. You see its estimate before it starts.
+        </InfoTip>
+      </span>
       {!initialKey && (
         <Field label="Item" htmlFor={`${id}-item`}>
           <select id={`${id}-item`} className={INPUT} value={key} onChange={(e) => pick(e.target.value)}>

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
   Chip,
   DataTable,
   Empty,
   FilterChips,
+  InfoTip,
   Inspector,
   InspectorSection,
   LinkButton,
@@ -269,7 +270,7 @@ function countFreshness(affected: Output[]) {
   return c;
 }
 
-function intro(report: Report, source: ImpactSource, subject: SubjectWords): string {
+function intro(report: Report, source: ImpactSource, subject: SubjectWords): ReactNode {
   if (!report.preview) return "Recorded: this change marked these outputs Potentially stale.";
   if (source.kind === "entity") return `What if ${report.subject.title ?? subject.title} changed? Preview only; nothing is marked stale.`;
   const n = source.kind === "version" ? source.n : null;
@@ -279,7 +280,15 @@ function intro(report: Report, source: ImpactSource, subject: SubjectWords): str
   const lead = already
     ? `Preview: ${n ? `v${n}` : "this change"} marks nothing stale. ${already === 1 ? "1 output was" : `${already} outputs were`} already marked stale by an earlier change.`
     : "Preview: nothing has been marked stale.";
-  return `${lead} The lines show what each output was built from in earlier versions${n ? `; v${n} changed the sections in the middle column` : ""}.`;
+  // #1590: how to read the board sits behind the (i).
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span>{lead}</span>
+      <InfoTip label="the lines and columns" align="start" testId="impact-intro-tip">
+        The lines show what each output was built from in earlier versions{n ? `; v${n} changed the sections in the middle column` : ""}.
+      </InfoTip>
+    </span>
+  );
 }
 
 function LoadingBoard() {
