@@ -25,11 +25,9 @@ from oracle.runs.service import (
     _art,
     _flow,
     _knobs,
-    _prompt_context,
     _segments,
     _set_art,
     _set_knob,
-    _target_kind,
     log,
 )
 from oracle.runtokens import mint_run_token, revoke_run_tokens
@@ -750,7 +748,7 @@ async def _submit_now(
     await revoke_run_tokens(db, run.id)
     url = settings.public_url.rstrip("/") + "/mcp"
     mode = await _mode(runtime, url)
-    kind = await _target_kind(db, run)
+    kind = await service._target_kind(db, run)
     registered_again = False
     while True:
         covered = _workflow_segments(flow, segment, segments) if mode.waits else [segment]
@@ -759,7 +757,7 @@ async def _submit_now(
         for s in covered:
             d = flow.segment(s.name)
             own = s.seq == segment.seq
-            ctx = await _prompt_context(
+            ctx = await service._prompt_context(
                 db,
                 run,
                 s,

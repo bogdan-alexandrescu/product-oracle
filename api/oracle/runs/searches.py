@@ -23,7 +23,6 @@ from oracle.runs.service import (
     _set_art,
     _set_knob,
     _spent,
-    _target_kind,
     _TickStats,
     log,
 )
@@ -574,7 +573,7 @@ async def _import_names(db: AsyncSession, run: Run, segment: RunSegment) -> set[
     if sdef.checkpoint == eng_dates.KIND:
         names.add(eng_dates.FILE)
     if sdef.imports_draft:
-        names.add(flows.draft_file(await _target_kind(db, run)))
+        names.add(flows.draft_file(await service._target_kind(db, run)))
     return names
 
 

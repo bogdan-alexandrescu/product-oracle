@@ -42,7 +42,6 @@ from oracle.runs.service import (
     _segments,
     _set_art,
     _set_knob,
-    _target_kind,
     _TickStats,
     log,
 )
@@ -703,7 +702,7 @@ async def _retry_checked(
     refused = await caller_refusal(db, principal, role)  # type: ignore[arg-type]
     if refused is not None:
         raise Forbidden(refused)
-    kind = await _target_kind(db, run)
+    kind = await service._target_kind(db, run)
     refusal = _draft_retry_refusal(run, segment, review, kind, _run_version(segments, checkpoints))
     if refusal is not None or review is None:
         raise RunError(f"nothing to retry: {refusal}")

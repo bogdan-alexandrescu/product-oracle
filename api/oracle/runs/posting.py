@@ -26,7 +26,6 @@ from oracle.runs.service import (
     _segments,
     _set_art,
     _set_knob,
-    _target_kind,
 )
 from oracle.swarm import RecordedAnswer, RuntimeUnavailable
 from oracle.swarm.runtime import MERGE, NOT_YET
@@ -364,7 +363,7 @@ async def _problem_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[
     return workflow.check_findings(
         ITEMS_FILE, payload.get("items_check"), []
     ) + workflow.check_findings(
-        flows.draft_file(await _target_kind(db, run)),
+        flows.draft_file(await service._target_kind(db, run)),
         None,
         list(imported.get("problems") or []),
         list(imported.get("code_names") or []),

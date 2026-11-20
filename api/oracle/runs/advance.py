@@ -44,17 +44,14 @@ from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.scope_models import PrdScope
 from oracle.runs.service import (
     ITEMS_FILE,
-    SENT_KNOBS,
     _art,
     _checkpoints,
     _flow,
-    _frozen_queue,
     _knobs,
     _segments,
     _set_art,
     _set_knob,
     _source_id,
-    _target_kind,
     _TickStats,
     log,
 )
@@ -170,7 +167,7 @@ async def _plan_table_problems(
     bases = await schedule.verified_bases(db, source.document_id if source else None)
     # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables
     # too, from the queue the run froze when its first prompt (roadmap_items) was built.
-    frozen = await _frozen_queue(db, run, source)
+    frozen = await service._frozen_queue(db, run, source)
     others = roadmap_company.with_run_items(
         frozen["rows"], items, **{k: v for k, v in frozen.items() if k != "rows"}
     )
@@ -307,7 +304,7 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 # Without its date markers (the import checked its dates; none of the
                 # markers is read here): never a wait for dates in the middle of a tick.
                 result.version = await docs_service.read_version(s, row, require_dates=False)
-        if run.flow == "feedback_loop" and any(knobs.get(k) for k in SENT_KNOBS):
+        if run.flow == "feedback_loop" and any(knobs.get(k) for k in service.SENT_KNOBS):
             await _settle_sent_items(s, run, result.version.number, result.resolutions)
         if (run.knobs or {}).get("intake_id"):
             # C5: the intake's answers given while this draft was written become feedback.
@@ -558,7 +555,7 @@ async def _advance(
             {
                 "workflow_id": wait.get("workflow_id"),
                 "step_id": wait.get("step_id"),
-                "kind": sdef.checkpoint_for(await _target_kind(db, run)),
+                "kind": sdef.checkpoint_for(await service._target_kind(db, run)),
                 "seq": segment.seq,
                 "wait": wait,
             },
@@ -698,7 +695,7 @@ async def _advance(
             service._note_art(art, note)
         art["triage_import"] = triage_import
     if sdef.imports_draft:
-        kind = await _target_kind(db, run)
+        kind = await service._target_kind(db, run)
         name = flows.draft_file(kind)
         markdown = art["files"].get(name)
         if markdown is None:
@@ -798,14 +795,21 @@ async def _advance(
                 return True
         await service._next(db, run, segment, segments)
         return True
-    checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
+    checkpoint_kind = sdef.checkpoint_for(await service._target_kind(db, run))
     if (
         wait is not None
         and imported is not None
         and (imported.get("problems") or imported.get("code_names"))
         and knobs.checkpoints.get(sdef.checkpoint, True)
         and await service._send_back(
-            db, run, segment, segments, wait, imported, await _target_kind(db, run), checkpoint_kind
+            db,
+            run,
+            segment,
+            segments,
+            wait,
+            imported,
+            await service._target_kind(db, run),
+            checkpoint_kind,
         )
     ):
         return True
