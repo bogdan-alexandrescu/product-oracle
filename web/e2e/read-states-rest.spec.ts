@@ -128,3 +128,26 @@ test("Brief: goals that could not be read say so, never no confirmed company goa
   await seesReason(page, page.getByTestId("intake-goals"), "the goals");
   await expect(page.getByTestId("intake-goals")).not.toContainText(/No goal chosen yet|No confirmed company goal yet/);
 });
+
+test("Ground Truth: a goal with no values and no history, answered, says so", async ({ page }) => {
+  await login(page);
+  await page.goto("/ground-truth");
+  await page.getByTestId("goal-g.early-churn").getByRole("button", { name: "Cut early churn" }).click();
+  const d = page.getByRole("dialog", { name: "Cut early churn" });
+  await expect(d.getByTestId("goal-measurements")).toContainText("Give the goal its unit, then record values here");
+  await expect(d.getByTestId("entity-history")).toContainText("No changes recorded");
+  await expect(d.getByTestId("load-error")).toHaveCount(0);
+});
+
+test("Decisions: a linked item with no evidence, answered, says so", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  await page.goto("/company/decisions");
+  await page.getByRole("button", { name: "Propose decision" }).click();
+  const dialog = page.getByRole("dialog", { name: "Propose decision" });
+  const linked = dialog.getByRole("group", { name: "Linked items" });
+  await linked.getByLabel("Find an item to link").fill("churn");
+  await linked.getByRole("button", { name: /^Cut early churn · Goal/ }).click();
+  const evidence = dialog.getByRole("group", { name: "Evidence" });
+  await expect(evidence).toContainText("No evidence on this item");
+  await expect(evidence.getByTestId("load-error")).toHaveCount(0);
+});
