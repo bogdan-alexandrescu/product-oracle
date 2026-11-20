@@ -36,7 +36,11 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
+
+# #1570: this test reads CI's own workflow and the laptop deploy script, outside api/ on purpose.
+pytestmark = pytest.mark.foreign_read(".github/workflows/ci.yml", "ops/deploy/deploy-api.sh")
 
 ROOT = Path(__file__).resolve().parents[2]
 CI = ROOT / ".github" / "workflows" / "ci.yml"

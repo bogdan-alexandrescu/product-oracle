@@ -86,22 +86,30 @@ async def author_questions(ctx, intake_id: str) -> tuple[StakeholderQuestion, St
         # What the author's sources say about a rule-made gap is kept in its finding.
         reg = (await s.get(ProductIntake, uuid.UUID(intake_id))).analysis["findings"]
         model = next(g for g in gaps if g.statement == MODEL_GAP)
-        rule = next(
-            g for g in gaps
-            if g.statement != MODEL_GAP and g.rule_key is not None
-            and (reg.get(str(g.id)) or {}).get("evidence_ids")
-            and g.status in ("unknown", "asked")
+        rules = sorted(
+            (
+                g for g in gaps
+                if g.statement != MODEL_GAP and g.rule_key is not None
+                and (reg.get(str(g.id)) or {}).get("evidence_ids")
+                and g.status in ("unknown", "asked")
+            ),
+            key=lambda g: str(g.id),
         )  # fmt: skip
-        out = []
-        for gap in (model, rule):
-            out.append(
-                await s.scalar(
-                    select(StakeholderQuestion).where(
-                        StakeholderQuestion.gap_id == gap.id,
-                        StakeholderQuestion.status != "withdrawn",
-                    )
+
+        async def question_of(gap: KnowledgeGap) -> StakeholderQuestion | None:
+            return await s.scalar(
+                select(StakeholderQuestion).where(
+                    StakeholderQuestion.gap_id == gap.id,
+                    StakeholderQuestion.status != "withdrawn",
                 )
             )
+
+        # The rows come back in no set order, and a rule-made question may be asked of one
+        # person: anyone else is refused (403). Take one asked of no one, so every role in the
+        # matrix may answer it (main CI, Nov 20: commenter-counts drew a directed question).
+        rule_qs = [q for g in rules if (q := await question_of(g)) is not None]
+        rule_q = next((q for q in rule_qs if q.asked_to is None), rule_qs[0])
+        out = [await question_of(model), rule_q]
     return out[0], out[1]
 
 

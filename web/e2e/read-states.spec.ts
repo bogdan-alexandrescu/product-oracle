@@ -74,7 +74,7 @@ test.describe("PRDs list, no PRDs yet", () => {
     await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
   });
 
-  test("while the ideas load, the list is loading, not No PRDs yet", async ({ page }) => {
+  test("while the ideas load, the list is loading, not No PRDs yet @timing", async ({ page }) => {
     await login(page);
     await page.goto("/documents");
     await expect(page.getByTestId("prds-empty")).toBeVisible();
