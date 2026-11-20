@@ -336,9 +336,10 @@ jobs:
           path: web/test-results/
 
   # #1569 (owner, Nov 20: Cloud Run, oracle-api and oracle-web, deployed from here). After every
-  # test job above passes on a main push: both images built with the commit stamped in, a Cloud SQL
-  # backup, the API's new revision staged with no traffic, the migration (Cloud Run job, the new
-  # image), the API's traffic moved to that revision, the web deployed, and the containment check.
+  # test job above passes on a main push: the serving API checked not to migrate at start, both
+  # images built with the commit stamped in, a Cloud SQL backup, the API's new revision staged with
+  # no traffic, the migration (Cloud Run job, the new image), the API's traffic moved to that revision by its tag, the web deployed, and the
+  # containment check (each /version asked through IAP with an ID token).
   # A failed migration stops the job before any traffic moves: the staged revision never serves, and
   # the old one keeps the old schema (Alembic runs every pending revision in one transaction).
   # Why the API revision is staged before the migration (Oct 18: a migration before the new image
@@ -351,6 +352,8 @@ jobs:
     needs: [api, coverage-floors, pyright, api-timing, web, e2e, mock-e2e, e2e-timing]
     if: vars.ORACLE_DEPLOY_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # The federation's attribute condition admits only this environment (docs/deploy/actions-deploy.md).
+    environment: production
     timeout-minutes: 60
     # One deploy at a time; a newer run's deploy waits for this one, never cancels it.
     concurrency:
@@ -377,6 +380,9 @@ jobs:
       # Each service's /version, reachable from GitHub's runners.
       API_VERSION_URL: ${{ vars.ORACLE_API_VERSION_URL }}
       WEB_VERSION_URL: ${{ vars.ORACLE_WEB_VERSION_URL }}
+      # IAP is in front of both: each /version is asked with a Google ID token for its audience.
+      IAP_AUDIENCE_API: ${{ vars.ORACLE_IAP_AUDIENCE_API }}
+      IAP_AUDIENCE_WEB: ${{ vars.ORACLE_IAP_AUDIENCE_WEB }}
     steps:
       # Full history: the containment check asks git whether a served commit contains this one.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -388,25 +394,13 @@ jobs:
       - name: Every repository variable is set
         run: |
           missing=""
-          for v in PROJECT REGION REGISTRY WIF_PROVIDER DEPLOY_SA SQL_INSTANCE API_INTERNAL_URL API_VERSION_URL WEB_VERSION_URL; do
+          for v in PROJECT REGION REGISTRY WIF_PROVIDER DEPLOY_SA SQL_INSTANCE API_INTERNAL_URL API_VERSION_URL WEB_VERSION_URL IAP_AUDIENCE_API IAP_AUDIENCE_WEB; do
             [ -n "${!v}" ] || missing="$missing $v"
           done
           [ -z "$missing" ] || { echo "Repository variables not set (docs/deploy/actions-deploy.md):$missing"; exit 1; }
-      # A run whose tests finished after a newer run deployed must not roll a service back: each
-      # service already serving this commit or one that contains it (exit 0) is left alone.
-      - name: Skip what already serves this commit
-        id: served
-        run: |
-          for s in api web; do
-            url=API_VERSION_URL; [ "$s" = web ] && url=WEB_VERSION_URL
-            code=0
-            node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "${!url}" || code=$?
-            echo "$s=$([ "$code" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          done
       # Workload Identity Federation by hand (what google-github-actions/auth writes): GitHub's
       # OIDC token for this job, exchanged for the deploy service account's short-lived token.
       - name: Sign in to Google Cloud
-        if: steps.served.outputs.api != 'true' || steps.served.outputs.web != 'true'
         run: |
           cred="$RUNNER_TEMP/gcp-wif.json"
           umask 077
@@ -424,6 +418,34 @@ jobs:
           gcloud auth login --cred-file="$cred" --quiet
           gcloud config set project "$PROJECT"
           gcloud auth configure-docker "${REGISTRY%%/*}" --quiet
+      # A run whose tests finished after a newer run deployed must not roll a service back: each
+      # service already serving this commit or one that contains it (exit 0) is left alone.
+      - name: Skip what already serves this commit
+        id: served
+        run: |
+          # A Google ID token for the IAP audience, sent as Authorization: Bearer.
+          token() { gcloud auth print-identity-token --impersonate-service-account="$DEPLOY_SA" --include-email "$@"; }
+          serves() { node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$@"; }
+          # Plain assignments, so a token that can not be had fails the step (bash -e).
+          api_token=$(token --audiences="$IAP_AUDIENCE_API")
+          web_token=$(token --audiences="$IAP_AUDIENCE_WEB")
+          api=0 web=0
+          ORACLE_VERSION_TOKEN="${api_token}" serves "$API_VERSION_URL" || api=$?
+          ORACLE_VERSION_TOKEN="${web_token}" serves "$WEB_VERSION_URL" || web=$?
+          echo "api=$([ "$api" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "web=$([ "$web" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      # The serving revisions must not migrate at start (docs/deploy/actions-deploy.md, Turn it
+      # on): one that does would run Alembic itself when Cloud Run adds an instance during the
+      # migration. Checked before the backup, so such a run changes nothing.
+      - name: The serving API does not migrate at start
+        if: steps.served.outputs.api != 'true'
+        run: |
+          code=0
+          at_start=$(ORACLE_GCP_PROJECT="$PROJECT" ORACLE_GCP_REGION="$REGION" ops/deploy/serving-env.sh "$API_SERVICE" ORACLE_MIGRATE_AT_START) || code=$?
+          if [ "$code" != 0 ] || [ "$at_start" != 0 ]; then
+            echo "The serving $API_SERVICE revision does not have ORACLE_MIGRATE_AT_START=0 (found '${at_start}', exit $code): set it (docs/deploy/actions-deploy.md, Turn it on), then run again."
+            exit 1
+          fi
       - name: Build and push both images, the commit stamped in
         if: steps.served.outputs.api != 'true' || steps.served.outputs.web != 'true'
         run: |
@@ -447,6 +469,7 @@ jobs:
       # The new API revision, started and warm, with no traffic. ORACLE_MIGRATE_AT_START=0: it
       # serves without migrating (api/oracle/startup.py), so only the next step changes the schema.
       - name: Stage the API's new revision with no traffic
+        id: stage
         if: steps.served.outputs.api != 'true'
         run: |
           gcloud run deploy "$API_SERVICE" --image="$API_IMAGE" --region="$REGION" \
@@ -461,13 +484,28 @@ jobs:
       - name: Move the API's traffic to the new revision
         if: steps.served.outputs.api != 'true'
         run: |
-          gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --to-latest --quiet
+          # By the staged revision's tag, not to the latest: a revision created meanwhile never takes it.
+          gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --to-tags="c-${SHA:0:12}=100" --quiet
           gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --remove-tags="c-${SHA:0:12}" --quiet
       - name: Deploy the web
         if: steps.served.outputs.web != 'true'
         run: gcloud run deploy "$WEB_SERVICE" --image="$WEB_IMAGE" --region="$REGION" --quiet
-      # 0 served, 1 not served, 2 could not ask (web/scripts/deploy-serves.ts); asked again for up
-      # to 5 minutes while the new revisions take their traffic. Anything but 0 fails the job.
+      # 0 served, 1 not served, 2 could not ask (web/scripts/deploy-serves.ts), per service; asked
+      # again for up to 5 minutes while the new revisions take their traffic. Anything but 0 fails
+      # the job.
       - name: Containment check
         if: steps.served.outputs.api != 'true' || steps.served.outputs.web != 'true'
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$API_VERSION_URL" "$WEB_VERSION_URL" --wait 300
+        run: |
+          token() { gcloud auth print-identity-token --impersonate-service-account="$DEPLOY_SA" --include-email "$@"; }
+          serves() { node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$@" --wait 300; }
+          api_token=$(token --audiences="$IAP_AUDIENCE_API")
+          web_token=$(token --audiences="$IAP_AUDIENCE_WEB")
+          code=0
+          ORACLE_VERSION_TOKEN="${api_token}" serves "$API_VERSION_URL" || code=$?
+          ORACLE_VERSION_TOKEN="${web_token}" serves "$WEB_VERSION_URL" || code=$?
+          exit "$code"
+      # A run that failed (or was cancelled, or timed out) after staging leaves no c-<commit> tag
+      # behind; traffic stays where it is.
+      - name: Remove a failed run's tag
+        if: (failure() || cancelled()) && (steps.stage.outcome == 'success' || steps.stage.outcome == 'failure')
+        run: gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --remove-tags="c-${SHA:0:12}" --quiet
