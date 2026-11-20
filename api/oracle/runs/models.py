@@ -126,9 +126,8 @@ class Run(Trashable, TenantScoped, Base):
         Uuid, ForeignKey("documents.id", ondelete="SET NULL")
     )
     estimate_usd: Mapped[Decimal | None] = mapped_column(Usd)
-    spent_usd: Mapped[Decimal] = mapped_column(
-        Usd, nullable=False, default=Decimal(0), server_default="0"
-    )
+    # #1572: null until a cost is reported (unknown, never "free").
+    spent_usd: Mapped[Decimal | None] = mapped_column(Usd)
     # User id or API token id; no FK because it can be either.
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # Who approved the cost estimate (runs over the approval threshold).
@@ -162,9 +161,8 @@ class RunSegment(TenantScoped, Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     swarm_workflow_id: Mapped[str | None] = mapped_column(Text)
     estimate_usd: Mapped[Decimal | None] = mapped_column(Usd)
-    cost_usd: Mapped[Decimal] = mapped_column(
-        Usd, nullable=False, default=Decimal(0), server_default="0"
-    )
+    # #1572: null until the runtime reports a cost.
+    cost_usd: Mapped[Decimal | None] = mapped_column(Usd)
     artifacts: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

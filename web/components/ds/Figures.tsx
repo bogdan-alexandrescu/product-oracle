@@ -65,7 +65,7 @@ export function CostFigure({
   /** Inside an Inspector head. */
   hero?: boolean;
 }) {
-  if (usd == null) return <span className="text-[13px] text-text2">–</span>;
+  if (usd == null) return <span className="text-[13px] text-text2">—</span>;
   const text = `${usdFmt.format(usd)}${of != null ? ` / ${usdFmt.format(of)}` : ""}${est ? " est." : ""}`;
   if (prominent) {
     const over = of != null && usd > of;

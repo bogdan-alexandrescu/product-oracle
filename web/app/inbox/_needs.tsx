@@ -1629,7 +1629,7 @@ export function inboxNeeds(
         <span className="truncate">Resume or cancel</span>
         <CostFigure usd={r.spent_usd} of={r.estimate_usd} prominent />
         <span className="sr-only">
-          Spent {money(r.spent_usd)} of {money(r.estimate_usd)} estimated
+          Spent {r.spent_usd == null ? "—" : formatMoney(r.spent_usd)} of {money(r.estimate_usd)} estimated
         </span>
       </>
     ),

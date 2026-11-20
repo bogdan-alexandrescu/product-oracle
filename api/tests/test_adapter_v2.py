@@ -3510,4 +3510,4 @@ async def test_cancel_calls_swarmcloud_outside_the_runs_row_lock(client, owner, 
     assert resp.status_code == 200, resp.text
     assert free == [True] and swarm.workflows["wf_1"].state == "CANCELLED"
     assert (await _knobs_of(tenant_id, run["id"]))["workflow"]["state"] == "cancelled"
-    assert resp.json()["spent_usd"] == sum(s.cost for s in swarm.workflows["wf_1"].steps)
+    assert resp.json()["spent_usd"] == (sum(s.cost for s in swarm.workflows["wf_1"].steps) or None)

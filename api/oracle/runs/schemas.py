@@ -282,7 +282,8 @@ class SegmentAttempt(BaseModel):
     attempt: int
     workflow_id: str | None = None
     submitted_at: datetime | None = None
-    cost_usd: float = 0
+    # #1572: None until the runtime reports a cost (unknown, never "free").
+    cost_usd: float | None = None
     # The reviewer's note this attempt applied: for a wait answered in SwarmCloud, the
     # findings SwarmCloud recorded, by whom (``note_by``); an Inbox note that SwarmCloud
     # did not record (it already held an answer) is ``not_applied``.
@@ -789,7 +790,8 @@ class SegmentOut(BaseModel):
     checkpoint: CheckpointKind | None
     checkpoint_on: bool
     estimate_usd: float | None = None
-    cost_usd: float
+    # #1572: the known costs of its attempts; None until one is reported.
+    cost_usd: float | None = None
     workflow_id: str | None = None
     artifacts: list[str]
     attempts: list[SegmentAttempt]
@@ -830,10 +832,7 @@ class SegmentOut(BaseModel):
     # read since it started); empty once the segment is no longer running.
     agents: list[SegmentAgent] = []
     checked_at: datetime | None = None
-    # run-progress: whether the runtime reported any cost for it yet (False: cost_usd is
-    # 0 only because nothing, or only a zero, was reported: a working agent costs), and
-    # the proposals the run wrote while it runs.
-    cost_reported: bool = False
+    # run-progress: the proposals the run wrote while it runs.
     proposals_written: int = 0
     # Why SwarmCloud holds this running segment's step, as on the run's Runs row.
     queue_wait: QueueWait | None = None
@@ -1043,7 +1042,8 @@ class RunSummary(BaseModel):
     # (published Nov 4)"); None before it read one, and on other runs.
     roadmap_read: str | None = None
     estimate_usd: float | None = None
-    spent_usd: float
+    # #1572: the known costs of its segments; None until one is reported.
+    spent_usd: float | None = None
     created_by: uuid.UUID | None = None
     created_at: datetime
     started_at: datetime | None = None

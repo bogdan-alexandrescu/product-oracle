@@ -176,7 +176,7 @@ async def test_a_cancel_that_winds_down_counts_a_later_segment_s_cost_once(clien
     run = await get(client, auth, run["id"])
     assert run["status"] == "cancelled" and run["searching"] is None
     assert run["spent_usd"] == pytest.approx(_wf_cost(swarm))
-    assert sum(s["cost_usd"] for s in run["segments"]) == pytest.approx(_wf_cost(swarm))
+    assert sum(s["cost_usd"] or 0 for s in run["segments"]) == pytest.approx(_wf_cost(swarm))
 
 
 async def test_an_overrun_pause_that_winds_down_counts_a_later_segment_s_cost_once(client, owner):
