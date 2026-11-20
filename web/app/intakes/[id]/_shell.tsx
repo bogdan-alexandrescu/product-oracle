@@ -299,7 +299,8 @@ export function BeforeDrafting({ id }: { id: string }) {
         <ReadLine
           read={s.ai_read}
           openGaps={openGaps}
-          asked={(batchesQ.data ?? []).reduce((n, b) => n + b.questions.length, 0)}
+          // #1586: the summary's count until the thread is read, never 0 for a thread that failed.
+          asked={batchesQ.data ? batchesQ.data.reduce((n, b) => n + b.questions.length, 0) : s.batch.asked + s.batch.answered}
           mayRead={mayRead && !converted && !archived}
           mayDraft={mayDraft && !converted && !archived}
           busy={busy}

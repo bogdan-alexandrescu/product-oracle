@@ -15,7 +15,7 @@ import { useMe } from "@/lib/me";
 import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
 import { useSetParams } from "@/lib/use-set-params";
 import { topGoalSuggestions } from "@/lib/key-results";
-import { LoadError } from "@/components/ui";
+import { LoadError, Loading } from "@/components/ui";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
@@ -359,7 +359,12 @@ export function Priorities() {
       {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
       {/* #1586: key results that could not be read say why, never goals that have none. */}
       {kr.failed && <LoadError what="the key results" error={kr.failed.error} onRetry={kr.failed.retry} />}
-      {blank && (
+      {/* #1586: the next step depends on the goals Oracle suggests for: unread, it is not guessed. */}
+      {blank && suggestions.error && !suggestions.data && (
+        <LoadError what="the suggested features" error={suggestions.error} onRetry={() => void suggestions.reload()} />
+      )}
+      {blank && !suggestions.error && !suggestions.data && <Loading />}
+      {blank && suggestions.data && (
         <p className="text-text2" data-testid="priorities-empty">
           {hasGoals ? (
             <>

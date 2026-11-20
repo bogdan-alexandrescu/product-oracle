@@ -256,10 +256,11 @@ function Launches() {
                   value={current}
                   onChange={(v) => setFilter(v)}
                   items={[
-                    { value: "ready", label: "Ready", count: count("ready") },
-                    { value: "planned", label: "Planned", count: count("planned") },
-                    { value: "launched", label: "Launched", count: count("launched") },
-                    { value: "all", label: "All", count: rows.length },
+                    // #1586: a list still loading or failed counts nothing, never 0.
+                    { value: "ready", label: "Ready", count: q.data ? count("ready") : null },
+                    { value: "planned", label: "Planned", count: q.data ? count("planned") : null },
+                    { value: "launched", label: "Launched", count: q.data ? count("launched") : null },
+                    { value: "all", label: "All", count: q.data ? rows.length : null },
                   ]}
                 />
               )
@@ -309,7 +310,7 @@ function Launches() {
                   if (phone) setSheet(true);
                 }}
                 loading={q.loading && !q.data}
-                empty={emptyText(current, rows.length, can("create_launch"))}
+                empty={q.error && !q.data ? null : emptyText(current, rows.length, can("create_launch"))}
                 rowProps={(l) => ({ "data-testid": "launch-row", "data-state": l.state })}
               />
             )}

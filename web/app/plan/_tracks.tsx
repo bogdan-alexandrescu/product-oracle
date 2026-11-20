@@ -16,7 +16,7 @@ import {
   SegmentedControl,
   type ChipKind,
 } from "@/components/ds";
-import { INPUT } from "@/components/ui";
+import { INPUT, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatShortDate, plural } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
@@ -726,8 +726,17 @@ function MilestoneForm({
                 onChange={(e) => pickDate(e.target.value)}
               />
             </label>
+            {/* #1586: bases still loading or failed never read as none. */}
             {date &&
-              (supporting.length ? (
+              (bases.error ? (
+                <LoadError
+                  what="the estimates"
+                  error={bases.error}
+                  onRetry={() => void bases.reload()}
+                />
+              ) : !bases.data ? (
+                <Loading />
+              ) : supporting.length ? (
                 <fieldset className="flex flex-col gap-1">
                   <legend className="text-[13px] font-semibold text-text2">
                     Verified by

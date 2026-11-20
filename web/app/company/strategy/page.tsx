@@ -76,6 +76,7 @@ export default function StrategyPage() {
   const rows = useMemo(() => stackRows(stack, open), [stack, open]);
   const goals = useMemo(() => new Map((goalsQ.data ? goalViews(goalsQ.data) : []).map((g) => [g.id, g])), [goalsQ.data]);
   const selected = rows.find((r) => r.key === picked) ?? rows[0] ?? null;
+  const findingsRead = { loading: openQ.loading, error: openQ.error, onRetry: () => void openQ.reload() };
 
   // The approved document when there is one; else the draft in progress.
   const docs = docsQ.data;
@@ -126,7 +127,7 @@ export default function StrategyPage() {
             />
           </div>
           <div ref={stackPanel} className="scroll-mt-4" />
-          <Split inspector={selected && !phone ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
+          <Split inspector={selected && !phone ? <StackInspector stack={stack} row={selected} onWaived={waived} findingsRead={findingsRead} /> : undefined}>
             <Panel
               title="Strategy stack"
               tools={
@@ -162,7 +163,7 @@ export default function StrategyPage() {
           </Split>
           {phone && (
             <Sheet open={sheetOpen && !!selected} title="Stack line" onClose={() => setSheetOpen(false)} testId="stack-sheet">
-              {selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : null}
+              {selected ? <StackInspector stack={stack} row={selected} onWaived={waived} findingsRead={findingsRead} /> : null}
             </Sheet>
           )}
         </>
