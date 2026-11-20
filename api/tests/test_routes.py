@@ -33,8 +33,14 @@ SPEC_ROUTES = [
     ("POST", V + "/approve"),
     ("GET", V + "/export"),
     ("GET", "/healthz"),
+    ("GET", "/version"),
 ]
-PUBLIC = {("POST", "/v1/auth/login"), ("POST", "/v1/auth/logout"), ("GET", "/healthz")}
+PUBLIC = {
+    ("POST", "/v1/auth/login"),
+    ("POST", "/v1/auth/logout"),
+    ("GET", "/healthz"),
+    ("GET", "/version"),
+}
 
 
 def _concrete(path: str) -> str:
