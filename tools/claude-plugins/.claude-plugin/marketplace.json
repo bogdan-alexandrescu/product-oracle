@@ -1,0 +1,11 @@
+{
+  "name": "oracle-agent-tools",
+  "owner": { "name": "Oracle maintainers" },
+  "plugins": [
+    {
+      "name": "code-intel",
+      "source": "./code-intel",
+      "description": "Language servers for agents: pyright for api/, typescript-language-server for web/ (installed by make agent-setup)."
+    }
+  ]
+}

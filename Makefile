@@ -1,4 +1,4 @@
-.PHONY: up down logs test lint fmt migrate seed openapi web-build e2e e2e-mock
+.PHONY: up down logs test lint fmt migrate seed openapi web-build e2e e2e-mock agent-setup
 
 COMPOSE ?= docker compose
 # Tests need a Postgres; `make up` provides one with an oracle_test database.
@@ -52,3 +52,10 @@ e2e:
 # The UI suite against the in-browser mock API (no backend needed).
 e2e-mock:
 	cd web && npx playwright test
+
+# Local agent tooling, never CI (#1557): pinned pyright and typescript-language-server (the
+# code-intel plugin's language servers) and the CodeRabbit CLI, all into .agent-tools/; keeps
+# generated files out of local `git diff` and turns off `git pull`'s diffstat. Needs web/node_modules.
+# The SessionStart hook in .claude/settings.json runs the same script with --check.
+agent-setup:
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/agent-setup.ts

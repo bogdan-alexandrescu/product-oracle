@@ -1,0 +1,15 @@
+#!/bin/sh
+# Starts a language server that `make agent-setup` installed into the repository's
+# .agent-tools/. The plugin may run from a copy outside the repository, so the root comes from
+# the session (CLAUDE_PROJECT_DIR) or the working directory, never from this file's path.
+set -eu
+name="$1"
+shift
+root="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$root" ] || root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$(pwd)
+bin="$root/.agent-tools/node_modules/.bin/$name"
+if [ ! -x "$bin" ]; then
+  echo "code-intel: $name is not installed: run \`make agent-setup\` in $root" >&2
+  exit 127
+fi
+exec "$bin" "$@"
