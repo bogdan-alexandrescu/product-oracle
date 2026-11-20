@@ -1,18 +1,20 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { TemplateDetail } from '@/components/TemplateDetail';
-import type { RouteProps } from '@/lib/route-props';
 import { PageSkeleton } from '@/components/ds';
 
-async function Detail({ params }: { params: RouteProps<{ key: string }>['params'] }) {
-  const { key } = await params;
+function Detail() {
+  const { key } = useParams<{ key: string }>();
   return <TemplateDetail templateKey={key} />;
 }
 
-export default function TemplatePage({ params }: RouteProps<{ key: string }>) {
+export default function TemplatePage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Detail params={params} />
+      <Detail />
     </Suspense>
   );
 }

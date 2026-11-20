@@ -1,3 +1,5 @@
+'use client';
+
 import { RequestsScreen } from '../_components/RequestsScreen';
 
 /** Requests' Themes tab (#348): list, create, rename and archive the themes requests group under. */

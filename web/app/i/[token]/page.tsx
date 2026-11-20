@@ -1,19 +1,14 @@
-import type { Metadata } from 'next';
+'use client';
+
 import { Suspense } from 'react';
 
-import type { RouteProps } from '@/lib/route-props';
+import { useParams } from '@/lib/nav';
+import { useTitle } from '@/lib/title';
 
 import { InterviewChat } from './_chat';
 
-export const metadata: Metadata = {
-  title: 'Interview',
-  // A private one-time link: never indexed, never sent on as a referrer.
-  robots: { index: false, follow: false },
-  referrer: 'no-referrer',
-};
-
-async function Chat({ params }: { params: RouteProps<{ token: string }>['params'] }) {
-  const { token } = await params;
+function Chat() {
+  const { token } = useParams<{ token: string }>();
   return <InterviewChat token={token} />;
 }
 
@@ -21,10 +16,16 @@ async function Chat({ params }: { params: RouteProps<{ token: string }>['params'
  * A customer's interview (C3): opened from a private one-time link, with no account and no
  * rail (AppShell leaves /i/ bare). Only the public interview routes are called.
  */
-export default function CustomerInterviewPage({ params }: RouteProps<{ token: string }>) {
+export default function CustomerInterviewPage() {
+  useTitle('Interview');
   return (
-    <Suspense fallback={null}>
-      <Chat params={params} />
-    </Suspense>
+    <>
+      {/* A private one-time link: never indexed, never sent on as a referrer. */}
+      <meta name="robots" content="noindex, nofollow" />
+      <meta name="referrer" content="no-referrer" />
+      <Suspense fallback={null}>
+        <Chat />
+      </Suspense>
+    </>
   );
 }

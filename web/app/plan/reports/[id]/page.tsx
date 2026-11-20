@@ -1,21 +1,20 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { ReportDetail } from '../_report';
 import { PageSkeleton } from '@/components/ds';
 
-// Typed by hand rather than with Next's generated PageProps, so a plain `tsc --noEmit`
-// (without a build's .next/types) checks it.
-type Params = { params: Promise<{ id: string }> };
-
-async function Detail({ params }: Params) {
-  const { id } = await params;
+function Detail() {
+  const { id } = useParams<{ id: string }>();
   return <ReportDetail id={id} />;
 }
 
-export default function ReportPage({ params }: Params) {
+export default function ReportPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Detail params={params} />
+      <Detail />
     </Suspense>
   );
 }

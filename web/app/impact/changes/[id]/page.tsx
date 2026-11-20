@@ -1,19 +1,21 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { ImpactExplorer } from '@/app/impact/_explorer';
-import type { RouteProps } from '@/lib/route-props';
 import { PageSkeleton } from '@/components/ds';
 
-async function Explorer({ params }: { params: RouteProps<{ id: string }>['params'] }) {
-  const { id } = await params;
+function Explorer() {
+  const { id } = useParams<{ id: string }>();
   return <ImpactExplorer key={id} source={{ kind: 'change', id }} />;
 }
 
 /** v2 screen 2: the outputs a recorded change marked Potentially stale. */
-export default function ChangeImpactPage({ params }: RouteProps<{ id: string }>) {
+export default function ChangeImpactPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Explorer params={params} />
+      <Explorer />
     </Suspense>
   );
 }

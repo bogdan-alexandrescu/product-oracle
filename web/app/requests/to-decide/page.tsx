@@ -1,3 +1,5 @@
+'use client';
+
 import { RequestsScreen } from '../_components/RequestsScreen';
 
 /**

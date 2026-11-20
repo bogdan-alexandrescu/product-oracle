@@ -1,6 +1,50 @@
 @import 'tailwindcss';
 
 /*
+ * I3 type (Open sky): Inter Tight (latin, variable) for the UI and headings, DM Mono (latin,
+ * 400 and 500) for figures, ids and code. Self-hosted woff2 under public/fonts (SIL Open Font
+ * Licence 1.1), with the metric-matched Arial fallbacks next/font made, so nothing reflows on
+ * swap (#1580). DM Mono ships 300/400/500; the rail badge's 600 is synthesised from 500.
+ */
+@font-face {
+  font-family: 'Inter Tight';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-tight-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter Tight Fallback';
+  src: local('Arial');
+  ascent-override: 100.51%;
+  descent-override: 25.03%;
+  line-gap-override: 0%;
+  size-adjust: 96.39%;
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dm-mono-latin-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/dm-mono-latin-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono Fallback';
+  src: local('Arial');
+  ascent-override: 73.71%;
+  descent-override: 23.03%;
+  line-gap-override: 0%;
+  size-adjust: 134.59%;
+}
+
+/*
  * Product Oracle v2 design system (I3: B1 Split). The colour tokens below are the one
  * source of truth: components use them through Tailwind (bg-surface, text-text2,
  * border-line, ...) or var(--token), never a hard-coded colour.
@@ -11,6 +55,8 @@
 /* I3 palette "Open sky" (owner, 2026-10-19), as SwarmCloud's console uses it. Replaces B1's
    violet and lime; B1's token names stay. Contrast of every text pair: the PR's report. */
 :root {
+  --font-inter-tight: 'Inter Tight', 'Inter Tight Fallback';
+  --font-dm-mono: 'DM Mono', 'DM Mono Fallback';
   /* A phone's sticky top bar and fixed tab bar (AppShell, SimpleShell): one measure for both shells. */
   --phone-top-bar: calc(44px + env(safe-area-inset-top));
   --phone-tab-bar: 68px;

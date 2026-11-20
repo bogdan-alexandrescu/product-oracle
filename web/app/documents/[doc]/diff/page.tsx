@@ -1,25 +1,26 @@
+'use client';
+
 import { Suspense } from 'react';
 
 import { DiffView } from '@/components/DiffView';
-import type { RouteProps } from '@/lib/route-props';
+import { useParams, useSearchParams } from '@/lib/nav';
 import { PageSkeleton } from '@/components/ds';
 
-type Props = RouteProps<{ doc: string }>;
-
-function num(v: string | string[] | undefined): number | undefined {
-  const n = Number(Array.isArray(v) ? v[0] : v);
+function num(v: string | null): number | undefined {
+  const n = Number(v ?? undefined);
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-async function Diff({ params, searchParams }: Pick<Props, 'params' | 'searchParams'>) {
-  const [{ doc }, q] = await Promise.all([params, searchParams]);
-  return <DiffView doc={doc} from={num(q.from)} to={num(q.to)} />;
+function Diff() {
+  const { doc } = useParams<{ doc: string }>();
+  const q = useSearchParams();
+  return <DiffView doc={doc} from={num(q.get('from'))} to={num(q.get('to'))} />;
 }
 
-export default function DiffPage({ params, searchParams }: Props) {
+export default function DiffPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Diff params={params} searchParams={searchParams} />
+      <Diff />
     </Suspense>
   );
 }

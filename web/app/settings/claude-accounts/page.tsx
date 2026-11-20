@@ -1,3 +1,5 @@
+'use client';
+
 import { ClaudeAccounts } from './ClaudeAccounts';
 
 export default function ClaudeAccountsPage() {

@@ -1,20 +1,19 @@
+'use client';
+
 import { Suspense } from 'react';
 
 import { ApiTokensSettings } from '@/components/ApiTokensSettings';
+import { useSearchParams } from '@/lib/nav';
 
-async function Tokens({
-  searchParams,
-}: {
-  searchParams: PageProps<'/settings/api-tokens'>['searchParams'];
-}) {
-  const { member } = await searchParams;
-  return <ApiTokensSettings initialMember={typeof member === 'string' ? member : null} />;
+function Tokens() {
+  const member = useSearchParams().getAll('member');
+  return <ApiTokensSettings initialMember={member.length === 1 ? member[0] : null} />;
 }
 
-export default function ApiTokensPage({ searchParams }: PageProps<'/settings/api-tokens'>) {
+export default function ApiTokensPage() {
   return (
     <Suspense fallback={null}>
-      <Tokens searchParams={searchParams} />
+      <Tokens />
     </Suspense>
   );
 }

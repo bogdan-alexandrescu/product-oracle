@@ -1,3 +1,5 @@
+'use client';
+
 import { MyAccount } from '@/components/MyAccount';
 
 export default function AccountPage() {
