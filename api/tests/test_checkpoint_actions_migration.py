@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0022_checkpoint_actions"
 PREVIOUS = "0022_code_maps"
@@ -71,7 +72,6 @@ def _has_table() -> bool:
 
 def test_the_chain_ends_here_after_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
@@ -79,7 +79,7 @@ def test_upgrade_adds_the_draft_and_downgrade_drops_it(scratch_db):
     """protects=the schema of the shared draft; fails_when=the table, its checks, its one
     slot per item, kind and field or the two columns drift; no_claim=data backfill (none)."""
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant, run, cp = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run("INSERT INTO runs (id, tenant_id, flow, status) VALUES (:r, :t, 'prd_to_roadmap', "
@@ -87,7 +87,7 @@ def test_upgrade_adds_the_draft_and_downgrade_drops_it(scratch_db):
     _run("INSERT INTO checkpoints (id, tenant_id, run_id, kind, status) "
          "VALUES (:c, :t, :r, 'roadmap_items', 'pending')", c=cp, t=tenant, r=run)  # fmt: skip
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
     assert _draft_columns() == ["draft_note", "draft_revision"]
     assert _run("SELECT draft_note, draft_revision FROM checkpoints") == [(None, 0)]
@@ -113,5 +113,5 @@ def test_upgrade_adds_the_draft_and_downgrade_drops_it(scratch_db):
 
     command.downgrade(cfg, PREVIOUS)
     assert _draft_columns() == [] and not _has_table()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _has_table()

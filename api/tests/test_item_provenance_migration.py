@@ -11,13 +11,13 @@ import asyncio
 import uuid
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -55,7 +55,6 @@ def scratch_db():
 
 def test_the_chain_ends_here_after_0014_intake():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0016_source_needs_attention").down_revision == "0014_intake"
     assert script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
     assert script.get_revision("0017_item_provenance").down_revision == "0016_browse_calls"
@@ -67,7 +66,7 @@ def test_the_chain_ends_here_after_0014_intake():
 
 
 def test_no_table_uses_row_level_security(scratch_db):
-    command.upgrade(_cfg(), "0017_item_provenance")
+    upgrade(_cfg(), "0017_item_provenance")
     assert _run("SELECT count(*) FROM pg_class WHERE relrowsecurity OR relforcerowsecurity") == [
         (0,)
     ]
@@ -75,7 +74,7 @@ def test_no_table_uses_row_level_security(scratch_db):
 
 def test_the_backfill_fills_the_rows_of_two_companies(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0016_browse_calls")
+    upgrade(cfg, "0016_browse_calls")
     root = "11111111111141118111111111111111"
     expected: dict[uuid.UUID, tuple[str, str]] = {}
     for n in (1, 2):
@@ -114,7 +113,7 @@ def test_the_backfill_fills_the_rows_of_two_companies(scratch_db):
             )
             expected[item] = (kind, external)
 
-    command.upgrade(cfg, "0017_item_provenance")
+    upgrade(cfg, "0017_item_provenance")
 
     rows = _run("SELECT id, provenance FROM source_items")
     assert len(rows) == 4

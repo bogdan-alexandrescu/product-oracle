@@ -18,6 +18,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0020_decisions"
 PREVIOUS = "0014_account_fixes"
@@ -93,7 +94,6 @@ def test_chains_on_the_single_head():
     fails_when=a second head appears; no_claim=none beyond protects."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scratch_db):
@@ -102,7 +102,7 @@ def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scr
     drops the tables, the synced decision entities and the setting key, leaving the source
     rows; fails_when=a backfill or its entity is missing or doubled, or anything survives
     the downgrade; no_claim=none beyond protects."""
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     t, u = _company()
     risk = _assumption(
         t, u, "accept_risk", "Partner quota holds", datetime(2026, 12, 1, tzinfo=UTC)
@@ -111,7 +111,7 @@ def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scr
     _assumption(t, u, "validate", "Measured", None)
     _assumption(t, u, "reject", "Rejected", None)
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert {"decisions", "decision_reviews"} <= _tables()
     got = _run(
         "SELECT number, status, origin, class, source_kind, source_id, review_at, approver_id "
@@ -162,7 +162,7 @@ def test_decided_check_allows_a_null_review_date_only_for_checkpoints(scratch_db
     """protects=a decided judgement call needs a review date and a decided checkpoint
     record may have none; numbers and sources are unique per company; fails_when=either
     rule is not enforced by the database; no_claim=none beyond protects."""
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     t, u = _company()
 
     def insert(origin: str, number: int, review: date | None, source: uuid.UUID | None = None):

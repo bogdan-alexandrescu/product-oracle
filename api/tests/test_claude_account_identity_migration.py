@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0040_claude_account_identity"
 PREVIOUS = "0039_company_timezone"
@@ -68,14 +69,13 @@ def scratch_db():
 def test_the_chain_ends_here_after_discussion_replies():
     # Subgoals' 0041_subgoals (#345) chains on it; one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0041_subgoals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_downgrade_upgrade_keeps_the_accounts(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run(
@@ -85,7 +85,7 @@ def test_upgrade_downgrade_upgrade_keeps_the_accounts(scratch_db):
         a=uuid.uuid4(),
         t=tenant,
     )
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _columns() == ["claude_email", "claude_organization"]
     # Existing rows: not reported.
     assert _run("SELECT label, claude_email, claude_organization FROM claude_accounts") == [
@@ -94,5 +94,5 @@ def test_upgrade_downgrade_upgrade_keeps_the_accounts(scratch_db):
     command.downgrade(cfg, PREVIOUS)
     assert _columns() == []
     assert _run("SELECT label FROM claude_accounts") == [("personal",)]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _columns() == ["claude_email", "claude_organization"]

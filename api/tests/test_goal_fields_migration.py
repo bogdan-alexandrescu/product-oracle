@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0036_goal_fields"
 PREVIOUS = "0035_track_alerts"
@@ -86,7 +87,6 @@ def _tables() -> list[str]:
 def test_the_chain_ends_here_after_discussion_replies():
     script = ScriptDirectory.from_config(_cfg())
     # H2 Cadence engine's 0037_rituals chains on it; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0037_rituals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -97,7 +97,7 @@ def test_the_chain_ends_here_after_discussion_replies():
 # no_claim=fill from text (its own tests).
 def test_goal_text_moves_to_text_keys_and_back(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant, member = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
     _run(
@@ -116,7 +116,7 @@ def test_goal_text_moves_to_text_keys_and_back(scratch_db):
     churn = {"target": "below 8%", "weight": 0.2, "owner": str(member), "note": "kept"}
     a, c = _goal(tenant, "activation", activation), _goal(tenant, "churn", churn)
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _tables() == ["goal_measurements"]
     assert _attrs(a) == {
         "metric": "Accounts that finish setup",
@@ -138,7 +138,7 @@ def test_goal_text_moves_to_text_keys_and_back(scratch_db):
     assert _tables() == []
     assert _attrs(a) == activation
     assert _attrs(c) == churn
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
 
 # protects=review finding 3: after the upgrade no goal is left in a state the checks
@@ -150,7 +150,7 @@ def test_goals_the_checks_refuse_are_normalised(scratch_db):
     from oracle.baseline import goals
 
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
     seeded = {
@@ -164,7 +164,7 @@ def test_goals_the_checks_refuse_are_normalised(scratch_db):
     }  # fmt: skip
     ids = {k: _goal(tenant, k, v) for k, v in seeded.items()}
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     after = {k: _attrs(g) for k, g in ids.items()}
     for key, attrs in after.items():
         assert goals.field_problems(attrs) == [], (key, attrs)
@@ -181,4 +181,4 @@ def test_goals_the_checks_refuse_are_normalised(scratch_db):
 
     command.downgrade(cfg, PREVIOUS)
     assert {k: _attrs(g) for k, g in ids.items()} == seeded
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)

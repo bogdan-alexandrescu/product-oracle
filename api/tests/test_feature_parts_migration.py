@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0120_feature_parts"
 PREVIOUS = "0119_trash_milestones"
@@ -69,9 +70,9 @@ def test_chains_on_the_single_head():
 
 def test_up_down_up(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _columns() == [("text", "YES")]
     command.downgrade(cfg, PREVIOUS)
     assert _columns() == []
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _columns() == [("text", "YES")]

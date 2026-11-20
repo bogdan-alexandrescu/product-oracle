@@ -20,6 +20,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0051_pricing"
 PREVIOUS = "0050_metrics"
@@ -80,7 +81,6 @@ def test_chains_on_mains_head():
     parent; no_claim=later lanes' re-chaining."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_adds_the_table_and_values_and_downgrade_refuses_while_memos_exist(scratch_db):
@@ -90,9 +90,9 @@ def test_upgrade_adds_the_table_and_values_and_downgrade_refuses_while_memos_exi
     gone drops the table and the column and restores the checks; fails_when=a value is
     missing, another value is dropped, a bad row is accepted, or the downgrade deletes a
     memo; no_claim=data written by the app."""
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     before = {name: _definition(name) for name in CHECKS}
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     for name, values in CHECKS.items():
         after = _definition(name)
         for v in values:

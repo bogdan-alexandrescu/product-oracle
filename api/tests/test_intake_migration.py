@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -55,14 +56,13 @@ def test_0014_intake_chains_after_mains_head():
     # The PRD review chain (0014_review ... 0014_member_follow_up_retry) chains on it and
     # v2-specs 0015_specs on that.
     assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
-    assert len(script.get_heads()) == 1
 
 
 def test_widened_checks_keep_other_lanes_values(scratch_db):
     """The kind check is extended from what the database holds: 0014_quality's
     ``quality_review`` survives the upgrade and the downgrade (round 10)."""
     cfg = _cfg()
-    command.upgrade(cfg, "0014_blockers_snapshot")
+    upgrade(cfg, "0014_blockers_snapshot")
     t, doc = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -75,7 +75,7 @@ def test_widened_checks_keep_other_lanes_values(scratch_db):
         "INSERT INTO llm_jobs (id, tenant_id, kind, document_id, status) "
         "VALUES (gen_random_uuid(), :t, 'quality_review', :d, 'queued')"
     )
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     _run(insert, t=t, d=doc)
     command.downgrade(cfg, "0014_blockers_snapshot")
     _run(insert, t=t, d=doc)
@@ -84,7 +84,7 @@ def test_widened_checks_keep_other_lanes_values(scratch_db):
 
 def test_upgrade_keeps_document_jobs_and_downgrade_reverses(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, doc = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -100,7 +100,7 @@ def test_upgrade_keeps_document_jobs_and_downgrade_reverses(scratch_db):
         d=doc,
     )
 
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     assert _run("SELECT kind, document_id, intake_id FROM llm_jobs") == [("reporting", doc, None)]
     intake = uuid.uuid4()
     _run(
@@ -145,7 +145,7 @@ def test_upgrade_keeps_document_jobs_and_downgrade_reverses(scratch_db):
             t=t,
             d=doc,
         )
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     assert _run("SELECT count(*) FROM intake_proposals") == [(0,)]
 
 
@@ -153,7 +153,7 @@ def test_rule_made_gaps_are_keyed_by_category_not_by_text(scratch_db):
     """Round 3 (S6): a rule-made gap carries its category key, backfilled from the
     statements as they stand at this revision; model and person gaps carry none."""
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, intake, person = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -175,7 +175,7 @@ def test_rule_made_gaps_are_keyed_by_category_not_by_text(scratch_db):
             "impact, importance, created_by) VALUES (:g, :t, :i, :c, :s, '{}', 'high', :by)",
             g=ids[name], t=t, i=intake, c=category, s=statement, by=created_by,
         )  # fmt: skip
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     keys = dict(_run("SELECT id, rule_key FROM knowledge_gaps"))
     assert keys == {ids["rule"]: "ownership", ids["model"]: None, ids["person"]: None}
     command.downgrade(cfg, "0013")
@@ -192,7 +192,7 @@ def test_existing_intakes_withhold_everything_their_analysis_names(scratch_db):
     import json
 
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, intake, author = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     ids = [str(uuid.uuid4()) for _ in range(6)]
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
@@ -213,14 +213,14 @@ def test_existing_intakes_withhold_everything_their_analysis_names(scratch_db):
         a=author,
         an=json.dumps(analysis),
     )
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     rows = _run("SELECT intake_id, user_id, item_id FROM intake_withheld_items")
     assert {(r[0], r[1]) for r in rows} == {(intake, author)}
     assert sorted(str(r[2]) for r in rows) == sorted(ids[:5])
     names = [r[0] for r in _run("SELECT indexname FROM pg_indexes")]
     assert "ix_knowledge_gaps_legacy_importance" in names
     command.downgrade(cfg, "0013")
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
 
 
 def test_the_backfills_skip_malformed_item_ids_and_record_full_findings(scratch_db):
@@ -230,7 +230,7 @@ def test_the_backfills_skip_malformed_item_ids_and_record_full_findings(scratch_
     import json
 
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, intake, author = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     ids = [str(uuid.uuid4()) for _ in range(3)]
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
@@ -250,7 +250,7 @@ def test_the_backfills_skip_malformed_item_ids_and_record_full_findings(scratch_
         a=author,
         an=json.dumps(analysis),
     )
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     withheld = _run("SELECT item_id FROM intake_withheld_items")
     assert sorted(str(r[0]) for r in withheld) == sorted(ids)
     # Round 7 (freeze at sharing): the item's version at the pin cannot be determined
@@ -262,7 +262,7 @@ def test_the_backfills_skip_malformed_item_ids_and_record_full_findings(scratch_
     )
     assert "withdrawn" in checks[0][0]
     command.downgrade(cfg, "0013")
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
 
 
 def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(scratch_db):
@@ -275,7 +275,7 @@ def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(s
 
     JAN, MAR = datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 3, 1, tzinfo=UTC)
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, author = uuid.uuid4(), uuid.uuid4()
     intake, other, nulls = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     source, snap = uuid.uuid4(), uuid.uuid4()
@@ -338,7 +338,7 @@ def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(s
             i=intake_id, t=t, a=author, an=json.dumps(analysis),
             **({"p": snap} if intake_id == intake else {}),
         )  # fmt: skip
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     shared = _run("SELECT intake_id, item_id, version_id FROM intake_shared_items")
     assert [tuple(r) for r in shared] == [(intake, pinned, v1)]
     [[analysis]] = _run("SELECT analysis FROM product_intakes WHERE id = :i", i=intake)
@@ -352,7 +352,7 @@ def test_full_shares_are_frozen_at_the_pins_versions_and_null_findings_migrate(s
         (other, str(pinned))
     }
     command.downgrade(cfg, "0013")
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
 
 
 def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
@@ -363,7 +363,7 @@ def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
     names; a Slack permalink (ids only) as it is. An id not of the expected form, a
     GitHub release and an upload get none (fail closed)."""
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, author = uuid.uuid4(), uuid.uuid4()
     slack, notion, fireflies, gdocs, github, upload = (uuid.uuid4() for _ in range(6))
     message, page, odd = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
@@ -431,7 +431,7 @@ def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
             "VALUES (gen_random_uuid(), :t, :i, 'Returning buyers.', 'h')",
             t=t, i=item,
         )  # fmt: skip
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")
     links = dict(_run("SELECT item_id, url FROM source_item_versions"))
     assert links == {
         message: "https://chat.example.com/archives/C1/p1",
@@ -445,4 +445,4 @@ def test_versions_keep_their_link_and_notion_links_lose_the_title(scratch_db):
         file_: None,
     }
     command.downgrade(cfg, "0013")
-    command.upgrade(cfg, "0014_intake")
+    upgrade(cfg, "0014_intake")

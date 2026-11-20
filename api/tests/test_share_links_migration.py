@@ -6,6 +6,7 @@ import pytest
 from alembic import command
 from sqlalchemy.exc import IntegrityError
 
+from tests.migration_db import upgrade
 from tests.test_migrations import _cfg, _run, scratch_db  # noqa: F401
 
 
@@ -24,9 +25,9 @@ def _columns(table: str) -> set[str]:
 
 def test_0057_up_down_up(scratch_db):  # noqa: F811
     cfg = _cfg()
-    command.upgrade(cfg, "0072_public_texts")
+    upgrade(cfg, "0072_public_texts")
     assert _tables() == set()
-    command.upgrade(cfg, "0073_share_links")
+    upgrade(cfg, "0073_share_links")
     assert _tables() == {"share_links", "share_link_views"}
     # Counts only (O5-Q4): no column could hold an address or an identity.
     assert not _columns("share_link_views") & {"ip", "address", "user_agent", "user_id"}
@@ -51,5 +52,5 @@ def test_0057_up_down_up(scratch_db):  # noqa: F811
     assert version is not None
     command.downgrade(cfg, "0072_public_texts")
     assert _tables() == set()
-    command.upgrade(cfg, "0073_share_links")
+    upgrade(cfg, "0073_share_links")
     assert _tables() == {"share_links", "share_link_views"}

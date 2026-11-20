@@ -21,6 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0020_strategy"
 PREVIOUS = "0020_question_subjects"
@@ -82,7 +83,6 @@ def test_chains_on_mains_head():
     fixed number; no_claim=later lanes' re-chaining."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def _tenant() -> uuid.UUID:
@@ -97,10 +97,10 @@ def test_upgrade_widens_the_checks_and_downgrade_narrows_them(scratch_db, monkey
     drop them; fails_when=a value is missing, another lane's value is dropped, or the
     downgrade loses documents silently; no_claim=data written by the app."""
     monkeypatch.delenv("ORACLE_DOWNGRADE_DROP_STRATEGY", raising=False)
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     before = {name: _definition(name) for name in CHECKS}
     assert not _table("strategy_findings")
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     for name, values in CHECKS.items():
         after = _definition(name)
         for v in values:

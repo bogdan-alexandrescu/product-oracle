@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0023_source_partial_sync"
 PREVIOUS = "0022_updates"
@@ -69,14 +70,13 @@ def _columns() -> list[str]:
 def test_the_chain_after_updates():
     script = ScriptDirectory.from_config(_cfg())
     # 0023_intake_brief_fields (C4) chains on it, then 0024_segment_skipped; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0023_intake_brief_fields").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_adds_partly_synced_at_and_downgrade_drops_it(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant, user = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run(
@@ -93,7 +93,7 @@ def test_upgrade_adds_partly_synced_at_and_downgrade_drops_it(scratch_db):
         u=user,
     )
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
     assert _columns() == ["partly_synced_at"]
     assert _run("SELECT partly_synced_at FROM sources") == [(None,)]

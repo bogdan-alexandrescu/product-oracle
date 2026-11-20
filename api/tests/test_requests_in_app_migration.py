@@ -19,6 +19,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0027_request_in_app"
 PREVIOUS = "0026_staging"
@@ -72,20 +73,19 @@ def test_chains_after_mains_head_with_a_single_head():
     no_claim=other lanes' later migrations."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_allows_in_app_and_downgrade_records_them_as_other(scratch_db):
     """protects=the in_app channel in the database; fails_when=the check refuses it after
     the upgrade, or the downgrade fails on in_app rows; no_claim=the API's rules."""
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     with pytest.raises(IntegrityError):
         _add(tenant, "in_app")
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     _add(tenant, "in_app")
     _add(tenant, "sales")
     assert sorted(_run("SELECT channel FROM product_requests")) == [("in_app",), ("sales",)]

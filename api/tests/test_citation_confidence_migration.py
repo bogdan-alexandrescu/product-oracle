@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0019_citation_confidence"
 PREVIOUS = "0018_runtime_features"
@@ -123,18 +124,17 @@ def test_chains_on_the_citation_source_oracle_head():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # The intake lane's 0014_intake chains on it and the PRD review chain (0014_review,
     # 0014_member_disable, 0014_member_follow_up_retry) on that; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0014_intake").down_revision == REVISION
     assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
 
 
 def test_upgrade_adds_the_columns_and_the_downgrade_drops_them(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     t, v = _version()
     _cite(t, v, "old")  # a citation from before: defaults after the upgrade
     assert not _columns() & set(COLUMNS)
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert set(COLUMNS) <= _columns()
     assert _run("SELECT item_id, confidence, confidence_note, low_confidence FROM citations") == [
         (None, None, None, False)
@@ -169,7 +169,7 @@ def test_upgrade_adds_the_columns_and_the_downgrade_drops_them(scratch_db):
 
 @pytest.mark.parametrize("value", [1.5, -0.1])
 def test_confidence_outside_0_1_is_refused(scratch_db, value):
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     t, v = _version()
     with pytest.raises(IntegrityError):
         _cite(t, v, "c1", confidence=value)

@@ -7,7 +7,9 @@ database, the tables that got rows are emptied (``_truncate_after_test``).
 
 import asyncio
 import os
+import sys
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 # CI sets this; without it the tests try a local Postgres and, if none answers, the
@@ -81,7 +83,7 @@ def run_migrations(url: str) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def migrated_db() -> None:
+def migrated_db() -> Iterator[None]:
     try:
         asyncio.run(_reset_schema(TEST_DATABASE_URL))
     except OSError as e:
@@ -90,6 +92,11 @@ def migrated_db() -> None:
         pytest.skip(f"no Postgres at the default test URL ({e}); set ORACLE_TEST_DATABASE_URL")
     run_migrations(TEST_DATABASE_URL)
     asyncio.run(_install_cleanup(TEST_DATABASE_URL))
+    yield
+    # The migration tests' template databases (tests/migration_db.py), if any were made.
+    migration_db = sys.modules.get("tests.migration_db")
+    if migration_db is not None and migration_db._templates:
+        migration_db.drop_templates()
 
 
 # Emptying the tables after a test: one call that deletes from those with rows only. A

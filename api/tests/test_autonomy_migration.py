@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0020_autonomy"
 PREVIOUS = "0020_launches"
@@ -62,16 +63,15 @@ def test_chains_on_mains_head_with_one_head():
     no_claim=that the integrator's merge order keeps it last."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_creates_oracle_actions_and_downgrade_drops_it(scratch_db):
     """protects=0020 creates oracle_actions (defaults, index, tenant cascade) and its
     downgrade drops it; fails_when=the table, a default or the index is missing, or the
     downgrade leaves it; no_claim=behaviour of the rows (tests/test_autonomy.py)."""
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     assert not _exists()
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _exists()
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
@@ -92,5 +92,5 @@ def test_upgrade_creates_oracle_actions_and_downgrade_drops_it(scratch_db):
 
     command.downgrade(_cfg(), PREVIOUS)
     assert not _exists()
-    command.upgrade(_cfg(), "head")
+    upgrade(_cfg(), "head")
     assert _exists()

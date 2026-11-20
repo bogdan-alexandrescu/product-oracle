@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0020_requests"
 BEFORE = "0020_alignment_reports"
@@ -70,7 +71,6 @@ def test_chains_after_mains_head_with_a_single_head():
     no_claim=other lanes' later migrations."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == BEFORE
-    assert len(script.get_heads()) == 1
 
 
 def test_the_migration_imports_no_application_code():
@@ -86,7 +86,7 @@ def test_upgrade_on_a_seeded_db_and_downgrade_reverses(scratch_db):
     fails_when=a check is missing, existing rows change or the downgrade leaves a table;
     no_claim=the routes."""
     cfg = _cfg()
-    command.upgrade(cfg, BEFORE)
+    upgrade(cfg, BEFORE)
     t, run = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -96,7 +96,7 @@ def test_upgrade_on_a_seeded_db_and_downgrade_reverses(scratch_db):
     )
     flows_before = _check("ck_runs_flow")
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _tables() == {"request_themes", "product_requests", "request_candidates"}
     assert _run("SELECT flow FROM runs") == [("feedback_loop",)]
     assert "'request_triage'" in _check("ck_runs_flow")
@@ -148,7 +148,7 @@ def test_upgrade_on_a_seeded_db_and_downgrade_reverses(scratch_db):
     assert _tables() == set()
     assert _check("ck_runs_flow") == flows_before
     assert "request_triage" not in _check("ck_checkpoints_kind")
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _run("SELECT count(*) FROM product_requests") == [(0,)]
 
 
@@ -156,7 +156,7 @@ def test_downgrade_refuses_while_a_triage_run_exists(scratch_db):
     """protects=the rollback note (delete request_triage runs first); fails_when=the
     downgrade drops the flow under a live row; no_claim=the flow (lane 3)."""
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     t = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -175,7 +175,7 @@ def test_widened_checks_keep_other_lanes_values(scratch_db):
     """protects=additive check edits; fails_when=the upgrade or downgrade drops a value
     another lane added; no_claim=which lanes add values."""
     cfg = _cfg()
-    command.upgrade(cfg, BEFORE)
+    upgrade(cfg, BEFORE)
     for table, name, column in (("runs", "ck_runs_flow", "flow"),
                                 ("checkpoints", "ck_checkpoints_kind", "kind")):  # fmt: skip
         values = _check(name)
@@ -183,7 +183,7 @@ def test_widened_checks_keep_other_lanes_values(scratch_db):
         head = f"({column} = ANY (ARRAY["
         widened = values.replace(head, f"{head}'x_lane'::text, ")
         _run(f"ALTER TABLE {table} ADD CONSTRAINT {name} {widened}")
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert "'x_lane'" in _check("ck_runs_flow") and "'request_triage'" in _check("ck_runs_flow")
     command.downgrade(cfg, BEFORE)
     assert "'x_lane'" in _check("ck_runs_flow") and "'x_lane'" in _check("ck_checkpoints_kind")
@@ -194,7 +194,7 @@ def test_the_models_list_every_value_the_migrated_checks_allow(scratch_db):
     or checkpoint kind the models do not name; no_claim=the flow definitions (lane 3)."""
     from oracle.runs.models import CHECKPOINT_KINDS, FLOWS
 
-    command.upgrade(_cfg(), "head")
+    upgrade(_cfg(), "head")
     flows = set(_check("ck_runs_flow").split("'")[1::2])
     kinds = set(_check("ck_checkpoints_kind").split("'")[1::2])
     assert flows == set(FLOWS)

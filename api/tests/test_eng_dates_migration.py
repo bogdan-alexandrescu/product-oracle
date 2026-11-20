@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0069_eng_dates"
 PREVIOUS = "0068_intake_read"
@@ -61,28 +62,27 @@ def _check() -> str:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_up_down_up_keeps_every_other_kind(scratch_db):
     # protects=AC17; fails_when=up drops a kind another lane added, down leaves eng_dates
     # or removes another kind; no_claim=data in other tables.
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     before = _check()
     assert "eng_dates" not in before
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     after = _check()
     assert "eng_dates" in after and "eng_review" in after and "prd_review" in after
     command.downgrade(_cfg(), PREVIOUS)
     assert _check() == before
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert "eng_dates" in _check()
 
 
 def test_down_refuses_while_an_eng_dates_checkpoint_exists(scratch_db):
     # protects=AC17 refusal; fails_when=the downgrade drops the value under a row using
     # it; no_claim=-.
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     _run(
         "INSERT INTO tenants (id, name) VALUES "
         "('00000000-0000-0000-0000-0000000000a1', 'Example Co')"

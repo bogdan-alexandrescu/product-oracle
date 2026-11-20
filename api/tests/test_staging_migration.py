@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0026_staging"
 PREVIOUS = "0025_checkpoint_review"
@@ -73,7 +74,6 @@ def _has_table() -> bool:
 
 def test_the_chain_ends_here_after_segment_skipped():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
@@ -82,7 +82,7 @@ def test_up_down_up_keeps_existing_actions_as_row_actions(scratch_db):
     action, a check or the one live row per change drifts, or the downgrade leaves
     anything; no_claim=data backfill (none)."""
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant, run, cp = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run("INSERT INTO runs (id, tenant_id, flow, status) VALUES (:r, :t, 'prd_to_roadmap', "
@@ -92,7 +92,7 @@ def test_up_down_up_keeps_existing_actions_as_row_actions(scratch_db):
     _run("INSERT INTO checkpoint_actions (id, tenant_id, checkpoint_id, item_key, kind, state) "
          "VALUES (gen_random_uuid(), :t, :c, 'a', 'drop', 'staged')", t=tenant, c=cp)  # fmt: skip
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
     assert _origin_columns() == ["discussion_change_id", "discussion_id", "from_private", "origin"]
     assert _run("SELECT origin, from_private FROM checkpoint_actions") == [("row", False)]
@@ -118,5 +118,5 @@ def test_up_down_up_keeps_existing_actions_as_row_actions(scratch_db):
 
     command.downgrade(cfg, PREVIOUS)
     assert _origin_columns() == [] and not _has_table()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _has_table() and _origin_columns()

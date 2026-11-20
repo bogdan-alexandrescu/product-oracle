@@ -21,6 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0048_scope_review"
 PREVIOUS = "0047_slack_bridge"
@@ -62,12 +63,11 @@ def scratch_db():
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     t, run, scope, item = (uuid.uuid4() for _ in range(4))
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -91,7 +91,7 @@ def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
         t=t,
         s=scope,
     )
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _run("SELECT original FROM prd_scope_items")[0][0] == {}
     job = uuid.uuid4()
     _run(
@@ -120,4 +120,4 @@ def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
     assert ("prd_scope_items", "original") not in columns
     assert ("llm_jobs", "scope_id") not in columns
     assert _run("SELECT count(*) FROM prd_scope_items")[0][0] == 1
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)

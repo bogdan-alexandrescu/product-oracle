@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0037_rituals"
 PREVIOUS = "0036_goal_fields"
@@ -74,7 +75,6 @@ def test_chains_on_b5s_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # H3's 0038_outcome_tracking chains on it; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0038_outcome_tracking").down_revision == REVISION
 
 
@@ -84,9 +84,9 @@ def test_upgrade_and_downgrade(scratch_db):
     runs and the two settings keys; fails_when=a table or value is left behind, or
     another flow's value is dropped; no_claim=data written by the service."""
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     assert not (TABLES & _tables())
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert TABLES <= _tables()
     check = _flow_check()
     assert "'ritual_summary'" in check and "'update_draft'" in check

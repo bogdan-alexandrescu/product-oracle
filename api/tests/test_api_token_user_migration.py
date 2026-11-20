@@ -4,6 +4,7 @@ import uuid
 
 from alembic import command
 
+from tests.migration_db import upgrade
 from tests.test_migrations import _cfg, _run, scratch_db  # noqa: F401
 
 
@@ -16,7 +17,7 @@ def _columns() -> set[str]:
 
 def test_0005_up_down_up(scratch_db):  # noqa: F811
     cfg = _cfg()
-    command.upgrade(cfg, "0004")
+    upgrade(cfg, "0004")
     tenant, user = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     _run(
@@ -33,7 +34,7 @@ def test_0005_up_down_up(scratch_db):  # noqa: F811
     )
     assert "user_id" not in _columns()
 
-    command.upgrade(cfg, "0005")
+    upgrade(cfg, "0005")
     assert "user_id" in _columns()
     assert _run("SELECT user_id FROM api_tokens") == [(None,)]
     _run(
@@ -51,5 +52,5 @@ def test_0005_up_down_up(scratch_db):  # noqa: F811
     assert "user_id" not in _columns()
     assert _run("SELECT count(*) FROM api_tokens") == [(1,)]
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert "user_id" in _columns()

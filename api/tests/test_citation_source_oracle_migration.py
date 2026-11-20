@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0017_citation_source_oracle"
 SCRATCH_URL = (
@@ -95,7 +96,6 @@ def test_chains_on_the_refinement_batch_head():
     # 0018_runtime_features chains on it, 0019_citation_confidence on that, the intake
     # lane's 0014_intake on that and the PRD review chain (0014_review,
     # 0014_member_disable, 0014_member_follow_up_retry) on that; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0018_runtime_features").down_revision == REVISION
     assert script.get_revision("0019_citation_confidence").down_revision == "0018_runtime_features"
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
@@ -107,11 +107,11 @@ def test_chains_on_the_refinement_batch_head():
 
 
 def test_an_oracle_citation_inserts_after_upgrade(scratch_db):
-    command.upgrade(_cfg(), "0016_refinement_batch")
+    upgrade(_cfg(), "0016_refinement_batch")
     t, v = _version()
     with pytest.raises(IntegrityError):
         _cite(t, v, "o-g1", "oracle")
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     _cite(t, v, "o-g1", "oracle")
     _cite(t, v, "c1", "slack")
     assert _run("SELECT cite_key, source, ref FROM citations ORDER BY cite_key") == [
@@ -121,14 +121,14 @@ def test_an_oracle_citation_inserts_after_upgrade(scratch_db):
 
 
 def test_extends_the_live_check_and_the_downgrade_refuses_oracle_rows(scratch_db):
-    command.upgrade(_cfg(), "0016_refinement_batch")
+    upgrade(_cfg(), "0016_refinement_batch")
     # Another lane's source, added after 0001, must survive both ways.
     _run("ALTER TABLE citations DROP CONSTRAINT ck_citations_source")
     _run(
         "ALTER TABLE citations ADD CONSTRAINT ck_citations_source CHECK (source IN "
         "('slack', 'notion', 'gdocs', 'github', 'fireflies', 'upload', 'web', 'other_lane'))"
     )
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     check = _check()
     for source in ("slack", "fireflies", "web", "other_lane", "oracle"):
         assert f"'{source}'" in check

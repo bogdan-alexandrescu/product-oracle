@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0052_market"
 PREVIOUS = "0051_pricing"
@@ -78,12 +79,12 @@ def scratch_db():
 
 
 def test_market_up_down_up(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     assert not TABLES & _tables()
     assert "competitive_digest" not in _check("ck_runs_flow")
     assert "read:web" not in _check("ck_run_tokens_scopes")
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert TABLES <= _tables()
     assert "'competitive_digest'" in _check("ck_runs_flow")
     assert "'baseline'" in _check("ck_runs_flow")
@@ -131,7 +132,7 @@ def test_market_up_down_up(scratch_db):
         (0,)
     ]
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert TABLES <= _tables()
     assert "'competitive_digest'" in _check("ck_runs_flow")
     assert "'read:web'" in _check("ck_run_tokens_scopes")

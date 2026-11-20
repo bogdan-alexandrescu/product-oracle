@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0124_track_prds"
 PREVIOUS = "0123_track_goal"
@@ -69,7 +70,7 @@ def test_chains_on_the_single_head():
 
 
 def test_upgrade_backfills_and_downgrade_restores(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     tenant, first, second, third = (uuid.uuid4() for _ in range(4))
     track, empty = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
@@ -90,7 +91,7 @@ def test_upgrade_backfills_and_downgrade_restores(scratch_db):
         k=empty, t=tenant,
     )  # fmt: skip
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert "prd_document_id" not in _columns("product_tracks")
     assert _run("SELECT track_id, prd_document_id, state FROM track_prds") == [
         (track, first, "linked")
@@ -112,5 +113,5 @@ def test_upgrade_backfills_and_downgrade_restores(scratch_db):
     rows = dict(_run("SELECT id, prd_document_id FROM product_tracks"))
     assert rows == {track: first, empty: None}
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _run("SELECT track_id, prd_document_id FROM track_prds") == [(track, first)]

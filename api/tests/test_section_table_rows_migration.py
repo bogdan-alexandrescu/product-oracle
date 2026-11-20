@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 
 from oracle.docs.parser import body_text
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -81,7 +82,7 @@ def _texts() -> dict[str, str]:
 
 def test_upgrade_rewrites_table_rows_and_downgrade_restores_them(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0014_trace")
+    upgrade(cfg, "0014_trace")
     t, d, v = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -101,7 +102,7 @@ def test_upgrade_rewrites_table_rows_and_downgrade_restores_them(scratch_db):
     _section(t, v, "pipe", 2, PIPE_MD, "Use a a | b shell pipe, not a table.")
     _section(t, v, "plain", 3, "Just text.", "Just text.")
 
-    command.upgrade(cfg, "0015_section_table_rows")
+    upgrade(cfg, "0015_section_table_rows")
     after = _texts()
     assert after["metrics"] == "Targets:\nMetric | Target\nCheckout completion | 60%"
     # The migration writes what the parser writes today.

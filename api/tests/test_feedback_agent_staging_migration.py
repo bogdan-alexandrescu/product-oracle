@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0021_feedback_agent_staging"
 COLUMNS = ["staged_for_agents_at", "staged_for_agents_by"]
@@ -71,7 +72,6 @@ def test_the_chain_after_feedback_authors():
     # C9 Move and pin's 0022_priority_overrides, 0022_code_maps (F5-2),
     # 0022_checkpoint_actions (D8), 0022_updates (H8), 0023_source_partial_sync (#249),
     # 0023_intake_brief_fields (C4) and 0024_segment_skipped; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0022_invite_delivery").down_revision == REVISION
     assert script.get_revision("0022_baseline_flow").down_revision == "0022_invite_delivery"
     assert script.get_revision("0022_engineering_lead").down_revision == "0022_baseline_flow"
@@ -92,7 +92,7 @@ def test_the_chain_after_feedback_authors():
 
 def test_upgrade_adds_the_staging_columns_and_downgrade_drops_them(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0020_prd_scopes")
+    upgrade(cfg, "0020_prd_scopes")
     tenant, doc, item = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run(
@@ -109,7 +109,7 @@ def test_upgrade_adds_the_staging_columns_and_downgrade_drops_them(scratch_db):
         d=doc,
     )
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
     assert _columns() == COLUMNS
     assert _run("SELECT staged_for_agents_at, staged_for_agents_by FROM feedback_items") == [

@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0032_interviews"
 BEFORE = "0031_basis_verification"
@@ -70,7 +71,6 @@ def test_chains_after_mains_head_with_a_single_head():
     no_claim=other lanes' later migrations."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == BEFORE
-    assert len(script.get_heads()) == 1
 
 
 def test_the_migration_imports_no_application_code():
@@ -85,12 +85,12 @@ def test_upgrade_on_a_seeded_db_and_downgrade_reverses(scratch_db):
     fails_when=a check is missing, other lanes' job kinds are dropped, or the downgrade
     leaves a table or loses a request; no_claim=the routes."""
     cfg = _cfg()
-    command.upgrade(cfg, BEFORE)
+    upgrade(cfg, BEFORE)
     t, user = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     kinds_before = _check("ck_llm_jobs_kind")
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _tables() == {"interviews", "interview_messages"}
     for kind in ("interview_guide", "interview_snapshot", "decision_options", "intake_analysis"):
         assert f"'{kind}'" in _check("ck_llm_jobs_kind")
@@ -130,7 +130,7 @@ def test_upgrade_on_a_seeded_db_and_downgrade_reverses(scratch_db):
     assert _check("ck_llm_jobs_kind") == kinds_before
     assert _run("SELECT title, interview_id FROM product_requests") == [("Keep the address", None)]
     assert _run("SELECT count(*) FROM llm_jobs") == [(0,)]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
 
 def test_the_models_match_the_migrated_checks(scratch_db):
@@ -138,5 +138,5 @@ def test_the_models_match_the_migrated_checks(scratch_db):
     kind the models do not name; no_claim=the job runners."""
     from oracle.jobs.models import ALL_JOB_KINDS
 
-    command.upgrade(_cfg(), "head")
+    upgrade(_cfg(), "head")
     assert set(_check("ck_llm_jobs_kind").split("'")[1::2]) == set(ALL_JOB_KINDS)

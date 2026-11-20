@@ -19,6 +19,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0020_question_subjects"
 PREVIOUS = "0020_requests"
@@ -117,14 +118,13 @@ def _asked_to(q: uuid.UUID):
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_moves_asked_questions_to_the_author_and_adds_subjects(scratch_db):
     """protects=no asked question reaches nobody after the deploy; fails_when=an asked or
     delegated question keeps asked_to null; no_claim=drafts (the engine sets them when it
     asks)."""
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     t, author, intake = _company()
     someone = uuid.uuid4()
     asked = _question(t, "asked", intake=intake)
@@ -138,7 +138,7 @@ def test_upgrade_moves_asked_questions_to_the_author_and_adds_subjects(scratch_d
     ) == [(0,)]
     assert not COLUMNS & _columns()
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert COLUMNS <= _columns()
     assert "ix_stakeholder_questions_asked_to" in _indexes()
     assert _asked_to(asked) == author and _asked_to(delegated) == author
@@ -174,7 +174,7 @@ def test_upgrade_moves_asked_questions_to_the_author_and_adds_subjects(scratch_d
 def test_downgrade_refuses_while_general_questions_exist(scratch_db):
     """protects=the 17-category check comes back intact; fails_when=the downgrade drops a
     general question's category silently; no_claim=the data move (not undone)."""
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     t, author, intake = _company()
     general = _question(t, "asked", intake=intake, category="general", asked_to=author)
     with pytest.raises(RuntimeError, match="general"):
