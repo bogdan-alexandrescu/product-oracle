@@ -572,7 +572,7 @@ export function Campaigns({ doc }: { doc: string }) {
   return (
     <Panel
       title="Feedback campaigns"
-      count={rows.length}
+      count={q.data ? rows.length : undefined}
       testId="campaigns"
       tools={
         // qa-docs-26: while the form is open, its own Send and Cancel are the way out.
@@ -595,6 +595,7 @@ export function Campaigns({ doc }: { doc: string }) {
       )}
       {q.error && <div className="p-4"><ErrorNote>{q.error}</ErrorNote></div>}
       {error && <div className="px-4 pt-2"><InlineError>{error}</InlineError></div>}
+      {!q.data && !q.error && <div className="px-4 py-3"><Loading /></div>}
       {q.data && rows.length === 0 && <p className="px-4 py-3 text-sm text-text2">Nobody has been asked for feedback yet.</p>}
       <ul className="divide-y divide-line">
         {rows.map((c) => (

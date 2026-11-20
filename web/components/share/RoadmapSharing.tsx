@@ -691,6 +691,8 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
     <Panel
       title="Share links"
       count={(() => {
+        // #1586: a read still loading or failed has no count, never 0.
+        if (!q.data) return undefined;
         // qa4-docs-share-30: the count matches the rows listed.
         const active = links.filter((l) => l.state === "active").length;
         return active === links.length ? active : `${active} active · ${links.length} total`;

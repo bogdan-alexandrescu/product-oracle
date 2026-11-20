@@ -2104,7 +2104,12 @@ export function SimpleRoadmap() {
        * the legend and goal cards at the page's foot. */}
       {!blank && filters}
       {!blank && <MsKey />}
-      {blank && (
+      {/* #1586: the next step depends on the goals Oracle suggests for: unread, it is not guessed. */}
+      {blank && suggestions.error && !suggestions.data && (
+        <LoadError what="the suggested features" error={suggestions.error} onRetry={() => void suggestions.reload()} />
+      )}
+      {blank && !suggestions.error && !suggestions.data && <Loading />}
+      {blank && suggestions.data && (
         <p className="text-[15px] text-text2" data-testid="roadmap-empty">
           {hasGoals ? (
             <>No features yet: accept one Oracle suggests under a goal, and it shows here on its dates.</>

@@ -3,7 +3,7 @@
 import { useRouter } from "@/lib/nav";
 
 import { Chip, DataTable, Icon, Page, Panel, type Column } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
+import { LoadError } from "@/components/ui";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewSummary } from "@/lib/api/interviews";
 import { formatAge, formatDateTime } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
@@ -90,7 +90,7 @@ export default function InterviewsPage() {
         onFiled={(r) => router.push(`/requests?request=${encodeURIComponent(r.id)}`)}
         onInterviewed={() => void q.reload()}
       />
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {q.error && <LoadError what="the interviews" error={q.error} onRetry={() => void q.reload()} />}
       <Panel title="Interviews" count={q.data?.length} className="max-[600px]:[&_colgroup]:hidden">
         <DataTable
           label="Customer interviews"
@@ -99,6 +99,7 @@ export default function InterviewsPage() {
           rows={q.data}
           rowKey={(r) => r.id}
           loading={q.loading}
+          empty={q.error && !q.data ? null : undefined}
           onSelect={(id) => router.push(`/requests/interviews/${id}`)}
           rowProps={(r) => ({ "data-testid": "interview-row", "data-status": r.status })}
         />
