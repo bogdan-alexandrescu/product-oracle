@@ -49,9 +49,24 @@ function Link({ href, replace, scroll, prefetch, onClick, target, ...rest }: Lin
   return createElement('a', { ...rest, href, target, onClick: handle });
 }
 
-/** The location the page shows: during a navigation the router's own moves first (#1581). */
+const trimSlash = (p: string) => p.replace(/\/+$/, '') || '/';
+
+/**
+ * The location the page shows: during a navigation the router's own moves first, and the new
+ * page renders before resolvedLocation follows it (#1581), so it is the location once the
+ * rendered leaf match is its own.
+ */
 function useShownLocation() {
-  return useRouterState({ select: (s) => s.resolvedLocation ?? s.location });
+  return useRouterState({
+    select: (s) => {
+      const leaf = s.matches[s.matches.length - 1];
+      const shown =
+        leaf &&
+        trimSlash(leaf.pathname) === trimSlash(s.location.pathname) &&
+        JSON.stringify(leaf.search) === JSON.stringify(s.location.search);
+      return shown ? s.location : (s.resolvedLocation ?? s.location);
+    },
+  });
 }
 
 function usePathname(): string {
