@@ -66,7 +66,7 @@ def _search_for(
     until: str | None,
     why: str,
     workflow_id: str | None = None,
-    cancel: bool = True,  # noqa: F811
+    cancel: bool = True,
     cancelled: bool = False,
     costed: bool = False,
 ) -> None:

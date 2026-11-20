@@ -113,6 +113,17 @@ An advance interrupted after its first commit (an import raised) is advanced aga
 each tick; the run's workflow is read whatever that does. Each failure is counted on the
 attempt (``resume_failures``: the error's class and when); at ``RESUME_TRIES`` the step
 fails and owners see "Couldn't import" in the Inbox with Retry.
+
+This module keeps the run's errors and the helpers every part shares; the parts live
+beside it (#1576) and are imported back at the bottom, so ``service.NAME`` keeps working:
+``reads`` (runs, checkpoints, decisions), ``hold`` (the token's write hold), ``drafts``
+(create, estimate, start), ``prompts`` (what agents are told), ``submission`` (submit,
+cancel, detach), ``replay`` (SwarmCloud calls outside a lock), ``advance`` (a segment's
+end, its draft imported), ``tick``, ``searches`` (the workflow read each tick, lost
+submissions), ``renewal`` (the run's key), ``console`` (waits and console answers),
+``decisions``, ``posting`` (a decision posted to the workflow), ``manage`` (cancel, stop,
+retry, resume) and ``inbox``. A name tests patch on ``service`` is read there as
+``service.NAME``, so the patch reaches every part.
 """
 
 import copy

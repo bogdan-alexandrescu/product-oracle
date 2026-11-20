@@ -562,7 +562,7 @@ async def _detach(
     db: AsyncSession,
     run: Run,
     *,
-    cancel: bool,  # noqa: F811
+    cancel: bool,
     state: str,
     done: dict[str, _Cancelled] | None = None,
 ) -> bool:
