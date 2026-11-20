@@ -9,7 +9,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Each main push is its own group (by commit), so a merge never drops the run of the merge before it.
+# Each main push is its own group (by commit), so a merge never drops the run of the merge before it;
+# cancel-superseded below cancels the older runs once a newer one (which contains them) starts.
 concurrency:
   group: ci-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
@@ -22,15 +23,43 @@ concurrency:
 # runs its own copy of this workflow and can ask for any label. The control is the repository's
 # Actions setting "require approval for all outside contributors": read any workflow change in an
 # outside pull request before approving its run (the pool's VMs have passwordless sudo).
+#
+# Every action is pinned to a full commit SHA and every image to a digest (#1565): a moved tag
+# would run new code on the pool. The comment names the version; bump both together.
 jobs:
+  # #1564: a main push cancels this workflow's older main runs still in progress (their commits
+  # are in this run), never one whose deploy job has started (.github/scripts/cancel_superseded_runs.py).
+  cancel-superseded:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: .github/scripts
+      - run: python3 .github/scripts/cancel_superseded_runs.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # #1563: the suite split 4 ways by file, balanced by api/tests/shard_durations.json (per-file
+  # seconds, refreshed from the shards' api-junit-N artifacts: see api/tests/_shard.py). 4 keeps a
+  # shard under the slowest mock-e2e shard (~32 min) on GitHub's runners too. Each shard has its
+  # own Postgres service.
   api:
     runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     # One pytest worker per core: 8 on the pool's e2-standard-8 VMs, 4 on GitHub's hosted
-    # runners (the suite took ~70-90 min on 4 workers). A hung run frees its runner after 150.
-    timeout-minutes: 150
+    # runners (the whole suite took ~70-90 min on 4 workers). A hung shard frees its runner after 60.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
         env:
           POSTGRES_USER: oracle
           POSTGRES_PASSWORD: oracle
@@ -48,9 +77,9 @@ jobs:
       # PDF export (WeasyPrint) needs Pango; make the PDF test fail rather than skip.
       ORACLE_REQUIRE_PDF: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.12"
       # Each worker (one per core) drops and builds the whole schema in its own database
@@ -80,9 +109,17 @@ jobs:
           docker exec "$id" psql -U oracle -d oracle_test -tAc "SHOW max_locks_per_transaction" | grep -qx 256
           docker exec "$id" psql -U oracle -d oracle_test -tAc "SHOW max_connections" | grep -qx "$((workers * 50))"
       - run: uv sync --frozen
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run pytest -n "$PYTEST_WORKERS" -p no:cacheprovider -m "not timing"
+      - if: matrix.shard == 1
+        run: uv run ruff check .
+      - if: matrix.shard == 1
+        run: uv run ruff format --check .
+      - run: ../.github/scripts/api_pytest.sh ${{ matrix.shard }} 4
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: api-junit-${{ matrix.shard }}
+          path: api/junit/
+          if-no-files-found: ignore
 
   # Tests that assert a wall-clock limit (marker `timing`) run alone, on GitHub's hosted runners
   # where their budgets were tuned: on the pool's VMs four of them miss their budget on main itself
@@ -92,7 +129,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
         env:
           POSTGRES_USER: oracle
           POSTGRES_PASSWORD: oracle
@@ -109,9 +146,9 @@ jobs:
       ORACLE_TEST_DATABASE_URL: postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_test
       ORACLE_REQUIRE_PDF: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.12"
       - run: uv sync --frozen
@@ -123,13 +160,13 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.12"
       - run: npm ci
@@ -149,7 +186,7 @@ jobs:
     runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
         env:
           POSTGRES_USER: oracle
           POSTGRES_PASSWORD: oracle
@@ -160,12 +197,12 @@ jobs:
           --health-cmd "pg_isready -U oracle -d oracle"
           --health-interval 2s --health-timeout 5s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
@@ -174,7 +211,7 @@ jobs:
       # Postgres is the service above, so the target must not start the compose one.
       - run: make e2e E2E_POSTGRES=
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-results
           path: web/test-results/
@@ -192,10 +229,10 @@ jobs:
     steps:
       # Full history, origin/main with it: the prose guard reads its merge base's ceilings and
       # never fetches itself, so it always runs here.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
@@ -207,7 +244,7 @@ jobs:
         env:
           PROSE_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mock-e2e-results-${{ matrix.shard }}
           path: web/test-results/
@@ -217,8 +254,8 @@ jobs:
   e2e-timing:
     runs-on: ubuntu-latest  # timing budgets are tuned on GitHub's runners; the pool's VMs draw the 500-item views ~50 ms slower
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: npm
@@ -226,7 +263,7 @@ jobs:
       - run: cd web && npm ci && for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; echo "Playwright install failed (try $i of 3; an Ubuntu mirror is often down for a minute), retrying in 30 s"; sleep 30; done
       - run: cd web && E2E_TIMING=1 npx playwright test --grep @timing --workers=1
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-timing-results
           path: web/test-results/
