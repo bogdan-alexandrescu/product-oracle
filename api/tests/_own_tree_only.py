@@ -2,8 +2,10 @@
 
 A value that crosses trees is published by its owner as JSON under ``docs/contracts/``
 and read in that form (``contract(name)``); opening any other file of the checkout outside
-``api/`` while a test runs raises ``ForeignRead``. The guard is an audit hook on ``open``
-(Python's own and ``io.open_code``), armed from each test's setup to its teardown.
+``api/`` while a test runs raises ``ForeignRead``, and so does listing another tree's
+directory. The guard is an audit hook on ``open`` (Python's own and ``io.open_code``),
+``os.listdir`` and ``os.scandir`` (``Path.iterdir``, ``glob``, ``rglob``, ``os.walk``),
+armed from each test's setup to its teardown.
 
 A test whose code under test lives in another tree names the files it may open:
 ``@pytest.mark.foreign_read("path/from/the/repo/root", reason="...")``.
@@ -26,8 +28,10 @@ CONTRACTS = ROOT / "docs" / "contracts"
 OWN = (API, CONTRACTS, ROOT / ".venv", ROOT / ".git")
 
 
-class ForeignRead(PermissionError):
-    """A test opened a file of another tree instead of its published contract."""
+class ForeignRead(AssertionError):
+    """A test opened a file of another tree instead of its published contract.
+
+    Not an OSError: pathlib's glob and os.walk drop those, and the read would pass as empty."""
 
 
 _state: dict = {"armed": False, "allowed": ()}
@@ -39,19 +43,22 @@ def foreign(path: str | Path) -> Path | None:
         resolved = Path(path).resolve()
     except (OSError, ValueError):
         return None
-    if not resolved.is_relative_to(ROOT):
-        return None
+    if resolved == ROOT or not resolved.is_relative_to(ROOT):
+        return None  # the checkout's root is no tree: listing it names the trees only
     if any(resolved.is_relative_to(own) for own in OWN):
         return None
     return resolved
 
 
+_EVENTS = {"open", "os.listdir", "os.scandir"}  # args[0] is the path for each
+
+
 def _hook(event: str, args: tuple) -> None:
-    if event != "open" or not _state["armed"]:
+    if event not in _EVENTS or not _state["armed"]:
         return
     path = args[0]
     if not isinstance(path, (str, os.PathLike)):
-        return  # a file descriptor, or a bytes path no repo file uses
+        return  # a file descriptor, or a bytes path no repo file uses (None: the cwd, api/)
     found = foreign(path)
     if found is None or found in _state["allowed"]:
         return
