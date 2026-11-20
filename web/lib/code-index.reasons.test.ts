@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { buildCodeIndex, nameCodes, type CodeIndex } from "../lib/code-index";
+import { buildCodeIndex, nameCodes, type CodeIndex } from "./code-index";
 
 /*
  * codes-and-chips: a proposal's reason, unit-tested without a browser. A known goal or

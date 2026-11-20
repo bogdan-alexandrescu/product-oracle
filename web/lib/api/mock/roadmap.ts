@@ -254,7 +254,7 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
  * The roadmap data. In the "roadmap-items" scenario (E2), usage-alerts-roadmap v1's items are
  * those of ./roadmap-items.json, the fixture api/tests/test_roadmap_items_contract.py checks
  * against the API, with the mock's own ids; the default seed has no dates and nothing stale
- * (roadmap-tracks-mock.spec.ts expects the track on track).
+ * (lib/api/mock/roadmap.test.ts expects the track on track).
  */
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts: { plan?: boolean } = {}): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;

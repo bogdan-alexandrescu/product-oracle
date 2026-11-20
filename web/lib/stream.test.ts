@@ -1,4 +1,4 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
 /*
  * stream-discussion-path (lib/stream): when a reply is done, the shared reads of its own discussion are dropped,
@@ -18,8 +18,8 @@ const settle = () => new Promise((ok) => setTimeout(ok, 0));
 
 async function setup() {
   (globalThis as { window?: unknown }).window ??= new EventTarget();
-  const { sharedReads, forgetReads, forgetReadsOf } = await import("../lib/api/shared-reads");
-  const { discussionPath } = await import("../lib/stream");
+  const { sharedReads, forgetReads, forgetReadsOf } = await import("./api/shared-reads");
+  const { discussionPath } = await import("./stream");
   forgetReads();
   let calls = 0;
   const read = sharedReads(async () => {

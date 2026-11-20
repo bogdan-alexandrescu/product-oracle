@@ -1,8 +1,8 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { routeSimpleChanges } from "../lib/api/mock/simple-changes";
-import { seedSimpleRoadmap, settleDrafting } from "../lib/api/mock/simple-roadmap";
-import { stableUuid } from "../lib/api/mock/ids";
+import { routeSimpleChanges } from "./simple-changes";
+import { seedSimpleRoadmap, settleDrafting } from "./simple-roadmap";
+import { stableUuid } from "./ids";
 
 /*
  * roadmap-edit-fixes (draft-race review minors): the mock's Oracle draft of a new item as the

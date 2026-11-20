@@ -1,7 +1,7 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { routeIntake, type IntakeContext } from "../lib/api/mock/intake";
-import { seedV2 } from "../lib/api/mock/v2";
+import { routeIntake, type IntakeContext } from "./intake";
+import { seedV2 } from "./v2";
 
 /**
  * The intake mock (CR-03), its routes driven directly: the shapes the API returns, and the

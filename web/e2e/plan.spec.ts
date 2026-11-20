@@ -63,7 +63,7 @@ test("the rail says Plan, not Roadmap; Plan opens /plan; /roadmap ends on /plan"
 
 // protects = the goals band is Home's GoalsPanel: same tags and "to go" figures for the same
 // seed; fails_when = the Plan computes or tags goals its own way; no_claim = the figures'
-// maths (goal-maths.spec.ts).
+// maths (app/home/_goals.test.ts).
 test("the goals band shows the same goal tags and distances to go as Home", async ({ page }) => {
   await login(page);
   const home = await goalFigures(page.getByTestId("home-goals").filter({ visible: true }));

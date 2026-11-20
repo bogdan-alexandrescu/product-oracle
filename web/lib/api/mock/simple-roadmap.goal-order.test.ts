@@ -1,5 +1,5 @@
-import { GOALS, knowGoalOrderGoals } from "../lib/api/mock/simple-roadmap";
-import { expect, test } from "./test";
+import { GOALS, knowGoalOrderGoals } from "./simple-roadmap";
+import { expect, test } from "vitest";
 
 /**
  * build-goal-order-control review: the "goal-order" scenarios name their added goals in the mock's

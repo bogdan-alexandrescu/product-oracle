@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { blocksText, isSafeHref, parseBlocks, storedImageSrc } from "../lib/markdown";
+import { blocksText, isSafeHref, parseBlocks, storedImageSrc } from "./markdown";
 
 // E1 (owner, 2026-10-20): the document view reads a section body as the API's check does
 // (CommonMark through markdown-it), so a body the API reads as paragraph text never shows

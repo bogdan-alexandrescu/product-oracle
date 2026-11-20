@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { prdOnePager } from "../lib/api/mock/simple-one-pager";
-import { expect, test } from "./test";
+import { prdOnePager } from "./simple-one-pager";
+import { expect, test } from "vitest";
 
 /**
  * Contract: the mock's per-PRD one-pager (prdOnePager, a hand copy of the API's
@@ -28,7 +28,7 @@ type Contract = {
   }[];
 };
 
-const FIXTURES = path.join(__dirname, "../../api/tests/fixtures");
+const FIXTURES = path.join(__dirname, "../../../../api/tests/fixtures");
 const PRD = readFileSync(path.join(FIXTURES, "one_pager_contract.md"), "utf8");
 const CONTRACT: Contract = JSON.parse(readFileSync(path.join(FIXTURES, "one_pager_contract.json"), "utf8"));
 

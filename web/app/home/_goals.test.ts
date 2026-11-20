@@ -1,8 +1,8 @@
-import { expect, test } from "./test";
+import { describe, expect, test } from "vitest";
 
 import type { EntityOut } from "@/lib/api/client";
 
-import { assess, formatFigure, goalViews, parseFigure, type Point } from "../app/home/_goals";
+import { assess, formatFigure, goalViews, parseFigure, type Point } from "./_goals";
 
 /**
  * Unit tests for Home's goal maths (no browser): reading a figure, the goal's direction,
@@ -32,7 +32,7 @@ function goal(attrs: Record<string, unknown>, title = "A goal"): EntityOut {
 const points = (...values: number[]): Point[] =>
   values.map((value, i) => ({ at: new Date(Date.UTC(2026, i, 1)).toISOString(), value }));
 
-test.describe("parseFigure reads the value, not the first number", () => {
+describe("parseFigure reads the value, not the first number", () => {
   const cases: [string, { value: number; unit: string; currency?: string; low?: number; high?: number } | null][] = [
     ["45%", { value: 45, unit: "%" }],
     ["400 clinics", { value: 400, unit: "clinics" }],
@@ -76,7 +76,7 @@ test.describe("parseFigure reads the value, not the first number", () => {
   });
 });
 
-test.describe("distance to go, met and direction", () => {
+describe("distance to go, met and direction", () => {
   // [title, target, current, history, the text Home shows under the goal]
   const cases: [string, string, string | null, Point[] | undefined, string][] = [
     // Home's seeded goals keep their figures.
@@ -152,7 +152,7 @@ test.describe("distance to go, met and direction", () => {
   });
 });
 
-test.describe("formatFigure shows the current value in its own terms", () => {
+describe("formatFigure shows the current value in its own terms", () => {
   const cases: [string, string][] = [
     ["38%", "38%"],
     ["9.4%", "9.4%"],
@@ -179,7 +179,7 @@ test("goals with no position keep one order (creation, then title), as every pag
 // protects: Home's distance comes from the typed values once a goal has them.
 // fails_when: a typed goal is read from its text, or a strict comparison is met at equality.
 // no_claim: the API's goal_check (pytest).
-test.describe("typed goals: comparison gives the direction, typed beats text", () => {
+describe("typed goals: comparison gives the direction, typed beats text", () => {
   const asOf = { current_as_of: "2026-10-01" };
   const cases: [string, Record<string, unknown>, string][] = [
     ["at least 45%", { unit: "%", comparison: "at_least", target: 45, current: 38, ...asOf }, "7 pts to go"],

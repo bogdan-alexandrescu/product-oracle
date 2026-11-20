@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { planByMonth, type PlanInput } from "../lib/simple-home";
-import { expect, test } from "./test";
+import { planByMonth, type PlanInput } from "./simple-home";
+import { expect, test } from "vitest";
 
 /*
  * Card plan-strip-rules (#723 polish review): protects = Home's strip (lib/simple-home.ts

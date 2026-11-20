@@ -1,7 +1,7 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import type { Nudges } from "../lib/api/mock/learned";
-import { routeModules, seedModules } from "../lib/api/mock/modules";
+import type { Nudges } from "./learned";
+import { routeModules, seedModules } from "./modules";
 
 // The mock's composition routes mirror the API's (no page: no screen confirms yet).
 const DOC = { id: "d0000000-0000-4000-8000-000000000001", slug: "placeholder-prd", template: "oracle-default" };

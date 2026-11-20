@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { readMetricIntoGoal, seedBaseline } from "../lib/api/mock/baseline";
+import { readMetricIntoGoal, seedBaseline } from "./baseline";
 
 // The mock's goal measurements follow the API's oracle.metrics.pull._goal_measurement: when a
 // metric's weekly value is removed, only the goal measurement that metric wrote goes (no page:

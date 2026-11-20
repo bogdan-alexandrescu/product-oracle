@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { buildCodeIndex, splitCodes, type CodeIndex } from "../lib/code-index";
+import { buildCodeIndex, splitCodes, type CodeIndex } from "./code-index";
 
 /*
  * The code index (#305), unit-tested without a browser: built from a sample document, it

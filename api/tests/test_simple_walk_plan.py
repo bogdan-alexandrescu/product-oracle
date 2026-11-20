@@ -8,7 +8,7 @@ Test cards (protects / fails_when / no_claim):
   milestone, "Measure it, make it safe · 3 items" (no roadmap code: item texts are no
   roadmap milestone), on the one-pager and its PDF;
   fails_when=one row per distinct text (three identical truncated M1 labels) or a note in
-  the label; no_claim=the web's mirror (e2e/simple-plan-strip-rules.spec.ts).
+  the label; no_claim=the web's mirror (lib/simple-home.test.ts).
 - test_skeleton_prd_one_pager: protects=a PRD started from an empty skeleton shows no
   template guidance (HTML comments, "<Milestone>: <Feature>", "<Risk>: <mitigation>", bare
   arrows) as one-pager lines, and the PDF reads "Not written yet" for each empty block;

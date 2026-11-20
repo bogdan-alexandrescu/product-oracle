@@ -1,7 +1,7 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { asSentence, roleRefusal } from "../lib/api/client";
-import { MOCK_NOW } from "../lib/api/mock/clock";
+import { asSentence, roleRefusal } from "./api/client";
+import { MOCK_NOW } from "./api/mock/clock";
 import {
   formatAge,
   formatCount,
@@ -14,8 +14,8 @@ import {
   formatWeekday,
   plural,
   zoneName,
-} from "../lib/format";
-import { docLabel, runLabel } from "../lib/labels";
+} from "./format";
+import { docLabel, runLabel } from "./labels";
 
 /*
  * One way to write each value, unit-tested without a browser: dates, times, ranges and ages

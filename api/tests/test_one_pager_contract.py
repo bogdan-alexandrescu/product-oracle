@@ -4,7 +4,7 @@ web/lib/api/mock/simple-one-pager.ts (``prdOnePager``) copies oracle.simple.one_
 ``mapping`` and ``extract`` over the fallback blocks by hand. Both read the same invented PRD,
 ``fixtures/one_pager_contract.md``: this test parses it as an import does, builds the API's
 one-pager blocks and compares them with ``fixtures/one_pager_contract.json``;
-web/e2e/one-pager-contract.spec.ts runs the mock over the same parsed sections and compares
+web/lib/api/mock/simple-one-pager.test.ts runs the mock over the same parsed sections and compares
 its blocks with the same file. A change to either side that the other does not copy fails
 one of the two.
 

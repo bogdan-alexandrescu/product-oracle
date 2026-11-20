@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { audienceSections, redact, type BoardItem } from "../lib/api/mock/audience";
-import { expect, test } from "./test";
+import { audienceSections, redact, type BoardItem } from "./audience";
+import { expect, test } from "vitest";
 
 /**
  * The mock renders each audience as the API does. Team and Engineering keep the written
@@ -21,7 +21,7 @@ type Case = {
   engineering: string;
 };
 
-const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/tests/fixtures/audience_redaction.json"), "utf8"));
+const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../../../api/tests/fixtures/audience_redaction.json"), "utf8"));
 
 // Words Board writes itself (headings, column heads, the left-out and no-items lines).
 const BOARD_WORDS = new Set(

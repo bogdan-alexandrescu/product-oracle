@@ -16,7 +16,7 @@ import { login } from "./ui";
  * no_claim=the agents' writing (FakeRuntime's fixed files), the real Claude or SwarmCloud,
  * the engineering spec (no screen starts one: POST /v1/spec-requests only).
  *
- * No screen shows the composition yet (web/e2e/compositions-mock.spec.ts): the slice
+ * No screen shows the composition yet (web/lib/api/mock/modules.test.ts): the slice
  * confirms and checks it as the agent track does, through /v1, and says so where it does.
  */
 

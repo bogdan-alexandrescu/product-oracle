@@ -12,7 +12,7 @@
  * - `name-only`: a person's own page (AUD-9): the chat holds the page's name only.
  * - `none`: no Ask Oracle on the page (sign-in, a customer's link, a redirect).
  *
- * e2e/page-context-registry.spec.ts fails when a route under app/ has no entry here.
+ * lib/page-context.test.ts fails when a route under app/ has no entry here.
  */
 export type PageContext = { provider: "own" | "shown" | "name-only" | "none"; reads: string };
 

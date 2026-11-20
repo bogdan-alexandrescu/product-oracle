@@ -1,5 +1,5 @@
-import { betSubject, flowsOfBets, requestVisual, type VisualsDb } from "../lib/api/mock/simple-visuals";
-import { expect, test } from "./test";
+import { betSubject, flowsOfBets, requestVisual, type VisualsDb } from "./simple-visuals";
+import { expect, test } from "vitest";
 
 /**
  * vqa-one-pager 1: the mock's flowsOfBets reads each bet's flow as the API's visuals.flows_of_bets

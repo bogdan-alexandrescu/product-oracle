@@ -1,6 +1,6 @@
-import { prioritiesOut, shortCodes } from "../lib/api/mock/simple-priorities";
-import { seedSimpleRoadmap } from "../lib/api/mock/simple-roadmap";
-import { expect, test } from "./test";
+import { prioritiesOut, shortCodes } from "./simple-priorities";
+import { seedSimpleRoadmap } from "./simple-roadmap";
+import { expect, test } from "vitest";
 
 /*
  * simple-priorities-slice-own-key (lib/api/mock/simple-priorities): the mock reads a feature code as the API's

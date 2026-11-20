@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /**
  * C1 Requests, lane 1 (API). The screen comes in lane 2, so this drives the requests mock
- * (./lib/api/mock/requests.ts) the way intake-mock.spec.ts drives the intake one: the
+ * (./lib/api/mock/requests.ts) the way lib/api/mock/intake.test.ts drives the intake one: the
  * shapes the API returns and the same rules, which the screen's specs then build on.
  * Card: protects=the mock agrees with the API's rules (states, merge roots, roles,
  * private found items); fails_when=a count, a refusal or a role check disagrees with
