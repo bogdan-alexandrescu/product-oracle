@@ -13,6 +13,7 @@ import { findPeople, peopleByIds, type Person } from "@/components/PersonPicker"
 import { useConfirmedGoals } from "@/components/NewDraft";
 import { CarriedList, NO_REPLACES, ReplacesField, replacesBody, replacesReady, type Replaces } from "@/components/simple/NewPrdReplaces";
 import { dmy } from "@/components/simple/PrdTimeline";
+import { LoadError, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { dayIn, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -329,6 +330,8 @@ export function NewPrdSheet({ onClose, onStarted, prefill }: { onClose: () => vo
         </label>
         <fieldset className="flex flex-col gap-1.5">
           <legend className={`${LABEL} mb-1.5`}>The goals it helps</legend>
+          {/* #1586: goals that could not be read say why, goals still loading say so; never only "Not sure yet". */}
+          {goals.error ? <LoadError what="the goals" error={goals.error} onRetry={() => void goals.reload()} /> : !goals.data && <Loading />}
           <div className="flex flex-wrap gap-2">
             {[...goalList.map((g) => ({ id: g.id as string | null, name: g.title })), { id: null, name: "Not sure yet" }].map((g) => {
               const on = g.id === null ? picks === null : !!picks?.includes(g.id);

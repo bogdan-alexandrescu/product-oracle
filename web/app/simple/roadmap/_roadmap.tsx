@@ -1609,6 +1609,7 @@ export function SimpleRoadmap() {
   // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
   // roadmap): no roadmap's Needs a decision lists or counts it.
   const allProposals = (proposals.data ?? []).filter((c) => !(c.op === "add_feature_ask" && !c.document_id));
+  const proposalsFailed = proposals.error ? { error: proposals.error, retry: () => void proposals.reload() } : null;
   const decides = can("accept_simple_change") || data.items.some((i) => i.can_decide);
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
@@ -2174,6 +2175,7 @@ export function SimpleRoadmap() {
                     item={it}
                     items={byId}
                     proposals={allProposals.filter((c) => c.target.item_id === it.id)}
+                    proposalsFailed={proposalsFailed}
                     phone={sheet}
                     style={style}
                     act={act}
@@ -2253,6 +2255,7 @@ export function SimpleRoadmap() {
                 item={cardItem}
                 items={byId}
                 proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
+                proposalsFailed={proposalsFailed}
                 phone={phone}
                 style={{ position: "relative", left: 0, top: 0, width: "100%", border: 0, boxShadow: "none" }}
                 act={act}
@@ -2313,6 +2316,7 @@ export function SimpleRoadmap() {
             item={cardItem}
             items={byId}
             proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
+            proposalsFailed={proposalsFailed}
             phone={phone}
             style={{ left: card.left, top: card.top }}
             act={act}

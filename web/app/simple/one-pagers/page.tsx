@@ -10,7 +10,7 @@ import { deletedText, PrdMenu, restorePrd } from "@/components/simple/PrdMenu";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
-import { Loading } from "@/components/ui";
+import { LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone, dayIn } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -110,11 +110,13 @@ export default function OnePagers() {
             )}
           </div>
         )}
+        {/* #1586: the PRDs you started that could not be read say so and why, never left out. */}
+        {started.error && <LoadError what="the PRDs you started" error={started.error} onRetry={() => void started.reload()} />}
         {q.error ? (
           <p className="simple-small">{q.error}</p>
-        ) : !rows ? (
+        ) : !rows || (!started.data && !started.error) ? (
           <Loading />
-        ) : rows.length === 0 && mine.length === 0 ? (
+        ) : rows.length === 0 && mine.length === 0 && !started.error ? (
           // qa-simple-prd-41: what a one-pager comes from, and where to start one.
           <SimpleEmpty testId="simple-one-pagers-empty">
             No PRDs yet. A one-pager is made from a PRD: start one in{" "}

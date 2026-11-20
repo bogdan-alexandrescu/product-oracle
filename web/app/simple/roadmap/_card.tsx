@@ -7,6 +7,7 @@ import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAs
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { FeatureName } from "@/components/simple/FeatureName";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { LoadError } from "@/components/ui";
 import { useFitViewport } from "@/lib/fit-viewport";
 import { FlowPanel, subjectOf, type FlowSubject } from "@/components/simple/FlowVisual";
 import { FlowDiagram, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
@@ -846,6 +847,7 @@ export function FloatingCard({
   item,
   items,
   proposals,
+  proposalsFailed,
   phone,
   style,
   act,
@@ -882,6 +884,8 @@ export function FloatingCard({
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
+  /** #1586: the open proposals could not be read: their reason and Try again, never "No proposals waiting". */
+  proposalsFailed?: { error: string; retry: () => void } | null;
   phone: boolean;
   style: React.CSSProperties;
   act: Act;
@@ -1375,7 +1379,9 @@ export function FloatingCard({
                 ))}
               </ul>
             )}
-            {proposals.length ? (
+            {proposalsFailed ? (
+              <LoadError what="the proposals" error={proposalsFailed.error} onRetry={proposalsFailed.retry} />
+            ) : proposals.length ? (
               <ul className="mt-1 space-y-2" data-testid="card-proposals" data-waits>
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2">
