@@ -94,7 +94,12 @@ test("annotations are numbered as Oracle labels them, with a thread each and the
 
   // Version-level comment, oldest first, after the empty state.
   const reviews = panel.getByTestId("version-reviews");
-  await expect(reviews).toContainText("No reviews yet. Comments and verdicts on this version show here.");
+  await expect(reviews.getByText("No reviews yet.")).toBeVisible();
+  // #1590: the how-to sits behind its (i), not on the page.
+  await expect(page.getByText("Comments and verdicts on this version show here.").filter({ visible: true })).toHaveCount(0);
+  await reviews.getByTestId("version-reviews-tip").click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Comments and verdicts on this version show here.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await reviews.getByLabel("Comment on v1").fill("Holding until the PRD change is reviewed.");
   await reviews.getByRole("button", { name: "Comment" }).click();
   await expect(reviews).toContainText("Holding until the PRD change is reviewed.");

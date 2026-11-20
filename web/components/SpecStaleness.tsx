@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
-import { Button, Chip } from "@/components/ds";
+import { Button, Chip, InfoTip } from "@/components/ds";
 import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -176,12 +176,15 @@ function StaleActions({
       )}
       {open === "review" && (
         <form onSubmit={review} className="flex flex-col gap-2" role="group" aria-label="Review">
-          <p className="text-sm text-text2">Mark this version reviewed against the changed PRD. Its Potentially stale label clears.</p>
           <NoteField value={note} onChange={setNote} />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" variant="primary" disabled={busy}>
               Mark reviewed
             </Button>
+            {/* #1590: what Mark reviewed does sits behind its (i). */}
+            <InfoTip label="clearing the label" align="start" testId="mark-reviewed-tip">
+              Mark this version reviewed against the changed PRD. Its Potentially stale label clears.
+            </InfoTip>
             <Button variant="ghost" onClick={() => setOpen(null)} disabled={busy}>
               Cancel
             </Button>

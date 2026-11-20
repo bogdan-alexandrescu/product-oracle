@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, Dialog, Empty, Label, Page, PageHeader, Panel } from "@/components/ds";
+import { Button, Chip, confirmInPage, Dialog, Empty, InfoTip, Label, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
@@ -128,10 +128,23 @@ export function InterviewDetail({ id }: { id: string }) {
             {iv.finished_at && <Fact label="Finished">{formatDateTime(iv.finished_at)}</Fact>}
             {open && (
               <Fact label="Link">
-                <span data-testid="interview-link-note">
-                  {iv.link_opened_at ? `Opened ${formatDateTime(iv.link_opened_at)}. ` : "Not opened yet. "}
-                  For safety the link is shown only once, when it is made, so it can&apos;t be shown or copied again.
-                  {iv.can_manage && ` If ${name} lost it, use Make a new link; the old link stops working.`}
+                <span data-testid="interview-link-note" className="flex min-w-0">
+                  {/* #1590: why the link can't be shown again sits behind its status. The status is the
+                      tip's trigger: an (i)'s 44 px phone hit pad would overflow the 390 px About panel. */}
+                  <InfoTip
+                    label="the link"
+                    align="start"
+                    testId="interview-link-tip"
+                    shrink
+                    trigger={
+                      <span className="text-left break-words whitespace-normal underline decoration-dotted underline-offset-4">
+                        {iv.link_opened_at ? `Opened ${formatDateTime(iv.link_opened_at)}.` : "Not opened yet."}
+                      </span>
+                    }
+                  >
+                    For safety the link is shown only once, when it is made, so it can&apos;t be shown or copied again.
+                    {iv.can_manage && ` If ${name} lost it, use Make a new link; the old link stops working.`}
+                  </InfoTip>
                 </span>
                 {iv.can_manage && (
                   <div className="mt-2">

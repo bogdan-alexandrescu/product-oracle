@@ -145,6 +145,7 @@ export function Alternatives({
             <CompanyEmpty
               testId="alternatives-empty"
               title="No alternatives yet"
+              tip="Add what a customer could use instead of you: a competitor, a different kind of product, or a spreadsheet and habit. Oracle then reads their public pages every week and lists what changed."
               action={
                 mayAdd ? (
                   <Button icon="plus" onClick={() => onAdding(true)}>
@@ -153,8 +154,7 @@ export function Alternatives({
                 ) : undefined
               }
             >
-              Add what a customer could use instead of you: a competitor, a different kind of product, or a spreadsheet and habit. Oracle then
-              reads their public pages every week and lists what changed.{mayAdd ? "" : " Approvers and owners add them."}
+              {!mayAdd && "Approvers and owners add them."}
             </CompanyEmpty>
           ) : (
             <DataTable

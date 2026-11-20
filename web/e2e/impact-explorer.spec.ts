@@ -142,7 +142,12 @@ test("impact: a commenter who decides the roadmap estimates it, but settles no s
   const graph = page.getByRole("region", { name: "Lineage" });
   await graph.getByTestId("lineage-output").filter({ hasText: "Usage alerts roadmap" }).click();
   const r = row(page, "Usage alerts roadmap");
-  await expect(r.getByText("You decide on this roadmap, so you can regenerate it. Settling its staleness needs an approver.")).toBeVisible();
+  // #1590: who may settle is one visible line; why this reader may regenerate sits behind its (i).
+  await expect(r.getByText("Settling its staleness needs an approver.")).toBeVisible();
+  await expect(r.getByText("You decide on this roadmap, so you can regenerate it.").filter({ visible: true })).toHaveCount(0);
+  await r.getByTestId("settle-tip").click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "You decide on this roadmap, so you can regenerate it.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(r.getByRole("button", { name: "Accept regeneration" })).toHaveCount(0);
   await r.getByRole("button", { name: "Estimate" }).click();
   await expect(r.getByTestId("plan-estimate")).toContainText("$6.00");
