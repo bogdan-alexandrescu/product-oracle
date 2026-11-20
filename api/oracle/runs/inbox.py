@@ -44,7 +44,6 @@ from oracle.runs.service import (
     _import_failed,
     _live_reasons,
     _open_questions,
-    _owes,
     _pending_titles,
     _Refs,
     _refs,
@@ -412,7 +411,7 @@ async def _inbox(
             .where(Checkpoint.status.in_(DECIDED), Checkpoint.payload["wait"].has_key("posting"))
             .order_by(Checkpoint.decided_at, Checkpoint.id)
         )
-        if _owes(c)
+        if service._owes(c)
     ]
     run_ids = {c.run_id for c in [*pending, *owing]}
     runs: dict[uuid.UUID, Run] = {}

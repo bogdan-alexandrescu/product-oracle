@@ -33,7 +33,6 @@ from oracle.runs.service import (
     _outside_note,
     _plan_entry,
     _recorded,
-    _restore_agents_file,
     _rt,
     _segments,
     _set_art,
@@ -89,7 +88,7 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     wait.pop("posting")
     _set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
-    await _restore_agents_file(db, run, cp)
+    await service._restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None

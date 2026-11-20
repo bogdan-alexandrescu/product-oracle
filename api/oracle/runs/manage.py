@@ -67,7 +67,6 @@ from oracle.runs.service import (
     _note,
     _note_art,
     _overrun,
-    _owes,
     _parse_at,
     _said,
     _search_for,
@@ -1356,7 +1355,7 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     await webhooks.capture(db, "run.resumed", principal, run_id=run.id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
-    if any(c.status == "pending" or _owes(c) for c in checkpoints):
+    if any(c.status == "pending" or service._owes(c) for c in checkpoints):
         # Paused while it waited on a checkpoint: it waits on it again, in the Inbox; or
         # on a decision recorded and not delivered yet, which the tick delivers now.
         run.status = "awaiting_checkpoint"
