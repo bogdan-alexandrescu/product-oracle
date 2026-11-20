@@ -1,8 +1,8 @@
 """Test harness. Needs a Postgres database it may wipe: ORACLE_TEST_DATABASE_URL.
 
 The schema is built once per run with ``alembic upgrade head`` (so every run also
-proves the migration applies to an empty database); tables are truncated after
-each test.
+proves the migration applies to an empty database). After each test that used the
+database, the tables that got rows are emptied (``_truncate_after_test``).
 """
 
 import asyncio
@@ -39,8 +39,9 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
-from sqlalchemy import make_url, text  # noqa: E402
+from sqlalchemy import event, make_url, text  # noqa: E402
 from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
+from sqlalchemy.pool import Pool  # noqa: E402
 
 import oracle.models  # noqa: E402,F401
 from oracle.db import Base, get_engine  # noqa: E402
@@ -88,14 +89,61 @@ def migrated_db() -> None:
             raise
         pytest.skip(f"no Postgres at the default test URL ({e}); set ORACLE_TEST_DATABASE_URL")
     run_migrations(TEST_DATABASE_URL)
+    asyncio.run(_install_cleanup(TEST_DATABASE_URL))
+
+
+# Emptying the tables after a test: one call that deletes from those with rows only. A
+# TRUNCATE of all of them took about 350 ms a test; an outer transaction rolled back at
+# the end cannot hold, since the code opens many sessions of its own (requests, jobs,
+# SKIP LOCKED claims), each on its own connection. The replica role skips the foreign
+# keys and the triggers (a publication refuses a plain DELETE), so the order is free.
+_EMPTY_DIRTY_TABLES = """
+CREATE OR REPLACE FUNCTION oracle_tests.empty_dirty_tables(names text[]) RETURNS void AS $$
+DECLARE
+    t text;
+    found boolean;
+BEGIN
+    SET LOCAL session_replication_role = replica;
+    FOREACH t IN ARRAY names LOOP
+        EXECUTE format('SELECT EXISTS (SELECT FROM %I)', t) INTO found;
+        IF found THEN
+            EXECUTE format('DELETE FROM %I', t);
+        END IF;
+    END LOOP;
+END
+$$ LANGUAGE plpgsql
+"""
+
+
+async def _install_cleanup(url: str) -> None:
+    engine = create_async_engine(url)
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS oracle_tests"))
+        await conn.execute(text(_EMPTY_DIRTY_TABLES))
+    await engine.dispose()
+
+
+# Set when a test takes a database connection from any engine's pool: a test that took
+# none wrote nothing, and its clean-up makes no round trip.
+_used_database = False
+
+
+@event.listens_for(Pool, "checkout")
+def _note_database_use(*_args) -> None:
+    global _used_database
+    _used_database = True
 
 
 @pytest.fixture(autouse=True)
 async def _truncate_after_test(migrated_db):
+    global _used_database
+    _used_database = False
     yield
-    tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
+    if not _used_database:
+        return
+    names = [t.name for t in Base.metadata.sorted_tables]
     async with get_engine().begin() as conn:
-        await conn.execute(text(f"TRUNCATE {tables} CASCADE"))
+        await conn.execute(text("SELECT oracle_tests.empty_dirty_tables(:n)"), {"n": names})
 
 
 @pytest.fixture(autouse=True)
