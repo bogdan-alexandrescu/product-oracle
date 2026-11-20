@@ -141,3 +141,87 @@ test("Composition: how the first revision is made sits behind a tip", async ({ p
   await expect(page.getByTestId("history-empty")).toContainText("No revisions yet");
   await behindTip(page, "history-empty-tip", "An approver makes the first revision by choosing Use these modules");
 });
+
+// #1590 part 2: the next pages with the most prose.
+
+test("Impact: what proposing a new version keeps sits behind a tip", async ({ page }) => {
+  await scenario(page, "impact");
+  await login(page);
+  await page.goto("/impact/changes/b7dce326-2a47-4000-8b74-562e8ac05a9c");
+  await expect(page.getByText("Recorded: this change marked these outputs Potentially stale.")).toBeVisible();
+  await behindTip(page, "propose-version-tip", "stays as it is until a reviewer approves the new one.");
+});
+
+test("Evidence: what a red column means and who sees the links sit behind tips", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/annual-billing/v/2/evidence");
+  await behindTip(page, "evidence-red-tip", "A red column is a section with no links or citations");
+  await behindTip(page, "evidence-links-tip", "Readers never see these links on the page");
+});
+
+test("Public version: what it is sits behind a tip; why this document has none stays", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/annual-billing/public");
+  await expect(page.getByText("Annual billing PRD is a PRD, so it has none.")).toBeVisible();
+  await behindTip(page, "public-version-tip", "A public version is the page anyone with a roadmap's public link reads.");
+});
+
+test("Roadmap: how launches and changelog entries are made sit behind tips", async ({ page }) => {
+  await login(page);
+  await page.goto("/roadmap/launches");
+  await behindTip(page, "launches-empty-tip", "a launch groups items of an approved roadmap.");
+  await page.goto("/roadmap/changelog");
+  await expect(page.getByText("No entries yet.").filter({ visible: true }).first()).toBeVisible();
+  await behindTip(page, "changelog-empty-tip", "Oracle adds one when it drafts a launch's kit");
+  await behindTip(page, "changelog-export-tip", "export gives the published public entries");
+});
+
+test("Settings: what Slack and the weekly report do, and how to save, sit behind tips", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/notifications");
+  await expect(page.getByRole("button", { name: "Connect Oracle to Slack" })).toBeVisible();
+  await behindTip(page, "slack-about-tip", "It is installed once for the company and posts as Product Oracle.");
+  await behindTip(page, "weekly-report-tip", "Every week Oracle reports the roadmap against engineering for the week that ended");
+  await page.goto("/settings/company");
+  await behindTip(page, "company-save-tip", "Change the size or focus to save it.");
+  await page.goto("/settings/templates/one-pager");
+  await behindTip(page, "template-save-tip", "Change the template to save a new version.");
+  await behindTip(page, "template-meta-save-tip", "Change the name or description to save them.");
+  await page.goto("/settings/themes/clean-document");
+  await behindTip(page, "font-fallback-tip", "without it, Helvetica, then Arial, then sans-serif.");
+  await page.goto("/settings/claude-accounts");
+  await expect(page.getByRole("button", { name: "Make available", exact: true })).toBeDisabled();
+  await behindTip(page, "claude-account-signin-tip", "It can be made available once someone signs in to it again");
+});
+
+test("Company: the time zone note and what strategy findings are sit behind tips", async ({ page }) => {
+  await login(page);
+  await page.goto("/company/rituals");
+  await behindTip(page, "rituals-zone-tip", "Times use Pacific Time (Los Angeles) until you set the company time zone.");
+  await page.goto("/company/strategy");
+  await behindTip(page, "strategy-drift-tip", "Goals and items that do not follow the strategy show here.");
+});
+
+test("Plan: how outcomes, reports and saved orders are made sit behind tips", async ({ page }) => {
+  await login(page);
+  await page.goto("/plan/outcomes");
+  await expect(page.getByText("No outcomes yet").filter({ visible: true }).first()).toBeVisible();
+  await behindTip(page, "outcomes-empty-tip", "Approving a roadmap records a prediction for each item that serves a goal.");
+  await page.goto("/plan/reports");
+  await expect(page.getByText("No report yet.").filter({ visible: true }).first()).toBeVisible();
+  await behindTip(page, "reports-empty-tip", "Oracle makes one every week for the week that ended.");
+  await page.goto("/priorities");
+  await behindTip(page, "priorities-save-tip", "Save one above to keep this order and compare it later.");
+  await behindTip(page, "priorities-move-tip", "Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason.");
+});
+
+test("Interview and new PRD: what fills in later, and how much to write, sit behind tips", async ({ page }) => {
+  await login(page);
+  await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  await page.getByTestId("requests-tab-interviews").filter({ visible: true }).click();
+  await page.getByTestId("interview-row").filter({ hasText: "Ana Lima" }).click();
+  await behindTip(page, "interview-snapshot-tip", "Oracle writes a snapshot here once Ana Lima finishes the interview.");
+  await behindTip(page, "interview-requests-tip", "The requests Ana Lima makes show here, to decide, once they finish the interview.");
+  await page.goto("/documents/new");
+  await behindTip(page, "brief-length-tip", "A couple of sentences is enough (at least 20 characters).");
+});
