@@ -136,7 +136,11 @@ async def test_company_seed_keeps_the_prd_and_roadmap_builtins_only(tenant_id):
     async with tenant_session(tenant_id) as s:
         keys = set(await s.scalars(select(Template.key)))
     assert "product-strategy" not in keys and "vision-narrative" not in keys
-    assert len(keys) == 12
+    assert keys == {
+        "oracle-default", "one-pager", "pr-faq", "narrative-memo", "shape-up-pitch",
+        "prd-rfc", "ai-feature", "now-next-later", "outcome-roadmap", "quarterly-timeline",
+        "release-plan", "cycle-bets",
+    }  # fmt: skip
 
 
 # --------------------------------------------------------------------------- start

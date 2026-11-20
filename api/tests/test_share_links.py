@@ -847,7 +847,7 @@ def test_the_per_address_tables_drop_old_entries(monkeypatch):
 
     for i in range(50):
         assert share_public._client_allowed(request(f"198.51.100.{i}")) is None
-    assert len(share_public._client_hits) == 50
+    assert set(share_public._client_hits) == {f"198.51.100.{i}" for i in range(50)}
     clock[0] += share_public.LOCK_SECONDS + 1
     assert share_public._client_allowed(request("203.0.113.9")) is None
     assert list(share_public._client_hits) == ["203.0.113.9"]
