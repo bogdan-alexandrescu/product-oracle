@@ -245,10 +245,13 @@ export function InterviewDetail({ id }: { id: string }) {
               {finished ? (
                 "Oracle is writing the snapshot"
               ) : (
-                // #1590: when the snapshot appears sits behind the (i).
-                <InfoTip label="when the snapshot comes" align="start" testId="interview-snapshot-tip">
-                  {`Oracle writes a snapshot here once ${name} finishes the interview.`}
-                </InfoTip>
+                // #1590: a short status stays visible; the full sentence sits behind the (i).
+                <>
+                  <span data-testid="interview-snapshot-status">{`After ${name} finishes`}</span>{" "}
+                  <InfoTip label="when the snapshot comes" align="start" testId="interview-snapshot-tip">
+                    {`Oracle writes a snapshot here once ${name} finishes the interview.`}
+                  </InfoTip>
+                </>
               )}
             </Empty>
           )}
@@ -274,10 +277,13 @@ export function InterviewDetail({ id }: { id: string }) {
               {finished ? (
                 `Oracle found no requests in what ${name} said.`
               ) : (
-                // #1590: when the requests show sits behind the (i).
-                <InfoTip label="when requests show" align="start" testId="interview-requests-tip">
-                  {`The requests ${name} makes show here, to decide, once they finish the interview.`}
-                </InfoTip>
+                // #1590: a short status stays visible; the full sentence sits behind the (i).
+                <>
+                  <span data-testid="interview-requests-status">{`After ${name} finishes`}</span>{" "}
+                  <InfoTip label="when requests show" align="start" testId="interview-requests-tip">
+                    {`The requests ${name} makes show here, to decide, once they finish the interview.`}
+                  </InfoTip>
+                </>
               )}
             </Empty>
           )}

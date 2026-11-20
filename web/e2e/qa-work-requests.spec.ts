@@ -162,6 +162,9 @@ test("qa-work-43, qa-work-44, qa-work-45: an interview's page says what to do, w
   await expect(page.getByTestId("interview-link-note")).toContainText("can't be shown or copied again");
   await expect(page.getByTestId("interview-link-note")).toContainText("If Ana Lima lost it, use Make a new link; the old link stops working.");
   await expect(page.getByTestId("interview-transcript-empty")).toHaveText("Ana Lima hasn't opened the link yet. If you didn't send it, make a new link.");
+  // #1590 review: a short status stays visible beside each (i) until the interview is finished.
+  await expect(page.getByTestId("interview-snapshot-status")).toHaveText("After Ana Lima finishes");
+  await expect(page.getByTestId("interview-requests-status")).toHaveText("After Ana Lima finishes");
   await page.getByTestId("interview-snapshot-tip").filter({ visible: true }).first().click();
   await expect(
     page.getByRole("tooltip").filter({ hasText: "once Ana Lima finishes the interview", visible: true }),
