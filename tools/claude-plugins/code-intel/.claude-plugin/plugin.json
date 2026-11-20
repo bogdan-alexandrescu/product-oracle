@@ -1,0 +1,5 @@
+{
+  "name": "code-intel",
+  "version": "1.0.0",
+  "description": "Find a symbol's definition and uses through pyright and typescript-language-server instead of grep. The servers are pinned and installed into .agent-tools/ by make agent-setup."
+}

@@ -28,6 +28,7 @@ from pydantic import ConfigDict, Field, ValidationError
 
 from oracle import parse_budget
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 from oracle.specs.contract import Problem
 from oracle.specs.sanitize import MAX_FILE_BYTES, Sanitized, sanitize_svg, sanitize_wireframe
 
@@ -158,7 +159,7 @@ def check_design(
     try:
         raw = json.loads(text)
     except json.JSONDecodeError as exc:
-        _err(out, "invalid_json", f"design.json is not valid JSON: {exc}")
+        _err(out, "invalid_json", f"design.json is not valid JSON: {exception_text(exc)}")
         return out
     try:
         bundle = DesignBundle.model_validate(raw)

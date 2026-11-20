@@ -31,6 +31,7 @@ from oracle.connections.providers import (
     Provider,
     ProviderUnavailable,
 )
+from oracle.errors import exception_text
 
 STATE_MAX_AGE_SECONDS = 15 * 60
 
@@ -187,7 +188,7 @@ async def _token_request(
     try:
         resp = await http.post(meta.token_url, headers=headers, **kwargs)
     except httpx.HTTPError as e:
-        raise ProviderUnavailable(f"cannot reach {provider.name}: {e}") from e
+        raise ProviderUnavailable(f"cannot reach {provider.name}: {exception_text(e)}") from e
     try:
         data = resp.json()
     except ValueError:

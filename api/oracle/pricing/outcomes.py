@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.decisions.service import company_today
+from oracle.errors import exception_text
 from oracle.market.models import Competitor
 from oracle.pricing.models import ACCOUNT_MAX, CURRENCIES, DealOutcome
 from oracle.pricing.schemas import (
@@ -341,7 +342,9 @@ def _rows(raw: bytes) -> tuple[list[str], list[tuple[int, list[str]]]]:
             if len(rows) > MAX_ROWS:
                 raise OutcomeError(422, f"The file has more than {MAX_ROWS:,} rows")
     except csv.Error as e:
-        raise OutcomeError(422, f"The file is not valid CSV (line {reader.line_num}): {e}") from e
+        raise OutcomeError(
+            422, f"The file is not valid CSV (line {reader.line_num}): {exception_text(e)}"
+        ) from e
     missing = [c for c in REQUIRED if c not in (header or [])]
     if missing:
         raise OutcomeError(

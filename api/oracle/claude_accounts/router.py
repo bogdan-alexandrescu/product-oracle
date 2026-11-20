@@ -57,6 +57,7 @@ from oracle.claude_accounts.oauth import (
 from oracle.claude_accounts.sweep import get_token_endpoint, liveness, refresher_for
 from oracle.claude_accounts.sweep import sweep as run_sweep
 from oracle.company_time import company_time_zone
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1/claude-accounts", tags=["claude-accounts"])
@@ -330,7 +331,7 @@ async def _own(db: TenantDB, account_id: str) -> Account:
     try:
         account = await store.get(db, account_id)
     except store.MalformedAccountError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
     if account is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No Claude account {account_id!r}")
     return account
@@ -345,7 +346,7 @@ def _label(raw: str) -> str:
     try:
         return validate_label(raw.strip())
     except AccountError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from None
 
 
 def _unprocessable(message: str) -> HTTPException:
@@ -447,7 +448,7 @@ async def finish_claude_sign_in(body: ExchangeIn, principal: Owner, db: TenantDB
         email, organization = identity_from_token_response(payload)
     except CredentialError as e:
         # The pending sign-in stays, so the person can paste again.
-        raise _unprocessable(str(e)) from None
+        raise _unprocessable(exception_text(e)) from None
     # The redeem is a network call: the caller is re-read under the gate after it, and the
     # gate is held until the account is recorded.
     await recheck_caller(db, principal, "owner")
@@ -482,7 +483,7 @@ async def add_claude_account(body: RegisterIn, principal: OwnerNow, db: TenantDB
     try:
         credential = parse_credential(body.credential)
     except CredentialError as e:
-        raise _unprocessable(str(e)) from None
+        raise _unprocessable(exception_text(e)) from None
     account = await store.register(
         principal.tenant_id,
         label,
@@ -507,7 +508,7 @@ async def set_claude_fallback(body: FallbackIn, principal: OwnerNow, db: TenantD
     try:
         row = await fallback.store(db, body.token, principal.id)
     except fallback.NotAClaudeCredential as e:
-        raise _unprocessable(str(e)) from None
+        raise _unprocessable(exception_text(e)) from None
     await audit.record(
         db, principal, "claude_fallback.set", "claude_fallback", row.id, {"kind": row.kind}
     )

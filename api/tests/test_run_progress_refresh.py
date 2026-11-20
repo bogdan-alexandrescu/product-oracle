@@ -165,7 +165,7 @@ async def test_the_runtime_s_last_event_is_the_agent_s_last_work(client, owner):
     assert agent["last_work"] == "event"
     assert agent["last_work_at"].startswith("2026-10-21T09:04:00")
     # Nothing (only a zero) reported: not $0.00 spent.
-    assert seg["cost_reported"] is False
+    assert seg["cost_usd"] is None
 
 
 async def test_proposals_written_count_as_the_agent_s_last_work(client, owner):
@@ -201,4 +201,4 @@ async def test_a_reported_cost_is_reported(client, owner):
     swarm.forged[first.step_id] = {"state": "RUNNING", "cost_usd_total": 0.5}
     await tick(client, auth)
     seg = _running(await get(client, auth, run["id"]))
-    assert seg["cost_reported"] is True
+    assert seg["cost_usd"] == 0.5

@@ -41,6 +41,7 @@ from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
 from oracle.docs.schemas import ImportErrorResponse, rejected_detail
 from oracle.engineering.router import router as engineering_router
+from oracle.errors import exception_text
 from oracle.export.router import router as export_router
 from oracle.intake.drafting import DraftGateClosed, draft_gate_closed
 from oracle.intake.router import router as intake_router
@@ -233,7 +234,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(GoalFieldsInvalid)
     async def goal_fields_rejected(_request: Request, exc: GoalFieldsInvalid) -> JSONResponse:
         # B5: a person's goal write with bad typed fields; every problem with its code.
-        return JSONResponse({"detail": str(exc), "errors": exc.problems}, 422)
+        return JSONResponse({"detail": exception_text(exc), "errors": exc.problems}, 422)
 
     @app.exception_handler(ParseBusy)
     async def parse_busy(_request: Request, exc: ParseBusy) -> JSONResponse:

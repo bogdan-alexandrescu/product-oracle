@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.baseline import public_links
 from oracle.baseline.public_links import LinkError, LinkFetcher, get_link_fetcher
+from oracle.errors import exception_text
 from oracle.market import diff, robots
 from oracle.market.models import CompetitorChange, CompetitorPage, CompetitorPageSnapshot
 from oracle.rituals import clock
@@ -72,7 +73,7 @@ async def check_page(
     try:
         read = await fetch.fetch(page.url, now=now)
     except LinkError as e:
-        page.last_error = str(e)
+        page.last_error = exception_text(e)
         page.attempts += 1
         if e.code in FINAL_CODES or page.attempts >= MAX_ATTEMPTS:
             page.status = "error"

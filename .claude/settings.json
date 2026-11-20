@@ -1,0 +1,26 @@
+{
+  "extraKnownMarketplaces": {
+    "oracle-agent-tools": {
+      "source": {
+        "source": "directory",
+        "path": "./tools/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "code-intel@oracle-agent-tools": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"$CLAUDE_PROJECT_DIR/web/scripts/agent-setup.ts\" --check",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

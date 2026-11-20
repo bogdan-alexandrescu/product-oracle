@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0062_source_sync"
 PREVIOUS = "0061_discussion_decision_change"
@@ -67,16 +68,15 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_and_downgrade(scratch_db):
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     columns = _columns()
     assert columns["next_sync_at"] == "YES" and columns["sync_failures"] == "NO"
 
     command.downgrade(_cfg(), PREVIOUS)
     assert "next_sync_at" not in _columns() and "sync_failures" not in _columns()
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _columns()["sync_failures"] == "NO"

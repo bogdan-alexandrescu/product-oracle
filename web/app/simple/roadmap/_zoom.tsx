@@ -23,7 +23,7 @@ import {
 
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { InfoTip } from "@/components/ds/InfoTip";
-import { addMonths, calendarDay } from "@/lib/dates";
+import { addMonths, calendarDay, utcDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 
 import { FixButtons, fixCount, type Act } from "./_card";
@@ -526,9 +526,7 @@ function DayChart(props: TimelineProps) {
         label: m === 1 || months.length === 0 ? monthWord(d) : MONTHS[m - 1],
       });
     const n = new Date(ms(d));
-    d = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1))
-      .toISOString()
-      .slice(0, 10);
+    d = utcDay(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1));
   }
   // A month that starts just left of the view keeps its label, whole, at the view's left
   // edge while the next month's label is not in its way.

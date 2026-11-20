@@ -49,6 +49,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
@@ -878,7 +879,7 @@ def build(c: Ctx, op: str, args: dict[str, Any], body: str | None = None) -> Rep
     try:
         out = known.build(c, {k: v for k, v in args.items() if v is not None})
     except (KeyError, ValueError, TypeError) as e:
-        return Reply("note", f"I can't do that here: {e}.")
+        return Reply("note", f"I can't do that here: {exception_text(e)}.")
     if isinstance(out, Reply):
         if out.candidates and "item" in known.args:
             out.choices = [

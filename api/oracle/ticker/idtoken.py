@@ -13,6 +13,7 @@ import httpx
 import jwt
 
 from oracle.auth.jwks import KeyCache
+from oracle.errors import exception_text
 
 CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 ISSUERS = ("accounts.google.com", "https://accounts.google.com")
@@ -44,7 +45,7 @@ async def verify_id_token(token: str, *, audience: str, email: str) -> dict[str,
     try:
         header = jwt.get_unverified_header(token)
     except jwt.InvalidTokenError as e:
-        raise InvalidIdToken(str(e)) from e
+        raise InvalidIdToken(exception_text(e)) from e
     if header.get("alg") != "RS256" or not isinstance(header.get("kid"), str):
         raise InvalidIdToken("unexpected alg or kid")
     key = await _keys.get(header["kid"])
@@ -61,7 +62,7 @@ async def verify_id_token(token: str, *, audience: str, email: str) -> dict[str,
             options={"require": ["exp", "iat", "iss", "aud", "sub", "email"], "strict_aud": True},
         )
     except jwt.InvalidTokenError as e:
-        raise InvalidIdToken(str(e)) from e
+        raise InvalidIdToken(exception_text(e)) from e
     # PyJWT has checked both are integers (or integral numbers).
     if int(claims["exp"]) - int(claims["iat"]) > MAX_LIFETIME_SECONDS + LEEWAY_SECONDS:
         raise InvalidIdToken("lifetime over an hour")

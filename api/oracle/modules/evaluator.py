@@ -31,6 +31,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 from oracle.v2.contract import (
     MAX_CONDITION_DEPTH,
     MAX_CONDITION_NODES,
@@ -260,7 +261,7 @@ def evaluate(condition: Any, inputs: dict[str, Any] | BaseModel) -> Evaluation:
         except ValidationError as e:
             raise ConditionInvalidError(_first_error(e)) from None
         except ValueError as e:
-            raise ConditionInvalidError(str(e)) from None
+            raise ConditionInvalidError(exception_text(e)) from None
     else:
         # A node built in code skipped parsing: bound it here too.
         depth, count = condition_stats(condition)

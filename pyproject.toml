@@ -9,14 +9,16 @@ dependencies = ["product-oracle-api"]
 
 [tool.uv]
 package = false
+# #1566: a release resolves only once it is 14 days old.
+exclude-newer = "14 days"
 
 [tool.uv.sources]
 product-oracle-api = { path = "api", editable = true }
 
 [dependency-groups]
 dev = [
-    "pytest>=8.2",
-    "pytest-asyncio>=0.23",
-    "pytest-xdist>=3.6",
-    "ruff>=0.5",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-xdist==3.8.0",
+    "ruff==0.17.1",
 ]

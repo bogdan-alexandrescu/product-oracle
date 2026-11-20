@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 from oracle.modules.evaluator import ConditionError, Evaluation, evaluate
 from oracle.quality.learned import Nudge
 from oracle.v2.contract import ALWAYS, FieldDefinition, ModuleContract
@@ -558,8 +559,10 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
             try:
                 ev = evaluate(contract.condition, ctx.inputs)
             except ConditionError as e:
-                mod.condition_error = f"{e.code}: {e}"
-                mod.missing_information.append(f"Condition could not be evaluated: {e}")
+                mod.condition_error = f"{e.code}: {exception_text(e)}"
+                mod.missing_information.append(
+                    f"Condition could not be evaluated: {exception_text(e)}"
+                )
             if ev is not None:
                 mod.basis = _basis(ev, ctx)
                 mod.score = ev.score

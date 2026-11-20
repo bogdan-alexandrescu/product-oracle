@@ -32,6 +32,7 @@ from oracle.docs.schemas import (
     CitationSource,
     ImportProblem,
 )
+from oracle.errors import exception_text
 from oracle.raw_tokens import has_raw_tokens, strip_raw_tokens
 from oracle.review.schemas import NoteResolution, Resolution
 
@@ -458,7 +459,7 @@ def _parse_front_matter(yaml_text: str | None, problems: list[ImportProblem]) ->
         problems.append(
             ImportProblem(
                 code="invalid_front_matter",
-                message=f"front matter is not valid YAML: {exc}",
+                message=f"front matter is not valid YAML: {exception_text(exc)}",
                 line=exc.line + 1 if exc.line else None,
             )
         )
@@ -829,7 +830,7 @@ async def parse_draft_async(markdown: str) -> ParsedDraft:
     try:
         return await safe_yaml.run_parse_within(parse_draft, markdown, name="the draft")
     except safe_yaml.ParseTimeout as exc:
-        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
+        raise DraftError([ImportProblem(code=exc.code, message=exception_text(exc))]) from exc
 
 
 def is_uuid(value: str) -> bool:

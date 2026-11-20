@@ -14,3 +14,6 @@ node_modules/
 
 # CI api shards: junit output (api/tests/_shard.py)
 api/junit/
+
+# Local agent tools installed by `make agent-setup` (#1557)
+.agent-tools/

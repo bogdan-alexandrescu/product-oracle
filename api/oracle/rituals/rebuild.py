@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, autonomy, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.errors import exception_text
 from oracle.rituals.models import Ritual, RitualOccurrence
 from oracle.runs import flows
 from oracle.runs.models import Run
@@ -157,7 +158,11 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual: Ritual) -> No
             await db.rollback()
             occ = await db.get(RitualOccurrence, occ_id, with_for_update=True)
             if occ is not None:
-                await _note(db, occ, f"Not started: {str(exc)[:1].lower()}{str(exc)[1:]}")
+                await _note(
+                    db,
+                    occ,
+                    f"Not started: {exception_text(exc)[:1].lower()}{exception_text(exc)[1:]}",
+                )
             return
         occ.summary_run_id = run_id
         occ.summary_state = "running"
@@ -178,7 +183,7 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual: Ritual) -> No
             run = await db.get(Run, run_id)
             if occ is not None and run is not None and run.status == "draft":
                 occ.summary_run_id = None
-                msg = str(exc) if isinstance(exc, runs_service.RunError) else ""
+                msg = exception_text(exc) if isinstance(exc, runs_service.RunError) else ""
                 await _note(db, occ, f"Not started: {msg[:1].lower()}{msg[1:]}" if msg
                             else NOT_STARTED)  # fmt: skip
             return

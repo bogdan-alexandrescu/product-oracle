@@ -29,6 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0130_simple_change_indexes"
 PREVIOUS = "0129_ritual_failed_at"
@@ -84,7 +85,7 @@ def _timeouts(step: str) -> tuple[str, str]:
 
 
 def test_lock_timeout_does_not_outlive_the_migration(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     was, now = _timeouts("upgrade")
     assert now == was, (was, now)
     command.stamp(_cfg(), REVISION)
@@ -109,7 +110,7 @@ def _timeouts_at_each_index(step: str, monkeypatch) -> list[str]:
 
 
 def test_both_ways_wait_at_most_5s(scratch_db, monkeypatch):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     assert _timeouts_at_each_index("upgrade", monkeypatch) == ["5s"] * 4
     command.stamp(_cfg(), REVISION)
     assert _timeouts_at_each_index("downgrade", monkeypatch) == ["5s"] * 4

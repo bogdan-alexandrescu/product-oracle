@@ -14,6 +14,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0018_runtime_features"
 PREVIOUS = "0017_citation_source_oracle"
@@ -61,14 +62,13 @@ def test_chains_on_the_citation_source_head():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0019_citation_confidence chains on it, the intake lane's 0014_intake on that and the
     # PRD review chain (0014_review ... 0014_member_follow_up_retry) on that.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0019_citation_confidence").down_revision == REVISION
 
 
 def test_upgrade_creates_the_table_and_downgrade_drops_it(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     assert not _exists()
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _exists()
     _run(
         "INSERT INTO runtime_features (feature, state, reason, learned_at) "

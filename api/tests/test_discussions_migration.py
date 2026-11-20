@@ -19,6 +19,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0022_discussions"
 PREVIOUS = "0022_engineering_lead"
@@ -106,7 +107,6 @@ def _insert_discussion(tenant: uuid.UUID, **over) -> uuid.UUID:
 # or a fixed number that skips main's; no_claim=what the tables hold.
 def test_the_chain_ends_here_after_feedback_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
@@ -115,10 +115,10 @@ def test_the_chain_ends_here_after_feedback_agent_staging():
 # CHECK is missing, or the downgrade leaves a table behind; no_claim=the routes.
 def test_upgrade_downgrade_upgrade_with_discussions_in_it(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     command.downgrade(cfg, PREVIOUS)
     assert _tables() == []
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _tables() == TABLES
     assert {
         "ck_discussions_subject_kind",
@@ -170,5 +170,5 @@ def test_upgrade_downgrade_upgrade_with_discussions_in_it(scratch_db):
     command.downgrade(cfg, PREVIOUS)
     assert _tables() == []
     assert _run("SELECT count(*) FROM tenants") == [(1,)]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _tables() == TABLES

@@ -123,7 +123,7 @@ import logging
 import time
 import uuid
 import weakref
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -383,6 +383,27 @@ def _now() -> datetime:
 
 def _usd(value: Decimal | None) -> float | None:
     return None if value is None else float(value)
+
+
+def _known_sum(values: Iterable[Any]) -> Decimal | None:
+    """#1572: the sum of the known values; None (unknown, never $0) when none is known."""
+    known = [Decimal(str(v)) for v in values if v is not None]
+    return sum(known, Decimal(0)) if known else None
+
+
+def _attempts_cost(art: dict[str, Any]) -> Decimal | None:
+    return _known_sum(a.get("cost_usd") for a in art["attempts"])
+
+
+def _spent(run: Run) -> Decimal:
+    """What the run is known to have spent, against its ceiling: an unknown spend is not
+    over it."""
+    return run.spent_usd or Decimal(0)
+
+
+def _about(estimate: Decimal | float | None) -> str:
+    """ ", about $N" for a known estimate; nothing when it is unknown (never "about $0")."""
+    return "" if estimate is None else f", about ${float(estimate):g}"
 
 
 def _flow(run: Run) -> flows.FlowDef:
@@ -738,7 +759,7 @@ def _summary(
         theme=run.knobs.get("theme"),
         roadmap_read=run.knobs.get("roadmap_read"),
         estimate_usd=_usd(run.estimate_usd),
-        spent_usd=float(run.spent_usd or 0),
+        spent_usd=_usd(run.spent_usd),
         created_by=run.created_by,
         created_at=run.created_at,
         started_at=run.started_at,
@@ -1204,7 +1225,7 @@ def _segment_out(
         checkpoint=sdef.checkpoint_for(kind),  # type: ignore[arg-type]
         checkpoint_on=sdef.checkpoint is not None and knobs.checkpoints.get(sdef.checkpoint, True),
         estimate_usd=_usd(segment.estimate_usd),
-        cost_usd=float(segment.cost_usd or 0),
+        cost_usd=_usd(segment.cost_usd),
         workflow_id=segment.swarm_workflow_id,
         artifacts=sorted((art.get("files") or {}).keys()),
         attempts=[SegmentAttempt(**a) for a in art.get("attempts") or []],
@@ -1230,8 +1251,6 @@ def _segment_out(
         # #258: only while it runs, and only what was read of its current workflow.
         agents=[_agent_out(a, proposals[1]) for a in progress.get("agents") or []],
         checked_at=progress.get("checked_at"),
-        cost_reported=bool(segment.cost_usd)
-        or any(a.get("cost_usd") for a in progress.get("agents") or []),
         proposals_written=proposals[0] if progress else 0,
         queue_wait=_queue_wait_out(run, segment.seq) if segment.status == "running" else None,
     )
@@ -4302,7 +4321,7 @@ def _accepted(
             or len(art["attempts"]) + 1,
             "workflow_id": workflow_id,
             "submitted_at": info.get("submitted_at") or _now().isoformat(),
-            "cost_usd": 0,
+            "cost_usd": None,
             "note": change_request,
             "state": "running",
             "label": info.get("label"),
@@ -4788,7 +4807,7 @@ async def cancel_at_runtime(db: AsyncSession, follow_ups: list[uuid.UUID]) -> No
 
 
 def _recompute_spend(run: Run, segments: list[RunSegment]) -> None:
-    run.spent_usd = sum((s.cost_usd or Decimal(0) for s in segments), Decimal(0))
+    run.spent_usd = _known_sum(s.cost_usd for s in segments)
 
 
 async def _finish(
@@ -4846,7 +4865,7 @@ async def _next(
                 "attempt": len(art["attempts"]) + 1,
                 "workflow_id": wf["id"],
                 "submitted_at": _now().isoformat(),
-                "cost_usd": 0,
+                "cost_usd": None,
                 "note": None,
                 "state": "running",
                 "label": wf.get("label"),
@@ -6450,9 +6469,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         if earlier is None:
             current["cost_usd"] = _higher(status.cost_usd, current.get("cost_usd"))
         current["state"] = status.state
-    running.cost_usd = sum(
-        (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
-    )
+    running.cost_usd = _attempts_cost(art)
     _set_art(running, art)
     if earlier is not None:
         # The rest of the workflow's cost, counted once.
@@ -6497,7 +6514,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     _set_art(running, art)
 
     ceiling = _ceiling(run)
-    if run.status == "running" and ceiling is not None and run.spent_usd > ceiling:
+    if run.status == "running" and ceiling is not None and _spent(run) > ceiling:
         run.status = "paused_overrun"
         stats.paused += 1
         await audit.record(
@@ -6535,17 +6552,15 @@ def _take_cost(
         if later is None or later is start:
             continue
         own = {*entry.get("work", []), *entry.get("reviews", []), *entry.get("revises", [])}
-        spent = sum((st.cost_usd or 0 for st in status.steps if st.step_id in own), Decimal(0))
+        spent = _known_sum(st.cost_usd for st in status.steps if st.step_id in own)
         art = _art(later)
         first = True
         for a in art["attempts"]:
             if a.get("workflow_id") == wf["id"]:
                 a["cost_usd"] = _higher(spent, a.get("cost_usd")) if first else 0
-                others += Decimal(str(a["cost_usd"]))
+                others += Decimal(str(a["cost_usd"] or 0))
                 first = False
-        later.cost_usd = sum(
-            (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
-        )
+        later.cost_usd = _attempts_cost(art)
         _set_art(later, art)
     if start is not None:
         art = _art(start)
@@ -6557,13 +6572,11 @@ def _take_cost(
                 if first:
                     total = _higher(status.cost_usd, a.get("workflow_cost_usd", a.get("cost_usd")))
                     a["workflow_cost_usd"] = total
-                    a["cost_usd"] = max(total - float(others), 0)
+                    a["cost_usd"] = None if total is None else max(total - float(others), 0)
                 else:
                     a["cost_usd"] = 0
                 first = False
-        start.cost_usd = sum(
-            (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
-        )
+        start.cost_usd = _attempts_cost(art)
         _set_art(start, art)
     _recompute_spend(run, segments)
     return start
@@ -6572,7 +6585,7 @@ def _take_cost(
 def _overrun(run: Run) -> Decimal | None:
     """The ceiling when the run's spend is over it."""
     ceiling = _ceiling(run)
-    return ceiling if ceiling is not None and run.spent_usd > ceiling else None
+    return ceiling if ceiling is not None and _spent(run) > ceiling else None
 
 
 async def _pause_overrun(
@@ -6756,7 +6769,7 @@ def _add_attempt(
             "attempt": number,
             "workflow_id": workflow_id,
             "submitted_at": _now().isoformat(),
-            "cost_usd": 0,
+            "cost_usd": None,
             "note": None,
             "state": state,
             "label": label,
@@ -6915,16 +6928,13 @@ def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: 
     segment = next((s for s in segments if s.seq == entry.get("seq")), None)
     if segment is None:
         return
-    others = sum(
-        (
-            Decimal(str(a.get("cost_usd") or 0))
-            for s in segments
-            if s is not segment
-            for a in _art(s)["attempts"]
-            if a.get("workflow_id") == entry["id"]
-        ),
-        Decimal(0),
-    )
+    others = _known_sum(
+        a.get("cost_usd")
+        for s in segments
+        if s is not segment
+        for a in _art(s)["attempts"]
+        if a.get("workflow_id") == entry["id"]
+    ) or Decimal(0)
     art = _art(segment)
     first = True
     for a in art["attempts"]:
@@ -6932,21 +6942,22 @@ def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: 
             if first:
                 total = _higher(cost, a.get("workflow_cost_usd", a.get("cost_usd")))
                 a["workflow_cost_usd"] = total
-                a["cost_usd"] = max(total - float(others), 0)
+                a["cost_usd"] = None if total is None else max(total - float(others), 0)
             else:
                 a["cost_usd"] = 0
             first = False
-    segment.cost_usd = sum(
-        (Decimal(str(a.get("cost_usd") or 0)) for a in art["attempts"]), Decimal(0)
-    )
+    segment.cost_usd = _attempts_cost(art)
     _set_art(segment, art)
     _recompute_spend(run, segments)
 
 
-def _higher(cost: Decimal, recorded: Any) -> float:
+def _higher(cost: Decimal | None, recorded: Any) -> float | None:
     """A cost read now, never lower than the one recorded: SwarmCloud's costs only grow,
-    so a lower reading is an older one (read before a newer one was recorded)."""
-    return max(float(cost), float(recorded or 0))
+    so a lower reading is an older one (read before a newer one was recorded). #1572:
+    None while neither is known (a zero read with nothing recorded is not a report)."""
+    if recorded is None and not cost:
+        return None
+    return max(float(cost or 0), float(recorded or 0))
 
 
 def _rests(at: Any) -> bool:
@@ -7070,18 +7081,16 @@ def _new_overrun_after_end(run: Run, ceiling: Decimal) -> bool:
     dismissed one does not block a new one once the spend grows past it."""
     knobs = run.knobs or {}
     at_end = knobs.get("spent_at_end")
-    if at_end is not None and run.spent_usd <= Decimal(str(at_end)):
+    if at_end is not None and _spent(run) <= Decimal(str(at_end)):
         return False
     over = knobs.get("overrun_after_end")
     if not isinstance(over, dict):
         return True
-    return bool(over.get("dismissed_at")) and run.spent_usd > Decimal(
-        str(over.get("spent_usd") or 0)
-    )
+    return bool(over.get("dismissed_at")) and _spent(run) > Decimal(str(over.get("spent_usd") or 0))
 
 
 def _usd_text(value: Any) -> str:
-    return f"${Decimal(str(value or 0)):.2f}"
+    return "\u2014" if value is None else f"${Decimal(str(value)):.2f}"
 
 
 async def _overrun_after_end(
@@ -7153,13 +7162,12 @@ async def _found_call(e: dict[str, Any]) -> _Cancelled:
 
 
 def _last_cost(segment: RunSegment | None, wid: str) -> float:
+    """What was counted on the run's spend (nothing known: nothing counted)."""
     if segment is None:
         return 0.0
-    return sum(
-        float(a.get("cost_usd") or 0)
-        for a in _art(segment)["attempts"]
-        if a.get("workflow_id") == wid
-    )
+    attempts = _art(segment)["attempts"]
+    counted = _known_sum(a.get("cost_usd") for a in attempts if a.get("workflow_id") == wid)
+    return float(counted or 0)
 
 
 def _found_apply(
@@ -7590,13 +7598,11 @@ def _may_restart(run: Run, wf: dict[str, Any], status: WorkflowStatus, current: 
     (or its failing step) cost anything."""
     if "queue_restart" in (run.knobs or {}):
         return False
-    spent = sum(
-        Decimal(str(a.get("cost_usd") or 0))
-        for a in _art(current)["attempts"]
-        if a.get("workflow_id") == wf.get("id")
+    spent = _known_sum(
+        a.get("cost_usd") for a in _art(current)["attempts"] if a.get("workflow_id") == wf.get("id")
     )
     failed = next((st for st in status.steps if st.state in ("FAILED", "DEAD_LETTERED")), None)
-    return spent == 0 and not (failed is not None and failed.cost_usd)
+    return not spent and not (failed is not None and failed.cost_usd)
 
 
 async def _restart_queued(
@@ -8064,8 +8070,8 @@ async def _take_answer(
                 f"{_outside_note(cp, round_, record, at)} The workflow has no revision step "
                 "there and went on regardless; "
                 f"nothing is re-run on its own. In the Inbox an approver chooses Redo from "
-                f"'{console['redo_segment']}' (a new workflow: one more segment, about "
-                f"${console['redo_cost_usd']:g}) or Continue.",
+                f"'{console['redo_segment']}' (a new workflow: one more segment"
+                f"{_about(console['redo_cost_usd'])}) or Continue.",
             )
         return
     wait.pop("console", None)
@@ -8225,7 +8231,7 @@ def _console_record(
         "findings": list(record.findings),
         "revise": revise,
         "redo_segment": _flow(run).segment(segment.name).title,
-        "redo_cost_usd": float(segment.estimate_usd or 0),
+        "redo_cost_usd": _usd(segment.estimate_usd),
         "seen_at": _now().isoformat(),
     }
 
@@ -8892,7 +8898,7 @@ async def decide_checkpoint(
             segment,
             f"An approver chose Redo from '{title}' at {cp.kind}: Oracle cancels the run's "
             "workflow and runs the segment again as a new workflow with the findings (one more "
-            f"segment, about ${float(segment.estimate_usd or 0):g}).",
+            f"segment{_about(segment.estimate_usd)}).",
         )
     if live:
         # SwarmCloud is called after this commits: the decision is recorded under the gate
@@ -10151,7 +10157,7 @@ async def _follow(
             "attempt": len(art["attempts"]) + 1,
             "workflow_id": wf["id"],
             "submitted_at": _now().isoformat(),
-            "cost_usd": 0,
+            "cost_usd": None,
             "note": (cp.note if cp is not None else None) if note is None else (note or None),
             "note_by": note_by,
             "not_applied": not_applied,

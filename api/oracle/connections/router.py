@@ -34,6 +34,7 @@ from oracle.connections.providers import (
     get_provider,
     reconnect_reason,
 )
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.sources.connectors import fireflies
 from oracle.tenancy import tenant_session
@@ -192,7 +193,7 @@ def _endpoint(provider: Provider, url: str | None, principal: Principal) -> str 
     try:
         return fireflies.check_endpoint(url)
     except fireflies.EndpointRefused as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from None
 
 
 def _provider(key: str) -> Provider:
@@ -209,12 +210,12 @@ def _rejected(e: Exception) -> HTTPException:
     # Refused (it works, but Oracle will not use it, e.g. a Slack bot token): 422.
     # Rejected by the provider (invalid, expired, revoked): 400.
     if isinstance(e, CredentialRefused):
-        return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e))
-    return HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+        return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e))
+    return HTTPException(status.HTTP_400_BAD_REQUEST, exception_text(e))
 
 
 def _unavailable(e: Exception) -> HTTPException:
-    return HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, exception_text(e))
 
 
 async def _own(db: TenantDB, connection_id: uuid.UUID, principal: Principal) -> Connection:
@@ -327,13 +328,13 @@ async def connect_with_token(
             may_change_endpoint=has_role(principal.role, "owner"),
         )
     except service.EndpointChangeRefused as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
+        raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from None
     except CredentialRejected as e:
         raise _rejected(e) from None
     except ProviderUnavailable as e:
         raise _unavailable(e) from None
     except service.MemberDisabled as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
+        raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from None
     await audit.record(
         db, principal, "connection.connect", "connection", conn.id,
         {"provider": p.key, "auth_mode": "token", "account": conn.account_label,
@@ -395,7 +396,7 @@ async def set_connection_endpoint(
             endpoint_url=endpoint,
         )
     except service.MemberDisabled as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
+        raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from None
     await audit.record(
         db, principal, "connection.endpoint", "connection", conn.id,
         {"provider": p.key, "from": before, "to": endpoint_url(conn)},
@@ -443,7 +444,7 @@ async def oauth_callback(
     try:
         st = oauth.decode_state(state, p.key)
     except oauth.InvalidState as e:
-        return _back(provider=p.key, error=str(e))
+        return _back(provider=p.key, error=exception_text(e))
     # The state is bound to the user who started; a link opened by anyone else fails.
     if principal.kind != "user" or principal.user_id != st.user_id:
         return _back(provider=p.key, error="This sign-in was started by another user")
@@ -463,7 +464,7 @@ async def oauth_callback(
                 db, http, user_id=st.user_id, provider=p, tokens=tokens
             )
         except (CredentialRejected, ProviderUnavailable, service.MemberDisabled) as e:
-            return _back(provider=p.key, error=str(e))
+            return _back(provider=p.key, error=exception_text(e))
         await audit.record(
             db, principal, "connection.connect", "connection", conn.id,
             {"provider": p.key, "auth_mode": "oauth", "account": conn.account_label},
@@ -544,7 +545,7 @@ async def reconnect_connection(
                 endpoint_url=conn.endpoint_url,
             )
         except service.MemberDisabled as e:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
+            raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from None
     else:
         if reconnect_reason(conn.provider, list(conn.scopes or [])):
             # Only a Google grant without drive.readonly: a refresh keeps the old grant,
@@ -558,7 +559,7 @@ async def reconnect_connection(
             url = _start_oauth(principal, p, conn.id) if conn.auth_mode == "oauth" else None
             if url:
                 return ReconnectOut(connection=_out(conn), authorize_url=url)
-            raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+            raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
         except ProviderUnavailable as e:
             raise _unavailable(e) from None
     await audit.record(

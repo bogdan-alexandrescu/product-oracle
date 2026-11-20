@@ -420,7 +420,7 @@ export function RunDetail({ id }: { id: string }) {
             {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
             {run.error}
             {/* As the API: a failed run over its ceiling is not retried. */}
-            {run.status === "failed" && run.overrun_ceiling_usd != null && run.spent_usd > run.overrun_ceiling_usd && (
+            {run.status === "failed" && run.overrun_ceiling_usd != null && (run.spent_usd ?? 0) > run.overrun_ceiling_usd && (
               <span className="block" data-testid="budget-stopped">
                 This run stopped at its budget; start it again with a new estimate.
               </span>
@@ -633,7 +633,7 @@ function OverrunHeld({ mayResume, mayCancel }: { mayResume: boolean; mayCancel: 
 function resumeAllows(run: RunOut): string | null {
   // A resumed run may spend half its estimate more before it pauses again (the 1.5× rule).
   const allowance = run.estimate_usd != null ? run.estimate_usd * 0.5 : null;
-  return allowance != null ? `Resuming lets it spend up to ${usd(run.spent_usd + allowance)} in total, ${usd(allowance)} more.` : null;
+  return allowance != null ? `Resuming lets it spend up to ${usd((run.spent_usd ?? 0) + allowance)} in total, ${usd(allowance)} more.` : null;
 }
 
 /** ``lead``: this run could not be checked, so the result leads with it (``unchecked`` first, then ``text``). */
@@ -772,7 +772,7 @@ function RunInspector({ run }: { run: RunOut }) {
               // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
               // qa-work-23: the value's weight and colour, as every other Details value.
               <span data-testid="run-cost" data-cost="small" className="tnum">
-                {run.status === "running" && run.spent_usd === 0 && !run.segments.some((x) => x.cost_reported) ? (
+                {run.status === "running" && run.spent_usd == null ? (
                   <>
                     Cost not reported yet{run.estimate_usd != null && <> · {usd(run.estimate_usd)} estimated</>}
                   </>
@@ -963,8 +963,8 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
   return (
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
-        {/* run-progress: "$0.00" only once SwarmCloud reports a cost; until then, say so. */}
-        <span data-testid="segment-cost">{s.cost_reported ? `${usd(s.cost_usd)} spent so far` : "Cost not reported yet"}</span> ·{" "}
+        {/* run-progress, #1572: a cost only once SwarmCloud reports one (null until then); until then, say so. */}
+        <span data-testid="segment-cost">{s.cost_usd != null ? `${usd(s.cost_usd)} spent so far` : "Cost not reported yet"}</span> ·{" "}
         {/* run-progress review: the run's proposals are counted once for the step, not on each agent. */}
         {s.checked_at && s.proposals_written > 0 && (
           <>

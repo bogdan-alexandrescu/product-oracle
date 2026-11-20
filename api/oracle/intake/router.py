@@ -26,6 +26,7 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.discussions import changes as discussion_changes
+from oracle.errors import exception_text
 from oracle.intake import (
     answers,
     carried,
@@ -99,7 +100,7 @@ views.register()
 
 
 def _http(exc: service.IntakeError) -> HTTPException:
-    detail = {"code": exc.code, "message": str(exc)} if exc.code else str(exc)
+    detail = {"code": exc.code, "message": exception_text(exc)} if exc.code else exception_text(exc)
     return HTTPException(exc.status, detail)
 
 
@@ -176,7 +177,7 @@ async def get_replaced_prd_carried(
     try:
         got = await carried.inputs(db, document_id, item_keys)
     except carried.CarriedError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     return got.carried
 
 
@@ -207,7 +208,7 @@ async def get_intake_summary(
 
 
 def _read_http(exc: intake_read.ReadError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    return HTTPException(exc.status, exception_text(exc))
 
 
 @router.get(

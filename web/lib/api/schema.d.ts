@@ -39053,7 +39053,7 @@ export interface components {
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
-            spent_usd: number;
+            spent_usd?: number | null;
             /** Created By */
             created_by?: string | null;
             /**
@@ -39328,7 +39328,7 @@ export interface components {
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
-            spent_usd: number;
+            spent_usd?: number | null;
             /** Created By */
             created_by?: string | null;
             /**
@@ -40855,11 +40855,8 @@ export interface components {
             workflow_id?: string | null;
             /** Submitted At */
             submitted_at?: string | null;
-            /**
-             * Cost Usd
-             * @default 0
-             */
-            cost_usd: number;
+            /** Cost Usd */
+            cost_usd?: number | null;
             /** Note */
             note?: string | null;
             /** Note By */
@@ -40920,7 +40917,7 @@ export interface components {
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Cost Usd */
-            cost_usd: number;
+            cost_usd?: number | null;
             /** Workflow Id */
             workflow_id?: string | null;
             /** Artifacts */
@@ -40967,11 +40964,6 @@ export interface components {
             agents: components["schemas"]["SegmentAgent"][];
             /** Checked At */
             checked_at?: string | null;
-            /**
-             * Cost Reported
-             * @default false
-             */
-            cost_reported: boolean;
             /**
              * Proposals Written
              * @default 0

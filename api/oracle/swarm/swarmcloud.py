@@ -54,6 +54,7 @@ from typing import Any, Protocol
 import httpx
 import jwt
 
+from oracle.errors import exception_text
 from oracle.swarm.learned import DatabaseLearnedStore, Learned, LearnedStore
 from oracle.swarm.runtime import (
     AWAIT_PROFILE,
@@ -512,7 +513,7 @@ class SwarmCloudRuntime:
         except RuntimeUnavailable as exc:
             for k in FEATURES:
                 if states[k] == "unknown":
-                    reasons.setdefault(k, str(exc))
+                    reasons.setdefault(k, exception_text(exc))
         for key, state in states.items():
             # SwarmCloud reports the feature on: what a refusal taught is over.
             learned = self._learned.get(key)
@@ -545,7 +546,7 @@ class SwarmCloudRuntime:
                 if learned is None or learned.state != "off":
                     self.learn("mcp", "off", reasons["mcp"])
             else:
-                reasons["mcp"] = str(exc)
+                reasons["mcp"] = exception_text(exc)
             return
         body = _json(resp)
         self._take_egress(body)
@@ -565,7 +566,10 @@ class SwarmCloudRuntime:
             resp = await self._call(client, "GET", "/v1/capacity")
         except RuntimeUnavailable as exc:
             for k in ("await_input", "service_answer"):
-                reasons[k] = f"not reported by SwarmCloud ({exc}); learned at submit or answer"
+                reasons[k] = (
+                    f"not reported by SwarmCloud ({exception_text(exc)}); "
+                    "learned at submit or answer"
+                )
             return
         found = capacity_features(_json(resp))
         for k in ("await_input", "service_answer"):
@@ -1247,7 +1251,7 @@ class SwarmCloudRuntime:
 
 def _refused_why(exc: RuntimeUnavailable) -> str:
     """SwarmCloud's refusal without the call it refused: "422 validation_error: ..."."""
-    text = str(exc)
+    text = exception_text(exc)
     return text.split(": HTTP ", 1)[1] if ": HTTP " in text else (str(exc.status) or text)
 
 

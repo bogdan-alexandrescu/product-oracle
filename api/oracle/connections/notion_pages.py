@@ -21,6 +21,7 @@ from oracle.auth.deps import TenantDB
 from oracle.base_model import BaseModel
 from oracle.connections import service
 from oracle.connections.router import ProviderHttp, UserPrincipal
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.sources.base import ConnectorAuthError, ConnectorError, ConnectorRateLimited
 from oracle.sources.connectors import notion
@@ -127,7 +128,7 @@ async def list_notion_pages(
     except service.ConnectionUnavailable as e:
         if e.status is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Connection not found") from None
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
     if credential.provider != "notion":
         raise HTTPException(status.HTTP_409_CONFLICT, "This is not a Notion connection")
     try:

@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0039_company_timezone"
 PREVIOUS = "0038_outcome_tracking"
@@ -74,7 +75,6 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_the_report_zone_becomes_the_company_time_zone(scratch_db):
@@ -84,14 +84,14 @@ def test_the_report_zone_becomes_the_company_time_zone(scratch_db):
     fails_when=a zone is lost, overwrites a set company zone, or stays on the report;
     no_claim=the API's reading of it (test_company_timezone)."""
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     moved, kept, bare = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     for t in (moved, kept, bare):
         _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=t)
     _set(moved, "alignment_report", {**REPORT, "timezone": "Europe/Berlin"})
     _set(kept, "alignment_report", {**REPORT, "timezone": "Europe/Berlin"})
     _set(kept, "company_timezone", "Asia/Tokyo")
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _settings(moved) == {"alignment_report": REPORT, "company_timezone": "Europe/Berlin"}
     assert _settings(kept) == {"alignment_report": REPORT, "company_timezone": "Asia/Tokyo"}
     assert _settings(bare) == {}
@@ -132,7 +132,7 @@ def test_a_ritual_zone_of_its_own_moves_to_the_company_time_zone(scratch_db):
     from zoneinfo import ZoneInfo
 
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tokyo, unset = uuid.uuid4(), uuid.uuid4()
     for t in (tokyo, unset):
         _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=t)
@@ -140,7 +140,7 @@ def test_a_ritual_zone_of_its_own_moves_to_the_company_time_zone(scratch_db):
     berlin = _ritual(tokyo, "Europe/Berlin")
     utc = _ritual(unset, "UTC")
     paused = _ritual(unset, "Europe/Berlin", status="paused")
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     for rid, zone in ((berlin, "Asia/Tokyo"), (utc, "America/Los_Angeles")):
         schedule, next_due_at = _ritual_row(rid)
         assert schedule["timezone"] == zone

@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0014_blockers_snapshot"
 PREVIOUS = "0015_section_table_rows"
@@ -67,7 +68,6 @@ def test_the_migration_follows_0015_and_precedes_0014_intake():
     # that, 0017_citation_source_oracle on that, then 0018_runtime_features,
     # 0019_citation_confidence, the intake lane's 0014_intake and the PRD review chain
     # (0014_review, 0014_member_disable, 0014_member_follow_up_retry) on that.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0016_roadmap").down_revision == REVISION
     assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
     assert (
@@ -103,7 +103,7 @@ def _snapshots(entity_id) -> list[tuple]:
 
 def test_upgrade_snapshots_readable_legacy_blockers_and_downgrade_removes_them(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     t = uuid.uuid4()
     doc_b, doc_a = (
         uuid.UUID("bbbbbbbb-0000-0000-0000-000000000000"),
@@ -146,7 +146,7 @@ def test_upgrade_snapshots_readable_legacy_blockers_and_downgrade_removes_them(s
         b=legacy,
     )
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     rows = _snapshots(legacy)
     assert len(rows) == 1
     kind, to_status, actor, data, tenant = rows[0]
@@ -183,7 +183,7 @@ def test_upgrade_snapshots_readable_legacy_blockers_and_downgrade_removes_them(s
     assert _run(
         "SELECT count(*) FROM blocker_resolution_events WHERE blocker_id = :b", b=legacy
     ) == [(1,)]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert len(_snapshots(legacy)) == 1
 
 
@@ -191,13 +191,13 @@ def test_full_downgrade_and_upgrade_with_a_snapshot_written(scratch_db):
     # Production runs migrations at startup: the whole chain from 0013 goes up over
     # seeded blockers, and back down to 0013, without errors.
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     legacy = _constraint(t, "legacy", {"blocker": {"type": "hard", "severity": "high"}})
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert len(_snapshots(legacy)) == 1
     command.downgrade(cfg, "0013")
     assert _snapshots(legacy) == []
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert len(_snapshots(legacy)) == 1

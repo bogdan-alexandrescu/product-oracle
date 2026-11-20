@@ -3,7 +3,7 @@
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 
-import { calendarDay } from "@/lib/dates";
+import { calendarDay, utcDay } from "@/lib/dates";
 
 import {
   addDays,
@@ -311,7 +311,7 @@ function spanOf(data: Roadmap, units: { item: Item; pieces: Piece[] }[], extra: 
 function calendar(t0: string, t1: string) {
   const months: { day: string; label: string; start: boolean }[] = [];
   for (let d = new Date(ms(t0)); d.getTime() < ms(t1); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
-    const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const first = utcDay(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
     const day = first < t0 ? t0 : first;
     // fix4 qa-simple-roadmap-30: three letters ("Sep", not en-GB's "Sept"); January names its
     // year (the first label shown names its own too: monthLabels).

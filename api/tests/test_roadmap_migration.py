@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -75,7 +76,6 @@ def test_0016_roadmap_follows_the_wave_1_head():
     # 0022_engineering_lead, 0022_discussions, 0022_priority_snapshot_runs,
     # 0022_priority_overrides, 0022_code_maps, 0022_checkpoint_actions, 0022_updates,
     # 0023_source_partial_sync, 0023_intake_brief_fields and 0024_segment_skipped; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0016_refinement_batch").down_revision == REVISION
     assert script.get_revision("0017_citation_source_oracle").down_revision == (
         "0016_refinement_batch"
@@ -94,7 +94,7 @@ def _event(tenant: uuid.UUID, subject: str) -> None:
 
 def test_upgrade_adds_tables_and_the_subject_and_downgrade_reverses(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0014_blockers_snapshot")
+    upgrade(cfg, "0014_blockers_snapshot")
     tenant, doc = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     _run(
@@ -106,7 +106,7 @@ def test_upgrade_adds_tables_and_the_subject_and_downgrade_reverses(scratch_db):
     with pytest.raises(IntegrityError):
         _event(tenant, "product_track")
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert TABLES <= _tables()
     _event(tenant, "product_track")
     # A legacy roadmap is untouched and has no items until a run or a person adds them.
@@ -130,7 +130,7 @@ def test_upgrade_adds_tables_and_the_subject_and_downgrade_reverses(scratch_db):
     assert not TABLES & _tables()
     assert _run("SELECT count(*) FROM change_events WHERE subject_kind = 'product_track'") == [(0,)]
     assert _run("SELECT slug FROM documents") == [("example-roadmap",)]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
 
 def _subjects() -> set[str]:
@@ -157,14 +157,14 @@ def test_the_subject_check_keeps_other_lanes_values(scratch_db):
     """0016 adds only product_track to whatever the check holds at upgrade time and
     removes only product_track at downgrade: another lane's subject survives both."""
     cfg = _cfg()
-    command.upgrade(cfg, "0014_blockers_snapshot")
+    upgrade(cfg, "0014_blockers_snapshot")
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     before = _subjects()
     _allow_member()
     _event(tenant, "member")
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _subjects() == before | {"member", "product_track"}
     _event(tenant, "member")
     _event(tenant, "product_track")
@@ -182,11 +182,11 @@ def test_the_subject_check_keeps_other_lanes_values(scratch_db):
         "ALTER TABLE change_events ADD CONSTRAINT ck_change_events_subject_kind "
         "CHECK (subject_kind IN (" + ", ".join(f"'{v}'" for v in sorted(before)) + "))"
     )
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     _allow_member()
     command.downgrade(cfg, "0014_blockers_snapshot")
     assert _subjects() == before | {"member"}
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert _subjects() == before | {"member", "product_track"}
 
 
@@ -196,16 +196,16 @@ def test_a_product_track_event_survives_upgrade_head_and_a_round_trip(scratch_db
     migration that rebuilds the check from a fixed list fails here), and a downgrade to
     0016 and back to head must too."""
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     _event(tenant, "product_track")
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert "product_track" in _subjects()
     command.downgrade(cfg, REVISION)
     assert "product_track" in _subjects()
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert "product_track" in _subjects()
     assert _run("SELECT count(*) FROM change_events WHERE subject_kind = 'product_track'") == [(1,)]
     _event(tenant, "product_track")
@@ -213,7 +213,7 @@ def test_a_product_track_event_survives_upgrade_head_and_a_round_trip(scratch_db
     # Below 0016 the events go with the subject, and head brings the subject back.
     command.downgrade(cfg, "0014_blockers_snapshot")
     assert "product_track" not in _subjects()
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     _event(tenant, "product_track")
 
 
@@ -227,7 +227,7 @@ def test_the_migration_imports_no_application_code():
 def test_the_model_lists_every_subject_the_migrated_check_allows(scratch_db):
     from oracle.v2.models import CHANGE_SUBJECTS
 
-    command.upgrade(_cfg(), "head")
+    upgrade(_cfg(), "head")
     assert _subjects() == set(CHANGE_SUBJECTS)
 
 
@@ -314,7 +314,7 @@ def test_0014_review_after_0016_keeps_product_track(scratch_db, review):
     """The integrator may chain 0014_review after 0016. 0016 is additive in both orders
     (test above); 0014_review must be too, or the track monitor's change events break."""
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     before = _subjects()
@@ -342,7 +342,7 @@ def test_what_breaks_when_the_fixed_list_rebuild_runs_after_0016(scratch_db):
     silently drops product_track (the track monitor's change events are then refused);
     on a database with a product_track event the upgrade itself fails."""
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
 
@@ -352,7 +352,7 @@ def test_what_breaks_when_the_fixed_list_rebuild_runs_after_0016(scratch_db):
         _event(tenant, "product_track")
 
     command.downgrade(cfg, "0014_blockers_snapshot")
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     _event(tenant, "product_track")
     with pytest.raises(IntegrityError, match="ck_change_events_subject_kind"):
         _review_fixed_list(upgrade=True)

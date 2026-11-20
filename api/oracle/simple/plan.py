@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.simple.models import SimplePrdPlan
 from oracle.simple.schemas import (
     SimpleDocRef,
@@ -993,7 +994,7 @@ async def ensure(
             job = await jobs.enqueue(db, document, "prd_plan", version=v, coalesce=True)
             row.job_id = job.id
         except jobs.JobError as e:
-            row.status, row.error = "none", str(e)
+            row.status, row.error = "none", exception_text(e)
         await db.flush()
     return row, v
 

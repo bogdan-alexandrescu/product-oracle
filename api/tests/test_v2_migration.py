@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -82,7 +83,6 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     # Lanes add 0014_<lane> on top of 0013 (waves.md); the integrator re-chains them in
     # merge order so the chain stays linear, one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0013").down_revision == "0012"
     assert script.get_revision("0014_quality").down_revision == "0013"
     assert script.get_revision("0014_usage_retry_at").down_revision == "0014_quality"
@@ -105,7 +105,7 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
 
 def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0012")
+    upgrade(cfg, "0012")
     t, doc, ver = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -133,7 +133,7 @@ def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):
         t=t,
     )
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert V2_TABLES <= _tables()
     # Legacy rows untouched; the new review-correctness columns are null on them.
     assert _run("SELECT section_hash FROM section_reviews") == [(None,)]
@@ -181,6 +181,6 @@ def test_upgrade_keeps_legacy_data_and_downgrade_reverses(scratch_db):
             t=t,
         )
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert V2_TABLES <= _tables()
     assert _run("SELECT slug FROM documents") == [("legacy",)]

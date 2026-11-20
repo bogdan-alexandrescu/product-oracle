@@ -120,6 +120,62 @@ jobs:
           name: api-junit-${{ matrix.shard }}
           path: api/junit/
           if-no-files-found: ignore
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: api-coverage-${{ matrix.shard }}
+          path: api/.coverage.shard-${{ matrix.shard }}
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # #1567: the shards' coverage combined must stay at or above api/coverage-floor.json, which only
+  # rises (.github/scripts/coverage_floor.py). gh downloads the shards' data: no extra Action.
+  coverage-floors:
+    needs: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: gh run download "$GITHUB_RUN_ID" --pattern 'api-coverage-*' --dir "$RUNNER_TEMP/coverage"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: |
+          cp "$RUNNER_TEMP"/coverage/api-coverage-*/.coverage.shard-* .
+          uv run coverage combine
+          uv run coverage json -o coverage.json
+      - run: python3 ../.github/scripts/coverage_floor.py --self-test
+      - run: python3 ../.github/scripts/coverage_floor.py check coverage.json
+
+  # #1568: pyright (basic mode, pyrightconfig.json) on api/oracle; only errors that are not in
+  # .github/scripts/pyright-baseline.json fail (.github/scripts/pyright_baseline.py).
+  pyright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+      - run: cd api && uv sync --frozen
+      - run: cd web && npm ci
+      # pyright exits 1 when it finds errors (the baseline decides) and 2 or more when it fails.
+      - run: web/node_modules/.bin/pyright --outputjson > "$RUNNER_TEMP/pyright.json" || [ $? -eq 1 ]
+      - run: python3 .github/scripts/pyright_baseline.py --self-test
+      - run: python3 .github/scripts/pyright_baseline.py check "$RUNNER_TEMP/pyright.json"
 
   # Tests that assert a wall-clock limit (marker `timing`) run alone, on GitHub's hosted runners
   # where their budgets were tuned: on the pool's VMs four of them miss their budget on main itself

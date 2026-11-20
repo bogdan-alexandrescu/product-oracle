@@ -20,6 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0122_prd_milestone_codes"
 PREVIOUS = "0121_simple_changes_seq"
@@ -80,11 +81,11 @@ def _upgraded(ix: dict[str, str]) -> None:
 
 def test_up_down_up(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     _upgraded(_indexes())
     command.downgrade(cfg, PREVIOUS)
     ix = _indexes()
     assert set(ix) == {"uq_track_milestones_goal_code"}, ix
     assert "origin_prd_id" not in ix["uq_track_milestones_goal_code"]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     _upgraded(_indexes())

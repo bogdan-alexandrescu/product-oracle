@@ -39,6 +39,7 @@ from oracle.authz import has_role
 from oracle.baseline import service as baseline_service
 from oracle.baseline.models import Proposal
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.intake import categories as cats
 from oracle.intake import discovery, engine, sharing
 from oracle.intake.models import IntakeProposal
@@ -1010,7 +1011,7 @@ async def start_research(
         await db.rollback()
         proposal = await db.get(IntakeProposal, proposal_id)
         if proposal is not None:
-            proposal.result = {**(proposal.result or {}), "start_error": str(e)}
+            proposal.result = {**(proposal.result or {}), "start_error": exception_text(e)}
             await db.commit()
         return
     # A draft reused after an earlier refusal started now: no proposal of it says it

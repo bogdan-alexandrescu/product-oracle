@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
 from oracle.docs import visibility
+from oracle.errors import exception_text
 from oracle.launches.checklist import BY_KEY, tasks_of
 from oracle.launches.models import (
     CHANGELOG_AUDIENCES,
@@ -87,7 +88,7 @@ def validate(text: str, launch_id: uuid.UUID) -> tuple[dict[str, Any] | None, li
     try:
         data = safe_yaml.load(text)
     except safe_yaml.SafeYamlError as e:
-        return None, [f"{FILE} is not valid YAML: {e}"]
+        return None, [f"{FILE} is not valid YAML: {exception_text(e)}"]
     if not isinstance(data, dict):
         return None, [f"{FILE} must be a mapping with version, launch, changelog, tasks, notes"]
     problems: list[str] = []

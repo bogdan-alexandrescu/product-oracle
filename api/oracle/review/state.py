@@ -51,6 +51,7 @@ from oracle import audit, changes, webhooks
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.errors import exception_text
 from oracle.review.models import (
     DocumentReviewPolicy,
     FeedbackItem,
@@ -116,7 +117,7 @@ async def validate_policy(db: AsyncSession, value: Any) -> dict[str, Any]:
     try:
         policy = ReviewPolicyIn.model_validate(value)
     except Exception as e:  # noqa: BLE001 - pydantic's message is the answer
-        raise PolicyError(f"review_policy: {e}") from None
+        raise PolicyError(f"review_policy: {exception_text(e)}") from None
     if policy.decider_id is not None:
         await _approver_users(db, [policy.decider_id], "decider_id")
     await _approver_users(db, policy.mandatory_reviewer_ids, "mandatory_reviewer_ids")

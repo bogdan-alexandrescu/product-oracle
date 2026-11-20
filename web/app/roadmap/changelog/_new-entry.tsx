@@ -5,11 +5,10 @@ import { useState } from "react";
 import { Button, Dialog } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { todayIn, useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
 type Entry = Schemas["ChangelogEntryOut"];
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 /**
  * New entry (#344): a changelog entry written by hand, saved as a draft. A public entry needs
@@ -29,7 +28,8 @@ export function NewEntryDialog({
 }) {
   const [category, setCategory] = useState<Entry["category"]>("added");
   const [audience, setAudience] = useState<Entry["audience"]>("internal");
-  const [firstDay] = useState(today);
+  const zone = useCompanyZone();
+  const [firstDay] = useState(() => todayIn(zone));
   const [releasedOn, setReleasedOn] = useState(firstDay);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");

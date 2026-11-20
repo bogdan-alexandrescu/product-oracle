@@ -28,6 +28,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from oracle.errors import exception_text
+
 #: Claude Code's public OAuth client. Not a secret, which is why the flow is PKCE.
 CLAUDE_CODE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
@@ -140,7 +142,9 @@ class HttpTokenEndpoint:
                 content=json.dumps(payload).encode("utf-8"), content_type="application/json"
             )
         except httpx.HTTPError as exc:
-            raise CredentialError(f"could not reach the token endpoint: {exc}") from None
+            raise CredentialError(
+                f"could not reach the token endpoint: {exception_text(exc)}"
+            ) from None
         if resp.status_code >= 400:
             detail = resp.text[:400]
             raise CredentialError(
@@ -163,7 +167,9 @@ class HttpTokenEndpoint:
         try:
             resp = await self._post(content=body, content_type="application/x-www-form-urlencoded")
         except httpx.HTTPError as exc:
-            raise CredentialError(f"could not reach the token endpoint: {exc}") from None
+            raise CredentialError(
+                f"could not reach the token endpoint: {exception_text(exc)}"
+            ) from None
         if resp.status_code >= 400:
             detail = resp.text[:400]
             # `invalid_grant` is terminal; anything else may be transient.

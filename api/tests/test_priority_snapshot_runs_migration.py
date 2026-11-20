@@ -23,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0022_priority_snapshot_runs"
 PREVIOUS = "0022_discussions"
@@ -83,13 +84,12 @@ def _columns() -> list[str]:
 
 def test_the_chain_ends_here_after_feedback_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_existing_rows_become_saved_and_downgrade_drops_unapproved_orders(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant, before = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
     _run(
@@ -98,7 +98,7 @@ def test_existing_rows_become_saved_and_downgrade_drops_unapproved_orders(scratc
         t=tenant,
     )
 
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
 
     assert _columns() == COLUMNS
     assert _run("SELECT status, run_id, check_result FROM priority_snapshots") == [

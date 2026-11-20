@@ -27,6 +27,7 @@ from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.roadmap import items as items_mod
 from oracle.roadmap import views
 from oracle.roadmap.models import DraftRoadmap, RoadmapItem
@@ -231,7 +232,7 @@ async def start_due(db: AsyncSession) -> list[str]:
             row = await db.get(DraftRoadmap, row_id)
             if row is not None:
                 row.status = "failed"
-                row.error = f"Oracle could not start the derivation: {exc}"
+                row.error = f"Oracle could not start the derivation: {exception_text(exc)}"
                 await db.commit()
             continue
         except Exception as exc:  # noqa: BLE001 - one PRD must not stop the others

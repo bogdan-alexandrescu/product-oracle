@@ -44,6 +44,8 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 import httpcore
 import httpx
 
+from oracle.errors import exception_text
+
 MAX_BYTES = 2_000_000
 MAX_TEXT_CHARS = 200_000
 MAX_REDIRECTS = 5
@@ -264,7 +266,7 @@ class _GuardedBackend(httpcore.AsyncNetworkBackend):
         try:
             addresses = await public_addresses(host, port, self._resolve)
         except LinkError as exc:
-            raise httpcore.ConnectError(str(exc)) from exc
+            raise httpcore.ConnectError(exception_text(exc)) from exc
         last: Exception | None = None
         for address in addresses:
             try:

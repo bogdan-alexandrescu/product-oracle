@@ -28,6 +28,7 @@ from oracle.connections.providers import (
     get_provider,
     identify_fireflies,
 )
+from oracle.errors import exception_text
 
 # OAuth access tokens are refreshed this long before they expire.
 REFRESH_MARGIN = timedelta(minutes=5)
@@ -244,16 +245,16 @@ async def _refresh(
     try:
         tokens = await oauth.refresh(http, provider, client, refresh_token)
     except CredentialRejected as e:
-        await mark_failure(session, conn, "expired", f"Refresh refused: {e}")
+        await mark_failure(session, conn, "expired", f"Refresh refused: {exception_text(e)}")
         raise ConnectionUnavailable(
             f"{provider.name} refused to refresh; reconnect", "expired"
         ) from e
     except ProviderUnavailable as e:
         if conn.expires_at is not None and conn.expires_at > _now():
             # Still valid for a few minutes: use it and try again next time.
-            conn.last_error = f"Refresh failed: {e}"[:500]
+            conn.last_error = f"Refresh failed: {exception_text(e)}"[:500]
             return bundle
-        await mark_failure(session, conn, "error", f"Refresh failed: {e}")
+        await mark_failure(session, conn, "error", f"Refresh failed: {exception_text(e)}")
         raise ConnectionUnavailable(
             f"Cannot refresh the {provider.name} token right now", "error"
         ) from e
@@ -376,10 +377,10 @@ async def recheck(session: AsyncSession, http: httpx.AsyncClient, conn: Connecti
     try:
         identity = await identify(provider, http, token, conn.endpoint_url)
     except CredentialRejected as e:
-        await mark_failure(session, conn, "expired", str(e))
-        raise ConnectionUnavailable(f"{e}; paste a new token", "expired") from e
+        await mark_failure(session, conn, "expired", exception_text(e))
+        raise ConnectionUnavailable(f"{exception_text(e)}; paste a new token", "expired") from e
     except ProviderUnavailable as e:
-        await mark_failure(session, conn, "error", str(e))
+        await mark_failure(session, conn, "error", exception_text(e))
         raise
     conn.status = "active"
     conn.last_error = None

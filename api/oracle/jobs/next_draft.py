@@ -41,6 +41,7 @@ from oracle.auth.models import ApiToken, User
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.schemas import VersionOut
+from oracle.errors import exception_text
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
@@ -1112,9 +1113,9 @@ async def apply(
         result = await docs_service.import_draft(db, document.slug, markdown, principal)
     except docs_service.DraftError as e:
         await db.rollback()
-        raise JobError(422, f"the next draft does not import: {e}") from e
+        raise JobError(422, f"the next draft does not import: {exception_text(e)}") from e
     except docs_service.ImportConflictError as e:
-        raise JobError(409, str(e)) from e
+        raise JobError(409, exception_text(e)) from e
     if not result.created:
         raise JobError(409, "the next draft is identical to an existing version")
     number = result.version.number

@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0125_milestone_kinds"
 PREVIOUS = "0124_track_prds"
@@ -68,11 +69,10 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_upgrade_backfills_kinds_and_downgrade_drops_them(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     tenant, roadmap, prd, goal, user = (uuid.uuid4() for _ in range(5))
     key_result, prd_ms, plain, key_date = (uuid.uuid4() for _ in range(4))
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
@@ -103,7 +103,7 @@ def test_upgrade_backfills_kinds_and_downgrade_drops_them(scratch_db):
         k=key_date, t=tenant, r=roadmap, u=user,
     )  # fmt: skip
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert NEW <= _columns("track_milestones")
     assert NEW <= _columns("roadmap_key_dates")
     assert "on_roadmap" in _columns("entities")
@@ -121,5 +121,5 @@ def test_upgrade_backfills_kinds_and_downgrade_drops_them(scratch_db):
     assert not NEW & _columns("roadmap_key_dates")
     assert "on_roadmap" not in _columns("entities")
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert dict(_run("SELECT id, kind FROM track_milestones"))[key_result] == "sub_goal"

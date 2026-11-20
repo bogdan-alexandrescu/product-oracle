@@ -55,6 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.models import ROLES, User
 from oracle.authz import has_role
+from oracle.errors import exception_text
 from oracle.mcp import tools
 
 OP = "api_action"
@@ -753,7 +754,7 @@ async def apply(db: AsyncSession, principal: Any, c: Any) -> None:
                 record = await run(db, principal, reader,  # type: ignore[arg-type]
                                    _args_for(reader, list(path_args.values())))  # type: ignore[arg-type]  # fmt: skip
             except tools.ToolError as e:
-                raise chat.ChatError(409, f"Oracle could not do that: {e}") from e
+                raise chat.ChatError(409, f"Oracle could not do that: {exception_text(e)}") from e
         if _pinged(principal, action, args, record) != list(c.target.get("pinged") or []):
             raise chat.ChatError(409, PINGED_CHANGED)
         promised = None
@@ -768,7 +769,7 @@ async def apply(db: AsyncSession, principal: Any, c: Any) -> None:
     except tools.ToolError as e:
         c.after = was
         await _commit_now(db)
-        raise chat.ChatError(409, f"Oracle could not do that: {e}") from e
+        raise chat.ChatError(409, f"Oracle could not do that: {exception_text(e)}") from e
     # 202: a proposal, not the record; nothing of it to undo.
     how = promised if code != 202 else None
     rid = None
@@ -813,7 +814,7 @@ async def undo(db: AsyncSession, principal: Any, c: Any) -> None:
             body = {k: values[k] for k in sent}
             await run(db, principal, action, {**path_args, action.op.body_key: body})
     except tools.ToolError as e:
-        raise chat.ChatError(409, f"Oracle could not undo that: {e}") from e
+        raise chat.ChatError(409, f"Oracle could not undo that: {exception_text(e)}") from e
     await audit.record(db, principal, "simple_chat.api_action_undo", "simple_chat_card", c.id,
                        {"via": VIA, "action": action.name})  # fmt: skip
 
@@ -921,7 +922,7 @@ async def calls(c: Any, answer: dict[str, Any]) -> tuple[list[dict], list[dict],
             try:
                 data = own if own is not None else await run(c.db, c.principal, action, args)
             except tools.ToolError as e:
-                refused.append(f"I couldn't read that: {chat.plain(str(e))}")
+                refused.append(f"I couldn't read that: {chat.plain(exception_text(e))}")
                 continue
             text = json.dumps(_focus(c, action, data), default=str)
             results.append({"action": name, "does": action.summary, "result": text[:RESULT_MAX]})
@@ -931,5 +932,5 @@ async def calls(c: Any, answer: dict[str, Any]) -> tuple[list[dict], list[dict],
             try:
                 cards.append(await card(c.db, c.principal, action, args))
             except Refusal as e:
-                refused.append(str(e))
+                refused.append(exception_text(e))
     return results, cards, refused

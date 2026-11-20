@@ -27,6 +27,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.connections.models import Connection
+from oracle.errors import exception_text
 from oracle.sources import service
 from oracle.sources import sync as sync_engine
 from oracle.sources.models import Source
@@ -108,7 +109,7 @@ async def sync_due(db: AsyncSession, now: datetime, deadline: float | None = Non
             log.error("background sync of a source failed: %s", type(e).__name__)
             # Raised before the sync started, so the engine wrote no error on the source.
             if isinstance(e, service.InvalidError | service.NotFoundError):
-                error = str(e)
+                error = exception_text(e)
             else:
                 error = f"Sync failed unexpectedly ({type(e).__name__})"
             outcome, retry_after, finished = "error", None, False

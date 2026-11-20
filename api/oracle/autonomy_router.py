@@ -22,6 +22,7 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import recheck_caller, require_role
 from oracle.autonomy_models import OracleAction
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.runs.schemas import InboxOracleAction
 from oracle.tenant_settings import TenantSetting
@@ -142,7 +143,7 @@ async def set_autonomy(key: str, body: AutonomyIn, principal: Owner, db: TenantD
     try:
         r = autonomy.get(key)
     except autonomy.UnknownResponsibility as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from None
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from None
     await recheck_caller(db, principal, "owner", shared=True)
     # One row per company: made if missing, then locked, so two owners saving at once
     # each change their own key.
@@ -169,7 +170,7 @@ async def set_autonomy(key: str, body: AutonomyIn, principal: Owner, db: TenantD
     try:
         after = autonomy.validate_change(key, body.level, body.limits, before)
     except autonomy.AutonomyError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from None
     row.value = {**value, key: after}
     row.updated_by = principal.id
     await audit.record(

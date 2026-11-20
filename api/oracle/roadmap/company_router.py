@@ -12,6 +12,7 @@ from oracle.authz import require_role, require_role_now
 from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.schemas import DocumentOut, PrdRef
+from oracle.errors import exception_text
 from oracle.roadmap import company
 from oracle.routing import APIRouter
 
@@ -125,6 +126,6 @@ async def set_replaced_by(
     try:
         await company.replace(db, principal, document, body.prds)
     except company.CompanyError as e:
-        raise HTTPException(e.status_code, str(e)) from e
+        raise HTTPException(e.status_code, exception_text(e)) from e
     await db.commit()
     return await docs_service.read_document(db, document.slug)

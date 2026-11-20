@@ -45,6 +45,7 @@ from oracle.engineering.schemas import (
     TechBriefVerdict,
 )
 from oracle.engineering.store import KIND
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.runs import extensions
 from oracle.runs import service as runs_service
@@ -235,7 +236,7 @@ async def _readable(
 
 
 def _map_error(exc: codemaps.CodeMapError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    return HTTPException(exc.status, exception_text(exc))
 
 
 @router.get("/code-maps", response_model=list[CodeMapOut])
@@ -280,7 +281,7 @@ async def start_code_map(body: CodeMapCreate, principal: SourceWriter, db: Tenan
     except codemaps.CodeMapError as exc:
         raise _map_error(exc) from exc
     except runs_service.RunError as exc:
-        raise HTTPException(exc.status, str(exc)) from exc
+        raise HTTPException(exc.status, exception_text(exc)) from exc
     if row.run_id is not None:
         await runs_service.submit_queued(db, row.run_id)
     await db.refresh(row)

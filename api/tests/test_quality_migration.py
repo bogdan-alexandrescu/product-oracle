@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -74,7 +75,7 @@ def _job(t: uuid.UUID, d: uuid.UUID, kind: str) -> None:
 
 def test_upgrade_adds_tables_and_the_job_kind_and_downgrade_reverses(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0013")
+    upgrade(cfg, "0013")
     t, doc = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
     _run(
@@ -87,7 +88,7 @@ def test_upgrade_adds_tables_and_the_job_kind_and_downgrade_reverses(scratch_db)
     with pytest.raises(IntegrityError):
         _job(t, doc, "quality_review")
 
-    command.upgrade(cfg, "0014_quality")
+    upgrade(cfg, "0014_quality")
     assert TABLES <= _tables()
     _job(t, doc, "quality_review")
     goal = uuid.uuid4()

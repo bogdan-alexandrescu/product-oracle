@@ -1,5 +1,6 @@
 import { goalViews } from "@/app/home/_goals";
 import type { Schemas } from "@/lib/api/client";
+import { utcDay } from "@/lib/dates";
 
 /**
  * Simple's Home (#723 S1, the owner's "Brief as cards" pick): what the goal band, the summary
@@ -182,7 +183,7 @@ const PLAN_MONTHS = 6;
 const monthOf = (day: string) => `${day.slice(0, 7)}-01`;
 function addMonths(first: string, n: number): string {
   const d = new Date(`${first}T00:00:00Z`);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)).toISOString().slice(0, 10);
+  return utcDay(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
 }
 const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7)) + 1;
 const minOf = (xs: string[]) => xs.reduce((a, b) => (b < a ? b : a));
@@ -290,7 +291,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     n = Math.min(PLAN_MONTHS, monthsBetween(start, lastMonth));
   }
   const months = Array.from({ length: n }, (_, k) => addMonths(start, k));
-  const end = new Date(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
+  const end = utcDay(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY);
   const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null, also: string[] = [], code?: string | null, ms?: string): PlanStrip["rows"][number] => ({
     name,
     date,

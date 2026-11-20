@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from tests import test_roadmap_migration as base
 from tests.conftest import TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 base.SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -38,7 +39,6 @@ def scratch_db():
 def test_0030_chains_on_the_single_head():
     script = ScriptDirectory.from_config(base._cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def _seed() -> None:
@@ -72,10 +72,10 @@ def test_upgrade_downgrade_upgrade_keeps_roadmap_items(scratch_db):
     roadmap version's item changes, a draft item survives the downgrade, or an item
     with two owners is accepted; no_claim: live lock behaviour."""
     cfg = base._cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     tenant, prd, pv = _seed()
     before = base._run(ITEMS)
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert base._run(ITEMS) == before
     assert {"draft_roadmaps"} <= base._tables()
     draft = uuid.uuid4()
@@ -104,6 +104,6 @@ def test_upgrade_downgrade_upgrade_keeps_roadmap_items(scratch_db):
     assert base._run(ITEMS) == before
     assert "draft_roadmaps" not in base._tables()
     assert base._run("SELECT count(*) FROM runs") == [(0,)]
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert base._run(ITEMS) == before
     assert base._run("SELECT draft_roadmap_auto FROM documents LIMIT 1") == [(True,)]

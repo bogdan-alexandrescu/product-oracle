@@ -45,6 +45,7 @@ from oracle.autonomy_models import OracleAction
 from oracle.baseline.models import Entity
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.company_time import DEFAULT_ZONE as COMPANY_ZONE
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.requests import service
@@ -105,7 +106,7 @@ def parse(text: str) -> dict[str, list[Any]]:
     try:
         data = safe_yaml.load(text, limit=MAX_BYTES)
     except safe_yaml.SafeYamlError as e:
-        raise TriageFileError(str(e)) from e
+        raise TriageFileError(exception_text(e)) from e
     if not isinstance(data, dict) or data.get("version") != 1:
         raise TriageFileError("not a version 1 triage file")
     out: dict[str, list[Any]] = {}
@@ -1018,7 +1019,7 @@ async def file(
     try:
         request = await service.create(db, principal, data)
     except service.RequestError as e:
-        raise TriageError(e.status, str(e)) from e
+        raise TriageError(e.status, exception_text(e)) from e
     row.status = "filed"
     row.request_id = request.id
     row.updated_at = _now()

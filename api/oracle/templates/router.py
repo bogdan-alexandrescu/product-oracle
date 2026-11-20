@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.templates import service
 from oracle.templates.schemas import (
@@ -47,11 +48,11 @@ REJECTED = {422: {"model": ProblemsResponse, "description": "Validation problems
 
 
 def _not_found(e: service.NotFoundError) -> HTTPException:
-    return HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    return HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e))
 
 
 def _conflict(e: service.ConflictError) -> HTTPException:
-    return HTTPException(status.HTTP_409_CONFLICT, str(e))
+    return HTTPException(status.HTTP_409_CONFLICT, exception_text(e))
 
 
 def _rejected(e: service.InvalidError) -> JSONResponse:
@@ -264,7 +265,7 @@ async def start_draft(data: StartDraftIn, db: TenantDB, principal: ApproverNow):
     try:
         return await service.start_draft(db, data, principal)
     except service.ForbiddenError as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from e
+        raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from e
     except service.NotFoundError as e:
         raise _not_found(e) from e
     except service.InvalidError as e:
