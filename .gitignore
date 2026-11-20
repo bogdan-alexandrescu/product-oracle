@@ -11,3 +11,6 @@ __pycache__/
 
 # Node / Next.js (web/.gitignore has the rest)
 node_modules/
+
+# CI api shards: junit output (api/tests/_shard.py)
+api/junit/
