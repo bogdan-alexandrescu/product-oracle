@@ -117,8 +117,10 @@ test("qa-settings-33: the theme list's preview scrolls in full; fonts are named 
   await expect(page.frameLocator('[data-testid="theme-inspector-preview"]').getByRole("heading", { name: "Example feature PRD" })).toBeVisible();
 
   await page.goto("/settings/themes/clean-document");
-  const hint = page.getByTestId("font-heading-hint");
-  await expect(hint).toHaveText("Uses DejaVu Sans; without it, Helvetica, then Arial, then sans-serif.");
+  await page.getByRole("button", { name: "About Heading font fallback" }).click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Uses DejaVu Sans; without it, Helvetica, then Arial, then sans-serif.", visible: true }),
+  ).toBeVisible();
   // qa-settings-32: a picker names the font; the CSS stack sits under Advanced.
   await expect(page.getByLabel("Heading font", { exact: true })).toHaveValue("DejaVu Sans");
 });

@@ -1,6 +1,6 @@
 import { expect, test } from "./test";
 
-import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, selectText } from "./helpers";
+import { ADMIN, feedbackState, hoverCard, login, openSection, openTab, outlineRow, section, selectText } from "./helpers";
 
 test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.goto("/documents");
@@ -66,8 +66,7 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   // Hovering a chip previews source, title and excerpt.
   const chip = (await openSection(page, "problem")).getByTestId("cite-c1");
   await expect(chip).toHaveText(/Slack/);
-  await chip.hover();
-  const card = page.getByRole("tooltip");
+  const card = await hoverCard(page, chip, "#product thread on yearly plans");
   await expect(card).toContainText("#product thread on yearly plans");
   await expect(card).toContainText("Most teams who ask for a discount ask for a yearly price");
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", /example\.slack\.com/);
@@ -133,8 +132,7 @@ test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref a
 
   const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
   await expect(chip).toHaveText(/Oracle Ground Truth/);
-  await chip.hover();
-  const card = page.getByRole("tooltip");
+  const card = await hoverCard(page, chip, "Goal G1: raise first-order completion");
   await expect(card).toContainText("Goal G1: raise first-order completion");
   await expect(card.getByTestId("cite-ref")).toHaveText("Ground Truth goal g1 (activation), locked");
   await expect(card.getByRole("link")).toHaveCount(0);

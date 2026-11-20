@@ -221,16 +221,25 @@ export default function ChangelogPage() {
         {(q.error || error) && <Notice tone="error">{q.error ?? error}</Notice>}
         {exportWhy && (
           <p id="export-why" className="text-sm text-text2" data-testid="export-why">
-            {exportWhy} Publish a public entry to export it.
+            Nothing to export yet.{" "}
+            {/* #1590: what export gives sits behind the (i). */}
+            <InfoTip label="what export gives" align="start" testId="changelog-export-tip">
+              export gives the published public entries.
+            </InfoTip>{" "}
+            Publish a public entry to export it.
           </p>
         )}
         <Panel testId="changelog">
           {empty && (
             <div data-testid="changelog-empty" className="flex flex-col items-center gap-3 px-4 py-8 text-center">
               <p data-testid="changelog-empty-text" className="text-[15px] text-text2">
-                {canCreate
-                  ? "No entries yet. Add the first; Oracle adds one when it drafts a launch's kit."
-                  : "No entries yet. Oracle adds one when it drafts a launch's kit, and approvers add their own."}
+                No entries yet.{" "}
+                {/* #1590: how an entry gets added sits behind the (i). */}
+                <InfoTip label="how entries get added" align="start" testId="changelog-empty-tip">
+                  {canCreate
+                    ? "Add the first; Oracle adds one when it drafts a launch's kit."
+                    : "Oracle adds one when it drafts a launch's kit, and approvers add their own."}
+                </InfoTip>
               </p>
               {canCreate && (
                 <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { Button, Chip, Dialog, Icon, InspectorSection, Notice, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Dialog, Icon, InfoTip, InspectorSection, Notice, Panel, Sheet } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -724,9 +724,16 @@ export function ChangesPanel({
       )}
       {q.data && q.data.length === 0 && (
         <p data-testid="changes-empty" className="px-4 py-6 text-center text-text2">
-          {canChange
-            ? "No changes yet. Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason."
-            : "No changes yet."}
+          No changes yet.
+          {canChange && (
+            <>
+              {" "}
+              {/* #1590: how to move or pin a feature sits behind the (i). */}
+              <InfoTip label="moving or pinning a feature" align="start" testId="priorities-move-tip">
+                Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason.
+              </InfoTip>
+            </>
+          )}
         </p>
       )}
       <ul data-testid="change-log">

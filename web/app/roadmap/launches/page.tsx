@@ -270,9 +270,14 @@ function Launches() {
               <div data-testid="launches-empty" className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2">
                 <p className="font-display text-lg font-bold text-text">No launches yet</p>
                 <p data-testid="launches-empty-text">
-                  {canCreate && !noRoadmap
-                    ? "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
-                    : "They are planned when a roadmap is approved."}
+                  {canCreate && !noRoadmap ? (
+                    "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
+                  ) : (
+                    // #1590: when launches get planned sits behind the (i).
+                    <InfoTip label="when launches are planned" align="start" testId="launches-empty-tip">
+                      They are planned when a roadmap is approved.
+                    </InfoTip>
+                  )}
                 </p>
                 {canCreate && (
                   <Button

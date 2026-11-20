@@ -83,7 +83,10 @@ test.describe("desktop", () => {
   test("qa4-company-21: the unset time zone reads as used until it is set, with the way to set it", async ({ page }) => {
     await openRituals(page);
     const line = page.getByTestId("rituals-zone");
-    await expect(line).toHaveText("Times use Pacific Time (Los Angeles) until you set the company time zone. Set it");
+    await line.getByTestId("rituals-zone-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "Times use Pacific Time (Los Angeles) until you set the company time zone.", visible: true }),
+    ).toBeVisible();
     await expect(line.getByRole("link", { name: "Set it" })).toHaveAttribute("href", "/settings/company#timezone");
     await pick(page, "Monthly roadmap refresh");
     await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");

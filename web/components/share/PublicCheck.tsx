@@ -5,7 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { usePolling } from "@/components/JobsPanel";
 import { peopleByIds } from "@/components/PersonPicker";
-import { Button, Chip, Icon, LinkButton, Page, PageHeader, Panel, useDocumentDestination, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, InfoTip, LinkButton, Page, PageHeader, Panel, useDocumentDestination, type ChipKind } from "@/components/ds";
 import { findingSentence, findingText, WarningTicks, type Places } from "@/components/share/PublicWarnings";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type LlmJob, type Schemas } from "@/lib/api/client";
@@ -780,9 +780,15 @@ export function PublicCheck({ doc }: { doc: string }) {
       <Page>
         {header}
         <Panel testId="public-check-not-roadmap" bodyClassName="flex flex-col items-center gap-3 px-4 py-12 text-center">
-          <p className="font-display text-lg font-bold tracking-heading text-text">Only a roadmap has a public version</p>
+          <p className="inline-flex items-center gap-1.5 font-display text-lg font-bold tracking-heading text-text">
+            Only a roadmap has a public version
+            {/* #1590: what a public version is sits behind the (i). */}
+            <InfoTip label="a public version" align="start" testId="public-version-tip">
+              A public version is the page anyone with a roadmap&apos;s public link reads.
+            </InfoTip>
+          </p>
           <p className="max-w-prose text-[15px] text-text2">
-            A public version is the page anyone with a roadmap&apos;s public link reads. {docQ.data.title} is a {what}, so it has none.
+            {docQ.data.title} is a {what}, so it has none.
           </p>
           <LinkButton href={`/documents/${doc}`} icon="back">
             Back to the {what}

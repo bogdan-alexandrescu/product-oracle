@@ -21,7 +21,11 @@ test("qa-plan-18: New launch names the track and points to approving its roadmap
   await page.goto("/roadmap/launches");
   await expect(page.getByTestId("launches-empty-new")).toBeDisabled();
   const blocked = page.getByTestId("launches-empty").getByTestId("new-launch-blocked");
-  await expect(blocked).toContainText("Usage alerts PRD has no approved roadmap yet");
+  await blocked.getByTestId("launches-empty-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Usage alerts PRD has no approved roadmap yet", visible: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(blocked).not.toContainText("This track");
   const link = blocked.getByRole("link", { name: "Usage alerts roadmap" });
   await expect(link).toHaveAttribute("href", "/documents/usage-alerts-roadmap");
@@ -47,12 +51,19 @@ test("qa-plan-51: empty Launches and Changelog say so in a sentence and suggest 
   // qa-plan-48: with no launch at all, the empty state stands alone (no table).
   await expect(page.getByTestId("launches-empty")).toContainText("No launches yet");
   // fix4 qa-plan-13: no roadmap is approved yet, so New launch is not suggested; the reason is.
-  await expect(page.getByTestId("launches-empty-text")).toHaveText("They are planned when a roadmap is approved.");
+  const launchesEmptyText = page.getByTestId("launches-empty-text");
+  await launchesEmptyText.getByTestId("launches-empty-tip").filter({ visible: true }).first().click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "They are planned when a roadmap is approved.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("launches-empty").getByTestId("new-launch-blocked")).toBeVisible();
   await page.goto("/roadmap/changelog");
-  await expect(page.getByTestId("changelog-empty-text")).toHaveText(
-    "No entries yet. Add the first; Oracle adds one when it drafts a launch's kit.",
-  );
+  const changelogEmptyText = page.getByTestId("changelog-empty-text");
+  await expect(changelogEmptyText).toContainText("No entries yet.");
+  await changelogEmptyText.getByTestId("changelog-empty-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Add the first; Oracle adds one when it drafts a launch's kit.", visible: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   // fix4 qa-plan-58: the empty card holds New entry.
   await expect(page.getByTestId("changelog-empty").getByRole("button", { name: "New entry" })).toBeVisible();
   await expect(page.getByText("No changelog entries yet")).toHaveCount(0);
@@ -62,13 +73,20 @@ test("qa-plan-51: a viewer's empty states do not suggest New launch or New entry
   await start(page, { role: "viewer" });
   await page.goto("/roadmap/launches");
   await expect(page.getByTestId("launches-empty")).toContainText("No launches yet");
-  await expect(page.getByTestId("launches-empty-text")).toHaveText("They are planned when a roadmap is approved.");
+  const viewerEmptyText = page.getByTestId("launches-empty-text");
+  await viewerEmptyText.getByTestId("launches-empty-tip").filter({ visible: true }).first().click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "They are planned when a roadmap is approved.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("launches-empty-new")).toHaveCount(0);
   await page.goto("/roadmap/changelog");
-  await expect(page.getByTestId("changelog-empty")).toHaveText(
-    "No entries yet. Oracle adds one when it drafts a launch's kit, and approvers add their own.",
-  );
-  await expect(page.getByTestId("changelog-empty")).not.toContainText("New entry");
+  const viewerChangelogEmpty = page.getByTestId("changelog-empty");
+  await expect(viewerChangelogEmpty).toContainText("No entries yet.");
+  await viewerChangelogEmpty.getByTestId("changelog-empty-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Oracle adds one when it drafts a launch's kit, and approvers add their own.", visible: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewerChangelogEmpty).not.toContainText("New entry");
 });
 
 test("qa-plan-52: with nothing published the exports are disabled with a visible reason", async ({ page }) => {
@@ -77,7 +95,11 @@ test("qa-plan-52: with nothing published the exports are disabled with a visible
   await expect(page.getByTestId("changelog-empty")).toBeVisible();
   await expect(page.getByTestId("export-md")).toBeDisabled();
   await expect(page.getByTestId("export-html")).toBeDisabled();
-  await expect(page.getByTestId("export-why")).toContainText("Nothing to export yet: export gives the published public entries.");
+  const exportWhy = page.getByTestId("export-why");
+  await expect(exportWhy).toContainText("Nothing to export yet.");
+  await exportWhy.getByTestId("changelog-export-tip").filter({ visible: true }).first().click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "export gives the published public entries.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
 test("qa-plan-52: an export says what it downloaded", async ({ page }) => {

@@ -23,7 +23,10 @@ test.describe("desktop", () => {
     await login(page);
     await page.goto("/company/strategy");
     const what = strategyPage(page).getByTestId("drift-list").getByTestId("drift-what");
-    await expect(what).toContainText("Goals and items that do not follow the strategy show here.");
+    await what.getByTestId("strategy-drift-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "Goals and items that do not follow the strategy show here.", visible: true }),
+    ).toBeVisible();
     await expect(what).not.toContainText("What does not shows here");
   });
 

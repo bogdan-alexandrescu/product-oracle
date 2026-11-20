@@ -10,6 +10,7 @@ import {
   DataTable,
   Empty,
   FilterChips,
+  InfoTip,
   Inspector,
   InspectorSection,
   LinkButton,
@@ -530,10 +531,21 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
         <p data-testid="evidence-footnote" className="border-t border-line px-4 py-2 text-[13px] text-text2">
           {/* qa-docs-7: one or two plain sentences. qa-docs-21: the rule the red follows (unsupportedKeys).
               qa-docs-53: the phone's list has no columns, so its note says what a row shows. */}
-          {phone
-            ? "Each row lists the sections it is linked in."
-            : "A red column is a section with no links or citations, in it or in its subsections (the title is never red)."}{" "}
-          Readers never see these links on the page; exports list them under &ldquo;Sources and data points&rdquo;. {sourcesAsOf(data.snapshot)}
+          {phone ? (
+            "Each row lists the sections it is linked in."
+          ) : (
+            <>
+              {/* #1590: what a red column means sits behind the (i). */}
+              <InfoTip label="a red column" align="start" testId="evidence-red-tip">
+                A red column is a section with no links or citations, in it or in its subsections (the title is never red).
+              </InfoTip>{" "}
+            </>
+          )}
+          {/* #1590: that exports, not pages, carry these links sits behind the (i). */}
+          <InfoTip label="these links" align="start" testId="evidence-links-tip">
+            Readers never see these links on the page; exports list them under &ldquo;Sources and data points&rdquo;.
+          </InfoTip>{" "}
+          {sourcesAsOf(data.snapshot)}
         </p>
       </Panel>
       {!phone && !row && <p className="sr-only">Pick a cell to see every section that links its target.</p>}

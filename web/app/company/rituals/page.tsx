@@ -237,7 +237,10 @@ function Rituals() {
           <p className="px-4 pt-2.5 pb-1 text-sm text-text2" data-testid="rituals-zone">
             {zoneQ.data?.is_default ? (
               <>
-                Times use {zoneName(companyZone)} until you set the company time zone.{" "}
+                {/* #1590: why times default to Pacific sits behind the (i). */}
+                <InfoTip label="the time zone" align="start" testId="rituals-zone-tip">
+                  Times use {zoneName(companyZone)} until you set the company time zone.
+                </InfoTip>{" "}
                 <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
                   Set it
                 </Link>

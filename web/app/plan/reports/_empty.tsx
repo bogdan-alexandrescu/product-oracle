@@ -1,4 +1,4 @@
-import { Button } from "@/components/ds";
+import { Button, InfoTip } from "@/components/ds";
 
 /**
  * QA Nov 12 #14: the one empty state for alignment reports, the same on the Reports tab and on
@@ -20,10 +20,13 @@ export function NoReportYet({
       className="flex flex-col items-center gap-3 px-4 py-8 text-center text-[15px] text-text2"
     >
       <p>
-        No report yet. Oracle makes one every week for the week that ended.
-        {canGenerate
-          ? " You can generate one now for the week so far."
-          : " An owner can generate one now."}
+        No report yet.
+        {/* #1590: how reports get made sits behind the (i). */}
+        <InfoTip label="how reports get made" align="start" testId="reports-empty-tip">
+          Oracle makes one every week for the week that ended.
+          {canGenerate ? " You can generate one now for the week so far." : ""}
+        </InfoTip>
+        {!canGenerate && " An owner can generate one now."}
       </p>
       {canGenerate && (
         <Button variant="primary" icon="plus" onClick={onGenerate}>

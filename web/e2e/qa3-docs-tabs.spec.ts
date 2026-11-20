@@ -75,7 +75,12 @@ for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await openEvidence(page);
     const note = page.getByTestId("evidence-footnote");
-    await expect(note).toContainText("A red column is a section with no links or citations, in it or in its subsections (the title is never red).");
+    await expect(note.getByText("A red column is a section with no links or citations", { exact: false }).filter({ visible: true })).toHaveCount(0);
+    await note.getByTestId("evidence-red-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "A red column is a section with no links or citations, in it or in its subsections (the title is never red).", visible: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
 
     const totals = page.getByTestId("evidence-totals").locator("td[data-section]");
     expect(await totals.count()).toBeGreaterThan(0);

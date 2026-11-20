@@ -642,6 +642,19 @@ function notInPlan(report: Report): Output[] {
   return report.affected.filter((o) => !proposalOf(report, o));
 }
 
+/** #1590: "Propose a new version of…" (regenerate, non-roadmap) sits behind the (i); the
+ * roadmap-run and review proposals' own words stay visible as they are. */
+function HowText({ text }: { text: string }) {
+  if (text.startsWith("Propose a new version of")) {
+    return (
+      <InfoTip label="the proposal" align="start" testId="propose-version-tip">
+        {text}
+      </InfoTip>
+    );
+  }
+  return <>{text}</>;
+}
+
 function PlanSidebar({
   report,
   source,
@@ -707,8 +720,12 @@ function PlanSidebar({
                   <PlanSteps {...rowProps(o)} />
                 </div>
               ) : (
-                <p className="mt-1 line-clamp-2 pl-8 text-sm text-text2" title={names.words(p.how)}>
-                  {names.words(p.how)}
+                <p
+                  className="mt-1 line-clamp-2 pl-8 text-sm text-text2"
+                  title={names.words(p.how).startsWith("Propose a new version of") ? undefined : names.words(p.how)}
+                >
+                  {/* #1590: the propose-a-new-version sentence sits behind the (i). */}
+                  <HowText text={names.words(p.how)} />
                 </p>
               )}
             </li>
@@ -752,7 +769,8 @@ function ProposalBody({ proposal }: { proposal: NonNullable<ReturnType<typeof pr
         </div>
       )}
       <p data-testid="plan-how" className="text-sm">
-        {names.words(proposal.how)}
+        {/* #1590: the propose-a-new-version sentence sits behind the (i). */}
+        <HowText text={names.words(proposal.how)} />
       </p>
       {proposal.reasons.length > 0 && (
         <ul className="list-disc pl-5 text-sm text-text2">
@@ -872,7 +890,10 @@ function PlanList({ report }: { report: Report }) {
                   ))}
                   {p.entity_ids.length > 0 && <span className="text-[13px] text-text2">{p.entity_ids.length} Ground Truth item{p.entity_ids.length === 1 ? "" : "s"}</span>}
                 </div>
-                <p className="text-sm text-text2">{names.words(p.how)}</p>
+                <p className="text-sm text-text2">
+                  {/* #1590: the propose-a-new-version sentence sits behind the (i). */}
+                  <HowText text={names.words(p.how)} />
+                </p>
               </div>
             </li>
           );
@@ -994,7 +1015,10 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
       </InspectorSection>
       <InspectorSection label="Proposal">
         {proposal ? (
-          <p className="text-sm">{names.words(proposal.how)}</p>
+          <p className="text-sm">
+            {/* #1590: the propose-a-new-version sentence sits behind the (i). */}
+            <HowText text={names.words(proposal.how)} />
+          </p>
         ) : (
           <p className="text-sm text-text2">{statusLabel(output.status)}, so it is not in the plan.</p>
         )}

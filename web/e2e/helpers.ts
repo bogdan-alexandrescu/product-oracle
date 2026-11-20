@@ -177,6 +177,40 @@ export async function openSection(page: Page, key: string): Promise<Locator> {
   return s;
 }
 
+/**
+ * Hovers a citation chip until its card holds `text`. A hover card closes when the page
+ * scrolls under it, and on a busy machine the scroll to a section can land after the hover;
+ * the card is then hovered open again. The pointer first leaves any card already open, which
+ * may cover the next chip, and waits for it to close.
+ */
+export async function hoverCard(page: Page, chip: Locator, text: string | RegExp): Promise<Locator> {
+  const card = page.getByRole("tooltip");
+  await expect(async () => {
+    await page.mouse.move(0, 0);
+    await expect(card).toHaveCount(0, { timeout: 1_500 });
+    await chip.hover({ timeout: 1_500 });
+    await expect(card).toContainText(text, { timeout: 1_500 });
+    // Held open while nothing scrolls for 300 ms.
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          let t = setTimeout(end, 300);
+          function on() {
+            clearTimeout(t);
+            t = setTimeout(end, 300);
+          }
+          function end() {
+            window.removeEventListener("scroll", on, true);
+            done();
+          }
+          window.addEventListener("scroll", on, true);
+        }),
+    );
+    await expect(card).toContainText(text, { timeout: 500 });
+  }).toPass();
+  return card;
+}
+
 /** Opens a review panel tab (Feedback, Sources, History) in the visible panel. */
 export async function openTab(page: Page, name: "Feedback" | "Sources" | "History") {
   await page.getByRole("tab", { name: new RegExp(`^${name}`) }).filter({ visible: true }).click();

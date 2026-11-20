@@ -99,7 +99,9 @@ test("qa-plan-10: the plan names sections by their headings, not their keys", as
   const plan = page.getByRole("complementary", { name: "Regeneration plan" });
   const row = plan.getByTestId("plan-row").filter({ hasText: "Checkout flow" });
   await expect(row.getByTestId("plan-sections")).toHaveText("Scope");
-  await expect(row.getByTestId("plan-how")).toContainText("covering only the “Scope” section");
+  await row.getByTestId("propose-version-tip").filter({ visible: true }).first().click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "covering only the “Scope” section", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(plan.locator("code")).toHaveCount(0);
   const roadmap = plan.getByTestId("plan-row").filter({ hasText: "Usage alerts roadmap" });
   await expect(roadmap).not.toContainText("prd_to_roadmap");

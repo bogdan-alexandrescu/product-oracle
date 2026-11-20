@@ -135,10 +135,20 @@ test.describe("desktop", () => {
     await open(page);
     const panel = page.getByTestId("snapshots-panel");
     await expect(panel.getByTestId("snapshot-save").getByRole("button", { name: "Save snapshot" })).toBeVisible();
-    await expect(panel.getByTestId("snapshots-empty")).toHaveText(
-      "No snapshots yet. Save one above to keep this order and compare it later.",
-    );
-    await expect(page.getByTestId("changes-empty")).toContainText("move or pin a feature");
+    const snapshotsEmpty = panel.getByTestId("snapshots-empty");
+    await expect(snapshotsEmpty).toContainText("No snapshots yet.");
+    await snapshotsEmpty.getByTestId("priorities-save-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText: "Save one above to keep this order and compare it later.",
+        visible: true,
+      }),
+    ).toBeVisible();
+    const changesEmpty = page.getByTestId("changes-empty");
+    await changesEmpty.getByTestId("priorities-move-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "move or pin a feature", visible: true }),
+    ).toBeVisible();
     await panel.getByLabel("Snapshot note (optional)").fill("Before planning");
     await panel.getByRole("button", { name: "Save snapshot" }).click();
     await expect(panel.getByRole("status")).toContainText("Snapshot saved");
