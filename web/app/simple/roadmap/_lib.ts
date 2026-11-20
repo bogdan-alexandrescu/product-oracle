@@ -3,7 +3,7 @@
  * strings (the API's), counted in UTC; a scale turns them into pixels.
  */
 import { api, type Schemas } from "@/lib/api/client";
-import { calendarDay, displayZone, todayIn } from "@/lib/dates";
+import { calendarDay, displayZone, todayIn, utcDay } from "@/lib/dates";
 
 export type Roadmap = Schemas["SimpleRoadmapOut"];
 export type Item = Schemas["SimpleRoadmapItem"];
@@ -17,7 +17,7 @@ export type GanttUnit = "day" | "week";
 
 export const DAY_MS = 86_400_000;
 export const ms = (day: string): number => Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
-export const iso = (t: number): string => new Date(t).toISOString().slice(0, 10);
+export const iso = utcDay;
 export const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY_MS);
 export const daysBetween = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY_MS);
 

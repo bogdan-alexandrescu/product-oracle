@@ -92,17 +92,23 @@ export function plainClock(iso: string, zone: string, now: number = Date.now()):
   return `${d}, ${t}`;
 }
 
+/**
+ * #1588: the day (YYYY-MM-DD) of a UTC-midnight instant, for arithmetic on days (a day plus
+ * n, a month's 1st). Never today: that is the Company's day, `todayIn` (npm run lint).
+ */
+export const utcDay = (at: number): string => new Date(at).toISOString().slice(0, 10);
+
 /** `day` (YYYY-MM-DD) plus `n` days. */
 export function addDays(day: string, n: number): string {
   const [y, m, d] = day.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  return utcDay(Date.UTC(y, m - 1, d + n));
 }
 
 /** `day` (YYYY-MM-DD) plus `n` calendar months; the month's last day when it is shorter (Aug 31 less 6 months is Feb 28). */
 export function addMonths(day: string, n: number): string {
   const [y, m, d] = day.split("-").map(Number);
   const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(y, m - 1 + n, Math.min(d, last))).toISOString().slice(0, 10);
+  return utcDay(Date.UTC(y, m - 1 + n, Math.min(d, last)));
 }
 
 /** The ISO instant of `time` (HH:MM) on `day` (YYYY-MM-DD) in `zone`: what the API receives for a picked day. */
