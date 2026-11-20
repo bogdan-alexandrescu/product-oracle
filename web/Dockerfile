@@ -15,5 +15,9 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# #1569: the commit this image was built from, served at /version (the deploy job passes it:
+# --build-arg GIT_SHA=$GITHUB_SHA).
+ARG GIT_SHA=unknown
+ENV ORACLE_GIT_SHA=$GIT_SHA
 EXPOSE 3000
 CMD ["node", "server.js"]

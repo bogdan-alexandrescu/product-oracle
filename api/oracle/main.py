@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import math
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -173,6 +174,10 @@ class Health(BaseModel):
     database: str
 
 
+class Version(BaseModel):
+    git_sha: str
+
+
 def _finite(v: Any) -> Any:
     """``v`` with every NaN or infinite float written as its name ("nan", "inf")."""
     if isinstance(v, float) and not math.isfinite(v):
@@ -256,6 +261,13 @@ def create_app() -> FastAPI:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return Health(status="error", database="unreachable")
         return Health(status="ok", database="ok")
+
+    # #1569: the commit this image was built from (api/Dockerfile's GIT_SHA), without signing
+    # in: the deploy's containment check (web/scripts/deploy-serves.ts) asks it.
+    @app.get("/version", response_model=Version, tags=["health"])
+    async def build_commit(response: Response) -> Version:
+        response.headers["Cache-Control"] = "no-store"
+        return Version(git_sha=os.environ.get("ORACLE_GIT_SHA") or "unknown")
 
     app.include_router(auth_router)
     app.include_router(preferences_router)

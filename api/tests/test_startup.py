@@ -22,6 +22,13 @@ no_claim=<what green does not prove>.
   no_claim=the time it takes.
 - test_empty_database_check_is_one_read: protects=a database with no alembic_version table
   costs the check one statement too, then a full upgrade.
+- test_migrate_only_brings_the_database_to_head_without_serving: protects=`python -m
+  oracle.startup migrate` (the deploy's migrate step, #1569) upgrades a database behind head
+  and returns without starting the server; fails_when=it serves, or leaves it behind.
+- test_migrate_at_start_off_serves_without_migrating: protects=with ORACLE_MIGRATE_AT_START=0
+  (set on Cloud Run by the deploy job) a start never runs Alembic, so only the migrate step
+  changes the schema; fails_when=a staged revision migrates the database itself before the
+  migrate step (Oct 18: a migration ran before the new image was live: a 503).
 - test_app_import_leaves_heavy_libraries_unloaded: protects=importing the app (a clean
   interpreter, as a new instance does) loads no MCP SDK, PDF reader, SQL parser or
   template engine; fails_when=a route module imports one at its top again (Cloud Run, Nov
@@ -222,6 +229,30 @@ def test_empty_database_is_migrated(at_head, served):
 
     assert len(served) == 1
     assert served[0][1] == {_head()}
+
+
+def test_migrate_only_brings_the_database_to_head_without_serving(at_head, served):
+    command.downgrade(_cfg(), "-1")
+    assert _stored() != {_head()}
+
+    startup.main(["migrate"])
+
+    assert served == []
+    assert _stored() == {_head()}
+
+
+def test_migrate_at_start_off_serves_without_migrating(at_head, served, monkeypatch):
+    command.downgrade(_cfg(), "-1")
+    behind = _stored()
+    monkeypatch.setenv("ORACLE_MIGRATE_AT_START", "0")
+
+    try:
+        startup.main()
+
+        assert len(served) == 1
+        assert served[0][1] == behind
+    finally:
+        command.upgrade(_cfg(), "head")
 
 
 @pytest.fixture
