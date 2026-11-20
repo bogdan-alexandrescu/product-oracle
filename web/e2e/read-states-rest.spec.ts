@@ -151,3 +151,154 @@ test("Decisions: a linked item with no evidence, answered, says so", async ({ pa
   await expect(evidence).toContainText("No evidence on this item");
   await expect(evidence.getByTestId("load-error")).toHaveCount(0);
 });
+
+// Review round 1: the reads the first pass missed, each answered first, then failed.
+
+test("Requests: New request's goals that could not be read say so, never no goals yet", async ({ page }) => {
+  await login(page);
+  await page.goto("/requests");
+  const goals = async () => {
+    await page.getByRole("button", { name: "New request" }).first().click();
+    return page.getByRole("dialog", { name: "New request" }).getByRole("group", { name: "Goal (optional)" });
+  };
+  let g = await goals();
+  await expect(g.getByTestId("new-request-goal").first()).toBeVisible();
+  await expect(g.getByTestId("load-error")).toHaveCount(0);
+  const url = await calledUrl(page, /^\/v1\/baseline\/entities\?type=goal$/);
+
+  await failGets(page, url);
+  await page.reload();
+  g = await goals();
+  await seesReason(page, g, "the goals");
+  await expect(g).not.toContainText("No goals yet");
+  await expect(g.getByTestId("new-request-goal")).toHaveCount(0);
+});
+
+test("Requests: New request with no goals, answered, says no goals yet", async ({ page }) => {
+  await page.goto("/icon.svg");
+  await page.evaluate(() => {
+    localStorage.removeItem("po-mock-db-v2");
+    localStorage.setItem("po-mock-scenario", "empty");
+  });
+  await login(page);
+  await page.goto("/requests");
+  await page.getByRole("button", { name: "New request" }).first().click();
+  const g = page.getByRole("dialog", { name: "New request" }).getByRole("group", { name: "Goal (optional)" });
+  await expect(g).toContainText("No goals yet");
+  await expect(g.getByTestId("load-error")).toHaveCount(0);
+});
+
+test("Version: held rewrites that could not be read say so, never no held rewrites", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/annual-billing/v/2");
+  const button = page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true });
+  await expect(button.getByTestId("held-count")).toHaveText(/^[1-9]\d*$/);
+  const url = await calledUrl(page, /^\/v1\/documents\/[^/?]+\/section-patches/);
+
+  await failGets(page, url.split("?")[0]);
+  await page.reload();
+  await expect(page.getByTestId("document-sections")).toBeVisible();
+  await expect(button.getByTestId("held-count")).toHaveCount(0);
+  await button.click();
+  const held = page.getByTestId("held-rewrites").filter({ visible: true });
+  await seesReason(page, held, "the held rewrites");
+  await expect(held).not.toContainText("No held rewrites.");
+});
+
+test("Version: a version with no held rewrites, answered, shows no Held rewrites", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/team-invites/v/2");
+  await expect(page.getByTestId("document-sections")).toBeVisible();
+  await calledUrl(page, /^\/v1\/documents\/[^/?]+\/section-patches/);
+  await expect(page.getByRole("button", { name: /^Held rewrites/ })).toHaveCount(0);
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
+});
+
+test("Plan: the tech briefs that could not be read say so, never a lasting …", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), ["po-mock-scenario", "plan-decider"] as const);
+  await login(page);
+  const open = async () => {
+    await page.goto("/plan");
+    const title = "Threshold alerts on spend";
+    await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: title }).getByTestId("plan-title").click();
+    await page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-spec").getByRole("button", { name: "Request spec" }).click();
+    return page.getByRole("dialog", { name: "Request an engineering spec" }).getByTestId("request-spec-brief");
+  };
+  let brief = await open();
+  await expect(brief).toContainText("Feasible");
+  await expect(brief.getByTestId("load-error")).toHaveCount(0);
+
+  await failGets(page, "/v1/tech-briefs");
+  brief = await open();
+  await seesReason(page, brief, "the tech briefs");
+  await expect(brief).not.toContainText("…");
+  await expect(brief).not.toContainText("No approved tech brief for this feature.");
+});
+
+async function openRitual(page: Page) {
+  await page.goto("/company/rituals");
+  await page.getByTestId("ritual-row").filter({ hasText: "Quarterly goals review" }).click();
+  return page.getByTestId("ritual-inspector").filter({ visible: true }).getByTestId("ritual-occurrences");
+}
+
+test("Rituals: occurrences that could not be read say so, never nothing", async ({ page }) => {
+  await login(page);
+  let recent = await openRitual(page);
+  await expect(recent.getByRole("link").first()).toBeVisible();
+  await expect(recent.getByTestId("load-error")).toHaveCount(0);
+  const url = await calledUrl(page, /^\/v1\/rituals\/[^/?]+\/occurrences/);
+
+  await failGets(page, url.split("?")[0]);
+  await page.reload();
+  recent = await openRitual(page);
+  await seesReason(page, recent, "the occurrences");
+  await expect(recent).not.toContainText("No pre-read yet");
+  await expect(recent.getByRole("link")).toHaveCount(0);
+});
+
+test("Plan: date sources that could not be read say so, never no date sources yet", async ({ page }) => {
+  await login(page);
+  await page.goto("/plan/dates");
+  const table = page.getByTestId("dates-table").filter({ visible: true });
+  await expect(table.locator("[data-basis]").first()).toBeVisible();
+
+  await failGets(page, "/v1/schedule-bases");
+  await page.reload();
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" }).first()).toBeVisible();
+  await expect(page.getByText("No date sources yet.")).toHaveCount(0);
+  await expect(page.getByTestId("table-empty")).toHaveCount(0);
+});
+
+test("Plan: roadmap items that could not be read say so, never no roadmap items yet; answered none says so", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), ["po-mock-scenario", "plan-timeline"] as const);
+  await login(page);
+  await page.goto("/plan");
+  const bar = page.getByTestId("plan-scope-bar");
+  await bar.getByRole("group", { name: "Plan scope" }).getByRole("button", { name: "Approved only", exact: true }).click();
+  await expect(page.getByTestId("plan-table").filter({ visible: true }).getByTestId("table-empty")).toHaveText("No roadmap items yet");
+
+  await failGets(page, "/v1/plan");
+  await page.reload();
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" }).first()).toBeVisible();
+  await expect(page.getByText("No roadmap items yet")).toHaveCount(0);
+  await expect(page.getByTestId("table-empty")).toHaveCount(0);
+});
+
+test("Decisions: Ground Truth items that could not be read say so, never no item matches", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  const find = async (text: string) => {
+    await page.goto("/company/decisions");
+    await page.getByRole("button", { name: "Propose decision" }).click();
+    const linked = page.getByRole("dialog", { name: "Propose decision" }).getByRole("group", { name: "Linked items" });
+    await linked.getByLabel("Find an item to link").fill(text);
+    return linked;
+  };
+  let linked = await find("zzzz");
+  await expect(linked).toContainText("No Ground Truth item matches");
+  await expect(linked.getByTestId("load-error")).toHaveCount(0);
+
+  await failGets(page, "/v1/baseline/entities");
+  linked = await find("checklist");
+  await seesReason(page, linked, "the Ground Truth");
+  await expect(linked).not.toContainText("No Ground Truth item matches");
+});
