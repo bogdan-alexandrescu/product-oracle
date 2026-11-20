@@ -17,11 +17,9 @@ async function openHome(page: Page) {
 
 const failGets = (page: Page, path: string) => page.evaluate((p) => localStorage.setItem("po-mock-fail", p), path);
 
-/** Waits until the mock has answered a GET whose path and query start with `call`. */
-async function answered(page: Page, call: string) {
+/** Waits until the mock has been asked a GET whose path and query start with `call`. */
+async function asked(page: Page, call: string) {
   await page.waitForFunction((c) => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []).some((l) => l.startsWith(`GET ${c}`)), call);
-  // The mock's latency, then a render.
-  await page.waitForTimeout(800);
 }
 
 test("Home: a goal's trend that could not be read says so, never no trend", async ({ page }) => {
@@ -86,10 +84,13 @@ test.describe("PRDs list, no PRDs yet", () => {
       localStorage.setItem("po-mock-slow-ms", "8000");
     });
     await page.reload();
-    await answered(page, "/v1/documents?kind=prd");
+    await asked(page, "/v1/documents?kind=prd");
+    const start = Date.now();
     await expect(page.getByTestId("documents-table").locator("table")).toHaveAttribute("aria-busy", "true");
     await expect(page.getByTestId("prds-empty")).toHaveCount(0);
+    // The PRDs answer at once; No PRDs yet waits for the held ideas, never only for the PRDs.
     await expect(page.getByTestId("prds-empty")).toBeVisible({ timeout: 15_000 });
+    expect(Date.now() - start).toBeGreaterThan(6_000);
   });
 
   test("ideas that could not be read say so beside No PRDs yet", async ({ page }) => {
@@ -126,9 +127,57 @@ test("Publish: a version that could not be read says so, never every section rev
   await expect(page.getByTestId("publish-button")).toHaveText("Publish v1");
   await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toHaveCount(0);
 
+  await expect(page.getByTestId("publish-ready")).toBeVisible();
+  await expect(page.getByTestId("publish-ready")).not.toContainText("Could not check");
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
+
   await failGets(page, "/v1/documents/visit-reminders/versions/1");
   await page.reload();
-  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toBeVisible();
+  const failed = page.getByTestId("load-error").filter({ hasText: "Could not load the sections." });
+  await expect(failed).toBeVisible();
+  await failed.getByRole("button", { name: "About the error" }).click();
+  await expect(page.getByRole("tooltip")).toContainText("Mock failure");
+  await expect(page.getByTestId("publish-ready")).toHaveText("Could not check the sections");
+  await expect(page.getByTestId("publish-ready")).not.toContainText("Ready to publish");
+});
+
+for (const [what, path] of [
+  ["the blocker plan", "/v1/documents/visit-reminders/blocker-strategy"],
+  ["the staged changes", "/v1/documents/visit-reminders/staged-changes"],
+] as const) {
+  test(`Publish: ${what} that could not be read say so, never none`, async ({ page }) => {
+    await login(page);
+    await page.goto("/documents/visit-reminders/publish");
+    await expect(page.getByTestId("publish-button")).toHaveText("Publish v1");
+    await expect(page.getByTestId("load-error")).toHaveCount(0);
+
+    await failGets(page, path);
+    await page.reload();
+    await expect(page.getByTestId("publish-button")).toHaveText("Publish v1");
+    await expect(page.getByTestId("load-error")).toContainText(`Could not load ${what}.`);
+  });
+}
+
+test("Publish: a roadmap's publications that could not be read say so, never not published", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/usage-alerts-roadmap/publish");
+  await expect(page.getByTestId("publish-share-note")).toBeVisible();
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
+
+  await failGets(page, "/v1/documents/usage-alerts-roadmap/publications");
+  await page.reload();
+  await expect(page.getByTestId("load-error")).toContainText("Could not load the publications.");
+});
+
+test("Publish: open questions that could not be read say so, never none", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/visit-reminders/publish");
+  await expect(page.getByTestId("publish-button")).toHaveText("Publish v1");
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
+
+  await failGets(page, "/v1/questions");
+  await page.reload();
+  await expect(page.getByTestId("load-error")).toContainText("Could not load the open questions.");
 });
 
 /** The first GET the mock answered whose path matches `re` (its query left off). */
