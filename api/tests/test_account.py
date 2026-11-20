@@ -184,9 +184,10 @@ def test_reserved_domains_cannot_be_allowed_in_production(prod):
 
     from oracle.config import Settings
 
+    key = "an-example-key-made-up-for-this-test-0123456789"
     with pytest.raises(ValidationError, match="ALLOW_RESERVED_EMAIL_DOMAINS"):
-        Settings(allow_reserved_email_domains=True, **prod)
-    assert Settings(allow_reserved_email_domains=False, **prod)
+        Settings(allow_reserved_email_domains=True, secret_key=key, **prod)
+    assert Settings(allow_reserved_email_domains=False, secret_key=key, **prod)
     assert Settings(allow_reserved_email_domains=True)
 
 

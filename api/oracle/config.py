@@ -6,12 +6,15 @@ from typing import Literal
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+SECRET_KEY_MIN_LENGTH = 32
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ORACLE_", env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+asyncpg://oracle:oracle@localhost:5432/oracle"
-    # Signs the UI session cookie. Override in any non-local environment.
+    # Signs the UI session cookie and OAuth state, and derives the key that encrypts stored
+    # credentials. A real deployment refuses this default or a key under SECRET_KEY_MIN_LENGTH.
     secret_key: str = "dev-insecure-change-me"
     session_cookie_name: str = "oracle_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7
@@ -129,6 +132,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "ORACLE_WEBHOOKS_ALLOW_LOOPBACK_FOR_TESTS is for tests only; it cannot be set "
                 "with ORACLE_ENV=production, ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
+            )
+        # #1571: the default key is public; with it anyone could sign a session cookie.
+        if real and (
+            self.secret_key == type(self).model_fields["secret_key"].default
+            or len(self.secret_key) < SECRET_KEY_MIN_LENGTH
+        ):
+            raise ValueError(
+                f"ORACLE_SECRET_KEY must be set to a secret of at least {SECRET_KEY_MIN_LENGTH} "
+                "characters with ORACLE_ENV=production, ORACLE_COOKIE_SECURE or "
+                "ORACLE_IAP_AUDIENCES"
             )
         return self
 
