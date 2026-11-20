@@ -49,7 +49,7 @@ def test_chains_on_the_single_head():
 
 
 async def test_releases_requests_behind_briefs_archived_before(client, ctx):
-    """Releasing requests frees them from an intake archived before the release only."""
+    """Archiving an intake frees a request only when it has no PRD attached."""
     from tests.v2_helpers import seed_v2
 
     seeded = await seed_v2(ctx.tenant_id)

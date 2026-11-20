@@ -108,7 +108,7 @@ def _company_folder(drive: Drive) -> None:
 
 
 async def test_removing_a_shared_drive_deletes_every_members_docs_from_it_on_save(tenant_id, drive):
-    """Removing a shared drive from company settings deletes every member's docs."""
+    """Removing a shared drive deletes only each member's docs that came from it."""
     owner, member = await _people(tenant_id)
     _company_folder(drive)
     assert (await _put(owner, "company_email_domains", ["example.com"])).status_code == 200

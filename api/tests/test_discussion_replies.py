@@ -456,7 +456,7 @@ async def test_the_reply_limit(client):
 # protects=a failed reply reads the gateway's message to approvers and owners and the plain
 # copy to others, with Retry; fails_when=a commenter sees account details; no_claim=the UI.
 async def test_no_account_fails_the_reply_with_the_right_copy(client):
-    """A reply with no account still posts with readable error copy."""
+    """A reply with no account fails; approvers see why, others see plain copy."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     reply = (await say(client, ctx, d["id"], "commenter", ASK))["reply"]

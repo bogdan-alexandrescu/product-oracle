@@ -312,7 +312,7 @@ async def test_registration_is_idempotent(client, owner):
 
 
 async def test_one_workflow_credential_map_and_step_inputs(client, owner):
-    """A whole run submits as one workflow, its credential keyed per step, not shared."""
+    """A whole run submits as one workflow, sharing its credential across every step."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)

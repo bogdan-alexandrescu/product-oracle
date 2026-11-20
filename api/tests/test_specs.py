@@ -297,7 +297,7 @@ async def test_the_fake_runtime_default_files_import(client, runtime):
 
 
 async def test_a_spec_that_breaks_the_contract_is_not_imported(client, runtime):
-    """A spec that violates its section contract is not imported, nothing is stored."""
+    """A spec breaking its contract is not imported, but its design still saves."""
     world = await make_world(client)
     script(runtime, world, spec=spec_md(skip=("approach", "assumptions")))
     created = await generated(client, runtime, world, checkpoint=False)

@@ -298,7 +298,7 @@ def test_citation_item_that_is_not_a_uuid_still_parses():
     ],
 )
 def test_a_non_oracle_ref_with_a_scheme_other_than_http_is_refused(ref, scheme):
-    """A citation ref using a scheme other than http or https is refused, not linked."""
+    """A citation ref with a scheme besides http, https or urn is refused, not linked."""
     # The web opens a citation's ref as a link: no URL but http(s) gets in.
     text = _draft(
         "# T {#t}\n\nA claim [c:c1].\n",

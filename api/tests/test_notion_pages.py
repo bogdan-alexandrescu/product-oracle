@@ -349,7 +349,7 @@ async def test_a_missing_capability_does_not_expire_the_connection(
 
 
 async def test_malformed_results_are_skipped_not_a_500(client, alice, notion_conn):
-    """A malformed Notion search result is skipped, never a server error."""
+    """A bad item is dropped; a reply that is not a list is a 502, not a crash."""
     good = fixture("search_roadmap.json")["results"][0]
     body = {
         "object": "list",

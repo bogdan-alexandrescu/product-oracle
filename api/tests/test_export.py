@@ -227,7 +227,7 @@ async def test_html_version_banner(client, fx):
 
 
 async def test_html_stamps_hold_together(client, fx):
-    """A date and time stamp in an export never wraps between its day and zone."""
+    """An HTML export keeps a date stamp's day and time joined; markdown does not."""
     # PR 1300 round 3: as on the slides, a stamp's day and its time each stay on one line.
     nb = "\u00a0"
     html = (await _export(client, fx, "html", n=2)).text

@@ -100,7 +100,7 @@ async def test_observe_mid_interview_stores_no_versions(client, fake):
 # stored, or none; no_claim=the web's missing Use version 1 quick reply (the web reads
 # the level; autonomy-goals.spec.ts).
 async def test_draft_keeps_one_version(client, fake):
-    """Draft autonomy keeps only the newest proposed version from a goal interview."""
+    """Draft autonomy keeps only the first proposed version from a goal interview."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)

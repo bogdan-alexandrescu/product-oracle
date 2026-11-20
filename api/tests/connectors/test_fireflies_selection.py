@@ -96,7 +96,7 @@ def test_series_title_drops_dated_suffixes(title, normal):
 
 
 def test_series_title_keeps_case_and_drops_the_dated_suffix():
-    """Stripping a series title's dated suffix keeps its original case and spacing."""
+    """Stripping a series title's dated suffix keeps its case and collapses spaces."""
     assert series_title("AI agents sprint planning - Oct 14") == "AI agents sprint planning"
     assert series_title("  AI Agents  daily standup ") == "AI Agents daily standup"
 

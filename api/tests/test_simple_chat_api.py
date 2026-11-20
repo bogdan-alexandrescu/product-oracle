@@ -325,7 +325,7 @@ async def test_requests_become_cards_for_each_op_family(client):
 
 
 async def test_ambiguous_or_unknown_gets_one_question(client):
-    """An ambiguous or unknown item name asks one clarifying question, not a guess."""
+    """An ambiguous item asks one question; an unknown one waits for the reader."""
     ctx = await make_people()
     await World(ctx).build()
     m = await say(client, ctx, "owner", "move alert to Q2")

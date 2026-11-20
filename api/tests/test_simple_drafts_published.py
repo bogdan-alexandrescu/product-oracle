@@ -18,7 +18,7 @@ from tests.test_simple_drafts_api import edit_title, the_draft, world
 
 
 async def test_draft_says_whether_its_roadmap_has_an_approved_version(client):
-    """A draft reports whether its roadmap has ever had an approved version."""
+    """A draft's published flag reflects only the roadmap's current approval state."""
     w = await world()
     r = await edit_title(client, w, "decider")
     assert r.status_code == 201, r.text

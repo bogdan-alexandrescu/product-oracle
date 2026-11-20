@@ -109,7 +109,7 @@ def _lookups(statements: list[str]) -> list[str]:
 
 
 async def test_job_lookup_costs_the_same_for_one_empty_goal_or_four(client):
-    """Each extra goal in the Inbox job costs only its own lookup and insert."""
+    """Each extra goal in a tick adds no lookups, only its own insert."""
     one_w = await World().build()
     one = await _tick(one_w)
     four_w = await World().build()

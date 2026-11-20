@@ -611,7 +611,7 @@ async def test_a_company_narrowing_stopping_a_sync_hides_unknown_items(tenant_id
 async def test_a_failed_export_after_a_per_file_checkpoint_keeps_the_listing_undone(
     tenant_id, drive
 ):
-    """A sync that fails after exporting one file marks its folder listing unfinished."""
+    """A sync that fails after exporting one file marks its listing unfinished."""
     drive.doc(DOC_A, "A")
     drive.doc(DOC_B, "B")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, DOC_B]})

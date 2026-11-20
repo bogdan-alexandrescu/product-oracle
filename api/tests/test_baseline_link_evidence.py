@@ -168,7 +168,7 @@ async def test_freshness_halves_from_last_modified(client, ctx, web):
 
 
 async def test_links_count_as_independent_mentions(client, ctx, web):
-    """Each citing link counts as its own mention, not shared with other evidence."""
+    """Each distinct link raises the shared mention count on the entity evidence."""
     goal = await confirm(client, ctx, await entity(client, ctx, type="goal", key="g"))
     feat = await entity(client, ctx, type="feature", key="f")
     await edge(client, ctx, feat, goal, "supports", attrs={"contribution": 3})

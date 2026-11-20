@@ -215,7 +215,7 @@ async def changed(w: World, op: str) -> bool:
 @pytest.mark.parametrize("with_decider", [True, False], ids=["decider", "no-decider"])
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_permission_matrix(client, role, with_decider):
-    """An owner or a routed decider applies directly; others only propose."""
+    """An owner or routed decider applies now; a viewer is refused, others propose."""
     ctx = await make_people()
     w = await World(ctx).build(decider=with_decider)
     # restore needs a cut item first: cut in the published version (S3b: an owner's cut

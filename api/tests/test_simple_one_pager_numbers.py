@@ -317,7 +317,7 @@ async def test_heading_count_gets_its_fix(client):
 
 
 async def test_stale_heading_is_refused(client):
-    """Fixing a heading number already changed by someone else is refused."""
+    """A heading fix retried with its old value once it already applied is refused."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     assert (await fix(client, ctx, "owner", f)).status_code == 201

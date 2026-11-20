@@ -51,7 +51,7 @@ def _read(client, headers: dict[str, str]):
 
 
 async def test_both_markers_naming_the_same_run_act_as_that_run(client):
-    """A run token or its signed binding alone marks a call as that run."""
+    """A signed binding alone marks a call as its run; a bare token alone is refused."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     run_id, raw = await _run(ctx.tenant_id, pm.user_id)

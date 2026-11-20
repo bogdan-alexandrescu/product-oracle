@@ -58,7 +58,7 @@ async def _company_a() -> tuple[uuid.UUID, uuid.UUID]:
 
 
 async def test_hidden_for_reader_names_only_the_readers_company():
-    """A reader's hidden set names only the other company's items, never its own."""
+    """A hidden set names only items in the reader's own company, never another's."""
     b, b_doc, b_decision = await _company_b()
     a, commenter = await _company_a()
     async with tenant_session(b) as s:

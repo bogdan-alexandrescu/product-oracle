@@ -757,7 +757,7 @@ async def test_a_heading_in_a_refined_last_section_stays_in_it(client, ctx, pool
 
 
 def test_lost_sections_reports_an_added_section():
-    """lost_sections reports a heading missing from the composed markdown."""
+    """A heading added after the expected sections is caught, not missed as removed."""
     from oracle.jobs.service import lost_sections
 
     md = "# T {#title}\n\n## A {#a}\n\nx\n\n## B {#b}\n\ny\n"

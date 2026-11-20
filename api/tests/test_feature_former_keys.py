@@ -131,7 +131,7 @@ async def test_unknown_keys_know_a_features_old_key(client):
 
 
 async def test_a_lost_race_on_join_is_refused(client, monkeypatch):
-    """Two features racing for the same code: the second loses and retries."""
+    """A feature that loses a race for the same code keeps its old key, unconfirmed."""
     ctx = await make_ctx()
     one = await entity(client, ctx, "approver", type="feature", key="packing-list",
                        title="Packing list", status="proposed")  # fmt: skip

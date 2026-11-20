@@ -725,7 +725,7 @@ async def test_a_failed_root_post_fails_its_mirror_only(client, slack):
 # credential left); a reconnect makes the same row active again; fails_when=a thread is left
 # open, the token stays, or the row is deleted; no_claim=Slack's revoke.
 async def test_disconnect_closes_every_mirror_then_revokes(client, slack):
-    """Disconnecting closes every live mirror and revokes the token first."""
+    """Disconnecting closes every live mirror first, then revokes the token."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     (row,) = (await client.get("/v1/company-integrations", headers=ctx.as_("owner"))).json()

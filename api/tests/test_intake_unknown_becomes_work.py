@@ -79,7 +79,7 @@ def test_recognises_unknown_that_is_part_of_the_work(text):
     ],
 )
 def test_other_answers_are_not_work(text):
-    """An answer that treats a fact as already known is never read as work."""
+    """A bare unknown or an already known fact is never counted as discovery work."""
     assert not discovery.is_discovery(text)
 
 

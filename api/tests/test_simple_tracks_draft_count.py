@@ -34,7 +34,7 @@ async def counts(client, w: World, who: str) -> dict[str, tuple[int, int]]:
 
 
 async def test_a_tracks_count_reads_the_working_draft(client):
-    """A track's feature count reads the viewer's own working draft, not everyone's."""
+    """A track's feature count reflects the decider's own draft, not what viewers see."""
     w = await World(await make_people()).build(decider=True, ops=OPS)
     async with tenant_session(w.ctx.tenant_id) as s:
         first = await s.scalar(select(ProductTrack))

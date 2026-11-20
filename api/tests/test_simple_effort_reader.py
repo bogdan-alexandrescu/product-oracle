@@ -28,7 +28,7 @@ WINDOW = (date(2026, 10, 1), date(2026, 12, 31))
 
 
 def test_the_effort_reader_reads_effort_else_effort_weeks():
-    """Effort size reads the short code first and falls back only if unreadable."""
+    """Effort size falls back to weeks only when effort is absent, not unreadable."""
     assert scoring.effort_weeks({"effort": "M"}) == 2.0
     assert scoring.effort_weeks({"effort": 3}) == 3.0
     assert scoring.effort_weeks({"effort_weeks": "1.5"}) == 1.5
