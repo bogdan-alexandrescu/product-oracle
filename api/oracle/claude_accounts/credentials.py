@@ -75,6 +75,9 @@ class RefreshOutcome:
     refreshed: bool
     reason: str
     expires_at: datetime | None = None
+    #: Why a read or write failed (the exception's text), kept off ``as_dict``: the
+    #: outcome's ``reason`` is the closed set people see; this is for the logs.
+    error: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -108,12 +111,12 @@ class CredentialRefresher:
             stored = await self._store.access(refresh_secret)
         except KeyError:
             return RefreshOutcome(base, False, "no_refresh_credential")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - any store failure is store_unavailable
             log.warning(
                 "could not read the refresh credential",
-                extra={"account_id": base, "error": type(exc).__name__},
+                extra={"account_id": base, "error": exception_text(exc)},
             )
-            return RefreshOutcome(base, False, "store_unavailable")
+            return RefreshOutcome(base, False, "store_unavailable", error=exception_text(exc))
 
         try:
             credential = parse_credential(stored, now=now)
@@ -140,23 +143,25 @@ class CredentialRefresher:
         if not credential.needs_refresh(now, self._window):
             # STILL VALID IS NOT THE SAME AS ALREADY PUBLISHED: a pasted pair minted
             # minutes ago lands here at once, and the access column must carry it.
-            state = await self._base_state(base, credential.access_token)
+            state, why = await self._base_state(base, credential.access_token)
             if state is _BaseState.CURRENT:
                 return RefreshOutcome(base, False, "still_valid", credential.expires_at)
             if state is _BaseState.UNKNOWN:
                 log.error(
                     "could not read an account's access token, so nothing was written",
-                    extra={"account_id": base},
+                    extra={"account_id": base, "error": why},
                 )
-                return RefreshOutcome(base, False, "unverified_skipped", credential.expires_at)
+                return RefreshOutcome(
+                    base, False, "unverified_skipped", credential.expires_at, error=why
+                )
             try:
                 await self._store.add_version(base, credential.access_token)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - any store failure is publish_failed
                 log.warning(
                     "could not publish a still-valid access token",
-                    extra={"account_id": base, "error": type(exc).__name__},
+                    extra={"account_id": base, "error": exception_text(exc)},
                 )
-                return RefreshOutcome(base, False, "publish_failed")
+                return RefreshOutcome(base, False, "publish_failed", error=exception_text(exc))
             return RefreshOutcome(base, True, "published", credential.expires_at)
 
         try:
@@ -182,14 +187,16 @@ class CredentialRefresher:
         log.info("subscription credential refreshed", extra={"account_id": base})
         return RefreshOutcome(base, True, "refreshed", fresh.expires_at)
 
-    async def _base_state(self, base: str, access_token: str) -> _BaseState:
+    async def _base_state(self, base: str, access_token: str) -> tuple[_BaseState, str | None]:
+        """The access column's state, and why it is UNKNOWN when the read failed."""
         try:
             stored = await self._store.access(base)
         except KeyError:
-            return _BaseState.NEEDS_PUBLISH
-        except Exception:
-            return _BaseState.UNKNOWN
-        return _BaseState.CURRENT if stored == access_token else _BaseState.NEEDS_PUBLISH
+            return _BaseState.NEEDS_PUBLISH, None
+        except Exception as exc:  # noqa: BLE001 - any failed read is UNKNOWN; the caller logs why
+            return _BaseState.UNKNOWN, exception_text(exc)
+        same = stored == access_token
+        return (_BaseState.CURRENT if same else _BaseState.NEEDS_PUBLISH), None
 
     async def sweep_accounts(
         self,
@@ -210,10 +217,10 @@ class CredentialRefresher:
                 break
             try:
                 outcomes.append(await self.refresh_secret(base, held=base in held))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - one account must not stop the sweep
                 log.error(
                     "account refresh raised; continuing with the rest of the pool",
-                    extra={"account_id": base, "error": type(exc).__name__},
+                    extra={"account_id": base, "error": exception_text(exc)},
                 )
-                outcomes.append(RefreshOutcome(base, False, "error"))
+                outcomes.append(RefreshOutcome(base, False, "error", error=exception_text(exc)))
         return outcomes

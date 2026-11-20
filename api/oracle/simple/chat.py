@@ -49,7 +49,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.docs.models import Document, DocumentVersion
-from oracle.errors import exception_text
+from oracle.errors import exception_text, read_state
 from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
@@ -1568,12 +1568,19 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             "change_mode": r.change_mode,
         }
         meetings = _module(MEETINGS)
+        one_ = None
+        agenda_read = read_state(applies=meetings is not None)
         try:
             # A savepoint: a failing read of the agenda leaves the job's transaction usable.
             async with db.begin_nested():
                 one_ = await meetings.one(db, c.principal, r.meeting_id) if meetings else None
-        except Exception:  # noqa: BLE001 -- the agenda is context, never required
-            one_ = None
+        except Exception as exc:  # noqa: BLE001 - the agenda is context, never required
+            agenda_read = read_state(exc)
+            log.warning("chat reader: meeting %s agenda unavailable: %s",
+                        r.meeting_id, agenda_read["reason"])  # fmt: skip
+        # The reader is told whether the agenda was read, could not be (and why), or
+        # does not apply: an unread agenda is not an empty one.
+        context["meeting"]["agenda_read"] = agenda_read
         if one_ is not None:
             context["meeting"]["title"] = getattr(one_, "title", None)
             # The open decisions as S8 lists them (newest first): context, not an order.

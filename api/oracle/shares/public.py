@@ -39,6 +39,7 @@ No member credential, and never MCP tools (``oracle.mcp.tools.PUBLIC_OPERATIONS`
 
 import asyncio
 import hmac
+import logging
 import re
 import secrets
 import time
@@ -51,15 +52,20 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import func, select
+from starlette.exceptions import HTTPException
+from starlette.formparsers import MultiPartException
 
 from oracle import audit
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.roadmap.public import PAGE_HEADERS
 from oracle.routing import APIRouter
 from oracle.shares import render, service
 from oracle.shares.models import ShareLink, ShareLinkView
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.trash.filter import INCLUDE_TRASHED
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/public/shares", tags=["shares"])
 #: ``/s/{token}``: the address a creator copies; a browser address, not an operation.
@@ -340,7 +346,10 @@ async def _passcode_of(request: Request) -> str:
             value = data.get("passcode") if isinstance(data, dict) else None
         else:
             value = (await request.form()).get("passcode")
-    except Exception:
+    except (ValueError, HTTPException, MultiPartException) as exc:
+        # A body that does not parse (bad JSON, a broken form) is no passcode: the
+        # wrong-passcode answer, with the reason logged.
+        log.info("share passcode body unreadable: %s", exception_text(exc))
         value = None
     return value[:PASSCODE_FORM_MAX] if isinstance(value, str) else ""
 

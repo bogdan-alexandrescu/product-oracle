@@ -738,7 +738,9 @@ async def test_a_failed_agenda_read_tells_the_reader_why(client, meetings, monke
     async def down(db, principal, meeting_id):
         raise RuntimeError("agenda store down")
 
-    monkeypatch.setattr(meetings, "one", down)
+    monkeypatch.setattr(meetings.module, "one", down)
+    # Alembic's fileConfig in another test may have disabled the module's logger.
+    monkeypatch.setattr(chat.log, "disabled", False)
     await post(client, ctx, "owner", "push that out a quarter", mid)
     seen = []
     with caplog.at_level("WARNING", logger="oracle.simple.chat"):

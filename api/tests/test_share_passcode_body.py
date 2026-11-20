@@ -36,7 +36,9 @@ async def test_a_body_that_parses_gives_its_passcode():
     assert await public._passcode_of(_request(body, "application/json")) == "blue-otter-42"
 
 
-async def test_a_body_that_does_not_parse_is_empty_and_logged(caplog):
+async def test_a_body_that_does_not_parse_is_empty_and_logged(caplog, monkeypatch):
+    # Alembic's fileConfig in another test may have disabled the module's logger.
+    monkeypatch.setattr(public.log, "disabled", False)
     with caplog.at_level("INFO", logger="oracle.shares.public"):
         got = await public._passcode_of(_request(b"{not json", "application/json"))
     assert got == ""
