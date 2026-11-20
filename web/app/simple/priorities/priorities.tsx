@@ -16,6 +16,7 @@ import { useMe } from "@/lib/me";
 import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
 import { useSetParams } from "@/lib/use-set-params";
 import { topGoalSuggestions } from "@/lib/key-results";
+import { LoadError } from "@/components/ui";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
@@ -357,6 +358,8 @@ export function Priorities() {
       <div role="tabpanel" id="prio-panel" aria-labelledby={`prio-tab-${tab}`}>
       {q.error && !data && <p role="alert" className="text-crit">{q.error}</p>}
       {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
+      {/* #1586: key results that could not be read say why, never goals that have none. */}
+      {kr.failed && <LoadError what="the key results" error={kr.failed.error} onRetry={kr.failed.retry} />}
       {blank && (
         <p className="text-text2" data-testid="priorities-empty">
           {hasGoals ? (
@@ -2549,6 +2552,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
       </p>
+      {tasks.failed}
       {/* As with a dated plan: two columns only where a feature's row fits a card (31rem). */}
       <ul className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-[var(--simple-gap)]">
         {buckets.map((b, k) => {
@@ -2892,6 +2896,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
       </p>
+      {tasks.failed}
       {/* Two columns only where a feature's row fits a card (31rem); beside a 768 px window's sidebar one, as on a phone. */}
       <ul className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-4">
         {goals.map((g) => {

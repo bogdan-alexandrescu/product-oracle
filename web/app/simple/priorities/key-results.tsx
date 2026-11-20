@@ -24,6 +24,8 @@ export type BucketKeyResult = { id: string; name: string; line: string | null };
 
 export type PriorityKeyResults = {
   krs: KeyResults;
+  /** #1586: the goal tree could not be read: its reason and Try again, never goals with no key results. */
+  failed: { error: string; retry: () => void } | null;
   /** A goal's key results by its id, key or name (its bucket's list); `gb`: the goal buckets as read, for each one's target. */
   of: (refs: (string | null | undefined)[], gb?: Buckets) => BucketKeyResult[];
   /** The top-level goal of a key result named by its id, key, title or name; null for a goal. */
@@ -45,7 +47,9 @@ const OWN_CODE = /^(KR|O)[\s-]?\d+(\.\d+)*\b/i;
  */
 export function usePriorityKeyResults(): PriorityKeyResults {
   const goals = useQuery("simple-priorities-goal-tree", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
-  return useMemo(() => {
+  const { error, reload } = goals;
+  const failed = useMemo(() => (error && !goals.data ? { error, retry: () => void reload() } : null), [error, goals.data, reload]);
+  const read = useMemo(() => {
     const list = goals.data ?? [];
     const krs = keyResults(list);
     // A goal named without its code ("Faster activation" for "G-A Faster activation") is found by its name.
@@ -77,6 +81,7 @@ export function usePriorityKeyResults(): PriorityKeyResults {
     };
     return { krs, of, top, under };
   }, [goals.data]);
+  return useMemo(() => ({ ...read, failed }), [read, failed]);
 }
 
 /** The top-level goal of a goal named by its key or title: itself unless it is a key result. */

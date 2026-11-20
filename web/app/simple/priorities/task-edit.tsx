@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { LoadError } from "@/components/ui";
 import { NotInGt } from "@/components/simple/FeatureName";
-import { api, type Schemas } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { BTN, nextNoteId, TaskActions, type Note } from "./goal-buckets";
@@ -37,11 +38,8 @@ export type MilestoneOption = { name: string; date: string | null };
 
 /** The roadmap's items, for each task's outcome and milestone (the item panel reads the same). */
 export function useRoadmapItems() {
-  return useQuery("simple-roadmap:{}", async () => {
-    const { data } = await api.GET("/v1/simple/roadmap", {});
-    if (!data) throw new Error("Could not read the roadmap");
-    return data;
-  });
+  // #1586 review: unwrap keeps the server's reason, which a failed read shows.
+  return useQuery("simple-roadmap:{}", () => unwrap(api.GET("/v1/simple/roadmap", {})));
 }
 
 /** A task's row in the priorities: by its code, else its name. */
@@ -430,6 +428,8 @@ export function useBucketTasks({
     setError,
   );
   const all = items.data?.items ?? [];
+  // #1586 review: a roadmap that could not be read says why, never buckets whose features have no milestone or actions.
+  const failed = items.error && !items.data ? <LoadError what="the roadmap" error={items.error} onRetry={() => void items.reload()} /> : null;
   const options = milestoneOptions(plan, all, items.data?.milestones);
   const itemOf = (t: Task) => all.find((i) => i.id === t.itemId);
   const live = (i: Item) => i.status !== "cut" && i.status !== "merged";
@@ -511,5 +511,5 @@ export function useBucketTasks({
   };
   /** A task carried to another goal's bucket (a draft: the goal buckets do not list it yet). */
   const move = (t: Task, to: { id: string; title: string }) => writes.move(t, itemOf(t), to);
-  return { taskOf, isCut, form, actions, add, dialog, undo: writes.undo, milestoneName, ownMilestone, move, editing };
+  return { taskOf, isCut, form, actions, add, dialog, failed, undo: writes.undo, milestoneName, ownMilestone, move, editing };
 }

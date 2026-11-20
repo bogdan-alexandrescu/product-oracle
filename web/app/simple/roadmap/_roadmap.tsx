@@ -9,7 +9,7 @@ import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
-import { Loading } from "@/components/ui";
+import { LoadError, Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { draftNext } from "@/lib/simple-home";
@@ -702,6 +702,8 @@ function DecisionTray({
   milestones = [],
   planned = [],
   proposals,
+  proposalsFailed,
+  proposalsLoading,
   act,
   canChange,
   onDecide,
@@ -723,6 +725,10 @@ function DecisionTray({
   /** QA Nov 12 #5: the roadmap's own milestones (M1 Beta), an end past one names it by its code. */
   planned?: Roadmap["milestones"];
   proposals: Change[];
+  /** #1586: the open proposals could not be read: their reason and Try again, never "None waiting". */
+  proposalsFailed?: { error: string; retry: () => void } | null;
+  /** #1586 review: the open proposals are still being read: Loading, never "None waiting". */
+  proposalsLoading?: boolean;
   act: Act;
   canChange: boolean;
   onDecide: (c: Change, how: "accept" | "decline") => void;
@@ -948,6 +954,8 @@ function DecisionTray({
       )}
       <section id="tray-dates" className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Dates to confirm</h3>
+        {/* #1586 review: the parts' own dates that could not be read say why, never rows with no part lines. */}
+        {dateRows.length > 0 && open.error && !open.data && <LoadError what="the dates of the parts" error={open.error} onRetry={() => void open.reload()} />}
         {dateRows.length ? (
           <ul>
             {dateRows.map(({ item: i, s, parts }) => (
@@ -980,7 +988,15 @@ function DecisionTray({
       </section>
       <section id="review-proposals" ref={proposalsRef} className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Proposals waiting</h3>
-        {others.length ? <ul>{others.map(row)}</ul> : <p className="text-sm text-text2">None waiting.</p>}
+        {proposalsFailed ? (
+          <LoadError what="the proposals" error={proposalsFailed.error} onRetry={proposalsFailed.retry} />
+        ) : others.length ? (
+          <ul>{others.map(row)}</ul>
+        ) : proposalsLoading ? (
+          <Loading />
+        ) : (
+          <p className="text-sm text-text2">None waiting.</p>
+        )}
       </section>
       <section id="tray-pulled" className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Pulled in, pending a decision</h3>
@@ -1008,12 +1024,17 @@ function DecisionTray({
             Oracle is suggesting features…
           </p>
         )}
-        {suggested.length ? (
+        {/* #1586: suggestions that could not be read say why, never "None waiting". */}
+        {suggestions.error && !suggestions.data ? (
+          <LoadError what="the suggested features" error={suggestions.error} onRetry={() => void suggestions.reload()} />
+        ) : suggested.length ? (
           <ul className="mt-2 flex flex-col gap-2">
             {suggested.map((s) => (
               <SuggestionCard key={s.id} s={s} api={suggestions} />
             ))}
           </ul>
+        ) : !suggestions.data ? (
+          <Loading />
         ) : (
           <p className="text-sm text-text2">None waiting.</p>
         )}
@@ -1609,6 +1630,8 @@ export function SimpleRoadmap() {
   // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
   // roadmap): no roadmap's Needs a decision lists or counts it.
   const allProposals = (proposals.data ?? []).filter((c) => !(c.op === "add_feature_ask" && !c.document_id));
+  const proposalsFailed = proposals.error && !proposals.data ? { error: proposals.error, retry: () => void proposals.reload() } : null;
+  const proposalsLoading = !proposals.data && !proposals.error;
   const decides = can("accept_simple_change") || data.items.some((i) => i.can_decide);
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
@@ -1631,6 +1654,8 @@ export function SimpleRoadmap() {
   // Like the side menu, no number until every part it adds up is read (a failed read counts as read).
   const read = (q: { data?: unknown; error: string | null }) => q.data !== undefined || !!q.error;
   const waitingRead = read(proposals) && read(suggestions) && (!anyFilter || read(wholeLinks));
+  // #1586: a part that could not be read leaves the number out (the tray says why), never counts it as none.
+  const waitingFailed = !!proposalsFailed || (!!suggestions.error && !suggestions.data) || (anyFilter && !!wholeLinks.error && !wholeLinks.data);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1747,12 +1772,12 @@ export function SimpleRoadmap() {
           data-testid="needs-decision"
           title={`Broken links, dates to confirm, proposals, items pulled in and suggested features, ${f.roadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}`}
           onClick={() => setTray(true)}
-          data-zero={!waitingRead || waiting ? undefined : "true"}
+          data-zero={!waitingRead || waitingFailed || waiting ? undefined : "true"}
           aria-busy={waitingRead ? undefined : true}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
-          className={waitingRead && waiting ? "border-warn" : "border-line text-text2"}
+          className={waitingRead && (waiting || waitingFailed) ? "border-warn" : "border-line text-text2"}
         >
-          Needs a decision{waitingRead ? ` · ${waiting}` : ""}
+          Needs a decision{waitingRead && !waitingFailed ? ` · ${waiting}` : ""}
         </Button>
       )}
       <Button
@@ -2174,6 +2199,8 @@ export function SimpleRoadmap() {
                     item={it}
                     items={byId}
                     proposals={allProposals.filter((c) => c.target.item_id === it.id)}
+                    proposalsFailed={proposalsFailed}
+                    proposalsLoading={proposalsLoading}
                     phone={sheet}
                     style={style}
                     act={act}
@@ -2253,6 +2280,8 @@ export function SimpleRoadmap() {
                 item={cardItem}
                 items={byId}
                 proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
+                proposalsFailed={proposalsFailed}
+                proposalsLoading={proposalsLoading}
                 phone={phone}
                 style={{ position: "relative", left: 0, top: 0, width: "100%", border: 0, boxShadow: "none" }}
                 act={act}
@@ -2313,6 +2342,8 @@ export function SimpleRoadmap() {
             item={cardItem}
             items={byId}
             proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
+            proposalsFailed={proposalsFailed}
+            proposalsLoading={proposalsLoading}
             phone={phone}
             style={{ left: card.left, top: card.top }}
             act={act}
@@ -2386,6 +2417,8 @@ export function SimpleRoadmap() {
           milestones={data.goal_milestones}
           planned={data.milestones}
           proposals={allProposals}
+          proposalsFailed={proposalsFailed}
+          proposalsLoading={proposalsLoading}
           act={act}
           canChange={canChange}
           onDecide={(c, how) => void onDecide(c, how)}

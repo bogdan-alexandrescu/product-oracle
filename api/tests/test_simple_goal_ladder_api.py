@@ -11,6 +11,9 @@ Test cards (protects / fails_when / no_claim):
 - test_place_card_never_changes_data: protects=placing a card leaves the goals, milestones,
   features and links read exactly as before; fails_when=a place moves a feature to another
   milestone or goal; no_claim=Edit ladder's moves (test_move_a_feature_to_another_milestone).
+- test_a_features_milestones_keep_their_order: protects=a feature on two milestones linked in
+  one go (same added time) reads its milestones in one order, whatever order the rows are
+  stored in; fails_when=the storage order swaps them (main CI run 44734213689).
 - test_a_viewer_places_cards_for_themselves: protects=a viewer may place cards (their own
   view) though every edit is refused; fails_when=a viewer gets 403; no_claim=commenters.
 - test_tidy_up_puts_back_only_my_cards and test_a_card_put_back_by_itself: protects=Tidy up
@@ -37,7 +40,7 @@ import uuid
 from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from oracle import company_time
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
@@ -97,6 +100,25 @@ async def test_place_card_never_changes_data(client):
         return out
 
     assert data(mine) == data(before)
+
+
+async def test_a_features_milestones_keep_their_order(client):
+    ctx, ids = await world()
+    low, high = uuid.UUID(int=1), uuid.UUID(int=2**128 - 1)
+    # f2's two links added in one go (one added time), stored in either order: the read is
+    # the same both times.
+    for stored in ([(low, "m2"), (high, "m3")], [(high, "m3"), (low, "m2")]):
+        async with tenant_session(ctx.tenant_id) as s:
+            await s.execute(delete(MilestoneFeature).where(MilestoneFeature.item_id == ids["f2"]))
+            for link_id, m in stored:
+                s.add(MilestoneFeature(id=link_id, milestone_id=ids[m], item_id=ids["f2"],
+                                       area_id=ids["onboard"], expected="+$40 each",
+                                       confidence="medium"))  # fmt: skip
+                await s.flush()
+            await s.commit()
+        body = await read(client, ctx)
+        [f2] = [f for f in body["features"] if f["id"] == ids["f2"]]
+        assert f2["milestones"] == [ids["m2"], ids["m3"]], stored
 
 
 async def test_a_viewer_places_cards_for_themselves(client):

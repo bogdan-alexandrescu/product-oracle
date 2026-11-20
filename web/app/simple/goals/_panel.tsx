@@ -107,6 +107,8 @@ export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; 
           item={item}
           items={byId}
           proposals={(proposals.data ?? []).filter((c) => c.target.item_id === item.id)}
+          proposalsFailed={proposals.error && !proposals.data ? { error: proposals.error, retry: () => void proposals.reload() } : null}
+          proposalsLoading={!proposals.data && !proposals.error}
           phone={phone}
           style={phone ? {} : { position: "relative", left: 0, top: 0 }}
           act={act}

@@ -6,6 +6,7 @@ import { Button, toast } from "@/components/ds";
 import { useFitViewport } from "@/lib/fit-viewport";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
+import { LoadError, Loading } from "@/components/ui";
 import { useQuery } from "@/lib/use-query";
 
 import { ChangeFailed, propose, undo, type Item } from "./_lib";
@@ -145,6 +146,12 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
               </li>
             ))}
             {removed.data && rows.length === 0 && <li className="px-3 py-2 text-text2">Nothing removed</li>}
+            {/* #1586: a list that could not be read says why, one still loading says so; never an empty list. */}
+            {!removed.data && (
+              <li className="px-3 pt-2">
+                {removed.error ? <LoadError what="what was removed" error={removed.error} onRetry={() => void removed.reload()} /> : <Loading />}
+              </li>
+            )}
           </ul>
         </div>
       )}

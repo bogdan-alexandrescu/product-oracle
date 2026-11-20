@@ -7,6 +7,7 @@ import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAs
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { FeatureName } from "@/components/simple/FeatureName";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { LoadError, Loading } from "@/components/ui";
 import { useFitViewport } from "@/lib/fit-viewport";
 import { FlowPanel, subjectOf, type FlowSubject } from "@/components/simple/FlowVisual";
 import { FlowDiagram, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
@@ -16,6 +17,7 @@ import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from "@/lib/a
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
+import { errorMessage } from "@/lib/use-query";
 
 import { HORIZONS, type Horizon } from "./_board";
 import { NameEdit, PanelFields } from "./_fields";
@@ -846,6 +848,8 @@ export function FloatingCard({
   item,
   items,
   proposals,
+  proposalsFailed,
+  proposalsLoading,
   phone,
   style,
   act,
@@ -882,6 +886,10 @@ export function FloatingCard({
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
+  /** #1586: the open proposals could not be read: their reason and Try again, never "No proposals waiting". */
+  proposalsFailed?: { error: string; retry: () => void } | null;
+  /** #1586 review: the open proposals are still being read: Loading, never "No proposals waiting". */
+  proposalsLoading?: boolean;
   phone: boolean;
   style: React.CSSProperties;
   act: Act;
@@ -915,16 +923,25 @@ export function FloatingCard({
   // when the card opens and kept as the talk changes.
   const [talkCards, setTalkCards] = useState<{ id: string; cards: ChatCard[] } | null>(null);
   const onTalkCards = useCallback((cards: ChatCard[]) => setTalkCards({ id: item.id, cards }), [item.id]);
+  // #1586 review: a talk that could not be read says why, never "No proposals waiting" while its cards may wait.
+  const [talkFailed, setTalkFailed] = useState<{ id: string; error: string } | null>(null);
+  const [talkTry, setTalkTry] = useState(0);
   useEffect(() => {
     let live = true;
     askThread(itemTalkPage(item.id))
-      .then((t) => live && onTalkCards(t.messages.flatMap((m) => m.cards ?? [])))
-      .catch(() => undefined);
+      .then((t) => {
+        if (!live) return;
+        setTalkFailed(null);
+        onTalkCards(t.messages.flatMap((m) => m.cards ?? []));
+      })
+      .catch((e: unknown) => live && setTalkFailed({ id: item.id, error: errorMessage(e) }));
     return () => {
       live = false;
     };
-  }, [item.id, onTalkCards]);
-  const waiting = talkCards && talkCards.id === item.id ? talkCards.cards.filter((c) => c.status === "open") : [];
+  }, [item.id, onTalkCards, talkTry]);
+  const talkRead = !!talkCards && talkCards.id === item.id;
+  const waiting = talkRead ? talkCards.cards.filter((c) => c.status === "open") : [];
+  const talkError = !talkRead && talkFailed?.id === item.id ? talkFailed.error : null;
   // qa4-simple-roadmap-41: the red flags on the roadmap now; the talk's change cards list only the ones a change brings.
   const known = useMemo(
     () => new Set([...items.values()].flatMap((i) => i.flags.filter((f) => f.state === "red").map((f) => flagKey(i.id, f.kind, f.subject)))),
@@ -1375,7 +1392,9 @@ export function FloatingCard({
                 ))}
               </ul>
             )}
-            {proposals.length ? (
+            {proposalsFailed ? (
+              <LoadError what="the proposals" error={proposalsFailed.error} onRetry={proposalsFailed.retry} />
+            ) : proposals.length ? (
               <ul className="mt-1 space-y-2" data-testid="card-proposals" data-waits>
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2">
@@ -1411,6 +1430,12 @@ export function FloatingCard({
                   </li>
                 ))}
               </ul>
+            ) : proposalsLoading ? (
+              <Loading />
+            ) : talkError ? (
+              <LoadError what="your talk with Oracle" error={talkError} onRetry={() => setTalkTry((n) => n + 1)} />
+            ) : !talkRead ? (
+              <Loading />
             ) : (
               !waiting.length && <p className="text-text2">No proposals waiting</p>
             )}
