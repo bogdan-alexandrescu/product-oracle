@@ -215,7 +215,7 @@ def _no_value(body: ActionIn) -> None:
         raise InvalidAction(f"{body.kind} takes no value")
 
 
-def _roadmap_items(body: ActionIn, ctx: ValidationContext) -> None:
+def _validate_roadmap_items(body: ActionIn, ctx: ValidationContext) -> None:
     """The D2 Product reasons vocabulary on ``roadmap_items.yaml`` (all kinds but
     look_again and add)."""
     if body.kind in ("look_again", "add"):
@@ -358,7 +358,7 @@ def _baseline_confirm(body: ActionIn, ctx: ValidationContext) -> None:
 
 # The spec owning each checkpoint kind registers its vocabulary here.
 VOCABULARY: dict[str, Validator] = {
-    "roadmap_items": _roadmap_items,
+    "roadmap_items": _validate_roadmap_items,
     "feature_set": _feature_set,
     "eng_review": _eng_review,
     "eng_dates": _eng_dates,
