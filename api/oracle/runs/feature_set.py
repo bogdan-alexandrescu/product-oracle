@@ -73,6 +73,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import confidence as confidence_weights
 from oracle import safe_yaml, wording
 from oracle.baseline.models import Entity, Proposal
+from oracle.errors import exception_text
 from oracle.runs.schemas import FeatureSetCheck as CheckOut
 from oracle.runs.schemas import PrdScopeOut, ScopeFeatureOut, ScopeGoal, ScopeRequirementOut
 from oracle.runs.scope_models import PrdScope, PrdScopeItem
@@ -255,7 +256,7 @@ def load_feature_set(text: str) -> Any:
         try:
             data = safe_yaml.load(text)
         except safe_yaml.SafeYamlError as exc:
-            raise FeatureSetError(exc.code, f"{FILE} is refused: {exc}") from exc
+            raise FeatureSetError(exc.code, f"{FILE} is refused: {exception_text(exc)}") from exc
         size = len(json.dumps(data, default=str).encode())
         if size > MAX_STORED_BYTES:
             raise FeatureSetError(
@@ -297,7 +298,7 @@ def check_feature_set(text: str, *, document: str | None, known: Known) -> Featu
     try:
         data = load_feature_set(text)
     except FeatureSetError as exc:
-        out.add("unreadable_yaml", str(exc))
+        out.add("unreadable_yaml", exception_text(exc))
         return out
     if not isinstance(data, dict):
         out.add("unreadable_yaml", f"{FILE} must be a mapping with a features list")

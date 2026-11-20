@@ -24,6 +24,7 @@ from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.connections.router import ProviderHttp
 from oracle.discussions import replies as discussion_replies
 from oracle.discussions import research as discussion_research
+from oracle.errors import exception_text
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.routing import APIRouter
 from oracle.runs import actions, agent_questions, service
@@ -73,7 +74,7 @@ async def _call[T](op: Awaitable[T]) -> T:
         return await op
     except service.RunError as exc:
         # A refusal with a structured detail (D8 ``review_changed``) keeps it.
-        detail = getattr(exc, "detail", None) or str(exc)
+        detail = getattr(exc, "detail", None) or exception_text(exc)
         if exc.refs:
             raise wording.Refused(exc.status, detail, exc.refs) from exc
         raise HTTPException(exc.status, detail) from exc
@@ -122,7 +123,7 @@ async def register_mcp_server(_: Owner) -> McpServerRegistration:
     try:
         result = await get_runtime().ensure_mcp_server(url)
     except RuntimeUnavailable as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, exception_text(exc)) from None
     return McpServerRegistration(name=MCP_SERVER, url=url, result=result)  # type: ignore[arg-type]
 
 
