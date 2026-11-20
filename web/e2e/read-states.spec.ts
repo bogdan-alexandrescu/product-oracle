@@ -130,3 +130,38 @@ test("Publish: a version that could not be read says so, never every section rev
   await page.reload();
   await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toBeVisible();
 });
+
+/** The first GET the mock answered whose path matches `re` (its query left off). */
+async function calledPath(page: Page, re: RegExp): Promise<string> {
+  const handle = await page.waitForFunction(
+    (src) => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []).map((l) => l.replace(/^GET /, "").split("?")[0]).find((p) => new RegExp(src).test(p)),
+    re.source,
+  );
+  return (await handle.jsonValue()) as string;
+}
+
+test("a PRD's review states that could not be read say so, never no re-review asked", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/visit-reminders/v/1");
+  const doc = page.getByRole("article", { name: "Document" }).filter({ visible: true });
+  await expect(doc.locator("h2, h3").first()).toBeVisible();
+  await expect(doc.getByTestId("load-error")).toHaveCount(0);
+
+  await failGets(page, "/v1/documents/visit-reminders/versions/1/section-states");
+  await page.reload();
+  await expect(doc.getByTestId("load-error")).toContainText("Could not load the sections' review states.");
+  await expect(doc.locator("h2, h3").first()).toBeVisible();
+});
+
+test("Simple: a whole PRD that could not be read says so under the one-pager", async ({ page }) => {
+  await page.context().addInitScript(() => localStorage.setItem("po-mock-scenario", "prd-calm-page"));
+  await login(page);
+  await page.goto("/simple/one-pagers/guided-setup");
+  await expect(page.getByTestId("prd-whole").getByRole("heading", { level: 2, name: "The whole PRD" })).toBeVisible();
+  const path = await calledPath(page, /^\/v1\/documents\/guided-setup\/versions\/\d+$/);
+
+  await failGets(page, path);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
+  await expect(page.getByTestId("prd-whole").getByTestId("load-error")).toContainText("Could not load the whole PRD.");
+});
