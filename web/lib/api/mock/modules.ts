@@ -589,7 +589,8 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         "/v1/module-catalog",
         "get",
         listed.map((c) => {
-          const { contract, ...out } = c;
+          const out: Omit<Catalog, "contract"> & Partial<Pick<Catalog, "contract">> = { ...c };
+          delete out.contract;
           return out;
         }),
       );
