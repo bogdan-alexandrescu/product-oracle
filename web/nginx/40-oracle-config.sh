@@ -4,9 +4,9 @@
 set -eu
 : "${ORACLE_GIT_SHA:=unknown}"
 export ORACLE_GIT_SHA
-envsubst '${ORACLE_GIT_SHA}' < /etc/nginx/oracle/default.conf.template > /etc/nginx/conf.d/default.conf
+envsubst "\${ORACLE_GIT_SHA}" < /etc/nginx/oracle/default.conf.template > /etc/nginx/conf.d/default.conf
 if [ -n "${API_INTERNAL_URL:-}" ]; then
-  envsubst '${API_INTERNAL_URL}' < /etc/nginx/oracle/api-proxy.conf.template > /etc/nginx/api-proxy.conf
+  envsubst "\${API_INTERNAL_URL}" < /etc/nginx/oracle/api-proxy.conf.template > /etc/nginx/api-proxy.conf
 else
   : > /etc/nginx/api-proxy.conf
 fi

@@ -11,7 +11,7 @@ ROOT="$(pwd)/dist-e2e"
 sed -e "s#listen 3000;#listen ${E2E_WEB_PORT};#" -e "s#root /usr/share/nginx/html;#root ${ROOT};#" \
   -e "s#/etc/nginx/security-headers.conf#${CONF}/security-headers.conf#g" \
   -e "s#/etc/nginx/api-proxy.conf#${CONF}/api-proxy.conf#" \
-  -e 's#${ORACLE_GIT_SHA}#unknown#' nginx/default.conf.template > "$CONF/conf.d/default.conf"
+  -e "s#\${ORACLE_GIT_SHA}#unknown#" nginx/default.conf.template > "$CONF/conf.d/default.conf"
 cp nginx/security-headers.conf "$CONF/security-headers.conf"
 sed -e "s#\${API_INTERNAL_URL}#${E2E_API_URL}#" nginx/api-proxy.conf.template > "$CONF/api-proxy.conf"
 cat > "$CONF/nginx.conf" <<NGINX
