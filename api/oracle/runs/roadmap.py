@@ -61,6 +61,7 @@ from datetime import date, datetime
 from typing import Any
 
 from oracle import safe_yaml
+from oracle.errors import exception_text
 from oracle.roadmap.schedule import Basis, supporting
 
 HORIZONS = ("now", "next", "later")
@@ -129,7 +130,9 @@ def _parse(text: str) -> Any:
     try:
         return safe_yaml.load(text)
     except safe_yaml.SafeYamlError as exc:
-        raise ItemsYamlError(exc.code, f"roadmap_items.yaml is refused: {exc}") from exc
+        raise ItemsYamlError(
+            exc.code, f"roadmap_items.yaml is refused: {exception_text(exc)}"
+        ) from exc
 
 
 def load_items_yaml(text: str) -> Any:
@@ -181,7 +184,7 @@ def check_items(
     try:
         data = load_items_yaml(text)
     except ItemsYamlError as exc:
-        out.add(exc.code, str(exc))
+        out.add(exc.code, exception_text(exc))
         return out
     if not isinstance(data, dict):
         out.add("invalid_shape", "roadmap_items.yaml must be a mapping with an items list")

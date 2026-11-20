@@ -149,6 +149,7 @@ from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.engineering import check as eng_check
 from oracle.engineering import dates as eng_dates
+from oracle.errors import exception_text
 from oracle.jobs.models import LlmSuggestion
 from oracle.members.leads import (
     ENGINEERING_KINDS,
@@ -2226,7 +2227,7 @@ def _resolve_knobs(flow: flows.FlowDef, knobs: KnobsIn) -> flows.Knobs:
     try:
         return flows.resolve_knobs(flow, knobs.model_dump())
     except flows.KnobError as exc:
-        raise Invalid(str(exc)) from exc
+        raise Invalid(exception_text(exc)) from exc
 
 
 async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> None:
@@ -2361,7 +2362,7 @@ async def create_run(
                 db, document_id, body.strategy_brief
             )
         except ValueError as exc:
-            raise Invalid(str(exc)) from exc
+            raise Invalid(exception_text(exc)) from exc
     run = Run(
         flow=flow.key,
         status="draft",
@@ -3483,10 +3484,11 @@ async def _mode(runtime: AgentRuntime, url: str) -> _Mode:
             # "on" does not make it safe to send the token.
             registered = False
             if exc.code == "mcp_unavailable":
-                notes.append(workflow.advice(exc.code, str(exc)))
+                notes.append(workflow.advice(exc.code, exception_text(exc)))
             else:
                 notes.append(
-                    f"Oracle's MCP server could not be registered in SwarmCloud ({exc}): "
+                    "Oracle's MCP server could not be registered in SwarmCloud "
+                    f"({exception_text(exc)}): "
                     "agents run without it. An owner can retry with POST "
                     "/v1/runtime/mcp-server."
                 )
@@ -3514,9 +3516,11 @@ async def _mode(runtime: AgentRuntime, url: str) -> _Mode:
 def _degrade(mode: _Mode, exc: RuntimeUnavailable) -> _Mode | None:
     """The mode to submit again with after a refusal, or None when none helps."""
     if exc.code in _DROP_WAITS and mode.waits:
-        return _Mode(mode.attach, False, [*mode.notes, workflow.advice(exc.code, str(exc))])
+        return _Mode(
+            mode.attach, False, [*mode.notes, workflow.advice(exc.code, exception_text(exc))]
+        )
     if exc.code in _DROP_MCP and mode.attach:
-        return _Mode(False, False, [*mode.notes, workflow.advice(exc.code, str(exc))])
+        return _Mode(False, False, [*mode.notes, workflow.advice(exc.code, exception_text(exc))])
     return None
 
 
@@ -3561,7 +3565,10 @@ def _unconfirmed(what: str) -> "Unavailable":
 
 def _shown(value: Any) -> str | None:
     """An upstream value as Oracle stores it: text, redacted, at most 200 characters."""
-    return None if value in (None, "") else redact(str(value))[:200]
+    if value in (None, ""):
+        return None
+    text = exception_text(value) if isinstance(value, BaseException) else str(value)
+    return redact(text)[:200]
 
 
 def _cause(exc: BaseException) -> str | None:
@@ -4090,7 +4097,7 @@ async def _submit_now(
         except RuntimeUnavailable as exc:
             lost["lookups"] = int(lost.get("lookups") or 0) + 1
             art["lost"] = lost
-            error = f"looking up submission {tag}: {exc}"
+            error = f"looking up submission {tag}: {exception_text(exc)}"
             if _lookup_exhausted(lost):
                 # Never resolved either way: an owner or the run's creator decides.
                 error += f". {_STUCK}"
@@ -4283,12 +4290,13 @@ async def _submit_now(
                     segment,
                     art,
                     change_request,
-                    f"{exc}; Oracle looks for submission {tag} before submitting again",
+                    f"{exception_text(exc)}; Oracle looks for submission {tag} "
+                    "before submitting again",
                 )
                 log.warning("run %s segment %s: submit lost: %s", run.id, segment.name, exc)
                 return None
             await revoke_run_tokens(db, run.id)
-            _pending(segment, art, change_request, workflow.advice(exc.code, str(exc)))
+            _pending(segment, art, change_request, workflow.advice(exc.code, exception_text(exc)))
             log.warning("run %s segment %s: submit failed: %s", run.id, segment.name, exc)
             return None
         if claim is not None and not await still_ours():
@@ -5066,7 +5074,7 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
     try:
         principal = _creator(tenant_id, user, token)
     except LookupError as exc:
-        return {"error": str(exc)}
+        return {"error": exception_text(exc)}
     source_id = await _draft_source(db, run)
     knobs = run.knobs or {}
     template = (
@@ -5117,7 +5125,7 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             # goes back to the writer (_send_back). All capped (rejection.refused).
             return rejection.refused(name, exc.problems)
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
-            return {"error": f"{name} was not imported: {exc}"}
+            return {"error": f"{name} was not imported: {exception_text(exc)}"}
         if not result.created and source_id and result.version.source is None:
             # The same draft was already imported (an agent pushed it) without its
             # provenance: record it now.
@@ -5172,7 +5180,7 @@ async def _run_importer(
     try:
         principal = _creator(tenant_id, user, token)
     except LookupError as exc:
-        return {"error": str(exc)}
+        return {"error": exception_text(exc)}
     # The importer works in its own transactions (a spec's design check takes up to
     # DESIGN_CHECK_SECONDS): this session holds none open meanwhile.
     await db.commit()
@@ -5263,7 +5271,7 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
     try:
         principal = _creator(tenant_id, user, token)
     except LookupError as exc:
-        return {"error": str(exc)}
+        return {"error": exception_text(exc)}
     async with tenant_session(tenant_id) as s:
         # H11: how far Oracle may go with the baseline, read now (a change applies to the
         # next merge). Below Act every write is a proposal; at Observe nothing is merged.
@@ -6690,7 +6698,7 @@ async def _retry_pending_cancel(
             marker = {**pending, "tried_at": _now().isoformat(), "error": _shown(exc)}
             _count_not_found(marker, pending, True)
             _set_knob(run, "workflow", {**wf, "cancel_pending": marker})
-            stats.errors.append(f"run {run.id}: {exc}")
+            stats.errors.append(f"run {run.id}: {exception_text(exc)}")
             return False
         raise
     _take_cost(run, wf, status, segments)
@@ -8558,7 +8566,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                     try:
                         await _complete_decision(db, run_id, owed, deadline, stats)
                     except Unavailable as exc:
-                        errors.append(f"run {run_id}: {exc}")
+                        errors.append(f"run {run_id}: {exception_text(exc)}")
                 # Each replay puts back only what its own unfinished passes counted: what an
                 # earlier one committed (the searches' pause, say) stays counted.
                 await _replay(
@@ -8593,7 +8601,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                 unread.setdefault(run_id, _unchecked_reason(exc))
         except RuntimeUnavailable as exc:
             await db.rollback()
-            errors.append(f"run {run_id}: {exc}")
+            errors.append(f"run {run_id}: {exception_text(exc)}")
             if not read:
                 unread.setdefault(run_id, _unchecked_reason(exc))
         except Exception as exc:  # one broken run must not stop the others
@@ -9012,12 +9020,14 @@ async def _apply_staged_edits(
         )
     except apply_edits.EditError as exc:
         raise _edits_refused(
-            "edit_cannot_apply", f"{exc}: remove that edit, or send back to the agents",
+            "edit_cannot_apply",
+            f"{exception_text(exc)}: remove that edit, or send back to the agents",
             actions=[str(exc.action_id)],
         ) from None  # fmt: skip
     except safe_yaml.SafeYamlError as exc:
         raise _edits_refused(
-            "edit_cannot_apply", f"{name} cannot be edited ({exc}): send back to the agents"
+            "edit_cannot_apply",
+            f"{name} cannot be edited ({exception_text(exc)}): send back to the agents",
         ) from None
     attempts = art.get("attempts") or []
     attempt = int(attempts[-1].get("attempt") or len(attempts)) if attempts else 1
@@ -9884,15 +9894,17 @@ async def _decide_in_workflow(
             # Nothing was recorded: the same decision is safe to send again (same
             # answer_id, same body).
             raise Unavailable(
-                f"SwarmCloud did not confirm the decision ({exc}); the decision is recorded "
-                "and Oracle posts it again on its next tick, there is no need to decide again",
+                f"SwarmCloud did not confirm the decision ({exception_text(exc)}); "
+                "the decision is recorded and Oracle posts it again on its next tick, "
+                "there is no need to decide again",
                 cause=exc,
             ) from None
         # Refused (the wait is closed, a person is required, or another refusal): not
         # posted, so the run continues as a new workflow with the decision.
         fallback = (
-            f"SwarmCloud refused Oracle's answer to {cp.kind} ({exc}), so the decision was not "
-            "posted: Oracle cancelled the workflow and continued the run as a new workflow "
+            f"SwarmCloud refused Oracle's answer to {cp.kind} ({exception_text(exc)}), "
+            "so the decision was not posted: Oracle cancelled the workflow and continued "
+            "the run as a new workflow "
             "from the Inbox decision."
         )
         _note(segment, workflow.advice(exc.code, fallback))
@@ -10900,7 +10912,9 @@ async def _retry_draft_import(
     try:
         run, segment, review, kind = await _retry_checked(db, principal, run_id, seq)
     except RunError as exc:
-        raise RunError(f"{exc} (the run changed while its draft was imported)") from exc
+        raise RunError(
+            f"{exception_text(exc)} (the run changed while its draft was imported)"
+        ) from exc
     finished = run.status == "succeeded"
     art = _art(segment)
     previous = art["import"]["error"]

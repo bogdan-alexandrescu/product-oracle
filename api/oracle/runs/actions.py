@@ -39,6 +39,7 @@ from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
 from oracle.engineering import check as eng_check
 from oracle.engineering import dates as eng_dates
+from oracle.errors import exception_text
 from oracle.members.leads import (
     ENGINEERING_KINDS,
     LEAD_ONLY,
@@ -310,7 +311,7 @@ def _eng_review(body: ActionIn, ctx: ValidationContext) -> None:
     try:
         eng_check.validate(body.kind, body.item_key, body.field, body.value, ctx.item_keys, asked)
     except eng_check.Invalid as exc:
-        raise InvalidAction(str(exc)) from None
+        raise InvalidAction(exception_text(exc)) from None
     if body.kind == "question":
         _question(body)
 
@@ -320,7 +321,7 @@ def _eng_dates(body: ActionIn, ctx: ValidationContext) -> None:
     try:
         eng_dates.validate(body.kind, body.item_key, body.field, body.value, ctx.items)
     except eng_dates.Invalid as exc:
-        raise InvalidAction(str(exc)) from None
+        raise InvalidAction(exception_text(exc)) from None
     if body.kind == "question":
         _question(body)
 
@@ -614,7 +615,7 @@ async def _ask(
             ),
         )
     except IntakeError as exc:
-        error = service.RunError(str(exc))
+        error = service.RunError(exception_text(exc))
         error.status = exc.status
         raise error from None
     document_id = run.document_id
@@ -658,7 +659,7 @@ async def put_action(
     try:
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
-        raise service.Invalid(str(exc)) from None
+        raise service.Invalid(exception_text(exc)) from None
     leads = await engineering_leads(db) if cp.kind in ENGINEERING_KINDS else frozenset()
     by_lead = lead_stop(cp.kind, run.flow, leads)
     # F4: with an engineering lead named, the leads and owners stage at its stops; anyone
