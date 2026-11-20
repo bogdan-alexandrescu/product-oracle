@@ -123,7 +123,11 @@ async def test_template_upgrade_skips_edited_archived_and_company_templates(
         and after[key][4][:-1] == before[key][4]
     }
     builtin_keys = {t.key for t in builtins.BUILTIN_TEMPLATES}
-    assert len(builtin_keys) == 12
+    assert builtin_keys == {
+        "oracle-default", "one-pager", "pr-faq", "narrative-memo", "shape-up-pitch",
+        "prd-rfc", "ai-feature", "now-next-later", "outcome-roadmap", "quarterly-timeline",
+        "release-plan", "cycle-bets",
+    }  # fmt: skip
     assert upgraded == builtin_keys - untouched
     # Seven PRD and five roadmap built-ins, still all there.
     kinds = {t.key: t.kind for t in builtins.BUILTIN_TEMPLATES}

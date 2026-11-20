@@ -14,6 +14,7 @@ import uuid
 from fastapi import HTTPException, Response, status
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.errors import exception_text
 from oracle.jobs.schemas import LlmJobOut
 from oracle.jobs.service import job_out
 from oracle.routing import APIRouter
@@ -34,7 +35,9 @@ async def _call[T](op) -> T:  # type: ignore[no-untyped-def]
     try:
         return await op
     except service.RunError as exc:
-        raise HTTPException(exc.status, getattr(exc, "detail", None) or str(exc)) from exc
+        raise HTTPException(
+            exc.status, getattr(exc, "detail", None) or exception_text(exc)
+        ) from exc
 
 
 @router.get("/{scope_id}", response_model=PrdScopeReview, operation_id="get_prd_scope_review")

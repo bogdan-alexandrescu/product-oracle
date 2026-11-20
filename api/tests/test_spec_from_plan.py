@@ -35,7 +35,7 @@ from oracle.v2.models import ArtifactOutput, ArtifactRequest, ArtifactVersion
 from tests.baseline_helpers import make_ctx
 from tests.specs_helpers import PRD, add_approver, make_world, request_spec
 from tests.test_plan import Seed, by_key, plan
-from tests.test_specs_review2 import generated
+from tests.test_specs import generated_review2 as generated
 
 
 @pytest.fixture

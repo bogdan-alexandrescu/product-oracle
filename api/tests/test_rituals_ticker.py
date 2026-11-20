@@ -71,7 +71,8 @@ async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
         # by default).
         assert r.schedule["timezone"] == "America/Los_Angeles"
     await tick(ctx.tenant_id)
-    assert len(await rituals_of(ctx.tenant_id)) == 12
+    # A second tick seeds nothing: the same twelve built-ins, not thirteen.
+    assert set(await rituals_of(ctx.tenant_id)) == set(seeded)
 
 
 async def test_an_occurrence_is_created_once_at_its_preparation_moment(ctx, at):

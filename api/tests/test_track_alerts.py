@@ -681,6 +681,7 @@ async def test_the_hourly_pass_syncs_twenty_tracks_with_no_model_call(owner, mon
     monkeypatch.setattr(gateway, "complete", no_model)
     monkeypatch.setattr(gateway, "stream", no_model)
     tenant_id, _ = owner
+    track_ids: list[uuid.UUID] = []
     async with tenant_session(tenant_id) as s:
         for n in range(20):
             prd = Document(slug=f"prd-{n}", title=f"PRD {n}", kind="prd")
@@ -689,6 +690,7 @@ async def test_the_hourly_pass_syncs_twenty_tracks_with_no_model_call(owner, mon
             track = ProductTrack(prd_document_id=prd.id, title=f"Track {n}")
             s.add(track)
             await s.flush()
+            track_ids.append(track.id)
             s.add(
                 TrackerRecord(
                     tracker="linear", external_ref=f"ENG-{900 + n}", title="Cleanup",
@@ -701,7 +703,10 @@ async def test_the_hourly_pass_syncs_twenty_tracks_with_no_model_call(owner, mon
         await s.commit()
     async with tenant_session(tenant_id) as s:
         rows = list(await s.scalars(select(TrackAlert)))
-    assert len(rows) == 20 and {a.kind for a in rows} == {"unplanned"}
+    # Every one of the 20 due tracks got exactly one alert, of kind unplanned.
+    assert len(rows) == 20
+    assert {a.track_id for a in rows} == set(track_ids)
+    assert {a.kind for a in rows} == {"unplanned"}
     assert {a.item_key for a in rows} == {""}
 
 

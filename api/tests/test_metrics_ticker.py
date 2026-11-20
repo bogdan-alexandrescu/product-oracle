@@ -82,7 +82,9 @@ async def test_one_tick_stores_the_missing_week_once(client, ctx, clock, fake_po
     for _ in range(4):
         await _tick(ctx.tenant_id)
     assert await _count(ctx.tenant_id) == 14
-    assert len(fake_posthog.metric_queries()) == 12 + 2
+    # No duplicate re-query: every week queried is distinct, 12 + 2 of them.
+    weeks = [w for r in fake_posthog.requests if (w := fake_posthog.week_of(r)) is not None]
+    assert len(weeks) == len(set(weeks)) == 12 + 2
     row = await _metric(ctx.tenant_id, metric["id"])
     assert row.last_pulled_at is not None and row.attempts == 0
 

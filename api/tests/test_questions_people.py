@@ -786,9 +786,16 @@ async def test_people_who_decide_page_past_the_first_twenty(client):
     resp = await client.post(f"/v1/members/{gone.id}/disable", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     everyone = await client.get("/v1/people", params={"limit": 500}, headers=ctx.as_("viewer"))
-    assert len(everyone.json()) == 28
+    # The default four plus the 24 new members; the disabled "gone" is not offered.
+    assert sorted(p["email"] for p in everyone.json()) == sorted(
+        ["owner@example.com", "approver@example.com", "commenter@example.com",
+         "viewer@example.com"] + [f"member.{n:02d}@example.com" for n in range(24)]
+    )  # fmt: skip
     deciders = sorted(p["email"] for p in everyone.json() if p["role"] in ("approver", "owner"))
-    assert len(deciders) == 14
+    assert deciders == sorted(
+        ["owner@example.com", "approver@example.com"]
+        + [f"member.{n:02d}@example.com" for n in range(24) if n % 4 in (0, 2)]
+    )
     seen: list[str] = []
     for offset in range(0, 20, 5):
         resp = await client.get(

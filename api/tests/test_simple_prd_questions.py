@@ -133,7 +133,7 @@ async def test_import_reads_sixteen_questions(client):
     await seed(ctx)
     body = await page(client, ctx)
     qs = {q["code"]: q for q in body["questions"]}
-    assert len(qs) == 16
+    assert set(qs) == {f"Q{i}" for i in range(1, 17)}
     assert qs["Q1"]["status"] == "decided" and qs["Q1"]["column"] == "decided"
     assert qs["Q1"]["decided_at"].startswith("2026-10-20")
     q3 = qs["Q3"]
@@ -155,7 +155,7 @@ async def test_reimport_never_duplicates(client):
         await version(s, prd, 2, FIXTURE.replace("Question number 7 ", "Question seven, reworded "))
         await s.commit()
     body = await page(client, ctx)
-    assert len(body["questions"]) == 16
+    assert sorted(q["code"] for q in body["questions"]) == sorted(f"Q{i}" for i in range(1, 17))
     assert {q["code"]: q["title"] for q in body["questions"]}["Q7"] == "Question seven, reworded"
     async with tenant_session(ctx.tenant_id) as s:
         assert await s.scalar(select(func.count()).select_from(Decision)) == 16
@@ -357,7 +357,7 @@ async def test_removed_question_leaves(client):
         await version(s, await s.get(Document, ids["prd"]), 2, body)
         await s.commit()
     qs = (await page(client, ctx))["questions"]
-    assert len(qs) == 15 and "Q16" not in {q["code"] for q in qs}
+    assert sorted(q["code"] for q in qs) == sorted(f"Q{i}" for i in range(1, 16))
     w = (await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("decider"))).json()
     assert "Q16" not in {q["code"] for q in w["questions"]}
 
@@ -401,12 +401,14 @@ async def test_filters_narrow_questions(client):
         s.add(Document(slug="usage-alerts", title="Usage alerts", kind="prd",
                        status="approved", visibility="company"))  # fmt: skip
         await s.commit()
-    assert len((await page(client, ctx))["questions"]) == 16
+    assert sorted(q["code"] for q in (await page(client, ctx))["questions"]) == sorted(
+        f"Q{i}" for i in range(1, 17)
+    )
     r = await client.get("/v1/simple/decisions?prd=usage-alerts", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert r.json()["questions"] == [] and r.json()["waiting_count"] == 0
     r = await client.get("/v1/simple/decisions?prd=guided-setup", headers=ctx.as_("owner"))
-    assert len(r.json()["questions"]) == 16
+    assert sorted(q["code"] for q in r.json()["questions"]) == sorted(f"Q{i}" for i in range(1, 17))
     r = await client.get(f"/v1/simple/decisions?meeting={uuid.uuid4()}", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert r.json()["questions"] == []
@@ -448,7 +450,7 @@ async def test_meeting_agenda_keeps_what_it_decided(client):
     open_ = sorted((q for q in listed if q["status"] == "proposed"),
                    key=lambda q: (q["due_on"] or "9999", q["number"]))  # fmt: skip
     every = [q["code"] for q in open_]
-    assert len(every) == 15 and {"Q7", "Q16"} <= set(every)
+    assert sorted(every) == sorted(f"Q{i}" for i in range(2, 17))
     assert [q["code"] for q in m["decisions_due"]] == every
     # The agenda holds the PRD's questions; "Open decisions" never lists them again.
     assert not [d for d in m["open_decisions"] if d["title"].startswith("Question number")]

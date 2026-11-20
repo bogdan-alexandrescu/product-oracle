@@ -10,15 +10,15 @@ import pytest
 from oracle.runs.models import Run, RunSegment
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import person, setup
-from tests.test_review_v2_security_6 import (  # noqa: F401
+from tests.test_review_v2_security import (  # noqa: F401
     OVERSPEND,
     _at_checkpoint,
     _decide,
     _read,
     _started,
-    _tick,
     runtime,
 )
+from tests.test_review_v2_security import _tick_security6 as _tick
 
 
 async def _demote(client, ctx, user_id, role: str):

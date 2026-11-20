@@ -2,7 +2,7 @@
 
 Card: protects=rituals.attendees_edited_at comes and goes with the revision, chained on
 0086_simple_meetings as the single head; fails_when=the column is missing or the
-downgrade leaves it; no_claim=its use (tests/test_simple_walk_fixes_review2_api.py).
+downgrade leaves it; no_claim=its use (tests/test_simple_walk_fixes_review_api.py).
 
 Sync on purpose (Alembic runs its own event loop); its own scratch database."""
 

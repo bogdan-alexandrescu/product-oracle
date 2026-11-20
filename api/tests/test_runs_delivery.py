@@ -26,14 +26,14 @@ from tests.test_adapter_v2 import (
     _draft_markdown,
     _knobs_of,
     _waiting,
+    _wf_cost,
     doc_findings,
     mcp_session,
     on,
     token_of,
 )
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_adapter_v2_round7 import _wf_cost
-from tests.test_review_v2_security_3 import member_token
+from tests.test_review_v2_security import member_token
 from tests.test_runs import get, pending, started, tick
 from tests.test_runs import runtime as runtime  # the FakeRuntime fixture
 

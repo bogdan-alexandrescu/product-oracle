@@ -13,7 +13,7 @@ from oracle.auth.models import ApiToken
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import person, setup, verdict
-from tests.test_review_v2_security_3 import member_token
+from tests.test_review_v2_security import member_token
 
 
 def remove_url(token_id: uuid.UUID | str) -> str:

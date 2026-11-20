@@ -107,7 +107,7 @@ async def test_answers_before_drafting_make_no_feedback(client, runtime):  # noq
 
 async def _private_answer(client) -> tuple:
     """A drafted intake whose model question's finding is private, answered late."""
-    from tests.test_intake_sharing_round4 import _model_question, _privacy_gap, authored_with
+    from tests.test_intake_sharing import _model_question, _privacy_gap, authored_with
 
     holder: dict = {}
 
@@ -151,7 +151,7 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
     """#587 review MAJOR 2: the feedback item quoting an answer follows its finding's
     level; and an answer given while the finding was private becomes feedback once it is
     shared in full."""
-    from tests.test_intake_sharing_round4 import share
+    from tests.test_intake_sharing import share
 
     ctx, intake_id, fid, body = await _private_answer(client)
     # Shared in full: now it is feedback.
@@ -180,7 +180,7 @@ async def test_a_late_answer_someone_acted_on_is_kept_with_its_quote_withheld(
 ):
     """#595 re-review: an item someone triaged is not deleted (nor what hangs off it) when
     its finding goes private: it stays, its quote withheld, and reads in full once shared."""
-    from tests.test_intake_sharing_round4 import share
+    from tests.test_intake_sharing import share
 
     ctx, intake_id, fid, body = await _private_answer(client)
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
@@ -217,7 +217,7 @@ async def test_a_withheld_late_answer_hides_its_suggestions_too(
 
     from oracle.jobs.models import LlmSuggestion
     from oracle.review.models import FeedbackItem
-    from tests.test_intake_sharing_round4 import share
+    from tests.test_intake_sharing import share
 
     ctx, intake_id, fid, body = await _private_answer(client)
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
@@ -299,7 +299,7 @@ async def test_a_withheld_late_answer_hides_its_lines_in_job_outputs(
     from oracle.docs.models import Document, DocumentVersion
     from oracle.jobs.models import LlmJob
     from oracle.review.models import FeedbackItem
-    from tests.test_intake_sharing_round4 import share
+    from tests.test_intake_sharing import share
 
     ctx, intake_id, fid, body = await _private_answer(client)
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
@@ -411,7 +411,7 @@ async def test_a_withheld_note_from_an_earlier_suggestion_stays_withheld(
 
     from oracle.jobs.models import LlmSuggestion
     from oracle.review.models import FeedbackItem
-    from tests.test_intake_sharing_round4 import share
+    from tests.test_intake_sharing import share
 
     ctx, intake_id, fid, body = await _private_answer(client)
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200

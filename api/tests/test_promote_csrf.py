@@ -30,12 +30,15 @@ from oracle.runtokens import verify_run_token
 from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, StakeholderQuestion
 from tests.baseline_helpers import make_ctx
-from tests.test_intake_sharing_round5 import ANSWER as INTAKE_ANSWER
-from tests.test_intake_sharing_round5 import MODEL_GAP, _blocker_gap, share, world
-from tests.test_intake_sharing_round6 import (
-    _intake_read_on_the_job,  # noqa: F401 (autouse fixture: INT2's job path)
-    fake,  # noqa: F401 (fixture)
+from tests.test_intake_sharing import ANSWER as INTAKE_ANSWER
+from tests.test_intake_sharing import (  # noqa: F401 (fixtures)
+    MODEL_GAP,
+    _blocker_gap,
+    _intake_read_on_the_job,
+    fake,
+    world,
 )
+from tests.test_intake_sharing import share_round5 as share
 from tests.test_mcp import local_runtime, run_token  # noqa: F401 (fixture)
 
 B = "/v1/baseline"

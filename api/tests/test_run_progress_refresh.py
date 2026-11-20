@@ -10,9 +10,8 @@ from oracle.baseline.models import Proposal
 from oracle.runs import service
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
-from tests.test_adapter_v2 import on, use
+from tests.test_adapter_v2 import _interrupted, on, use
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_adapter_v2_round9 import _interrupted
 from tests.test_runs import get, started, tick
 
 settings = _v2_settings

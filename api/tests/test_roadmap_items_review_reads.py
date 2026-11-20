@@ -97,7 +97,7 @@ async def test_the_review_screens_reads_do_not_grow_with_its_items(client, owner
 
     few, _ = await reads_of(client, auth, small_review)
     many, review = await reads_of(client, auth, big_review)
-    assert len(review["items"]) == 38
+    assert sorted(i["key"] for i in review["items"]) == sorted(f"item-{n}" for n in range(38))
     assert all(len(i["actions"]) == 2 for i in review["items"])
     assert len(many) == len(few), (len(few), len(many))
     assert len(many) <= MAX_REVIEW_READS, len(many)
