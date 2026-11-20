@@ -192,7 +192,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     # removed-tracks, prd-order, feature-parts, qaC-numfix, item-milestone, milestone-kinds,
     # tb-mk, feature-panel, track-order, ritual-failed-at, simple-change-indexes,
     # outcomes-edit, roadmap-dates: renumbered on merge.
-    assert script.get_heads() == ["0132_roadmap_picked_quarter"]
+    assert script.get_heads() == ["0133_null_run_cost"]
 
     command.upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()
