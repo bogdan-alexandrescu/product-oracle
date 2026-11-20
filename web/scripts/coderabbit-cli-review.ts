@@ -44,9 +44,19 @@ function live(base: string, extra: string[]): CliReviewInput {
     console.error("coderabbit is not installed: run `make agent-setup` from the repository root.");
     process.exit(1);
   }
-  const diffFiles = lines(
-    execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], { cwd: ROOT, encoding: "utf8" }),
-  );
+  let diffFiles: string[];
+  try {
+    diffFiles = lines(
+      execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], {
+        cwd: ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
+    );
+  } catch {
+    console.log(`coderabbit review: did-not-review (0 findings)\n  - base ${base} not found: fetch it or pass --base`);
+    process.exit(1);
+  }
   const run = spawnSync(CLI, ["review", "--agent", "--committed", "--base", base, ...extra], {
     cwd: ROOT,
     encoding: "utf8",
