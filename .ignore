@@ -1,0 +1,23 @@
+# Generated, lock and bulk files that ripgrep (and the Grep and Glob tools built on it)
+# skips on a broad search. A census that must see everything uses `git grep` or
+# `rg --no-ignore`. Read the large source files by range: .claude/rules/large-files.md.
+
+# Generated from the API (make openapi)
+web/lib/api/openapi.json
+web/lib/api/schema.d.ts
+
+# Bulk data
+api/oracle/roadmap/unicode/confusables.txt
+
+# Lockfiles
+uv.lock
+api/uv.lock
+web/package-lock.json
+
+# Design images and frames
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.pdf

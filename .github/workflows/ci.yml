@@ -180,6 +180,8 @@ jobs:
       # A spec that measures elapsed time is tagged @timing, so it runs alone in e2e-timing.
       - name: Timing specs are tagged @timing
         run: node scripts/check-timing-tags.mjs
+      - name: Repo tools pass their self-tests
+        run: node scripts/replace.mjs --self-test && node scripts/mutate.mjs --self-test
       - run: npm run build
 
   e2e:

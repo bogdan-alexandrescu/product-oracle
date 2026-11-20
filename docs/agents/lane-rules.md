@@ -2,6 +2,8 @@
 
 Shared rules for every SwarmCloud lane on this repo. A lane prompt says "Follow
 docs/agents/lane-rules.md"; the product rules are in .claude/rules/oracle-product.md.
+The repo-wide rules (router, feature loop, token economy, gates) are in the root
+`CLAUDE.md`; the incidents behind these rules are in `docs/lessons/README.md`.
 
 ## Building a lane
 
@@ -26,8 +28,8 @@ docs/agents/lane-rules.md"; the product rules are in .claude/rules/oracle-produc
   Set `ORACLE_TEST_DATABASE_URL`: without it, tests that cannot reach a database are
   skipped, not failed. Each xdist worker makes its own database (`oracle_test_gw0`, ...).
   Stop it with `pg_ctl -D "$XDG_CACHE_HOME/pgdata" stop` before tsc or a build.
-- Never put the data directory, logs or other scratch under a literal /tmp (3 GiB; a lane
-  that filled it was evicted) or in the workspace (5 GiB, checkpointed). Use `$TMPDIR`.
+- Never put the data directory, logs or other scratch under a literal /tmp (3 GiB) or in
+  the workspace (5 GiB, checkpointed). Use `$TMPDIR`. Why: `docs/lessons/README.md`.
 - A migration, if one is needed, chains after the branch's own head, so
   `cd api && uv run alembic heads` shows one head (CLD renumbers when trains merge).
 - Web checks, from `web/`: `npx next typegen && npx tsc --noEmit -p .`, then `npm run lint`.
@@ -47,9 +49,9 @@ docs/agents/lane-rules.md"; the product rules are in .claude/rules/oracle-produc
 - Roles in the web go through `can()` or an item's own `can_*` field only.
 - No company or customer data in code, tests or the PR.
 - Never use pkill, killall or kill on a pattern; kill by PID.
-- The container has 8 GiB (a lane was OOM-killed). `free -m` shows the host, not the
-  container: watch `cat /sys/fs/cgroup/memory.current` between stages and stop a stage that
-  passes 6 GiB. Run one heavy command at a time.
+- The container has 8 GiB. `free -m` shows the host, not the container: watch
+  `cat /sys/fs/cgroup/memory.current` between stages and stop a stage that passes 6 GiB. Run
+  one heavy command at a time. Why: `docs/lessons/README.md`.
 
 ## Reviewing a lane
 
