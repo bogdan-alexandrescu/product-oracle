@@ -50,3 +50,9 @@ async def test_an_unexpected_failure_is_not_swallowed():
         await public._passcode_of(
             _request(b"", "application/json", fail=RuntimeError("receive broke"))
         )
+
+
+async def test_a_body_nested_too_deep_is_empty_not_a_crash():
+    # The narrowed catch must still cover json's RecursionError: a public route, no login.
+    body = b"[" * 200_000
+    assert await public._passcode_of(_request(body, "application/json")) == ""
