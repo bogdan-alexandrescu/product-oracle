@@ -17,6 +17,7 @@ there is no other tree to read.
 import json
 import os
 import sys
+from importlib.util import cache_from_source
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,7 @@ class ForeignRead(AssertionError):
     Not an OSError: pathlib's glob and os.walk drop those, and the read would pass as empty."""
 
 
-_state: dict = {"armed": False, "allowed": ()}
+_state: dict = {"armed": False, "allowed": (), "cached": ()}
 
 
 def foreign(path: str | Path) -> Path | None:
@@ -61,6 +62,8 @@ def _hook(event: str, args: tuple) -> None:
         return  # a file descriptor, or a bytes path no repo file uses (None: the cwd, api/)
     found = foreign(path)
     if found is None or found in _state["allowed"]:
+        return
+    if any(str(found).startswith(cache) for cache in _state["cached"]):
         return
     _state["armed"] = False  # building the error must not trip the hook again
     try:
@@ -94,10 +97,14 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_protocol(item: pytest.Item, nextitem):
     marks = list(item.iter_markers("foreign_read"))
-    _state["allowed"] = tuple((ROOT / p).resolve() for m in marks for p in m.args)
+    named = [(ROOT / p).resolve() for m in marks for p in m.args]
+    _state["allowed"] = tuple(named)
+    # An allowed .py is imported: Python reads its bytecode cache beside it and writes it
+    # through a temporary <cache>.<id> file.
+    _state["cached"] = tuple(cache_from_source(p) for p in named if p.suffix == ".py")
     _state["armed"] = True
     try:
         return (yield)
     finally:
         _state["armed"] = False
-        _state["allowed"] = ()
+        _state["allowed"] = _state["cached"] = ()

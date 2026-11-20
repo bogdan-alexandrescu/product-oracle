@@ -21,7 +21,7 @@ DOCS = Path(__file__).resolve().parents[1]
 ROOT = DOCS.parent
 HERE = DOCS / "contracts"
 TEMPLATES = DOCS / "research" / "templates"
-_YAML_FENCE = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```", re.S | re.M)
+_YAML_FENCE = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```", re.DOTALL | re.MULTILINE)
 # Not sources (build output, packages, CI config); the API checks its own tree, api/.
 _SKIP_DIRS = {
     ".git", ".github", "private", "node_modules", ".venv", "__pycache__",
