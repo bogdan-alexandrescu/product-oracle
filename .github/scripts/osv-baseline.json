@@ -1,0 +1,18 @@
+{"accepted": [
+  {"package":"brotlicffi","id":"PYSEC-2026-4323","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade brotlicffi past 1.2.0.2 to clear it."},
+  {"package":"brotli","id":"PYSEC-2026-4322","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade brotli past 1.2.0 to clear it."},
+  {"package":"certifi","id":"PYSEC-2026-4320","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade certifi past 2026.7.22 to clear it."},
+  {"package":"minimatch","id":"GHSA-g3hv-75wg-m249","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade minimatch past 10.2.6 to clear it."},
+  {"package":"opentelemetry-api","id":"GHSA-mf5v-w3w3-f6cg","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade opentelemetry-api past 1.45.1 to clear it."},
+  {"package":"pypdf","id":"GHSA-42gh-23hr-vphw","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-4vqv-7265-gm2w","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-5849-834g-hvw5","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-5hx5-vpf9-5wcv","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-62m5-6wh8-28x7","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-6c7f-9265-g8fw","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-cggf-277g-3q54","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-gmh7-3g9r-mjh5","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-jr96-gvgh-j3r4","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-mfr5-77xh-9j7h","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."},
+  {"package":"pypdf","id":"GHSA-x3rh-gjgm-fmqc","reason":"On main when the scan began (Nov 20, 2026, #1566): upgrade pypdf past 6.21.0 to clear it."}
+]}

@@ -1,0 +1,8 @@
+{
+  "include": ["api/oracle"],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.12",
+  "venvPath": "api",
+  "venv": ".venv",
+  "extraPaths": ["api"]
+}

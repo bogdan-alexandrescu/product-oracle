@@ -2342,27 +2342,6 @@ def words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
     return _words(c, v, names, _target(c, v))
 
 
-async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> set[uuid.UUID]:
-    """simple-replaced-prds: the proposals waiting on an item of a replaced PRD, which leave
-    Simple with the item (service.load); decided ones stay as history."""
-    by_item: dict[uuid.UUID, list[uuid.UUID]] = {}
-    for c in changes:
-        if c.status != "proposed" or not c.target.get("item_id"):
-            continue
-        try:
-            by_item.setdefault(uuid.UUID(str(c.target["item_id"])), []).append(c.id)
-        except ValueError:
-            pass
-    if not by_item or not (replaced := await roadmap_company.replaced_prd_ids(db)):
-        return set()
-    items = await db.scalars(
-        select(RoadmapItem.id).where(
-            RoadmapItem.id.in_(list(by_item)), RoadmapItem.prd_document_id.in_(replaced)
-        )
-    )
-    return {cid for iid in items for cid in by_item[iid]}
-
-
 def _subject(
     c: SimpleChange, questions: dict[str, Any], prds: dict[uuid.UUID, str] | None = None
 ) -> dict[str, Any]:
