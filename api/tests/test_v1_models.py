@@ -193,7 +193,9 @@ async def test_seed_gives_the_tenant_the_default_template():
 
     r = await seed()
     async with tenant_session(r.tenant_id) as s:
-        assert await s.scalar(select(Template.key)) == DEFAULT_TEMPLATE_KEY
+        # The built-in templates are seeded too: the default is one of them.
+        keys = set((await s.scalars(select(Template.key))).all())
+    assert DEFAULT_TEMPLATE_KEY in keys
 
 
 @pytest.mark.parametrize(

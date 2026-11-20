@@ -1355,7 +1355,9 @@ async def test_the_summary_level_shows_the_fixed_line_until_the_author_confirms(
     async with tenant_session(ctx.tenant_id) as s:
         events = (
             await s.scalars(
-                select(AuditEvent).where(AuditEvent.action == "intake.finding_summary_set")
+                select(AuditEvent)
+                .where(AuditEvent.action == "intake.finding_summary_set")
+                .order_by(AuditEvent.created_at)
             )
         ).all()
     assert [e.data["edited"] for e in events] == [False, True]
