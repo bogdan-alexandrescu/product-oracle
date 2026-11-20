@@ -120,7 +120,8 @@ class Answer:
     http_status: int | None = None
     error: str | None = None
     excerpt: str | None = None
-    duration_ms: int = 0
+    # None: not known (a call that timed out never ended).
+    duration_ms: int | None = None
     retry_after: float | None = None
 
 
@@ -188,7 +189,8 @@ async def post(client: httpx.AsyncClient, url: str, body: bytes, headers: dict) 
         out.error = "timeout"
     except httpx.HTTPError as e:
         out.error = _error_code(e)
-    out.duration_ms = int((time.monotonic() - started) * 1000)
+    if out.error != "timeout":
+        out.duration_ms = int((time.monotonic() - started) * 1000)
     return out
 
 
