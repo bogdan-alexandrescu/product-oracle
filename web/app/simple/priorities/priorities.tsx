@@ -16,6 +16,7 @@ import { useMe } from "@/lib/me";
 import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
 import { useSetParams } from "@/lib/use-set-params";
 import { topGoalSuggestions } from "@/lib/key-results";
+import { LoadError } from "@/components/ui";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
@@ -357,6 +358,8 @@ export function Priorities() {
       <div role="tabpanel" id="prio-panel" aria-labelledby={`prio-tab-${tab}`}>
       {q.error && !data && <p role="alert" className="text-crit">{q.error}</p>}
       {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
+      {/* #1586: key results that could not be read say why, never goals that have none. */}
+      {kr.failed && <LoadError what="the key results" error={kr.failed.error} onRetry={kr.failed.retry} />}
       {blank && (
         <p className="text-text2" data-testid="priorities-empty">
           {hasGoals ? (
