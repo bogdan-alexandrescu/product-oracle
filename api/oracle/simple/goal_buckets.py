@@ -45,6 +45,7 @@ from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.goals import figure_words, unit_ok
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.roadmap.models import RoadmapItem
 from oracle.routing import APIRouter
 from oracle.simple.router import Approver, Reader
@@ -468,7 +469,7 @@ def _fields(g: Entity, body: GoalIn) -> None:
     try:
         attrs = typed_target(attrs, body.target)
     except TargetKept as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from e
     g.attrs = attrs
 
 

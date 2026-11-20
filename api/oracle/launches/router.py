@@ -22,6 +22,7 @@ from sqlalchemy import select
 from oracle import audit, autonomy_drafts, changes, company_time
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
+from oracle.errors import exception_text
 from oracle.launches import changelog, service
 from oracle.launches.models import ChangelogEntry, Launch, LaunchTask, RequesterNote
 from oracle.launches.schemas import (
@@ -63,7 +64,7 @@ changes.register_handler("launches.plan", service.on_published, subjects={"docum
 
 
 def _fail(exc: service.LaunchError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    return HTTPException(exc.status, exception_text(exc))
 
 
 async def _launch(db, launch_id: uuid.UUID, *, for_update: bool = False) -> Launch:
@@ -175,7 +176,7 @@ async def draft_launch_kit(launch_id: uuid.UUID, principal: Approver, db: Tenant
     except service.LaunchError as e:
         raise _fail(e) from e
     except runs_service.RunError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     await runs_service.submit_queued(db, run_id)
     return await runs_service.read_run(db, run_id, principal)
 

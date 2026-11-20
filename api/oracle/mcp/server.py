@@ -15,6 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
+from oracle.errors import exception_text
 from oracle.lazy import LazyModule
 from oracle.mcp import auth, scopes
 from oracle.mcp.curated import CONFIDENCE_GUIDANCE, CURATED, CURATED_NAMES, Curated
@@ -170,7 +171,9 @@ class Catalog:
             resp = await call_operation(self.app, self.caller, op, args)
             return to_result(resp, plain=plain_for(self.caller))
         except ToolError as exc:
-            return types.CallToolResult(content=[types.TextContent(text=str(exc))], is_error=True)
+            return types.CallToolResult(
+                content=[types.TextContent(text=exception_text(exc))], is_error=True
+            )
 
 
 def plain_for(caller: auth.McpCaller) -> bool:

@@ -18,6 +18,7 @@ from fastapi import Depends, HTTPException, Query, Response, status
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import not_for_runs, require_role_now
 from oracle.discussions import research
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
@@ -48,7 +49,9 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except (service.TrashError, runs_service.RunError) as exc:
-        raise HTTPException(exc.status, getattr(exc, "detail", None) or str(exc)) from exc
+        raise HTTPException(
+            exc.status, getattr(exc, "detail", None) or exception_text(exc)
+        ) from exc
 
 
 def _entry_out(

@@ -7,6 +7,7 @@ Claude accounts) or the deterministic :class:`FakeRuntime`, which tests choose w
 :class:`UnconfiguredSwarmCloud`: runs say what is missing instead of the API failing.
 """
 
+from oracle.errors import exception_text
 from oracle.swarm.fake import FakeRuntime, Outcome
 from oracle.swarm.runtime import (
     AgentRuntime,
@@ -60,7 +61,7 @@ def get_runtime() -> AgentRuntime:
             try:
                 _runtime = SwarmCloudRuntime.from_settings(settings)
             except ValueError as e:
-                _runtime = UnconfiguredSwarmCloud(str(e))
+                _runtime = UnconfiguredSwarmCloud(exception_text(e))
         else:
             _runtime = FakeRuntime()
     return _runtime

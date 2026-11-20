@@ -34,6 +34,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import SLUG_RE as PARSER_SLUG_RE
 from oracle.docs.parser import DraftError, ParsedDraft, is_uuid
 from oracle.docs.schemas import ImportProblem
+from oracle.errors import exception_text
 from oracle.review import service as review_service
 from oracle.runs import service as runs_service
 from oracle.runs.flows import MAX_SOURCE_CHARS
@@ -401,7 +402,7 @@ async def create_request(
             commit=False,
         )
     except runs_service.RunError as exc:
-        raise Invalid(str(exc)) from exc
+        raise Invalid(exception_text(exc)) from exc
     for r in await _family(db, request):
         r.run_id = run_id
     await audit.record(
@@ -628,7 +629,7 @@ async def prompt_lines(db: AsyncSession, run: Run) -> list[str]:
     try:
         inputs, prd, version = await _inputs(db, request, run)
     except Invalid as exc:
-        return [f"{exc}: write nothing."]
+        return [f"{exception_text(exc)}: write nothing."]
     params = request.params or {}
     design = bool(params.get("design", True))
     noun = "technical brief" if inputs.depth == "brief" else "full engineering spec"
@@ -742,7 +743,7 @@ async def import_spec(
         try:
             inputs, prd, version = await _inputs(s, request, run_row or run)
         except Invalid as exc:
-            return {"error": str(exc)}
+            return {"error": exception_text(exc)}
         provenance = _provenance(run_row or run, inputs, version)
         params = request.params or {}
         # Plain ids: a refused import rolls the session back and expires its objects.
@@ -756,7 +757,7 @@ async def import_spec(
             )
         except safe_yaml.ParseTimeout as exc:
             composed = contract.Composed(
-                None, [contract.Problem(exc.code, str(exc), severity="error")]
+                None, [contract.Problem(exc.code, exception_text(exc), severity="error")]
             )
         out["spec_check"] = [p.as_json() for p in composed.problems]
         if inputs.dropped:
@@ -806,7 +807,7 @@ async def import_spec(
                 spec_ok = False
             except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
                 await s.rollback()
-                out["error"] = f"spec.md was not imported: {exc}"
+                out["error"] = f"spec.md was not imported: {exception_text(exc)}"
                 spec_ok = False
             else:
                 out.update(
@@ -953,7 +954,7 @@ async def check_edit(
     try:
         inputs, _, version = await _inputs(db, request, run, source_version_id)
     except Invalid as exc:
-        raise DraftError([ImportProblem(code="spec_inputs", message=str(exc))]) from exc
+        raise DraftError([ImportProblem(code="spec_inputs", message=exception_text(exc))]) from exc
     # As Oracle wrote them from the PRD version (not from today's baseline, which may
     # have moved on since), then as the version this edit replaces has them.
     texts: dict[str, str | None] = {"written": None, "previous": None}
@@ -969,7 +970,7 @@ async def check_edit(
             contract.edit_check, markdown, inputs=inputs, draft=draft, name="the edit", **texts
         )
     except safe_yaml.ParseTimeout as exc:
-        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
+        raise DraftError([ImportProblem(code=exc.code, message=exception_text(exc))]) from exc
     structure = [
         ImportProblem(code=p.code, message=p.message, section_key=p.section) for p in check.problems
     ]
@@ -1595,7 +1596,7 @@ async def _draft_run(db: AsyncSession, principal: Principal, plan: _Regeneration
             commit=False,
         )
     except runs_service.RunError as exc:
-        raise Invalid(str(exc)) from exc
+        raise Invalid(exception_text(exc)) from exc
 
 
 async def regeneration_draft(

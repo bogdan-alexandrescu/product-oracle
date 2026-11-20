@@ -42,6 +42,7 @@ from oracle.auth.deps import Principal
 from oracle.baseline import fixes, scoring, service
 from oracle.baseline.models import EDGE_TYPES, ENTITY_TYPES, NODE_STATUSES, Edge, Entity, Evidence
 from oracle.baseline.schemas import ImportIssue, YamlImportResult
+from oracle.errors import exception_text
 from oracle.sources.models import Source, SourceItem
 
 FORMAT_VERSION = 1
@@ -161,7 +162,7 @@ def _parse(text: str) -> dict[str, Any]:
         data = safe_yaml.load(text)
     except safe_yaml.SafeYamlError as e:
         # Invalid or refused (oracle.safe_yaml): too large, too deep, anchors, tags...
-        raise YamlInvalid([ImportIssue(code="invalid_yaml", message=str(e))]) from None
+        raise YamlInvalid([ImportIssue(code="invalid_yaml", message=exception_text(e))]) from None
     if data is None:
         data = {}
     if not isinstance(data, dict):
@@ -424,10 +425,10 @@ async def _merge(
                     )
                 )
         except service.ForbiddenError as e:
-            raise YamlForbidden(str(e), f"entities[{i}]") from None
+            raise YamlForbidden(exception_text(e), f"entities[{i}]") from None
         except service.BaselineError as e:
             raise YamlInvalid(
-                [ImportIssue(code="rejected", message=str(e), where=f"entities[{i}]")]
+                [ImportIssue(code="rejected", message=exception_text(e), where=f"entities[{i}]")]
             ) from None
         await _import_evidence(db, doc.get("evidence"), own, result, entity_id=entity.id)
 
@@ -474,9 +475,11 @@ async def _merge(
                 )
                 _count(result, write, after != before)
         except service.ForbiddenError as e:
-            raise YamlForbidden(str(e), where) from None
+            raise YamlForbidden(exception_text(e), where) from None
         except service.BaselineError as e:
-            raise YamlInvalid([ImportIssue(code="rejected", message=str(e), where=where)]) from None
+            raise YamlInvalid(
+                [ImportIssue(code="rejected", message=exception_text(e), where=where)]
+            ) from None
         await _import_evidence(db, doc.get("evidence"), own, result, edge_id=edge.id)
 
     await db.flush()

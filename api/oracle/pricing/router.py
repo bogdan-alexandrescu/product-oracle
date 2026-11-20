@@ -16,6 +16,7 @@ from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now, require_role_or_absent
 from oracle.decisions import service as decisions_service
 from oracle.decisions.schemas import DecisionOut
+from oracle.errors import exception_text
 from oracle.http import read_capped_body
 from oracle.pricing import decide, outcomes
 from oracle.pricing.schemas import (
@@ -39,7 +40,7 @@ ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 def _http(exc: outcomes.OutcomeError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    return HTTPException(exc.status, exception_text(exc))
 
 
 # --------------------------------------------------------------------------- Win and loss
@@ -175,7 +176,7 @@ MEMO_ERRORS = {
 
 
 def _pricing_http(exc: decide.PricingError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    return HTTPException(exc.status, exception_text(exc))
 
 
 @router.get("/pricing-memos", response_model=list[PricingMemoSummary], responses=MEMO_ERRORS)

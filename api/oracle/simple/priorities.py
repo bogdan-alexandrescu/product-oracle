@@ -50,6 +50,7 @@ from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Entity
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap import company
@@ -1011,7 +1012,7 @@ async def twin_pair(
         source = await baseline.get_entity(db, feature_id)
         into = await baseline.get_entity(db, into_id)
     except baseline.BaselineError as exc:
-        raise changes.ChangeError(exc.status_code, str(exc)) from exc
+        raise changes.ChangeError(exc.status_code, exception_text(exc)) from exc
     if source.type != "feature" or into.type != "feature" or source.id == into.id:
         raise changes.ChangeError(422, "into: another Ground Truth feature")
     return source, into
@@ -1107,7 +1108,7 @@ async def _merge_twin(
     try:
         await baseline.merge_entity(db, principal, source, into, None, any_run=True)
     except baseline.BaselineError as exc:
-        raise changes.ChangeError(exc.status_code, str(exc)) from exc
+        raise changes.ChangeError(exc.status_code, exception_text(exc)) from exc
     return SimpleTwinMergeOut(feature_id=str(into.id), relinked=relinked)
 
 

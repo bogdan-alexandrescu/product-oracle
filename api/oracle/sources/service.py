@@ -25,6 +25,7 @@ from oracle.connections.providers import (
     get_provider,
     reconnect_reason,
 )
+from oracle.errors import exception_text
 from oracle.sources import base, store
 from oracle.sources.connectors import google_docs
 from oracle.sources.items import current_xid
@@ -143,7 +144,7 @@ async def _read_credential(db: AsyncSession, conn: Connection) -> dict[str, Any]
     try:
         return _connector_credential(await connections.credential_for(db, conn))
     except connections.ConnectionUnavailable as e:
-        raise InvalidError(f"{e}") from None
+        raise InvalidError(f"{exception_text(e)}") from None
 
 
 async def mark_connection_rejected(
@@ -187,7 +188,7 @@ async def credential_for(
     except connections.ConnectionUnavailable as e:
         if e.status is None:
             raise NotFoundError("Connection not found") from None
-        raise InvalidError(f"{e}") from None
+        raise InvalidError(f"{exception_text(e)}") from None
     conn = await db.get(Connection, credential.connection_id)
     return _connector_credential(credential), conn
 
@@ -273,9 +274,9 @@ def _check_shape(kind: str, config: dict[str, Any]) -> None:
         try:
             check(config)
         except base.ConnectorBadInput as e:
-            raise BadRequestError(str(e)) from None
+            raise BadRequestError(exception_text(e)) from None
         except base.ConnectorError as e:
-            raise InvalidError(str(e)) from None
+            raise InvalidError(exception_text(e)) from None
 
 
 async def _validate(
@@ -293,7 +294,7 @@ async def _validate(
     try:
         await connector.validate(config, credential)
     except base.ConnectorBadInput as e:
-        raise BadRequestError(redact(str(e), credential)) from None
+        raise BadRequestError(redact(exception_text(e), credential)) from None
     except base.ConnectorRateLimited as e:
         wait = max(1, round(e.retry_after)) if e.retry_after else 60
         provider = get_provider(KIND_PROVIDER[kind] or "")
@@ -302,9 +303,11 @@ async def _validate(
             f"{name} is busy checking the selection: try again in {wait} seconds", wait
         ) from None
     except base.ConnectorAuthError as e:
-        raise InvalidError(f"The connection was rejected: {redact(str(e), credential)}") from None
+        raise InvalidError(
+            f"The connection was rejected: {redact(exception_text(e), credential)}"
+        ) from None
     except base.ConnectorError as e:
-        raise InvalidError(redact(str(e), credential)) from None
+        raise InvalidError(redact(exception_text(e), credential)) from None
 
 
 def redact(message: str, credential: dict[str, Any] | None) -> str:

@@ -34,6 +34,7 @@ from oracle import audit, company_time
 from oracle.auth.deps import Principal, TenantDB
 from oracle.base_model import BaseModel
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.routing import APIRouter
 from oracle.simple import fit_date as fd
@@ -890,7 +891,7 @@ async def fit_date_approve(
     except HTTPException:
         raise
     except Exception as e:  # a gate refusing the version says why
-        detail = getattr(e, "detail", None) or str(e)
+        detail = getattr(e, "detail", None) or exception_text(e)
         raise HTTPException(status.HTTP_409_CONFLICT, detail) from e
     was = fd.schedule(p).milestones[p.milestone]
     date = fd.schedule(d.plan).milestones[p.milestone]

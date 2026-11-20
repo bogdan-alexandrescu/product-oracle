@@ -28,6 +28,7 @@ from fastapi import Depends, HTTPException, Query, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.simple import (
     approved_roadmap,
@@ -217,7 +218,7 @@ async def _decide(db, principal, suggestion_id, action) -> DateSuggestionOut:
     try:
         s, item, may = await suggestions.decide(db, principal, suggestion_id, action)
     except suggestions.SuggestionError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     return service.suggestion_out(s, item, may)
 
 
@@ -228,7 +229,7 @@ async def _accept(db, principal, suggestion_id, body=None) -> SimpleChangeResult
             body.start_date if body else None, body.end_date if body else None,
         )  # fmt: skip
     except suggestions.SuggestionError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     except (changes.ChangeError, drafts.DraftError) as e:
         await db.rollback()
         raise HTTPException(e.status, e.detail) from e
@@ -268,7 +269,7 @@ async def reopen_date_suggestion(
     try:
         s, item, may = await suggestions.reopen(db, principal, suggestion_id)
     except suggestions.SuggestionError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     return service.suggestion_out(s, item, may)
 
 

@@ -17,6 +17,7 @@ from typing import Protocol
 import httpx
 
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.members.schemas import PLAIN_ADDRESS, plain_address
 from oracle.swarm.swarmcloud import GoogleAccessToken
 
@@ -211,7 +212,7 @@ async def grant(client: IapPolicyClient, backends: list[str], email: str) -> Non
             try:
                 await _change(client, http, backend, lambda p: _with(p, member))
             except IapError as exc:
-                raise type(exc)(f"{backend}: {exc}") from None
+                raise type(exc)(f"{backend}: {exception_text(exc)}") from None
 
 
 async def revoke(client: IapPolicyClient, backends: list[str], email: str) -> None:
@@ -222,4 +223,4 @@ async def revoke(client: IapPolicyClient, backends: list[str], email: str) -> No
             try:
                 await _change(client, http, backend, lambda p: _without(p, member))
             except IapError as exc:
-                raise type(exc)(f"{backend}: {exc}") from None
+                raise type(exc)(f"{backend}: {exception_text(exc)}") from None

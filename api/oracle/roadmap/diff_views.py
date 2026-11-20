@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.roadmap import diff as diff_mod
 from oracle.roadmap import draft_items
 from oracle.roadmap.items import live_milestones
@@ -95,7 +96,7 @@ async def resolve_ref(db: AsyncSession, ref: str) -> Side:
         document = await docs_service.get_document_or_404(db, m["slug"])
         version = await docs_service.get_version_row(db, document, int(m["n"]))
     except docs_service.NotFoundError as e:
-        raise DiffError(404, str(e)) from e
+        raise DiffError(404, exception_text(e)) from e
     if document.kind == "prd":
         row = await db.scalar(select(DraftRoadmap).where(DraftRoadmap.prd_version_id == version.id))
         if row is None or row.status != "ready":
@@ -320,7 +321,7 @@ async def history(db: AsyncSession, prd: str, item_key: str) -> RoadmapItemHisto
     try:
         document = await docs_service.get_document_or_404(db, prd)
     except docs_service.NotFoundError as e:
-        raise DiffError(404, str(e)) from e
+        raise DiffError(404, exception_text(e)) from e
     if document.kind != "prd":
         raise DiffError(422, f"'{document.slug}' is a {document.kind}, not a prd")
     versions = await db.scalars(

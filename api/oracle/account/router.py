@@ -26,6 +26,7 @@ from oracle.auth.models import User
 from oracle.auth.service import make_session_cookie
 from oracle.authz import not_for_runs
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.members import service as members
 from oracle.members import tokens
 from oracle.members.schemas import ApiTokenOut, NamePatch
@@ -63,7 +64,7 @@ async def _call[T](op: Awaitable[T]) -> T:
     except service.RateLimited as e:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            str(e),
+            exception_text(e),
             headers={"Retry-After": str(e.retry_after)},
         ) from e
 

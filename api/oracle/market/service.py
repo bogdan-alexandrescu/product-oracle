@@ -17,6 +17,7 @@ from oracle.auth.models import User
 from oracle.baseline import public_links
 from oracle.baseline.public_links import LinkFetcher
 from oracle.docs import visibility
+from oracle.errors import exception_text
 from oracle.market import robots, watch
 from oracle.market.blocks import LABEL_TITLES
 from oracle.market.findings import plain
@@ -320,7 +321,7 @@ def _https(url: str) -> str:
     except public_links.LinkError as e:
         if e.code == "not_https":
             raise MarketError(422, "url: only https:// pages can be watched") from e
-        raise MarketError(422, f"url: {e}") from e
+        raise MarketError(422, f"url: {exception_text(e)}") from e
     return url
 
 

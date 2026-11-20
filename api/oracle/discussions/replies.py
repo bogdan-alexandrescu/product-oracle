@@ -60,6 +60,7 @@ from oracle.discussions import changes, context
 from oracle.discussions import plan as plan_ctx
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.docs import visibility
+from oracle.errors import exception_text
 from oracle.jobs import prompting
 from oracle.jobs.worker import _cost, _tokens
 from oracle.live import tokens
@@ -676,8 +677,8 @@ async def _produce(
         reason = _reason(e)
         log.info("discussion reply %s failed: %s", reply_id, reason)
         await _save(
-            tenant_id, reply_id, body=shown(live.text), status="failed", error=str(e)[:1000],
-            error_reason=reason, **end,
+            tenant_id, reply_id, body=shown(live.text), status="failed",
+            error=exception_text(e)[:1000], error_reason=reason, **end,
         )  # fmt: skip
         return "failed"
     if not held.seen and done.text:

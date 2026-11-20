@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Query, status
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
+from oracle.errors import exception_text
 from oracle.plan import service
 from oracle.plan.schemas import ItemHistoryOut, PlanOut, PlanScope
 from oracle.routing import APIRouter
@@ -50,7 +51,7 @@ async def get_plan_item_history(
     try:
         document = await docs_service.get_document_or_404(db, roadmap)
     except docs_service.NotFoundError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from e
     if document.kind != "roadmap":
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

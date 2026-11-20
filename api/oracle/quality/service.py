@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, readiness
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.jobs import service as jobs_service
 from oracle.jobs.models import LlmJob
 from oracle.quality import criteria, judge
@@ -94,7 +95,7 @@ async def get_version(db: AsyncSession, doc: str, n: int) -> tuple[Document, Doc
         document = await docs_service.get_document_or_404(db, doc)
         return document, await docs_service.get_version_row(db, document, n)
     except docs_service.NotFoundError as e:
-        raise QualityError(404, str(e)) from e
+        raise QualityError(404, exception_text(e)) from e
 
 
 async def evaluate(
@@ -356,4 +357,4 @@ async def queue_model_review(db: AsyncSession, principal: "Principal", doc: str,
             db, document, "quality_review", version=version, principal=principal
         )
     except jobs_service.JobError as e:
-        raise QualityError(e.status, str(e)) from e
+        raise QualityError(e.status, exception_text(e)) from e

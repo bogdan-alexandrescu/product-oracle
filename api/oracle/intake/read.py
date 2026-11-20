@@ -44,6 +44,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from oracle import audit, company_time, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.intake import job as intake_job
 from oracle.jobs.models import LlmJob
 from oracle.runs import extensions
@@ -547,7 +548,7 @@ async def import_analysis(
         try:
             answer = await safe_yaml.run_parse_within(_parse, text, name=INTAKE_ANALYSIS_FILE)
         except (ValueError, safe_yaml.SafeYamlError, safe_yaml.ParseTimeout) as exc:
-            error = f"{INTAKE_ANALYSIS_FILE} could not be read ({exc})"[:300]
+            error = f"{INTAKE_ANALYSIS_FILE} could not be read ({exception_text(exc)})"[:300]
     async with tenant_session(current_tenant(db)) as s:
         intake = await s.get(ProductIntake, intake_id)
         read = current(intake) if intake is not None else None

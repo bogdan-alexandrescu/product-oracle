@@ -61,6 +61,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.connections.models import Connection
 from oracle.engineering import codemaps
+from oracle.errors import exception_text
 from oracle.integrations.models import CompanyIntegration
 from oracle.sources import base, service, store
 from oracle.sources.connectors import github
@@ -350,7 +351,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     try:
         credential, used = await service.credential_for(db, source, start.connection_id)
     except service.InvalidError as e:
-        return await _failed(db, start, stats, str(e))
+        return await _failed(db, start, stats, exception_text(e))
     except service.NotFoundError:
         return await _failed(db, start, stats, service.CONNECTION_REMOVED)
     # The connection the credential is of: an auth error marks this one, whatever the
@@ -505,15 +506,15 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         stats.retry_after = e.retry_after
         return stats
     except base.ConnectorNeedsAttention as e:
-        message = service.redact(str(e), credential)
+        message = service.redact(exception_text(e), credential)
         return await _failed(db, start, stats, message, "needs_attention")
     except base.ConnectorForbidden as e:
         # One request refused (a transcript the key may not read, a channel): the source
         # fails, the connection itself is not marked expired.
-        detail = service.redact(str(e), credential) or "forbidden"
+        detail = service.redact(exception_text(e), credential) or "forbidden"
         return await _failed(db, start, stats, f"Access refused: {detail}")
     except base.ConnectorAuthError as e:
-        detail = service.redact(str(e), credential) or "credential rejected"
+        detail = service.redact(exception_text(e), credential) or "credential rejected"
         await db.rollback()
         # The credential was rejected whatever became of the source since.
         await service.mark_connection_rejected(
@@ -521,7 +522,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
         )
         return await _failed(db, start, stats, f"The connection was rejected: {detail}")
     except base.ConnectorError as e:
-        return await _failed(db, start, stats, service.redact(str(e), credential))
+        return await _failed(db, start, stats, service.redact(exception_text(e), credential))
     except Exception as e:  # noqa: BLE001 - recorded on the source, never re-raised
         # The type only: a message could carry provider responses or secrets.
         log.error("sync of a %s source failed: %s", kind, type(e).__name__)
@@ -553,7 +554,7 @@ def _needs_attention(connector: base.Connector, config: dict[str, Any]) -> str |
     e = config_refusal(connector, config)
     if e is None:
         return None
-    message = _upper(str(e))
+    message = _upper(exception_text(e))
     # Review of PR 1286: only a message that is itself the fix reads "then it syncs again";
     # any other cause names the edit to make, as a sentence of its own (r2).
     if e.is_action:
@@ -574,4 +575,4 @@ def attention_of(source: Any) -> dict[str, Any] | None:
     e = config_refusal(service.connector_for(source.kind), dict(source.config or {}))
     if e is None:
         return None
-    return {"cause": _upper(e.cause or str(e)), "is_action": e.is_action}
+    return {"cause": _upper(e.cause or exception_text(e)), "is_action": e.is_action}

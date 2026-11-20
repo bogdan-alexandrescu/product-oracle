@@ -46,6 +46,7 @@ from oracle.authz import has_role, recheck_caller
 from oracle.discussions import access, context, replies
 from oracle.discussions.models import MAX_BODY, Discussion, DiscussionMessage
 from oracle.docs import visibility
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.runs import extensions, flows
 from oracle.runs.models import Run
@@ -166,7 +167,7 @@ async def start(
                          "line_id": str(line.id)},
         )  # fmt: skip
     except runs_service.RunError as e:
-        raise service.DiscussionError(e.status, str(e)) from e
+        raise service.DiscussionError(e.status, exception_text(e)) from e
     line.run_id = run_id
     await db.execute(
         sql_update(Discussion)
@@ -184,7 +185,7 @@ async def start(
         # The runs refused it (a budget, one build at a time): the line says so, in words,
         # and the run ends, so Research this may be asked again (#584 review).
         await db.rollback()
-        await _failed_start(db, line.id, run_id, str(e))
+        await _failed_start(db, line.id, run_id, exception_text(e))
     await db.refresh(line)
     return line
 

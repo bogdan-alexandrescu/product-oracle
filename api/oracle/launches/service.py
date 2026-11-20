@@ -36,6 +36,7 @@ from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.launches import checklist, requesters, tiers
 from oracle.launches.models import ChangelogEntry, Launch, LaunchTask, RequesterNote
 from oracle.launches.schemas import (
@@ -704,7 +705,7 @@ async def _start_kit_or_note(
     except (LaunchError, RunError) as e:
         await db.rollback()
         row = await get_launch(db, launch_id, for_update=True)
-        row.kit_error = f"The launch kit run did not start: {e}"
+        row.kit_error = f"The launch kit run did not start: {exception_text(e)}"
         await db.commit()
         return None
 

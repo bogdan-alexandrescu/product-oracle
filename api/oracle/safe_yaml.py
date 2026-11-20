@@ -45,6 +45,7 @@ from yaml.nodes import MappingNode
 from yaml.resolver import Resolver
 
 from oracle import parse_budget
+from oracle.errors import exception_text
 
 try:  # libyaml's event parser: the same events, much faster than the pure-Python one.
     from yaml.cyaml import CParser as _EventParser
@@ -302,13 +303,13 @@ def load(text: str, *, limit: int | None = None) -> Any:
     except SafeYamlError:
         raise
     except yaml.YAMLError as exc:
-        error = SafeYamlError(str(exc), show_mark=False)
+        error = SafeYamlError(exception_text(exc), show_mark=False)
         error.problem_mark = getattr(exc, "problem_mark", None)
         raise error from None
     except RecursionError:
         raise SafeYamlError(f"nested more than {MAX_DEPTH} levels deep", code="too_deep") from None
     except (ValueError, OverflowError, TypeError, ArithmeticError) as exc:
-        raise SafeYamlError(f"a value could not be read: {str(exc)[:200]}") from None
+        raise SafeYamlError(f"a value could not be read: {exception_text(exc)[:200]}") from None
     except Exception as exc:  # noqa: BLE001 - one error type for every failure
         raise SafeYamlError(
             f"the YAML could not be read: {type(exc).__name__}", code="unreadable_yaml"

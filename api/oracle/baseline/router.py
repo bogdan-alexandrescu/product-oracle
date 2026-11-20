@@ -81,6 +81,7 @@ from oracle.baseline.schemas import (
     YamlImportResult,
 )
 from oracle.discussions import research as discussion_research
+from oracle.errors import exception_text
 from oracle.http import read_capped_body
 from oracle.routing import APIRouter
 from oracle.runs import actions, review_file
@@ -110,7 +111,7 @@ def _fail(exc: service.BaselineError) -> Exception:
     if isinstance(exc, service.GoalFieldsInvalid):
         # The app renders it: {"detail", "errors": [{code, message, where}]} (B5).
         return service.GoalFieldsInvalid(exc.problems)
-    return HTTPException(exc.status_code, str(exc))
+    return HTTPException(exc.status_code, exception_text(exc))
 
 
 def _run_of(principal: Principal, run_id: uuid.UUID | None) -> uuid.UUID | None:
@@ -793,7 +794,7 @@ _LINK_RESPONSES = {
 
 
 def _link_failed(exc: public_links.LinkError) -> JSONResponse:
-    return JSONResponse({"detail": str(exc), "code": exc.code}, exc.status_code)
+    return JSONResponse({"detail": exception_text(exc), "code": exc.code}, exc.status_code)
 
 
 @router.post("/evidence/link/preview", response_model=LinkPreviewOut, responses=_LINK_RESPONSES)

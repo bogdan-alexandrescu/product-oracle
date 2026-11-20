@@ -41,6 +41,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import visibility
+from oracle.errors import exception_text
 from oracle.rituals import blocks, clock
 from oracle.rituals.kinds import KINDS, available, builtins
 from oracle.rituals.models import Ritual, RitualOccurrence, RitualRead
@@ -336,7 +337,7 @@ async def _build(
         if rebuild:
             return False
         occ.attempts += 1
-        occ.error = f"{type(exc).__name__}: {exc}"[:2000]
+        occ.error = f"{type(exc).__name__}: {exception_text(exc)}"[:2000]
         if occ.attempts >= MAX_ATTEMPTS:
             occ.status, occ.failed_at = "failed", clock.now()
         return False

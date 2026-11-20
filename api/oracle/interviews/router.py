@@ -15,6 +15,7 @@ from fastapi import Depends, HTTPException, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
+from oracle.errors import exception_text
 from oracle.intake.router import answer_result
 from oracle.interviews import service, team
 from oracle.interviews.schemas import (
@@ -39,7 +40,7 @@ Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 
 
 def _http(exc: service.InterviewError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    return HTTPException(exc.status, exception_text(exc))
 
 
 @router.post("/interviews", response_model=InterviewOut, status_code=status.HTTP_201_CREATED)

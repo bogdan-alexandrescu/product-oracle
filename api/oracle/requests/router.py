@@ -19,6 +19,7 @@ from fastapi import Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
+from oracle.errors import exception_text
 from oracle.requests import launch_requesters, service, triage
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
@@ -69,7 +70,9 @@ Owner = Annotated[Principal, Depends(require_role("owner"))]
 
 def _http(exc: service.RequestError | triage.TriageError) -> HTTPException:
     code = getattr(exc, "code", None)
-    return HTTPException(exc.status, {"code": code, "message": str(exc)} if code else str(exc))
+    return HTTPException(
+        exc.status, {"code": code, "message": exception_text(exc)} if code else exception_text(exc)
+    )
 
 
 @router.get("/requests", response_model=RequestList)
@@ -164,7 +167,7 @@ async def start_request_triage(data: TriageStart, db: TenantDB, principal: Appro
     except triage.TriageError as e:
         raise _http(e) from e
     except runs_service.RunError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     await runs_service.submit_queued(db, run_id)
     return await runs_service.read_run(db, run_id, principal)
 

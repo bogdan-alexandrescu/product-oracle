@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 
 from oracle import robots_match
 from oracle.baseline.public_links import LinkError, LinkFetcher
+from oracle.errors import exception_text
 
 AGENT = "productoraclebot"
 TTL = timedelta(hours=24)
@@ -94,7 +95,9 @@ async def rules_for(fetcher: LinkFetcher, url: str, now: datetime) -> Rules:
         page = await fetcher.fetch(f"https://{host}/robots.txt", now=now)
         rules = parse(page.text)
     except LinkError as e:
-        server_error = e.code == "unreachable" and _SERVER_ERROR.search(str(e)) is not None
+        server_error = (
+            e.code == "unreachable" and _SERVER_ERROR.search(exception_text(e)) is not None
+        )
         rules = Rules(disallow_all=server_error)
     _cache[host] = (now, rules)
     return rules

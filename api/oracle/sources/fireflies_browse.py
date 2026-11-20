@@ -37,6 +37,7 @@ from oracle.base_model import BaseModel
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import FirefliesHttp, UserPrincipal
+from oracle.errors import exception_text
 from oracle.live import budget
 from oracle.live.fireflies import backend_of
 from oracle.routing import APIRouter
@@ -218,7 +219,7 @@ async def _browse(db: TenantDB, conn: Connection, call):
     try:
         credential = await _read_credential(db, conn)
     except InvalidError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
     try:
         return await call(credential)
     except base.ConnectorRateLimited as e:
@@ -246,10 +247,12 @@ async def _browse(db: TenantDB, conn: Connection, call):
         ) from None
     except fireflies.EndpointRefused as e:
         # Oracle's own words (a redirect it does not follow): never the key.
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e)) from None
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, exception_text(e)) from None
     except base.ConnectorError as e:
         # Redacted like a sync's error: Fireflies may echo the key back.
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, redact(str(e), credential)) from None
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, redact(exception_text(e), credential)
+        ) from None
     except httpx.HTTPError:
         # A network failure (refused, timed out, reset): a fixed text, never the error's.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, UNREACHABLE) from None

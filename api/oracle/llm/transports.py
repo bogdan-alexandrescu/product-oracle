@@ -30,6 +30,7 @@ import httpx
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from oracle.claude_accounts.fallback import ANTHROPIC_API, ANTHROPIC_VERSION
+from oracle.errors import exception_text
 
 
 class LlmSettings(BaseSettings):
@@ -505,7 +506,7 @@ class MessagesApiTransport:
                         f"{self.base_url}/v1/messages", json=body, headers=headers
                     )
         except httpx.HTTPError as e:
-            raise LlmUnavailable(f"Cannot reach the Claude API: {e}") from e
+            raise LlmUnavailable(f"Cannot reach the Claude API: {exception_text(e)}") from e
         if resp.status_code in (401, 403):
             raise LlmAuthError(f"Claude rejected the API key ({resp.status_code})")
         if resp.status_code >= 400:
@@ -574,7 +575,7 @@ class MessagesApiTransport:
                     elif event == "message_stop":
                         break
         except httpx.HTTPError as e:
-            raise LlmUnavailable(f"Cannot reach the Claude API: {e}") from e
+            raise LlmUnavailable(f"Cannot reach the Claude API: {exception_text(e)}") from e
         finally:
             if own:
                 await http.aclose()

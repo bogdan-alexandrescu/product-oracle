@@ -38,6 +38,7 @@ from oracle.claude_accounts.oauth import (
     serialise,
 )
 from oracle.claude_accounts.store import REFRESH_SUFFIX
+from oracle.errors import exception_text
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ class CredentialRefresher:
         except CredentialError as exc:
             log.warning(
                 "stored subscription credential is unusable",
-                extra={"account_id": base, "error": str(exc)},
+                extra={"account_id": base, "error": exception_text(exc)},
             )
             return RefreshOutcome(base, False, "unreadable")
 
@@ -163,13 +164,13 @@ class CredentialRefresher:
         except ReauthRequired as exc:
             log.error(
                 "subscription credential needs a person to sign in again",
-                extra={"account_id": base, "error": str(exc)},
+                extra={"account_id": base, "error": exception_text(exc)},
             )
             return RefreshOutcome(base, False, "reauth_required")
         except CredentialError as exc:
             log.warning(
                 "credential refresh failed; will retry on the next sweep",
-                extra={"account_id": base, "error": str(exc)},
+                extra={"account_id": base, "error": exception_text(exc)},
             )
             return RefreshOutcome(base, False, "refresh_failed")
 

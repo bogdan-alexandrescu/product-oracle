@@ -35,6 +35,7 @@ from oracle import audit
 from oracle.auth.models import ApiToken, User
 from oracle.company_time import company_time_zone
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.members import iap_access, mailer
 from oracle.members.models import Invite, MemberFollowUp
 from oracle.members.names import display_name
@@ -113,7 +114,7 @@ async def _grant(email: str) -> tuple[str, str | None]:
         await iap_access.grant(client, backends, email)
     except iap_access.IapError as exc:
         log.warning("IAP access for %s not granted: %s", email, exc)
-        return "pending", str(exc)[:MAX_ERROR_CHARS]
+        return "pending", exception_text(exc)[:MAX_ERROR_CHARS]
     return "granted", None
 
 
@@ -126,7 +127,7 @@ async def _revoke(email: str) -> tuple[str, str | None]:
         await iap_access.revoke(client, get_settings().iap_backends, email)
     except iap_access.IapError as exc:
         log.warning("IAP access for %s not removed: %s", email, exc)
-        return "failed", str(exc)[:MAX_ERROR_CHARS]
+        return "failed", exception_text(exc)[:MAX_ERROR_CHARS]
     return "removed", None
 
 
@@ -440,7 +441,9 @@ async def deliver(
                 except Exception as exc:
                     # Only Oracle's own short reason, never a body from Google.
                     error = (
-                        str(exc)[:MAX_ERROR_CHARS] if isinstance(exc, mailer.MailError) else ""
+                        exception_text(exc)[:MAX_ERROR_CHARS]
+                        if isinstance(exc, mailer.MailError)
+                        else ""
                     ) or type(exc).__name__
                     log.warning("invite email to %s failed (try %d): %s", address, attempt, error)
                 await audit.record(

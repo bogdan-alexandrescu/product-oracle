@@ -60,6 +60,7 @@ from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.docs.prd_order import sort_prds
+from oracle.errors import exception_text
 from oracle.models import AuditEvent
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
@@ -2204,7 +2205,7 @@ async def redraft(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Si
                 principal=principal,
             )  # fmt: skip
     except jobs.JobError as e:
-        raise MeetingError(e.status, str(e)) from e
+        raise MeetingError(e.status, exception_text(e)) from e
     m.minutes_job_id, m.minutes_state = job.id, "drafting"
     await db.flush()
     await audit.record(db, principal, "simple_meeting.redraft", "simple_meeting", m.id,

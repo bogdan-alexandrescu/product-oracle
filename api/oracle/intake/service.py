@@ -29,6 +29,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
+from oracle.errors import exception_text
 from oracle.intake import autoask, engine, sharing
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
@@ -193,7 +194,7 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
         try:
             got = await carried.inputs(db, body.replaces.document_id, body.replaces.item_keys)
         except carried.CarriedError as e:
-            raise IntakeError(e.status, str(e)) from e
+            raise IntakeError(e.status, exception_text(e)) from e
         replaces = {
             "document_id": str(body.replaces.document_id),
             "area_name": body.replaces.area_name.strip(),
@@ -223,7 +224,7 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     try:
         linked = await requests_service.put_behind_brief(db, principal, intake.id, body.request_ids)
     except requests_service.RequestError as e:
-        raise IntakeError(e.status, str(e), e.code) from e
+        raise IntakeError(e.status, exception_text(e), e.code) from e
     await engine.analyze(db, intake)
     # Before the first batch: the brief's goals and out-of-scope lines answer their
     # questions, so neither is asked.
@@ -787,7 +788,7 @@ async def create_run(
             commit=False,
         )
     except runs_service.RunError as e:
-        raise IntakeError(e.status, str(e)) from e
+        raise IntakeError(e.status, exception_text(e)) from e
     return run_id
 
 
@@ -829,5 +830,5 @@ async def _update_draft_run(
     try:
         await runs_service.update_run(db, principal, run_id, patch_body)
     except runs_service.RunError as e:
-        raise IntakeError(e.status, str(e)) from e
+        raise IntakeError(e.status, exception_text(e)) from e
     return run_id

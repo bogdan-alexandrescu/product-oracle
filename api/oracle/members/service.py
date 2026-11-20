@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes
 from oracle.auth.models import ROLES, ApiToken, Role, User
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.members.models import INVITE_TTL, Invite, MemberFollowUp
 from oracle.members.schemas import InviteOut, InviteStatus, MemberOut, plain_address
 from oracle.tenant_settings import TenantSetting
@@ -1761,7 +1762,7 @@ async def create_invite(
     try:
         check_email_allowed(email)
     except ReservedEmailError as e:
-        raise MemberError("invalid", str(e)) from None
+        raise MemberError("invalid", exception_text(e)) from None
     await check_invite_domain(session, email)
     await _gate(session, principal, shared=True, role=least_inviter(role, engineering_lead))
     member = await session.scalar(select(User).where(User.email == email))

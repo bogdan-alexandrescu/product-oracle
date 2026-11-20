@@ -21,6 +21,7 @@ from oracle.authz import has_role
 from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.jobs import service as jobs_service
 from oracle.jobs.schemas import LlmJobOut
 from oracle.review.models import DocumentPublication
@@ -190,7 +191,7 @@ async def _roadmap(db, doc: str) -> Document:
     try:
         document = await docs_service.get_document_or_404(db, doc)
     except docs_service.NotFoundError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from e
     if document.kind != "roadmap":
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -446,7 +447,7 @@ async def draft_public_texts(
             db, document, "public_text", version=v, principal=principal, coalesce=True
         )
     except jobs_service.JobError as e:
-        raise HTTPException(e.status, str(e)) from None
+        raise HTTPException(e.status, exception_text(e)) from None
     await db.commit()
     await db.refresh(job)
     return await jobs_service.job_out(db, job)

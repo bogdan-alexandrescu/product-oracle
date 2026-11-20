@@ -22,6 +22,7 @@ from oracle import company_time
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionOut
+from oracle.errors import exception_text
 from oracle.export import offload
 from oracle.intake import sharing
 from oracle.jobs import next_draft, service
@@ -65,7 +66,7 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except service.JobError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
 
 
 async def _shown(db: TenantDB, principal: Principal, job) -> LlmJobOut:
@@ -220,9 +221,9 @@ async def build_next_draft_with_agents(
             body.next_draft_change_ids,
         )
     except service.JobError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     except runs_service.RunError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     await runs_service.submit_queued(db, run_id)
     return await runs_service.read_run(db, run_id, principal)
 
@@ -246,13 +247,13 @@ async def build_next_draft(doc: str, body: NextDraftIn, principal: Approver, db:
         return JSONResponse(
             status_code=409,
             content={
-                "detail": str(e),
+                "detail": exception_text(e),
                 "code": "needs_agents",
                 "why": [w.model_dump(mode="json") for w in e.why],
             },
         )
     except service.JobError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     await db.commit()
     return await service.job_out(db, job)
 

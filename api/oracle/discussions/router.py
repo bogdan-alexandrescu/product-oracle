@@ -59,6 +59,7 @@ from oracle.discussions.schemas import (
     Status,
     SummaryAsk,
 )
+from oracle.errors import exception_text
 from oracle.jobs import service as jobs_service
 from oracle.priorities.schemas import PushbackOut
 from oracle.routing import APIRouter
@@ -200,7 +201,9 @@ async def update_discussion(
         d = await _call(service.update(db, principal, discussion_id, body))
     except service.ExposureMismatch as e:
         await db.rollback()
-        conflict = DiscussionExposureConflict(detail=str(e), messages=e.messages, people=e.people)
+        conflict = DiscussionExposureConflict(
+            detail=exception_text(e), messages=e.messages, people=e.people
+        )
         return JSONResponse(conflict.model_dump(), status.HTTP_409_CONFLICT)
     await db.commit()
     await db.refresh(d)
@@ -288,7 +291,7 @@ async def create_discussion_message(
             reply = await replies.ask(db, d, message)
         except replies.ReplyLimited as e:
             await db.commit()
-            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(e)) from e
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, exception_text(e)) from e
     await db.commit()
     if reply is not None and wait:
         await replies.wait(principal.tenant_id, reply.id)
@@ -390,7 +393,7 @@ async def retry_discussion_reply(
     try:
         reply = await _call(replies.retry(db, principal, discussion_id, reply_id))
     except replies.ReplyLimited as e:
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(e)) from e
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, exception_text(e)) from e
     await db.commit()
     [out] = await service.messages_out(db, [reply], principal)
     return out

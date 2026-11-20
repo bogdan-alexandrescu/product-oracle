@@ -27,6 +27,7 @@ from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.parser import DraftError
+from oracle.errors import exception_text
 from oracle.members.leads import DateRights, date_rights, engineering_leads, lead_now
 from oracle.roadmap import (
     alerts,
@@ -197,14 +198,14 @@ changes.register_handler(
 
 
 def _fail(exc: Exception) -> HTTPException:
-    return HTTPException(getattr(exc, "status_code", 422), str(exc))
+    return HTTPException(getattr(exc, "status_code", 422), exception_text(exc))
 
 
 async def _document(db, doc: str, kind: str | None = None) -> Document:
     try:
         document = await docs_service.get_document_or_404(db, doc)
     except docs_service.NotFoundError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from e
     if kind is not None and document.kind != kind:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -329,9 +330,9 @@ async def act_on_roadmap_item_staleness(
     try:
         changed = await staleness.act(db, principal, body.action, rows, body.reason)
     except staleness.Conflict as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from e
     except staleness.Invalid as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from e
     # Acting updates every count at once (the stale-marks walk): the tracks that own the
     # changed items are re-checked now, each on its own (views.monitor_owners), so a
     # reconciled item's stale alert leaves the Inbox, not at the next hourly pass, and a
@@ -398,7 +399,7 @@ async def derive_draft_roadmap_items(
     try:
         await draft_items.derive(db, principal, document, version, (body or DeriveIn()).depth)
     except draft_items.Conflict as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from e
     await db.commit()
     return await draft_items.view(db, document, version, "full")
 
@@ -599,7 +600,7 @@ async def propose_roadmap_change_set(
         raise _fail(e) from e
     except DraftError as e:
         await db.rollback()
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from e
     await db.commit()
     return await changeset.view(db, document, await changeset.get(db, document, set_id))
 
@@ -926,8 +927,10 @@ async def import_tracker_records(
 
 def _link_fail(exc: links.LinkError) -> HTTPException:
     if isinstance(exc, links.Conflict):
-        return HTTPException(exc.status_code, {"message": str(exc), "linked": exc.linked})
-    return HTTPException(exc.status_code, str(exc))
+        return HTTPException(
+            exc.status_code, {"message": exception_text(exc), "linked": exc.linked}
+        )
+    return HTTPException(exc.status_code, exception_text(exc))
 
 
 async def _monitor_tracks(db, track_ids: set[uuid.UUID], principal: Principal) -> None:
@@ -1170,7 +1173,7 @@ async def create_track_roadmap_run(
     try:
         run_id = await runs_service.create_run(db, principal, create)
     except runs_service.RunError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
     return await runs_service.read_run(db, run_id, principal)
 
 
@@ -1353,7 +1356,7 @@ AlertReader = Annotated[Principal, Depends(alert_reader)]
 
 
 def _alert_fail(exc: alerts.AlertError | tracks.TrackError) -> HTTPException:
-    return HTTPException(exc.status_code, str(exc))
+    return HTTPException(exc.status_code, exception_text(exc))
 
 
 async def _alert_out(db, principal: Principal, row) -> TrackAlertOut:

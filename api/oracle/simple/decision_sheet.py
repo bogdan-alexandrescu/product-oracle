@@ -41,6 +41,7 @@ from oracle.authz import has_role
 from oracle.decisions import service as decisions
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.simple import questions
 from oracle.simple.changes import ChangeError
@@ -189,7 +190,7 @@ async def _clean(db: AsyncSession, op: str, after: dict[str, Any]) -> dict[str, 
             except ValueError as e:
                 raise ChangeError(422, "after.review_at: a day") from e
             except decisions.DecisionError as e:
-                raise ChangeError(422, f"after.review_at: {e}") from e
+                raise ChangeError(422, f"after.review_at: {exception_text(e)}") from e
             out["review_at"] = when.isoformat()
         else:
             out["review_at"] = None

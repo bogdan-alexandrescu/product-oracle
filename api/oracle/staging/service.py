@@ -26,6 +26,7 @@ from oracle import audit
 from oracle.authz import has_role
 from oracle.discussions.models import Discussion, DiscussionChange, DiscussionParticipant
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.runs.models import Checkpoint, CheckpointAction
 from oracle.staging import hooks, mapping
 from oracle.staging.models import NextDraftChange
@@ -233,7 +234,7 @@ async def _to_checkpoint(
             db, principal, run_id, cp.id, body, source=source, suggest_only=not stage
         )
     except RunError as e:
-        raise StagingError(getattr(e, "status", 409), str(e)) from None
+        raise StagingError(getattr(e, "status", 409), exception_text(e)) from None
 
 
 async def suggest_discussion_change(

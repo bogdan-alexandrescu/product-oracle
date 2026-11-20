@@ -14,6 +14,7 @@ overflowing document is returned as laid out, its page count on the result
 
 import re
 
+from oracle.errors import exception_text
 from oracle.export.render import HERE
 
 
@@ -27,7 +28,7 @@ def _weasyprint():
     except OSError as e:  # raised by cffi when a shared library is missing
         raise PdfUnavailable(
             "PDF export is unavailable: WeasyPrint cannot load its system libraries "
-            f"(install Pango, see api/Dockerfile): {e}"
+            f"(install Pango, see api/Dockerfile): {exception_text(e)}"
         ) from e
     return weasyprint
 
