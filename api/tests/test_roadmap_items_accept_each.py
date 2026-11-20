@@ -19,6 +19,7 @@ from tests.test_roadmap_reasons import roadmap_items_check
 
 
 async def test_each_reason_keeps_its_own_accept(client, owner, runtime):  # noqa: F811
+    """An item with two reasons to confirm keeps a separate Accept staged for each."""
     _, auth = owner
     await approved_prd(client, auth)
     run, _ = await roadmap_items_check(client, auth, runtime, items_file(1))

@@ -30,6 +30,7 @@ from tests.test_simple_goal_buckets_api import World
 
 
 def test_figure_words():
+    """A goal's value and unit render as one correctly formatted and rounded figure string."""
     from oracle.baseline.goals import figure_words
 
     for value, unit, shown in (
@@ -55,6 +56,7 @@ def test_figure_words():
 
 
 def test_figure_words_past_decimal_range():
+    """Goal figure formatting handles infinities and very large magnitudes without crashing."""
     from oracle.baseline.goals import figure_words
 
     assert figure_words(float("inf"), "usd") == "$inf"
@@ -64,6 +66,7 @@ def test_figure_words_past_decimal_range():
 
 
 def test_figure_words_singular_for_one():
+    """Goal figure wording uses the singular form of the unit when the value is exactly one."""
     from oracle.baseline.goals import figure_words
     from oracle.quality.capture import figure_text
 
@@ -94,6 +97,7 @@ def test_figure_words_singular_for_one():
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_goal_buckets_read_money_and_count_goals(client):
+    """The goal buckets view renders money and count goal targets in their correct formats."""
     w = await World().build()
     tid = w.ctx.tenant_id
     gid = w.goals["grow"]

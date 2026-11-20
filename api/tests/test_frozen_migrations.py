@@ -34,6 +34,7 @@ def _oracle_imports(path) -> list[str]:
 
 
 def test_no_migration_imports_live_app_code():
+    """No migration file imports live application code, so old migrations replay unchanged."""
     bad = {p.name: i for p in sorted(VERSIONS.glob("*.py")) if (i := _oracle_imports(p))}
     assert bad == {}
 
@@ -65,6 +66,7 @@ MOMENTS = [
 
 @pytest.mark.parametrize("rule", RULES)
 def test_0039_frozen_next_date_matches_the_app_today(rule):
+    """A frozen migration's own next-occurrence rule still matches the live app's calculation."""
     frozen = _migration("0039_company_timezone")
     for after in MOMENTS:
         assert frozen._next_occurrence(rule, after) == next_occurrence(rule, after)

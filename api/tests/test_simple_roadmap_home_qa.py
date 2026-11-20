@@ -18,6 +18,7 @@ def _red(kind: str, fixes: list[str]) -> Flag:
 
 
 async def test_waiting_counts_every_red_flag_with_a_fix(monkeypatch):
+    """The red-flag count skips flags with no fix and items already done."""
     entries = [
         SimpleNamespace(
             status="planned",

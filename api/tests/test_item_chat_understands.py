@@ -49,6 +49,7 @@ async def shipped_of(w, key: str):
 
 
 async def test_already_shipped_line_offers_mark_as_shipped(client):
+    """Saying a feature already shipped offers a card only an owner can apply."""
     w = await world()
     m = await say(client, w, "owner", LINE, page(w))
     assert m["kind"] == "cards", m["body"]
@@ -77,6 +78,7 @@ async def test_already_shipped_line_offers_mark_as_shipped(client):
 
 
 async def test_reader_mark_shipped_action_builds(client):
+    """The reader's mark shipped action builds a card with the stated note."""
     w = await world()
     seen: list = []
     m = await reads(client, w, "owner", "we've had this for months in the partner app",
@@ -91,6 +93,7 @@ async def test_reader_mark_shipped_action_builds(client):
 
 
 async def test_answer_about_the_item_without_its_name_is_shown(client):
+    """A plain answer with no item named is still shown to the asker."""
     w = await world()
     said = "Got it: this already runs elsewhere, so it needs no new dates."
     m = await reads(client, w, "owner", "we do this elsewhere already, right?",
@@ -105,6 +108,7 @@ async def test_answer_about_the_item_without_its_name_is_shown(client):
 
 
 async def test_unread_line_asks_with_choices(client):
+    """Ambiguous talk about shipping offers choices instead of a bare refusal."""
     w = await world()
     m = await reads(client, w, "owner", "folks have been using a version of this for a while",
                     {"actions": [], "clarify": None, "answer": None}, page(w))  # fmt: skip

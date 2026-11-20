@@ -38,6 +38,7 @@ async def _marks(client, w) -> dict[str, tuple[str | None, str | None]]:
 
 
 async def test_roadmap_refresh_says_its_roadmaps_were_deleted_for_good(client):
+    """Home's meeting mark says roadmaps are gone for good only once trash is empty."""
     w = await meeting_world()
     refresh, custom = await _rituals(w)
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -70,6 +71,7 @@ async def test_roadmap_refresh_says_its_roadmaps_were_deleted_for_good(client):
 
 
 async def test_deleted_roadmap_says_the_day_it_was_deleted(client):
+    """A ritual's deleted-roadmap date is set only once purged, not merely trashed."""
     w = await meeting_world()
     refresh, custom = await _rituals(w)
     async with tenant_session(w.ctx.tenant_id) as s:

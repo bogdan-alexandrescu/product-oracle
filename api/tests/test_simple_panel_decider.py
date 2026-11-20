@@ -26,6 +26,7 @@ def clock(monkeypatch):
 
 
 async def test_panel_own_decider_id_apply_and_read(client):
+    """Setting an item's own decider in the panel only changes that one item."""
     p = await Panel().build(await make_people())
     items = await p.read(client)
     assert items["a"]["own_decider_id"] is None

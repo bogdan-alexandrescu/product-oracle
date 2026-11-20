@@ -120,6 +120,7 @@ def _cite(t, v, key: str, **cols) -> None:
 
 
 def test_chains_on_the_citation_source_oracle_head():
+    """This migration chains on the citation source oracle head, keeping one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # The intake lane's 0014_intake chains on it and the PRD review chain (0014_review,
@@ -129,6 +130,7 @@ def test_chains_on_the_citation_source_oracle_head():
 
 
 def test_upgrade_adds_the_columns_and_the_downgrade_drops_them(scratch_db):
+    """Upgrade adds the confidence columns with safe defaults; downgrade drops them."""
     upgrade(_cfg(), PREVIOUS)
     t, v = _version()
     _cite(t, v, "old")  # a citation from before: defaults after the upgrade
@@ -169,6 +171,7 @@ def test_upgrade_adds_the_columns_and_the_downgrade_drops_them(scratch_db):
 
 @pytest.mark.parametrize("value", [1.5, -0.1])
 def test_confidence_outside_0_1_is_refused(scratch_db, value):
+    """A citation confidence outside 0 to 1 is refused by a database constraint."""
     upgrade(_cfg(), REVISION)
     t, v = _version()
     with pytest.raises(IntegrityError):

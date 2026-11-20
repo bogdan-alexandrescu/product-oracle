@@ -56,6 +56,7 @@ def V(slug: str, n: int, path: str = "") -> str:
 
 
 async def test_an_approver_queues_a_model_review_that_is_labelled_model_output(client, ctx, judge):
+    """A model's quality review is stored and shown as labelled model output."""
     case = load_case("good-prd")
     seeded = await seed_case(client, ctx, case)
     url = V(seeded.slug, 1, "/quality-review")
@@ -105,6 +106,7 @@ async def test_an_approver_queues_a_model_review_that_is_labelled_model_output(c
 
 
 async def test_a_model_saying_critical_never_blocks(client, ctx, judge):
+    """A model judging every criterion critical still never blocks the document."""
     seeded = await seed_case(client, ctx, load_case("good-prd"))
     await client.post(V(seeded.slug, 1, "/quality-review"), headers=ctx.as_("approver"))
     judge.answers.append(
@@ -117,6 +119,7 @@ async def test_a_model_saying_critical_never_blocks(client, ctx, judge):
 
 
 async def test_an_answer_with_no_usable_criterion_is_retried_then_fails(client, ctx, judge):
+    """A model answer with no usable criterion is retried, then fails without storing."""
     seeded = await seed_case(client, ctx, load_case("good-prd"))
     await client.post(V(seeded.slug, 1, "/quality-review"), headers=ctx.as_("approver"))
     judge.answers += [{"criteria": [{"key": "x", "status": "green"}]}, "not json at all"]
@@ -127,6 +130,7 @@ async def test_an_answer_with_no_usable_criterion_is_retried_then_fails(client, 
 
 
 async def test_quality_review_can_be_turned_off_per_document(client, ctx, judge):
+    """Quality review can be turned off per document, and refuses a new one once off."""
     seeded = await seed_case(client, ctx, load_case("good-prd"))
     settings = f"/v1/documents/{seeded.slug}/llm-jobs/settings"
     current = (await client.get(settings, headers=ctx.as_("viewer"))).json()

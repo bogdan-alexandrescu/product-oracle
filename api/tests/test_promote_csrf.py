@@ -170,6 +170,7 @@ async def _legacy_forgery(ctx) -> uuid.UUID:
 
 
 async def test_a_forged_proposal_names_its_sender_and_is_not_accepted(client, ctx):
+    """A forged proposal still shows its true sender and cannot be accepted."""
     proposal_id = await _legacy_forgery(ctx)
     listed = (await client.get(f"{B}/proposals", headers=ctx.as_("approver"))).json()
     [shown] = [p for p in listed if p["id"] == str(proposal_id)]
@@ -187,6 +188,7 @@ async def test_a_forged_proposal_names_its_sender_and_is_not_accepted(client, ct
 
 
 async def test_a_token_forgery_names_the_token(client, ctx):
+    """A proposal made by an API token is shown labeled by that token, not a person."""
     async with tenant_session(ctx.tenant_id) as s:
         proposal = Proposal(
             payload={"op": "create", "kind": "entity", "origin": "agent", "reason": None,
@@ -283,6 +285,7 @@ async def test_every_browser_write_is_checked_for_its_origin(client, signed_in, 
 
 
 async def test_a_same_origin_cookie_write_passes(client, ctx):
+    """A same-origin write with cookie auth is allowed, whether or not it sends Origin."""
     body = {"type": "feature", "key": "guided", "title": "Guided setup"}
     for extra in ({"Origin": "http://test"}, {"sec-fetch-site": "same-origin"}, {}):
         body["key"] = f"guided-{len(body['title'])}"
@@ -324,6 +327,7 @@ RAW = {
 
 @pytest.mark.parametrize("kind", sorted(RAW))
 async def test_raw_imports_take_only_their_declared_type(client, ctx, kind):
+    """A raw import needs its exact Content-Type, unless it uses a bearer token."""
     path, declared, body = RAW[kind]
     for wrong in ("text/plain", "application/x-www-form-urlencoded", "multipart/form-data"):
         headers = {**ctx.as_("approver"), "Content-Type": wrong}
@@ -344,6 +348,7 @@ async def test_raw_imports_take_only_their_declared_type(client, ctx, kind):
 
 
 async def test_a_rejected_constraint_is_not_made_a_blocker(client, ctx):
+    """A rejected constraint cannot be turned into a blocker."""
     entity_id = await _constraint(ctx, "archived-limit", status="rejected")
     body = {"entity_id": str(entity_id), "type": "hard", "severity": "high", "status": "open"}
     resp = await client.post("/v1/blockers", json=body, headers=ctx.as_("approver"))
@@ -351,6 +356,7 @@ async def test_a_rejected_constraint_is_not_made_a_blocker(client, ctx):
 
 
 async def test_a_proposed_suggested_blocker_is_accepted_before_promote(client, ctx):
+    """A suggested blocker must be accepted before it can be promoted."""
     entity_id = await _constraint(
         ctx, "unaccepted-limit", status="proposed", proposed_blocker=MARKS["proposed_blocker"]
     )
@@ -360,6 +366,7 @@ async def test_a_proposed_suggested_blocker_is_accepted_before_promote(client, c
 
 
 async def test_a_disabled_member_does_not_own_a_new_blocker(client, ctx):
+    """A disabled member cannot be set as the owner of a new blocker."""
     async with tenant_session(ctx.tenant_id) as s:
         gone = User(email="gone@example.com", password_hash="x", role="approver",
                     disabled_at=datetime.now(UTC))  # fmt: skip

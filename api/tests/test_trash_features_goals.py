@@ -117,6 +117,7 @@ async def _items(client, w: World, who: str = "owner") -> dict[str, dict]:
 
 @pytest.mark.asyncio
 async def test_decider_deletes_a_feature_and_restore_puts_it_back(client):
+    """A decider's feature delete is immediate, and restore keeps its goal links."""
     w = await _world()
     a, b = w.ids["cut-a"], w.ids["cut-b"]
     before = await _items(client, w)
@@ -166,6 +167,7 @@ async def test_decider_deletes_a_feature_and_restore_puts_it_back(client):
 
 @pytest.mark.asyncio
 async def test_an_approver_who_does_not_decide_proposes_the_delete(client):
+    """An approver who isn't the decider only proposes a delete, never applies it."""
     w = await _world()
     a, b = w.ids["cut-a"], w.ids["cut-b"]
     r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("approver"))
@@ -208,6 +210,7 @@ async def test_an_approver_who_does_not_decide_proposes_the_delete(client):
 
 @pytest.mark.asyncio
 async def test_viewers_neither_delete_nor_restore(client):
+    """A viewer can neither delete nor restore a feature or see what is in Trash."""
     w = await _world()
     a = w.ids["cut-a"]
     r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("viewer"))
@@ -234,6 +237,7 @@ async def test_viewers_neither_delete_nor_restore(client):
 
 @pytest.mark.asyncio
 async def test_whoever_deleted_a_feature_or_goal_restores_it(client):
+    """Only the person who deleted an item, or an owner, may restore it."""
     w = await _world()
     a, b = w.ids["cut-a"], w.ids["cut-b"]
 
@@ -293,6 +297,7 @@ async def test_whoever_deleted_a_feature_or_goal_restores_it(client):
 
 @pytest.mark.asyncio
 async def test_delete_a_goal_moves_its_features_and_restore_brings_it_back(client):
+    """Deleting a goal moves its features to another goal, and restore undoes it."""
     w = await Buckets().build()
     grow, quiet = w.goals["grow"], w.goals["quiet"]
     before = next(g for g in (await w.read(client))["goals"] if g["id"] == grow)
@@ -323,6 +328,7 @@ async def test_delete_a_goal_moves_its_features_and_restore_brings_it_back(clien
 
 @pytest.mark.asyncio
 async def test_trashed_features_and_goals_expire_after_30_days(client, monkeypatch):
+    """Trashed features and goals are purged for good only after 30 days."""
     w = await _world()
     a = w.ids["cut-a"]
     assert (await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("owner"))).status_code == 200
@@ -372,6 +378,7 @@ async def _links_and_goals(w: World, feature_ids: list[uuid.UUID]) -> tuple:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("move_to_other", [False, True])
 async def test_delete_a_goal_and_restore_keep_links_and_item_goals_exactly(client, move_to_other):
+    """Restoring a deleted goal brings back its exact links and item goal lists."""
     w = await _world()
     goal = uuid.UUID(w.goal_id)
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -415,6 +422,7 @@ async def test_delete_a_goal_and_restore_keep_links_and_item_goals_exactly(clien
 
 @pytest.mark.asyncio
 async def test_restore_of_a_goal_keeps_a_goal_set_since_the_delete(client):
+    """Restoring a deleted goal never overrides a goal choice made after the delete."""
     w = await _world()
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
@@ -450,6 +458,7 @@ async def test_restore_of_a_goal_keeps_a_goal_set_since_the_delete(client):
 
 @pytest.mark.asyncio
 async def test_restore_of_a_goal_keeps_a_feature_moved_since_the_delete(client):
+    """Restoring a deleted goal never undoes a feature move made after the delete."""
     w = await Buckets().build()
     grow, quiet = w.goals["grow"], w.goals["quiet"]
     r = await client.delete(f"{BUCKETS}/goals/{grow}", params={"to_goal_id": quiet},
@@ -474,6 +483,7 @@ async def test_restore_of_a_goal_keeps_a_feature_moved_since_the_delete(client):
 
 @pytest.mark.asyncio
 async def test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_dependents(client):
+    """Blocks a key clash on restore and keeps the restored item's dependents linked."""
     from tests.test_simple_additions_api import World as Additions
 
     w = await Additions().build()
@@ -503,6 +513,7 @@ async def test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_depende
 
 @pytest.mark.asyncio
 async def test_a_commenters_goal_delete_is_a_proposal_to_its_decider(client):
+    """A commenter's goal delete is only a proposal the owner must accept."""
     w = await Buckets().build()
     grow = w.goals["grow"]
     r = await client.delete(f"{BUCKETS}/goals/{grow}", headers=w.as_("viewer"))
@@ -534,6 +545,7 @@ async def test_a_commenters_goal_delete_is_a_proposal_to_its_decider(client):
 
 @pytest.mark.asyncio
 async def test_a_proposed_delete_of_a_feature_already_in_trash_is_closed(client):
+    """A pending delete proposal is auto-declined once the item is already in Trash."""
     w = await _world()
     a = w.ids["cut-a"]
     r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("approver"))
@@ -547,6 +559,7 @@ async def test_a_proposed_delete_of_a_feature_already_in_trash_is_closed(client)
 
 @pytest.mark.asyncio
 async def test_a_purged_feature_leaves_no_milestone_or_dependency_on_it(client):
+    """Purging a feature or goal scrubs it from every milestone and dependency."""
     w = await _world()
     a, b = w.ids["cut-a"], w.ids["cut-b"]
     assert (await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("owner"))).status_code == 200
@@ -663,6 +676,7 @@ async def test_restore_after_a_new_version_puts_the_feature_on_the_current_roadm
 
 @pytest.mark.asyncio
 async def test_restore_after_a_new_version_still_refuses_a_key_clash(client):
+    """A key clash blocks restore even after a new version reused the trashed key."""
     from tests import test_simple_drafts_api as D
 
     w = await D.world()
@@ -967,6 +981,7 @@ async def test_restore_skips_a_version_that_can_no_longer_be_approved(client):
 
 @pytest.mark.asyncio
 async def test_a_goal_in_trash_takes_no_set_goal_measure_or_edit(client):
+    """A goal in Trash cannot be assigned, measured or edited until restored."""
     w = await _world()
     async with tenant_session(w.ctx.tenant_id) as s:
         other = await Seed(s).entity("goal", "fewer-tickets", position=2, metric="Tickets",
@@ -1005,6 +1020,7 @@ async def test_a_goal_in_trash_takes_no_set_goal_measure_or_edit(client):
 
 @pytest.mark.asyncio
 async def test_restore_of_a_goal_keeps_a_new_first_goal_set_since_the_delete(client):
+    """Restoring a deleted goal never undoes a later reorder of its features."""
     w = await Buckets().build()
     grow, quiet = w.goals["grow"], w.goals["quiet"]
     later = (await client.post(f"{BUCKETS}/goals", headers=w.as_("owner"), json=GOAL)).json()

@@ -52,6 +52,7 @@ async def _feed(ctx) -> None:
 
 
 async def test_the_markdown_export_names_the_prds_that_feed_the_roadmap(client, ctx):
+    """A roadmap's markdown export names its feeding PRDs in one plain line."""
     await seed_roadmap(ctx)
     await _feed(ctx)
     resp = await client.get(EXPORT, params={"format": "md"}, headers=ctx.as_("viewer"))
@@ -72,6 +73,7 @@ async def test_the_markdown_export_names_the_prds_that_feed_the_roadmap(client, 
 
 
 async def test_a_roadmap_no_prd_feeds_has_no_line(client, ctx):
+    """A roadmap fed by no PRD gets no From the PRDs line in its export."""
     await seed_roadmap(ctx)
     async with tenant_session(ctx.tenant_id) as s:
         await s.execute(update(RoadmapItem).values(prd_document_id=None))
@@ -81,6 +83,7 @@ async def test_a_roadmap_no_prd_feeds_has_no_line(client, ctx):
 
 
 def test_a_body_with_no_title_carries_the_line_at_its_top_and_imports_without_it():
+    """The PRDs line sits above a titleless body, and import strips it again."""
     from oracle.export.render import prds_line
 
     head = f"---\ndocument: {SLUG}\ntitle: Example Labs roadmap\n---\n"
@@ -108,6 +111,7 @@ UNDATED = [(k, lv, h, "- Pricing tier: owner Ana" if k == "decisions" else b)
 
 
 def test_a_parse_keeps_a_paragraph_that_starts_like_the_line():
+    """A paragraph that merely starts like the PRDs line is kept on import."""
     # Every parse (a PRD's, a spec's, a section edit's composed draft) reads the text as written.
     assert parser.parse_draft(PRD_TEXT).sections[0].body_md == "From the PRDs: what we learnt."
     roadmap = ROADMAP_HEAD + "# Example Labs roadmap {#roadmap}\n\nFrom the PRDs: our own note.\n"
@@ -115,6 +119,7 @@ def test_a_parse_keeps_a_paragraph_that_starts_like_the_line():
 
 
 def test_only_the_line_under_the_first_title_or_at_the_top_is_dropped():
+    """Only the generated PRDs line, right under the title, is dropped on import."""
     first = "# Example Labs roadmap {#roadmap}\n\n"
     second = "## Summary {#summary}\n\nWe grow.\n\n# Full version {#full}\n\n"
     line = "From the PRDs: Scale\n\n"
@@ -136,6 +141,7 @@ def test_only_the_line_under_the_first_title_or_at_the_top_is_dropped():
 
 
 async def test_a_roadmap_export_round_trips_through_the_import_route(client, ctx):
+    """A roadmap's PRDs line is stripped on import, regenerated on next export."""
     await seed_roadmap(ctx, sections=UNDATED)
     await _feed(ctx)
     # The seeded version stores no front matter; a real one carries it into its export.
@@ -166,6 +172,7 @@ async def test_a_roadmap_export_round_trips_through_the_import_route(client, ctx
 
 
 async def test_the_import_route_keeps_the_paragraph_in_a_prd(client, ctx):
+    """Importing a PRD keeps a paragraph that merely resembles the PRDs line."""
     resp = await client.post(
         "/v1/documents/example-notes/versions",
         content=PRD_TEXT.encode(),
@@ -179,6 +186,7 @@ async def test_the_import_route_keeps_the_paragraph_in_a_prd(client, ctx):
 
 
 async def test_the_import_route_keeps_a_roadmap_paragraph_under_a_later_title(client, ctx):
+    """Importing a roadmap keeps a PRDs-like paragraph under a later heading."""
     await seed_roadmap(ctx, sections=UNDATED)
     md = (await client.get(EXPORT, params={"format": "md"}, headers=ctx.as_("viewer"))).text
     assert "From the PRDs" not in md
@@ -202,6 +210,7 @@ async def test_the_import_route_keeps_a_roadmap_paragraph_under_a_later_title(cl
 
 
 async def test_a_prd_in_trash_is_left_out_of_the_line(client, ctx):
+    """A trashed PRD is left out of the roadmap's From the PRDs line."""
     await seed_roadmap(ctx)
     await _feed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -215,6 +224,7 @@ async def test_a_prd_in_trash_is_left_out_of_the_line(client, ctx):
 
 
 async def test_a_title_with_a_comma_reads_clearly(client, ctx):
+    """A PRD title with a comma is quoted in the PRDs line for clarity."""
     # Commas part the titles, so a title holding one is quoted.
     await seed_roadmap(ctx)
     await _feed(ctx)
@@ -228,6 +238,7 @@ async def test_a_title_with_a_comma_reads_clearly(client, ctx):
 
 
 async def test_only_the_markdown_export_reads_the_prds(client, ctx, monkeypatch):
+    """Only the markdown export reads which PRDs feed a roadmap, not others."""
     from oracle.export import render
 
     async def refused(*_args, **_kwargs):

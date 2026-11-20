@@ -131,6 +131,7 @@ async def roadmap_world(ctx):
 
 
 async def test_drafted_with_each_proposal_kind(client):
+    """Every edit that touches a bet queues a visual job, but unrelated edits do not."""
     ctx = await world(client)
     # A one-pager bet reworded (a commenter's proposal): its visual is queued with it.
     view = await get(client, ctx, "commenter")
@@ -218,6 +219,7 @@ async def test_drafted_with_each_proposal_kind(client):
 
 
 async def test_sanitising_refuses_script(client):
+    """A generated visual with a script or click handler is refused, not shown drawn."""
     ctx = await world(client)
     sid = uuid.uuid4()
     async with tenant_session(ctx.tenant_id) as s:
@@ -253,6 +255,7 @@ async def test_sanitising_refuses_script(client):
 
 
 async def test_revise_adds_a_version(client):
+    """Revising a visual keeps the old version and adds a new one from its comments."""
     ctx = await world(client)
     view = await get(client, ctx, "commenter")
     r = await edit(client, ctx, "commenter", view, "bets-1", "A setup checklist with invites")
@@ -295,6 +298,7 @@ async def test_revise_adds_a_version(client):
     ],
 )
 async def test_role_rules(client, role, comment, revise):
+    """Commenting and revising a visual follow the same role rules as its own change."""
     ctx = await world(client)
     view = await get(client, ctx, "commenter")
     r = await edit(client, ctx, "commenter", view, "bets-1", "A setup checklist with invites")
@@ -333,6 +337,7 @@ async def test_role_rules(client, role, comment, revise):
 
 
 async def test_flow_for_contract(client):
+    """A subject already drawn queues no new job, and a disabled document queues none."""
     ctx = await world(client)
     rm, item = await roadmap_world(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -362,6 +367,7 @@ async def test_flow_for_contract(client):
 
 
 async def test_draft_change_visual_follows_the_draft(client):
+    """A draft change's visual is visible to whoever can see that change, no one else."""
     ctx = await world(client)
     view = await get(client, ctx, "decider")
     r = await edit(client, ctx, "decider", view, "bets-1", "A setup checklist with invites")

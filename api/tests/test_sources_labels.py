@@ -49,6 +49,7 @@ UNAVAILABLE = [{"external_id": "C0ROADMAP:1", "reason": "No access: removed"}]
 
 
 def test_selection_is_the_config_without_labels():
+    """A source's labels are excluded from config comparison, so they are not a change."""
     config = {"channels": BOTH, "since": "2025-10-01", "labels": NAMES}
     assert base.selection(config) == {"channels": BOTH, "since": "2025-10-01"}
     assert base.selection({"channels": BOTH}) == {"channels": BOTH}
@@ -65,6 +66,7 @@ def test_an_unlabelled_fingerprint_is_unchanged_and_labels_do_not_count():
 
 
 def test_slack_labels_must_map_ids_to_names_and_are_capped():
+    """Slack labels must map channel ids to names, and the label set is capped."""
     slack = SlackConnector()
     slack.check_config({"channels": BOTH, "labels": NAMES})
     with pytest.raises(base.ConnectorConfigError, match="labels must map channel ids to names"):
@@ -77,6 +79,7 @@ def test_slack_labels_must_map_ids_to_names_and_are_capped():
 
 
 def test_slack_normalize_drops_unpicked_labels_and_trims_names():
+    """Normalizing Slack config drops unpicked labels and trims overlong names."""
     got = SlackConnector().normalize_config(
         {"channels": [" C0PRODUCT "], "labels": {"C0PRODUCT": "#" + "p" * 299, "C0GONE": "#gone"}}
     )
@@ -84,6 +87,7 @@ def test_slack_normalize_drops_unpicked_labels_and_trims_names():
 
 
 def test_notion_labels_must_map_page_ids_to_titles_and_are_capped():
+    """Notion labels must map page ids to titles, and the label set is capped."""
     notion = NotionConnector()
     notion.check_config({"roots": [CHILD], "labels": {CHILD: "Product specs"}})
     with pytest.raises(base.ConnectorConfigError, match="labels must map page ids to titles"):
@@ -96,6 +100,7 @@ def test_notion_labels_must_map_page_ids_to_titles_and_are_capped():
 
 
 def test_notion_normalize_drops_unpicked_labels_and_trims_titles():
+    """Normalizing Notion config drops unpicked labels, trims titles, keeps other keys."""
     got = NotionConnector().normalize_config(
         {"roots": [CHILD], "labels": {CHILD: "T" * 300, DB: "Gone"}, "other": 1}
     )
@@ -155,6 +160,7 @@ async def _mark_unavailable(tenant_id, sid) -> None:
 
 
 async def test_a_labels_only_save_is_stored_without_calling_slack(a, tenant_id, alice, slack):
+    """Saving only label changes stores it without calling Slack or the cursor."""
     source = await _add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await _mark_unavailable(tenant_id, source["id"])
     before_row = await _row(tenant_id, source["id"])
@@ -181,6 +187,7 @@ async def test_a_labels_only_save_is_stored_without_calling_slack(a, tenant_id, 
 
 
 async def test_a_stale_labels_only_save_is_refused_and_changes_nothing(a, tenant_id, alice, slack):
+    """A stale label-only save is refused, leaving config and cursor unchanged."""
     source = await _add(a, tenant_id, alice, "slack", {"channels": BOTH})
     first = await patch_source(a, source["id"], {"name": "Renamed"})
     assert first.status_code == 200, first.text
@@ -200,6 +207,7 @@ async def test_a_stale_labels_only_save_is_refused_and_changes_nothing(a, tenant
 
 
 async def test_slack_labels_are_normalised_and_checked_on_save(a, tenant_id, alice, slack):
+    """Slack labels are normalised and checked the same way on save as on create."""
     source = await _add(a, tenant_id, alice, "slack", {"channels": BOTH})
 
     resp = await patch_source(
@@ -223,6 +231,7 @@ async def test_slack_labels_are_normalised_and_checked_on_save(a, tenant_id, ali
 
 
 async def test_a_new_slack_source_with_bad_labels_is_a_422(a, tenant_id, alice, slack):
+    """Creating a Slack source with bad labels is refused before any Slack call."""
     conn = await make_connection(tenant_id, alice, "slack")
     slack.calls.clear()
     resp = await a.post(
@@ -251,6 +260,7 @@ def notion(monkeypatch):
 
 
 async def test_notion_labels_follow_the_same_rules(a, tenant_id, alice, notion):
+    """Notion source labels follow the same validation and stale-save rules."""
     source = await _add(a, tenant_id, alice, "notion", {"roots": [CHILD, DB]})
     await _mark_unavailable(tenant_id, source["id"])
     before = (await a.get(f"/v1/sources/{source['id']}")).json()
@@ -329,6 +339,7 @@ def _fingerprint_before(config, connection_id, account_id) -> str:
 async def test_a_fireflies_source_labelled_before_keeps_its_position(
     a, tenant_id, alice, fake, ff_connector
 ):
+    """A Fireflies source labelled under an old cursor format keeps its position."""
     standup = f"cal:{STANDUP_CAL}"
     config = {"mode": "selected", "series": [standup], "labels": {standup: "Daily standup"}}
     conn = await make_connection(

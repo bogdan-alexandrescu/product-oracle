@@ -56,6 +56,7 @@ async def built(ctx, d_id: str) -> str:
 # owner) and the filters in use; fails_when=the context holds only "Runs" or no items;
 # no_claim=the reply's wording.
 async def test_a_run_review_chat_context_has_its_items(client):
+    """A chat started from a run's checkpoint carries that run and its filtered items."""
     ctx, _doc = await company(client)
     run_id, cp_id = await review_stop(ctx)
     d = await start(
@@ -78,6 +79,7 @@ async def test_a_run_review_chat_context_has_its_items(client):
 # protects=a page's own name heads its "This page" chat; fails_when=it reads "Runs";
 # no_claim=the page's list of items.
 async def test_a_screen_chat_is_named_by_its_page_and_reads_what_it_shows(client):
+    """A chat started from a screen is named for that page and reads what it shows."""
     ctx, _doc = await company(client)
     d = await start(
         client, ctx,
@@ -95,6 +97,7 @@ async def test_a_screen_chat_is_named_by_its_page_and_reads_what_it_shows(client
 # protects=what one person's page showed stays in their own private panel chat;
 # fails_when=an open discussion or a shared copy carries the view; no_claim=G7 sharing.
 async def test_an_open_discussion_never_carries_a_page_view(client):
+    """A discussion never stores or leaks the page view that started it."""
     ctx, _doc = await company(client)
     run_id, cp_id = await review_stop(ctx)
     subject = {"run_id": run_id, "checkpoint_id": cp_id, "view": VIEW}
@@ -119,6 +122,7 @@ async def test_an_open_discussion_never_carries_a_page_view(client):
 # Inbox, the account) hold the page's name only, whatever the client sends; fails_when=another
 # client's view of such a page is stored or read; no_claim=what the web sends (pageNameOnly).
 async def test_a_persons_own_page_keeps_its_name_only_whatever_is_sent(client):
+    """A person's own private pages never leak their view into a chat's context."""
     ctx, _doc = await company(client)
     shown = {"name": "Members", "lines": ["Pat Example, pat@example.com, owner"]}
     own = ("/settings/members", "/sources", "/inbox", "/simple/inbox", "/account", "/settings")
@@ -149,6 +153,7 @@ async def test_a_persons_own_page_keeps_its_name_only_whatever_is_sent(client):
 # reply's context only; fails_when=a discussion or a run's discussion list sends it back;
 # no_claim=the subject's other fields.
 async def test_the_page_view_is_never_sent_back(client):
+    """The page view used to start a discussion is never sent back to anyone."""
     ctx, _doc = await company(client)
     run_id, cp_id = await review_stop(ctx)
     d = await start(

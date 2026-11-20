@@ -50,6 +50,7 @@ def _run() -> Run:
     "make", [_theme, _entity, _run, lambda: Invite(email="pm@example.com", role="viewer")]
 )
 async def test_rows_are_invisible_and_unwritable_across_tenants(make):
+    """A tenant can neither read nor write another tenant's rows across tables."""
     a, b = await make_tenant("A"), await make_tenant("B")
     async with tenant_session(a) as s:
         row = make()
@@ -90,12 +91,14 @@ async def test_rows_are_invisible_and_unwritable_across_tenants(make):
     ],
 )
 async def test_enum_like_columns_are_checked(db, make):
+    """Database check constraints reject out-of-enum values for several tables."""
     db.add(make())
     with pytest.raises(IntegrityError, match="ck_"):
         await db.flush()
 
 
 async def test_one_open_invite_per_email(db):
+    """Only one open invite may exist for the same email address."""
     db.add(Invite(email="pm@example.com", role="viewer"))
     await db.flush()
     db.add(Invite(email="pm@example.com", role="approver"))
@@ -104,6 +107,7 @@ async def test_one_open_invite_per_email(db):
 
 
 async def test_revoked_invite_frees_the_email(db):
+    """A revoked invite frees its email for a brand new invite."""
     from datetime import UTC, datetime
 
     db.add(Invite(email="pm@example.com", role="viewer", revoked_at=datetime.now(UTC)))
@@ -112,6 +116,7 @@ async def test_revoked_invite_frees_the_email(db):
 
 
 async def test_evidence_and_edges_targets(db):
+    """Evidence must point at exactly one target, and an edge can't point to itself."""
     goal, feature = _entity(), Entity(type="feature", key="one-click", title="1", origin="agent")
     db.add_all([goal, feature])
     await db.flush()
@@ -137,6 +142,7 @@ async def test_evidence_and_edges_targets(db):
 
 
 async def test_checkpoint_defaults_to_approver(db):
+    """A checkpoint with no approver role set defaults to pending and approver."""
     run = _run()
     db.add(run)
     await db.flush()
@@ -148,6 +154,7 @@ async def test_checkpoint_defaults_to_approver(db):
 
 
 async def test_item_versions_get_a_search_vector(db):
+    """A source item version is full-text searchable through a GIN-indexed column."""
     source = _source(await _owner(db))
     db.add(source)
     await db.flush()
@@ -180,6 +187,7 @@ async def test_item_versions_get_a_search_vector(db):
 
 
 async def test_default_template_is_seeded_once(db):
+    """Seeding the default template twice never creates a duplicate."""
     await ensure_default_template(db)
     await ensure_default_template(db)
     templates = (await db.scalars(select(Template))).all()
@@ -189,6 +197,7 @@ async def test_default_template_is_seeded_once(db):
 
 
 async def test_seed_gives_the_tenant_the_default_template():
+    """A freshly seeded tenant already has the built-in default template."""
     from oracle.seed import seed
 
     r = await seed()
@@ -203,6 +212,7 @@ async def test_seed_gives_the_tenant_the_default_template():
     [{"kind": "dropbox"}, {"status": "broken"}],
 )
 async def test_source_enum_columns_are_checked(db, fields):
+    """A source's kind and status are restricted by a database check constraint."""
     source = _source(await _owner(db))
     for key, value in fields.items():
         setattr(source, key, value)
@@ -230,6 +240,7 @@ async def test_sources_belong_to_one_user(db):
 
 
 async def test_connections_are_checked(db):
+    """A connection's provider, auth mode and status are checked by the database."""
     owner = await _owner(db)
 
     def conn(**over) -> Connection:
@@ -254,6 +265,7 @@ async def test_connections_are_checked(db):
 
 @pytest.mark.parametrize("value", ["-0.1", "1.001"])
 async def test_confidence_is_between_zero_and_one(db, value):
+    """Evidence confidence must stay between zero and one, enforced by the database."""
     entity = _entity()
     db.add(entity)
     await db.flush()

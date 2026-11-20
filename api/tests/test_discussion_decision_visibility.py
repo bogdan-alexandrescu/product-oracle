@@ -95,6 +95,7 @@ async def _absent(client, ctx, who, d_id, ref) -> None:
 @pytest.mark.parametrize("who", READERS)
 @pytest.mark.parametrize("kind", list(SETUPS))
 async def test_a_discussions_decision_follows_its_document(client, kind, who):
+    """A decision proposed from a discussion follows its document's rules."""
     ctx, subject = await SETUPS[kind](client)
     d_id, ref = await _proposed(client, ctx, subject)
     async with tenant_session(ctx.tenant_id) as s:
@@ -112,6 +113,7 @@ async def test_a_discussions_decision_follows_its_document(client, kind, who):
 @pytest.mark.parametrize("who", READERS)
 @pytest.mark.parametrize("kind", list(SETUPS))
 async def test_an_older_decision_naming_only_the_discussion_is_hidden(client, kind, who):
+    """A decision naming only its discussion is hidden once unlinked."""
     ctx, subject = await SETUPS[kind](client)
     d_id, ref = await _proposed(client, ctx, subject)
     async with tenant_session(ctx.tenant_id) as s:
@@ -127,6 +129,7 @@ async def test_an_older_decision_naming_only_the_discussion_is_hidden(client, ki
 @pytest.mark.parametrize("role", ["commenter", "viewer"])
 @pytest.mark.parametrize("kind", list(SETUPS))
 async def test_mcp_misses_a_discussions_hidden_decision(client, kind, role):
+    """MCP hides a discussion's decision from roles barred from it."""
     ctx, subject = await SETUPS[kind](client)
     _d_id, ref = await _proposed(client, ctx, subject)
     async with mcp_client(await api_token(ctx.tenant_id, role)) as c:
@@ -142,6 +145,7 @@ async def test_mcp_misses_a_discussions_hidden_decision(client, kind, role):
 # protects=a discussion on a company PRD keeps its decision company-wide; fails_when=the
 # rule hides every discussion's decision; no_claim=other subjects.
 async def test_a_company_documents_discussion_decision_stays_visible(client):
+    """A decision in a shared document stays visible with its discussion."""
     ctx, doc = await company(client)
     d_id, ref = await _proposed(client, ctx, section(doc))
     me = ctx.as_("commenter")

@@ -47,6 +47,7 @@ async def _admin() -> User:
 
 @pytest.mark.parametrize(("scope", "can_write"), [("oracle:read", False), (None, True)])
 async def test_source_writes_need_oracle_write(client, slack, scope, can_write):
+    """Source writes need oracle:write scope; oracle:read alone changes nothing."""
     _, tok = await full_flow(client, scope=scope)
     client.cookies.clear()
     auth = {"Authorization": f"Bearer {tok['access_token']}"}
@@ -83,6 +84,7 @@ async def test_source_writes_need_oracle_write(client, slack, scope, can_write):
 
 
 async def test_mcp_tools_refuse_source_writes_for_a_read_only_client(client, slack):
+    """MCP tools refuse to sync or delete a source for a read-only scoped client."""
     from tests.test_mcp import mcp_client, text_of
 
     _, tok = await full_flow(client, scope="oracle:read")
@@ -144,6 +146,7 @@ async def test_a_read_only_personal_token_changes_no_source(client, slack, scope
 
 
 async def test_mcp_tools_refuse_source_writes_for_a_read_only_personal_token(client, slack):
+    """MCP tools refuse to pause or delete a source for a read-only personal token."""
     from tests.test_mcp import mcp_client, text_of
 
     raw = await _personal_token("oracle:read")

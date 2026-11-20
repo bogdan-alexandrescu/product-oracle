@@ -85,6 +85,7 @@ def _tables() -> list[str]:
 # protects=the chain has one head, this one, right after main's; fails_when=a second head
 # or a number that skips main's; no_claim=what the table holds.
 def test_the_chain_ends_here_after_discussion_replies():
+    """This migration chains onto its own branch, and a later one chains after it."""
     script = ScriptDirectory.from_config(_cfg())
     # H2 Cadence engine's 0037_rituals chains on it; one head.
     assert script.get_revision("0037_rituals").down_revision == REVISION
@@ -96,6 +97,7 @@ def test_the_chain_ends_here_after_discussion_replies():
 # fails_when=a text value stays typed, a valid one moves, or the downgrade loses a value;
 # no_claim=fill from text (its own tests).
 def test_goal_text_moves_to_text_keys_and_back(scratch_db):
+    """Upgrading moves unparsed goal fields into text columns; downgrading reverses it."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     tenant, member = uuid.uuid4(), uuid.uuid4()
@@ -147,6 +149,7 @@ def test_goal_text_moves_to_text_keys_and_back(scratch_db):
 # the downgrade puts every value back as it was; fails_when=a goal keeps a refused value
 # typed, so every later save of it is 422; no_claim=values that fit (the test above).
 def test_goals_the_checks_refuse_are_normalised(scratch_db):
+    """Goal values the field checks would refuse are normalised into text fields on migration."""
     from oracle.baseline import goals
 
     cfg = _cfg()

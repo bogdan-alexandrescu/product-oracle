@@ -31,11 +31,13 @@ def _migration():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the single existing migration head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_the_new_css_is_the_packaged_theme():
+    """The migration's new CSS matches the packaged roadmap-board theme file."""
     m = _migration()
     # Later rules are appended after it (qa4-docs-share-5's phone rule).
     assert (BUILTIN_DIR / "themes" / "roadmap-board.css").read_text("utf-8").startswith(m.NEW_CSS)
@@ -43,6 +45,7 @@ def test_the_new_css_is_the_packaged_theme():
 
 
 def test_upgrade_swaps_unedited_copies_and_downgrade_restores(scratch_db):  # noqa: F811
+    """Upgrading swaps only unedited theme copies; downgrading restores the old css."""
     m = _migration()
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)

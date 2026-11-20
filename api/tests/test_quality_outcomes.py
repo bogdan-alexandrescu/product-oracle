@@ -81,6 +81,7 @@ def outcome_body(world, **extra) -> dict:
 
 
 async def test_an_approver_links_launched_work_to_a_goal_and_assesses_it(client, world):
+    """An approver links launched work to a goal, tracks it, and assesses the outcome."""
     ctx = world["ctx"]
     body = outcome_body(world)
     assert (
@@ -121,6 +122,7 @@ async def test_an_approver_links_launched_work_to_a_goal_and_assesses_it(client,
 
 
 async def test_outcome_links_are_validated(client, world):
+    """An outcome can only link a real goal and work that was actually launched."""
     ctx = world["ctx"]
     seeded = world["seeded"]
     headers = ctx.as_("approver")
@@ -160,6 +162,7 @@ async def test_outcome_links_are_validated(client, world):
 
 
 async def test_tracking_never_changes_a_published_document(client, world):
+    """Tracking an outcome's assessment and learnings never changes the document."""
     ctx = world["ctx"]
     seeded = world["seeded"]
 
@@ -202,6 +205,7 @@ async def test_tracking_never_changes_a_published_document(client, world):
 
 
 async def test_learnings_become_recommendation_signals(client, world):
+    """A learning becomes a recommendation signal only for a real category or target."""
     ctx = world["ctx"]
     headers = ctx.as_("approver")
 
@@ -261,6 +265,7 @@ async def test_learnings_become_recommendation_signals(client, world):
 
 
 async def test_another_companys_outcomes_and_learnings_are_invisible(client, world):
+    """Another company's outcomes, learnings and assessments stay invisible to it."""
     ctx = world["ctx"]
     other = await make_ctx("Company B")
     outcome = (

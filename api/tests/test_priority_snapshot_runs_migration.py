@@ -83,11 +83,13 @@ def _columns() -> list[str]:
 
 
 def test_the_chain_ends_here_after_feedback_agent_staging():
+    """The priority_snapshot_runs migration chains after the prior head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_existing_rows_become_saved_and_downgrade_drops_unapproved_orders(scratch_db):
+    """The priority_snapshot_runs migration marks old snapshots saved and indexed."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     tenant, before = uuid.uuid4(), uuid.uuid4()

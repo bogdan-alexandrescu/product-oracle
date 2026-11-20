@@ -34,6 +34,7 @@ def _from_line(item: dict) -> str:
 
 
 async def test_why_line_names_prd_draft_code_and_feature(client):
+    """An item's why-line names its PRD, draft number and title, not a raw section key."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -63,6 +64,7 @@ async def test_why_line_names_prd_draft_code_and_feature(client):
 
 
 async def test_later_starts_where_next_ends(client):
+    """The later window starts the day after the next window ends, with no gap."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)

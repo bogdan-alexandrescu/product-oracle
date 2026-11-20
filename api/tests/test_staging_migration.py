@@ -73,6 +73,7 @@ def _has_table() -> bool:
 
 
 def test_the_chain_ends_here_after_segment_skipped():
+    """The staging migration's chain still ends at its revision after a skip."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 

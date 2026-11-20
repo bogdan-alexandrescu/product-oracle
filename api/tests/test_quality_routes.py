@@ -38,6 +38,7 @@ ROUTES = {
 
 
 def test_every_route_is_an_mcp_tool():
+    """Every quality route is also reachable as an MCP tool under its expected name."""
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for key, name in ROUTES.items():
         assert key in ops, key
@@ -45,6 +46,7 @@ def test_every_route_is_an_mcp_tool():
 
 
 async def test_routes_require_auth(client):
+    """Every quality route refuses a request that carries no authentication."""
     for method, path in ROUTES:
         url = path.format(doc="x", n=1, outcome_id=uuid.uuid4(), learning_id=uuid.uuid4(), index=0)
         resp = await client.request(method, url, json={})
@@ -52,6 +54,7 @@ async def test_routes_require_auth(client):
 
 
 async def test_criteria_catalogue(client):
+    """The criteria catalogue lists every key with its title, question and hard flag."""
     ctx = await make_ctx()
     resp = await client.get("/v1/quality/criteria", headers=ctx.as_("viewer"))
     assert resp.status_code == 200
@@ -62,6 +65,7 @@ async def test_criteria_catalogue(client):
 
 
 async def test_the_dashboard_shows_every_criterion_with_its_explanation(client):
+    """The readiness dashboard shows every criterion's status without storing a report."""
     ctx = await make_ctx()
     seeded = await seed_case(client, ctx, load_case("social-api-policy"))
     resp = await client.get(V(seeded.slug, 1, "/readiness"), headers=ctx.as_("viewer"))
@@ -89,6 +93,7 @@ async def test_the_dashboard_shows_every_criterion_with_its_explanation(client):
 
 
 async def test_a_commenter_stores_a_report_and_it_is_audited(client):
+    """A stored evaluation report is audited and becomes the document's latest report."""
     ctx = await make_ctx()
     seeded = await seed_case(client, ctx, load_case("bad-prd-sections"))
     url = V(seeded.slug, 1, "/evaluations")
@@ -116,6 +121,7 @@ async def test_a_commenter_stores_a_report_and_it_is_audited(client):
 
 
 async def test_human_ratings_are_stored_and_compared(client):
+    """A human rating is stored beside the rules' own status, with an agreement score."""
     ctx = await make_ctx()
     seeded = await seed_case(client, ctx, load_case("good-prd"))
     url = V(seeded.slug, 1, "/evaluations/human")
@@ -170,6 +176,7 @@ async def test_another_companys_documents_and_reports_are_invisible(client):
 
 
 async def test_an_unknown_version_is_a_404(client):
+    """Reading readiness for a version number that does not exist gives a 404."""
     ctx = await make_ctx()
     seeded = await seed_case(client, ctx, load_case("good-prd"))
     resp = await client.get(V(seeded.slug, 9, "/readiness"), headers=ctx.as_("viewer"))

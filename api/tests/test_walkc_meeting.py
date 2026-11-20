@@ -37,6 +37,7 @@ async def _no_roadmap_decider(w) -> None:
 
 
 async def test_a_meeting_proposal_goes_to_the_meetings_deciders(client):
+    """A meeting proposal with a decider present asks only that decider."""
     w = await world()
     await _no_roadmap_decider(w)
     mid = (await start(client, w, "owner", attendee_ids=[uid(w, "commenter")]))["id"]
@@ -54,6 +55,7 @@ async def test_a_meeting_proposal_goes_to_the_meetings_deciders(client):
 
 
 async def test_nobody_in_the_meeting_decides(client):
+    """With no decider in the meeting, a proposal must ask outside it."""
     w = await world()
     await _no_roadmap_decider(w)
     mid = (await start(client, w, attendee_ids=[uid(w, "commenter")]))["id"]

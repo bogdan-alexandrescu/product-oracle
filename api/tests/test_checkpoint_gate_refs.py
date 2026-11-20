@@ -32,6 +32,7 @@ TWO = BLOCKING.replace(
 
 
 def test_each_problem_has_its_own_ref():
+    """Two problems sharing a code on one feature still get their own distinct refs."""
     problems = [
         {"code": "depends_on_excluded", "feature": "saved-addresses", "message": m}
         for m in ("depends on address-sharing, left out", "depends on gift-notes, left out")
@@ -46,6 +47,7 @@ def test_each_problem_has_its_own_ref():
 
 
 async def test_a_waiver_of_one_problem_leaves_the_other_open(client, owner, runtime):  # noqa: F811
+    """Waiving one of two same-code problems leaves the other still blocking."""
     _, auth = owner
     run = await at_feature_set(client, owner, runtime, TWO)
     cp = pending(run)
@@ -99,6 +101,7 @@ def test_two_same_text_problems_stay_two():
 
 
 def test_a_gate_row_names_its_feature_by_its_title():
+    """A blocked gate row names its feature by title, not by its internal key."""
     check = {
         "problems": [
             {

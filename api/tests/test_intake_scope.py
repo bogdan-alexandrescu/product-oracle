@@ -51,6 +51,7 @@ ROUTES = [
 
 
 def test_every_intake_route_is_in_openapi_and_an_mcp_tool():
+    """Every intake route is documented in OpenAPI and exposed as its own MCP tool."""
     paths = app.openapi()["paths"]
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for method, path, tool in ROUTES:
@@ -83,10 +84,12 @@ def test_every_intake_route_is_in_openapi_and_an_mcp_tool():
     ],
 )
 def test_run_token_scopes(method, path, scope):
+    """Each intake route requires exactly the run-token scope its data needs."""
     assert required_scope(method, path) == scope
 
 
 async def test_run_tokens_read_the_intake_but_never_answer_or_decide(client):
+    """A run token reads an intake's data but never answers or decides a gap."""
     ctx = await company()
     out = await create_intake(client, ctx)
     intake_id = out["intake"]["id"]
@@ -115,6 +118,7 @@ async def test_run_tokens_read_the_intake_but_never_answer_or_decide(client):
 
 
 async def test_roles_guard_every_write(client):
+    """Every write route on an intake is blocked for a role lacking permission."""
     ctx = await company()
     out = await create_intake(client, ctx)
     intake_id = out["intake"]["id"]
@@ -152,6 +156,7 @@ async def test_roles_guard_every_write(client):
 
 
 async def test_another_companys_intake_is_invisible_on_every_route(client):
+    """An intake from another company is a 404 on every read or write route tried."""
     a = await company("Company A")
     b = await company("Company B")
     theirs = await intake_with_source(client, b)
@@ -196,6 +201,7 @@ async def test_another_companys_intake_is_invisible_on_every_route(client):
 
 
 async def test_snapshots_and_sources_of_another_user_cannot_be_pinned(client):
+    """An intake cannot pin a snapshot or source belonging to someone else."""
     ctx = await company()
     theirs = (
         await client.post("/v1/snapshots", json={"label": "x"}, headers=ctx.as_("approver"))
@@ -238,6 +244,7 @@ INJECTION = (
 
 
 async def test_evidence_search_is_audited_and_returns_data_not_instructions(client):
+    """Evidence search results are marked untrusted data, and every search is audited."""
     ctx = await company()
     await make_item(ctx, "commenter", content=INJECTION, title="#support thread")
     out = await create_intake(client, ctx)

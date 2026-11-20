@@ -65,6 +65,7 @@ async def test_a_console_approval_by_an_approver_not_lead_does_not_count(
     owner,  # noqa: F811
     monkeypatch,
 ):
+    """A console approval by an approver who is not the lead never counts."""
     # protects=Done-when 5 (first half): with a lead named, a console MERGE by an approver
     # who is not the lead is not counted; the check stays open and shows what the console
     # said; fails_when=the answer approves the check or nothing shows it; no_claim=the
@@ -93,6 +94,7 @@ async def test_a_console_approval_by_the_lead_with_a_verdict_missing_is_held(
     owner,  # noqa: F811
     monkeypatch,
 ):
+    """A lead's console approval with a missing verdict is held, not counted."""
     # protects=Done-when 5 (second half, D3 "Console gate"): the lead's console MERGE
     # while a feature has no verdict is held: pending with console.needs = "confirm",
     # nothing posted to the workflow, the run token read-only, confirming 409 until the
@@ -136,6 +138,7 @@ async def test_the_inbox_lists_the_check_for_the_lead_and_owners_only(
     client,
     owner,  # noqa: F811
 ):
+    """The Inbox lists the check for the lead and owners, not a plain approver."""
     # protects=Done-when 15 (the check; the dates stop is lane B): with a lead named, the
     # Inbox lists the Engineering check for the lead and owners, titled by its segment,
     # with its open blocking reasons, and not for an approver; fails_when=an approver sees
@@ -170,6 +173,7 @@ async def test_workflow_mode_runs_the_check_and_a_prd_review_send_back_revises_t
     client,
     owner,  # noqa: F811
 ):
+    """The check runs in the run's own workflow; a send-back still revises the draft."""
     # protects=Done-when 16 for lane A: in workflow mode the check's step runs in the
     # run's one workflow after the feature set, and a PRD review send-back still revises
     # prd_draft (the importing segment), then the run goes on to the dates stop (lane B,
@@ -215,6 +219,7 @@ async def test_a_counted_console_approval_at_the_dates_records_the_verified_base
     owner,  # noqa: F811
     monkeypatch,
 ):
+    """An approval made in the external console still saves the same verified schedule basis."""
     # protects=#590 review MAJOR 1: the lead stages Accept in Oracle, then approves the
     # Engineering dates in the SwarmCloud console; the counted answer records the dates as
     # Oracle's Approve does; fails_when=the stop is approved but no verified basis is made,

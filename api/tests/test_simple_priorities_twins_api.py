@@ -87,6 +87,7 @@ async def _add_item(w, key: str, **kw) -> str:
 
 
 async def test_a_draft_item_is_on_the_roadmap(client):
+    """A draft on the company roadmap shows as on it, but is not the ranked item."""
     w = await company_world()
     out = await w.read(client)
     rows = [r for r in out["rows"] if r["feature_id"] == w.ids["widgets"]]
@@ -100,6 +101,7 @@ async def test_a_draft_item_is_on_the_roadmap(client):
 
 
 async def test_a_linked_draft_of_a_ranked_feature_is_on_its_row(client):
+    """A linked draft of a ranked feature shows on that feature's row."""
     w = await company_world()
     await _add_item(w, "pay-8", feature_id=uuid.UUID(w.ids["ledger"]), draft=True)
     trace = [{"target": "feature", "id": w.ids["exports"], "via": "section_link"}]
@@ -116,6 +118,7 @@ async def test_a_linked_draft_of_a_ranked_feature_is_on_its_row(client):
 
 
 async def test_same_named_records_show_as_one_row(client):
+    """Features that share a name, case and spacing aside, show as a single row."""
     w = await company_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         (await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))).title = "Ledger"
@@ -150,6 +153,7 @@ async def test_same_named_records_show_as_one_row(client):
 
 
 async def test_a_move_confirms_a_trace_linked_draft(client):
+    """Pinning a feature with a trace-linked draft turns that draft into its real item."""
     w = await company_world()
     trace = [{"target": "feature", "id": w.ids["insights"], "via": "section_link"}]
     await _add_item(w, "pay-8", title="Night digest", draft=True, trace=trace)
@@ -173,6 +177,7 @@ async def test_a_move_confirms_a_trace_linked_draft(client):
 
 
 def test_a_draft_on_another_roadmap_is_not_on_the_company_roadmap():
+    """A draft held on another roadmap does not count as held on the company roadmap."""
     company, other = uuid.uuid4(), uuid.uuid4()
     fid = str(uuid.uuid4())
 
@@ -201,6 +206,7 @@ async def _features(w, *specs: tuple[str, str, int]) -> None:
 
 
 async def test_a_twin_of_a_row_with_only_a_draft_still_merges(client):
+    """A row whose only item is a draft still offers a twin feature to merge into it."""
     w = await company_world()
     await _features(w, ("gadget", "Gadget", 1), ("gadget-copy", "gadget", 9))
     await _add_item(w, "pay-8", title="Gadget", draft=True, feature_id=uuid.UUID(w.ids["gadget"]))
@@ -215,6 +221,7 @@ async def test_a_twin_of_a_row_with_only_a_draft_still_merges(client):
 
 
 async def test_a_twins_merge_proposal_shows(client):
+    """A proposal to merge a twin's item shows as a waiting merge proposal."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _add_item(w, "pay-8", title="Ledger", feature_id=uuid.UUID(w.ids["ledger-copy"]))
@@ -253,6 +260,7 @@ async def _feature_of(w, item: str) -> str | None:
 
 
 async def test_merging_a_twin_keeps_its_item_on_the_kept_row(client):
+    """Merging a twin keeps its item ranked on the row that is kept, dropping the twin."""
     w = await company_world()
     await _features(w, ("gadget", "Gadget", 1), ("gadget-copy", "gadget", 9))
     await _add_item(w, "pay-8", title="Gadget", draft=True, feature_id=uuid.UUID(w.ids["gadget"]))
@@ -292,6 +300,7 @@ async def _devices(w, *items: tuple[str, str], decider: str | None = None) -> No
 
 
 async def test_merging_a_twin_relinks_its_item_on_another_roadmap(client):
+    """Merging a twin relinks its item from another roadmap onto the kept feature."""
     # payments is the company roadmap: Simple reads it alone, devices is an older one.
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
@@ -311,6 +320,7 @@ async def test_merging_a_twin_relinks_its_item_on_another_roadmap(client):
 
 
 async def test_a_twin_on_a_roadmap_the_caller_does_not_decide_is_refused(client):
+    """Merging a twin is refused when its own roadmap has a different decider to ask."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-1", "ledger-copy"), decider="decider")
@@ -329,6 +339,7 @@ async def test_a_twin_on_a_roadmap_the_caller_does_not_decide_is_refused(client)
 
 
 async def test_a_twin_merges_only_into_its_same_name_row(client):
+    """A twin may merge only into the row with the exact same name."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     r = await client.post(
@@ -340,6 +351,7 @@ async def test_a_twin_merges_only_into_its_same_name_row(client):
 
 
 async def test_a_twins_item_is_not_linked_beside_the_kept_features_own(client):
+    """A twin's item cannot be linked beside an item the kept feature already has."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-0", "ledger"), ("dev-1", "ledger-copy"))
@@ -358,6 +370,7 @@ async def test_a_twins_item_is_not_linked_beside_the_kept_features_own(client):
 
 
 async def test_merging_a_twin_needs_its_roadmaps_decider(client):
+    """Merging a twin needs that twin's own roadmap's decider, not just any approver."""
     w = await company_world()
     await _features(w, ("gadget", "Gadget", 1), ("gadget-copy", "gadget", 9))
     await _add_item(w, "pay-8", title="Gadget", draft=True, feature_id=uuid.UUID(w.ids["gadget"]))

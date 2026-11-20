@@ -56,6 +56,7 @@ def scratch_db():
 
 
 def test_chains_on_the_roadmap_head():
+    """The refinement-batch migration chains on the roadmap head, one head overall."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_roadmap"
     # 0017_citation_source_oracle chains on it, then 0018_runtime_features,
@@ -67,6 +68,7 @@ def test_chains_on_the_roadmap_head():
 
 
 def test_extends_the_live_check_and_keeps_other_kinds(scratch_db):
+    """Extending the job-kind check adds one kind without dropping another lane's own."""
     upgrade(_cfg(), "0016_roadmap")
     # Another lane's kind, added after 0013, must survive.
     _run("ALTER TABLE llm_jobs DROP CONSTRAINT ck_llm_jobs_kind")

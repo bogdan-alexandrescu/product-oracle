@@ -80,6 +80,7 @@ def _runtime(status: int) -> SwarmCloudRuntime:
 
 @pytest.mark.parametrize("status", [400, 403, 410, 413, 422])
 async def test_a_file_refused_for_good_is_skipped_and_reported(status):
+    """A file SwarmCloud refuses for good is skipped and reported, others still read."""
     skipped: dict[str, str] = {}
     files = await _runtime(status).artifacts("wf_1", skipped=skipped)
     assert files == {"notes.md": "Some notes."}
@@ -92,6 +93,7 @@ async def test_a_file_refused_for_good_is_skipped_and_reported(status):
 
 @pytest.mark.parametrize("status", [500, 503, 429])
 async def test_a_file_refused_for_now_is_still_read_again(status):
+    """A file SwarmCloud refuses only for now is retried, never treated as skipped."""
     skipped: dict[str, str] = {}
     with pytest.raises(RuntimeUnavailable) as exc:
         await _runtime(status).artifacts("wf_1", skipped=skipped)
@@ -119,6 +121,7 @@ def _naming(run: dict, name: str) -> list[str]:
 async def test_a_refused_extra_file_is_skipped_and_the_segment_reaches_its_checkpoint(
     client, owner
 ):
+    """A refused extra file does not stop the segment from reaching its checkpoint."""
     _, auth = owner
     _swarm("_export.yaml", 422)
     run = await started(client, auth)
@@ -136,6 +139,7 @@ async def test_a_refused_extra_file_is_skipped_and_the_segment_reaches_its_check
 
 
 async def test_a_file_refused_for_now_is_read_again_without_a_note(client, owner):
+    """A file refused only for now leaves no note once it is finally read."""
     _, auth = owner
     swarm = _swarm("_export.yaml", 503)
     run = await started(client, auth)
@@ -152,6 +156,7 @@ async def test_a_file_refused_for_now_is_read_again_without_a_note(client, owner
 
 
 async def test_a_refused_file_the_import_needs_holds_it_with_a_note_in_words(client, owner):
+    """A refused file the import needs holds the run with one plain-words note."""
     _, auth = owner
     _swarm("baseline.yaml", 422)
     run = await started(client, auth)
@@ -199,6 +204,7 @@ def _two_steps() -> httpx.MockTransport:
 
 
 async def test_a_file_refused_in_one_step_but_served_by_a_later_one_is_not_skipped():
+    """A file refused by one step is not skipped if a later step serves it."""
     runtime = SwarmCloudRuntime(
         "https://swarm.test", StaticBearer("sc-bearer"), transport=_two_steps()
     )
@@ -209,6 +215,7 @@ async def test_a_file_refused_in_one_step_but_served_by_a_later_one_is_not_skipp
 
 
 async def test_the_held_note_does_not_say_to_start_the_run_again(client, owner):
+    """A held run's note never tells a person to start it again."""
     _, auth = owner
     _swarm("baseline.yaml", 422)
     run = await started(client, auth)
@@ -221,6 +228,7 @@ async def test_the_held_note_does_not_say_to_start_the_run_again(client, owner):
 
 
 async def test_a_refusal_whose_words_change_is_still_noted_once_per_file(client, owner):
+    """A refusal is noted once per file, even if its wording changes between tries."""
     _, auth = owner
     swarm = _swarm("baseline.yaml", 422)
     run = await started(client, auth)

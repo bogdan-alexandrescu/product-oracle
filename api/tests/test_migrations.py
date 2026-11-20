@@ -84,6 +84,7 @@ def scratch_db():
 
 
 def test_upgrade_downgrade_round_trip(scratch_db):
+    """An existing token becomes an owner, and a tenant gets the default template."""
     cfg = _cfg()
     upgrade(cfg, "0001")
     tenant = uuid.uuid4()
@@ -154,6 +155,7 @@ def test_models_match_migrations(scratch_db):
 
 
 def test_migration_template_copy_matches_defaults():
+    """The migration's copy of the default template matches the app's own defaults."""
     import importlib.util
 
     path = API_DIR / "migrations" / "versions" / "0002_v1_foundation.py"
@@ -176,6 +178,7 @@ def _flow_check() -> str:
 
 
 def test_baseline_flow_check_up_down_up(scratch_db):
+    """The baseline flow's value comes and goes with its migration, others stay."""
     # protects=the baseline flow value comes and goes with 0022_baseline_flow, other
     # flows' values survive, and the downgrade deletes only baseline runs (criterion 10);
     # fails_when=the upgrade misses the value, the downgrade leaves it or deletes another
@@ -234,6 +237,7 @@ def _columns(table: str) -> set[str]:
 
 
 def test_revision_run_up_down_up(scratch_db):
+    """The entity revision's run id column comes and goes with its own migration."""
     # protects=B2 criterion 10: entity_revisions.run_id (and its index) comes and goes
     # with 0042_revision_run, after main's head; fails_when=the column survives the
     # downgrade, is missing after the upgrade, or the chain has two heads; no_claim=the
@@ -257,6 +261,7 @@ SIMPLE_CHANGES_SEQ = "0121_simple_changes_seq"
 
 
 def test_simple_changes_seq_backfills_in_the_order_made(scratch_db):
+    """Backfilled change numbers follow the order made, not how they are stored."""
     # protects=0121 numbers the changes already stored by (at, id): older ones first, and
     # rows sharing one ``at`` by id, so a tie lists the same as it did before the column;
     # a change made after the upgrade numbers after them all and NOT NULL holds;

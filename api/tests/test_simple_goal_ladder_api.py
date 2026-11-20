@@ -72,6 +72,7 @@ async def place(client, ctx, role, feature, x, y):
 
 
 async def test_place_card_is_per_person(client):
+    """Each person's card placement on the map is private, not shared with others."""
     ctx, ids = await world()
     body = await place(client, ctx, "owner", ids["f1"], 1240.5, 80)
     assert places(body) == {ids["f1"]: (1240.5, 80)}
@@ -84,6 +85,7 @@ async def test_place_card_is_per_person(client):
 
 
 async def test_place_card_never_changes_data(client):
+    """Placing a card changes only its position, never the map's underlying data."""
     ctx, ids = await world()
     before = await read(client, ctx, "approver")
     await place(client, ctx, "owner", ids["f2"], 900, 30)
@@ -103,6 +105,7 @@ async def test_place_card_never_changes_data(client):
 
 
 async def test_a_features_milestones_keep_their_order(client):
+    """A feature's milestone links keep the order they were stored in, either way."""
     ctx, ids = await world()
     low, high = uuid.UUID(int=1), uuid.UUID(int=2**128 - 1)
     # f2's two links added in one go (one added time), stored in either order: the read is
@@ -122,6 +125,7 @@ async def test_a_features_milestones_keep_their_order(client):
 
 
 async def test_a_viewer_places_cards_for_themselves(client):
+    """A viewer can place cards for themselves without changing what owners see."""
     ctx, ids = await world()
     body = await place(client, ctx, "viewer", ids["f1"], 50, 60)
     assert body["can_edit"] is False and places(body) == {ids["f1"]: (50, 60)}
@@ -130,6 +134,7 @@ async def test_a_viewer_places_cards_for_themselves(client):
 
 
 async def test_tidy_up_puts_back_only_my_cards(client):
+    """Putting back cards clears only the current user's own placed cards."""
     ctx, ids = await world()
     await place(client, ctx, "owner", ids["f1"], 1, 2)
     await place(client, ctx, "owner", ids["f2"], 3, 4)
@@ -141,6 +146,7 @@ async def test_tidy_up_puts_back_only_my_cards(client):
 
 
 async def test_a_card_put_back_by_itself(client):
+    """Placing a card with no position puts it back without touching other cards."""
     ctx, ids = await world()
     await place(client, ctx, "owner", ids["f1"], 1, 2)
     await place(client, ctx, "owner", ids["f2"], 3, 4)
@@ -149,6 +155,7 @@ async def test_a_card_put_back_by_itself(client):
 
 
 async def test_places_of_a_feature_in_trash_are_not_shown(client):
+    """A feature in trash is hidden and unplaceable, but keeps its place once restored."""
     ctx, ids = await world()
     await place(client, ctx, "owner", ids["f1"], 7, 8)
     async with tenant_session(ctx.tenant_id) as s:
@@ -172,6 +179,7 @@ async def test_places_of_a_feature_in_trash_are_not_shown(client):
 
 
 async def test_place_card_needs_a_feature_on_the_map(client):
+    """Only a feature on the map can be placed; milestones and unknown ids are refused."""
     ctx, ids = await world()
     for feature in (ids["m1"], str(uuid.uuid4())):
         r = await client.post(
@@ -181,6 +189,7 @@ async def test_place_card_needs_a_feature_on_the_map(client):
 
 
 async def test_a_card_on_no_milestone_is_placed_too(client):
+    """An unplaced feature can still be placed as a card, and vanishes once deleted."""
     ctx, ids = await world()
     assert ids["f3"] in {f["id"] for f in (await read(client, ctx))["unplaced"]}
     body = await place(client, ctx, "viewer", ids["f3"], 40, 50)
@@ -198,6 +207,7 @@ async def test_a_card_on_no_milestone_is_placed_too(client):
 
 
 async def test_move_a_feature_to_another_milestone(client):
+    """Moving a feature between milestones needs approver rights, landing on one only."""
     ctx, ids = await world()
     body = {"feature": ids["f1"], "from_milestone": ids["m1"], "to_milestone": ids["m2"]}
     for role in ("commenter", "viewer"):
@@ -231,6 +241,7 @@ async def test_move_a_feature_to_another_milestone(client):
 
 
 async def test_set_depends_refuses_a_loop(client):
+    """A loop-forming dependency is refused, naming each item by its code and title."""
     p = await Panel().build(await make_people())
     r = await p.post(client, "set_depends", {"depends_on": []}, {"depends_on": ["a"]}, item=p.b)
     assert r.status_code == 201, r.text

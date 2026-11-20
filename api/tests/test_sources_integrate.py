@@ -119,6 +119,7 @@ def drop_pricing(slack: World) -> None:
 async def test_a_message_deleted_upstream_is_deleted_after_a_channel_is_added(
     a, tenant_id, alice, slack
 ):
+    """An upstream delete only shows once the channel holding it joins the source."""
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT"]})
     await sync(a, source)
     assert (await items(tenant_id, source))[PRICING] is True
@@ -156,6 +157,7 @@ async def test_a_message_deleted_upstream_is_deleted_under_a_legacy_cursor(
 
 
 async def test_a_new_range_refetches_and_still_compares_deletes(a, tenant_id, alice, slack):
+    """Narrowing a sync's date range still compares deletes against prior items."""
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT"]})
     await sync(a, source)
     drop_pricing(slack)
@@ -168,6 +170,7 @@ async def test_a_new_range_refetches_and_still_compares_deletes(a, tenant_id, al
 
 
 async def test_a_reordered_allowlist_is_the_same_selection(a, tenant_id, alice, slack):
+    """Reordering a channel allowlist is the same selection, not a change."""
     source = await add(a, tenant_id, alice, {"channels": [" C0ROADMAP", "C0PRODUCT", "C0PRODUCT"]})
     assert source["config"]["channels"] == BOTH
     await sync(a, source)
@@ -182,6 +185,7 @@ async def test_a_reordered_allowlist_is_the_same_selection(a, tenant_id, alice, 
 async def test_a_reconnect_resets_a_cursor_a_sync_saved_after_the_request_loaded_it(
     tenant_id, alice, slack
 ):
+    """A connection swap mid-sync is not overwritten by that sync's stale cursor."""
     first = await make_connection(tenant_id, alice, "slack")
     second = await make_connection(tenant_id, alice, "slack")
     async with tenant_session(tenant_id) as s:
@@ -219,6 +223,7 @@ async def test_a_reconnect_resets_a_cursor_a_sync_saved_after_the_request_loaded
 async def test_a_private_channel_left_needs_attention_and_the_rest_still_syncs(
     a, tenant_id, alice, slack
 ):
+    """A channel the source loses access to needs attention; the rest still syncs."""
     slack.channels["G0SECRET"] = [{"ts": ts("2025-10-04"), "user": "U0ADA", "text": "secret"}]
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT", "G0SECRET"]})
     await sync(a, source)
@@ -243,6 +248,7 @@ async def test_a_private_channel_left_needs_attention_and_the_rest_still_syncs(
 async def test_a_source_on_a_bot_token_connection_needs_attention_and_keeps_its_items(
     a, tenant_id, alice, slack
 ):
+    """A source behind a now-bot-token connection needs attention, keeps items."""
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT"]})
     await sync(a, source)
     slack.bot = True
@@ -258,6 +264,7 @@ async def test_a_source_on_a_bot_token_connection_needs_attention_and_keeps_its_
 async def test_a_forbidden_request_fails_the_source_and_leaves_the_connection_active(
     a, tenant_id, alice, slack
 ):
+    """A sync refused access fails only that source, leaving its connection active."""
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT"]})
     slack.forbidden.add("conversations.history")
     result = await sync(a, source, "error")
@@ -270,6 +277,7 @@ async def test_a_forbidden_request_fails_the_source_and_leaves_the_connection_ac
 async def test_a_rejected_token_expires_the_connection_the_sync_used(
     a, tenant_id, alice, slack, monkeypatch
 ):
+    """A sync whose source moved connections charges the rejected token correctly."""
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT"]})
     other = await make_connection(tenant_id, alice, "slack")
     connector = base._registry["slack"]
@@ -298,6 +306,7 @@ async def test_a_rejected_token_expires_the_connection_the_sync_used(
 
 
 async def test_a_source_paused_while_it_syncs_stays_paused(a, tenant_id, alice, slack, monkeypatch):
+    """A source paused mid-sync stays paused instead of going active again."""
     source = await add(a, tenant_id, alice, {"channels": ["C0PRODUCT"]})
     connector = base._registry["slack"]
     original = connector.sync
@@ -322,6 +331,7 @@ async def test_a_source_paused_while_it_syncs_stays_paused(a, tenant_id, alice, 
 async def test_saving_a_narrower_allowlist_deletes_what_falls_outside_at_once(
     a, tenant_id, alice, slack
 ):
+    """A narrower channel allowlist deletes out-of-scope items at save, not sync."""
     source = await add(a, tenant_id, alice, {"channels": BOTH})
     await sync(a, source)
     roadmap = f"C0ROADMAP:{ts('2025-10-03')}"

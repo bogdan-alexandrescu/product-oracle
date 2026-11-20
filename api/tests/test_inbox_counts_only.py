@@ -49,6 +49,7 @@ async def _draft_of_mine(ctx) -> None:
 
 
 async def test_counts_match_the_inbox(client):
+    """The quick Inbox counts match the full read's total and roadmap-only numbers."""
     ctx = await make_ctx()
     await seed_company(ctx)
     await _draft_of_mine(ctx)
@@ -62,6 +63,7 @@ async def test_counts_match_the_inbox(client):
 
 
 async def test_counts_read_little(client):
+    """Reading just the Inbox counts costs far fewer queries than the whole Inbox."""
     ctx = await make_ctx()
     await seed_company(ctx)
     await statements(client, "GET", "/v1/inbox/counts", ctx.as_("owner"))

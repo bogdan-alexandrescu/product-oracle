@@ -47,6 +47,7 @@ async def _marks(client, w) -> dict[str, str | None]:
 
 
 async def test_roadmap_refresh_says_its_roadmaps_are_in_trash(client):
+    """Home's meeting mark flags a ritual whose roadmaps sit in Trash, till restored."""
     w = await meeting_world()
     refresh, custom = await _rituals(w)
     async with tenant_session(w.ctx.tenant_id) as s:

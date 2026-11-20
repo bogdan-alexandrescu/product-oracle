@@ -62,6 +62,7 @@ async def _pat(tenant_id, scopes_=READONLY):
 
 
 async def test_lists_docs_and_folders(tenant_id, drive):
+    """Browsing Drive lists matching docs and folders with their owner and a cursor."""
     pat, conn = await _pat(tenant_id)
     async with client_for(pat) as c:
         resp = await c.get(PATH.format(conn.id), params={"q": "pric"})
@@ -82,6 +83,7 @@ async def test_lists_docs_and_folders(tenant_id, drive):
 
 
 async def test_search_text_is_one_escaped_term(tenant_id, drive):
+    """A search term is escaped into one quoted Drive query term, not split apart."""
     pat, conn = await _pat(tenant_id)
     text = "x' or sharedWithMe or name contains '\\"
     async with client_for(pat) as c:
@@ -92,6 +94,7 @@ async def test_search_text_is_one_escaped_term(tenant_id, drive):
 
 
 async def test_folder_must_be_a_drive_id(tenant_id, drive):
+    """A folder param that is not a valid Drive id is refused before any Drive call."""
     pat, conn = await _pat(tenant_id)
     async with client_for(pat) as c:
         for bad in ("root", "root?x=' in parents or sharedWithMe or 'y", "../about"):
@@ -104,6 +107,7 @@ async def test_folder_must_be_a_drive_id(tenant_id, drive):
 
 
 async def test_cached_for_a_minute_and_throttled_per_person(tenant_id, drive, monkeypatch):
+    """Drive browse answers are cached briefly and rate limited per person."""
     now = [1000.0]
     monkeypatch.setattr(browse_google, "_clock", lambda: now[0])
     monkeypatch.setattr(browse_google, "RATE_LIMIT", 3)
@@ -124,6 +128,7 @@ async def test_cached_for_a_minute_and_throttled_per_person(tenant_id, drive, mo
 
 
 async def test_owner_only(tenant_id, drive):
+    """Only a connection's own owner can browse its Drive files."""
     _, conn = await _pat(tenant_id)
     sam = (await make_person(tenant_id, "sam@example.com")).user
     async with client_for(sam) as c:
@@ -168,6 +173,7 @@ async def test_a_read_only_personal_token_is_refused(tenant_id, drive, client):
 
 
 async def test_service_tokens_are_refused(tenant_id, drive):
+    """A service api token cannot browse Drive files."""
     _, conn = await _pat(tenant_id)
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "service")
@@ -179,6 +185,7 @@ async def test_service_tokens_are_refused(tenant_id, drive):
 
 
 def test_run_tokens_cannot_reach_it():
+    """A run token's scopes never grant access to the Drive browse route."""
     # A run token's scopes cover sources, baseline and documents, never connections.
     assert scopes.required_scope("GET", "/v1/connections/{connection_id}/google/files") is None
     assert not scopes.allowed(
@@ -187,6 +194,7 @@ def test_run_tokens_cannot_reach_it():
 
 
 async def test_a_grant_without_drive_readonly_is_asked_to_reconnect(tenant_id, drive):
+    """Browsing without the drive.readonly grant asks the person to reconnect."""
     pat, conn = await _pat(tenant_id, ["openid", "email", DRIVE_FILE])
     async with client_for(pat) as c:
         resp = await c.get(PATH.format(conn.id))
@@ -195,6 +203,7 @@ async def test_a_grant_without_drive_readonly_is_asked_to_reconnect(tenant_id, d
 
 
 async def test_an_mcp_tool_describes_what_it_lists():
+    """The MCP tool that lists Drive files names what it lists and its parameters."""
     from oracle.main import app
     from oracle.mcp.tools import app_operations
 
@@ -276,6 +285,7 @@ async def test_the_credential_is_read_through_the_connections_row_lock(
 
 
 async def test_an_expired_connection_is_not_served_from_the_cache(tenant_id, drive):
+    """Marking a connection expired blocks a browse even for an answer cached before."""
     pat, conn = await _pat(tenant_id)
     async with client_for(pat) as c:
         assert (await c.get(PATH.format(conn.id), params={"q": "a"})).status_code == 200
@@ -290,6 +300,8 @@ async def test_an_expired_connection_is_not_served_from_the_cache(tenant_id, dri
 
 
 async def test_google_errors_are_redacted_in_the_answer(tenant_id):
+    """A Drive error message is redacted so a secret in it never reaches the answer."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"error": {"message": f"backend saw {SECRET}"}})
 
@@ -303,6 +315,8 @@ async def test_google_errors_are_redacted_in_the_answer(tenant_id):
 
 
 async def test_a_rejected_token_is_redacted_in_the_connections_error(tenant_id):
+    """A rejected token's secret is redacted from the stored connection error too."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": {"message": f"Invalid token {SECRET}"}})
 

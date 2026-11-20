@@ -68,6 +68,7 @@ def listed(roadmap: dict) -> dict[str, dict]:
 
 
 async def test_an_approver_proposes_moving_a_key_result_by_its_goal_alone(client):
+    """Moving a key result to another goal can be proposed by its goal alone."""
     ctx = await make_ctx()
     ids, m, _ = await two_goals(client, ctx)
     ask = {"op": "edit_goal_milestone", "target": {"milestone_id": m["id"]},
@@ -95,6 +96,7 @@ async def test_an_approver_proposes_moving_a_key_result_by_its_goal_alone(client
 
 
 async def test_moving_a_key_result_to_a_goal_with_its_code_renumbers_it(client):
+    """Moving a key result to another goal renumbers its code, freeing the old one."""
     ctx = await make_ctx()
     ids, m, _ = await two_goals(client, ctx)
     url = f"{MILESTONES}/{m['id']}"
@@ -108,6 +110,7 @@ async def test_moving_a_key_result_to_a_goal_with_its_code_renumbers_it(client):
 
 
 async def test_set_code_gives_an_item_its_feature_code(client):
+    """Setting an item's code is refused if another item or feature already has it."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -172,6 +175,7 @@ def propose_code(client, ctx: Ctx, item: str, code: str, who: str = "commenter")
 
 
 async def test_accepting_a_code_another_item_took_since_is_refused(client):
+    """Accepting a proposed code is refused if another item took it since; can decline."""
     ctx = await make_people()
     a, b = await coded_pair(ctx)
     made = []
@@ -194,6 +198,7 @@ async def test_accepting_a_code_another_item_took_since_is_refused(client):
 
 
 async def test_accepting_a_code_a_ground_truth_feature_took_since_is_refused(client):
+    """Accepting a proposed code is refused if a Ground Truth feature took it since."""
     ctx = await make_people()
     a, _ = await coded_pair(ctx)
     r = await propose_code(client, ctx, a, "F-33")
@@ -209,6 +214,7 @@ async def test_accepting_a_code_a_ground_truth_feature_took_since_is_refused(cli
 
 
 async def test_a_code_never_cuts_the_name(client):
+    """A code is refused, not carried, if there is no room left for it in the name."""
     ctx = await make_people()
     long = "Alerts " + "x" * 190  # 197 characters: no room for "F-31 " in 200
     a, _ = await coded_pair(ctx, first=long)
@@ -221,6 +227,7 @@ async def test_a_code_never_cuts_the_name(client):
 
 
 async def test_the_read_says_where_a_code_comes_from(client):
+    """An item's read shows if its code is from its PRD, set directly, or absent."""
     # protects=an item whose code comes from its PRD reads code_from "prd" (the panel shows it
     # read-only); its own code (set_code's) and no code read null; fails_when=the read gives no
     # way to tell them apart; no_claim=a Ground Truth feature's code (priorities' short codes).
@@ -238,6 +245,7 @@ async def test_the_read_says_where_a_code_comes_from(client):
 
 
 async def test_undoing_a_code_change_never_gives_its_old_code_to_two_items(client):
+    """Undoing a code change is refused if another item took the old code since."""
     # protects=Undo of a set_code that would write back a code another item took since is
     # refused (409) in the words of propose and accept, and nothing changes; fails_when=both
     # items read F-30 after the undo; no_claim=a Ground Truth feature taking the code.
@@ -266,6 +274,7 @@ def rename(client, ctx: Ctx, item: str, seen: str, title: str, who: str = "owner
 
 
 async def test_a_rename_never_takes_a_code_another_item_or_feature_has(client):
+    """A rename taking a code another item or feature already has is refused."""
     # protects=a new title leading with a code other than the item's own is checked as
     # set_code checks it, in its words; a free code is kept; fails_when=a rename gives an item
     # a code another item or a Ground Truth feature has; no_claim=an item coded by its feature.
@@ -294,6 +303,7 @@ async def test_a_rename_never_takes_a_code_another_item_or_feature_has(client):
 
 
 async def test_merging_into_a_feature_never_gives_its_code_to_two_items(client):
+    """Merging into a feature is refused if another item already shows its code."""
     # protects=merge_item into a Ground Truth feature whose code another item shows as its own
     # is refused in set_code's words; fails_when=two items read the feature's code;
     # no_claim=items linked to the same feature (its slices).
@@ -333,6 +343,7 @@ async def coded_roadmap(ctx: Ctx) -> tuple[str, str]:
 
 
 async def test_adding_an_item_never_takes_a_code_another_item_or_feature_has(client):
+    """Adding an item is refused, and none made, if its leading code is already taken."""
     # protects=add_item whose title leads with a code another item or a Ground Truth feature
     # has is refused in set_code's words, and no item is made; a free code is kept;
     # fails_when=two items read F-30 after the add; no_claim=Oracle's drafting.
@@ -353,6 +364,7 @@ async def test_adding_an_item_never_takes_a_code_another_item_or_feature_has(cli
 
 
 async def test_accepting_an_added_item_whose_code_was_taken_since_is_refused(client):
+    """Accepting a proposed add is refused if its code was taken since; can decline."""
     # protects=a proposed add_item whose code another item took since is refused on accept
     # (409) in set_code's words, the proposal open to decline; fails_when=the accept makes a
     # second F-36; no_claim=a decider's own add (checked on create).
@@ -373,6 +385,7 @@ async def test_accepting_an_added_item_whose_code_was_taken_since_is_refused(cli
 
 
 async def test_a_rename_checks_any_leading_code_the_read_sees(client):
+    """A rename checks any leading code the read would show, wider than a feature code."""
     # protects=a leading code the read takes as the item's code ("ABCD-1 Alerts", wider than a
     # feature code) is checked in a rename too; fails_when=two items read ABCD-1;
     # no_claim=set_code (feature codes only).
@@ -386,6 +399,7 @@ async def test_a_rename_checks_any_leading_code_the_read_sees(client):
 
 
 async def test_restoring_an_item_whose_code_was_taken_since_is_refused(client):
+    """Restoring a deleted item is refused if its code was taken since, until freed."""
     ctx = await make_people()
     _, b = await coded_roadmap(ctx)
     a = by_key(await get(client, ctx, "owner"))["a"]["id"]
@@ -407,6 +421,7 @@ async def test_restoring_an_item_whose_code_was_taken_since_is_refused(client):
 
 
 async def test_a_goal_restore_never_gives_a_taken_code_to_a_second_item(client):
+    """Restoring a goal from trash never restores an item whose code was taken since."""
     # protects=restoring a goal brings back the goal alone (the rows its Trash entry holds, as
     # trash_items._codes_free checks them): an item deleted before whose code another item
     # took meanwhile stays in Trash, and its own restore is still refused in set_code's words;

@@ -43,6 +43,8 @@ def _drains(scenario, pending: set) -> bool:
 # drained (tests, shutdown); fails_when=drain() spins without yielding when the submission
 # finished before its done callback ran; no_claim=what the submission does.
 def test_drain_returns_when_the_read_finished_before_its_callback_ran(monkeypatch):
+    """Drain still returns when a background read finishes before its callback runs."""
+
     async def done_at_once(tenant_id, intake_id, read) -> None:
         return None
 
@@ -64,6 +66,8 @@ def test_drain_returns_when_the_read_finished_before_its_callback_ran(monkeypatc
 # protects=api-suite-hang: an invite's email sent after the response, then drained;
 # fails_when=drain() spins when the send finished before its done callback ran.
 def test_drain_returns_when_the_send_finished_before_its_callback_ran(monkeypatch):
+    """Drain still returns when a background send finishes before its callback runs."""
+
     async def done_at_once(tenant_id, invite_id) -> None:
         return None
 
@@ -78,6 +82,7 @@ def test_drain_returns_when_the_send_finished_before_its_callback_ran(monkeypatc
 
 
 def test_drain_still_waits_for_work_under_way(monkeypatch):
+    """Drain waits for background work that is still running."""
     seen: list[str] = []
 
     async def slow(tenant_id, intake_id, read) -> None:

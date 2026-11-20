@@ -76,6 +76,7 @@ HOSTILE_SVG = [
 
 @pytest.mark.parametrize("fragment", HOSTILE_HTML)
 def test_hostile_wireframe_markup_is_refused(fragment):
+    """Hostile markup in a wireframe is blocked, and any rebuilt page stays offline."""
     out = sanitize_wireframe(f"<h1 id='t'>Cart</h1>{fragment}", title="Cart")
     assert out.blocked, fragment
     # Even the rebuilt page (never stored when blocked) is static and offline.
@@ -84,6 +85,7 @@ def test_hostile_wireframe_markup_is_refused(fragment):
 
 @pytest.mark.parametrize("candidate", HOSTILE_SVG)
 def test_hostile_flow_markup_is_refused(candidate):
+    """Hostile markup in a flow diagram's SVG is blocked before it can be stored."""
     out = sanitize_svg(candidate, title="Flow")
     assert out.blocked, candidate
     if out.content:
@@ -91,6 +93,7 @@ def test_hostile_flow_markup_is_refused(candidate):
 
 
 def test_a_clean_wireframe_is_rebuilt_static_grayscale_and_with_a_policy():
+    """A clean wireframe is rebuilt as static grayscale html with a strict policy."""
     out = sanitize_wireframe(
         wireframe_html(1) + "<blink>old</blink><a href='#top' target='_blank'>Top</a>",
         title="Cart <1>",
@@ -112,6 +115,7 @@ def test_a_clean_wireframe_is_rebuilt_static_grayscale_and_with_a_policy():
 
 
 def test_a_clean_flow_keeps_local_markers_only():
+    """A clean flow diagram keeps its local markers and title in static safe svg."""
     out = sanitize_svg(FLOW_SVG, title="Checkout")
     assert out.safe, out.blocked
     assert 'marker-end="url(#arrow)"' in out.content
@@ -122,6 +126,7 @@ def test_a_clean_flow_keeps_local_markers_only():
 
 
 def test_text_is_escaped_not_interpreted():
+    """Text is escaped, not run as markup, even when spelled out or split across tags."""
     out = sanitize_wireframe("<p>Price &lt;b&gt; &amp; tax</p>", title="x")
     assert out.safe and "Price &lt;b&gt; &amp; tax" in out.content
     # Text that spells out a script tag is escaped, and still refused: the final check
@@ -136,6 +141,7 @@ def test_text_is_escaped_not_interpreted():
 
 
 def test_the_download_policy_isolates_the_page():
+    """The download policy blocks scripts, network, cookies and form posts."""
     # No scripts or network, an opaque origin (no allow-same-origin): no cookies, no API.
     assert "default-src 'none'" in DOWNLOAD_CSP
     assert "sandbox" in DOWNLOAD_CSP and "allow-same-origin" not in DOWNLOAD_CSP
@@ -156,6 +162,7 @@ def check(text, **kw):
 
 
 def test_a_valid_bundle_passes_with_sanitised_outputs():
+    """A valid design bundle passes with sanitized, named and hashed outputs."""
     out = check(design_json(REQS, SECTIONS))
     assert out.ok, out.problems
     assert [o.name for o in out.flows] == ["checkout-flow.svg"]
@@ -167,6 +174,7 @@ def test_a_valid_bundle_passes_with_sanitised_outputs():
 
 
 def test_a_wireframe_footer_numbers_each_note_once_without_ids_or_keys():
+    """A wireframe's footnotes number once each, never leaking ids or keys."""
     # qa-docs-19: "1. The quote shows ...", never "1. 1. cost-label [s-1] The quote ...".
     out = check(design_json(REQS, SECTIONS))
     html = out.wireframes[0].content
@@ -185,12 +193,14 @@ def test_a_wireframe_footer_numbers_each_note_once_without_ids_or_keys():
     ],
 )
 def test_bundle_shape(override, code):
+    """A design bundle with the wrong shape or no flows is refused by code."""
     out = check(design_json(REQS, SECTIONS, **override))
     assert code in {p.code for p in out.problems}
     assert not out.ok
 
 
 def test_bundle_checks_names_counts_sizes_links_and_targets():
+    """The bundle check flags bad names, dangling links, duplicates and oversize files."""
     bundle = json.loads(design_json(REQS, SECTIONS, screens=1))
     flow = bundle["flows"][0]
     flow["name"] = "../../etc/passwd.svg"
@@ -215,6 +225,7 @@ def test_bundle_checks_names_counts_sizes_links_and_targets():
 
 
 def test_a_wireframe_with_a_script_refuses_the_bundle():
+    """A wireframe bundle with any script tag is refused, naming the file."""
     bundle = json.loads(design_json(REQS, SECTIONS))
     bundle["wireframes"][1]["html"] += "<script>fetch('/v1/me')</script>"
     out = check(json.dumps(bundle))
@@ -249,6 +260,7 @@ def inputs(**kw):
 
 
 def test_compose_keeps_requirements_apart_and_labels_the_approach():
+    """Compose writes the requirements itself, discarding an agent's rewrite of them."""
     out = compose(spec_md(extra="\n## Product requirements {#requirements}\n\nRewritten!\n"),
                   inputs())  # fmt: skip
     assert out.ok, out.problems
@@ -270,6 +282,7 @@ def test_compose_keeps_requirements_apart_and_labels_the_approach():
 
 
 def test_compose_with_a_capability_map_says_proposed_only():
+    """With a capability map, compose says the approach is proposed only, not final."""
     out = compose(spec_md(), inputs(capability_map=True))
     assert out.ok
     assert "based on assumptions" not in out.markdown
@@ -277,6 +290,7 @@ def test_compose_with_a_capability_map_says_proposed_only():
 
 
 def test_compose_lists_every_problem():
+    """Compose lists every missing or unknown section at once, not just the first."""
     out = compose(spec_md(skip=("approach", "assumptions"), extra="## Odd {#odd}\n\nx\n"),
                   inputs())  # fmt: skip
     assert out.markdown is None
@@ -289,6 +303,7 @@ def test_compose_lists_every_problem():
 
 
 def test_a_tech_brief_needs_only_the_brief_sections():
+    """A brief depth only needs its own sections, not the full spec's."""
     brief = compose(
         spec_md(skip=("architecture", "test-strategy", "user-flows")), inputs(depth="brief")
     )
@@ -301,6 +316,7 @@ def test_a_tech_brief_needs_only_the_brief_sections():
 
 
 def test_a_self_closing_style_does_not_swallow_markup_into_css():
+    """A self-closing style tag never swallows later markup into its css."""
     payload = (
         "<style/>&lt;<b>/style&gt;&lt;<b>meta http-equiv=&amp;#114;efresh "
         'content="0;url=https://evil.example/x"&gt;&lt;<b>svg/onload=alert(1)&gt;'
@@ -323,6 +339,7 @@ def test_a_self_closing_style_does_not_swallow_markup_into_css():
     ],
 )
 def test_css_tricks_are_refused_everywhere(css):
+    """CSS tricks like comments, escapes and imports are refused everywhere."""
     assert sanitize_wireframe(f"<style>{css}</style><p>x</p>", title="x").blocked
     assert sanitize_wireframe(f"<p style='{css}'>x</p>", title="x").blocked
     assert sanitize_svg(f"{SVG_HEAD}<style>{css}</style></svg>", title="x").blocked
@@ -330,6 +347,7 @@ def test_css_tricks_are_refused_everywhere(css):
 
 
 def test_the_static_check_decodes_entities_and_slash_separated_handlers():
+    """The static check reads encoded entities and slash-joined event handlers."""
     assert static_problems('<meta http-equiv=&#114;efresh content="0">', "svg")
     assert static_problems("<svg/onload=alert(1)>", "svg")
     assert static_problems('<p class="a"onclick=alert(1)>', "svg")
@@ -370,12 +388,14 @@ def test_a_css_escaped_url_in_a_presentation_attribute_is_refused(attr, value):
     ["\\75rl(https://evil.example/p.svg#g)", "\\000055 RL(https://evil.example/x)"],
 )
 def test_a_css_escaped_url_is_refused_in_wireframe_attributes(value):
+    """A css-escaped url in a wireframe attribute is refused, not let through."""
     out = sanitize_wireframe(f'<p id="a" title="{value}">x</p>', title="x")
     assert not out.safe, out.content
     assert "evil.example" not in out.content
 
 
 def test_css_unescape():
+    """css_unescape decodes css escape sequences back to their plain characters."""
     from oracle.specs.sanitize import css_unescape
 
     assert css_unescape("\\75rl(") == "url("
@@ -411,6 +431,7 @@ def test_words_in_text_and_class_names_do_not_refuse_a_wireframe():
     ],
 )
 def test_newer_css_fetching_functions_are_refused(css):
+    """Newer css functions that fetch urls are refused in style and inline css."""
     assert sanitize_wireframe(f"<style>{css}</style><p>x</p>", title="x").blocked
     assert sanitize_svg(f"{SVG_HEAD}<style>{css}</style></svg>", title="x").blocked
 
@@ -428,6 +449,7 @@ def test_markup_that_never_closes_is_refused_before_parsing(tail):
 
 
 def test_text_after_the_last_tag_is_fine():
+    """Plain text after the last tag is safe and does not block the page."""
     out = sanitize_wireframe("<p>x</p> trailing words &amp; more", title="x")
     assert out.safe, out.blocked
 

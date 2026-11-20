@@ -294,6 +294,7 @@ async def built_roadmap(client, auth, runtime) -> dict:
 
 
 async def test_flow_in_the_catalog(client, owner, runtime):
+    """The prd_to_roadmap flow is read-only; it never writes drafts itself."""
     _, auth = owner
     body = (await client.get("/v1/flows", headers=auth)).json()
     flow = next(f for f in body["flows"] if f["key"] == "prd_to_roadmap")
@@ -311,6 +312,7 @@ async def test_flow_in_the_catalog(client, owner, runtime):
 
 
 def test_knobs_and_estimate():
+    """Flow knobs pick roles and checkpoints and drive the cost estimate."""
     flow = flows.FLOWS["prd_to_roadmap"]
     knobs = flows.resolve_knobs(flow, {})
     assert knobs.roles == {
@@ -332,6 +334,7 @@ def test_knobs_and_estimate():
 
 
 def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
+    """Keeps the draft prompt naming the exact plan version with its ranked order and links."""
     flow = flows.FLOWS["prd_to_roadmap"]
     knobs = flows.resolve_knobs(flow, {})
     source = flows.SourceContext(
@@ -437,6 +440,7 @@ def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
     ],
 )
 def test_horizon_lines(h, lines):
+    """Horizon line wording adapts to however many quarters are configured."""
     # protects=the prompt's wording per horizon value; fails_when=a span reads wrong or the
     # defaults' text drifts from HORIZONS; no_claim=agents use it.
     keys = ("short_quarters", "medium_quarters", "long_from_months", "long_to_months")
@@ -446,6 +450,7 @@ def test_horizon_lines(h, lines):
 @pytest.mark.parametrize("short", [1, 2])
 @pytest.mark.parametrize("medium", [1, 2, 3, 4])
 def test_next_reads_the_next_quarters_whatever_now_covers(short, medium):
+    """Next always names its own quarter count, not worded against Now."""
     # protects=acceptance criterion 9 (owner, 2026-10-21): Next reads "the next N quarters"
     # ("the next quarter" for 1) whether Now is one quarter or two; fails_when=Next is worded
     # relative to Now (e.g. "after those two"); no_claim=agents read it so.
@@ -461,6 +466,7 @@ def test_next_reads_the_next_quarters_whatever_now_covers(short, medium):
 
 
 def test_feedback_loop_prompt_names_the_roadmap():
+    """The feedback loop's draft prompt names the roadmap and roadmap.md."""
     flow = flows.FLOWS["feedback_loop"]
     segment = flow.segment("next_draft")
     ctx = flows.PromptContext(
@@ -485,6 +491,7 @@ def _codes(text):
 
 
 def test_items_valid():
+    """A valid roadmap items file passes with a correct count by horizon."""
     out = _check(ITEMS)
     assert out.ok, out.problems
     assert out.as_json() == {
@@ -521,12 +528,14 @@ def test_items_valid():
     ],
 )
 def test_items_problems(change, code):
+    """Each listed defect in a roadmap items file is caught by its own code."""
     text = ITEMS.replace(*change, 1)
     assert text != ITEMS
     assert code in _codes(text)
 
 
 def test_items_order_respects_dependencies():
+    """Listing an item before what it depends on breaks dependency order."""
     first, second = ITEMS.split("  - id: shipping-step")
     head, payment = first.split("  - id: payment-step")
     swapped = head + "  - id: shipping-step" + second + "  - id: payment-step" + payment
@@ -538,10 +547,12 @@ def test_items_order_respects_dependencies():
     [("items: [", "invalid_yaml"), ("- a\n- b\n", "invalid_shape"), ("version: 1\n", "no_items")],
 )
 def test_items_shape(text, code):
+    """A roadmap items file with no valid shape or items is rejected."""
     assert _codes(text) == [code]
 
 
 def test_doc_links():
+    """doc_links reads every PRD section link out of a roadmap, in order."""
     links = doc_links(ROADMAP_MD)
     assert [(link["slug"], link["version"], link["section"]) for link in links] == [
         (PRD, 1, "s-5-1"),
@@ -554,6 +565,7 @@ def test_doc_links():
 
 
 async def test_refused_without_an_approved_version(client, owner, runtime):
+    """Building a roadmap from a PRD is refused with no approved version."""
     _, auth = owner
     await approved_prd(client, auth, approve=False)
     resp = await client.post(
@@ -564,6 +576,7 @@ async def test_refused_without_an_approved_version(client, owner, runtime):
 
 
 async def test_a_named_version_must_be_approved(client, owner, runtime):
+    """A roadmap run must name an approved PRD version, not a draft one."""
     _, auth = owner
     await approved_prd(client, auth, approve=False)
     v2 = draft("prd_v1.md").replace("Checkout redesign PRD", "Checkout redesign PRD (v2)")
@@ -586,6 +599,7 @@ async def test_a_named_version_must_be_approved(client, owner, runtime):
 
 
 async def test_input_validation(client, owner, runtime):
+    """Starting a roadmap run rejects a bad source, document or role."""
     _, auth = owner
     await approved_prd(client, auth)
     cases = [
@@ -616,6 +630,7 @@ async def test_input_validation(client, owner, runtime):
 
 
 async def test_defaults_and_patch(client, owner, runtime):
+    """A new roadmap run takes its source's defaults and can be patched."""
     _, auth = owner
     await approved_prd(client, auth)
     run = await create(client, auth, source=PRD)
@@ -644,6 +659,7 @@ async def test_defaults_and_patch(client, owner, runtime):
 
 
 async def test_end_to_end(client, owner, runtime):
+    """A roadmap run drafts items from the PRD's priorities and edges."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -743,6 +759,7 @@ async def test_end_to_end(client, owner, runtime):
 
 
 async def test_the_prompt_reads_the_companys_horizons(client, owner, runtime):
+    """The roadmap prompt uses the company's configured horizon quarters."""
     # protects=runs honour the owner's horizons; fails_when=the constant is still used;
     # no_claim=agent behaviour.
     tenant_id, auth = owner
@@ -766,6 +783,7 @@ async def test_the_prompt_reads_the_companys_horizons(client, owner, runtime):
 
 
 async def test_without_a_setting_the_prompt_keeps_the_default_horizons(client, owner, runtime):
+    """With no horizons setting, the prompt keeps today's exact wording."""
     # protects=no stored row means today's text, byte for byte; fails_when=the default
     # wording drifts; no_claim=agent behaviour.
     tenant_id, auth = owner
@@ -780,6 +798,7 @@ async def test_without_a_setting_the_prompt_keeps_the_default_horizons(client, o
 
 
 async def test_a_run_keeps_the_horizons_it_started_with(client, owner, runtime):
+    """A run keeps its starting horizon wording even if the setting changes."""
     # protects=Settings > Company's promise that runs under way keep what they started
     # with; fails_when=a later segment or a change request reads the setting
     # changed mid-run; no_claim=agent behaviour.
@@ -839,6 +858,7 @@ async def test_a_run_keeps_the_horizons_it_started_with(client, owner, runtime):
 
 
 async def test_exports_resolve_prd_links_and_carry_provenance(client, owner, runtime):
+    """Roadmap exports resolve PRD links and carry the source's provenance."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -866,6 +886,7 @@ async def test_exports_resolve_prd_links_and_carry_provenance(client, owner, run
 
 
 async def test_a_bad_items_file_waits_at_its_checkpoint_or_fails_the_run(client, owner, runtime):
+    """A roadmap items file with problems waits at its checkpoint for a fix."""
     _, auth = owner
     await approved_prd(client, auth)
     bad = ITEMS.replace("horizon: next", "horizon: soon")
@@ -931,6 +952,7 @@ async def test_a_date_without_a_verified_basis_is_refused(client, owner, runtime
 
 
 def test_items_check_dates_against_verified_bases():
+    """A milestone date in roadmap items is checked against a verified base."""
     from oracle.roadmap.schedule import Basis
 
     eng = Basis(uuid.uuid4(), "estimate", "ENG-412", date(2026, 11, 30))
@@ -945,6 +967,7 @@ def test_items_check_dates_against_verified_bases():
 
 
 async def test_existing_roadmap_gets_the_next_version(client, owner, runtime):
+    """Rebuilding from the same PRD adds a version to the existing roadmap."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -974,6 +997,7 @@ async def test_existing_roadmap_gets_the_next_version(client, owner, runtime):
 
 
 async def test_feedback_loop_on_a_roadmap(client, owner, runtime):
+    """A feedback loop on a roadmap keeps its template and folds in feedback."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -1029,6 +1053,7 @@ async def test_feedback_loop_on_a_roadmap(client, owner, runtime):
 
 
 async def test_feedback_loop_refuses_a_prd_draft_for_a_roadmap(client, owner, runtime):
+    """A feedback segment writing the wrong file is recorded as an error."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -1051,6 +1076,7 @@ async def test_feedback_loop_refuses_a_prd_draft_for_a_roadmap(client, owner, ru
 
 
 async def test_role_checks(client, owner, runtime):
+    """Starting or deciding a roadmap run is refused to viewers and commenters."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     viewer = await as_user(tenant_id, "viewer")
@@ -1088,6 +1114,7 @@ async def test_role_checks(client, owner, runtime):
 
 
 async def test_over_the_threshold_waits_for_an_owner(client, owner, runtime):
+    """A run over the cost threshold waits for an owner's approval to start."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     approver = await as_user(tenant_id, "approver")
@@ -1113,6 +1140,7 @@ async def test_over_the_threshold_waits_for_an_owner(client, owner, runtime):
 
 
 async def test_mcp_lists_the_flow_and_returns_provenance(client, owner, runtime):
+    """MCP tools list the roadmap flow and create a run with provenance."""
     from tests.test_mcp import api_token, mcp_client, text_of
 
     tid, auth = owner
@@ -1138,6 +1166,7 @@ async def test_mcp_lists_the_flow_and_returns_provenance(client, owner, runtime)
 
 
 async def test_a_draft_of_the_other_kind_never_imports_into_a_document(client, owner):
+    """A roadmap draft is refused from importing into a PRD document."""
     _, auth = owner
     await approved_prd(client, auth)
     # A roadmap pushed into the approved PRD, by its front matter kind or its template.
@@ -1154,6 +1183,7 @@ async def test_a_draft_of_the_other_kind_never_imports_into_a_document(client, o
 
 
 async def test_a_run_without_a_template_takes_the_company_default(client, owner, runtime):
+    """A run with no named template takes the company's default template."""
     _, auth = owner
     await approved_prd(client, auth)
     await client.get("/v1/templates", headers=auth)
@@ -1171,6 +1201,7 @@ async def test_a_run_without_a_template_takes_the_company_default(client, owner,
 
 
 def test_app_links_default_to_the_public_url(monkeypatch):
+    """A document link falls back to the public url with no app url set."""
     from oracle.config import Settings
     from oracle.swarm.settings import get_runtime_settings
 
@@ -1183,6 +1214,7 @@ def test_app_links_default_to_the_public_url(monkeypatch):
 
 
 async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable(client, owner):
+    """A document with no kind line takes its kind from the roadmap template."""
     _, auth = owner
     # No kind line: the roadmap template makes it a roadmap, and it takes new versions.
     # (No PRD to verify a date against: round 3, a date in the text would be refused.)
@@ -1199,6 +1231,7 @@ async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable
 
 
 async def test_a_draft_pushed_before_the_import_still_gets_its_provenance(client, owner, runtime):
+    """A draft pushed before its run's import still gets stamped provenance."""
     _, auth = owner
     await approved_prd(client, auth)
     # The same roadmap.md arrived first by another path (an agent's push).

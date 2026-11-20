@@ -51,6 +51,7 @@ async def ctx():
 
 
 async def test_owner_renames_a_proposed_goal_with_an_audit_row(client, ctx):
+    """An owner's rename of a goal writes one audit row with title before and after."""
     goal = await entity(
         client, ctx, who="token", type="goal", key="kr-reply-rate", title="KR 1.1 Replies"
     )
@@ -83,6 +84,7 @@ async def test_owner_renames_a_proposed_goal_with_an_audit_row(client, ctx):
 
 
 async def test_a_viewer_cannot_rename_a_goal(client, ctx):
+    """A viewer cannot rename a goal, and no audit row is written for the attempt."""
     goal = await entity(client, ctx, type="goal", key="kr-uptime", title="KR 2.1 Uptime")
     resp = await client.patch(
         f"{B}/entities/{goal['id']}",
@@ -112,6 +114,7 @@ entities:
 
 
 async def test_import_writes_goal_names_without_placeholders(client, ctx):
+    """Importing goals from yaml strips bracket placeholders from titles and bodies."""
     resp = await client.post(
         f"{B}/yaml",
         content=LADDER.encode(),
@@ -138,6 +141,7 @@ async def test_import_writes_goal_names_without_placeholders(client, ctx):
 
 
 async def test_an_agent_update_drops_placeholders(client, ctx):
+    """An agent's update to a goal's title drops placeholder brackets before storing."""
     goal = await entity(
         client,
         ctx,
@@ -160,6 +164,7 @@ async def test_an_agent_update_drops_placeholders(client, ctx):
 
 
 async def test_a_goal_stored_with_a_placeholder_reads_without_it(client, ctx):
+    """A goal's placeholder brackets are stripped on read but kept raw in the export."""
     goal = await entity(client, ctx, type="goal", key="kr-helpers", title="KR 4.1 Helpers")
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(Entity, goal["id"])
@@ -180,6 +185,7 @@ async def test_a_goal_stored_with_a_placeholder_reads_without_it(client, ctx):
 
 
 async def test_a_blank_goal_name_is_refused(client, ctx):
+    """A blank or whitespace-only goal name is refused on both create and rename."""
     goal = await entity(client, ctx, type="goal", key="kr-signups", title="KR 5.1 Sign-ups")
     resp = await client.patch(
         f"{B}/entities/{goal['id']}",
@@ -206,6 +212,7 @@ async def test_a_blank_goal_name_is_refused(client, ctx):
 
 
 async def test_an_empty_goal_name_reads_the_same_as_a_blank_one(client, ctx):
+    """An empty goal title is refused the same way a blank one is."""
     goal = await entity(client, ctx, type="goal", key="kr-trials", title="KR 6.1 Trials")
     resp = await client.patch(
         f"{B}/entities/{goal['id']}",
@@ -224,6 +231,7 @@ async def test_an_empty_goal_name_reads_the_same_as_a_blank_one(client, ctx):
 
 
 def test_without_placeholders():
+    """Stripping placeholder brackets from goal text keeps real bracketed words intact."""
     assert goals.without_placeholders("KR 1.1 [n] of [n] live helpers") == "KR 1.1 live helpers"
     assert goals.without_placeholders("KR [n] of [n] agents") == "KR agents"
     assert goals.without_placeholders("Reach [n] out of [n] people by [tbd].") == "Reach people by."
@@ -254,6 +262,7 @@ def test_without_placeholders():
 
 
 def test_a_real_bracketed_word_stays_in_a_goal_name():
+    """A bracketed word that is not a known placeholder stays in a goal's name."""
     for name in ("Project [X]", "Price [Value]", "Launch [beta]", "Reach [N] by [TBD]"):
         assert goals.without_placeholders(name) == name
         assert goals.goal_name(name, "kr-x") == name

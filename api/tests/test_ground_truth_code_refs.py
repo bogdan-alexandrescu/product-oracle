@@ -81,6 +81,7 @@ async def _export(client, ctx) -> str:
 
 
 async def test_an_older_export_maps_the_old_key_to_the_feature(client):
+    """Re-importing an older export still maps a feature's old key to it after a code."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     old = await _export(client, ctx)
@@ -128,6 +129,7 @@ async def _brief_key(ctx, req_id: uuid.UUID) -> str:
 
 
 async def test_tech_briefs_follow_the_code(client):
+    """A tech brief's key follows its feature's code, reverting when undone."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     mine = await _brief(ctx, w["prd"][0], "smart-search")
@@ -151,6 +153,7 @@ async def _refused(ctx, ref: str) -> list[str]:
 
 
 async def test_a_citation_of_the_old_key_is_still_valid(client):
+    """A citation by a feature's old key stays valid after its code is given or undone."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     ref = "baseline feature smart-search (search), locked"
@@ -164,6 +167,7 @@ async def test_a_citation_of_the_old_key_is_still_valid(client):
 
 
 async def test_a_launch_finds_the_feature_by_its_old_key(client):
+    """A launch run finds a feature by its old key before a code, by its code after."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     item = RoadmapItem(item_key="smart-search", title="Smart Search")
@@ -178,6 +182,7 @@ async def test_a_launch_finds_the_feature_by_its_old_key(client):
 
 
 async def test_undo_is_refused_when_the_old_key_is_taken(client):
+    """Undoing a given code is refused if its old key was taken by another feature."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     brief = await _brief(ctx, w["prd"][0], "smart-search")
@@ -213,6 +218,7 @@ def _held(monkeypatch, block_at: dict[str, int]) -> None:
 
 
 async def test_two_approvers_at_once(client, monkeypatch):
+    """Two approvers coding different features at once each get a distinct code."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     chat = await _top(ctx, "team-chat", "Team chat")
@@ -228,6 +234,7 @@ async def test_two_approvers_at_once(client, monkeypatch):
 
 
 async def test_an_accept_at_the_same_moment(client, monkeypatch):
+    """Accepting a proposal and coding a feature at once still get distinct codes."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     chat = await _top(ctx, "team-chat", "Team chat")
@@ -244,6 +251,7 @@ async def test_an_accept_at_the_same_moment(client, monkeypatch):
 
 
 async def test_a_taken_code_twice_is_a_conflict(client, monkeypatch):
+    """Giving a feature a code that collides with one taken is refused, not retried."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     real = fixes.next_code
@@ -261,6 +269,7 @@ async def test_a_taken_code_twice_is_a_conflict(client, monkeypatch):
 
 
 async def test_an_unread_prds_codes_are_counted(client):
+    """The next code given counts codes already used in a PRD never explicitly read."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     body = (

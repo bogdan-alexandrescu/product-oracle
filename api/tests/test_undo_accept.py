@@ -68,6 +68,7 @@ async def accept(client, ctx, sid: str):
 
 
 async def test_undo_puts_staged_text_back_to_open(client, ctx, pool, fake):
+    """Undoing an accepted suggestion reopens it and lets it be accepted again."""
     ids = await staged_setup(client, ctx, fake)
     resp = await undo(client, ctx, ids["goal_s"])
     assert resp.status_code == 200, resp.text
@@ -84,6 +85,7 @@ async def test_undo_puts_staged_text_back_to_open(client, ctx, pool, fake):
 
 
 async def test_undo_reopens_a_closed_or_merged_item(client, ctx, pool, fake):
+    """Undoing an accept reopens its feedback item, whether closed or merged."""
     await import_draft(client, ctx)
     a = await comment(client, ctx, "solution", "Make the checklist skippable.")
     b = await comment(client, ctx, "solution", "Let teams skip the checklist.")
@@ -115,6 +117,7 @@ async def test_undo_reopens_a_closed_or_merged_item(client, ctx, pool, fake):
 
 
 async def test_undo_refuses_what_it_cannot_revert(client, ctx, pool, fake):
+    """Undo refuses to revert text already built or applied into a draft."""
     ids = await staged_setup(client, ctx, fake)
     # Not accepted: nothing to undo.
     resp = await undo(client, ctx, ids["still_s"])
@@ -134,6 +137,7 @@ async def test_undo_refuses_what_it_cannot_revert(client, ctx, pool, fake):
 
 
 async def test_undo_refuses_a_posted_answer_and_a_changed_item(client, ctx, pool, fake):
+    """Undo refuses a posted answer, and a feedback item changed since accept."""
     await import_draft(client, ctx)
     q = await comment(client, ctx, "problem", "Where does the half figure come from?")
     ok = await comment(client, ctx, "goal-trace", "Looks right to me.")
@@ -167,6 +171,7 @@ async def test_undo_refuses_a_posted_answer_and_a_changed_item(client, ctx, pool
 
 
 async def test_undo_takes_an_approver(client, ctx, pool, fake):
+    """Undoing an accepted suggestion needs approver role or above."""
     ids = await staged_setup(client, ctx, fake)
     for role in ("viewer", "commenter"):
         headers = await token_with_role(ctx["tenant_id"], role)
@@ -244,6 +249,7 @@ async def test_a_replaced_refinement_without_a_section_key_cannot_be_applied(
 
 
 async def test_a_refinement_of_an_older_version_never_holds_undo(client, ctx, pool, fake):
+    """A refined suggestion's undo unblocks once a newer document version lands."""
     ids = await staged_setup(client, ctx, fake)
     await refine(client, ctx, fake, "goal-trace", {})
     assert (await undo(client, ctx, ids["goal_s"])).status_code == 409
@@ -254,6 +260,7 @@ async def test_a_refinement_of_an_older_version_never_holds_undo(client, ctx, po
 
 
 async def test_undo_drops_the_text_accept_edited(client, ctx, pool, fake):
+    """Undoing an accept clears any edited text the acceptance set."""
     ids = await staged_setup(client, ctx, fake)
     sid = ids["still_s"]
     resp = await client.post(f"/v1/suggestions/{sid}/accept", json={"text": "Half (2026)."},
@@ -265,6 +272,7 @@ async def test_undo_drops_the_text_accept_edited(client, ctx, pool, fake):
 
 
 async def test_undo_leaves_an_item_closed_before_accept(client, ctx, pool, fake):
+    """Undoing an accept leaves an item's own prior resolution note untouched."""
     await import_draft(client, ctx)
     ok = await comment(client, ctx, "problem", "Looks right to me.")
     fake.script["review_comments"].append(

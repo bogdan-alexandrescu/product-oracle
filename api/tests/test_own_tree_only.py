@@ -18,6 +18,7 @@ if not (ROOT / "web").is_dir():
 
 
 def test_a_read_outside_api_raises():
+    """Reading a file outside api/ raises, keeping tests from reading other trees."""
     with pytest.raises(ForeignRead, match=r"web/package.json is outside api/"):
         (ROOT / "web" / "package.json").read_text()
     with pytest.raises(ForeignRead, match=r"docs/build-brief.md is outside api/"):
@@ -25,6 +26,7 @@ def test_a_read_outside_api_raises():
 
 
 def test_listing_a_directory_outside_api_raises():
+    """Listing a directory outside api/ raises too, not just reading a file in it."""
     web_app = ROOT / "web" / "app"
     with pytest.raises(ForeignRead, match=r"web/app is outside api/"):
         list(web_app.iterdir())
@@ -36,6 +38,7 @@ def test_listing_a_directory_outside_api_raises():
 
 
 def test_an_import_from_outside_api_raises():
+    """Importing a script from outside api/ raises the same guard as reading a file."""
     script = ROOT / ".github" / "scripts" / "cancel_superseded_runs.py"
     spec = importlib.util.spec_from_file_location("foreign", script)
     with pytest.raises(ForeignRead):
@@ -43,6 +46,7 @@ def test_an_import_from_outside_api_raises():
 
 
 def test_its_own_tree_and_the_contracts_are_read():
+    """The API's own files and the published contracts stay readable despite the guard."""
     assert "product-oracle-api" in (Path(__file__).parents[1] / "pyproject.toml").read_text()
     assert (CONTRACTS / "web-proxy.json").read_text()
     assert contract("web-proxy")["proxy_timeout_ms"] > 0
@@ -50,6 +54,7 @@ def test_its_own_tree_and_the_contracts_are_read():
 
 @pytest.mark.foreign_read("web/package.json", reason="the guard's own exception")
 def test_a_named_foreign_file_is_read():
+    """A file named as an explicit exception can be read; others still raise."""
     assert '"name"' in (ROOT / "web" / "package.json").read_text()
     with pytest.raises(ForeignRead):
         (ROOT / "web" / "tsconfig.json").read_text()

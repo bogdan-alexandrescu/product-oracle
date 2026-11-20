@@ -59,6 +59,7 @@ def scratch_db():
 
 
 def test_0014_quality_sits_on_the_foundation():
+    """The quality tables migration chains on the foundation migration's own head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_quality").down_revision == "0013"
 
@@ -74,6 +75,7 @@ def _job(t: uuid.UUID, d: uuid.UUID, kind: str) -> None:
 
 
 def test_upgrade_adds_tables_and_the_job_kind_and_downgrade_reverses(scratch_db):
+    """Before its migration a quality_review job is rejected; after, both exist."""
     cfg = _cfg()
     upgrade(cfg, "0013")
     t, doc = uuid.uuid4(), uuid.uuid4()

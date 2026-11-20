@@ -126,6 +126,7 @@ async def inbox(client, w: World, who: str) -> dict:
 
 
 async def test_published_version_unchanged_while_a_draft_exists(client):
+    """The published roadmap stays unchanged while a draft is open and growing."""
     w = await world()
     r = await edit_title(client, w, "decider")
     assert r.status_code == 201, r.text
@@ -161,6 +162,7 @@ async def test_published_version_unchanged_while_a_draft_exists(client):
     ],
 )
 async def test_visibility_per_role(client, who, track_owner, sees):
+    """A draft in review shows only to its owner, decider, reviewers, or track owner."""
     w = await world(reviewers=("approver",), track_owner=track_owner)
     assert (await edit_title(client, w, "decider")).status_code == 201
     view = await roadmap(client, w, who)
@@ -176,6 +178,7 @@ async def test_visibility_per_role(client, who, track_owner, sees):
 
 
 async def test_submit_goes_through_the_review_policy(client):
+    """Submitting a draft hands it to its reviewer and locks out further changes."""
     w = await world(reviewers=("approver",))
     change = (await edit_title(client, w, "decider")).json()["change"]
     d = await the_draft(client, w)
@@ -225,6 +228,7 @@ async def test_submit_goes_through_the_review_policy(client):
 
 
 async def test_approve_in_meeting_present_and_absent(client):
+    """A meeting approval counts only reviewers present; an absent one approves later."""
     w = await world(reviewers=("approver", "reviewer2"))
     meeting = await client.post(SESSIONS, json={"kind": "meeting"}, headers=w.ctx.as_("decider"))
     sid = meeting.json()["id"]
@@ -253,6 +257,7 @@ async def test_approve_in_meeting_present_and_absent(client):
 
 
 async def test_undo_inside_a_draft_change_by_change(client):
+    """Undoing a draft's changes one by one restores each earlier state exactly."""
     w = await world()
     first = (await edit_title(client, w, "decider")).json()["change"]
     second = (
@@ -269,6 +274,7 @@ async def test_undo_inside_a_draft_change_by_change(client):
 
 
 async def test_resume_rules(client, clock):
+    """Resuming a draft's session is limited to its decider and keeps its change count."""
     w = await world()
     change = (await edit_title(client, w, "decider")).json()["change"]
     clock["now"] = NOW + timedelta(minutes=31)

@@ -110,6 +110,7 @@ def url(conn, **params) -> str:
 
 
 async def test_lists_public_and_private_channels_never_dms(client, alice, conn, slack):
+    """The Slack picker lists public and private channels only, never DMs."""
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -140,6 +141,7 @@ async def test_lists_public_and_private_channels_never_dms(client, alice, conn, 
 
 
 async def test_next_page(client, alice, conn, slack):
+    """The Slack channel list's next page follows its own cursor."""
     resp = await client.get(url(conn, cursor="page-2"), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert [c["id"] for c in resp.json()["channels"]] == ["C0FEEDBACK"]
@@ -148,6 +150,7 @@ async def test_next_page(client, alice, conn, slack):
 
 
 async def test_archived_on_request(client, alice, conn, slack):
+    """Archived Slack channels show only when asked for, not by default."""
     resp = await client.get(url(conn, include_archived="true"), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     ids = [c["id"] for c in resp.json()["channels"]]
@@ -157,6 +160,7 @@ async def test_archived_on_request(client, alice, conn, slack):
 
 
 async def test_search_matches_names_across_pages(client, alice, conn, slack):
+    """A Slack channel search reads on through pages, since Slack has no name filter."""
     resp = await client.get(url(conn, search="FEED"), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     # Slack has no name filter: Oracle reads on through the pages to find matches.
@@ -169,12 +173,14 @@ async def test_search_matches_names_across_pages(client, alice, conn, slack):
 
 
 async def test_another_users_connection_is_not_found(client, bob, conn, slack):
+    """Another user's Slack connection is not found, and Slack is never called."""
     resp = await client.get(url(conn), headers=bob.headers)
     assert resp.status_code == 404
     assert slack.calls == []
 
 
 async def test_a_github_connection_is_not_found(client, tenant_id, alice, slack):
+    """A GitHub connection does not show up as a Slack channel list."""
     other = await add_connection(tenant_id, alice.id, "github")
     resp = await client.get(url(other), headers=alice.headers)
     assert resp.status_code == 404
@@ -182,6 +188,7 @@ async def test_a_github_connection_is_not_found(client, tenant_id, alice, slack)
 
 
 async def test_rate_limit_is_a_clear_retry(client, alice, conn, slack):
+    """Slack's rate limit reply becomes a clear, fixed retry-after message."""
     slack.limited = True
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 429
@@ -190,6 +197,7 @@ async def test_rate_limit_is_a_clear_retry(client, alice, conn, slack):
 
 
 async def test_rejected_token_marks_the_connection(client, tenant_id, alice, conn, slack):
+    """A Slack token Slack revokes marks the connection expired, not leaked."""
     slack.error = "token_revoked"
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 409
@@ -201,6 +209,7 @@ async def test_rejected_token_marks_the_connection(client, tenant_id, alice, con
 
 
 async def test_missing_scope(client, alice, conn, slack):
+    """Slack refusing for a missing scope is reported, naming the scope problem."""
     slack.error = "missing_scope"
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 409
@@ -208,6 +217,7 @@ async def test_missing_scope(client, alice, conn, slack):
 
 
 async def test_inactive_connection(client, tenant_id, alice, slack):
+    """An already-expired connection refuses the request before calling Slack."""
     expired = await add_connection(
         tenant_id, alice.id, "slack", bundle={"access_token": TOKEN}, status="expired"
     )
@@ -217,6 +227,8 @@ async def test_inactive_connection(client, tenant_id, alice, slack):
 
 
 async def test_slack_unreachable_is_a_bad_gateway(client, alice, conn):
+    """Slack being unreachable over the network becomes a bad gateway."""
+
     def down(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("no route", request=request)
 

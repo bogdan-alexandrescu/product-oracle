@@ -250,6 +250,7 @@ CASES = [
 
 @pytest.mark.parametrize(("p", "expected"), [c[1:] for c in CASES], ids=[c[0] for c in CASES])
 def test_describe_table(p, expected):
+    """Every kind of baseline proposal reads as its one expected plain sentence."""
     assert describe(p, ENTITIES, EDGES) == expected
 
 

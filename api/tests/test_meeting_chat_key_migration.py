@@ -91,11 +91,13 @@ def _keys() -> dict[uuid.UUID, str]:
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the branch's one existing head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_each_meeting_keeps_its_chat(scratch_db):
+    """The chat-key migration gives each meeting its own chat, not mixed with Ask."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t = uuid.uuid4()

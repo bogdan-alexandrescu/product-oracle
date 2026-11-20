@@ -48,6 +48,7 @@ def _close_to(value: str, delta: timedelta) -> bool:
 
 
 async def test_an_invite_expires_and_resend_brings_it_back(client, fetches):
+    """An expired invite blocks sign-in until it is resent."""
     from tests.test_access_requests import _seed_request
 
     # Under ``request`` an expired invite is refused (``join``, the default, lets them in).
@@ -101,6 +102,7 @@ async def test_an_invite_expires_and_resend_brings_it_back(client, fetches):
 async def test_invites_outside_the_company_domains_are_refused_with_google_sign_in(
     client, fetches, monkeypatch
 ):
+    """An address outside the company domains is refused unless Google sign-in is off."""
     r = await seed()
     owner = await person(r.tenant_id, "owner")
     out = await client.post(
@@ -121,6 +123,7 @@ async def test_invites_outside_the_company_domains_are_refused_with_google_sign_
 
 
 async def test_approvers_invite_viewers_and_commenters_and_see_only_theirs(client):
+    """Approvers invite only viewers and commenters, and see only their own invites."""
     r = await seed()
     owner = await person(r.tenant_id, "owner")
     approver = await person(r.tenant_id, "approver")
@@ -173,6 +176,7 @@ async def test_approvers_invite_viewers_and_commenters_and_see_only_theirs(clien
 
 
 async def test_me_lists_invite_roles_per_role(client):
+    """The roles a person may invite depend on their own role."""
     r = await seed()
     expected = {
         "owner": ["viewer", "commenter", "approver", "owner"],
@@ -186,6 +190,7 @@ async def test_me_lists_invite_roles_per_role(client):
 
 
 async def test_owners_name_members(client):
+    """An owner can rename a member, and search finds them by the new name."""
     r = await seed()
     owner = await person(r.tenant_id, "owner")
     member = await person(r.tenant_id, "approver", name="design.approver")
@@ -214,6 +219,7 @@ async def test_owners_name_members(client):
 
 
 async def test_members_name_themselves_with_a_writable_credential(client):
+    """A member can rename themselves, but not with a read only credential."""
     r = await seed()
     commenter = await person(r.tenant_id, "commenter")
     resp = await client.patch("/v1/me/account", json={"name": "Pat Doe"}, headers=commenter.headers)
@@ -232,6 +238,7 @@ async def test_members_name_themselves_with_a_writable_credential(client):
 
 
 async def test_the_invite_name_becomes_the_member_name(client, fetches):
+    """An invite's given name becomes the new member's own name."""
     r = await seed()
     owner = await person(r.tenant_id, "owner")
     made = await client.post(

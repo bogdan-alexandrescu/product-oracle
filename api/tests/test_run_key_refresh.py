@@ -121,6 +121,7 @@ async def test_the_restore_call_refusals_carry_their_http_status(status, reason)
 
 
 async def test_the_restore_call_reads_what_was_stored_and_promoted(client, owner):
+    """A restore call reports the stored keys and how many were promoted."""
     _, auth = owner
     swarm = parking()
     swarm.fail_restores = [

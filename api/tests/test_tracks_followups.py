@@ -54,6 +54,7 @@ async def test_approving_a_prd_version_suggests_its_track(client, owner):  # noq
 
 
 async def test_only_a_prd_has_a_track(client, owner, runtime):  # noqa: F811
+    """Only a PRD can own a track; approving its roadmap never starts a second one."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -74,6 +75,7 @@ async def test_only_a_prd_has_a_track(client, owner, runtime):  # noqa: F811
 
 
 async def test_a_create_track_race_returns_the_existing_track(client, owner, monkeypatch):  # noqa: F811
+    """A race to create a track for the same PRD returns the one already made."""
     _, auth = owner
     await approved_prd(client, auth)
     (existing,) = await _tracks(client, auth)
@@ -94,6 +96,7 @@ async def test_a_create_track_race_returns_the_existing_track(client, owner, mon
 
 
 async def test_the_monitor_isolates_a_failing_track(client, owner, runtime, monkeypatch):  # noqa: F811
+    """One track's monitor failure never stops another track's check from running."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -142,6 +145,7 @@ async def _none() -> None:
 
 
 async def test_listing_tracks_reads_blockers_once_per_track(client, owner, runtime, monkeypatch):  # noqa: F811
+    """Listing tracks fetches blockers in one batch, not once per item."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -159,6 +163,7 @@ async def test_listing_tracks_reads_blockers_once_per_track(client, owner, runti
 
 
 async def test_a_track_owner_is_a_member_of_the_company(client, owner, runtime):  # noqa: F811
+    """A track's owner must be a member of its own company, or left unset."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     (track,) = await _tracks(client, auth)
@@ -182,6 +187,8 @@ async def test_a_track_owner_is_a_member_of_the_company(client, owner, runtime):
 
 
 def test_carry_forward_matches_keys_exactly():
+    """A roadmap item is named in text by its exact key, never a key substring."""
+
     def item(key, title):
         return SimpleNamespace(item_key=key, title=title)
 

@@ -67,6 +67,7 @@ CHANGES = [
 
 
 async def test_change_set_crud_and_audit(client, owner, runtime):  # noqa: F811
+    """A change set is one per roadmap, and records its moves, cuts, adds."""
     tenant_id, auth = owner
     await approved_roadmap(client, auth, runtime)
 
@@ -157,6 +158,7 @@ async def test_change_set_crud_and_audit(client, owner, runtime):  # noqa: F811
 
 
 async def test_proposed_version_is_the_base_plus_the_changes(client, owner, runtime):  # noqa: F811
+    """Proposing a change set builds a version from the base plus changes."""
     tenant_id, auth = owner
     await approved_roadmap(client, auth, runtime)
     out = (await client.post(SETS, headers=auth)).json()
@@ -202,6 +204,7 @@ async def test_proposed_version_is_the_base_plus_the_changes(client, owner, runt
 
 
 async def test_only_the_decider_approves_and_it_becomes_the_plan(client, owner, runtime):  # noqa: F811
+    """Only the decider approves a proposed version, which becomes the plan."""
     tenant_id, auth = owner
     await approved_roadmap(client, auth, runtime)
     decider_id, decider = await member(tenant_id, "approver")
@@ -236,6 +239,7 @@ async def test_only_the_decider_approves_and_it_becomes_the_plan(client, owner, 
 
 
 async def test_a_stale_base_is_refused(client, owner, runtime):  # noqa: F811
+    """Editing or proposing against a stale base version is refused."""
     tenant_id, auth = owner
     await approved_roadmap(client, auth, runtime)
     out = (await client.post(SETS, headers=auth)).json()
@@ -262,6 +266,7 @@ async def test_a_stale_base_is_refused(client, owner, runtime):  # noqa: F811
 
 
 async def test_roles_and_companies(client, owner, runtime):  # noqa: F811
+    """Viewers and commenters cannot write a change set; other companies can't read it."""
     tenant_id, auth = owner
     await approved_roadmap(client, auth, runtime)
     out = (await client.post(SETS, headers=auth)).json()

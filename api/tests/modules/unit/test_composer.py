@@ -30,6 +30,7 @@ def custom(**fields) -> dict:
 
 
 def test_required_modules_are_mandatory_and_say_who_requires_them():
+    """A required module is mandatory and says the pack policy requires it."""
     comp = compose(context())
     m = by_key(comp)
     assert comp.valid
@@ -40,6 +41,7 @@ def test_required_modules_are_mandatory_and_say_who_requires_them():
 
 
 def test_company_policy_decides_the_mandatory_modules():
+    """Company policy can make a module mandatory and pull in its dependency."""
     comp = compose(
         context(
             company_required=("platform.tenant-isolation",),
@@ -57,6 +59,7 @@ def test_company_policy_decides_the_mandatory_modules():
 
 
 def test_conditional_modules_explain_inclusion_and_omission():
+    """A conditional module explains its suggestion or its missing input."""
     comp = compose(context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS))
     m = by_key(comp)
     tools = m["agents.tool-policies"]
@@ -72,12 +75,14 @@ def test_conditional_modules_explain_inclusion_and_omission():
 
 
 def test_not_every_specialised_module_is_required():
+    """A category's recommendation never forces in modules outside its pack."""
     comp = compose(context(pack="ai-agent.platform", inputs={"category": "b2b_saas"}))
     included = {m.key for m in comp.included}
     assert not any(k.startswith(("agents.", "platform.")) for k in included)
 
 
 def test_basis_carries_the_source_and_knowledge_state():
+    """A module's basis carries its source and how confidently it is known."""
     comp = compose(
         context(
             pack="ai-agent.platform",
@@ -102,6 +107,7 @@ def test_basis_carries_the_source_and_knowledge_state():
 
 
 def test_advisory_scores_never_decide_alone():
+    """An advisory score alone never includes a module, only explains it."""
     comp = compose(
         context(
             pack="ai-agent.platform",
@@ -115,6 +121,7 @@ def test_advisory_scores_never_decide_alone():
 
 
 def test_template_sections_keep_their_module_even_when_its_condition_fails():
+    """A template's own section keeps its module when its condition fails."""
     comp = compose(context(template="narrative-memo"))  # renders options -> alternatives
     alt = by_key(comp)["solution.alternatives"]
     # The memo's "Options" heading is level 2: the template's spine makes it mandatory.
@@ -129,6 +136,7 @@ def test_template_sections_keep_their_module_even_when_its_condition_fails():
 
 
 def test_a_mandatory_module_cannot_be_removed():
+    """A mandatory module cannot be removed and stays included."""
     comp = compose(context(), Changes(remove=("constraints.solutions",), reason="too long"))
     assert not comp.valid
     problem = next(p for p in comp.problems if p.code == "required_module")
@@ -138,6 +146,7 @@ def test_a_mandatory_module_cannot_be_removed():
 
 
 def test_a_dependency_cannot_be_removed_while_a_dependent_stays():
+    """Stops a document from losing a module still needed by another part still included."""
     ctx = context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS)
     comp = compose(ctx, Changes(remove=("agents.archetypes",), reason="not needed"))
     assert "required_dependency" in codes(comp)
@@ -163,6 +172,7 @@ def test_a_dependency_cannot_be_removed_while_a_dependent_stays():
 
 
 def test_a_removed_suggestion_records_the_person_and_reason():
+    """Removing a suggested module records who did it and why."""
     ctx = context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS)
     actor = "5d8c1f3e-2a4b-4c6d-8e9f-0a1b2c3d4e5f"
     comp = compose(
@@ -174,6 +184,7 @@ def test_a_removed_suggestion_records_the_person_and_reason():
 
 
 def test_adding_a_module_pulls_in_its_dependencies_with_an_explanation():
+    """Adding a module brings in what it needs, and tells the person why it appeared."""
     comp = compose(context(), Changes(add=("platform.cost-quotas",), reason="usage pricing"))
     m = by_key(comp)
     assert comp.valid
@@ -185,6 +196,7 @@ def test_adding_a_module_pulls_in_its_dependencies_with_an_explanation():
 
 
 def test_disabled_and_unknown_modules_cannot_be_added():
+    """Blocks turning on a module the company disabled or one that was only typed in."""
     comp = compose(
         context(company_disabled=("economics.value",)),
         Changes(add=("economics.value", "made.up"), reason="x"),
@@ -193,6 +205,7 @@ def test_disabled_and_unknown_modules_cannot_be_added():
 
 
 def test_owner_gated_modules_need_the_owner_role():
+    """A module gated to owner review refuses an approver's add."""
     contracts = dict(builtin_contracts())
     contracts["compliance.review"] = validate_contract(
         custom(id="compliance.review", required_review_role="owner")
@@ -208,6 +221,7 @@ def test_owner_gated_modules_need_the_owner_role():
 
 
 def test_an_unsatisfiable_required_dependency_fails_clearly():
+    """A dependency disabled by company policy fails the composition clearly."""
     comp = compose(context(company_disabled=("goals.outcomes",)))
     assert not comp.valid
     problem = next(p for p in comp.problems if p.code == "unsatisfied_dependency")
@@ -215,6 +229,7 @@ def test_an_unsatisfiable_required_dependency_fails_clearly():
 
 
 def test_a_suggested_module_with_an_unavailable_dependency_is_dropped_and_explained():
+    """An unavailable dependency drops its module and explains why."""
     contracts = dict(builtin_contracts())
     contracts.pop("agents.archetypes")  # archived by the company
     comp = compose(context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS, contracts=contracts))
@@ -235,6 +250,7 @@ def test_a_suggested_module_with_an_unavailable_dependency_is_dropped_and_explai
 
 
 def test_conflicts_drop_the_weaker_module_or_fail():
+    """Conflicting modules keep exactly one; re-adding the other fails."""
     contracts = dict(builtin_contracts())
     contracts["one.way"] = validate_contract(
         custom(
@@ -272,6 +288,7 @@ def test_conflicts_drop_the_weaker_module_or_fail():
 
 
 def test_order_is_deterministic_and_respects_constraints():
+    """Composition order is the same every time and obeys every constraint."""
     ctx = context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS)
     orders = {tuple(m.key for m in compose(ctx).included) for _ in range(5)}
     assert len(orders) == 1
@@ -283,6 +300,7 @@ def test_order_is_deterministic_and_respects_constraints():
 
 
 def test_a_person_may_reorder_within_the_constraints():
+    """A person may reorder modules within the constraints only."""
     ctx = context()
     order = [m.key for m in compose(ctx).included]
     swapped = order.copy()
@@ -309,6 +327,7 @@ def test_a_person_may_reorder_within_the_constraints():
 
 
 def test_order_cycles_are_reported():
+    """A cycle in module ordering is reported, not silently resolved."""
     contracts = dict(builtin_contracts())
     contracts["a.one"] = validate_contract(custom(id="a.one", order_after=["a.two"]))
     contracts["a.two"] = validate_contract(custom(id="a.two", order_after=["a.one"]))
@@ -317,6 +336,7 @@ def test_order_cycles_are_reported():
 
 
 def test_section_collisions_are_refused():
+    """Two modules claiming the same template section are refused."""
     contracts = dict(builtin_contracts())
     contracts["dup.module"] = validate_contract(custom(id="dup.module", section_ids=["priority"]))
     comp = compose(
@@ -329,6 +349,7 @@ def test_section_collisions_are_refused():
 
 
 def test_layer_impact_of_template_and_new_modules():
+    """A module's layer impact says which sections are template or new."""
     comp = compose(context(pack="ai-agent.platform", template="one-pager", inputs=PLATFORM_INPUTS))
     m = by_key(comp)
     risks = m["risks.register"].layer_impact
@@ -345,6 +366,7 @@ def test_layer_impact_of_template_and_new_modules():
 
 
 def test_field_values_are_validated_against_the_module_validators():
+    """A module's field values are checked for required, type and unknown."""
     contract = builtin_contracts()["goals.outcomes"]
     problems = validate_fields(contract, {"metric": "", "baseline_value": "ten", "nope": 1})
     kinds = {(p.field, p.kind) for p in problems}
@@ -362,6 +384,7 @@ def test_field_values_are_validated_against_the_module_validators():
 
 
 def test_same_context_same_composition():
+    """Composing the same context twice always yields the same result."""
     ctx = context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS)
     dumps = {compose(ctx).model_dump_json() for _ in range(3)}
     assert len(dumps) == 1

@@ -55,6 +55,7 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A new PRD version marks stale only the roadmap items whose own section changed."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -111,6 +112,7 @@ async def test_a_section_gone_from_a_new_prd_version_is_named_by_its_old_heading
 
 
 async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  # noqa: F811
+    """Editing a requirement marks its traced items stale, naming it, not its id."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -134,6 +136,7 @@ async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  #
 
 
 async def test_a_blocker_status_change_marks_its_items(client, owner, runtime):  # noqa: F811
+    """Changing a blocker's status marks the roadmap items it affects as stale."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -151,6 +154,7 @@ async def test_a_blocker_status_change_marks_its_items(client, owner, runtime): 
 
 
 async def test_review_and_reconcile(client, owner, runtime):  # noqa: F811
+    """Reconciling a stale item needs a reason, the right role, and the approved PRD."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

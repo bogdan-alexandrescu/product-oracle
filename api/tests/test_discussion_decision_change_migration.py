@@ -68,11 +68,13 @@ def _change(tenant: uuid.UUID, d: uuid.UUID, kind: str) -> None:
 
 
 def test_chains_on_the_single_head():
+    """The new migration chains after the branch's own alembic head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """The migration's upgrade adds the change kind, downgrade removes it."""
     upgrade(_cfg(), PREVIOUS)
     tenant, d = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)

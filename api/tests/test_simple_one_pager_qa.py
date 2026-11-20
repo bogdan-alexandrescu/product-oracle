@@ -64,6 +64,7 @@ async def company_roadmap(s, prd_id: uuid.UUID, items: list[dict]) -> None:
 
 
 async def test_timeline_counts_the_company_roadmap_items_of_the_prd(client):
+    """The timeline lists only the company roadmap items that belong to this PRD."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
@@ -115,6 +116,7 @@ async def other_prd_slicing_f07(s) -> Document:
 
 @pytest.mark.parametrize("own_plan", [False, True])
 async def test_timeline_places_items_by_this_prds_plan(client, own_plan):
+    """An item's timeline place follows this PRD's own plan, not another PRD's."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
@@ -152,6 +154,7 @@ async def test_timeline_places_items_by_this_prds_plan(client, own_plan):
 
 
 async def test_a_plan_led_page_lists_the_items_with_no_plan_milestone(client):
+    """Items whose feature is not in the plan land in a No milestone row."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
@@ -193,6 +196,7 @@ PLAN_TABLES = """
 
 
 async def test_timeline_reads_the_approved_versions_plan(client):
+    """A milestone with no roadmap item linking it shows its name alone, not a code."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
@@ -212,6 +216,7 @@ NOT_YET = "Not in the PRD yet"
 
 
 async def test_not_in_prd_said_once_per_section(client):
+    """A missing-section placeholder shows once per block and never leaks into text."""
     ctx = await world(client)
     await get(client, ctx)  # builds and stores the page
     async with tenant_session(ctx.tenant_id) as s:
@@ -261,6 +266,7 @@ New workspace admins stall during setup and never invite a teammate in week one.
 
 
 async def test_goal_codes_named(client):
+    """Bets and outcomes name each goal by its code and title, never the code alone."""
     ctx = await world(client)
     r = await client.post("/v1/documents/calm-setup/versions", content=GOALS.encode(),
                           headers=MD | ctx.as_("owner"))  # fmt: skip

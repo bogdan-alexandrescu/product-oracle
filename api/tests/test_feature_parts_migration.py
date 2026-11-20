@@ -61,6 +61,7 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the one true head, kept at a single head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # One head, and this migration is on its chain (test_migrations pins the head itself).
@@ -69,6 +70,7 @@ def test_chains_on_the_single_head():
 
 
 def test_up_down_up(scratch_db):
+    """Migrating this change up, down and up again leaves the column correct."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _columns() == [("text", "YES")]

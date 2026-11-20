@@ -13,6 +13,7 @@ async def _evidence_refs(db) -> list[dict]:
 
 
 async def test_default_threshold_is_0_7_and_a_company_can_raise_it(db):
+    """Evidence counts only above the pushback threshold, which a company may raise."""
     feature = Entity(type="feature", key="checkout", title="Checkout", origin="user")
     db.add(feature)
     await db.flush()

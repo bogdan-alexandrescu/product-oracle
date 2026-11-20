@@ -92,6 +92,7 @@ async def read(client, headers) -> tuple[int, float, dict]:
 
 @pytest.mark.timing
 async def test_waiting_answers_under_budget(client, company):
+    """The waiting list answers fast even with hundreds of items on a real company."""
     ctx, _ = company
     best = {}
     for role in ("approver", "owner"):
@@ -106,6 +107,7 @@ async def test_waiting_answers_under_budget(client, company):
 
 
 async def test_waiting_reads_no_statement_per_row(client, company):
+    """The waiting list reads every kind of item with no per-row database query."""
     ctx, _ = company
     await read(client, ctx.as_("owner"))
     for role in ("approver", "owner"):
@@ -168,6 +170,7 @@ async def token(ctx, name: str, user: str | None, scope: str | None = None) -> d
 
 @pytest.mark.parametrize("company_roadmap", [False, True], ids=["roadmaps", "company_roadmap"])
 async def test_waiting_says_what_it_said_before(client, monkeypatch, company_roadmap):
+    """The waiting list's rewritten code answers exactly as its earlier version did."""
     ctx = await make_ctx()
     seeded = await big_company(ctx, company_roadmap=company_roadmap)
     people = {role: ctx.as_(role) for role in ("owner", "approver", "commenter", "viewer")}

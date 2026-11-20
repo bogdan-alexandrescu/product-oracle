@@ -66,6 +66,7 @@ async def _raw_patch(pat, source, body):
 
 
 async def test_a_drive_save_without_base_version_is_refused_and_changes_nothing(tenant_id, drive):
+    """Saving a Drive source without its base version is refused and changes nothing."""
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
@@ -87,6 +88,7 @@ async def test_a_drive_save_without_base_version_is_refused_and_changes_nothing(
 
 
 async def test_a_stale_drive_save_is_refused_and_hides_nothing(tenant_id, drive):
+    """Saving a Drive source against a stale base version is refused, deletes nothing."""
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
@@ -109,6 +111,7 @@ async def test_a_stale_drive_save_is_refused_and_hides_nothing(tenant_id, drive)
 
 
 async def test_a_names_only_drive_edit_bumps_the_config_version(tenant_id, drive):
+    """A names-only edit still bumps the config version, without asking Drive."""
     drive.doc(DOC_A, "A")
     drive.doc("1DocMissing", "Unshared later")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, "1DocMissing"]})
@@ -135,6 +138,7 @@ async def test_a_names_only_drive_edit_bumps_the_config_version(tenant_id, drive
 
 
 async def test_a_drive_pure_narrowing_with_an_expired_connection_saves_and_sweeps(tenant_id, drive):
+    """Pure narrowing saves and deletes with an expired connection; widening needs one."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_A, "A")
@@ -210,6 +214,7 @@ async def _legacy_folder_source(tenant_id, drive):
 
 
 async def test_a_sync_superseded_by_a_company_narrowing_still_hides_unknown_items(tenant_id, drive):
+    """A sync superseded by a company narrowing still hides items of unknown ownership."""
     pat, source = await _legacy_folder_source(tenant_id, drive)
     running, release = await _sync_held_at_listing(drive, pat, source, DOC_A)
     try:
@@ -230,6 +235,7 @@ async def test_a_sync_superseded_by_a_company_narrowing_still_hides_unknown_item
 
 
 async def test_a_sync_superseded_by_a_persons_edit_does_not_hide_unknown_items(tenant_id, drive):
+    """A sync superseded by a person's own edit hides only what the person removed."""
     pat, source = await _legacy_folder_source(tenant_id, drive)
     running, release = await _sync_held_at_listing(drive, pat, source, DOC_A)
     try:

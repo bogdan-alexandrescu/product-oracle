@@ -51,6 +51,7 @@ async def _exists(tenant_id, conn_id) -> bool:
 
 
 async def test_delete_connection_is_refused_and_nothing_is_revoked(client, provider):
+    """A read-only credential cannot delete a connection, and nothing is revoked."""
     auth = await _bearer(client, "oracle:read")
     admin = await _admin()
     conn = await add_connection(admin.tenant_id, admin.id, "google", auth_mode="oauth")
@@ -62,6 +63,7 @@ async def test_delete_connection_is_refused_and_nothing_is_revoked(client, provi
 
 
 async def test_connect_with_token_is_refused(client, provider):
+    """A read-only credential cannot create a new connection, and nothing is stored."""
     auth = await _bearer(client, "oracle:read")
     resp = await client.post("/v1/connections/github/token", json=_pasted(), headers=auth)
     assert resp.status_code == 403
@@ -72,6 +74,7 @@ async def test_connect_with_token_is_refused(client, provider):
 
 
 async def test_reconnect_connection_is_refused(client, provider):
+    """A read-only credential cannot reconnect an existing connection."""
     auth = await _bearer(client, "oracle:read")
     admin = await _admin()
     conn = await add_connection(admin.tenant_id, admin.id, "github")
@@ -114,6 +117,7 @@ WRITE_ROUTES = _write_routes()
 
 
 def test_the_sweep_sees_the_routes_it_should():
+    """The read-only guard's route sweep still finds the sensitive write endpoints."""
     paths = {f"{m} {p.split('/')[2]}" for m, p in WRITE_ROUTES}
     assert {"POST sources", "PATCH sources", "DELETE sources", "DELETE connections"} <= paths
     assert len(WRITE_ROUTES) > 30
@@ -132,6 +136,7 @@ async def test_every_write_route_is_refused(client, provider):
 
 
 async def test_reads_still_work(client):
+    """A read-only credential can still read: GET and HEAD requests succeed."""
     auth = await _bearer(client, "oracle:read")
     assert (await client.get("/v1/me", headers=auth)).status_code == 200
     assert (await client.get("/v1/connections", headers=auth)).status_code == 200
@@ -139,6 +144,7 @@ async def test_reads_still_work(client):
 
 
 async def test_a_write_client_may_still_disconnect(client, provider):
+    """A credential with write access can still delete a connection."""
     auth = await _bearer(client, None)
     admin = await _admin()
     conn = await add_connection(admin.tenant_id, admin.id, "github")
@@ -148,6 +154,7 @@ async def test_a_write_client_may_still_disconnect(client, provider):
 
 
 async def test_mcp_tools_are_refused_for_a_read_only_client(client, provider):
+    """A read-only credential's MCP tools can list but not delete a connection."""
     from tests.test_mcp import mcp_client, text_of
 
     _, tok = await full_flow(client, scope="oracle:read")
@@ -185,6 +192,7 @@ async def test_a_read_only_credential_is_refused_with_or_without_the_run_binding
 
 
 async def test_a_write_credential_with_the_run_binding_may_still_write(client, provider):
+    """A write credential with a signed run binding can still create things."""
     auth = await _bearer(client, None)
     admin = await _admin()
     signed = {**auth, RUN_HEADER: sign_run_binding(admin.id, uuid.uuid4())}

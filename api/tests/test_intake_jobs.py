@@ -82,6 +82,7 @@ def _answer(payload):
 
 
 async def test_the_intake_queues_an_extraction_job_that_adds_inferences(client, fake):
+    """An intake's extraction job reads sources as untrusted data, not the prompt."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     content = f"Returning buyers complain about retyping the shipping address. {INJECTION}"
@@ -128,6 +129,7 @@ async def test_the_intake_queues_an_extraction_job_that_adds_inferences(client, 
 
 
 async def test_without_a_claude_account_the_rules_analysis_still_stands(client):
+    """A missing model account fails the extraction job but keeps the rule gaps."""
     ctx = await company()
     out = await create_intake(client, ctx, ai_extraction=True)
     tick = await worker.run_pending(ctx.tenant_id)
@@ -142,6 +144,7 @@ async def test_without_a_claude_account_the_rules_analysis_still_stands(client):
 
 
 async def test_no_job_is_queued_when_extraction_is_off(client):
+    """Turning extraction off queues no model job for the intake."""
     ctx = await company()
     await create_intake(client, ctx, ai_extraction=False)
     async with tenant_session(ctx.tenant_id) as s:
@@ -201,6 +204,7 @@ def _outside_untrusted(payload) -> str:
 
 
 async def test_injected_title_and_gap_statements_stay_data_and_pull_nothing_out(client, fake):
+    """An injected title or gap statement stays inside untrusted data, not the prompt."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     await make_item(ctx, "commenter", content=PRIVATE, title="#pilot results")
@@ -260,6 +264,7 @@ async def test_injected_title_and_gap_statements_stay_data_and_pull_nothing_out(
 
 
 async def test_model_output_is_capped_per_run(client, fake):
+    """A model's extraction output is capped per run so an intake cannot be flooded."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     fake(lambda payload: {
@@ -285,6 +290,7 @@ async def test_model_output_is_capped_per_run(client, fake):
 async def test_model_gaps_are_deduplicated_by_meaning_and_never_reask_a_closed_category(
     client, fake
 ):
+    """Gaps the model repeats in other words, or already answered, are dropped."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     out = await create_intake(client, ctx, ai_extraction=True)
@@ -317,6 +323,7 @@ async def test_model_gaps_are_deduplicated_by_meaning_and_never_reask_a_closed_c
 
 
 async def test_the_job_adds_nothing_to_a_converted_or_archived_intake(client, fake):
+    """An archived intake's extraction job adds nothing and reports why it skipped."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     claude = fake(_answer_no_source)

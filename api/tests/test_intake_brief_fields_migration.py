@@ -68,6 +68,7 @@ def scratch_db():
 
 
 def test_chains_on_mains_head():
+    """The brief fields migration chains on main's head, keeping one migration head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0024_segment_skipped chains on it; one head.
@@ -75,6 +76,7 @@ def test_chains_on_mains_head():
 
 
 def test_upgrade_adds_the_brief_fields_and_downgrade_drops_them(scratch_db):
+    """The migration adds the brief columns with defaults, and downgrade drops them."""
     upgrade(_cfg(), PREVIOUS)
     tenant, intake = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)

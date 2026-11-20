@@ -34,6 +34,7 @@ async def counts(client, w: World, who: str) -> dict[str, tuple[int, int]]:
 
 
 async def test_a_tracks_count_reads_the_working_draft(client):
+    """A track's feature count reflects the decider's own draft, not what viewers see."""
     w = await World(await make_people()).build(decider=True, ops=OPS)
     async with tenant_session(w.ctx.tenant_id) as s:
         first = await s.scalar(select(ProductTrack))
@@ -105,6 +106,7 @@ async def delete(client, w: World, track_id: str) -> dict:
 
 
 async def test_move_to_trash_counts_the_published_features_moved_off_in_the_draft(client):
+    """Move to Trash counts every published feature the draft also moved off the track."""
     w = await World(await make_people()).build(decider=True, ops=OPS)
     old, new, moved = await two_tracks(client, w)
     held = await published_on(w, old)
@@ -134,6 +136,7 @@ async def test_move_to_trash_counts_the_published_features_moved_off_in_the_draf
 
 
 async def test_move_to_trash_moves_the_drafts_features_off_and_restore_puts_them_back(client):
+    """Trashing a track moves its draft-only features off; restoring puts them back."""
     w = await World(await make_people()).build(decider=True, ops=OPS)
     old, new, moved = await two_tracks(client, w)
     # Gift boxes holds five only in the draft: Move to Trash asks about them and moves them.

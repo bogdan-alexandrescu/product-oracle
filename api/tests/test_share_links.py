@@ -237,6 +237,7 @@ async def test_refusals_on_create(client, ctx):
 
 
 async def test_a_prd_cannot_be_shared(client, ctx):
+    """A PRD document cannot be given a share link; other document kinds can."""
     await seed_roadmap(ctx, publish=True)
     resp = await client.post(
         "/v1/documents/example-labs-prd/share-links",
@@ -673,6 +674,7 @@ async def test_disabling_the_creator_revokes_their_links_for_the_owners_inbox(cl
 
 
 async def test_a_demotion_below_approver_revokes_the_creators_links(client, ctx):
+    """Demoting a share link's creator below approver revokes their links."""
     await seed_roadmap(ctx, publish=True)
     await create(client, ctx, "approver")
     resp = await client.patch(
@@ -708,6 +710,7 @@ async def test_trashing_the_document_revokes_every_link_and_restore_does_not(cli
 
 
 async def test_revoke_all_is_owners_only_and_counts(client, ctx):
+    """Revoking all share links is owner-only and reports how many it revoked."""
     await seed_roadmap(ctx, publish=True)
     await create(client, ctx, "owner")
     await create(client, ctx, "approver", label="Team weekly")

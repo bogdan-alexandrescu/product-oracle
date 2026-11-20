@@ -124,6 +124,7 @@ async def last(client, w, mid: str, who: str = "decider") -> dict:
 
 
 async def test_the_reader_reads_only_the_meetings_prd(client):
+    """A review meeting's chat reads only that meeting's own PRD, not another's."""
     w = await world()
     ids = await two_prds(w)
     mid = await meeting(client, w)
@@ -146,6 +147,7 @@ async def test_the_reader_reads_only_the_meetings_prd(client):
 
 
 async def test_a_move_gets_a_card_for_the_meeting_prds_item(client):
+    """Moving a date in chat makes a card that applies and can be undone later."""
     w = await world()
     ids = await two_prds(w)
     mid = await meeting(client, w)
@@ -178,6 +180,7 @@ async def test_a_move_gets_a_card_for_the_meeting_prds_item(client):
 
 
 async def test_a_cut_gets_a_card_and_an_unclear_item_a_question(client):
+    """A clear cut or move makes a card; a name matching two items asks which one."""
     w = await world()
     ids = await two_prds(w)
     mid = await meeting(client, w)
@@ -199,6 +202,7 @@ async def test_a_cut_gets_a_card_and_an_unclear_item_a_question(client):
 
 
 async def test_an_answer_names_its_sources_and_reads_dates_month_first(client):
+    """A chat answer names its PRD and draft roadmap, and shows dates month first."""
     w = await world()
     await two_prds(w)
     mid = await meeting(client, w)
@@ -213,6 +217,7 @@ async def test_an_answer_names_its_sources_and_reads_dates_month_first(client):
 
 
 async def test_an_oracle_line_is_dated_when_oracle_wrote_it(client):
+    """A chat reply is timestamped when Oracle wrote it, not when it was asked."""
     w = await world()
     ids = await two_prds(w)
     mid = await meeting(client, w)
@@ -231,6 +236,7 @@ async def test_an_oracle_line_is_dated_when_oracle_wrote_it(client):
 
 
 async def test_an_ended_meeting_says_who_ended_it(client):
+    """A meeting's chat shows who ended it, or that it ended itself when idle."""
     w = await world()
     await two_prds(w)
     mid = await meeting(client, w)
@@ -259,6 +265,7 @@ async def test_an_ended_meeting_says_who_ended_it(client):
 
 
 async def test_an_oracle_line_is_never_marked_edited(client):
+    """Oracle's own chat lines are never marked as edited."""
     w = await world()
     await two_prds(w)
     mid = await meeting(client, w)
@@ -276,6 +283,7 @@ async def test_an_oracle_line_is_never_marked_edited(client):
 
 
 async def test_the_reader_reads_the_prd_text(client):
+    """A meeting's chat can answer from the PRD's own text, not just its items."""
     w = await world()
     await two_prds(w)
     mid = await meeting(client, w)
@@ -287,6 +295,7 @@ async def test_the_reader_reads_the_prd_text(client):
 
 
 async def test_the_version_is_the_one_under_review(client):
+    """Chat reads the PRD version under review, even with a newer roadmap run going."""
     w = await world()
     await two_prds(w)
     async with tenant_session(w.ctx.tenant_id) as s:

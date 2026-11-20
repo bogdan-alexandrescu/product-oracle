@@ -43,6 +43,7 @@ def _dates() -> str:
 
 
 def test_dates_rule_says_month_first() -> None:
+    """The dates rule tells models to write dates month first, never in ISO form."""
     dates = _dates()
     assert "Nov 12, 2026" in dates and "Nov 12, 2026, 2:49 PM PST" in dates
     assert "time zone" in dates and "ISO" in dates and "YYYY-MM-DD" in dates
@@ -50,6 +51,7 @@ def test_dates_rule_says_month_first() -> None:
 
 @pytest.mark.parametrize("kind", READ)
 def test_read_prompts_carry_dates_once(kind: str) -> None:
+    """A prompt that reads dates carries the month-first rule once, named by version."""
     name, text = prompting.current(kind)
     # The recorded name says the rule was added, so a job's prompt stays traceable.
     assert name == f"{prompting.CURRENT[kind]}+dates.v1"
@@ -58,6 +60,7 @@ def test_read_prompts_carry_dates_once(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", WITHOUT)
 def test_dateless_prompts_do_not(kind: str) -> None:
+    """A prompt with no dates to read carries no date rule and keeps its plain name."""
     name, text = prompting.current(kind)
     assert name == prompting.CURRENT[kind]
     assert _dates() not in text

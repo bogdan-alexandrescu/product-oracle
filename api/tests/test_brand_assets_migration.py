@@ -68,11 +68,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the single existing migration head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Brand assets stay unique per company and downgrade cleans up their settings."""
     upgrade(_cfg(), PREVIOUS)
     assert "brand_assets" not in _tables()
 

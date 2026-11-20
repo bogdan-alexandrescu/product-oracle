@@ -145,6 +145,7 @@ async def test_a_goal_that_is_not_confirmed_is_422_and_creates_nothing(client):
 
 
 async def test_template_and_theme_must_be_a_live_prd_template_and_theme(client):
+    """Only a live PRD template and theme can start an intake, not a roadmap one."""
     ctx = await company()
     for body in (
         {"template": "no-such-template"},

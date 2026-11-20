@@ -47,6 +47,7 @@ async def _lead(client, tenant_id, auth):
 
 
 async def test_the_review_says_the_lead_stages_and_decides_not_the_approver(client, owner, runtime):
+    """The review marks only the lead able to stage and decide, not the approver."""
     # protects=AC4/AC24 what the screen reads; fails_when=a commenter lead's review says it
     # cannot stage or decide, or an approver who is not the lead is told they can;
     # no_claim=the decide route itself (test_eng_review_stop).
@@ -63,6 +64,7 @@ async def test_the_review_says_the_lead_stages_and_decides_not_the_approver(clie
 
 
 async def test_with_no_lead_the_approver_stages_and_decides(client, owner, runtime):
+    """With no lead named, the approver can stage and decide the engineering review."""
     # protects=AC4 fallback on the screen; fails_when=no lead named and the approver's
     # review says they cannot stage; no_claim=the audit (test_eng_review_stop).
     tenant_id, auth = owner
@@ -75,6 +77,7 @@ async def test_with_no_lead_the_approver_stages_and_decides(client, owner, runti
 
 
 async def test_the_lead_stages_a_suggestion_sets_the_note_and_undoes(client, owner, runtime):
+    """A commenter lead can stage a suggested edit, write its note, and undo it."""
     # protects=AC6 "a commenter's choices are suggestions a lead or owner stages" and the
     # Send back note, for a lead below the approver role; fails_when=a commenter lead gets
     # 403 staging, writing the note or undoing someone else's suggestion, or an approver
@@ -110,6 +113,7 @@ async def test_the_lead_stages_a_suggestion_sets_the_note_and_undoes(client, own
 
 
 async def test_the_checkpoint_says_whether_it_waits_for_a_lead(client, owner, runtime):
+    """The checkpoint shows waiting for a lead only once an engineering lead is named."""
     # protects=the screen's "Waits for" names only who can decide (review fix 2);
     # fails_when=a check with no lead named says it waits for a lead, or one with a lead
     # named does not; no_claim=who may decide (test_eng_review_stop).
@@ -134,6 +138,7 @@ SUGGESTS = {"viewer": False, "commenter": True, "approver": True, "owner": True}
 @pytest.mark.parametrize("lead_named", [False, True])
 @pytest.mark.parametrize("role", list(SUGGESTS))
 async def test_the_review_says_who_may_suggest_by_role(client, owner, runtime, role, lead_named):
+    """Only a commenter, approver or owner may suggest, never a viewer."""
     # protects=the engineering review's own can_suggest for each role, with and without an
     # engineering lead named; fails_when=a viewer is told they may suggest, or a commenter,
     # approver or owner is not; no_claim=who stages (the tests above) and the screen (web).

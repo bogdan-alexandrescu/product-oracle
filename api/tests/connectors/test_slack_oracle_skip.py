@@ -45,6 +45,7 @@ def world_with_a_mirror() -> SlackWorld:
 
 
 async def test_oracles_own_posts_are_never_ingested():
+    """A Slack source never ingests Oracle's own bot posts as if a person wrote them."""
     world = world_with_a_mirror()
     conn = SlackConnector(httpx.AsyncClient(transport=httpx.MockTransport(world)))
     config = {"channels": ["C0PRODUCT"], ORACLE_SLACK_USERS: [BOT]}

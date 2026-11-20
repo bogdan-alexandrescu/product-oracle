@@ -28,6 +28,7 @@ async def _setup(client):
 
 
 async def test_approved_sections_lock_and_a_changed_one_is_flagged_not_refused(client):
+    """A locked section changed in the next version is flagged, never blocked outright."""
     tenant_id, auth, approver, v1 = await _setup(client)
     for key, value in (
         ("problem", "approved"),  # unchanged in v2
@@ -69,6 +70,7 @@ async def test_approved_sections_lock_and_a_changed_one_is_flagged_not_refused(c
 
 
 async def test_a_removed_locked_section_is_reported(client):
+    """Removing a locked section entirely still raises the same locked-change warning."""
     _, auth, approver, _ = await _setup(client)
     assert (await verdict(client, approver, "req-checklist", "approved")).status_code == 200
     removed = V1.replace(
@@ -85,6 +87,7 @@ async def test_a_removed_locked_section_is_reported(client):
 
 
 async def test_verdicts_need_an_approver_and_comments_a_commenter(client):
+    """A section verdict needs an approver's role; a comment needs a commenter's."""
     tenant_id, _, _, _ = await _setup(client)
     viewer = await user_cookie(tenant_id, "viewer")
     commenter = await user_cookie(tenant_id, "commenter")
@@ -102,6 +105,7 @@ async def test_verdicts_need_an_approver_and_comments_a_commenter(client):
 
 
 async def test_approving_the_version_and_reimporting_reopens_review(client):
+    """Reimporting after approval reopens review without changing the approved version."""
     tenant_id, auth, approver, v1 = await _setup(client)
     resp = await client.post(f"{VERSION1}/approve", headers=approver)
     assert resp.status_code == 200, resp.text

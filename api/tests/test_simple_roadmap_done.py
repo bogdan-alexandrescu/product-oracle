@@ -47,6 +47,7 @@ def _node(id_: str, start: date, end: date, **kw) -> constraints.Node:
 
 
 def test_done_item_is_not_checked():
+    """A done item skips every check: its order, its milestone, and any blocker."""
     alpha = _node("alpha", date(2026, 11, 1), date(2026, 12, 11), status="done")
     beta = _node("beta", date(2026, 11, 13), date(2026, 12, 20), depends_on=["alpha"])
     flags = constraints.check([alpha, beta])
@@ -87,6 +88,7 @@ async def _walk_links(client, ctx) -> list[dict]:
 
 
 async def test_shipped_dependency_clears_the_link(client):
+    """Shipping a dependency clears the broken-order flag on what depends on it."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["shift_dependents"])
     ids = {"a": w.ids["shift_dependents-a"], "b": w.ids["shift_dependents-b"]}
@@ -101,6 +103,7 @@ async def test_shipped_dependency_clears_the_link(client):
 
 
 async def test_shipped_dependent_clears_the_cut_flag(client):
+    """Shipping a dependent clears the cut-with-dependents flag on what it depended on."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["cut"])
     ids = {"a": w.ids["cut-a"], "b": w.ids["cut-b"]}

@@ -49,6 +49,7 @@ def _refresher(secrets, endpoint=None):
 
 
 async def test_the_rotated_pair_is_persisted_before_the_access_token():
+    """A rotated credential pair is saved before the plain access token."""
     r, s = _refresher({"a-refresh": _pair(timedelta(hours=1)), "a": "acc"})
     out = await r.refresh_secret("a")
     assert (out.refreshed, out.reason) == (True, "refreshed")
@@ -59,6 +60,7 @@ async def test_the_rotated_pair_is_persisted_before_the_access_token():
 
 
 async def test_an_account_far_from_expiry_costs_no_endpoint_call_and_no_write():
+    """A credential far from expiring triggers no network call and no write."""
     endpoint = FakeEndpoint()
     r, s = _refresher({"a-refresh": _pair(timedelta(hours=7)), "a": "acc"}, endpoint)
     out = await r.refresh_secret("a")
@@ -67,6 +69,7 @@ async def test_an_account_far_from_expiry_costs_no_endpoint_call_and_no_write():
 
 
 async def test_still_valid_is_not_already_published():
+    """A still-valid credential never yet published to storage is written once."""
     r, s = _refresher({"a-refresh": _pair(timedelta(hours=7))})
     out = await r.refresh_secret("a")
     assert (out.refreshed, out.reason) == (True, "published")
@@ -74,6 +77,7 @@ async def test_still_valid_is_not_already_published():
 
 
 async def test_a_held_account_inside_the_window_but_outside_the_margin_is_not_refreshed():
+    """An account holding a job is not refreshed until it nears expiry."""
     endpoint = FakeEndpoint()
     r, s = _refresher({"a-refresh": _pair(timedelta(hours=1)), "a": "acc"}, endpoint)
     out = await r.refresh_secret("a", held=True)
@@ -82,6 +86,7 @@ async def test_a_held_account_inside_the_window_but_outside_the_margin_is_not_re
 
 
 async def test_a_held_account_near_expiry_is_refreshed():
+    """A held account is refreshed anyway once it nears its own expiry margin."""
     near = DEFAULT_HELD_REFRESH_MARGIN - timedelta(minutes=1)
     r, s = _refresher({"a-refresh": _pair(near), "a": "acc"})
     assert (await r.refresh_secret("a", held=True)).reason == "refreshed"
@@ -89,6 +94,7 @@ async def test_a_held_account_near_expiry_is_refreshed():
 
 
 async def test_a_dead_refresh_token_is_reauth_and_nothing_is_written():
+    """A refresh token the provider has revoked needs a fresh sign-in."""
     endpoint = FakeEndpoint()
     endpoint.refuse = REAUTH
     r, s = _refresher({"a-refresh": _pair(timedelta(hours=1)), "a": "acc"}, endpoint)
@@ -97,6 +103,7 @@ async def test_a_dead_refresh_token_is_reauth_and_nothing_is_written():
 
 
 async def test_missing_unreadable_and_unavailable_are_different_answers():
+    """A missing credential, an unreadable one and a failed store each differ."""
     r, s = _refresher({"b-refresh": "not json", "c-refresh": _pair(timedelta(hours=1))})
     s.fail_reads.add("c-refresh")
     assert (await r.refresh_secret("a")).reason == "no_refresh_credential"
@@ -105,6 +112,7 @@ async def test_missing_unreadable_and_unavailable_are_different_answers():
 
 
 async def test_one_bad_account_does_not_stop_the_rest_and_the_fence_does():
+    """One bad account does not stop the sweep, but a stop signal does."""
     r, s = _refresher({"a-refresh": "not json", "b-refresh": _pair(timedelta(hours=1)), "b": "acc"})
     out = await r.sweep_accounts(["a", "b"])
     assert [o.reason for o in out] == ["unreadable", "refreshed"]
@@ -119,6 +127,7 @@ async def test_one_bad_account_does_not_stop_the_rest_and_the_fence_does():
 
 
 async def test_no_token_material_reaches_the_outcome():
+    """A refresh outcome never reports any of the account's token values."""
     r, _ = _refresher({"a-refresh": _pair(timedelta(hours=1), access="secret-acc"), "a": "x"})
     text = json.dumps((await r.refresh_secret("a")).as_dict())
     assert "secret-acc" not in text and "acc-new" not in text and "ref-new" not in text
@@ -152,6 +161,7 @@ def no_usage():
 async def test_every_account_is_refreshed_including_idle_and_paused_ones(
     tenant_id, endpoint, no_usage
 ):
+    """A sweep refreshes idle and paused accounts, skipping one needing sign-in."""
     idle = await add_account(tenant_id, "idle", expires_in=timedelta(hours=1))
     paused = await add_account(
         tenant_id, "paused", expires_in=timedelta(hours=1), state=AccountState.PAUSED
@@ -171,6 +181,7 @@ async def test_every_account_is_refreshed_including_idle_and_paused_ones(
 
 
 async def test_the_sweep_defers_only_accounts_with_a_live_hold(tenant_id, endpoint, no_usage):
+    """A sweep defers refreshing an account only while it holds a live job."""
     held = await add_account(tenant_id, "held", expires_in=timedelta(hours=1))
     stale_hold = await add_account(tenant_id, "stale", expires_in=timedelta(hours=1))
     await store.acquire_hold(tenant_id, held.account_id, now=now())
@@ -183,6 +194,7 @@ async def test_the_sweep_defers_only_accounts_with_a_live_hold(tenant_id, endpoi
 async def test_a_dead_credential_is_confirmed_then_marked_and_not_retried(
     tenant_id, endpoint, no_usage
 ):
+    """A dead credential is checked twice before being marked, then left alone."""
     a = await add_account(tenant_id, "work", expires_in=timedelta(hours=1))
     endpoint.refuse = REAUTH
     result = await sweep.sweep(tenant_id)
@@ -200,6 +212,7 @@ async def test_a_dead_credential_is_confirmed_then_marked_and_not_retried(
 async def test_a_refresh_that_works_on_the_second_attempt_leaves_the_state_alone(
     tenant_id, endpoint, no_usage
 ):
+    """A refresh that fails once but succeeds on retry leaves the state alone."""
     a = await add_account(tenant_id, "work", expires_in=timedelta(hours=1))
     endpoint.refuse_once = REAUTH
     result = await sweep.sweep(tenant_id)
@@ -211,6 +224,7 @@ async def test_a_refresh_that_works_on_the_second_attempt_leaves_the_state_alone
 
 
 async def test_another_sweep_holding_the_lease_means_no_exchange(tenant_id, endpoint, no_usage):
+    """A sweep whose lease another worker holds makes no refresh calls."""
     await add_account(tenant_id, "work", expires_in=timedelta(hours=1))
     taken = await sweep.acquire_lease(tenant_id, "someone-else", now())
     assert taken.acquired
@@ -224,6 +238,7 @@ async def test_another_sweep_holding_the_lease_means_no_exchange(tenant_id, endp
 
 
 async def test_the_lease_records_that_the_sweep_is_alive(client, tenant_id, endpoint, no_usage):
+    """The accounts page reports when the refresh sweep last ran and its outcome."""
     from tests.connection_helpers import make_person
 
     owner = await make_person(tenant_id, "owner@example.com", "owner")
@@ -236,6 +251,7 @@ async def test_the_lease_records_that_the_sweep_is_alive(client, tenant_id, endp
 
 
 async def test_usage_readings_land_on_the_account_within_the_budget(tenant_id, endpoint):
+    """A usage poll during the sweep updates only as many accounts as its budget."""
     from oracle.claude_accounts.accounts import WindowReading
 
     accounts = [await add_account(tenant_id, f"acct-{i}") for i in range(5)]
@@ -256,6 +272,7 @@ async def test_usage_readings_land_on_the_account_within_the_budget(tenant_id, e
 async def test_the_refresh_button_goes_through_the_same_writer_and_recovers(
     client, tenant_id, endpoint
 ):
+    """A manual refresh uses the same writer as the sweep, so it can mark dead too."""
     from tests.connection_helpers import make_person
 
     owner = await make_person(tenant_id, "owner@example.com", "owner")
@@ -281,6 +298,7 @@ async def test_the_refresh_button_goes_through_the_same_writer_and_recovers(
 
 
 async def test_an_unreadable_access_token_says_why_nothing_was_written(caplog, monkeypatch):
+    """An unreadable access token logs its cause instead of reporting unknown."""
     # #1574: a failed read of the access column was UNKNOWN with no trace of the cause.
     r, s = _refresher({"a-refresh": _pair(timedelta(hours=12)), "a": "acc"})
     s.fail_reads.add("a")
@@ -294,6 +312,7 @@ async def test_an_unreadable_access_token_says_why_nothing_was_written(caplog, m
 
 
 async def test_a_store_that_cannot_be_read_carries_its_reason():
+    """A store that cannot be read reports its own reason, hidden from the dict."""
     r, s = _refresher({"c-refresh": _pair(timedelta(hours=1))})
     s.fail_reads.add("c-refresh")
     out = await r.refresh_secret("c")

@@ -110,6 +110,7 @@ async def apply(client, w, who: str, card_id: str):
 
 
 def test_every_action_is_a_registered_op():
+    """Every chat action is registered as a matching op with the same build and args."""
     for a in chat_actions.ACTIONS:
         op = chat.OPS[a["op"]]
         assert op.build is a["build"] and op.describe == a["describe"]
@@ -122,6 +123,7 @@ def test_every_action_is_a_registered_op():
 
 
 async def test_reader_two_changes_owner_and_dates(client):
+    """One message can be read as two actions at once and both become separate cards."""
     w = await world()
     mid = (await start(client, w))["id"]
     cut_a = str(w.ids["cut-a"])
@@ -144,6 +146,7 @@ async def test_reader_two_changes_owner_and_dates(client):
 
 
 async def test_reader_decision_note_question_and_agenda(client):
+    """Decision, note, question and agenda lines are each read as one single action."""
     w = await world()
     mid = (await start(client, w))["id"]
     cut_a = str(w.ids["cut-a"])
@@ -179,6 +182,7 @@ async def test_reader_decision_note_question_and_agenda(client):
 
 
 async def test_reader_unknown_person_asks_with_choices(client):
+    """An unmatched person name offers a choice list ending in a 'Neither' option."""
     w = await world()
     mid = (await start(client, w))["id"]
     cut_a = str(w.ids["cut-a"])
@@ -196,6 +200,7 @@ async def test_reader_unknown_person_asks_with_choices(client):
 
 
 async def test_reader_new_ops_per_place_and_role(client):
+    """The reader applies the same place and role rules as direct chat actions."""
     w = await world()
     m = await reads(client, w, "approver", "jot down that legal reviews PII",
                     actions(act("minutes_note", text="Legal reviews PII")))  # fmt: skip

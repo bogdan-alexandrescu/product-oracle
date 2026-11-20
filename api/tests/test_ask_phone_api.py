@@ -13,6 +13,7 @@ from tests.test_roadmap import owner, runtime  # noqa: F401 - fixtures
 # protects=QA row 1: Ask on /simple/goals and /simple/inbox names the page; fails_when=the raw
 # path reads as its name; no_claim=the web's own map (its Playwright spec covers it).
 def test_simple_goal_map_and_inbox_have_names():
+    """Simple's goal map and inbox pages have a real name, not a raw path."""
     from oracle.discussions.context import page_name
     from oracle.simple.chat import page_name as chat_page_name
 
@@ -25,6 +26,7 @@ def test_simple_goal_map_and_inbox_have_names():
 # fails_when=the subject line ends in the item's key (mobile-push); no_claim=a code (this
 # item has no Ground Truth feature).
 async def test_a_checkpoint_items_subject_names_the_item(review):  # noqa: F811
+    """A discussion on a checkpoint's items names the item, not its raw key."""
     d_id = await item_discussion(review)
     resp = await review.client.get(f"/v1/discussions/{d_id}", headers=review.h("commenter"))
     assert resp.status_code == 200, resp.text

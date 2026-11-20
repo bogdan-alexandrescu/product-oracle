@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_no_wheel_is_committed():
+    """No compiled wheel file is ever committed into the repository."""
     if shutil.which("git") is None or not (ROOT / ".git").exists():
         pytest.skip("not a git checkout")
     tracked = subprocess.run(

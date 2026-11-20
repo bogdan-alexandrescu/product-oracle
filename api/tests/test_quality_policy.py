@@ -16,6 +16,7 @@ from tests.quality_corpus import load_case, seed_case
 
 
 def test_the_ten_criteria_are_advisory_and_only_two_checks_are_hard():
+    """Only security_policy and third_party_support can block a PRD; the rest never do."""
     import oracle.main  # noqa: F401  (the app registers the checks at import)
 
     registered = {r.key: r.hard for r in readiness.checks()}
@@ -54,6 +55,7 @@ async def test_every_advisory_criterion_critical_never_blocks(client):
 
 
 async def test_an_advisory_criterion_forced_critical_still_does_not_block(db):
+    """Every advisory criterion failing critical still leaves the report unblocked."""
     with readiness.isolated_checks():
         criteria.register()
         for key in criteria.KEYS:
@@ -75,6 +77,7 @@ async def test_an_advisory_criterion_forced_critical_still_does_not_block(db):
 
 
 async def test_a_failed_hard_check_blocks(client):
+    """A failed hard check blocks the document and is named as the blocking reason."""
     ctx = await make_ctx()
     seeded = await seed_case(client, ctx, load_case("failed-security-requirement"))
     criteria.register()

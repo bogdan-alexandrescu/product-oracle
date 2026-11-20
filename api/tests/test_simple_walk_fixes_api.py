@@ -75,6 +75,7 @@ async def _set_last_job(ctx, **kw) -> None:
 
 
 async def test_flow_failed_then_retry_then_drawn(client):
+    """A failed visual can be retried, and each retry's result is tracked on its own."""
     ctx = await prd_world(client)
     _, item = await roadmap_world(ctx)
     path = f"{VISUALS}/feature/{item.id}"
@@ -118,6 +119,7 @@ async def _thread(client, ctx, who: str, page: str | None) -> list[str]:
 
 
 async def test_ask_thread_per_page_per_role(client):
+    """Each page keeps its own Ask thread, readable by every role, never mixed up."""
     ctx = await chat_people()
     await ChatWorld(ctx).build()
     for who in ("viewer", "commenter", "approver", "owner"):
@@ -156,6 +158,7 @@ async def test_ask_thread_per_page_per_role(client):
 
 
 def test_prd_code_and_short_codes():
+    """A feature's short code falls back to its initials once its PRD code is taken."""
     assert prd_code("f-06") == "F-06" and prd_code("F-30") == "F-30"
     assert prd_code("problem") is None and prd_code(None) is None
     keys = ["delivery-integrity", "F-12", "loop-guards", "data-ingest"]
@@ -166,6 +169,7 @@ def test_prd_code_and_short_codes():
 
 
 async def test_prd_codes_on_priorities(client):
+    """Priorities shows each feature's PRD code, or its initials when it has none."""
     ctx = await make_people()
     w = await PriorityWorld(ctx).build()
     async with tenant_session(ctx.tenant_id) as s:
@@ -182,6 +186,7 @@ async def test_prd_codes_on_priorities(client):
 
 
 async def test_item_card_names_the_prd_section(client):
+    """A roadmap item names the PRD section it came from by its heading, not raw key."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -236,6 +241,7 @@ async def test_roadmap_codes_never_read_shown_names(client, monkeypatch):
 
 
 async def test_next_review_lists_the_rituals_real_attendees(client):
+    """A ritual's next review lists the attendees it actually started with, once begun."""
     w = await meeting_world()
     ritual_id, due = await ritual(w, owner="owner")
     async with tenant_session(w.ctx.tenant_id) as s:

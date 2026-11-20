@@ -108,6 +108,7 @@ async def test_the_eng_412_probe_is_refused(client, owner, runtime):  # noqa: F8
 
 
 async def test_withdrawal_removes_the_date_everywhere(client, owner, runtime):  # noqa: F811
+    """Withdrawing a schedule basis removes its date from tracker and item."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

@@ -55,6 +55,7 @@ async def _get(client, ctx, ent) -> dict:
 # protects=a subgoal is a goal with a parent and its own typed target; fails_when=parent_id
 # is dropped, or the subgoal loses B5's checks; no_claim=roll-up (below).
 async def test_subgoal_is_a_goal_with_a_parent(client, ctx):
+    """A subgoal is a goal with a parent goal, typed fields still required."""
     parent = await _goal(client, ctx, "activation")
     sub = await _goal(client, ctx, "activation-setup", parent, **_typed())
     assert sub["parent_id"] == parent["id"]
@@ -76,6 +77,7 @@ async def test_subgoal_is_a_goal_with_a_parent(client, ctx):
 # protects=only a goal has a parent, and the parent is a goal; fails_when=a feature gets a
 # parent or a goal hangs under a feature; no_claim=cycles (next test).
 async def test_parent_is_a_goal_and_only_goals_have_one(client, ctx):
+    """Only a goal can be a parent, and only a goal can have one."""
     parent = await _goal(client, ctx, "activation")
     feature = await entity(client, ctx, type="feature", key="guided-setup")
     resp = await client.post(
@@ -95,6 +97,7 @@ async def test_parent_is_a_goal_and_only_goals_have_one(client, ctx):
 # protects=the API refuses cycles: itself, its own subgoal, and a second level; fails_when=
 # a goal ends up its own ancestor or a tree two levels deep; no_claim=the UI's choices.
 async def test_cycles_and_second_levels_are_refused(client, ctx):
+    """A goal cannot be its own parent, form a cycle, or nest two levels deep."""
     a = await _goal(client, ctx, "activation")
     b = await _goal(client, ctx, "activation-setup", a)
     c = await _goal(client, ctx, "retention")
@@ -111,6 +114,7 @@ async def test_cycles_and_second_levels_are_refused(client, ctx):
 # protects=move a subgoal to another parent and promote it to a goal; fails_when=the move
 # does not stick or null does not clear the parent; no_claim=archive (status, below).
 async def test_move_and_promote(client, ctx):
+    """A subgoal can move between parents or become one, but only for editors."""
     a = await _goal(client, ctx, "activation")
     b = await _goal(client, ctx, "retention")
     sub = await _goal(client, ctx, "activation-setup", a)
@@ -132,6 +136,7 @@ async def test_move_and_promote(client, ctx):
 # under, or moved under, an archived goal; no_claim=what happens to subgoals already under
 # a goal when it is archived (they stand as goals in the web tree).
 async def test_archived_goal_is_refused_as_a_parent(client, ctx):
+    """An archived goal is refused as a parent, for a new or an existing goal."""
     archived = await _goal(client, ctx, "old-activation")
     resp = await client.post(
         f"{B}/entities/{archived['id']}/reject",
@@ -157,6 +162,7 @@ async def test_archived_goal_is_refused_as_a_parent(client, ctx):
 # protects=a goal's own progress from start, current and target, either direction;
 # fails_when=the fraction is off, unclamped or ignores the direction; no_claim=roll-up.
 def test_own_progress():
+    """own_progress reads a goal's measured progress toward its own target."""
     assert own_progress(_typed(current=30, current_as_of="2026-10-01")) == pytest.approx(0.5)
     assert own_progress(_typed(current=60, current_as_of="2026-10-01")) == 1.0
     assert own_progress(_typed(current=5, current_as_of="2026-10-01")) == 0.0
@@ -173,6 +179,7 @@ def test_own_progress():
 # (1 when unset), rejected subgoals left out; fails_when=a parent with a value reads its
 # subgoals, the weights are ignored, or an archived subgoal counts; no_claim=the API shape.
 def test_rollup_math():
+    """rollup weights subgoals' progress, or falls back to the goal's own."""
     half = _typed(current=30, current_as_of="2026-10-01", weight=3)
     full = _typed(current=50, current_as_of="2026-10-01")
     out = rollup({}, [(half, "confirmed"), (full, "proposed")])
@@ -189,6 +196,7 @@ def test_rollup_math():
 # it; fails_when=progress is missing, or a subgoal's measurement does not reach the parent;
 # no_claim=the web's wording.
 async def test_parent_rolls_up_through_the_api(client, ctx):
+    """A parent goal's progress rolls up from its subgoals through the API."""
     parent = await _goal(client, ctx, "activation")
     s1 = await _goal(client, ctx, "activation-setup", parent, **_typed(weight=3))
     await _goal(client, ctx, "activation-invites", parent, **_typed())
@@ -218,6 +226,7 @@ async def test_parent_rolls_up_through_the_api(client, ctx):
 # logs a Pydantic serializer warning (progress handed over as a bare dict); no_claim=the
 # roll-up maths (above).
 async def test_progress_is_served_through_its_schema(client, ctx):
+    """A goal's progress serializes through its schema without a warning."""
     parent = await _goal(client, ctx, "activation")
     await _goal(client, ctx, "activation-setup", parent, **_typed())
     with warnings.catch_warnings(record=True) as caught:
@@ -237,6 +246,7 @@ async def test_progress_is_served_through_its_schema(client, ctx):
 # parent; fails_when=a subgoal link scores nothing, scores the subgoal's own weight as a
 # second top goal, or forgets the parent; no_claim=other methods.
 async def test_scoring_credits_the_parent_through_the_subgoal(client, ctx):
+    """Priority scoring credits a parent goal's weight through its subgoal."""
     parent = await _goal(client, ctx, "activation", **{"weight": 4})
     s1 = await _goal(client, ctx, "activation-setup", parent, weight=3)
     s2 = await _goal(client, ctx, "activation-invites", parent, weight=1)

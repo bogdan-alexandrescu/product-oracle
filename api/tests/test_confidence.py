@@ -7,6 +7,7 @@ NOW = datetime(2026, 10, 17, tzinfo=UTC)
 
 
 def test_fresh_corroborated_goal_linked_code_beats_stale_lone_chat():
+    """A fresh, corroborated, goal-linked signal scores far above a stale one."""
     strong = score(
         Factors("github", "readme", NOW - timedelta(days=1), mentions=3, goal_contribution=3),
         now=NOW,
@@ -17,6 +18,7 @@ def test_fresh_corroborated_goal_linked_code_beats_stale_lone_chat():
 
 
 def test_freshness_halves_per_half_life_down_to_the_floor():
+    """A signal's freshness halves each half-life and never drops below a floor."""
     month = score(Factors("slack", latest_at=NOW - timedelta(days=30)), now=NOW)
     assert month.breakdown["freshness"]["value"] == 0.5
     ancient = score(Factors("slack", latest_at=NOW - timedelta(days=3000)), now=NOW)
@@ -26,6 +28,7 @@ def test_freshness_halves_per_half_life_down_to_the_floor():
 
 
 def test_more_mentions_and_planning_docs_raise_the_score():
+    """More corroborating mentions, or being a planning doc, raise the score."""
     one = score(Factors("notion", latest_at=NOW), now=NOW).confidence
     three = score(Factors("notion", latest_at=NOW, mentions=3), now=NOW).confidence
     planning = score(Factors("notion", latest_at=NOW, planning_doc=True), now=NOW).confidence
@@ -33,6 +36,7 @@ def test_more_mentions_and_planning_docs_raise_the_score():
 
 
 def test_company_overrides_change_weights_and_kinds():
+    """A company's own override changes the score without altering the defaults."""
     f = Factors("slack", latest_at=NOW)
     base = score(f, now=NOW).confidence
     trusted = score(f, {"source": {"slack": 0.95}}, now=NOW).confidence
@@ -47,6 +51,7 @@ def test_company_overrides_change_weights_and_kinds():
 
 
 def test_aggregate_rank_and_prefer():
+    """Combining several scores, ranking and preferring between two handle edges."""
     assert aggregate([]) is None
     assert aggregate([0.5, 0.5]) == 0.75
     assert rank_weight(1.0) == 1.0 and rank_weight(0.0) == 0.5

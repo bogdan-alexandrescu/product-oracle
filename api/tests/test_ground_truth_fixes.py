@@ -96,6 +96,7 @@ async def _child(ctx, parent_id: str, key: str, title: str) -> str:
 
 
 async def test_give_code_gives_the_next_number(client):
+    """A feature code picks the next free number; undoing restores the old key."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     assert [f["feature"]["id"] for f in _of(await _check(client, ctx), "no_code")] == [search]
@@ -119,6 +120,7 @@ async def test_give_code_gives_the_next_number(client):
 
 
 async def test_a_slice_keeps_its_parents_number(client):
+    """A feature's slice keeps its parent's number with a letter suffix, like F-02a."""
     w = await world()
     ctx, f2 = w["ctx"], w["features"]["F-02"]
     a = await _child(ctx, f2, "audit-export", "Audit export")
@@ -134,6 +136,7 @@ async def test_a_slice_keeps_its_parents_number(client):
 
 
 async def test_give_code_refusals(client):
+    """Giving a code is refused for one that has it, a goal, or an unlinked slice."""
     w = await world()
     ctx, feats = w["ctx"], w["features"]
     r = await client.post(code_url(feats["F-01"]), headers=ctx.as_("owner"))
@@ -154,6 +157,7 @@ async def test_give_code_refusals(client):
 
 
 async def test_a_commenter_proposes_a_code(client):
+    """A commenter can only propose a code; asking twice reuses the same proposal."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     r = await client.post(code_url(search), headers=ctx.as_("viewer"))
@@ -185,6 +189,7 @@ async def _plan_codes(client, ctx, prd: str) -> list[str]:
 
 
 async def test_link_a_prd_feature(client):
+    """Linking a PRD feature to a Ground Truth feature clears its flag everywhere."""
     w = await world()
     ctx, prd, feats = w["ctx"], w["prd"][0], w["features"]
     assert await _plan_codes(client, ctx, prd) == ["F-01", "F-09", "F-15a", "F-15b"]
@@ -248,6 +253,7 @@ async def test_link_a_prd_feature(client):
 
 
 async def test_link_a_plan_code_read_one_way(client):
+    """A PRD feature code matches its plan entry regardless of letter case."""
     plan = {**PLAN, "features": [*PLAN["features"], {"code": "f-21", "name": "Seat limits"}]}
     w = await world(plan)
     ctx, prd, feats = w["ctx"], w["prd"][0], w["features"]
@@ -262,6 +268,7 @@ async def test_link_a_plan_code_read_one_way(client):
 
 
 async def test_link_refusals(client):
+    """Linking a code is refused for the wrong role, an unknown code, or one taken."""
     w = await world()
     ctx, prd, feats = w["ctx"], w["prd"][0], w["features"]
 
@@ -282,6 +289,7 @@ async def test_link_refusals(client):
 
 
 async def test_a_commenter_proposes_a_link(client):
+    """A commenter's proposed feature link waits on an approver to clear the flag."""
     w = await world()
     ctx, prd, feats = w["ctx"], w["prd"][0], w["features"]
     body = {"prd_document_id": prd, "code": "F-09", "feature_id": feats["F-02"]}
@@ -301,6 +309,7 @@ async def test_a_commenter_proposes_a_link(client):
 
 
 async def test_scoped_to_the_company(client):
+    """A feature's code and links are scoped to one company; others get a 404."""
     w = await world()
     ctx, prd, feats = w["ctx"], w["prd"][0], w["features"]
     other = await make_ctx("Other Example Co")
@@ -314,6 +323,7 @@ async def test_scoped_to_the_company(client):
 
 
 async def test_add_a_slices_feature_by_its_code(client):
+    """A roadmap slice missing its parent's code is flagged with the code to add."""
     w = await world()
     ctx = w["ctx"]
     prd_id, pv_id, rv_id = w["seed"]
@@ -359,6 +369,7 @@ async def test_add_a_slices_feature_by_its_code(client):
 
 
 async def test_add_a_prd_feature_by_its_code(client):
+    """A feature code is its feature's alone: a taken code refuses a new one."""
     w = await world()
     ctx, prd = w["ctx"], w["prd"][0]
     check = await _check(client, ctx)
@@ -392,6 +403,7 @@ async def _create(client, ctx, key: str, title: str = "Team invites"):
 
 
 async def test_a_code_key_is_read_one_way_and_taken_once(client):
+    """A feature code reads the same way however typed, and refuses if taken."""
     w = await world()
     ctx, search = w["ctx"], w["features"]["smart-search"]
     taken = "Another feature already has the code {}."
@@ -435,6 +447,7 @@ async def test_a_code_key_is_read_one_way_and_taken_once(client):
 
 
 async def test_a_feature_gets_its_code_when_it_joins(client):
+    """A feature gets its code only once confirmed, never while proposed."""
     w = await world()
     ctx = w["ctx"]
     # F-01..F-03 in the Ground Truth, F-09 and F-15 in the PRD, the next is F-16.

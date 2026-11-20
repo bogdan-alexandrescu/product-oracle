@@ -14,6 +14,7 @@ RAW = re.compile(r"\[[cls]:")
 
 
 def test_strip_raw_tokens_drops_every_kind_with_its_space():
+    """Stripping raw tokens drops every kind of marker but leaves normal links alone."""
     text = "Teams plan by capacity [c:capacity]. Reads [l:2] and sees [s:convdef], [c:a, b]."
     assert strip_raw_tokens(text) == "Teams plan by capacity. Reads and sees,."
     assert strip_raw_tokens("Nested [c:[c:x]a] and open [c:gametric") == "Nested and open gametric"
@@ -25,6 +26,7 @@ def test_strip_raw_tokens_drops_every_kind_with_its_space():
 
 
 def test_markdown_footnotes_number_known_citations_and_drop_unknown_ones():
+    """Markdown export turns known citations into footnotes, dropping unknown ones."""
     labels = {"capacity": "Capacity plan (upload notes.pdf)", "c2": "Funnel review"}
     out = markdown_footnotes(
         "Capacity is low [c:capacity]. Funnel [c:c2, f-aice]; again [c:capacity] [l:3].\n",
@@ -39,6 +41,7 @@ def test_markdown_footnotes_number_known_citations_and_drop_unknown_ones():
 
 
 def test_markdown_footnotes_keep_clear_of_the_documents_own_footnotes():
+    """Added citation footnotes never reuse a number the document's own footnotes use."""
     labels = {"capacity": "Capacity plan"}
     out = markdown_footnotes(
         "Own note[^1] and [^2]; capacity is low [c:capacity].\n\n[^1]: First\n[^2]: Second\n",
@@ -51,6 +54,7 @@ def test_markdown_footnotes_keep_clear_of_the_documents_own_footnotes():
 
 
 def test_markdown_footnotes_leave_fenced_code_as_written():
+    """Citation markers inside fenced code blocks are left exactly as written."""
     labels = {"capacity": "Capacity plan"}
     md = (
         "Low [c:capacity].\n\n```\nraw [c:capacity] [l:2]\n```\n\n"
@@ -87,6 +91,7 @@ class _C:
 
 
 def test_markdown_export_carries_footnotes_not_raw_tokens():
+    """A markdown export never shows a raw citation token, only its resolved footnote."""
     md = (
         "---\ndocument: planning\n---\n\n# Planning PRD {#title}\n\n"
         "Teams plan by capacity [c:capacity]; the AI estimate [c:f-aice] is off.\n\n"

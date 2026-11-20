@@ -30,6 +30,7 @@ async def _changes(ctx, blocker_id: str) -> list[tuple[str, str]]:
 async def test_a_status_change_is_one_blocker_status_event_and_a_statement_is_an_entity_change(
     client,
 ):
+    """A blocker's status change and its statement edit log distinct change events."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]

@@ -57,6 +57,7 @@ async def _run(client, ctx, expect: int = 201, flow: str = "baseline_to_prd", **
 
 
 async def test_an_intake_run_carries_the_briefs_goals(client):
+    """An intake run made from a brief carries the brief's picked goals, in order."""
     ctx = await company()
     goals = await _goals(client, ctx)
     out = await create_intake(
@@ -77,6 +78,7 @@ async def test_an_intake_run_carries_the_briefs_goals(client):
 
 
 async def test_the_sheets_pick_overrides_the_brief_on_the_same_draft_run(client):
+    """Picking goals on the run's sheet overrides the brief's on the same draft."""
     ctx = await company()
     goals = await _goals(client, ctx)
     out = await create_intake(client, ctx, who="approver", goal_ids=[goals[0]["id"]])
@@ -100,6 +102,7 @@ async def test_the_sheets_pick_overrides_the_brief_on_the_same_draft_run(client)
 
 
 async def test_a_plain_run_names_goals_by_key_and_patch_keeps_them(client):
+    """A run's goals, set by key, survive a patch that changes another knob."""
     ctx = await company()
     await _goals(client, ctx)
     run = await _run(client, ctx, goals=["new-markets", "repeat-purchases", "new-markets"])
@@ -126,6 +129,7 @@ async def test_a_plain_run_names_goals_by_key_and_patch_keeps_them(client):
 
 
 async def test_an_unconfirmed_goal_or_another_flow_is_422(client):
+    """An unconfirmed, unknown or wrongly-flowed goal on a run is rejected."""
     ctx = await company()
     await _goals(client, ctx)
     resp = await _run(client, ctx, expect=422, goals=["maybe-later"])
@@ -135,6 +139,7 @@ async def test_an_unconfirmed_goal_or_another_flow_is_422(client):
 
 
 async def test_the_started_runs_baseline_prompt_names_the_target_goals(client, runtime):
+    """A started run's baseline prompt names its target goals to favour."""
     ctx = await company()
     await _goals(client, ctx)
     run = await _run(client, ctx, goals=["support-load"], reuse_baseline=False)
@@ -164,6 +169,7 @@ GOALS = [("support-load", "Lower support load"), ("new-markets", "Open two new m
 
 
 def test_the_feature_set_prompt_favours_the_target_goals():
+    """The feature-set prompt asks each kept feature to cite its target goals."""
     prompt = _prompt("feature_set", GOALS)
     assert "- support-load: Lower support load" in prompt
     assert "- new-markets: Open two new markets" in prompt
@@ -172,12 +178,14 @@ def test_the_feature_set_prompt_favours_the_target_goals():
 
 
 def test_the_prd_prompt_covers_the_target_goals_in_its_goal_trace():
+    """The PRD prompt asks its goal trace section to cover every target goal."""
     prompt = _prompt("prd_draft", GOALS)
     assert "- support-load: Lower support load" in prompt
     assert "The Goal trace section ({#goal-trace}) covers every target goal" in prompt
 
 
 def test_a_run_without_target_goals_says_nothing_of_them():
+    """A run naming no target goals leaves every segment's prompt silent of them."""
     for segment in ("baseline", "feature_set", "priority", "prd_draft"):
         assert "Target goals" not in _prompt(segment, [])
 

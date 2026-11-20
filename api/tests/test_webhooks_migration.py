@@ -74,12 +74,14 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The webhooks migration and its resumed-at follow-up chain onto the right head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision(RESUMED).down_revision == "0066_webhook_delivery_sent"
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading creates the webhook tables and event kinds; downgrade removes them."""
     upgrade(_cfg(), REVISION)
     assert _tables() == TABLES
     assert "webhook_paused" in _kinds() and "webhook_url_changed" in _kinds()
@@ -99,6 +101,7 @@ def _columns() -> set[str]:
 
 
 def test_resumed_at_comes_and_goes(scratch_db):
+    """The webhooks resumed_at column comes and goes with its migration, table intact."""
     # protects=webhooks.resumed_at comes and goes with 0067_webhook_resumed_at and the
     # webhooks table stays; fails_when=the upgrade misses the column or the downgrade
     # leaves it.

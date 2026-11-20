@@ -125,6 +125,7 @@ async def add_milestone(client, ctx: Ctx, ids: dict) -> dict:
 
 
 async def test_removed_lists_what_was_cut_archived_and_removed(client):
+    """The removed list shows every cut feature, archived goal and deleted milestone."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     assert await removed(client, ctx) == []
@@ -164,6 +165,7 @@ async def test_removed_lists_what_was_cut_archived_and_removed(client):
 
 
 async def test_a_feature_cut_from_its_panel_status_names_who_and_when(client):
+    """Cutting a feature from its own panel records who cut it and when."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     out = await change(client, ctx, "owner", "set_status", {"item_id": ids["item_id"]},
@@ -175,6 +177,7 @@ async def test_a_feature_cut_from_its_panel_status_names_who_and_when(client):
 
 
 async def test_unarchive_goal_and_restore_milestone_through_the_change_engine(client):
+    """Un-archiving a goal or restoring a milestone uses the same engine as any edit."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     r = await client.post(f"{GOALS}/{ids['goal_id']}/archive", json={"to_goal_id": None},
@@ -243,6 +246,7 @@ async def read_tracks(client, ctx: Ctx, role: str = "owner") -> dict:
 
 
 async def test_tracks_add_edit_delete_and_restore_from_trash(client):
+    """Tracks can be added, edited, moved to Trash and restored, each guarded by role."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     out = await read_tracks(client, ctx)
@@ -332,6 +336,7 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
 
 
 async def test_a_tracks_feature_count_is_the_whole_roadmaps(client):
+    """A track's feature count covers the whole roadmap, cut items included."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -362,6 +367,7 @@ async def test_a_tracks_feature_count_is_the_whole_roadmaps(client):
 
 
 async def test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something(client):
+    """Undoing an add deletes an empty track, but sends a used one to Trash instead."""
     ctx = await make_ctx()
     ids = await seed(ctx)
 
@@ -415,6 +421,7 @@ async def test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something(cl
 
 
 async def test_another_company_neither_reads_nor_changes_these(client):
+    """A roadmap's removed list, tracks and their changes stay scoped to one company."""
     # protects=the removed list, the tracks and their ops are the company's own (tenant
     # scope); fails_when=another company reads them, changes one by its id or adds a
     # track on this company's PRD (refused in words that do not say whether it exists).

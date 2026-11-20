@@ -81,6 +81,7 @@ async def set_status(ctx, change_id: uuid.UUID, status: str) -> None:
 # fails_when=no row, a second row, total unchanged, or still counted after the read;
 # no_claim=the screens (web/e2e/inbox-discussions.spec.ts).
 async def test_a_mention_invites_and_reading_marks_it_done(client):
+    """A mention invites someone and reading it marks the row done."""
     ctx, doc = await company(client)
     before = (await inbox(client, ctx, "viewer"))["total"]
     d = await start(client, ctx, subject=section(doc), title=TITLE)
@@ -109,6 +110,7 @@ async def test_a_mention_invites_and_reading_marks_it_done(client):
 # row whose excerpt is the message's first 140 characters; fails_when=no row, an invited
 # row again, or a longer excerpt; no_claim=the quoting on screen.
 async def test_a_later_mention_is_a_mentioned_row_with_a_short_excerpt(client):
+    """A later mention after a read one makes a fresh excerpted row."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), title=TITLE)
     first = await post(client, ctx, d["id"], "commenter", "Hi", mentions=[uid(ctx, "viewer")])
@@ -129,6 +131,7 @@ async def test_a_later_mention_is_a_mentioned_row_with_a_short_excerpt(client):
 # the row for all of them; fails_when=a commenter gets it, an approver does not, or it
 # stays after Stage; no_claim=G3's Suggest and Stage routes (not built: status set here).
 async def test_a_suggested_change_waits_on_every_approver_until_staged(client):
+    """Makes sure every approver sees a pending change, and it clears for all once staged."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), title=TITLE, message={"body": "Thoughts?"})
     before = {who: (await inbox(client, ctx, who))["total"] for who in ("approver", "owner")}
@@ -155,6 +158,7 @@ async def test_a_suggested_change_waits_on_every_approver_until_staged(client):
 # row for its suggested change and no invited row; fails_when=a row before, none after, or
 # an invited row; no_claim=G1's Make open warning.
 async def test_a_private_discussion_made_open_reaches_approvers_without_inviting(client):
+    """Opening a private thread reaches approvers through its change, not a stray invite."""
     ctx, doc = await company(client)
     d = await start(
         client, ctx, subject=section(doc), title=SECRET_TITLE, visibility="private",
@@ -177,6 +181,7 @@ async def test_a_private_discussion_made_open_reaches_approvers_without_inviting
 # removing the person deletes their invited and mentioned rows at once; fails_when=a row
 # is left (even done) or any response carries the title; no_claim=G1's removal rules.
 async def test_a_removed_participant_loses_the_rows_and_the_title(client):
+    """Removing a participant clears their rows and hides the title."""
     ctx, doc = await company(client)
     d = await start(
         client, ctx, subject=section(doc), title=SECRET_TITLE, visibility="private",
@@ -206,6 +211,7 @@ async def test_a_removed_participant_loses_the_rows_and_the_title(client):
 # then Done); anyone else gets 404, and a changes_proposed row cannot be dismissed;
 # fails_when=another person dismisses it or the row stays counted; no_claim=the button.
 async def test_only_the_owner_dismisses_a_row(client):
+    """Only a row's own owner may dismiss it from the inbox."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), title=TITLE)
     await post(client, ctx, d["id"], "commenter", "Hi", mentions=[uid(ctx, "viewer")])
@@ -226,6 +232,7 @@ async def test_only_the_owner_dismisses_a_row(client):
 # with its discussion's title, and with none for a reader of a private discussion they
 # are not in; fails_when=no title, or a private title leaks; no_claim=C2's answer flow.
 async def test_a_question_from_a_discussion_carries_its_title(client):
+    """A question row carries its discussion's title, unless private."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), title=TITLE)
     secret = await start(
@@ -259,6 +266,7 @@ async def test_a_question_from_a_discussion_carries_its_title(client):
 # new or open discussion row once (C1e); fails_when=needs_me moves or a done row counts;
 # no_claim=the web's own count (web/e2e/inbox-discussions.spec.ts).
 async def test_total_counts_new_and_open_rows_and_needs_me_does_not(client):
+    """Inbox total counts new and open rows; needs_me counts narrower."""
     ctx, doc = await company(client)
     base = await inbox(client, ctx, "approver")
     d = await start(client, ctx, subject=section(doc), title=TITLE, message={"body": "Hi"})
@@ -281,6 +289,7 @@ async def test_total_counts_new_and_open_rows_and_needs_me_does_not(client):
 # new open discussion reaches them; fails_when=anyone else sees the panel chat's row or
 # title; no_claim=the panel's screens (G7's specs).
 async def test_a_panel_chat_makes_rows_for_its_starter_only(client):
+    """A panel chat's changes only make rows for its own starter."""
     ctx, doc = await company(client)
     resp = await client.post(
         "/v1/discussions",
@@ -320,6 +329,7 @@ async def test_a_panel_chat_makes_rows_for_its_starter_only(client):
 # reopening it brings the row back; fails_when=the row stays counted while closed, so
 # Review changes leads to nothing to act on; no_claim=the card itself (the web spec).
 async def test_a_closed_discussion_counts_no_changes_until_reopened(client):
+    """A closed discussion stops counting changes until reopened."""
     ctx, doc = await company(client)
     d = await start(
         client, ctx, "approver", subject=section(doc), title=TITLE, message={"body": "Hi"}
@@ -364,6 +374,7 @@ def _c(status: str) -> DiscussionChange:
 # review, a deleted subject's Home or Runs), a handled change counts, or a closed
 # discussion's leftovers count; no_claim=the pages (the web specs).
 def test_waits_on_is_an_open_change_on_a_page_that_opens_its_thread():
+    """waits_on treats a change as waited on only where its page opens."""
     for path in (
         "/documents/saved-carts/v/2", "/documents/saved-carts/v/2/items", "/runs/r1",
         "/runs/r1?tab=log", "/ground-truth", "/briefs/b1", "/intakes/i1", "/plan",
@@ -398,6 +409,7 @@ def test_waits_on_is_an_open_change_on_a_page_that_opens_its_thread():
     ],
 )  # fmt: skip
 def test_every_subject_kind_counts_its_open_changes(kind):
+    """Every subject kind opens a thread and counts its open changes."""
     assert changes.opens_thread(_d(kind)), kind
     assert changes.waits_on(_d(kind), _c("proposed"), participant=True), kind
     assert changes.waits_on(_d(kind), _c("suggested"), participant=False), kind
@@ -411,6 +423,7 @@ def test_every_subject_kind_counts_its_open_changes(kind):
 # (discussion-review-changes-lands.spec.ts).
 @pytest.mark.parametrize("kind", ["priorities", "entity"])
 async def test_changes_on_priorities_and_goals_make_a_row_that_opens_the_thread(client, kind):
+    """Changes on priorities or goals make one linked inbox row."""
     ctx, _doc = await company(client)
     if kind == "entity":
         goal = await entity(client, ctx, type="goal", key="checkout", title="Faster checkout")
@@ -466,6 +479,7 @@ async def _intake_and_gaps(ctx, doc: str) -> dict[str, str]:
 # found, so the thread never opens) or Home (counted for no one); no_claim=the pages
 # (discussion-review-changes-intake.spec.ts).
 async def test_intake_and_gap_changes_open_the_intake_page(client):
+    """Intake and gap changes link their inbox row to the intake page."""
     ctx, doc = await company(client)
     ids = await _intake_and_gaps(ctx, doc)
     slug = (await client.get(f"/v1/documents/{doc}", headers=ctx.as_("owner"))).json()["slug"]
@@ -495,6 +509,7 @@ async def test_intake_and_gap_changes_open_the_intake_page(client):
 # intake's do; fails_when=a live subject's changes vanish because of where it links, or a
 # deleted one's count; no_claim=the pages.
 async def test_a_deleted_subject_is_its_missing_row_not_its_link(client):
+    """A change on a deleted subject shows a missing row, not a link."""
     ctx, doc = await company(client)
     ids = await _intake_and_gaps(ctx, doc)
     goal = await entity(client, ctx, type="goal", key="checkout", title="Faster checkout")

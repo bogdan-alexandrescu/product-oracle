@@ -66,6 +66,7 @@ async def _status(w: World) -> str:
 
 
 async def test_dropped_task_goes_to_trash_and_restores(client):
+    """Dropping a task sends it to Trash, and restoring it brings the task back."""
     ctx = await make_people()
     w = await World(ctx).build()
     assert "Spec" in await _task_titles(client, w)
@@ -84,6 +85,7 @@ async def test_dropped_task_goes_to_trash_and_restores(client):
 
 
 async def test_undoing_the_drop_takes_it_out_of_trash(client):
+    """Undoing a dropped task removes it from Trash too."""
     ctx = await make_people()
     w = await World(ctx).build()
     change = await _drop(client, w, "done")
@@ -95,6 +97,7 @@ async def test_undoing_the_drop_takes_it_out_of_trash(client):
 
 
 async def test_restoring_a_task_whose_feature_is_in_trash_says_so(client):
+    """Restoring a task whose feature is also in Trash says why it stays out for now."""
     ctx = await make_people()
     w = await World(ctx).build()
     await _drop(client, w, "doing")

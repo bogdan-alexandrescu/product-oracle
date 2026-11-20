@@ -33,6 +33,7 @@ async def _criticals(client, ctx, intake_id: str) -> list[dict]:
 
 
 async def test_the_critical_line_moves_with_each_answer(client):
+    """An owner's answer clears the gap at once; a commenter's waits for review."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]

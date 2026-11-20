@@ -122,6 +122,7 @@ EDIT = {
 
 
 async def test_owner_edits_an_open_decision_and_undoes_it(client):
+    """An owner can edit an open decision's fields, and one undo restores them all."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="approver")
     row = _row(await _page(client, ctx), d["id"])
@@ -149,6 +150,7 @@ async def test_owner_edits_an_open_decision_and_undoes_it(client):
 
 
 async def test_approver_who_is_not_the_decider_proposes_the_edit(client):
+    """An approver who is not the decider proposes an edit for the decider to accept."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="owner")
     row = _row(await _page(client, ctx, "approver"), d["id"])
@@ -171,6 +173,7 @@ async def test_approver_who_is_not_the_decider_proposes_the_edit(client):
 
 
 async def test_withdraw_is_the_not_now_with_undo(client):
+    """Withdrawing a decision marks it withdrawn, and that too can be undone."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="owner")
     r = await _change(client, ctx, "approver", "withdraw_decision", {"decision_id": d["id"]})
@@ -187,6 +190,7 @@ async def test_withdraw_is_the_not_now_with_undo(client):
 
 
 async def test_new_decision_takes_its_review_day(client):
+    """A new decision keeps the review day it was given when it was created."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="approver", review_at="2026-12-15")
     assert d["review_at"] == "2026-12-15"
@@ -215,6 +219,7 @@ async def _meeting_link(ctx, decision_id: str) -> uuid.UUID:
 
 
 async def test_delete_a_decision_to_trash_and_restore_it(client):
+    """Deleting a decision hides it everywhere and sends it to trash for restoring."""
     ctx = await make_ctx()
     d = await _decision(
         client,
@@ -289,6 +294,7 @@ async def _read_again(ctx, ids: dict) -> None:
 
 
 async def test_question_edit_add_withdraw_and_delete(client):
+    """Editing or adding a question follows the same roles as editing a decision."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     page = await _page(client, ctx, "decider")
@@ -360,6 +366,7 @@ async def test_question_edit_add_withdraw_and_delete(client):
 
 
 async def test_accepting_an_outdated_edit_is_refused(client):
+    """Accepting a proposed edit once a newer edit has landed is refused as outdated."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="owner")
     target = {"decision_id": d["id"]}
@@ -377,6 +384,7 @@ async def test_accepting_an_outdated_edit_is_refused(client):
 
 
 async def test_added_question_with_no_decider_is_not_accepted_by_its_proposer(client, monkeypatch):
+    """A question added with no decider is not accepted by its own proposer."""
     ctx = await make_ctx()
     ids = await seed(ctx)
 
@@ -399,6 +407,7 @@ async def test_added_question_with_no_decider_is_not_accepted_by_its_proposer(cl
 
 
 async def test_add_question_takes_the_prd_by_its_slug(client):
+    """A new question can be added by naming its PRD's slug, not only its id."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     page = await _page(client, ctx)
@@ -412,6 +421,7 @@ async def test_add_question_takes_the_prd_by_its_slug(client):
 
 
 async def test_one_decision_reads_as_its_row(client):
+    """One decision reads the same alone as it does inside the page's full list."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="approver")
     r = await client.get(f"/v1/simple/decisions/{d['id']}", headers=ctx.as_("approver"))
@@ -432,6 +442,7 @@ async def test_one_decision_reads_as_its_row(client):
 
 
 async def test_accepting_a_proposed_withdraw_applies_it(client):
+    """Accepting a proposed withdraw moves the decision's own status to withdrawn."""
     from oracle.simple.models import SimpleChange
 
     ctx = await make_ctx()
@@ -452,6 +463,7 @@ async def test_accepting_a_proposed_withdraw_applies_it(client):
 
 
 async def test_a_question_of_a_deleted_or_replaced_prd_is_404(client):
+    """A question is 404 once its own PRD is deleted or replaced by another document."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     q = next(x for x in (await _page(client, ctx))["questions"] if x["status"] == "proposed")
@@ -476,6 +488,7 @@ async def test_a_question_of_a_deleted_or_replaced_prd_is_404(client):
 
 
 async def test_a_waiting_suggestion_names_its_decision_as_it_is_now(client):
+    """A waiting proposal names its decision by its latest title, not an old one."""
     ctx = await make_ctx()
     d = await _decision(client, ctx, approver="owner")
     target = {"decision_id": d["id"]}
@@ -501,6 +514,7 @@ async def test_a_waiting_suggestion_names_its_decision_as_it_is_now(client):
 
 
 async def test_edited_by_names_the_last_edit_made_in_the_same_instant(client):
+    """Two edits at the same instant credit the later one, falling back to its id."""
     # Review finding (train AS replay review): two edits in the same instant (the clock is
     # frozen) name the later one's person; the later edit is given the smaller id here, so an
     # order that falls back to the id names the earlier edit's person.

@@ -69,6 +69,7 @@ def proposal(m: dict, after: dict | None) -> dict:
 
 
 async def test_an_approver_who_is_not_the_owner_is_refused_and_proposes(client):
+    """An approver who is not a milestone's owner cannot change it, only propose."""
     ctx = await make_ctx()
     _, m = await own_milestone(client, ctx)
     rights = [("owner", True, False), ("approver", False, True), ("commenter", False, True),
@@ -109,6 +110,7 @@ async def test_an_approver_who_is_not_the_owner_is_refused_and_proposes(client):
 
 
 async def test_a_proposal_to_remove_it_removes_it_when_accepted(client):
+    """A proposal to remove a milestone keeps it until accepted, then removes it."""
     ctx = await make_ctx()
     _, m = await own_milestone(client, ctx)
     r = await client.post(CHANGES, json=proposal(m, None), headers=ctx.as_("approver"))
@@ -127,6 +129,7 @@ async def test_a_proposal_to_remove_it_removes_it_when_accepted(client):
 
 
 async def test_a_proposal_checks_what_was_seen_and_who_sends_it(client):
+    """A proposal is refused if stale, the item is gone, or it bypasses direct rights."""
     ctx = await make_ctx()
     _, m = await own_milestone(client, ctx)
     stale = proposal({**m, "date": "2026-11-20"}, {"date": "2026-12-04"})

@@ -31,6 +31,7 @@ async def _refused(tenant_id: uuid.UUID, row, constraint: str) -> None:
 
 
 async def test_invariants_are_enforced_by_the_database(tenant_id):
+    """Database checks enforce v2 invariants like compliant-only selected options."""
     seeded = await seed_v2(tenant_id)
     doc, blocker = seeded.document_id, seeded.blocker_id
     # §6: a non-compliant option can never be the selected one.
@@ -103,6 +104,7 @@ async def test_invariants_are_enforced_by_the_database(tenant_id):
 
 
 async def test_optimistic_concurrency_refuses_a_lost_update(tenant_id):
+    """A second writer's stale update is refused instead of silently overwriting."""
     seeded = await seed_v2(tenant_id)
     gap_id = seeded.ids["knowledge_gaps"]
     async with tenant_session(tenant_id) as a, tenant_session(tenant_id) as b:
@@ -127,6 +129,7 @@ async def test_optimistic_concurrency_refuses_a_lost_update(tenant_id):
 
 
 async def test_every_editable_table_is_versioned():
+    """Every table with a lock version actually uses it for optimistic locking."""
     editable = [
         cls
         for cls in vars(m).values()
@@ -138,6 +141,7 @@ async def test_every_editable_table_is_versioned():
 
 
 async def test_rows_are_company_scoped(tenant_id):
+    """Every v2 table's rows are invisible and unattachable from another company."""
     seeded = await seed_v2(tenant_id)
     other = await make_tenant("Other Co")
     async with tenant_session(other) as s:
@@ -154,6 +158,7 @@ async def test_rows_are_company_scoped(tenant_id):
 
 
 async def test_deleting_a_document_cascades_its_v2_rows(tenant_id):
+    """Deleting a document cascades its v2 rows, but an intake outlives it."""
     seeded = await seed_v2(tenant_id)
     async with tenant_session(tenant_id) as s:
         await s.delete(await s.get(Document, seeded.document_id))
@@ -206,6 +211,7 @@ async def test_the_baseline_graph_carries_the_trace_types(client):
 
 
 async def test_verdicts_record_the_section_hash_and_approval_the_approver(client):
+    """A section review pins the exact revision it approved, and names the approver."""
     ctx = await make_ctx()
     seeded = await seed_v2(ctx.tenant_id)
     h = ctx.as_("approver")

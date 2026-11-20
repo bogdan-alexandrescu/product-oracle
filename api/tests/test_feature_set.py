@@ -102,6 +102,7 @@ def codes(out: fs.FeatureSetCheck) -> list[str]:
 
 
 def test_a_clean_file_has_no_problems():
+    """A clean feature set file parses with no problems, in the order written."""
     out = check(CLEAN)
     assert out.problems == [] and out.blocking == 0
     assert out.as_json() == {
@@ -127,6 +128,7 @@ def test_a_clean_file_has_no_problems():
 
 
 def test_check_depends_on_excluded():
+    """A feature depending on an excluded one is flagged as a blocking problem."""
     text = CLEAN.replace("depends_on: [address-lookup]", "depends_on: [address-sharing]")
     out = check(text)
     assert codes(out) == ["depends_on_excluded"]
@@ -163,6 +165,7 @@ MINIMAL = {
 
 @pytest.mark.parametrize("code", sorted(MINIMAL))
 def test_every_blocking_code_has_a_minimal_failing_file(code):
+    """Every blocking code has its own minimal file triggering only that code."""
     out = check(MINIMAL[code])
     assert codes(out) == [code], out.problems
     assert all(p["blocking"] for p in out.problems)
@@ -170,11 +173,13 @@ def test_every_blocking_code_has_a_minimal_failing_file(code):
 
 
 def test_not_a_mapping_is_unreadable():
+    """A feature set file that is a list, not a mapping, is reported unreadable."""
     out = check("- just\n- a list\n")
     assert codes(out) == ["unreadable_yaml"]
 
 
 def test_missing_requirement_text_and_duplicate_requirement_keys():
+    """A requirement missing text and a duplicate requirement key are reported."""
     text = CLEAN.replace(
         "        text: The buyer picks one of up to five saved addresses\n", ""
     ).replace(
@@ -206,17 +211,20 @@ def test_the_check_names_each_requirement_and_goal_a_problem_names():
 
 
 def test_a_proposed_goal_is_unknown():
+    """A feature set goal that is only proposed, not confirmed, reads unknown."""
     # Only confirmed goals count: the known goals are the confirmed ones.
     out = check(CLEAN, k=known(goals={}))
     assert codes(out) == ["unknown_goal", "unknown_goal"]
 
 
 def test_a_dependency_on_a_baseline_feature_outside_the_set_is_fine():
+    """A feature depending on an existing baseline feature is not a problem."""
     text = CLEAN.replace("depends_on: [address-lookup]", "depends_on: [bulk-edit]")
     assert check(text).problems == []
 
 
 def test_cycles_are_found_once_with_their_path():
+    """A dependency cycle is reported once, naming every feature in its path."""
     text = """\
 version: 1
 document: saved-addresses
@@ -232,11 +240,13 @@ features:
 
 
 def test_self_dependency_is_a_cycle():
+    """A feature that depends on itself is reported as a dependency cycle."""
     text = CLEAN.replace("depends_on: [address-lookup]", "depends_on: [saved-addresses]")
     assert codes(check(text)) == ["dependency_cycle"]
 
 
 def test_every_problem_listed_in_one_pass():
+    """Several unrelated problems in one file are all reported in one pass."""
     text = (
         CLEAN.replace("version: 1", "version: 3")
         .replace("{key: activation, contribution: 2}", "{key: retention, contribution: 2}")
@@ -246,6 +256,7 @@ def test_every_problem_listed_in_one_pass():
 
 
 def test_flags_are_advisory():
+    """Low confidence, an excluded blocker and a likely duplicate are flagged."""
     text = """\
 version: 1
 document: saved-addresses
@@ -274,16 +285,19 @@ features:
 
 
 def test_a_features_own_title_is_not_a_duplicate():
+    """A feature is never flagged as a duplicate of its own unchanged title."""
     assert check(CLEAN).flags == {}
 
 
 def test_invalid_contribution_is_blocking():
+    """A goal contribution value outside its allowed range is a blocking problem."""
     out = check(CLEAN.replace("contribution: 2", "contribution: 7"))
     assert codes(out) == ["invalid_field"]
     assert out.problems[0]["feature"] == "saved-addresses"
 
 
 def test_without_a_document_slug_any_document_passes():
+    """With no document slug given, the feature set check accepts any document."""
     out = fs.check_feature_set(
         CLEAN.replace("saved-addresses\nfeatures", "other\nfeatures"), document=None, known=known()
     )
@@ -291,6 +305,7 @@ def test_without_a_document_slug_any_document_passes():
 
 
 def test_the_loader_is_the_safe_one():
+    """Loading a feature set uses the safe YAML loader, refusing alias abuse."""
     with pytest.raises(fs.FeatureSetError) as exc:
         fs.load_feature_set("a: &x 1\nb: *x\n")
     assert exc.value.code
@@ -299,6 +314,7 @@ def test_the_loader_is_the_safe_one():
 
 
 def test_too_large_once_parsed_is_refused(monkeypatch):
+    """A feature set file over the stored byte limit is refused as too large."""
     monkeypatch.setattr(fs, "MAX_STORED_BYTES", 100)
     with pytest.raises(fs.FeatureSetError) as exc:
         fs.load_feature_set(CLEAN)
@@ -307,11 +323,13 @@ def test_too_large_once_parsed_is_refused(monkeypatch):
 
 
 async def test_the_async_check_runs_on_the_parse_pool():
+    """Checking a feature set off the main thread returns the same result."""
     out = await fs.check_feature_set_async(CLEAN, document=DOC, known=known())
     assert out.problems == [] and out.as_json()["features"] == 2
 
 
 def test_blocking_message_counts():
+    """The blocking-problem message uses the right singular or plural count."""
     assert fs.blocking_message(1) == (
         "The feature set has 1 blocking problem; send it back with Request changes"
     )
@@ -356,6 +374,8 @@ async def _beating(coro):
 
 @pytest.mark.timing
 async def test_the_scope_recheck_runs_off_the_event_loop(monkeypatch):
+    """A recheck that runs too long times out as too slow, keeping its result."""
+
     def slow(rows, *, known):
         time.sleep(1)
         raise AssertionError("not reached")
@@ -381,6 +401,7 @@ async def test_the_scope_recheck_runs_off_the_event_loop(monkeypatch):
 
 @pytest.mark.timing
 async def test_the_scope_yaml_renders_off_the_event_loop(monkeypatch):
+    """Rendering a scope to YAML off the main loop matches the sync render."""
     from oracle import safe_yaml
 
     def slow(data, **kw):
@@ -410,6 +431,7 @@ class _CountedTitles(list):
 
 
 def test_flags_index_the_baseline_titles():
+    """Flagging a duplicate title walks the baseline title index only once."""
     titles = _CountedTitles(known().titles)
     out = check(CLEAN.replace("Address lookup", "Address book"), k=known(titles=titles))
     assert out.flags["address-lookup"] == ["duplicate_of_existing"]
@@ -419,6 +441,7 @@ def test_flags_index_the_baseline_titles():
 
 @pytest.mark.timing
 def test_a_large_scope_checks_in_linear_time():
+    """A set of ten thousand features is checked for duplicates in linear time."""
     n = 10_000
     features = {f"f{i}": fs.Ref(entity_id=uuid.uuid4(), title=f"Feature {i}") for i in range(n)}
     titles = [(f"b{i}", fs.norm_title(f"Baseline {i}")) for i in range(n)]

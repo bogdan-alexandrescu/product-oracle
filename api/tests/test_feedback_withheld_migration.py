@@ -68,11 +68,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains onto the single existing head, keeping one lineage."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_backfills_and_downgrade(scratch_db):
+    """Upgrading backfills the withheld column from existing data, and downgrading drops it."""
     from oracle.intake.late_answers import WITHHELD as current
 
     assert current == WITHHELD

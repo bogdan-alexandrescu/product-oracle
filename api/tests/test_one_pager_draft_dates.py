@@ -23,6 +23,7 @@ async def _prd_id(client, auth) -> str:
 
 
 async def test_an_unbacked_date_is_refused_naming_it_and_its_fix(client, owner, runtime):  # noqa: F811
+    """A date with no verified source is refused, naming the date and how to fix it."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -44,6 +45,7 @@ async def test_an_unbacked_date_is_refused_naming_it_and_its_fix(client, owner, 
 
 
 async def test_a_date_backed_by_a_verified_source_is_accepted(client, owner, runtime):  # noqa: F811
+    """A delivery date already backed by proof should not be re-flagged as unsupported."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

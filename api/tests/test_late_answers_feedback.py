@@ -58,6 +58,7 @@ async def _feedback(client, ctx) -> list[dict]:
 
 
 async def test_a_late_answer_becomes_feedback_on_the_draft(client, runtime):  # noqa: F811
+    """An answer given after drafting started is turned into feedback on the draft."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -97,6 +98,7 @@ async def test_a_late_answer_becomes_feedback_on_the_draft(client, runtime):  # 
 
 
 async def test_answers_before_drafting_make_no_feedback(client, runtime):  # noqa: F811
+    """Answers given before drafting starts create no feedback items."""
     ctx = await company()
     intake_id, run_id, cards = await _started(client, ctx)
     await _import(ctx, run_id)

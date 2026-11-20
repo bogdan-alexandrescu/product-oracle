@@ -96,6 +96,7 @@ async def _set_attrs(tenant_id, goal_id, attrs: dict) -> None:
 
 
 async def test_panel_goal_fields_keep_target_and_unit(client):
+    """Editing only the due date leaves a measured goal's target and unit intact."""
     p = await Panel().build(await make_people())
     tid, gid = p.ctx.tenant_id, p.g1.id
     # The unit as an older form stored it, with a stray space.
@@ -147,6 +148,7 @@ async def test_panel_goal_fields_keep_target_and_unit(client):
 
 
 async def test_goal_form_edit_keeps_target_and_unit(client):
+    """Editing a goal's form field keeps its stored target and unit, and undo restores them."""
     w = await World().build()
     tid, gid = w.ctx.tenant_id, w.goals["grow"]
     await _set_attrs(tid, gid, {"position": 1, "metric": "Shops live", "target": 40,
@@ -167,6 +169,7 @@ async def test_goal_form_edit_keeps_target_and_unit(client):
 
 
 async def test_goal_archive_and_restore_write_revisions(client):
+    """Archiving and restoring a goal through the panel each write their own revision record."""
     w = await World().build()
     tid, gid = w.ctx.tenant_id, w.goals["quiet"]
     r = await client.post(f"{BUCKETS}/goals/{gid}/archive", headers=w.as_("owner"), json={})
@@ -180,6 +183,7 @@ async def test_goal_archive_and_restore_write_revisions(client):
 
 
 async def test_goal_map_target_edit_writes_a_revision(client):
+    """Editing a goal's target on the goal map writes a revision recording the before and after."""
     ctx, ids = await goal_map_world()
     r = await client.patch(
         f"{GOAL_MAP}/goals/{ids['conv']}", json={"target": 12}, headers=ctx.as_("owner")
@@ -192,6 +196,7 @@ async def test_goal_map_target_edit_writes_a_revision(client):
 
 
 async def test_goal_form_add_writes_a_revision(client):
+    """Adding a goal through the form writes a revision with no earlier state."""
     w = await World().build()
     r = await client.post(f"{BUCKETS}/goals", headers=w.as_("owner"), json=GOAL)
     assert r.status_code == 201, r.text
@@ -202,6 +207,7 @@ async def test_goal_form_add_writes_a_revision(client):
 
 
 async def test_goal_milestone_rename_writes_a_revision(client):
+    """Renaming a goal's milestone through the panel writes a revision for the change."""
     ctx = await make_ctx()
     ids = await seed(ctx, due="2026-12-15")
     await make(client, ctx, ids, name="Carts ready", date="2026-11-27")
@@ -217,6 +223,7 @@ async def test_goal_milestone_rename_writes_a_revision(client):
 
 
 async def test_goal_form_typed_target_keeps_number_and_unit(client):
+    """The goal form parses a typed target number with its unit and rejects a mismatched unit."""
     w = await World().build()
     tid, gid = w.ctx.tenant_id, w.goals["grow"]
     await _set_attrs(tid, gid, {"position": 1, "metric": "Shops live", "target": 40,
@@ -253,6 +260,7 @@ async def test_goal_form_typed_target_keeps_number_and_unit(client):
 
 
 async def test_goal_map_target_edit_drops_target_text(client):
+    """Setting a numeric target on the goal map clears any leftover free-text target."""
     ctx, ids = await goal_map_world()
     attrs, _ = await _goal(ctx.tenant_id, ids["conv"])
     await _set_attrs(ctx.tenant_id, ids["conv"], {**attrs, "target_text": "about ten"})
@@ -266,6 +274,7 @@ async def test_goal_map_target_edit_drops_target_text(client):
 
 
 async def test_goal_ask_archive_and_restore_write_revisions(client):
+    """Archiving and restoring a goal via an accepted change each write their own revision."""
     w = await World().build()
     tid, gid = w.ctx.tenant_id, w.goals["quiet"]
 
@@ -302,6 +311,7 @@ async def _measured_goal(client, unit: str):
 
 
 async def test_goal_form_refusal_names_unit_as_read(client):
+    """A goal form target rejected for the wrong unit names the goal's unit as it is shown."""
     for unit, shown in (("usd", "$"), ("EUR", "€"), ("gbp", "£"), ("shops", "shops")):
         _, _, _, patch = await _measured_goal(client, unit)
         r = await patch("70 partners")
@@ -310,6 +320,7 @@ async def test_goal_form_refusal_names_unit_as_read(client):
 
 
 async def test_goal_form_target_commas_only_between_thousands(client):
+    """The goal form accepts commas only where thousands separators belong in a typed target."""
     w, tid, gid, patch = await _measured_goal(client, "shops")
     for typed, n in (("1,200", 1200), ("12,000,000 shops", 12000000), ("1,234.5", 1234.5)):
         r = await patch(typed)
@@ -326,6 +337,7 @@ async def test_goal_form_target_commas_only_between_thousands(client):
 
 
 async def test_baseline_numeric_target_drops_target_text(client):
+    """Setting a numeric target through the baseline API clears any leftover free-text target."""
     w = await World().build()
     tid, gid = w.ctx.tenant_id, w.goals["grow"]
     await _set_attrs(tid, gid, {"position": 1, "metric": "Shops live", "unit": "shops",

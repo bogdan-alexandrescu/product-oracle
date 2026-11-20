@@ -67,6 +67,7 @@ async def recorded(ctx, change: dict, who: str, op: str) -> None:
 
 @pytest.mark.parametrize("who", ["owner", "commenter"])
 async def test_target_ops_record_who_and_when(client, who):
+    """Every target op records who made it and when, applied or proposed by role."""
     w = await TargetWorld(await make_people()).build()
     for op in TARGET_OPS:
         r = await w.post(client, who, op)
@@ -77,6 +78,7 @@ async def test_target_ops_record_who_and_when(client, who):
 
 
 async def test_target_ops_stay_in_their_company(client):
+    """Target ops from another company are refused and change nothing."""
     w = await TargetWorld(await make_people()).build()
     other = await make_people()
     for op in TARGET_OPS:
@@ -88,6 +90,7 @@ async def test_target_ops_stay_in_their_company(client):
 
 
 async def test_key_date_ops_record_who_and_when_and_stay_in_their_company(client):
+    """Key date ops refuse another company and record who did them and when at home."""
     w = await key_date_world()
     other = await make_people()
     kd = await published_key_date(w)
@@ -131,6 +134,7 @@ def _simple_writes():
 
 
 async def test_every_simple_write_refuses_a_run(client):
+    """Every Simple write is refused when called by a run instead of a person."""
     ctx = await make_people()
     run = await run_headers(ctx, "owner")
     writes = list(_simple_writes())
@@ -151,6 +155,7 @@ async def rows(ctx, ids: list[str]) -> dict[str, dict]:
 
 
 async def test_draft_item_ops_roles_record_and_undo(client):
+    """Draft item ops are gated by role, recorded, and undo-able once applied."""
     w = await AddWorld().build()
     for op in ("keep_both", "confirm_item", "merge_item"):
         c = (await w.add(client, "owner", f"Draft for {op}"))["change"]
@@ -190,6 +195,7 @@ async def test_draft_item_ops_roles_record_and_undo(client):
 
 
 async def test_a_viewer_attendee_is_refused_every_meeting_write(client):
+    """A viewer attending a meeting is refused every write it offers."""
     from tests import test_simple_meetings_api as mt
 
     w = await mt.world()

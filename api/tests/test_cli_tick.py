@@ -28,6 +28,7 @@ def _run(argv, handler):
 
 
 def test_tick_posts_and_prints_a_summary(monkeypatch):
+    """Tick posts to its endpoint and reports how many runs it checked."""
     monkeypatch.setenv("ORACLE_URL", "http://oracle.test:8000")
     monkeypatch.setenv("ORACLE_API_TOKEN", "po_secret")
     code, out, err, reqs = _run(["tick"], lambda r: httpx.Response(200, json=RESULT))
@@ -40,6 +41,7 @@ def test_tick_posts_and_prints_a_summary(monkeypatch):
 
 
 def test_tick_refused(monkeypatch):
+    """A tick refused for lacking the owner role reports that exact reason."""
     monkeypatch.setenv("ORACLE_API_TOKEN", "po_secret")
     code, _, err, _ = _run(
         ["tick"], lambda r: httpx.Response(403, json={"detail": "Requires the owner role"})
@@ -49,12 +51,14 @@ def test_tick_refused(monkeypatch):
 
 
 def test_tick_needs_a_token(monkeypatch):
+    """Running tick without a token is refused, naming the missing variable."""
     monkeypatch.delenv("ORACLE_API_TOKEN", raising=False)
     code, _, err, _ = _run(["tick"], lambda r: httpx.Response(200, json=RESULT))
     assert code == 2 and "ORACLE_API_TOKEN" in err
 
 
 def test_tick_prints_the_built_in_jobs(monkeypatch):
+    """Tick's summary also reports the built-in jobs it ran, errors included."""
     monkeypatch.setenv("ORACLE_URL", "http://oracle.test:8000")
     monkeypatch.setenv("ORACLE_API_TOKEN", "po_secret")
     result = {
@@ -75,6 +79,7 @@ def test_tick_prints_the_built_in_jobs(monkeypatch):
 
 
 def test_tick_says_when_the_account_sweep_was_not_due(monkeypatch):
+    """Tick says plainly when the account sweep was not due, not zero counts."""
     monkeypatch.setenv("ORACLE_URL", "http://oracle.test:8000")
     monkeypatch.setenv("ORACLE_API_TOKEN", "po_secret")
     pool = {"reclaimed": 0, "examined": 0, "refreshed": 0, "polled": 0, "lease": "not_due"}

@@ -201,6 +201,7 @@ def by_key(body: dict) -> dict[str, dict]:
 
 
 async def test_dates_come_from_each_source(client):
+    """An item's shown dates come from whichever source set them: typed or tracked."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -304,6 +305,7 @@ async def test_an_end_only_item_starts_its_feature_effort_before_its_end(client)
 
 
 async def test_estimated_windows_follow_the_company_day(client, clock):
+    """An undated item falls into the quarter after next, by the company's own day."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -320,6 +322,7 @@ async def test_estimated_windows_follow_the_company_day(client, clock):
 
 
 async def test_visibility_per_role(client):
+    """An approvers-only roadmap and its items stay hidden from commenters and viewers."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -346,6 +349,7 @@ async def test_visibility_per_role(client):
 
 
 async def test_grouping_and_filters(client):
+    """Grouping the roadmap by goal or track buckets every item, ungrouped ones too."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -467,6 +471,7 @@ async def seed_many(ctx: Ctx, n: int = 500, per: int = 50) -> None:
 
 @pytest.mark.timing
 async def test_500_items_answer_under_300_ms_and_grouped_by_goal_under_500_ms(client):
+    """Reading 500 items, plain or grouped by goal, stays within its own time budget."""
     # dod-perf review: the default view keeps its guard (best of 3 under 300 ms); the goal lanes
     # (group=goal) are timed beside it, under 500 ms.
     ctx = await make_ctx()
@@ -505,6 +510,7 @@ async def statements_of(client, headers, **params) -> int:
 
 
 async def test_reads_do_not_grow_with_the_items(client):
+    """Reading the roadmap makes the same number of statements at 20 items or 500."""
     small = await make_ctx()
     await seed_many(small, n=20, per=10)
     big = await make_ctx()
@@ -517,6 +523,7 @@ async def test_reads_do_not_grow_with_the_items(client):
 
 
 async def test_flags_through_the_route(client):
+    """A blocker's feasibility experiment and its flags reach the roadmap read whole."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -577,6 +584,7 @@ async def open_suggestions(ctx: Ctx) -> list[RoadmapDateSuggestion]:
 
 
 async def test_suggestions_regenerate_once_a_day_and_on_demand(client, clock):
+    """Suggested dates regenerate once a day on their own, and right away when asked."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -649,6 +657,7 @@ async def seed_decidable(ctx: Ctx, *, decider: str | None, track_owner: str | No
     ],
 )
 async def test_suggestion_permissions_per_role(client, role, decider, track_owner, allowed):
+    """Only a roadmap's decider, or an approver who owns its track, may decide a date."""
     ctx = await make_ctx()
     sid = await seed_decidable(ctx, decider=decider, track_owner=track_owner)
     listed = (await client.get(SUGGESTIONS, headers=ctx.as_(role))).json()
@@ -658,6 +667,7 @@ async def test_suggestion_permissions_per_role(client, role, decider, track_owne
 
 
 async def test_accept_edit_dismiss(client):
+    """Accepting, editing or dismissing a suggestion runs through the change engine."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -739,6 +749,7 @@ async def test_published_estimate_is_the_open_drafts_accepted_dates(client):
 
 
 async def test_migration_columns():
+    """A fresh item starts with no risks or draft flag; a bad date source is rejected."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)

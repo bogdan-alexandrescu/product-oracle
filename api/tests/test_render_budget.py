@@ -177,6 +177,7 @@ async def test_the_heartbeat_does_not_count_collecting_what_earlier_tests_left()
 
 
 async def test_a_large_roadmap_read_never_blocks_the_loop_and_is_found_once(client, monkeypatch):
+    """Reading a large roadmap finds dates off the loop, cached so a repeat skips it."""
     tenant_id, auth = await seed_auth()
     url = await big_roadmap(tenant_id)
     threads: list[str] = []
@@ -308,6 +309,7 @@ async def _store_copy(tenant_id, slug: str, number: int = 2) -> None:
 
 
 async def test_a_roadmap_import_whose_dates_take_too_long_is_refused(client, monkeypatch):
+    """A roadmap import whose date search runs too long is refused, not left hanging."""
     _, auth = await seed_auth()
     monkeypatch.setattr(doc_dates, "WAIT_SECONDS", 0)
     # Under the parse pool's queue policy (safe_yaml.run_parse_within) the cap is the
@@ -338,6 +340,7 @@ async def test_an_import_keeps_its_dates_for_the_version(client, monkeypatch):
 
 
 async def test_template_dates_are_found_once_per_template_body(monkeypatch):
+    """Finding a template's dates is cached, not redone for the same body and date."""
     body = "---\ntitle: T\n---\n\n# Plan {#plan}\n\nKickoff 2026-11-30.\n"
     calls = count_calls(monkeypatch, doc_dates, "template_dates")
     first = await doc_dates.template_dates_async(body, date(2026, 10, 20))
@@ -351,6 +354,7 @@ async def test_template_dates_are_found_once_per_template_body(monkeypatch):
 
 @pytest.mark.parametrize("fmt", ["html", "md"])
 async def test_a_large_roadmap_export_never_blocks_the_loop(client, monkeypatch, fmt):
+    """Exporting a large roadmap finds dates, renders off the loop, or refuses cleanly."""
     tenant_id, auth = await seed_auth()
     url = await big_roadmap(tenant_id)
     finds: list[str] = []
@@ -406,6 +410,7 @@ def test_the_export_cap_and_pool_are_the_owner_s():
 
 @pytest.mark.parametrize("path", EXPORTS)
 async def test_an_export_past_its_time_cap_is_refused(client, tenant_id, doc, monkeypatch, path):  # noqa: F811
+    """An export past its time cap is refused with a clear message, not left hanging."""
     monkeypatch.setattr("oracle.export.offload.SECONDS", 0)
     viewer = await _token(tenant_id, "viewer")
     resp = await client.get(f"/v1/documents/checkout/versions/1/{path}", headers=viewer)
@@ -543,6 +548,7 @@ def test_kept_dates_are_compact():
 
 
 async def test_kept_dates_read_back_exactly_what_was_found():
+    """Dates kept for a version read back exactly as they were first found."""
     body = (
         "| Item | Ships |\n|---|---|\n| [Payment](#now-payment-step) | 2026-11-30 |\n\n"
         "```\nfreeze 2026-12-01\n```\n\nThe 3rd of December, and 05/06/2026.\n"
@@ -645,6 +651,7 @@ async def test_a_company_runs_at_most_two_date_jobs_at_once(monkeypatch):
 
 
 def test_a_key_given_up_again_moves_to_the_end_of_the_list():
+    """A key marked given up again moves to list's end, so the oldest expires first."""
     kept = doc_dates._Kept()
     kept.give_up("again")
     for k in range(1023):
@@ -777,6 +784,7 @@ async def test_one_person_s_second_concurrent_export_is_refused_at_once(
     doc,  # noqa: F811
     monkeypatch,
 ):
+    """A second export by the same person while one runs is refused before it renders."""
     held = Held(monkeypatch)
     viewer = await _token(tenant_id, "viewer")
     first = asyncio.create_task(client.get(URL, headers=viewer))
@@ -825,6 +833,7 @@ async def test_a_company_holding_its_two_exports_leaves_two_workers_to_others(cl
 
 @pytest.mark.timing
 async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(client, monkeypatch):
+    """Two companies flooding exports never starve a third company's export worker."""
     held = Held(monkeypatch)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
     a_people = [await _token(a, "viewer") for _ in range(3)]
@@ -852,6 +861,7 @@ async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(cli
 
 @pytest.mark.timing
 async def test_a_wait_for_a_worker_past_ten_seconds_is_busy_not_too_large(client, monkeypatch):
+    """An export that waits too long for a worker is refused as busy, not too large."""
     held = Held(monkeypatch)
     monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
@@ -980,6 +990,7 @@ async def _versions(tenant_id, *numbers: int) -> None:
 
 
 def test_the_present_share_is_the_owner_s():
+    """Present's per-person and per-company export limits match the chosen numbers."""
     assert offload.PRESENTS_PER_PERSON == 2
     assert offload.EXPORTS_PER_PERSON == 1
     assert offload.EXPORTS_PER_COMPANY == 2
@@ -996,6 +1007,7 @@ async def test_one_person_s_third_concurrent_deck_is_refused_at_once(
     doc,  # noqa: F811
     monkeypatch,
 ):
+    """A person's third Present deck at once is refused before it starts building."""
     await _versions(tenant_id, 2, 3)
     decks = HeldDecks(monkeypatch)
     viewer = await _token(tenant_id, "viewer")
@@ -1087,6 +1099,7 @@ async def test_a_company_with_two_places_in_use_is_refused_a_third(client, monke
 
 @pytest.mark.timing
 async def test_one_company_s_decks_never_take_more_than_two_workers(client, monkeypatch):
+    """One company's decks never take more than two workers, leaving room for another."""
     held = Held(monkeypatch)
     decks = HeldDecks(monkeypatch)
     a, b = await _company(client, "A Co"), await _company(client, "B Co")
@@ -1121,6 +1134,7 @@ async def test_one_company_s_decks_never_take_more_than_two_workers(client, monk
 
 @pytest.mark.timing
 async def test_a_deck_waiting_past_ten_seconds_for_a_worker_is_busy(client, monkeypatch):
+    """A deck that waits too long for a worker is refused busy without ever building."""
     held = Held(monkeypatch)
     decks = HeldDecks(monkeypatch, held=False)
     monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
@@ -1149,6 +1163,7 @@ async def test_a_repeat_deck_is_served_from_the_cache_without_a_place(
     doc,  # noqa: F811
     monkeypatch,
 ):
+    """A built deck is served again from cache, even while every export place is full."""
     decks = HeldDecks(monkeypatch, held=False)
     viewer = await _token(tenant_id, "viewer")
     first = await client.get(deck_url(), headers=viewer)
@@ -1180,6 +1195,7 @@ async def test_parallel_requests_for_one_deck_build_it_once(
     doc,  # noqa: F811
     monkeypatch,
 ):
+    """Several requests for the same deck at once build it only once, with one result."""
     decks = HeldDecks(monkeypatch)
     viewer = await _token(tenant_id, "viewer")
     tasks = [asyncio.create_task(client.get(deck_url(), headers=viewer)) for _ in range(3)]
@@ -1228,6 +1244,7 @@ async def no_place_held() -> None:
 
 @pytest.mark.timing
 async def test_one_deck_refused_busy_is_one_build_attempt_for_all_its_waiters(client, monkeypatch):
+    """Many requests for a deck that ends up busy share one build attempt, not each."""
     held = Held(monkeypatch)
     decks = HeldDecks(monkeypatch, held=False)
     monkeypatch.setattr(offload, "QUEUE_SECONDS", 1.0)
@@ -1266,6 +1283,7 @@ async def test_a_failed_deck_build_fails_its_waiters_alike_and_is_not_built_agai
     monkeypatch,
     failure,
 ):
+    """A deck build that fails, fails every waiter alike, and is not retried for them."""
     import httpx
 
     from oracle.main import app
@@ -1385,6 +1403,7 @@ async def test_a_cancelled_deck_build_never_leaves_its_waiters_hanging(
 
 
 async def test_a_kept_deck_is_never_served_to_another_company(client, monkeypatch):
+    """A cached Present deck is never served to a different company."""
     decks = HeldDecks(monkeypatch, held=False)
     a, b = await _company(client, "A Co"), await _company(client, "B Co")
     for company in (a, b, a, b):
@@ -1438,6 +1457,7 @@ def _deck(size: int):
 
 
 def test_kept_decks_are_bounded_and_an_oversized_one_evicts_nothing(monkeypatch):
+    """The deck cache drops an oversized deck without evicting others, oldest first."""
     from oracle.export import present
 
     monkeypatch.setattr(present, "KEPT_BYTES", 200_000)  # at most 25,000 per deck

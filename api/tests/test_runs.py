@@ -109,6 +109,7 @@ async def decide(client, headers, run, decision="approved", note=None):
 
 
 async def test_flow_catalog(client, owner, runtime):
+    """The flow catalog lists each flow's segments, checkpoints and spend threshold."""
     _, auth = owner
     resp = await client.get("/v1/flows", headers=auth)
     assert resp.status_code == 200
@@ -127,6 +128,7 @@ async def test_flow_catalog(client, owner, runtime):
 
 
 def test_segment_prompts_name_tools_and_the_low_confidence_threshold():
+    """Every segment's prompt names its tools, outputs and the low confidence cutoff."""
     flow = flows.FLOWS["baseline_to_prd"]
     knobs = flows.resolve_knobs(flow, {})
     ctx = flows.PromptContext(
@@ -147,6 +149,7 @@ def test_segment_prompts_name_tools_and_the_low_confidence_threshold():
 
 
 def test_segment_tools_are_tools_of_the_mcp_server():
+    """Every tool a segment names is an actual tool on the MCP server."""
     from oracle.main import app
     from oracle.mcp.curated import CURATED, CURATED_NAMES
     from oracle.mcp.tools import app_operations, tool_names
@@ -163,6 +166,7 @@ def test_segment_tools_are_tools_of_the_mcp_server():
 
 
 async def test_full_flow_through_every_checkpoint(client, owner, runtime):
+    """A full flow advances through every checkpoint in order to succeed."""
     tenant_id, auth = owner
     # F4 lane B: the Engineering dates stop's own path is tests/test_eng_dates_stop.py.
     run = await started(client, auth, checkpoints={"eng_dates": False})
@@ -222,6 +226,7 @@ async def test_full_flow_through_every_checkpoint(client, owner, runtime):
 
 
 async def test_run_token_scopes_per_segment(client, owner, runtime):
+    """Each segment gets its own run token, scoped to it and revoked once used."""
     _, auth = owner
     run = await started(client, auth, checkpoints={"eng_dates": False})
     raws = []
@@ -244,6 +249,7 @@ async def test_run_token_scopes_per_segment(client, owner, runtime):
 
 
 async def test_token_is_live_while_its_segment_runs(client, owner, runtime):
+    """A segment's run token is valid, with its segment's scopes, while it runs."""
     _, auth = owner
     run = await started(client, auth)
     claims = await verify_run_token(runtime.submitted[0].mcp.token)
@@ -252,6 +258,7 @@ async def test_token_is_live_while_its_segment_runs(client, owner, runtime):
 
 
 async def test_skipped_checkpoints(client, owner, runtime):
+    """Checkpoints turned off are skipped while the run still advances normally."""
     _, auth = owner
     run = await started(
         client,
@@ -291,6 +298,7 @@ async def test_skipped_checkpoints(client, owner, runtime):
 
 
 async def test_all_checkpoints_off_runs_to_the_end(client, owner, runtime):
+    """A run with every checkpoint off runs straight through to success."""
     _, auth = owner
     off = dict.fromkeys(flows.FLOWS["baseline_to_prd"].checkpoints, False)
     run = await started(client, auth, checkpoints=off)
@@ -305,6 +313,7 @@ async def test_all_checkpoints_off_runs_to_the_end(client, owner, runtime):
 
 
 async def test_estimate_over_50_waits_for_an_owner(client, owner, runtime):
+    """A run estimated over the threshold waits for an owner's approval to start."""
     tenant_id, auth = owner
     approver = await as_user(tenant_id, "approver")
     run = await create(client, approver, depth="deep")
@@ -335,6 +344,7 @@ async def test_estimate_over_50_waits_for_an_owner(client, owner, runtime):
 
 
 async def test_estimate_at_50_starts_without_approval(client, owner, runtime):
+    """A run estimated exactly at the threshold starts without needing approval."""
     _, auth = owner
     # Base costs summing to 25, doubled by deep depth: exactly the threshold.
     roles = {
@@ -351,6 +361,7 @@ async def test_estimate_at_50_starts_without_approval(client, owner, runtime):
 
 
 async def test_budget_caps_the_estimate(client, owner, runtime):
+    """A run over its own budget is refused at start, never submitted."""
     _, auth = owner
     run = await create(client, auth, budget_usd=20)
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=auth)).json()
@@ -362,6 +373,7 @@ async def test_budget_caps_the_estimate(client, owner, runtime):
 
 
 async def test_start_needs_an_estimate(client, owner, runtime):
+    """A run cannot start before it has been estimated."""
     _, auth = owner
     run = await create(client, auth)
     resp = await client.post(f"/v1/runs/{run['id']}/start", headers=auth)
@@ -370,6 +382,7 @@ async def test_start_needs_an_estimate(client, owner, runtime):
 
 
 async def test_overrun_pauses_and_an_owner_resumes(client, owner, runtime):
+    """A run that overruns its spend ceiling pauses, and only an owner resumes it."""
     tenant_id, auth = owner
     approver = await as_user(tenant_id, "approver")
     # Estimate 31.50 (the dates stop off), ceiling 47.25: halfway the baseline has spent 25,
@@ -406,6 +419,7 @@ async def test_overrun_pauses_and_an_owner_resumes(client, owner, runtime):
 
 
 async def test_overrun_owner_cancels(client, owner, runtime):
+    """An owner can cancel a run that has paused for overrunning its budget."""
     _, auth = owner
     runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=2)]
     run = await started(client, auth, checkpoints={"eng_dates": False})
@@ -425,6 +439,7 @@ async def test_overrun_owner_cancels(client, owner, runtime):
 
 
 async def test_cancel_a_running_run(client, owner, runtime):
+    """Cancelling a running run stops every segment and revokes its live token."""
     tenant_id, auth = owner
     other_approver = await as_user(tenant_id, "approver")
     runtime.script["baseline"] = [Outcome(polls=5)]
@@ -448,6 +463,7 @@ async def test_cancel_a_running_run(client, owner, runtime):
 async def test_creator_approver_cancels_own_run_and_pending_checkpoint_is_skipped(
     client, owner, runtime
 ):
+    """Cancelling a run its creator started skips the pending checkpoint too."""
     tenant_id, auth = owner
     approver = await as_user(tenant_id, "approver")
     run = await started(client, approver)
@@ -460,6 +476,7 @@ async def test_creator_approver_cancels_own_run_and_pending_checkpoint_is_skippe
 
 
 async def test_cancel_a_draft(client, owner, runtime):
+    """A draft run not yet started can still be cancelled."""
     _, auth = owner
     run = await create(client, auth)
     resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
@@ -496,6 +513,7 @@ async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
 
 
 async def test_changes_requested_reruns_the_segment_with_the_note(client, owner, runtime):
+    """Requesting changes needs a note and reruns the segment carrying it."""
     tenant_id, auth = owner
     runtime.script["baseline"] = [Outcome(cost_usd=Decimal(3)), Outcome(cost_usd=Decimal(4))]
     run = await started(client, auth)
@@ -543,6 +561,7 @@ async def test_changes_requested_reruns_the_segment_with_the_note(client, owner,
 
 
 async def test_checkpoint_roles(client, owner, runtime):
+    """A commenter cannot decide or see a pending checkpoint; an approver can."""
     tenant_id, auth = owner
     commenter = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -588,6 +607,7 @@ async def test_a_runs_row_says_who_decides_its_checkpoint(client, owner, runtime
 
 
 async def test_flow_named_role_is_enforced(client, owner, runtime):
+    """A checkpoint demanding a higher role than default is enforced when deciding."""
     _, auth = owner
     run = await started(client, auth)
     await tick(client, auth)
@@ -611,6 +631,7 @@ async def test_flow_named_role_is_enforced(client, owner, runtime):
 
 
 async def test_role_checks(client, owner, runtime):
+    """Creating or acting on a run needs at least an approver; only an owner ticks."""
     tenant_id, auth = owner
     viewer = await as_user(tenant_id, "viewer")
     commenter = await as_user(tenant_id, "commenter")
@@ -634,6 +655,7 @@ async def test_role_checks(client, owner, runtime):
 
 
 async def test_runs_are_tenant_scoped(client, owner, runtime):
+    """A run is invisible to a user in another tenant, even by direct id."""
     _, auth = owner
     run = await create(client, auth)
     from tests.conftest import make_tenant
@@ -648,6 +670,7 @@ async def test_runs_are_tenant_scoped(client, owner, runtime):
 
 
 async def test_knob_and_document_validation(client, owner, runtime):
+    """Bad knobs or a missing or unknown document are rejected before a run is made."""
     _, auth = owner
     cases = [
         {"flow": "baseline_to_prd", "document": "x", "knobs": {"roles": {"baseline": ["ghost"]}}},
@@ -670,6 +693,7 @@ async def test_knob_and_document_validation(client, owner, runtime):
 
 
 async def test_patch_a_draft_clears_its_estimate(client, owner, runtime):
+    """Patching a draft run's knobs or document clears its stale estimate."""
     _, auth = owner
     run = await create(client, auth)
     await client.post(f"/v1/runs/{run['id']}/estimate", headers=auth)
@@ -694,6 +718,7 @@ async def test_patch_a_draft_clears_its_estimate(client, owner, runtime):
 
 
 async def test_feedback_loop_imports_the_next_version(client, owner, runtime):
+    """A feedback-loop run carries the document's open feedback into its prompt."""
     tenant_id, auth = owner
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     async with tenant_session(tenant_id) as s:
@@ -735,6 +760,7 @@ async def test_feedback_loop_imports_the_next_version(client, owner, runtime):
 
 
 async def test_inbox_feedback_says_what_waits_and_where_the_first_item_is(client, owner):
+    """The inbox names the open feedback count and points to its earliest item."""
     from datetime import UTC, datetime, timedelta
 
     from oracle.jobs.models import LlmSuggestion
@@ -795,6 +821,7 @@ async def test_inbox_feedback_says_what_waits_and_where_the_first_item_is(client
 
 
 async def test_a_rejected_draft_waits_at_review_and_reruns(client, owner, runtime):
+    """A rejected PRD draft waits at review and reruns once changes are requested."""
     tenant_id, auth = owner
     runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": BAD_PRD})]
     off = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
@@ -815,6 +842,7 @@ async def test_a_rejected_draft_waits_at_review_and_reruns(client, owner, runtim
 
 
 async def test_a_rejected_draft_with_review_off_fails_the_run(client, owner, runtime):
+    """A rejected PRD draft fails the run outright when its review is turned off."""
     _, auth = owner
     runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": BAD_PRD})]
     off = dict.fromkeys(flows.FLOWS["baseline_to_prd"].checkpoints, False)
@@ -827,6 +855,7 @@ async def test_a_rejected_draft_with_review_off_fails_the_run(client, owner, run
 
 
 async def test_a_failed_segment_fails_the_run(client, owner, runtime):
+    """A failed segment fails the whole run and revokes every run token."""
     tenant_id, auth = owner
     runtime.script["baseline"] = [Outcome(state="failed", error="agent crashed")]
     run = await started(client, auth)
@@ -841,6 +870,7 @@ async def test_a_failed_segment_fails_the_run(client, owner, runtime):
 
 
 async def test_submit_failure_is_retried_by_the_next_tick(client, owner, runtime):
+    """A submission that fails to reach the runtime is retried on the next tick."""
     from oracle.swarm import RuntimeUnavailable
 
     _, auth = owner
@@ -864,6 +894,7 @@ async def test_submit_failure_is_retried_by_the_next_tick(client, owner, runtime
 
 
 async def test_rows_written(client, owner, runtime):
+    """Starting a run writes its spend ceiling and each segment's estimate to rows."""
     tenant_id, auth = owner
     run = await started(client, auth)
     async with tenant_session(tenant_id) as s:
@@ -900,11 +931,13 @@ LANE_E_ROUTES = [
 
 @pytest.mark.parametrize(("method", "path"), LANE_E_ROUTES)
 async def test_lane_e_routes_require_auth(client, method, path):
+    """Every lane E route refuses a request with no auth at all."""
     resp = await client.request(method, path.replace("{id}", str(uuid.uuid4())), json={})
     assert resp.status_code == 401
 
 
 async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
+    """A viewer's inbox is empty even when checkpoints or feedback exist."""
     tenant_id, auth = owner
     viewer = await as_user(tenant_id, "viewer")
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
@@ -945,6 +978,7 @@ async def test_inbox_for_a_viewer_is_empty(client, owner, runtime):
 
 
 async def test_a_refused_rerun_keeps_the_reviewers_note(client, owner, runtime):
+    """A rerun refused by the runtime still keeps the reviewer's note for the retry."""
     from oracle.swarm import RuntimeUnavailable
 
     _, auth = owner
@@ -1003,6 +1037,7 @@ async def confirm_goal(client, headers, entity_id):
 
 
 async def test_baseline_yaml_is_merged_through_the_import(client, owner, runtime):
+    """An imported baseline.yaml merges in, proposing changes to locked items only."""
     tenant_id, auth = owner
     # A person's locked feature: the run may not change it, only propose.
     resp = await client.post(
@@ -1050,6 +1085,7 @@ async def test_baseline_yaml_is_merged_through_the_import(client, owner, runtime
 
 
 async def test_a_rejected_baseline_yaml_with_review_off_fails_the_run(client, owner, runtime):
+    """An invalid baseline.yaml fails the run and leaves the graph unchanged."""
     _, auth = owner
     runtime.script["baseline"] = [Outcome(artifacts={"baseline.yaml": "entities: [{type: x}]"})]
     off = dict.fromkeys(flows.FLOWS["baseline_to_prd"].checkpoints, False)

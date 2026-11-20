@@ -32,11 +32,13 @@ def _request(body: bytes, kind: str, fail: Exception | None = None) -> Request:
 
 
 async def test_a_body_that_parses_gives_its_passcode():
+    """A passcode form body that parses as JSON gives back its passcode."""
     body = json.dumps({"passcode": "blue-otter-42"}).encode()
     assert await public._passcode_of(_request(body, "application/json")) == "blue-otter-42"
 
 
 async def test_a_body_that_does_not_parse_is_empty_and_logged(caplog, monkeypatch):
+    """A passcode body that fails to parse reads as empty and is logged."""
     # Alembic's fileConfig in another test may have disabled the module's logger.
     monkeypatch.setattr(public.log, "disabled", False)
     with caplog.at_level("INFO", logger="oracle.shares.public"):
@@ -46,6 +48,7 @@ async def test_a_body_that_does_not_parse_is_empty_and_logged(caplog, monkeypatc
 
 
 async def test_an_unexpected_failure_is_not_swallowed():
+    """An unexpected failure reading the passcode body is raised, not swallowed."""
     with pytest.raises(RuntimeError):
         await public._passcode_of(
             _request(b"", "application/json", fail=RuntimeError("receive broke"))
@@ -53,6 +56,7 @@ async def test_an_unexpected_failure_is_not_swallowed():
 
 
 async def test_a_body_nested_too_deep_is_empty_not_a_crash():
+    """A passcode body nested too deep for JSON reads as empty, not a crash."""
     # The narrowed catch must still cover json's RecursionError: a public route, no login.
     body = b"[" * 200_000
     assert await public._passcode_of(_request(body, "application/json")) == ""

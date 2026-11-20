@@ -12,6 +12,7 @@ OUT_OF_ROOM = "claude-code exited 1: prompt is too long: 218009 tokens > 200000 
 
 
 def test_plain_failure_words():
+    """A failure reason is turned into plain words, never raw runtime text."""
     assert workflow.plain_failure(OUT_OF_ROOM, "writer") == (
         "The writer stopped: its session ran out of room."
     )
@@ -49,6 +50,7 @@ def draft_of(run):
 
 
 async def test_a_failed_segment_says_why_in_plain_words(client, owner, runtime):  # noqa: F811
+    """A failed segment shows why in plain words and offers a retry."""
     _, auth = owner
     run = await failed_at_draft(client, auth, runtime)
     seg = draft_of(run)
@@ -62,6 +64,7 @@ async def test_a_failed_segment_says_why_in_plain_words(client, owner, runtime):
 
 
 async def test_retry_redispatches_only_the_failed_segment(client, owner, runtime):  # noqa: F811
+    """Retrying a run resubmits only its failed segment, keeping earlier approvals."""
     _, auth = owner
     run = await failed_at_draft(client, auth, runtime)
     before = {s["name"]: len(s["attempts"]) for s in run["segments"]}
@@ -91,6 +94,7 @@ async def test_retry_redispatches_only_the_failed_segment(client, owner, runtime
 
 @pytest.mark.parametrize("role", ["viewer", "commenter"])
 async def test_retry_is_refused_to_a_viewer(client, owner, runtime, role):  # noqa: F811
+    """A viewer or commenter cannot retry a failed segment."""
     tenant_id, auth = owner
     run = await failed_at_draft(client, auth, runtime)
     seq = draft_of(run)["seq"]
@@ -103,6 +107,7 @@ async def test_retry_is_refused_to_a_viewer(client, owner, runtime, role):  # no
 
 
 async def test_retry_needs_a_failed_segment(client, owner, runtime):  # noqa: F811
+    """Retrying a segment that has not failed is refused."""
     _, auth = owner
     run = await failed_at_draft(client, auth, runtime)
     first = run["segments"][0]["seq"]
@@ -111,6 +116,7 @@ async def test_retry_needs_a_failed_segment(client, owner, runtime):  # noqa: F8
 
 
 async def test_a_second_retry_while_queued_or_running_is_refused(client, owner, runtime):  # noqa: F811
+    """A second retry is refused while the first is still queued or running."""
     _, auth = owner
     run = await failed_at_draft(client, auth, runtime)
     seq = draft_of(run)["seq"]
@@ -128,6 +134,7 @@ async def test_a_second_retry_while_queued_or_running_is_refused(client, owner, 
 
 
 async def test_retry_is_refused_to_an_approver_who_did_not_create_the_run(client, owner, runtime):  # noqa: F811
+    """An approver who did not create the run cannot retry its failed segment."""
     tenant_id, auth = owner
     run = await failed_at_draft(client, auth, runtime)
     seq = draft_of(run)["seq"]

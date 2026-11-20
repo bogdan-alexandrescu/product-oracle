@@ -111,6 +111,7 @@ def texts(view: dict, key: str) -> list[str]:
 
 
 async def test_table_rows_are_readable_lines(client):
+    """Markdown table rows read as plain label and detail lines, never raw pipes."""
     ctx = await table_world(client)
     view = await get(client, ctx, "owner", "usage-alerts")
     assert texts(view, "bets") == [
@@ -126,6 +127,7 @@ async def test_table_rows_are_readable_lines(client):
 
 
 def test_template_block_table_rows():
+    """A template's table block reads its rows as clean label and detail lines."""
     specs = one_pager._template_specs(
         "---\none_pager:\n  blocks:\n    - key: plan\n      title: The plan\n"
         "      sections: [build]\n---\n# Template\n"
@@ -142,6 +144,7 @@ def test_template_block_table_rows():
 
 
 def test_job_answer_never_keeps_pipes():
+    """A job's answer lines never keep stray table pipes, even in partial rows."""
     specs = one_pager.FALLBACK
     sec = Section(section_key="build", heading="What we will build", level=2, ordinal=1,
                   body_md="- a\n- b\n- c", body_text="a b c", content_hash="x")  # fmt: skip
@@ -157,6 +160,7 @@ def test_job_answer_never_keeps_pipes():
 
 
 async def test_edit_a_table_line_patches_its_row(client):
+    """Editing one table line patches only its own row, keeping the table's header."""
     ctx = await table_world(client)
     view = await get(client, ctx, "owner", "usage-alerts")
     r = await edit(client, ctx, "owner", view, "bets-3", "Alert routing: Sends alerts to a team")
@@ -168,6 +172,7 @@ async def test_edit_a_table_line_patches_its_row(client):
 
 
 async def test_owner_named_or_no_owner_yet(client):
+    """The owner is named by who imported the PRD, or left unset, never 'someone'."""
     # Imported by a user: the owner reads by name, with the decider.
     ctx = await world(client)
     view = await get(client, ctx, "viewer")
@@ -222,6 +227,7 @@ async def seed_slice(ctx) -> None:
 
 
 async def test_plan_strip_by_month_with_milestones(client):
+    """The plan strip groups items by milestone and reads its footer in plain words."""
     ctx = await world(client)
     await seed_slice(ctx)
     view = await get(client, ctx, "viewer")
@@ -249,6 +255,7 @@ async def test_plan_strip_by_month_with_milestones(client):
 
 
 def test_plan_strip_rules():
+    """Plan strip rows put dated milestones first; an empty list produces no strip."""
     from oracle.simple import plan_strip
 
     P = plan_strip.PlanItem
@@ -267,6 +274,7 @@ def test_plan_strip_rules():
 
 
 async def test_a_merged_feature_is_not_on_the_plan(client):
+    """An item merged into another drops off the timeline and is not counted twice."""
     ctx = await world(client)
     await seed_slice(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -289,6 +297,7 @@ async def test_a_merged_feature_is_not_on_the_plan(client):
 
 
 def test_every_milestone_row_has_its_name():
+    """Every milestone row in the plan strip shows its name, never just its code."""
     from types import SimpleNamespace as N
 
     from oracle.simple import plan_strip

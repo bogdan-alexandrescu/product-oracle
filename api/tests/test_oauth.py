@@ -112,6 +112,7 @@ async def full_flow(client, scope: str | None = None, role: str = "owner") -> tu
 
 
 async def test_protected_resource_metadata(client):
+    """OAuth protected-resource metadata advertises the right resource and scopes."""
     for path in (
         "/.well-known/oauth-protected-resource",
         "/.well-known/oauth-protected-resource/mcp",
@@ -124,6 +125,7 @@ async def test_protected_resource_metadata(client):
 
 
 async def test_authorization_server_metadata(client):
+    """OAuth authorization-server metadata matches the endpoints the server serves."""
     doc = (await client.get("/.well-known/oauth-authorization-server")).json()
     assert doc["issuer"] == BASE
     assert doc["authorization_endpoint"] == f"{BASE}/oauth/authorize"
@@ -137,6 +139,7 @@ async def test_authorization_server_metadata(client):
 
 
 async def test_public_url_setting_sets_the_issuer(client, monkeypatch):
+    """The configured public URL sets the OAuth issuer used everywhere, challenge too."""
     monkeypatch.setenv("ORACLE_PUBLIC_URL", "https://oracle.example.com/")
     service.oauth_settings.cache_clear()
     try:
@@ -157,6 +160,7 @@ async def test_public_url_setting_sets_the_issuer(client, monkeypatch):
 
 
 async def test_register_a_public_client(client):
+    """Registering a public OAuth client stores its redirect URIs and issues no secret."""
     await seed()
     reg = await register(
         client,
@@ -198,6 +202,7 @@ async def test_register_a_public_client(client):
     ],
 )
 async def test_register_rejects_bad_metadata(client, body, error):
+    """An unsafe redirect URI or other bad client metadata is refused at registration."""
     await seed()
     resp = await client.post("/oauth/register", json=body)
     assert resp.status_code == 400
@@ -207,6 +212,7 @@ async def test_register_rejects_bad_metadata(client, body, error):
 
 
 async def test_register_lands_in_the_default_tenant(client):
+    """A newly registered OAuth client lands in the default tenant."""
     first = await seed()
     reg = await register(client)
     async with unscoped_session() as s:
@@ -235,6 +241,7 @@ async def test_register_is_rate_limited(client, monkeypatch):
 
 
 async def test_register_before_setup_is_unavailable(client):
+    """OAuth client registration is unavailable before initial setup."""
     resp = await client.post("/oauth/register", json={"redirect_uris": [REDIRECT]})
     assert resp.status_code == 503
 
@@ -243,6 +250,7 @@ async def test_register_before_setup_is_unavailable(client):
 
 
 async def test_anonymous_browser_signs_in_first(client):
+    """An anonymous browser must sign in before reaching the OAuth consent screen."""
     await seed()
     reg = await register(client)
     _, challenge = pkce()
@@ -261,6 +269,7 @@ async def test_anonymous_browser_signs_in_first(client):
 
 
 async def test_authorize_rejects_unknown_client_and_redirect_without_redirecting(client):
+    """An unknown client or a mismatched redirect is rejected without redirecting."""
     await sign_in(client)
     reg = await register(client)
     _, challenge = pkce()
@@ -285,6 +294,7 @@ async def test_authorize_rejects_unknown_client_and_redirect_without_redirecting
     ],
 )
 async def test_authorize_errors_go_back_to_the_client(client, override, error):
+    """Bad authorize requests send their error back to the client, not a raw failure."""
     await sign_in(client)
     reg = await register(client)
     _, challenge = pkce()
@@ -303,6 +313,7 @@ async def test_authorize_errors_go_back_to_the_client(client, override, error):
 
 
 async def test_loopback_redirect_may_use_any_port(client):
+    """A loopback redirect may use any port, but its path still must match."""
     await sign_in(client)
     reg = await register(client)
     _, challenge = pkce()
@@ -317,6 +328,7 @@ async def test_loopback_redirect_may_use_any_port(client):
 
 
 async def test_consent_details_and_deny(client):
+    """The consent screen shows the client, scopes in plain words, lets a user deny."""
     await sign_in(client, role="commenter")
     reg = await register(client)
     _, challenge = pkce()
@@ -347,6 +359,7 @@ async def test_consent_details_and_deny(client):
 
 
 async def test_tampered_consent_request_is_rejected(client):
+    """A tampered consent request handle is rejected."""
     await sign_in(client)
     reg = await register(client)
     _, challenge = pkce()
@@ -358,6 +371,7 @@ async def test_tampered_consent_request_is_rejected(client):
 
 
 async def test_decision_requires_a_signed_in_user(client):
+    """Deciding on consent requires a currently signed-in user."""
     await sign_in(client)
     reg = await register(client)
     _, challenge = pkce()
@@ -371,6 +385,7 @@ async def test_decision_requires_a_signed_in_user(client):
 
 
 async def test_full_flow_issues_working_tokens(client):
+    """A full OAuth flow issues working access and refresh tokens with the right scope."""
     reg, tok = await full_flow(client)
     assert tok["token_type"] == "Bearer"
     assert tok["expires_in"] == 3600
@@ -393,6 +408,7 @@ async def test_full_flow_issues_working_tokens(client):
 
 
 async def test_token_response_is_not_cached(client):
+    """The OAuth token endpoint always responds with no-store, never cached."""
     _, _ = await full_flow(client)
     resp = await token(client, grant_type="password")
     assert resp.status_code == 400
@@ -409,6 +425,7 @@ async def _code_for(client) -> tuple[dict, str, str]:
 
 
 async def test_wrong_verifier_is_rejected(client):
+    """A token request with the wrong PKCE verifier, or missing one, is rejected."""
     reg, code, _ = await _code_for(client)
     wrong, _ = pkce()
     resp = await token(
@@ -432,6 +449,7 @@ async def test_wrong_verifier_is_rejected(client):
 
 
 async def test_redirect_mismatch_is_rejected(client):
+    """A token request whose redirect URI does not match the original is rejected."""
     reg, code, verifier = await _code_for(client)
     resp = await token(
         client,
@@ -446,6 +464,7 @@ async def test_redirect_mismatch_is_rejected(client):
 
 
 async def test_code_of_another_client_is_rejected(client):
+    """An authorization code may only be redeemed by the client that requested it."""
     _, code, verifier = await _code_for(client)
     other = await register(client, client_name="Other")
     resp = await token(
@@ -463,6 +482,7 @@ async def test_code_of_another_client_is_rejected(client):
 
 
 async def test_code_reuse_is_rejected_and_revokes_its_tokens(client):
+    """Reusing a spent authorization code is rejected and revokes the tokens it issued."""
     reg, code, verifier = await _code_for(client)
     form = {
         "grant_type": "authorization_code",
@@ -480,6 +500,7 @@ async def test_code_reuse_is_rejected_and_revokes_its_tokens(client):
 
 
 async def test_expired_code_is_rejected(client):
+    """An expired authorization code is rejected with a clear error."""
     reg, code, verifier = await _code_for(client)
     async with unscoped_session() as s:
         await s.execute(
@@ -504,6 +525,7 @@ async def test_expired_code_is_rejected(client):
 
 
 async def test_refresh_rotates(client):
+    """Refreshing an OAuth token rotates both tokens and keeps their family linked."""
     reg, tok = await full_flow(client)
     resp = await token(
         client,
@@ -526,6 +548,7 @@ async def test_refresh_rotates(client):
 
 
 async def test_refresh_reuse_revokes_the_family(client):
+    """Replaying an old refresh token revokes every token in its whole family."""
     reg, tok = await full_flow(client)
     form = {"grant_type": "refresh_token", "client_id": reg["client_id"]}
     second = (await token(client, **form, refresh_token=tok["refresh_token"])).json()
@@ -542,6 +565,7 @@ async def test_refresh_reuse_revokes_the_family(client):
 
 
 async def test_refresh_may_narrow_but_not_widen_scope(client):
+    """Refreshing a token may narrow its scope but never widen it."""
     reg, tok = await full_flow(client, scope="oracle:read")
     form = {"grant_type": "refresh_token", "client_id": reg["client_id"]}
     wide = await token(client, **form, refresh_token=tok["refresh_token"], scope="oracle:write")
@@ -551,6 +575,7 @@ async def test_refresh_may_narrow_but_not_widen_scope(client):
 
 
 async def test_refresh_by_another_client_is_rejected(client):
+    """A refresh token may only be redeemed by the client it was issued to."""
     _, tok = await full_flow(client)
     other = await register(client, client_name="Other")
     resp = await token(
@@ -563,6 +588,7 @@ async def test_refresh_by_another_client_is_rejected(client):
 
 
 async def test_expired_tokens(client):
+    """An expired access token stops working, and so does its refresh once expired."""
     reg, tok = await full_flow(client)
     past = datetime.now(UTC) - timedelta(seconds=1)
     async with unscoped_session() as s:
@@ -584,6 +610,7 @@ async def test_expired_tokens(client):
 
 @pytest.mark.parametrize("which", ["access_token", "refresh_token"])
 async def test_revoke(client, which):
+    """Revoking a token by another client fails silently; the real client revokes it."""
     reg, tok = await full_flow(client)
     other = await register(client, client_name="Other")
     # Another client cannot revoke it (and learns nothing: still 200).
@@ -615,6 +642,7 @@ async def test_revoke(client, which):
 
 
 async def test_verify_rejects_garbage():
+    """Garbage or unknown access tokens never verify as valid."""
     assert await verify_access_token("") is None
     assert await verify_access_token("po_not-an-oauth-token") is None
     assert await verify_access_token("poa_unknown") is None
@@ -626,6 +654,7 @@ async def test_verify_rejects_garbage():
 @pytest.mark.parametrize("role", ROLES)
 @pytest.mark.parametrize("scope", ["oracle:read", "oracle:write", "oracle:read oracle:write"])
 async def test_effective_rights_are_role_intersected_with_scope(client, role, scope):
+    """A token's effective role is its user's role narrowed by the token's own scope."""
     _, tok = await full_flow(client, scope=scope, role=role)
     principal = await verify_access_token(tok["access_token"])
     expected = role if "oracle:write" in scope else "viewer"
@@ -636,6 +665,7 @@ async def test_effective_rights_are_role_intersected_with_scope(client, role, sc
 
 
 async def test_role_changes_apply_to_live_tokens(client):
+    """A role change in the database applies at once to that user's live tokens."""
     r = await seed(password=PASSWORD)
     await client.post("/v1/auth/login", json={"email": "admin@example.com", "password": PASSWORD})
     reg = await register(client)
@@ -658,6 +688,7 @@ async def test_role_changes_apply_to_live_tokens(client):
 
 
 async def test_google_signed_in_user_goes_straight_to_consent(client, fetches):  # noqa: F811
+    """A signed-in Google user goes straight to consent, skipping a sign-in step."""
     r = await seed()
     await _join_at_once(r.tenant_id)  # A5: an uninvited sign-in joins at once
     reg = await register(client)

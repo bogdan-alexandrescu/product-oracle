@@ -63,6 +63,7 @@ async def _seed(client, own_items: bool):
 
 
 async def test_strip_rows_read_the_roadmap_codes(client):
+    """The one-pager's timeline strip shows each milestone's real roadmap code."""
     ctx, roadmap_id = await _seed(client, own_items=True)
     body = {"roadmap_id": roadmap_id, "name": "Kickoff", "date": "2026-11-06"}
     r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
@@ -79,6 +80,7 @@ async def test_strip_rows_read_the_roadmap_codes(client):
 
 
 async def test_a_milestone_with_no_roadmap_milestone_shows_no_code(client):
+    """A milestone with no matching roadmap milestone shows no code, not a stale one."""
     ctx, _ = await _seed(client, own_items=False)
     read = await get_roadmap(client, ctx, "owner")
     assert not [m for m in read["goal_milestones"] if m["prd"]], read["goal_milestones"]

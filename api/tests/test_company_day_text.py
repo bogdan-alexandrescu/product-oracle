@@ -53,6 +53,7 @@ async def company_zone(client, ctx, zone: str) -> None:
 
 
 def test_the_day_is_the_company_day():
+    """A moment's day and its worded form both use the company zone, or a fallback."""
     late = datetime(2026, 10, 12, 20, 0, tzinfo=UTC)
     assert company_time.day(late, AUCKLAND) == date(2026, 10, 13)
     assert company_time.day_in_words(late, AUCKLAND) == "Oct 13"
@@ -70,6 +71,7 @@ def test_the_day_is_the_company_day():
 
 
 async def test_the_reuse_note_and_banner_name_the_company_day(client, runtime, monkeypatch):
+    """The reuse note and the approval banner both name the company's own day."""
     # A fixed approval moment: any age is reusable here (the 30-day rule has its own tests).
     monkeypatch.setattr(reuse, "REUSE_DAYS", 100_000)
     ctx = await make_ctx()
@@ -113,6 +115,7 @@ async def test_the_reuse_note_and_banner_name_the_company_day(client, runtime, m
 
 
 async def test_a_runs_proposals_are_labelled_with_the_company_day(client):
+    """A proposal names the run that made it with a label dated by company day."""
     ctx = await make_ctx()
     await company_zone(client, ctx, AUCKLAND)
     async with tenant_session(ctx.tenant_id) as s:
@@ -168,8 +171,8 @@ EXCEPTIONS = {
     ("simple/constraints.py", "_day"): "a roadmap item's date: a calendar date, no time of day",
     ("shares/render.py", "_dates"): "a shared card's item dates: calendar dates, no time of day",
     ("simple/dates.py", "_day"): "a suggested start or end: a calendar date, no time of day",
-    ("simple/chat_common.py", "_day_words"): "a change card's item dates: calendar dates, no time of day",
-    ("simple/chat_ops.py", "_b_move"): "the first day of a named period (this quarter): calendar date",
+    ("simple/chat_common.py", "_day_words"): "a change card's item dates: calendar dates, no time",
+    ("simple/chat_ops.py", "_b_move"): "the first day of a named period (this quarter)",
     ("simple/priorities.py", "_day"): "the line's key date or milestone: a calendar date, no time",
     ("simple/one_pager_pdf.py", "_plan_html"): "the PDF plan strip's months: calendar dates",
     ("simple/plan.py", "_day"): "a plan milestone's start or end: a calendar date, no time",
@@ -235,6 +238,7 @@ def _all_hits() -> dict[tuple[str, str], list[str]]:
 
 
 def test_every_api_text_builder_words_its_days_through_the_helper():
+    """Every place the API words a date goes through the company_time helper."""
     hits = _all_hits()
     unnamed = [h for key, found in hits.items() if key not in EXCEPTIONS for h in found]
     assert unnamed == [], "word these through company_time, or name them in EXCEPTIONS"
@@ -263,6 +267,7 @@ LATE = datetime(2026, 10, 12, 20, 0, tzinfo=UTC)  # Oct 13, 09:00 NZDT in Auckla
 
 
 def test_the_helper_words_a_moment_with_the_zones_short_name():
+    """A formatted moment carries its zone's short name, and a day its year."""
     assert company_time.stamp(LATE, AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
     assert company_time.stamp(LATE, "America/Los_Angeles") == "Oct 12, 2026, 1:00 PM PDT"
     assert company_time.stamp(LATE.replace(tzinfo=None), AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
@@ -274,6 +279,7 @@ def test_the_helper_words_a_moment_with_the_zones_short_name():
 
 
 def test_the_spec_sources_name_the_company_day_of_the_prd_approval():
+    """A spec's sources section names its PRD's approval date in company time."""
     from oracle.specs import contract
 
     inputs = contract.SpecInputs(
@@ -292,6 +298,7 @@ def test_the_spec_sources_name_the_company_day_of_the_prd_approval():
 
 
 def test_review_yaml_names_the_company_day_it_was_sent_back():
+    """A review file's header names the company day it was sent back."""
     from oracle.runs import review_file
     from tests.test_review_file import _full
 
@@ -332,6 +339,7 @@ async def test_the_served_review_yaml_names_the_company_day(client):
 
 
 def test_the_export_dates_are_the_company_time_with_its_short_name():
+    """An export's date uses the company zone and its short name, or renders empty."""
     from oracle.export import render
 
     # Each part held on one line, as on the slides (PR 1300 round 3).
@@ -340,6 +348,7 @@ def test_the_export_dates_are_the_company_time_with_its_short_name():
 
 
 def test_the_ritual_pre_read_is_due_in_the_company_time():
+    """A ritual's pre-read due date is worded in company time, never UTC."""
     from oracle.rituals import blocks
 
     md = blocks.markdown("Weekly product review", LATE, [], AUCKLAND)
@@ -348,6 +357,7 @@ def test_the_ritual_pre_read_is_due_in_the_company_time():
 
 
 async def test_blocker_gate_rationales_name_the_company_day(client):
+    """A blocker's risk rationale names its review date in the company's day."""
     from oracle.blockers.readiness import critical_blockers
     from oracle.readiness import ReadinessContext
     from oracle.v2 import models as m
@@ -410,12 +420,14 @@ async def test_blocker_gate_rationales_name_the_company_day(client):
 
 
 def test_short_date_takes_the_company_zone():
+    """The short date shown for baseline reuse reads the company's own zone."""
     at = datetime(2026, 10, 12, 20, 0, tzinfo=UTC)
     assert reuse.short_date(at, AUCKLAND) == "Oct 13"
     assert reuse.short_date(at.isoformat(), "America/Los_Angeles") == "Oct 12"
 
 
 def test_run_label_takes_the_company_zone():
+    """A run's label dates itself in the company's own time zone."""
     from oracle.baseline.schemas import ProposalRun
 
     run = ProposalRun(
@@ -430,6 +442,7 @@ def test_run_label_takes_the_company_zone():
 
 
 def test_the_deck_banner_names_the_company_time():
+    """An exported deck's banner names its approval time in the company zone."""
     from oracle.docs.models import Document, DocumentVersion
     from oracle.export import deck
     from oracle.export.render import ExportVersion
@@ -508,6 +521,7 @@ def _reports():
 
 
 def test_the_version_reports_name_the_company_time():
+    """A document's version report stamps when it was generated in company time."""
     from oracle.docs.models import Document
     from oracle.jobs import service as jobs
 

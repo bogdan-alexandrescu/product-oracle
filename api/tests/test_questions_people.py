@@ -129,6 +129,7 @@ def test_question_subject_needs_its_own_fields(subject):
 
 
 def test_question_prompt_and_why_are_bounded():
+    """A question's prompt and rationale are bounded, and a blank prompt is refused."""
     s = {"kind": "entity", "entity_id": str(uuid.uuid4())}
     with pytest.raises(ValidationError):
         QuestionCreate(prompt="x" * 1001, asked_to=uuid.uuid4(), subject=s)
@@ -169,6 +170,7 @@ async def test_unassigned_goes_to_author(client):
 
 
 async def test_batch_assign_sends_each_named_question_to_that_person(client):
+    """A batch assign sends a named question to its picked person, others to the asker."""
     ctx = await company()
     out = await create_intake(client, ctx, "commenter", batch_size=1)
     intake_id = out["intake"]["id"]
@@ -193,6 +195,7 @@ async def test_batch_assign_sends_each_named_question_to_that_person(client):
 
 
 async def test_batch_assign_to_a_viewer_is_refused_and_asks_nothing(client):
+    """Assigning a question to someone who cannot answer is refused, asking nothing."""
     ctx = await company()
     out = await create_intake(client, ctx, "commenter", batch_size=1)
     intake_id = out["intake"]["id"]
@@ -235,6 +238,7 @@ async def test_delegate_sees_question(client):
 
 
 async def test_ask_a_teammate_about_a_document_section(client):
+    """Asking about a document section records who asked whom, linked to that section."""
     ctx = await company()
     slug, doc_id = await document_id(client, ctx)
     q = await ask(
@@ -268,6 +272,7 @@ async def test_ask_a_teammate_about_a_document_section(client):
 
 
 async def test_a_general_question_is_answered_and_the_asker_reads_the_answer(client):
+    """Answering a question clears it from the inbox, and the asker reads the answer."""
     ctx = await company()
     _, doc_id = await document_id(client, ctx)
     q = await ask(
@@ -285,6 +290,7 @@ async def test_a_general_question_is_answered_and_the_asker_reads_the_answer(cli
 
 
 async def test_every_subject_kind_reads_with_its_title_and_link(client):
+    """Every kind of question subject shows its own readable title and link."""
     ctx = await company()
     ent = await entity(client, ctx, type="goal", key="activation", title="Activation")
     out = await create_intake(client, ctx, "commenter", batch_size=1)
@@ -330,6 +336,7 @@ async def test_every_subject_kind_reads_with_its_title_and_link(client):
 
 
 async def test_a_disabled_member_cannot_be_asked_nor_listed(client):
+    """A disabled member cannot be asked a question or found in the people search."""
     ctx = await company()
     ent = await entity(client, ctx, type="goal", key="activation", title="Activation")
     resp = await client.post(
@@ -400,6 +407,7 @@ async def test_reassign_and_withdraw(client):
 async def test_an_answered_question_is_not_reassigned_and_the_author_moves_intake_questions(
     client,
 ):
+    """An answered question cannot be reassigned, though a draft one still can be."""
     ctx = await company()
     out = await create_intake(client, ctx, "commenter", batch_size=2)
     first, second = await questions_of(client, ctx, out["intake"]["id"], "asked")
@@ -491,6 +499,7 @@ async def test_private_gap_not_assignable(client, fake):
 
 
 async def test_people_lists_active_members_with_five_fields(client):
+    """The people search shows only active members with their write access."""
     ctx = await company()
     resp = await client.get("/v1/people", params={"q": "appr"}, headers=ctx.as_("viewer"))
     assert resp.status_code == 200, resp.text
@@ -674,6 +683,7 @@ async def test_batch_skips_a_gap_owner_who_can_no_longer_answer(client):
 
 
 async def test_batch_skips_a_gap_owner_demoted_to_viewer(client):
+    """A batch assign skips a gap's picked owner once they are demoted to viewer."""
     ctx = await company()
     out = await create_intake(client, ctx, "commenter", batch_size=1)
     intake_id = out["intake"]["id"]

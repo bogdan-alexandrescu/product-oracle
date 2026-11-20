@@ -84,6 +84,7 @@ async def meeting(client, w: World, **over) -> dict:
 
 
 async def test_a_cut_on_another_roadmap_is_a_proposal_for_its_owner(client):
+    """A meeting cut on another roadmap's item becomes a proposal for its own decider."""
     w = await world()
     b = await with_roadmap_b(w)
     m = await meeting(client, w)
@@ -112,6 +113,7 @@ async def test_a_cut_on_another_roadmap_is_a_proposal_for_its_owner(client):
 
 
 async def test_accepting_applies_and_declining_leaves_it(client):
+    """A declined cut proposal leaves the roadmap unchanged; its decider can accept."""
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)
@@ -135,6 +137,7 @@ async def test_accepting_applies_and_declining_leaves_it(client):
 
 
 async def test_items_on_the_agenda_still_apply(client):
+    """A cut on an item already on the meeting's own agenda still applies at once."""
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)
@@ -147,6 +150,7 @@ async def test_items_on_the_agenda_still_apply(client):
 
 
 async def test_a_task_on_another_roadmap_is_a_proposal(client):
+    """Adding a task to an item on another roadmap is a proposal, not applied at once."""
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)
@@ -162,6 +166,7 @@ async def test_a_task_on_another_roadmap_is_a_proposal(client):
 
 
 async def test_the_meetings_agent_makes_no_card_off_its_agenda(client):
+    """The meeting chat agent never offers a card for an action off its own agenda."""
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)

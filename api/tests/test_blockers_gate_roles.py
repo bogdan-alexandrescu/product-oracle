@@ -115,6 +115,7 @@ async def _resolve(client, ctx, blocker_id):
 async def test_reclassifying_an_approvers_decision_into_the_gate_reopens_it(
     client, action, start, patch
 ):
+    """Worsening a blocker past an approver's decision reopens it for an owner."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, **start)
     resp = await _decide(client, ctx, b["id"], action, "approver")
@@ -136,6 +137,7 @@ async def test_reclassifying_an_approvers_decision_into_the_gate_reopens_it(
 
 @pytest.mark.parametrize("action", ["accept-risk", "feasibility-scope"])
 async def test_an_owner_reclassifying_and_confirming_keeps_the_decision(client, action):
+    """An owner who reclassifies and confirms at once keeps the decision standing."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, severity="high")
     resp = await _decide(client, ctx, b["id"], action, "approver")
@@ -177,6 +179,7 @@ async def _archive(client, ctx, entity_id, how: str, who: str):
 
 @pytest.mark.parametrize("how", ["reject", "patch", "delete"])
 async def test_an_approver_cannot_archive_a_blocker_that_still_gates(client, how):
+    """Stops an approver from clearing a blocker that is still holding back the document."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     resp = await _archive(client, ctx, b["id"], how, "approver")
@@ -188,6 +191,7 @@ async def test_an_approver_cannot_archive_a_blocker_that_still_gates(client, how
 
 
 async def test_an_accepted_risk_still_gates_for_archiving(client):
+    """A blocker with an accepted risk still gates archiving by an approver."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx)
     assert (await _decide(client, ctx, b["id"], "accept-risk", "owner")).status_code == 200
@@ -197,6 +201,7 @@ async def test_an_accepted_risk_still_gates_for_archiving(client):
 
 @pytest.mark.parametrize("how", ["reject", "patch", "delete"])
 async def test_an_owner_may_archive_a_blocker_that_still_gates(client, how):
+    """An owner may archive a blocker that still gates, where an approver cannot."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     resp = await _archive(client, ctx, b["id"], how, "owner")
@@ -206,6 +211,7 @@ async def test_an_owner_may_archive_a_blocker_that_still_gates(client, how):
 
 @pytest.mark.parametrize("how", ["reject", "delete"])
 async def test_an_approver_may_archive_a_resolved_blocker(client, how):
+    """An approver may archive a blocker once it is resolved."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     await _resolve(client, ctx, b["id"])
@@ -216,6 +222,7 @@ async def test_an_approver_may_archive_a_resolved_blocker(client, how):
 
 @pytest.mark.parametrize("start", [{"severity": "high"}, {"type": "soft"}])
 async def test_an_approver_may_archive_a_blocker_that_does_not_gate(client, start):
+    """Lets an approver clear a blocker once it stops actually holding the document back."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, **start)
     resp = await _archive(client, ctx, b["id"], "reject", "approver")
@@ -224,6 +231,7 @@ async def test_an_approver_may_archive_a_blocker_that_does_not_gate(client, star
 
 
 async def test_an_approver_may_still_archive_other_constraints(client):
+    """An approver may still archive a plain constraint that is not a blocker."""
     ctx = await make_ctx()
     entity_id = await make_entity(ctx, "constraint", "plain-constraint")
     resp = await _archive(client, ctx, entity_id, "reject", "approver")
@@ -232,6 +240,7 @@ async def test_an_approver_may_still_archive_other_constraints(client):
 
 @pytest.mark.parametrize("op", ["delete", "update"])
 async def test_accepting_a_proposal_to_archive_a_gating_blocker_takes_an_owner(client, op):
+    """Closes the proposal route an approver could use to end-run owner-only blocker rules."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     body = {"op": op, "kind": "entity", "entity_id": b["id"], "fields": {}}
@@ -253,6 +262,7 @@ async def test_accepting_a_proposal_to_archive_a_gating_blocker_takes_an_owner(c
 
 
 async def test_a_yaml_import_cannot_archive_a_gating_blocker_for_an_approver(client):
+    """A YAML import cannot let an approver archive a blocker that still gates."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     data = yaml.safe_load((await client.get("/v1/baseline/yaml", headers=ctx.as_("viewer"))).text)
@@ -280,6 +290,7 @@ async def test_a_yaml_import_cannot_archive_a_gating_blocker_for_an_approver(cli
 
 @pytest.mark.parametrize("tool", ["reject_entity", "delete_entity", "update_entity"])
 async def test_the_mcp_tools_cannot_archive_a_gating_blocker_for_an_approver(client, tool):
+    """MCP entity tools cannot let an approver archive a blocker that still gates."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     args = {"entity_id": b["id"]}
@@ -329,6 +340,7 @@ async def _legacy(ctx, doc_id, key: str, *, status_event: bool = True, **fields)
 
 @pytest.mark.parametrize("status_event", [True, False])
 async def test_a_legacy_soft_low_resolved_blocker_does_not_block(client, status_event):
+    """A legacy soft, low, resolved blocker passes the gate without a snapshot."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     entity_id = await _legacy(
@@ -342,6 +354,7 @@ async def test_a_legacy_soft_low_resolved_blocker_does_not_block(client, status_
 
 
 async def test_a_legacy_critical_blocker_is_judged_on_its_status_not_as_tampered(client):
+    """A legacy blocker with no snapshot is judged by status, not called tampered."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await _legacy(ctx, doc_id, "legacy-critical")
@@ -351,6 +364,7 @@ async def test_a_legacy_critical_blocker_is_judged_on_its_status_not_as_tampered
 
 
 async def test_a_legacy_blocker_edited_after_its_snapshot_fails_closed(client):
+    """A legacy blocker changed after its recorded snapshot fails the gate closed."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     entity_id = await _legacy(ctx, doc_id, "legacy-edited", severity="low", type="soft")
@@ -385,6 +399,7 @@ async def test_a_legacy_blocker_edited_after_its_snapshot_fails_closed(client):
 
 
 async def test_an_unreadable_legacy_strategy_still_fails_closed(client):
+    """A blocker strategy that cannot be parsed fails the gate closed, not open."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await make_entity(
@@ -426,6 +441,7 @@ async def test_events_of_one_blocker_are_strictly_ordered(client, monkeypatch):
 
 
 async def test_a_reclassification_reads_sensibly_in_the_history(client):
+    """A reclassification is logged in plain words, not as a status change."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx)
     resp = await client.patch(
@@ -453,6 +469,7 @@ async def test_a_reclassification_reads_sensibly_in_the_history(client):
     ],
 )
 async def test_the_403_names_the_configured_role(client, action, text):
+    """A role-denied decision names the configured deciding role, not 'propose'."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx)
     resp = await _decide(client, ctx, b["id"], action, "approver")
@@ -462,6 +479,7 @@ async def test_the_403_names_the_configured_role(client, action, text):
 
 
 async def test_a_blank_success_threshold_is_refused_at_approval(client):
+    """A feasibility scope needs a real success threshold, not a blank one."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     exp = await _experiment(client, ctx, b["id"], success_threshold="   ")
@@ -476,6 +494,7 @@ async def test_a_blank_success_threshold_is_refused_at_approval(client):
 
 
 async def test_no_proposal_is_left_by_a_refused_archive(client):
+    """A refused archive attempt leaves no stray proposal behind."""
     ctx = await make_ctx()
     _doc_id, b = await _blocker(client, ctx)
     assert (await _archive(client, ctx, b["id"], "delete", "approver")).status_code == 403

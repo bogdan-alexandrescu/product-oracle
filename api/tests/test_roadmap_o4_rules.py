@@ -29,6 +29,7 @@ def _marks(body: str, bases: list[Basis], ref: date = date(2026, 10, 20)):
 
 
 def test_the_prd_is_the_one_named_in_front_matter_never_a_link():
+    """A document's PRD is the one named in its own front matter, never a text link."""
     assert doc_dates.declared_prd({"prd": {"document": "checkout", "version": 2}}) == "checkout"
     assert doc_dates.declared_prd({"prd": "checkout"}) == "checkout"
     assert doc_dates.declared_prd({"title": "See [PRD](/documents/checkout/v/2#now)"}) is None
@@ -36,6 +37,7 @@ def test_the_prd_is_the_one_named_in_front_matter_never_a_link():
 
 
 def test_an_ambiguous_numeric_date_needs_a_basis_for_both_readings():
+    """An ambiguous numeric date needs a basis for both its readings to count verified."""
     may_6, jun_5 = date(2026, 5, 6), date(2026, 6, 5)
     (one,) = _marks("Beta on 05/06/2026.", [_basis(may_6)])
     assert set(one.days) == {may_6, jun_5} and one.status == "unverified"
@@ -68,6 +70,7 @@ def test_a_two_way_date_names_the_reading_that_still_needs_a_source():
 
 
 def test_a_year_less_date_is_the_next_such_day_on_or_after_the_draft():
+    """A date with no year is the next such day from the draft's date, not a past one."""
     ref = date(2026, 10, 20)
     (later,) = _marks("GA Dec 15.", [_basis(date(2026, 12, 15))], ref)
     assert later.day == date(2026, 12, 15) and later.status == "verified"
@@ -78,6 +81,7 @@ def test_a_year_less_date_is_the_next_such_day_on_or_after_the_draft():
 
 
 def test_a_date_inside_an_html_comment_is_checked():
+    """A date hidden inside an HTML comment is still checked against verified bases."""
     (mark,) = _marks("Plan.\n\n<!-- GA 2026-12-15 -->\n", [])
     assert mark.text == "2026-12-15" and mark.status == "unverified"
     (inline,) = _marks("Plan <!-- ship 2026-12-16 --> soon.\n", [_basis(date(2026, 12, 16))])

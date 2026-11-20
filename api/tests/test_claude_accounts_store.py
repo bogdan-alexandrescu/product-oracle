@@ -22,6 +22,7 @@ async def _records(tenant_id, account_id=None):
 
 
 async def test_acquiring_counts_the_hold_and_opens_its_record(tenant_id):
+    """Acquiring a hold raises the assigned count and opens its own log record."""
     a = await add_account(tenant_id, "work")
     assignment_id, assigned = await store.acquire_hold(
         tenant_id, a.account_id, now=now(), task_id="reporting", attempt_id="att-1"
@@ -37,6 +38,7 @@ async def test_acquiring_counts_the_hold_and_opens_its_record(tenant_id):
 
 
 async def test_releasing_closes_the_record_and_a_duplicate_writes_nothing(tenant_id):
+    """Releasing a hold closes its record; releasing it again writes nothing."""
     a = await add_account(tenant_id, "work")
     hold_id, _ = await store.acquire_hold(tenant_id, a.account_id, now=now())
     assert await store.release_hold(tenant_id, a.account_id, assignment_id=hold_id, now=now()) == (
@@ -51,6 +53,7 @@ async def test_releasing_closes_the_record_and_a_duplicate_writes_nothing(tenant
 
 
 async def test_a_release_reporting_the_credential_unreadable_ends_as_unusable(tenant_id):
+    """Releasing a hold as unreadable marks the account itself unreadable."""
     a = await add_account(tenant_id, "work")
     hold_id, _ = await store.acquire_hold(tenant_id, a.account_id, now=now())
     await store.release_hold(
@@ -61,6 +64,7 @@ async def test_a_release_reporting_the_credential_unreadable_ends_as_unusable(te
 
 
 async def test_an_expired_hold_is_pruned_and_closed_at_its_own_deadline(tenant_id):
+    """Pruning an expired hold closes its record at the hold's own deadline."""
     a = await add_account(tenant_id, "work")
     taken = now() - timedelta(hours=4)
     hold_id, _ = await store.acquire_hold(tenant_id, a.account_id, now=taken)
@@ -74,6 +78,7 @@ async def test_an_expired_hold_is_pruned_and_closed_at_its_own_deadline(tenant_i
 
 
 async def test_an_expired_hold_dropped_by_a_later_assignment_is_closed_too(tenant_id):
+    """Acquiring a new hold also closes the account's own already-expired ones."""
     a = await add_account(tenant_id, "work")
     await store.acquire_hold(tenant_id, a.account_id, now=now() - timedelta(hours=4))
     _, assigned = await store.acquire_hold(tenant_id, a.account_id, now=now())
@@ -83,6 +88,7 @@ async def test_an_expired_hold_dropped_by_a_later_assignment_is_closed_too(tenan
 
 
 async def test_draining_marks_every_live_hold_and_leaving_it_clears_the_marks(tenant_id):
+    """Draining marks every live hold to move; leaving the state clears them."""
     a = await add_account(tenant_id, "work")
     h1, _ = await store.acquire_hold(tenant_id, a.account_id, now=now())
     await store.acquire_hold(tenant_id, a.account_id, now=now())
@@ -102,6 +108,7 @@ async def test_draining_marks_every_live_hold_and_leaving_it_clears_the_marks(te
 
 
 async def test_a_drained_account_reaches_zero_holders_by_swaps(tenant_id):
+    """Swapping a job off a draining account is how it reaches zero holders."""
     a = await add_account(tenant_id, "alpha")
     b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
     first = await pool.assign(tenant_id, job="reporting", attempt_id="x")
@@ -117,6 +124,7 @@ async def test_a_drained_account_reaches_zero_holders_by_swaps(tenant_id):
 async def test_a_swap_moves_the_hold_in_one_commit_with_one_closed_and_one_opened_record(
     tenant_id,
 ):
+    """A swap closes the old account's record and opens the new one as one commit."""
     a = await add_account(tenant_id, "alpha")
     b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.3)})
     hold_id, _ = await store.acquire_hold(
@@ -153,6 +161,7 @@ async def test_a_swap_moves_the_hold_in_one_commit_with_one_closed_and_one_opene
 
 
 async def test_no_other_account_keeps_the_hold_and_says_why(tenant_id):
+    """A swap with no other account available keeps the original hold, and says why."""
     a = await add_account(tenant_id, "alpha")
     await add_account(tenant_id, "paused", state=AccountState.PAUSED)
     got = await pool.assign(tenant_id, job="reporting", attempt_id="x")
@@ -163,6 +172,7 @@ async def test_no_other_account_keeps_the_hold_and_says_why(tenant_id):
 
 
 async def test_a_swap_off_an_unusable_account_keeps_the_next_ask_away_from_it(tenant_id):
+    """Stops the pool from handing the next job right back to an account just marked unusable."""
     a = await add_account(tenant_id, "alpha")
     b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
     got = await pool.assign(tenant_id, job="reporting", attempt_id="x")
@@ -173,6 +183,7 @@ async def test_a_swap_off_an_unusable_account_keeps_the_next_ask_away_from_it(te
 
 
 async def test_the_sweep_remembers_the_state_it_overrules_and_recovery_gives_it_back(tenant_id):
+    """Marking an account needing sign-in remembers its prior state to restore."""
     a = await add_account(tenant_id, "work", state=AccountState.PAUSED)
     marked = await store.mark_reauth_required(tenant_id, a.account_id, "refresh failed")
     assert marked.state is AccountState.REAUTH_REQUIRED
@@ -186,6 +197,7 @@ async def test_the_sweep_remembers_the_state_it_overrules_and_recovery_gives_it_
 
 
 async def test_a_person_setting_a_state_forgets_what_the_sweep_remembered(tenant_id):
+    """Setting sign-in-needed by hand forgets what the sweep meant to restore."""
     a = await add_account(tenant_id, "work", state=AccountState.DRAINING)
     await store.mark_reauth_required(tenant_id, a.account_id, "refresh failed")
     await store.set_state_and_moves(
@@ -197,6 +209,7 @@ async def test_a_person_setting_a_state_forgets_what_the_sweep_remembered(tenant
 
 
 async def test_signing_in_again_recovers_and_keeps_holds_and_readings(tenant_id):
+    """Signing in again recovers an account while keeping its holds and readings."""
     a = await add_account(tenant_id, "work", windows={"five_hour": window(0.4)})
     await store.acquire_hold(tenant_id, a.account_id, now=now())
     await store.mark_reauth_required(tenant_id, a.account_id, "refresh failed: reauth_required")
@@ -208,6 +221,7 @@ async def test_signing_in_again_recovers_and_keeps_holds_and_readings(tenant_id)
 
 
 async def test_removing_an_account_closes_its_open_hold_records(tenant_id):
+    """Removing an account closes every one of its open hold records first."""
     a = await add_account(tenant_id, "work")
     await store.acquire_hold(tenant_id, a.account_id, now=now())
     await store.acquire_hold(tenant_id, a.account_id, now=now() - timedelta(hours=4))
@@ -220,6 +234,7 @@ async def test_removing_an_account_closes_its_open_hold_records(tenant_id):
 
 
 async def test_a_reading_is_merged_in_a_transaction(tenant_id):
+    """A usage reading merges in one transaction; an older one never wins."""
     a = await add_account(tenant_id, "work", windows={"five_hour": window(0.9)})
     await store.record_reading(tenant_id, a.account_id, {"seven_day": window(0.1)}, now())
     account = await get_account(tenant_id, a.account_id)
@@ -230,6 +245,7 @@ async def test_a_reading_is_merged_in_a_transaction(tenant_id):
 
 
 async def test_the_pool_is_one_companys(tenant_id):
+    """An account's pool belongs to one company; another's calls see nothing."""
     from tests.conftest import make_tenant
 
     other = await make_tenant("Other Co")
@@ -240,6 +256,7 @@ async def test_the_pool_is_one_companys(tenant_id):
 
 
 async def test_an_unreadable_report_is_forgotten_by_the_sweep(tenant_id):
+    """An unreadable mark on an account is cleared by the next pruning sweep."""
     a = await add_account(tenant_id, "work")
     await edit_row(tenant_id, a.account_id, unreadable_at=now() - timedelta(hours=1))
     await store.prune_holds(tenant_id, a.account_id, now=now())

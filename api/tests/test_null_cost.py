@@ -29,6 +29,7 @@ def _running(run: dict) -> dict:
 
 
 def test_cost_columns_are_nullable_with_no_zero_default():
+    """A run's cost and duration columns have no zero default; unreported stays null."""
     for column in (Run.__table__.c.spent_usd, RunSegment.__table__.c.cost_usd):
         assert column.nullable
         assert column.server_default is None
@@ -36,6 +37,7 @@ def test_cost_columns_are_nullable_with_no_zero_default():
 
 
 def test_a_sum_counts_only_the_known_costs():
+    """Summing costs counts only the ones actually reported, ignoring unknowns."""
     assert service._known_sum([None, None]) is None
     assert service._known_sum([]) is None
     assert service._known_sum([None, 0.5, "1.25"]) == Decimal("1.75")
@@ -43,6 +45,7 @@ def test_a_sum_counts_only_the_known_costs():
 
 
 async def test_a_run_with_no_cost_reported_has_unknown_spend(client, owner):
+    """A run with no reported cost shows unknown spend, not zero, until cost arrives."""
     _, auth = owner
     draft = await create(client, auth)
     assert draft["spent_usd"] is None
@@ -72,6 +75,7 @@ async def test_a_run_with_no_cost_reported_has_unknown_spend(client, owner):
 
 
 async def test_a_timed_out_call_has_no_duration():
+    """A timed-out call records no duration instead of a misleading zero."""
     assert outbox.Answer().duration_ms is None
 
     def timeout(request: httpx.Request) -> httpx.Response:

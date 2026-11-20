@@ -25,6 +25,7 @@ from tests.review_v2_helpers import (
 
 
 async def test_states_start_unreviewed_with_revisions(client):
+    """A document's sections all start unreviewed, each with its revision."""
     ctx = await setup(client)
     resp = await client.get(ctx.v(1, "/section-states"), headers=ctx.auth)
     body = resp.json()
@@ -45,6 +46,7 @@ async def test_states_start_unreviewed_with_revisions(client):
 
 
 async def test_an_approval_binds_to_its_revision_and_carries_to_unchanged_sections(client):
+    """A section approval binds to its revision and goes stale on edit."""
     ctx = await setup(client)
     approver = await person(ctx.tenant_id, "approver")
     for key in ("problem", "solution"):
@@ -71,6 +73,7 @@ async def test_an_approval_binds_to_its_revision_and_carries_to_unchanged_sectio
 
 
 async def test_an_edit_invalidates_only_the_affected_section(client):
+    """Editing one section invalidates only that section's approval."""
     ctx = await setup(client)
     approver = await person(ctx.tenant_id, "approver")
     owner = await person(ctx.tenant_id, "commenter", "owner")
@@ -200,6 +203,7 @@ async def test_an_accepted_ai_patch_invalidates_the_section_approval(client):
 
 
 async def test_two_reviewers_comment_concurrently_on_different_sections(client):
+    """Two reviewers commenting on different sections at once both succeed."""
     ctx = await setup(client)
     a = await person(ctx.tenant_id, "commenter", "a")
     b = await person(ctx.tenant_id, "commenter", "b")
@@ -220,6 +224,7 @@ async def test_two_reviewers_comment_concurrently_on_different_sections(client):
 
 
 async def test_a_verdict_on_a_stale_revision_is_a_conflict(client):
+    """A verdict on a stale section revision is refused as a conflict."""
     ctx = await setup(client)
     s1 = await states(client, ctx.auth, 1)
     old = s1["problem"]["revision"]
@@ -238,6 +243,7 @@ async def test_a_verdict_on_a_stale_revision_is_a_conflict(client):
 
 
 async def test_the_decider_approves_current_versions_only(client):
+    """Only the decider gives final approval, only on the current version."""
     ctx = await setup(client)
     decider = await person(ctx.tenant_id, "approver", "decider")
     other = await person(ctx.tenant_id, "approver", "other")
@@ -265,6 +271,7 @@ async def test_the_decider_approves_current_versions_only(client):
 
 
 async def test_no_unanimity_unless_mandatory_reviewers_are_configured(client):
+    """Publishing needs only the decider unless mandatory reviewers are set."""
     ctx = await setup(client)
     decider = await person(ctx.tenant_id, "approver", "decider")
     legal = await person(ctx.tenant_id, "approver", "legal")
@@ -304,6 +311,7 @@ async def test_no_unanimity_unless_mandatory_reviewers_are_configured(client):
 
 
 async def test_policy_validation_and_company_default(client):
+    """A review policy needs an approver decider, an owner, a fresh lock."""
     ctx = await setup(client)
     commenter = await person(ctx.tenant_id, "commenter")
     resp = await client.put(
@@ -337,6 +345,7 @@ async def test_policy_validation_and_company_default(client):
 
 
 async def test_severity_classifies_change_requests(client):
+    """Comments and verdicts carry a severity that counts and can be edited."""
     ctx = await setup(client)
     resp = await client.post(
         ctx.v(1, "/comments"),
@@ -398,6 +407,7 @@ async def test_a_held_rewrite_flags_its_stock_reason(client):
 
 
 def test_a_patch_with_its_own_reason_is_not_stock():
+    """A patch is stock rationale only when its reason matches canned text."""
     from oracle.review.schemas import HELD_REMOVE_REASON, HELD_REWRITE_REASON, SectionPatchOut
 
     def out(rationale):

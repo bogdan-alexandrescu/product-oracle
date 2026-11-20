@@ -154,6 +154,7 @@ AREA = ["caps", "safe-mode"]
 
 
 async def test_carried_decisions_are_the_standing_decided_ones(client, ctx):
+    """A carried PRD keeps only still-decided decisions, not reversed or trashed ones."""
     w = await _world(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
         got = await carried.inputs(s, uuid.UUID(w["old"]["id"]), AREA, "User Safety",
@@ -170,6 +171,7 @@ async def test_carried_decisions_are_the_standing_decided_ones(client, ctx):
 
 
 async def test_carried_bases_are_the_area_items_verified_ones(client, ctx):
+    """A new PRD can only carry forward bases that are verified for its chosen area."""
     w = await _world(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
         got = await carried.inputs(s, uuid.UUID(w["old"]["id"]), AREA)
@@ -178,6 +180,7 @@ async def test_carried_bases_are_the_area_items_verified_ones(client, ctx):
 
 
 async def test_brief_replaces_an_approved_prd_and_says_what_it_carries(client, ctx):
+    """Starting from an approved PRD shows what it carries, and blocks a draft source."""
     w = await _world(client, ctx)
     r = await client.get(f"/v1/intakes/replaces/{w['old']['id']}/carried",
                          params={"item_keys": AREA}, headers=ctx.as_("commenter"))  # fmt: skip
@@ -201,6 +204,7 @@ async def test_brief_replaces_an_approved_prd_and_says_what_it_carries(client, c
 
 
 async def test_run_prompt_lists_the_carried_inputs(client, ctx):
+    """The next-draft prompt lists the carried decisions and bases, but only for a PRD."""
     w = await _world(client, ctx)
     replaces = {"document_id": w["old"]["id"], "area_name": "User Safety",
                 "area_scope": "caps, tripwires and ban prevention", "item_keys": AREA}  # fmt: skip
@@ -232,6 +236,7 @@ CARRIED_SECTION = f"# Carried from {OLD} {{#carried}}\n- D-7 Cap at 30 messages 
 
 
 def test_critic_flags_a_departure_and_a_dropped_item():
+    """A draft that contradicts or silently drops a carried decision is flagged."""
     c = _carried()
     good = CARRIED_SECTION + (
         "# Rate caps {#caps}\nContinues: caps\nWe keep D-7 Cap at 30 messages a minute.\n"

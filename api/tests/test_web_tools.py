@@ -160,6 +160,7 @@ async def world():
 
 
 def test_read_web_is_a_run_token_scope_mapped_to_the_web_routes():
+    """The read:web scope gates web search and fetch routes; reading is not a write."""
     assert "read:web" in SCOPES
     assert scopes.required_scope("POST", "/v1/web/search") == "read:web"
     assert scopes.required_scope("POST", "/v1/web/fetch") == "read:web"
@@ -177,6 +178,7 @@ def test_read_web_is_a_run_token_scope_mapped_to_the_web_routes():
 async def test_a_run_token_with_read_web_gets_untrusted_results_recorded_with_refs(
     client, world, provider
 ):
+    """Web search results come back marked untrusted, with a note and refs for fetch."""
     tenant_id, owner = world
     headers = await _as_run(tenant_id, owner)
     resp = await client.post("/v1/web/search", json={"query": "Competitor A news"}, headers=headers)
@@ -227,6 +229,7 @@ async def test_a_run_token_with_read_web_gets_untrusted_results_recorded_with_re
 
 @pytest.mark.parametrize("path", ["/v1/web/search", "/v1/web/fetch"])
 async def test_people_and_tokens_without_read_web_get_403(client, world, provider, net, path):
+    """A person, token, or run lacking read:web cannot search or fetch the web."""
     tenant_id, owner = world
     body = {"query": "Competitor A"} if path.endswith("search") else {"url": "https://a.example/"}
     async with tenant_session(tenant_id) as s:
@@ -260,6 +263,7 @@ async def test_people_and_tokens_without_read_web_get_403(client, world, provide
 
 
 async def test_people_are_never_offered_the_web_tools(client, world):
+    """People's own sessions are never offered the search-web or fetch-page capability."""
     tenant_id, owner = world
     resp = await client.get("/v1/me/capabilities", headers=_session(owner))
     assert resp.status_code == 200, resp.text
@@ -271,6 +275,7 @@ async def test_people_are_never_offered_the_web_tools(client, world):
 
 
 async def test_the_31st_search_in_a_run_gets_429(client, world, provider):
+    """A run is capped at 30 web searches, with a fresh cap for every new run."""
     tenant_id, owner = world
     headers = await _as_run(tenant_id, owner)
     for i in range(30):
@@ -289,6 +294,7 @@ async def test_the_31st_search_in_a_run_gets_429(client, world, provider):
 
 
 async def test_a_search_with_no_results_still_counts(client, world):
+    """A web search that finds nothing still counts against the run's search cap."""
     tenant_id, owner = world
     empty = FakeProvider(results=[])
     app.dependency_overrides[get_search_provider] = lambda: empty
@@ -302,6 +308,7 @@ async def test_a_search_with_no_results_still_counts(client, world):
 
 
 async def test_the_monthly_setting_caps_searches_across_runs(client, world, provider):
+    """A tenant's monthly search cap spans every run, resets monthly, 0 disables it."""
     tenant_id, owner = world
     resp = await client.put(
         "/v1/settings/web_searches_per_month", json={"value": 2}, headers=_session(owner)
@@ -342,6 +349,7 @@ async def test_the_monthly_setting_caps_searches_across_runs(client, world, prov
 
 @pytest.mark.parametrize("value", [-1, 2001, "200", True, 1.5])
 async def test_the_monthly_setting_is_0_to_2000_and_owner_only(client, world, value):
+    """The monthly search-cap setting rejects values outside 0 to 2000, default 200."""
     tenant_id, owner = world
     resp = await client.put(
         "/v1/settings/web_searches_per_month", json={"value": value}, headers=_session(owner)
@@ -355,6 +363,7 @@ async def test_the_monthly_setting_is_0_to_2000_and_owner_only(client, world, va
 
 
 async def test_no_key_configured_answers_503_web_search_unconfigured(client, world, monkeypatch):
+    """Without a search key configured, web search refuses with 503 and logs no usage."""
     tenant_id, owner = world
     from pydantic import SecretStr
 
@@ -371,6 +380,7 @@ async def test_no_key_configured_answers_503_web_search_unconfigured(client, wor
 
 
 def test_with_a_key_the_provider_is_brave(monkeypatch):
+    """A configured search key picks the Brave provider without exposing the key."""
     from pydantic import SecretStr
 
     monkeypatch.setattr(get_settings(), "web_search_key", SecretStr("brave-test-key-1"))
@@ -382,6 +392,7 @@ def test_with_a_key_the_provider_is_brave(monkeypatch):
 
 
 async def test_brave_sends_the_key_in_a_header_and_parses_results():
+    """Brave search sends the key only in its header and returns clean, parsed hits."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -428,6 +439,7 @@ async def test_brave_sends_the_key_in_a_header_and_parses_results():
 async def test_a_provider_error_is_503_with_its_status_and_never_the_key(
     client, world, monkeypatch
 ):
+    """A search provider's error becomes a 503 with its status, never leaking the key."""
     from pydantic import SecretStr
 
     tenant_id, owner = world
@@ -466,6 +478,7 @@ async def test_a_provider_error_is_503_with_its_status_and_never_the_key(
     ],
 )
 async def test_an_empty_or_long_query_is_422(client, world, provider, body):
+    """A bad query or count in a search request is refused before the provider runs."""
     tenant_id, owner = world
     resp = await client.post("/v1/web/search", json=body, headers=await _as_run(tenant_id, owner))
     assert resp.status_code == 422, resp.text
@@ -485,6 +498,7 @@ async def _search(client, headers, provider, *results: SearchResult) -> list[dic
 async def test_fetch_reads_a_result_through_the_link_fetcher_and_records_it(
     client, world, provider, net
 ):
+    """Fetching a result's page records its text, length capped, marked untrusted."""
     tenant_id, owner = world
     headers = await _as_run(tenant_id, owner)
     (hit,) = await _search(
@@ -527,6 +541,7 @@ async def test_fetch_reads_a_result_through_the_link_fetcher_and_records_it(
 
 
 async def test_fetch_refuses_a_url_no_result_of_this_run_returned(client, world, provider, net):
+    """Fetching a url or ref this run never searched for is refused outright."""
     tenant_id, owner = world
     other_run = await _as_run(tenant_id, owner)
     await _search(
@@ -550,6 +565,7 @@ async def test_fetch_refuses_a_url_no_result_of_this_run_returned(client, world,
 
 
 async def test_fetch_needs_exactly_one_of_ref_and_url(client, world, net):
+    """A fetch request must give exactly one of ref or url, never both or neither."""
     tenant_id, owner = world
     headers = await _as_run(tenant_id, owner)
     for body in ({}, {"ref": "w-1", "url": "https://a.example/"}):
@@ -558,6 +574,7 @@ async def test_fetch_needs_exactly_one_of_ref_and_url(client, world, net):
 
 
 async def test_fetch_refuses_a_path_robots_txt_disallows(client, world, provider, net):
+    """A fetch obeys robots.txt: a disallowed path is blocked, others stay allowed."""
     tenant_id, owner = world
     headers = await _as_run(tenant_id, owner)
     blocked, allowed = await _search(
@@ -580,6 +597,7 @@ async def test_fetch_refuses_a_path_robots_txt_disallows(client, world, provider
 
 
 async def test_fetch_refuses_a_host_resolving_to_the_metadata_address(client, world, provider, net):
+    """A host resolving to the cloud metadata address is refused before any request."""
     tenant_id, owner = world
     headers = await _as_run(tenant_id, owner)
     (hit,) = await _search(
@@ -598,6 +616,7 @@ async def test_fetch_refuses_a_host_resolving_to_the_metadata_address(client, wo
 
 
 async def test_the_41st_page_in_a_run_gets_429(client, world, provider, net, monkeypatch):
+    """A run's page fetches stop at their cap; further fetches send no new request."""
     tenant_id, owner = world
     monkeypatch.setattr(get_settings(), "web_fetch_max_per_run", 2)
     headers = await _as_run(tenant_id, owner)
@@ -614,6 +633,7 @@ async def test_the_41st_page_in_a_run_gets_429(client, world, provider, net, mon
 
 
 def test_the_caps_default_to_30_searches_and_40_pages():
+    """Web search and fetch default to caps of 30 and 40 per run, Brave as provider."""
     s = get_settings()
     assert (s.web_search_max_per_run, s.web_fetch_max_per_run) == (30, 40)
     assert s.web_search_provider == "brave"
@@ -650,10 +670,12 @@ def test_the_caps_default_to_30_searches_and_40_pages():
     ],
 )
 def test_robots_rules(rules, path, ok):
+    """Robots.txt rules parse correctly for wildcards, allow overrides, agent order."""
     assert robots.Rules.parse(rules).allows(path) is ok
 
 
 async def test_robots_is_fetched_once_a_day_per_host():
+    """A host's robots.txt is fetched once a day; a missing file means allow-all."""
     net = Net()
     net.robots["competitor-a.example"] = "User-agent: *\nDisallow: /pricing"
     fetcher = net.fetcher()
@@ -671,6 +693,8 @@ async def test_robots_is_fetched_once_a_day_per_host():
 
 
 async def test_robots_unreachable_disallows():
+    """When robots.txt cannot be reached, that host's pages are refused, not fetched."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, text="down")
 
@@ -687,6 +711,7 @@ async def test_robots_unreachable_disallows():
 
 
 async def test_web_results_are_purged_after_13_months(world):
+    """Web results and searches older than 13 months are purged, recent ones kept."""
     tenant_id, owner = world
     now = datetime(2026, 10, 24, tzinfo=UTC)
     async with tenant_session(tenant_id) as s:

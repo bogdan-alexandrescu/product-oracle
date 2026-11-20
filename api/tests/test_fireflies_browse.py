@@ -76,6 +76,7 @@ async def conn(tenant_id, alice):
 
 
 async def test_meetings_lists_the_owners_meetings_paged(fake, alice, conn):
+    """Listing Fireflies meetings pages them newest first and never leaks the API key."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
         assert resp.status_code == 200, resp.text
@@ -109,6 +110,7 @@ async def test_meetings_lists_the_owners_meetings_paged(fake, alice, conn):
 
 
 async def test_meetings_cursor_pages(fake, alice, conn, monkeypatch):
+    """Paging through meetings by cursor returns each page once, and a bad cursor is a 422."""
     from oracle.sources.connectors import fireflies
 
     monkeypatch.setattr(fireflies, "PAGE_SIZE", 3)
@@ -128,6 +130,7 @@ async def test_meetings_cursor_pages(fake, alice, conn, monkeypatch):
 
 
 async def test_series_lists_groups_with_counts(fake, alice, conn):
+    """Listing series groups meetings by calendar series and counts each one correctly."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
     assert resp.status_code == 200, resp.text
@@ -142,6 +145,7 @@ async def test_series_lists_groups_with_counts(fake, alice, conn):
 
 
 async def test_another_users_connection_is_not_found(fake, tenant_id, bob, conn):
+    """A Fireflies route 404s on a connection owned by someone else or of another kind."""
     github = await make_connection(tenant_id, bob, "github")
     async with client_for(bob) as b:
         for path in ("meetings", "series"):
@@ -154,6 +158,7 @@ async def test_another_users_connection_is_not_found(fake, tenant_id, bob, conn)
 
 
 async def test_rate_limit_surfaces_as_a_retry_message(fake, alice, conn):
+    """A Fireflies rate limit response surfaces as a retry-after message, not a raw error."""
     fake.error = rate_limited(30)
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/meetings")
@@ -163,6 +168,7 @@ async def test_rate_limit_surfaces_as_a_retry_message(fake, alice, conn):
 
 
 async def test_rejected_key_asks_to_reconnect(fake, alice, conn):
+    """A rejected Fireflies API key tells the user to reconnect instead of a bare error."""
     fake.error = httpx.Response(401, json={"errors": [{"message": "Invalid API key"}]})
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
@@ -183,6 +189,7 @@ async def _items(tenant_id, source_id) -> dict[str, bool]:
 async def test_picked_source_syncs_and_drops_what_is_unpicked(
     fake, connector, tenant_id, alice, conn
 ):
+    """Saving a source syncs the picked meetings and drops ones that got unpicked."""
     async with client_for(alice) as a:
         resp = await a.post(
             "/v1/sources",
@@ -228,6 +235,7 @@ async def test_picked_source_syncs_and_drops_what_is_unpicked(
 
 
 async def test_legacy_source_keeps_syncing(fake, connector, tenant_id, alice, conn):
+    """A source using the legacy date and title filters keeps syncing as before."""
     async with client_for(alice) as a:
         resp = await a.post(
             "/v1/sources",
@@ -408,6 +416,7 @@ async def test_a_sync_saves_no_cursor_once_its_source_changed(
 
 @pytest.mark.parametrize("path", ["meetings", "series"])
 async def test_an_out_of_range_date_is_a_422(fake, alice, conn, path):
+    """A browse date outside the supported range is refused as a 422 with no provider call."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/{path}", params={"to": "9999-12-31"})
     assert resp.status_code == 422, resp.text
@@ -430,6 +439,7 @@ async def test_an_out_of_range_date_is_a_422(fake, alice, conn, path):
 async def test_a_source_with_a_bad_date_or_too_many_labels_is_a_422(
     fake, connector, alice, conn, config
 ):
+    """A source config with a bad date or too many or too-long labels is refused as a 422."""
     async with client_for(alice) as a:
         resp = await a.post(
             "/v1/sources",
@@ -439,6 +449,7 @@ async def test_a_source_with_a_bad_date_or_too_many_labels_is_a_422(
 
 
 async def test_the_browse_502_is_redacted(fake, alice, conn):
+    """A Fireflies error containing the API key is redacted before it reaches the response."""
     fake.error = httpx.Response(
         200, json={"errors": [{"message": f"internal error for key {API_KEY}"}]}
     )
@@ -449,6 +460,7 @@ async def test_the_browse_502_is_redacted(fake, alice, conn):
 
 
 async def test_a_browse_that_gets_no_list_is_a_502(fake, alice, conn):
+    """A browse response with no usable list of meetings surfaces as a 502, not a crash."""
     fake.error = httpx.Response(200, text="<html>maintenance</html>")
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/series")
@@ -462,6 +474,7 @@ async def _connection_status(user, conn) -> str:
 
 
 async def test_forbidden_on_browse_does_not_expire_the_connection(fake, alice, conn):
+    """A forbidden response while browsing does not mark the connection expired; a bad key does."""
     fake.error = httpx.Response(
         200,
         json={
@@ -490,6 +503,7 @@ async def test_forbidden_on_browse_does_not_expire_the_connection(fake, alice, c
 async def test_a_full_pass_on_a_broken_answer_keeps_the_items(
     fake, connector, tenant_id, alice, conn
 ):
+    """A full sync that hits a broken answer still keeps the items already stored."""
     async with client_for(alice) as a:
         resp = await a.post(
             "/v1/sources",
@@ -541,6 +555,7 @@ def clock(monkeypatch):
 
 
 async def test_answers_are_cached_for_a_minute(fake, alice, conn, clock):
+    """Repeated browse requests with the same search are served from a short-lived cache."""
     url = f"/v1/connections/{conn}/fireflies/meetings"
     async with client_for(alice) as a:
         first = await a.get(url, params={"search": "standup"})
@@ -565,6 +580,7 @@ async def test_answers_are_cached_for_a_minute(fake, alice, conn, clock):
 
 
 async def test_a_looping_client_is_limited_per_connection(fake, tenant_id, alice, conn, clock):
+    """Browsing from one connection is capped per minute and per day, then rate limited."""
     url = f"/v1/connections/{conn}/fireflies/meetings"
     statuses = []
     async with client_for(alice) as a:
@@ -639,6 +655,7 @@ async def test_a_low_plans_daily_quota_survives_a_browsing_session(fake, alice, 
 async def test_a_cached_answer_is_not_served_once_the_connection_is_unusable(
     fake, tenant_id, alice, conn, clock
 ):
+    """A cached browse answer is not served once the connection has gone bad."""
     url = f"/v1/connections/{conn}/fireflies/meetings"
     async with client_for(alice) as a:
         assert (await a.get(url)).status_code == 200
@@ -652,6 +669,7 @@ async def test_a_cached_answer_is_not_served_once_the_connection_is_unusable(
 
 
 async def test_one_search_is_one_cache_entry(fake, alice, conn, clock):
+    """Search terms that only differ by whitespace or emptiness share one cache entry."""
     url = f"/v1/connections/{conn}/fireflies/meetings"
     async with client_for(alice) as a:
         assert (await a.get(url, params={"search": "standup"})).status_code == 200
@@ -758,6 +776,7 @@ async def test_the_series_list_stops_at_six_pages_and_a_search_still_answers(
 
 
 async def test_the_series_list_stops_at_the_browse_budget(fake, alice, conn, clock):
+    """Listing series stops once the browse budget for the minute is used and marks it truncated."""
     fake.meetings = _large_window()
     async with client_for(alice) as a:
         for i in range(fireflies_browse.CALLS_PER_MINUTE - 3):
@@ -953,6 +972,7 @@ async def test_a_failure_after_the_source_changed_is_superseded(
 async def test_a_rejected_key_marks_the_connection_the_sync_used(
     fake, connector, tenant_id, alice, conn
 ):
+    """A sync that gets a rejected key marks both the source and the connection as failed."""
     async with client_for(alice) as a:
         source_id = await _source(a, conn)
         fake.error = httpx.Response(401, json={"errors": [{"message": "bad key"}]})
@@ -966,6 +986,7 @@ async def test_a_rejected_key_marks_the_connection_the_sync_used(
 async def test_a_403_on_one_transcript_fails_the_source_not_the_connection(
     fake, connector, tenant_id, alice, conn
 ):
+    """A single transcript that is forbidden fails the source, not the whole connection."""
     fake.forbidden = {"K1"}
     async with client_for(alice) as a:
         source_id = await _source(a, conn)
@@ -986,6 +1007,7 @@ async def test_a_403_on_one_transcript_fails_the_source_not_the_connection(
 async def test_a_transcript_dated_near_year_one_is_skipped_not_fatal(
     fake, connector, tenant_id, alice, conn, when
 ):
+    """A transcript dated near year one is skipped on sync, not treated as a fatal error."""
     fake.meetings.append(meeting("Y1", "Year one", when))
     async with client_for(alice) as a:
         source_id = await _source(a, conn)
@@ -1000,6 +1022,7 @@ async def test_a_transcript_dated_near_year_one_is_skipped_not_fatal(
 async def test_a_cursor_dated_near_year_one_does_not_overflow(
     fake, connector, tenant_id, alice, conn
 ):
+    """A cursor dated near year one does not overflow and the sync still completes."""
     async with client_for(alice) as a:
         source_id = await _source(a, conn)
         async with tenant_session(tenant_id) as s:
@@ -1028,6 +1051,7 @@ ODD = [
 async def test_a_transcript_with_a_non_text_id_or_title_is_skipped_on_browse(
     fake, alice, conn, path
 ):
+    """A transcript with a non-text id or title is skipped when browsing, not shown broken."""
     fake.meetings.extend(ODD)
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/connections/{conn}/fireflies/{path}")
@@ -1045,6 +1069,7 @@ async def test_a_transcript_with_a_non_text_id_or_title_is_skipped_on_browse(
 async def test_a_transcript_with_a_non_text_id_or_title_is_skipped_on_sync(
     fake, connector, tenant_id, alice, conn
 ):
+    """A transcript with a non-text id or title is skipped on sync, not stored broken."""
     fake.meetings.extend(ODD)
     async with client_for(alice) as a:
         source_id = await _source(a, conn)
@@ -1062,6 +1087,8 @@ async def test_a_transcript_with_a_non_text_id_or_title_is_skipped_on_sync(
     ],
 )
 async def test_a_network_error_while_browsing_is_a_fixed_502(alice, conn, error):
+    """A network error while browsing Fireflies always surfaces as the same fixed 502."""
+
     def unreachable(request: httpx.Request) -> httpx.Response:
         raise error
 
@@ -1128,6 +1155,7 @@ async def _save(a, fake, source, config):
 
 
 async def test_unpicking_a_meeting_deletes_it_on_save(fake, connector, tenant_id, alice, conn):
+    """Unpicking a meeting from a source deletes it from storage as soon as it is saved."""
     async with client_for(alice) as a:
         source = await _picked(
             a, conn, {"mode": "selected", "series": [STANDUP], "meetings": ["K1", "P1"]}
@@ -1148,6 +1176,7 @@ async def test_unpicking_a_meeting_deletes_it_on_save(fake, connector, tenant_id
 async def test_unpicking_a_series_deletes_its_meetings_on_save(
     fake, connector, tenant_id, alice, conn
 ):
+    """Unpicking a whole series deletes its meetings from storage as soon as it is saved."""
     async with client_for(alice) as a:
         source = await _picked(
             a, conn, {"mode": "selected", "series": [STANDUP, PLANNING], "meetings": ["K1"]}
@@ -1169,6 +1198,7 @@ async def test_unpicking_a_series_deletes_its_meetings_on_save(
 async def test_a_meeting_picked_alone_stays_when_its_series_is_unpicked(
     fake, connector, tenant_id, alice, conn
 ):
+    """A meeting picked on its own stays stored even after its series is unpicked."""
     async with client_for(alice) as a:
         source = await _picked(
             a, conn, {"mode": "selected", "series": [STANDUP], "meetings": ["S2"]}
@@ -1206,6 +1236,7 @@ async def test_items_of_unknown_provenance_not_shown_picked_are_swept(
 async def test_a_save_that_does_not_change_the_selection_sweeps_nothing(
     fake, connector, tenant_id, alice, conn
 ):
+    """Saving a source with the same selection as before sweeps away nothing."""
     async with client_for(alice) as a:
         source = await _picked(a, conn, {"mode": "selected", "series": [STANDUP]})
         await _save(
@@ -1268,6 +1299,7 @@ def _summarised(content: str) -> bool:
 async def test_a_sync_rereads_a_recent_meeting_still_without_a_summary(
     fake, connector, tenant_id, alice, conn
 ):
+    """A sync rereads a recent meeting that still has no summary, to pick one up later."""
     fake.meetings = [
         meeting("R2", "Pricing sync", _days_ago(2)),
         meeting("H2", "Hiring sync", _days_ago(2.5)),
@@ -1305,6 +1337,7 @@ async def test_a_sync_rereads_a_recent_meeting_still_without_a_summary(
 async def test_new_meetings_come_before_rereads_when_the_budget_is_tight(
     fake, connector, tenant_id, alice, conn
 ):
+    """When the detail budget is tight, new meetings are fetched before rereads of old ones."""
     fake.meetings = [meeting("R2", "Pricing sync", _days_ago(2))]
     fake.unsummarised = {"R2"}
     async with client_for(alice) as a:
@@ -1338,6 +1371,7 @@ async def test_new_meetings_come_before_rereads_when_the_budget_is_tight(
 async def test_a_synced_meeting_records_speakers_and_invitees(
     fake, connector, tenant_id, alice, conn
 ):
+    """A synced meeting records its speakers and invited attendees correctly."""
     fake.meetings = [
         meeting("K7", "Kickoff", _days_ago(1), participants=["ada@example.com", "lin@x.io"])
     ]
@@ -1359,6 +1393,7 @@ async def test_a_synced_meeting_records_speakers_and_invitees(
 async def test_a_failed_reread_does_not_fail_the_sync(
     fake, connector, tenant_id, alice, conn, failure
 ):
+    """A reread that fails on one meeting does not fail the whole sync."""
     fake.meetings = [meeting("R2", "Pricing sync", _days_ago(2))]
     fake.unsummarised = {"R2"}
     async with client_for(alice) as a:
@@ -1384,6 +1419,7 @@ async def test_a_failed_reread_does_not_fail_the_sync(
 async def test_a_reread_skips_a_meeting_the_selection_no_longer_takes(
     fake, connector, tenant_id, alice, conn
 ):
+    """A reread skips a meeting the current selection no longer includes."""
     fake.meetings = [meeting("R2", "Pricing sync", _days_ago(2))]
     fake.unsummarised = {"R2"}
     async with client_for(alice) as a:

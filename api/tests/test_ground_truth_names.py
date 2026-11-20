@@ -23,6 +23,7 @@ def _says_ground_truth(text: str) -> None:
 
 
 def test_checkpoint_names_say_ground_truth():
+    """Every checkpoint name says Ground Truth, never the old baseline name."""
     for names in (CHECKPOINT_TITLES, STOP_LABELS, _STOP_WORDS):
         _says_ground_truth(names["baseline_confirm"])
         for value in names.values():
@@ -30,6 +31,7 @@ def test_checkpoint_names_say_ground_truth():
 
 
 def test_flow_and_step_names_say_ground_truth():
+    """Every run flow and step title says Ground Truth, never the old name."""
     _says_ground_truth(flows.FLOWS["baseline_to_prd"].title)
     _says_ground_truth(flows.FLOWS["baseline"].title)
     _says_ground_truth(flows.BASELINE_SEGMENT.title)
@@ -41,18 +43,21 @@ def test_flow_and_step_names_say_ground_truth():
 
 
 def test_flow_start_link_is_the_ground_truth_page():
+    """The baseline flow's start link points to the Ground Truth page."""
     label, href = flows.FLOWS["baseline"].starts_from
     _says_ground_truth(label)
     assert href.startswith("/ground-truth")
 
 
 def test_decision_line_names_the_ground_truth():
+    """A baseline decision's summary line is labelled Ground Truth, not the old name."""
     line = decision_summary("baseline_confirm", "approved", "approver", "web", None, True)
     assert line.startswith("Ground Truth · approved")
     assert not BASELINE.search(line)
 
 
 def test_ritual_and_autonomy_names_say_ground_truth():
+    """Ritual and autonomy settings for baseline are named Ground Truth throughout."""
     _says_ground_truth(KINDS["baseline_rebuild"].title)
     _says_ground_truth(TITLES["baseline_rebuild"])
     area = next(r for r in autonomy._ALL if r.key == "baseline")
@@ -61,6 +66,7 @@ def test_ritual_and_autonomy_names_say_ground_truth():
 
 
 def test_page_names_say_ground_truth():
+    """Both the new and an old baseline link's page are named Ground Truth."""
     assert PAGES["ground-truth"] == "Ground Truth"
     assert PAGES["baseline"] == "Ground Truth"  # an old /baseline link's screen
 

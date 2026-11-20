@@ -74,6 +74,7 @@ BARE_G1 = re.compile(r"\bG1\b(?!\s+Activation)(?!\**\s*\()")
 
 
 async def test_x1_the_deck_footer_banner_gives_way_to_the_slide_number(client, prd):
+    """A deck slide's footer banner truncates instead of crowding the slide number."""
     html = (await client.get(f"{BASE}/export?layer=deck&format=html", headers=prd)).text
     banner = re.search(r"\.deck \.slide-banner \{([^}]*)\}", html).group(1)
     for rule in ("flex: 1 1 auto", "min-width: 0", "white-space: nowrap", "ellipsis"):
@@ -83,6 +84,7 @@ async def test_x1_the_deck_footer_banner_gives_way_to_the_slide_number(client, p
 
 
 async def test_x2_a_wide_table_fits_the_page(client, prd):
+    """A wide exported table wraps cells and shrinks its font to fit the page."""
     html = (await client.get(f"{BASE}/export?format=html", headers=prd)).text
     assert "table-layout: fixed" in html and "overflow-wrap: anywhere" in html
     # A table of many columns is marked for a smaller font; a narrow one is not.
@@ -91,6 +93,7 @@ async def test_x2_a_wide_table_fits_the_page(client, prd):
 
 
 async def test_x8_x9_goals_carry_names_and_sources_print_once_by_title(client, prd):
+    """An exported goal always carries its name with its code; sources print once."""
     for q in ("format=html", "layer=brief&format=html"):
         html = (await client.get(f"{BASE}/export?{q}", headers=prd)).text
         text = _visible(html)
@@ -109,6 +112,7 @@ async def test_x8_x9_goals_carry_names_and_sources_print_once_by_title(client, p
 
 
 async def test_x8_roadmap_goals_read_code_and_name(client, ctx):
+    """A roadmap export always shows a goal's code with its name, never alone."""
     await seed_roadmap(ctx)
     for audience in ("team", "engineering"):
         resp = await client.get(
@@ -125,6 +129,7 @@ async def test_x8_roadmap_goals_read_code_and_name(client, ctx):
 
 
 async def test_x11_the_roadmap_header_names_the_roadmap(client, ctx):
+    """The roadmap export header names the roadmap, not its slug or tag."""
     await seed_roadmap(ctx)
     for audience in ("team", "board"):
         resp = await client.get(
@@ -141,6 +146,7 @@ async def test_x11_the_roadmap_header_names_the_roadmap(client, ctx):
 
 
 async def test_x7_x10_the_share_link_pdf_footer_prints_only_its_parts(client, ctx, monkeypatch):
+    """A shared read-only link's PDF footer shows only the title, no status."""
     from oracle.shares import render as share_render
 
     seen: list[str] = []
@@ -169,6 +175,7 @@ async def test_x7_x10_the_share_link_pdf_footer_prints_only_its_parts(client, ct
 
 
 async def test_x7_x10_an_internal_pdf_footer_joins_version_and_status(client, prd):
+    """An internal PDF footer joins version and status with their separator."""
     html = (await client.get(f"{BASE}/export?format=html", headers=prd)).text
     assert 'string(doc-title) " \\00B7' not in html
     # The separator rides on the version and status, which an internal export prints.
@@ -180,6 +187,7 @@ async def test_x7_x10_an_internal_pdf_footer_joins_version_and_status(client, pr
 
 
 def test_x12_a_flagged_date_is_a_small_plain_mark():
+    """An unverified or withdrawn date renders as a small plain mark, not bold."""
     html = (
         "<p>Beta on Nov 20, 2026 <strong>[unverified]</strong> and GA "
         "<strong>[date withdrawn]</strong></p>"
@@ -191,6 +199,7 @@ def test_x12_a_flagged_date_is_a_small_plain_mark():
 
 
 async def test_x16_a_board_deck_keeps_a_horizon_note_with_its_table(client, ctx):
+    """A board deck keeps a left-out note on the same slide as its table."""
     await seed_roadmap(ctx)
     deck = (await client.get(DECK, params={"audience": "board"}, headers=ctx.as_("viewer"))).json()
     for s in deck["slides"][1:]:
@@ -200,6 +209,7 @@ async def test_x16_a_board_deck_keeps_a_horizon_note_with_its_table(client, ctx)
 
 
 async def test_x17_the_markdown_export_is_plain_markdown(client, prd):
+    """A markdown export carries no ISO dates or comments, just plain text."""
     md = (await client.get(f"{BASE}/export?format=md", headers=prd)).text
     assert "<!-- Product Oracle export" not in md
     body = md.split("\n---\n", 1)[1]
@@ -211,6 +221,7 @@ async def test_x17_the_markdown_export_is_plain_markdown(client, prd):
 
 
 async def test_x8_x9_the_pptx_names_goals_and_sources_by_title(client, prd):
+    """A PPTX export names goals and sources by title, never code or kind."""
     from tests.test_export_visual_e import _pptx_texts
 
     resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=prd)
@@ -220,6 +231,7 @@ async def test_x8_x9_the_pptx_names_goals_and_sources_by_title(client, prd):
 
 
 def test_x12_the_pptx_mark_is_a_plain_word():
+    """An unverified date mark in a PPTX export is a plain word, never bold."""
     from oracle.export import pptx as pptx_module
 
     blocks = pptx_module.parse_blocks("Beta on Nov 20, 2026 **[unverified]**.")
@@ -246,10 +258,12 @@ GOALS = {"G1": "Activation", "G2": "Retention"}
     ],
 )
 def test_x8_goal_names_leave_links_and_code_alone(text):
+    """Expanding a goal code never touches one inside a link, URL or code span."""
     assert render_module.with_goal_names(text, GOALS) == text
 
 
 def test_x8_goal_names_name_prose_beside_links_and_each_code_of_a_pair():
+    """Expanding goal codes names each code of a pair and prose beside a link."""
     w = render_module.with_goal_names
     assert w("[G1 dash](https://example.com/d?goal=G1)", GOALS) == (
         "[G1 Activation dash](https://example.com/d?goal=G1)"
@@ -324,10 +338,12 @@ DATED_LINKS = (
     ],
 )
 def test_x17_markdown_days_leave_links_comments_and_code_alone(text):
+    """Spelling an ISO date in words never touches one in a link or code span."""
     assert render_module._days_in_plain_words(text) == text
 
 
 async def test_x17_a_url_with_a_date_round_trips_through_export_and_import(client, prd):
+    """A URL holding a date survives a document's export and later import."""
     md = _draft().replace("Shipping, payment and review on one page.", DATED_LINKS)
     assert (await _import(client, prd, md)).status_code == 201
     exported = (

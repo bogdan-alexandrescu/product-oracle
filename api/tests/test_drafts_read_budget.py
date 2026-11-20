@@ -93,6 +93,7 @@ async def _budget(tenant_id: uuid.UUID, session_id: uuid.UUID, slug: str, n: int
 
 
 async def test_write_items_reads_do_not_grow_with_items():
+    """Writing one roadmap change reads no more from the database as the roadmap grows."""
     ctx = await make_ctx("Example Co")
     async with tenant_session(ctx.tenant_id) as s:
         session = SimpleSession(kind="editing", started_by=ctx.users["owner"].id, started_at=NOW)

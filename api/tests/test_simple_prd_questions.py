@@ -129,6 +129,7 @@ async def page(client, ctx, role="owner"):
 
 
 async def test_import_reads_sixteen_questions(client):
+    """Importing a PRD reads every one of its open questions with full detail."""
     ctx = await make_ctx()
     await seed(ctx)
     body = await page(client, ctx)
@@ -147,6 +148,7 @@ async def test_import_reads_sixteen_questions(client):
 
 
 async def test_reimport_never_duplicates(client):
+    """Re-importing a PRD updates its questions in place, never duplicating them."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     await page(client, ctx)
@@ -162,6 +164,7 @@ async def test_reimport_never_duplicates(client):
 
 
 async def test_due_dates_from_the_plan(client, monkeypatch):
+    """A question's due date and late label follow the plan's own milestone dates."""
     ctx = await make_ctx()
     await seed(ctx)
     qs = {q["code"]: q for q in (await page(client, ctx))["questions"]}
@@ -179,6 +182,7 @@ async def test_due_dates_from_the_plan(client, monkeypatch):
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_decide_per_role(client, role):
+    """Deciding a question applies, proposes or is refused depending on role."""
     ctx = await make_ctx()
     await seed(ctx)
     q = next(q for q in (await page(client, ctx, role))["questions"] if q["code"] == "Q3")
@@ -206,6 +210,7 @@ async def test_decide_per_role(client, role):
 
 
 async def test_run_approvals_not_counted(client):
+    """A run's own approval decision never counts among waiting open questions."""
     ctx = await make_ctx()
     await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -224,6 +229,7 @@ async def test_run_approvals_not_counted(client):
 
 
 async def test_job_reads_a_prd_without_a_table(client, monkeypatch):
+    """A PRD with no questions table still gets its questions read by a job."""
     ctx = await make_ctx()
     body = FIXTURE.split("## Open questions")[0] + "## Open questions\n\nQ1: Who signs off?\n"
     ids = await seed(ctx, body)
@@ -248,6 +254,7 @@ NO_TABLE = FIXTURE.split("## Open questions")[0] + "## Open questions\n\nQ1: Who
 
 
 async def test_job_queued_once_per_version(client):
+    """A questions job is queued once per version, not re-queued while it runs."""
     ctx = await make_ctx()
     ids = await seed(ctx, NO_TABLE)
     for _ in range(2):
@@ -295,6 +302,7 @@ async def test_job_queued_once_per_version(client):
 
 
 async def test_concurrent_reads_import_once(client):
+    """Two readers importing a PRD's questions at once never duplicate them."""
     ctx = await make_ctx()
     ids = await seed(ctx)
 
@@ -309,6 +317,7 @@ async def test_concurrent_reads_import_once(client):
 
 
 async def test_undo_name_decider_restores_needs_input(client):
+    """Undoing a question's decider assignment restores its needs-input state."""
     ctx = await make_ctx()
     await seed(ctx, with_decider=False)
     q = next(q for q in (await page(client, ctx))["questions"] if q["code"] == "Q3")
@@ -334,6 +343,7 @@ async def test_undo_name_decider_restores_needs_input(client):
 
 
 async def test_hidden_prd_question_refused(client):
+    """A question on a PRD a user can't see is refused as not found."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     q = next(q for q in (await page(client, ctx))["questions"] if q["code"] == "Q3")
@@ -348,6 +358,7 @@ async def test_hidden_prd_question_refused(client):
 
 
 async def test_removed_question_leaves(client):
+    """A question dropped from a new PRD version leaves the list and waiting count."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     await page(client, ctx)
@@ -363,6 +374,7 @@ async def test_removed_question_leaves(client):
 
 
 async def test_due_follows_the_plan_read_again(client):
+    """A question's due date updates when its PRD's plan is read again."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     qs = {q["code"]: q for q in (await page(client, ctx))["questions"]}
@@ -379,6 +391,7 @@ async def test_due_follows_the_plan_read_again(client):
 
 
 async def test_long_titles_cut_at_a_word(client):
+    """A long question title is always cut at a whole word, not mid-word."""
     long = "Should we " + "really " * 40 + "go out on Mondays"
     (q,) = questions.clean({"questions": [{"code": "Q1", "title": long}]})
     assert len(q["title"]) <= 200 and long.startswith(q["title"].rstrip("…"))
@@ -395,6 +408,7 @@ async def test_long_titles_cut_at_a_word(client):
 
 
 async def test_filters_narrow_questions(client):
+    """Filtering questions by PRD or meeting shows only ones that belong there."""
     ctx = await make_ctx()
     await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -415,6 +429,7 @@ async def test_filters_narrow_questions(client):
 
 
 async def test_page_source_outside_meetings_and_approvals(client):
+    """The questions page separates its own PRD questions from run approvals."""
     ctx = await make_ctx()
     await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -438,6 +453,7 @@ async def test_page_source_outside_meetings_and_approvals(client):
 
 
 async def test_meeting_agenda_keeps_what_it_decided(client):
+    """A meeting agenda lists every open question, soonest first, without duplicates."""
     ctx = await make_ctx()
     await seed(ctx)
     listed = (await page(client, ctx))["questions"]
@@ -524,6 +540,7 @@ async def _statements(client, ctx, path: str) -> int:
     "path", ["/v1/simple/decisions/waiting", "/v1/simple/roadmap", "/v1/simple/meetings"]
 )
 async def test_home_reads_do_not_grow_with_prds(client, path):
+    """Home-page reads stay cheap in queries even as more PRDs pile up."""
     ctx = await make_ctx("Example Co")
     await _prds(ctx, 2)
     few = await _statements(client, ctx, path)
@@ -536,6 +553,7 @@ async def test_home_reads_do_not_grow_with_prds(client, path):
 # postgresql distinct_on, not the deprecated ``Select.distinct(col)``; fails_when=it warns
 # SADeprecationWarning (an error once SQLAlchemy drops it); no_claim=which version it picks.
 async def test_home_reads_latest_versions_without_a_deprecation(client):
+    """Reading every PRD's latest version never trips a deprecated query path."""
     import warnings
 
     from sqlalchemy.exc import SADeprecationWarning
@@ -553,6 +571,7 @@ async def test_home_reads_latest_versions_without_a_deprecation(client):
 # a limit, the oldest dropped first; fails_when=the set grows with every such version for
 # as long as the process lives; no_claim=how often a dropped version is read again.
 async def test_versions_without_questions_are_kept_up_to_a_limit(client, monkeypatch):
+    """The no-questions version cache stays capped, keeping only the newest ones."""
     monkeypatch.setattr(questions, "_NOTHING_MAX", 3, raising=False)
     ctx = await make_ctx("Example Co")
     await _prds(ctx, 5)

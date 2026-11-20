@@ -66,6 +66,7 @@ async def test_the_answers_reach_the_prioritizer_the_prd_writer_and_the_dates_ar
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """Every answer from the engineering check reaches later stages with its question."""
     # protects=walk-eng-check: each later stage reads the check's answers quoted with their
     # questions; fails_when=a later stage's lines lack a question or its answer (the dates
     # architect read none), or name a question by its id only; no_claim=what the agents
@@ -88,6 +89,7 @@ async def test_a_console_approval_by_the_lead_still_carries_the_answers(
     owner,  # noqa: F811
     monkeypatch,
 ):
+    """Approving the engineering check from the console still carries its answers on."""
     # protects=walk-eng-check: the lead answers in Oracle and approves the check in
     # SwarmCloud's console; fails_when=the counted console approval records no answers, so
     # the later stages read the questions as unanswered; no_claim=a held console answer.

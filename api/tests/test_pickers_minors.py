@@ -73,6 +73,7 @@ async def create_slack(a, tenant_id, alice, config: dict) -> httpx.Response:
     ],
 )
 async def test_dates_out_of_bounds_or_not_yyyy_mm_dd_are_a_422(a, tenant_id, alice, slack, dates):
+    """A Slack source date outside year 2000-2100 or not in YYYY-MM-DD form is a 422."""
     resp = await create_slack(a, tenant_id, alice, {"channels": ["C0PRODUCT"], **dates})
     assert resp.status_code == 422, resp.text
     label = "a start date" if "since" in dates else "an end date"
@@ -81,6 +82,7 @@ async def test_dates_out_of_bounds_or_not_yyyy_mm_dd_are_a_422(a, tenant_id, ali
 
 
 async def test_dates_inside_the_bounds_are_accepted(a, tenant_id, alice, slack):
+    """Slack source dates within the accepted year range and format are accepted."""
     config = {"channels": ["C0PRODUCT"], "since": "2000-01-01", "until": "2100-12-31"}
     resp = await create_slack(a, tenant_id, alice, config)
     assert resp.status_code == 201, resp.text
@@ -90,6 +92,7 @@ async def test_dates_inside_the_bounds_are_accepted(a, tenant_id, alice, slack):
 
 
 async def test_too_many_channels_is_a_422(a, tenant_id, alice, slack):
+    """Picking more Slack channels than the cap is refused with a 422, naming the cap."""
     channels = [f"C{n:08d}" for n in range(MAX_CHANNELS + 1)]
     resp = await create_slack(a, tenant_id, alice, {"channels": channels})
     assert resp.status_code == 422
@@ -98,6 +101,7 @@ async def test_too_many_channels_is_a_422(a, tenant_id, alice, slack):
 
 
 async def test_fifty_channels_validate_in_one_list_read(a, tenant_id, alice, slack):
+    """Fifty known Slack channels validate from one list call, not fifty lookups."""
     channels = [f"C{n:08d}" for n in range(50)]
     slack.channels = {cid: [] for cid in [*channels, "C0PRODUCT", "C0ROADMAP"]}
     resp = await create_slack(a, tenant_id, alice, {"channels": channels})
@@ -107,6 +111,7 @@ async def test_fifty_channels_validate_in_one_list_read(a, tenant_id, alice, sla
 
 
 async def test_a_channel_the_list_does_not_show_is_looked_up(a, tenant_id, alice, slack):
+    """A channel missing from the listed set gets its own lookup before being refused."""
     slack.channels.update({"C0A": [], "C0B": []})
     channels = ["C0PRODUCT", "C0ROADMAP", "C0A", "C0B", "C0MISSING"]
     resp = await create_slack(a, tenant_id, alice, {"channels": channels})
@@ -117,6 +122,7 @@ async def test_a_channel_the_list_does_not_show_is_looked_up(a, tenant_id, alice
 
 
 async def test_a_rate_limit_while_validating_is_a_429(a, tenant_id, alice, slack):
+    """A Slack rate limit while validating channels surfaces as a 429 with a wait time."""
     slack.limited = {"conversations.list", "conversations.info"}
     resp = await create_slack(a, tenant_id, alice, {"channels": ["C0PRODUCT", "C0ROADMAP"]})
     assert resp.status_code == 429, resp.text
@@ -125,6 +131,7 @@ async def test_a_rate_limit_while_validating_is_a_429(a, tenant_id, alice, slack
 
 
 async def test_too_many_repos_is_a_422():
+    """Picking more GitHub repos than the cap is refused before any call to GitHub."""
     from oracle.sources.connectors.github import MAX_REPOS
 
     def no_call(request: httpx.Request) -> httpx.Response:
@@ -141,6 +148,7 @@ async def test_too_many_repos_is_a_422():
 
 @pytest.mark.parametrize("channel", ["d0direct", " D0DIRECT", "D0DIRECT\n", "\td0direct"])
 async def test_d_prefixed_ids_in_any_case_or_spacing_are_dms(channel):
+    """A channel id starting with D, in any case or spacing, is a DM, refused."""
     world = SlackWorld()
     with pytest.raises(ConnectorConfigError, match="DMs are never ingested"):
         await slack_connector(world).validate({"channels": [channel]}, CREDENTIAL)
@@ -148,6 +156,7 @@ async def test_d_prefixed_ids_in_any_case_or_spacing_are_dms(channel):
 
 
 async def test_an_mpdm_named_channel_is_a_dm():
+    """A group DM named like Slack's mpdm channels is refused the same as any other DM."""
     world = SlackWorld()
     world.channels["G0GROUPDM"] = []
     world.names["G0GROUPDM"] = "mpdm-ada--lin--sam-1"
@@ -159,6 +168,7 @@ async def test_an_mpdm_named_channel_is_a_dm():
 
 
 async def test_channel_ids_are_trimmed():
+    """A channel id with surrounding spaces is trimmed before Slack is asked to sync."""
     world = SlackWorld()
     world.channels["C0PRODUCT"] = [{"ts": ts("2025-10-01"), "user": "U0ADA", "text": "hi"}]
     events = [
@@ -169,6 +179,7 @@ async def test_channel_ids_are_trimmed():
 
 
 async def test_the_picker_drops_mpdm_names(client, tenant_id):
+    """The channel picker drops group DMs and plain DMs, listing only real channels."""
     person = await make_person(tenant_id, "pat@example.com")
     conn = await add_connection(
         tenant_id, person.id, "slack", bundle={"access_token": "xoxp-x"}, account_id="T0"
@@ -198,6 +209,7 @@ async def test_the_picker_drops_mpdm_names(client, tenant_id):
 
 
 async def test_sso_partial_results_are_a_hint(client, tenant_id):
+    """A GitHub SSO partial-results header becomes a hint naming hidden orgs."""
     person = await make_person(tenant_id, "pat@example.com")
     conn = await add_connection(tenant_id, person.id, "github", bundle={"access_token": "gho_x"})
 
@@ -223,6 +235,7 @@ async def test_sso_partial_results_are_a_hint(client, tenant_id):
 
 
 async def test_no_sso_header_no_hint(client, tenant_id):
+    """No SSO header on a GitHub repo list means no SSO hint is shown."""
     person = await make_person(tenant_id, "pat@example.com")
     conn = await add_connection(tenant_id, person.id, "github", bundle={"access_token": "gho_x"})
     use_provider_http(lambda request: httpx.Response(200, json=[]))
@@ -236,6 +249,8 @@ async def test_no_sso_header_no_hint(client, tenant_id):
 
 @pytest.mark.parametrize("repo", ["ada_example/app", "Ada_Example-Corp/app"])
 async def test_managed_user_logins_with_underscores_are_repo_owners(repo):
+    """A GitHub login with an underscore is still recognized as that repo's own owner."""
+
     def answer(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/user":
             return httpx.Response(200, json={"login": "ada_example"})
@@ -252,6 +267,7 @@ async def test_managed_user_logins_with_underscores_are_repo_owners(repo):
 
 
 async def test_browsing_does_not_write_last_used_at(client, tenant_id):
+    """Browsing a connection's repos never updates its last-used timestamp."""
     person = await make_person(tenant_id, "pat@example.com")
     conn = await add_connection(tenant_id, person.id, "github", bundle={"access_token": "gho_x"})
     use_provider_http(lambda request: httpx.Response(200, json=[]))

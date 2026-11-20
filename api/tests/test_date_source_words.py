@@ -10,12 +10,14 @@ from oracle.discussions import changes, kinds
 
 
 def test_the_shared_wording_says_date_source():
+    """The shared wording for a missing date source reads plainly, never jargon."""
     assert wording.RECORD_DATE_BASIS == (
         "add a date source on Plan › Dates (or ask the engineering lead to)"
     )
 
 
 def test_a_discussions_proposed_date_source_reads_date_source():
+    """A discussion's proposed date basis reads as 'date source' everywhere."""
     words = kinds.label(
         "basis_record",
         {"reference": "Sizing sheet", "supports_date": "2026-12-01", "kind": "estimate"},

@@ -107,6 +107,7 @@ def posts(slack) -> list[dict]:
 # on, the rest off, a member changes only their own; fails_when=another default, an unknown
 # ping accepted, or one member's choice changes another's; no_claim=the web page.
 async def test_each_member_chooses_their_pings(client):
+    """Each member's Slack ping choices are kept apart and validated for shape."""
     ctx, _ = await company(client)
     got = await client.get("/v1/me/preferences", headers=ctx.as_("commenter"))
     assert got.json()["slack_pings"] == DEFAULTS
@@ -130,6 +131,7 @@ async def test_each_member_chooses_their_pings(client):
 # on the tick; fails_when=nothing is queued, it posts before the tick, or to a channel
 # when the person's Slack user is known; no_claim=Slack's DM delivery.
 async def test_a_review_request_is_a_dm_to_that_person(client, slack):
+    """A review request pings only that person by direct message, once sent."""
     ctx, doc = await company(client)
     await install(client, ctx)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
@@ -150,6 +152,7 @@ async def test_a_review_request_is_a_dm_to_that_person(client, slack):
 # protects=a member who turned a ping off gets none, and nothing goes without Slack
 # connected; fails_when=a ping is queued anyway; no_claim=the in-app notification (kept).
 async def test_no_ping_when_turned_off_or_not_connected(client, slack):
+    """No ping queues when Slack is off or the recipient turned that ping off."""
     ctx, doc = await company(client)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
     assert await pings_of(ctx) == []  # Slack is not connected
@@ -164,6 +167,7 @@ async def test_no_ping_when_turned_off_or_not_connected(client, slack):
 # a reviewer who kept the default is not, or a non-reviewer is; no_claim=which sections
 # changed.
 async def test_a_new_draft_pings_the_reviewers_who_kept_it_on(client, slack):
+    """A new draft pings only the reviewers who kept draft-ready pings on."""
     ctx, doc = await company(client)
     await install(client, ctx)
     await choose(client, ctx, "commenter", review_requested=False)
@@ -186,6 +190,7 @@ async def test_a_new_draft_pings_the_reviewers_who_kept_it_on(client, slack):
 # and an approvers-only document's title never goes there; fails_when=the title is posted
 # to the channel, or the ping is lost silently; no_claim=who reads the channel.
 async def test_the_channel_fallback_keeps_approvers_only_titles_out(client, slack):
+    """A channel-fallback ping still hides the document title from non-approvers."""
     ctx, doc = await company(client)
     await install(client, ctx)
     resp = await client.put(
@@ -216,6 +221,7 @@ async def test_the_channel_fallback_keeps_approvers_only_titles_out(client, slac
 # protects=without the person in Slack and without a channel, the ping is dropped with
 # its reason; fails_when=it retries forever or posts somewhere; no_claim=the Inbox row.
 async def test_unknown_person_without_a_channel_is_dropped(client, slack):
+    """A ping to someone Slack cannot find is dropped, not retried forever."""
     ctx, doc = await company(client)
     await install(client, ctx)
     slack.people.clear()
@@ -229,6 +235,7 @@ async def test_unknown_person_without_a_channel_is_dropped(client, slack):
 # protects=a decision requested of a person pings them (review requested); fails_when=no
 # ping, or the proposer is pinged; no_claim=the decision page.
 async def test_a_decision_requested_pings_its_approver(client, slack):
+    """Requesting a decision pings its named approver by direct message."""
     ctx, _ = await company(client)
     await install(client, ctx)
     resp = await client.post(
@@ -270,6 +277,7 @@ async def test_a_decision_oracle_decides_does_not_ping_as_requested(
     options,
     decided,  # noqa: F811
 ):
+    """A decision Oracle decides itself never sends the as-requested ping."""
     from tests.decision_helpers import two_options
 
     ctx, _ = await company(client)
@@ -309,6 +317,7 @@ async def test_a_decision_oracle_decides_does_not_ping_as_requested(
 # protects=a member's own notifications go only when opted in; fails_when=a comment pings
 # by default; no_claim=every notification kind.
 async def test_comment_pings_are_opt_in(client, slack):
+    """Comment pings are opt-in and stay off until a reviewer turns them on."""
     ctx, doc = await company(client)
     await install(client, ctx)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "approver")])
@@ -333,6 +342,7 @@ async def test_comment_pings_are_opt_in(client, slack):
 # protects=a ping turned off after it was queued is not sent (the choice is read again when
 # it goes); fails_when=the queued ping still reaches the member; no_claim=the Inbox row.
 async def test_a_ping_turned_off_before_it_goes_is_dropped(client, slack):
+    """A ping turned off after queuing but before sending is dropped, not sent."""
     ctx, doc = await company(client)
     await install(client, ctx)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
@@ -349,6 +359,7 @@ async def test_a_ping_turned_off_before_it_goes_is_dropped(client, slack):
 # never sent late; fails_when=the stale ping is posted on the next tick; no_claim=the
 # disconnect flow itself.
 async def test_a_ping_older_than_a_day_is_not_sent(client, slack):
+    """A ping queued more than a day ago is dropped instead of sent stale."""
     ctx, doc = await company(client)
     await install(client, ctx)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
@@ -361,6 +372,7 @@ async def test_a_ping_older_than_a_day_is_not_sent(client, slack):
 # protects=a lookup answered without a user id falls back like an unknown member, without
 # aborting the tick; fails_when=a KeyError escapes deliver; no_claim=Slack's real answers.
 async def test_a_lookup_without_a_user_id_is_not_found(client, slack):
+    """A Slack lookup with no user id is treated as not found and dropped."""
     ctx, doc = await company(client)
     await install(client, ctx)
     slack.answers["users.lookupByEmail"] = [httpx.Response(200, json={"ok": True, "user": {}})]
@@ -375,6 +387,7 @@ async def test_a_lookup_without_a_user_id_is_not_found(client, slack):
 # with Slack's reason; fails_when=it is dropped at once, retried forever, or sent after
 # the day; no_claim=the exact back-off (test_slack_bridge).
 async def test_a_ping_retries_then_fails(client, slack):
+    """A ping that keeps failing retries on backoff, then gives up as failed."""
     ctx, doc = await company(client)
     await install(client, ctx)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
@@ -396,4 +409,5 @@ async def test_a_ping_retries_then_fails(client, slack):
 
 
 def test_the_event_list():
+    """The ping event list matches what the preferences API exposes."""
     assert pings.DEFAULTS == DEFAULTS

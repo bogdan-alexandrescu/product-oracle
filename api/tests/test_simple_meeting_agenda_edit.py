@@ -64,6 +64,7 @@ async def live(client, w) -> str:
 
 
 async def test_owner_adds_renames_moves_removes_and_undoes(client):
+    """An owner can add, rename, move, remove and undo agenda items, each one authored."""
     w = await world()
     mid = await live(client, w)
     m = await get(client, w, mid, "owner")
@@ -112,6 +113,7 @@ async def test_owner_adds_renames_moves_removes_and_undoes(client):
 
 
 async def test_approver_not_decider_proposes(client):
+    """An approver's agenda edits wait as a proposal for the decider, withdrawable."""
     w = await world()
     mid = await live(client, w)
     m = await get(client, w, mid, "approver")
@@ -142,6 +144,7 @@ async def test_approver_not_decider_proposes(client):
 
 
 async def test_viewer_is_refused(client):
+    """A viewer or commenter cannot add an agenda item."""
     w = await world()
     mid = await live(client, w)
     m = await get(client, w, mid, "viewer")
@@ -155,6 +158,7 @@ async def test_viewer_is_refused(client):
 
 
 async def test_chat_next_and_skip_still_work(client):
+    """The meeting chat's next and skip commands still move and mark agenda items."""
     w = await world()
     mid = await live(client, w)
     r = await op(client, w, "decider", mid, op="add", title="Launch email", batch="c1")
@@ -176,6 +180,7 @@ async def test_chat_next_and_skip_still_work(client):
 
 
 async def test_two_editors_at_once_keep_every_change(client):
+    """Two people editing the agenda at once each keep their own change, none lost."""
     w = await world()
     mid = await live(client, w)
     first = titles(await get(client, w, mid))
@@ -190,6 +195,7 @@ async def test_two_editors_at_once_keep_every_change(client):
 
 
 async def test_undo_only_the_last_batch(client):
+    """Undoing an agenda batch is refused if someone else changed it since, else works."""
     w = await world()
     mid = await live(client, w)
     first = titles(await get(client, w, mid))
@@ -209,6 +215,7 @@ async def test_undo_only_the_last_batch(client):
 
 
 async def test_decider_undoes_what_they_accepted(client):
+    """A decider can undo their own acceptance of a proposed agenda change."""
     w = await world()
     mid = await live(client, w)
     first = titles(await get(client, w, mid))
@@ -224,6 +231,7 @@ async def test_decider_undoes_what_they_accepted(client):
 
 
 async def test_move_and_rename_read_as_one_clause(client):
+    """A move and a rename of the same item in one batch read as a single clause."""
     w = await world()
     mid = await live(client, w)
     for t in ("Quiet hours", "Launch email"):
@@ -243,6 +251,7 @@ async def test_move_and_rename_read_as_one_clause(client):
 
 
 async def test_stale_proposal_op_is_dropped(client):
+    """A proposal's edit to an item removed since is dropped and named, rest applies."""
     w = await world()
     mid = await live(client, w)
     r = await op(client, w, "owner", mid, op="add", title="Quiet hours", batch="o1")
@@ -264,6 +273,7 @@ async def test_stale_proposal_op_is_dropped(client):
 
 
 async def test_dropped_move_and_rename_read_as_one_clause(client):
+    """A proposal's dropped move-and-rename of a removed item reads as one clause."""
     w = await world()
     mid = await live(client, w)
     for t in ("Launch email", "Quiet hours"):
@@ -287,6 +297,7 @@ async def test_dropped_move_and_rename_read_as_one_clause(client):
 
 
 async def test_accept_says_what_it_left_out(client):
+    """Accepting a proposal says which changes it left out; undoing restores them too."""
     w = await world()
     mid = await live(client, w)
     r = await op(client, w, "owner", mid, op="add", title="Quiet hours", batch="o1")
@@ -311,6 +322,7 @@ async def test_accept_says_what_it_left_out(client):
 
 
 async def test_feature_gone_from_the_prd_keeps_its_name(client):
+    """An agenda item whose feature was later deleted from the PRD keeps its own name."""
     w = await world()
     mid = await live(client, w)
     m = await get(client, w, mid)
@@ -327,6 +339,7 @@ async def test_feature_gone_from_the_prd_keeps_its_name(client):
 
 
 async def test_other_company_cannot_edit(client):
+    """A meeting from another company is invisible and cannot be edited."""
     w = await world()
     other = await world()
     mid = await live(client, w)

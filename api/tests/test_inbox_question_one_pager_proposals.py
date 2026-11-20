@@ -45,6 +45,7 @@ def _row(inbox: dict, change_id: str) -> dict | None:
 
 @pytest.mark.parametrize("op", ["decide_question", "name_decider"])
 async def test_a_proposed_question_answer_waits_named_by_its_question(client, op):
+    """A proposed PRD question decision is named by its question, shown as pending."""
     ctx = await make_ctx()
     await q_tests.seed(ctx)
     qs = (await q_tests.page(client, ctx, "owner"))["questions"]
@@ -86,6 +87,7 @@ async def test_a_proposed_question_answer_waits_named_by_its_question(client, op
 
 
 async def test_a_proposed_one_pager_wording_waits_named_by_its_line(client):
+    """A proposed one-pager wording change is named by its old text, shown as pending."""
     ctx = await op_tests.world(client)
     view = await op_tests.get(client, ctx, "approver")
     old = op_tests.line(view, "bets-1")["text"]
@@ -113,6 +115,7 @@ async def test_a_proposed_one_pager_wording_waits_named_by_its_line(client):
 
 
 async def test_deciding_the_question_on_decisions_removes_its_proposal(client):
+    """A decider deciding a question directly removes its pending Inbox proposal."""
     ctx = await make_ctx()
     await q_tests.seed(ctx)
     qs = (await q_tests.page(client, ctx, "owner"))["questions"]

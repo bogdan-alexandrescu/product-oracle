@@ -74,6 +74,7 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The roadmap-dates migration chains onto the branch's one and only head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -106,6 +107,7 @@ def _seed_item() -> tuple[uuid.UUID, uuid.UUID]:
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading adds the date columns and one open suggestion per item."""
     upgrade(_cfg(), PREVIOUS)
     tenant, item = _seed_item()
     assert _columns() == set()

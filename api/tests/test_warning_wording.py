@@ -98,12 +98,14 @@ def test_every_date_message_says_what_to_do_in_the_app(mark, prd, update):
 
 
 def test_the_item_and_track_date_refusals_say_what_to_do_in_the_app():
+    """Date refusal messages stay plain text and say where to fix the date."""
     for msg in (schedule.UNVERIFIED, schedule.OUTSIDE_NOW, doc_dates.SOURCES_NOT_LAST):
         _plain(msg)
     assert "Plan › Dates" in schedule.UNVERIFIED and "never invents dates" in schedule.UNVERIFIED
 
 
 def test_the_citation_warning_names_a_source_item_oracle_no_longer_has():
+    """A citation warning for a missing source item names the headings it pointed to."""
     for headings in (["Problem"], ["Problem", "Decisions"], []):
         msg = wording.unknown_source_item(headings)
         _plain(msg)
@@ -113,6 +115,7 @@ def test_the_citation_warning_names_a_source_item_oracle_no_longer_has():
 
 
 def test_the_publish_gate_message_names_headings_and_plan_dates():
+    """The publish gate's date warning names headings and dates, not raw ids."""
     marks = [_mark(), _mark("withdrawn", text="2026-11-30", day=date(2026, 11, 30))]
     headings = {"now-payment-step": "Payment step"}
     detail, blocks = publish_gate.dates_refusal(marks, headings)
@@ -185,6 +188,7 @@ def test_nothing_else_is_rewritten_so_no_id_is_lost():
 
 
 def test_a_warning_keeps_its_ids_in_refs():
+    """A version warning keeps its ids in refs, defaulting to empty if none are given."""
     w = VersionWarning(
         code="unknown_citation_item",
         message=wording.unknown_source_item(["Problem"]),

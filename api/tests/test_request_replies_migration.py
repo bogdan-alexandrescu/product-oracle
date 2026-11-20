@@ -63,11 +63,13 @@ def scratch_db():
 
 
 def test_chains_on_mains_head_and_is_the_only_head():
+    """The request-replies migration chains on the branch's own head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_a_downgrade_refused_while_a_new_reason_is_used(scratch_db):
+    """Downgrading the request-replies migration is refused once new data is in use."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, r, theme, d = (uuid.uuid4() for _ in range(4))

@@ -173,11 +173,13 @@ def flow(brief: str) -> tuple[str, str, str]:
 
 
 def test_chains_on_the_single_head():
+    """This migration chains directly onto the branch's single prior head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_flows_move_to_the_line_and_back(scratch_db):
+    """Upgrading moves a bet's flow onto its matching line; downgrading restores it."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     _, d = _world()

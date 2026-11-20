@@ -82,6 +82,7 @@ def _close(a: float, b: float) -> bool:
 
 
 async def test_commenter_adds_a_notion_link_everyone_sees_it(client, ctx, web):
+    """A Notion link becomes shared evidence that every role can see, not private."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     resp = await add(
         client, ctx, entity_id=feat["id"], url=NOTION_URL + "#decision", note="Interview data"
@@ -125,6 +126,7 @@ async def test_commenter_adds_a_notion_link_everyone_sees_it(client, ctx, web):
 
 
 async def test_google_doc_and_web_links_and_edges(client, ctx, web):
+    """A Google Doc or web page can be cited as evidence on an entity or an edge."""
     goal = await entity(client, ctx, type="goal", key="activation")
     feat = await entity(client, ctx, type="feature", key="pricing-page")
     sup = await edge(client, ctx, feat, goal, "supports", attrs={"contribution": 2})
@@ -149,6 +151,7 @@ async def test_google_doc_and_web_links_and_edges(client, ctx, web):
 
 
 async def test_freshness_halves_from_last_modified(client, ctx, web):
+    """A web page's freshness score halves every 90 days since its last change."""
     feat = await entity(client, ctx, type="feature", key="f")
     stamp = datetime.now(UTC) - timedelta(days=90)
     web.routes[WEB_URL] = html(
@@ -165,6 +168,7 @@ async def test_freshness_halves_from_last_modified(client, ctx, web):
 
 
 async def test_links_count_as_independent_mentions(client, ctx, web):
+    """Each distinct link raises the shared mention count on the entity evidence."""
     goal = await confirm(client, ctx, await entity(client, ctx, type="goal", key="g"))
     feat = await entity(client, ctx, type="feature", key="f")
     await edge(client, ctx, feat, goal, "supports", attrs={"contribution": 3})
@@ -183,6 +187,7 @@ async def test_links_count_as_independent_mentions(client, ctx, web):
 
 
 async def test_preview_shows_title_excerpt_and_confidence_and_saves_nothing(client, ctx, web):
+    """Previewing a link shows its title and confidence but saves nothing."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     resp = await client.post(
         f"{B}/evidence/link/preview",
@@ -209,6 +214,7 @@ async def test_preview_shows_title_excerpt_and_confidence_and_saves_nothing(clie
 
 
 async def test_refused_links_save_nothing(client, ctx, web):
+    """A non-https, private, internal or unsupported link is refused and unsaved."""
     feat = await entity(client, ctx, type="feature", key="f")
     cases = [
         ("http://research.example.com/activation", 422, "not_https"),
@@ -234,6 +240,7 @@ async def test_refused_links_save_nothing(client, ctx, web):
 
 
 async def test_targets_are_checked(client, ctx, web):
+    """Evidence needs exactly one valid target; a duplicate link there is refused."""
     feat = await entity(client, ctx, type="feature", key="f")
     other = await entity(client, ctx, type="feature", key="g")
     sup = await edge(client, ctx, feat, other, "depends_on")
@@ -253,6 +260,7 @@ async def test_targets_are_checked(client, ctx, web):
 
 
 async def test_roles(client, ctx, web):
+    """Only the adder or a privileged role may remove a link; a viewer never may."""
     feat = await entity(client, ctx, type="feature", key="f")
     body = {"entity_id": feat["id"], "url": WEB_URL}
     assert (await add(client, ctx, who="viewer", **body)).status_code == 403
@@ -283,6 +291,7 @@ async def test_roles(client, ctx, web):
 
 
 async def test_refresh_updates_the_snapshot_and_rescores(client, ctx, web):
+    """Refreshing a link keeps the old snapshot unless the fetched content changed."""
     feat = await entity(client, ctx, type="feature", key="f")
     old = (datetime.now(UTC) - timedelta(days=180)).strftime("%a, %d %b %Y %H:%M:%S GMT")
     web.routes[WEB_URL] = html("<main><p>First draft.</p></main>", **{"last-modified": old})
@@ -317,6 +326,7 @@ async def test_refresh_updates_the_snapshot_and_rescores(client, ctx, web):
 
 
 async def test_refresh_only_for_link_evidence(client, ctx, web):
+    """Refresh only works on link evidence; manual evidence and bad ids are refused."""
     feat = await entity(client, ctx, type="feature", key="f")
     manual = await cite(client, ctx, feat, who="approver", url=WEB_URL, excerpt="Typed in")
     assert manual["kind"] is None and manual["link"] is None
@@ -331,6 +341,7 @@ async def test_refresh_only_for_link_evidence(client, ctx, web):
 
 
 async def test_rescore_all_keeps_link_scoring(client, ctx, web):
+    """Rescoring all evidence keeps a link's own source-based score intact."""
     feat = await entity(client, ctx, type="feature", key="f")
     ev = (await add(client, ctx, entity_id=feat["id"], url=GDOC_URL)).json()
     resp = await client.post(f"{B}/rescore", headers=ctx.as_("approver"))
@@ -342,6 +353,7 @@ async def test_rescore_all_keeps_link_scoring(client, ctx, web):
 
 
 async def test_link_evidence_is_deleted_with_its_snapshots(client, ctx, web):
+    """Deleting link evidence also removes its saved snapshots."""
     feat = await entity(client, ctx, type="feature", key="f")
     ev = (await add(client, ctx, entity_id=feat["id"], url=NOTION_URL)).json()
     resp = await client.delete(f"{B}/evidence/{ev['id']}", headers=ctx.as_("approver"))

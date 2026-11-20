@@ -51,6 +51,7 @@ def scratch_db():
 
 
 def test_0014_trace_follows_0014_usage_retry_at():
+    """The trace migration chains right after usage retry-at, keeping one head."""
     # Re-chained at the wave 1 integration, part 2: 0014_* in merge order, one head.
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_trace").down_revision == "0014_usage_retry_at"
@@ -82,6 +83,7 @@ def _seed(t, doc, ver, ent):
 
 
 def test_upgrade_keeps_rows_and_a_deleted_entity_leaves_its_dependency(scratch_db):
+    """A deleted entity's dependency survives with a snapshot, never left dangling."""
     cfg = _cfg()
     # The live database is at 0014_usage_retry_at when 0014_trace first runs.
     upgrade(cfg, "0014_usage_retry_at")

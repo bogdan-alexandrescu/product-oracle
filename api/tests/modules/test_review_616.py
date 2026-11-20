@@ -43,6 +43,7 @@ def _mods(part):
 
 
 async def test_policy_changed_at_is_set_only_after_the_revision_in_force(client):
+    """Policy changed at clears only when a confirmed revision applies it."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     # A legacy document has no revision in force: nothing to flag.
@@ -68,6 +69,7 @@ async def test_policy_changed_at_is_set_only_after_the_revision_in_force(client)
 
 
 async def test_a_working_draft_does_not_clear_policy_changed_at(client):
+    """A working draft save never clears the policy changed at notice."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     assert (await _revise(client, ctx, None, "First")).status_code == 201
@@ -78,6 +80,7 @@ async def test_a_working_draft_does_not_clear_policy_changed_at(client):
 
 
 async def test_can_change_follows_the_role_and_required_review_role(client):
+    """Can change follows the viewer's role against the required review role."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     hardware = {"category": "hardware", "scope": {"capabilities": ["radio_hardware"]}}
@@ -97,6 +100,7 @@ async def test_can_change_follows_the_role_and_required_review_role(client):
 
 
 async def test_can_change_on_a_legacy_recommendation_and_a_preview(client):
+    """A legacy recommendation and a live preview both gate can change by role."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     legacy = await _inspect(client, ctx, "approver")
@@ -116,6 +120,7 @@ async def test_can_change_on_a_legacy_recommendation_and_a_preview(client):
 
 
 async def test_can_change_is_not_stored_in_the_revision(client):
+    """Whether a module can change is computed per reader, never stored."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     # An owner confirms; an approver then reads: what the owner could do does not carry.

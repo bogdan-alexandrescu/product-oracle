@@ -102,6 +102,7 @@ def _counted(inbox: dict) -> int:
 
 
 async def test_a_refused_draft_goes_back_to_the_writer_then_to_the_person(client, owner):
+    """A refused draft first goes back to the writing agent, not straight to a person."""
     tenant_id, auth = owner
     swarm = on()
     swarm.step_files[WRITER] = {"prd.md": BAD_PRD}
@@ -183,6 +184,7 @@ async def test_a_refused_draft_goes_back_to_the_writer_then_to_the_person(client
 
 
 async def test_a_draft_still_refused_after_the_revision_opens_the_inbox(client, owner):
+    """A draft still refused after one revision stops retrying and reaches the person."""
     tenant_id, auth = owner
     swarm = on()
     swarm.step_files[WRITER] = {"prd.md": BAD_PRD}
@@ -252,6 +254,7 @@ async def test_an_earlier_segments_refused_draft_is_left_to_the_person(client, o
 
 
 async def test_an_accepted_draft_is_not_answered_by_oracle(client, owner):
+    """An accepted draft waits for the person's review; Oracle does not answer for it."""
     tenant_id, auth = owner
     swarm = on()
     run = await _feedback_run(client, auth, tenant_id, swarm)
@@ -365,6 +368,7 @@ ISSUE_PRD = _default_content("prd.md", "next_draft", 1).replace(
 
 
 async def test_a_draft_sent_back_for_an_issue_number_says_what_the_warnings_are(client, owner):
+    """Sending a draft back for naming an issue by its number alone explains why."""
     tenant_id, auth = owner
     swarm = on()
     swarm.step_files[WRITER] = {"prd.md": ISSUE_PRD}
@@ -385,6 +389,7 @@ async def test_a_draft_sent_back_for_an_issue_number_says_what_the_warnings_are(
 
 
 async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, owner):
+    """A draft using codes without their names goes back to the writer, with why."""
     tenant_id, auth = owner
     swarm = on()
     swarm.step_files[WRITER] = {"prd.md": UNNAMED_PRD}
@@ -432,6 +437,7 @@ async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, 
 
 
 async def test_codes_still_unnamed_after_the_revision_say_which_at_the_review(client, owner):
+    """If a revision still lacks code names, the review says exactly which ones."""
     tenant_id, auth = owner
     swarm = on()
     swarm.step_files[WRITER] = {"prd.md": UNNAMED_PRD}

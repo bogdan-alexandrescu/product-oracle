@@ -24,6 +24,7 @@ def _columns(table: str) -> set[str]:
 
 
 def test_0057_up_down_up(scratch_db):  # noqa: F811
+    """The share links migration makes its tables, stores no personal data, reverses."""
     cfg = _cfg()
     upgrade(cfg, "0072_public_texts")
     assert _tables() == set()

@@ -164,6 +164,7 @@ class World:
 
 
 async def test_add_item_per_role(client):
+    """Adding a Simple item applies at once for owners and deciders, else proposes."""
     w = await World().build()
     for who in ("owner", "decider"):
         out = await w.add(client, who, f"Guided setup {who}")
@@ -199,6 +200,7 @@ async def test_add_item_per_role(client):
 
 
 async def test_proposed_add_item_carries_its_track(client):
+    """A proposed item keeps its picked track only if the track is live on the roadmap."""
     w = await World().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
@@ -234,6 +236,7 @@ async def test_proposed_add_item_carries_its_track(client):
 
 
 async def test_set_goals_moves_an_item_to_another_goal(client):
+    """Moving a Simple item's goal applies, and undo restores the original goal."""
     w = await World().build()
     grow, quiet = w.goals["grow"], w.goals["quiet"]
     item_id = (await w.add(client, "owner", "Saved carts"))["change"]["target"]["item_id"]
@@ -259,6 +262,7 @@ async def test_set_goals_moves_an_item_to_another_goal(client):
 
 
 async def test_accepted_set_goals_moves_the_goal_bucket_link(client):
+    """Accepting a goal move for an item also moves its link on goal buckets."""
     w = await World().build()
     grow, quiet = w.goals["grow"], w.goals["quiet"]
     item_id = w.ids["import-a"]
@@ -297,6 +301,7 @@ async def test_accepted_set_goals_moves_the_goal_bucket_link(client):
 
 
 async def test_added_item_is_in_the_draft_only(client):
+    """A newly added Simple item is visible only in the draft until it is submitted."""
     w = await World().build()
     c = (await w.add(client, "owner", "Guided setup"))["change"]
     iid = c["target"]["item_id"]
@@ -370,6 +375,7 @@ async def test_quarter_add_is_estimated_in_its_quarter(client):
 
 
 async def test_drafting_job_fills_the_draft(client):
+    """The item drafting job fills a draft's fields from the asked outcome and dates."""
     w = await World().build()
     c = (await w.add(client, "owner", "Import from files", kind="quarter", value="2026-Q4"))[
         "change"
@@ -442,6 +448,7 @@ async def test_drafting_job_fills_the_draft(client):
 
 
 async def test_merge_item_per_role(client):
+    """Merging a draft item into one is owner-applied, approver-only proposed."""
     w = await World().build()
     c = (await w.add(client, "owner", "Import from spreadsheets"))["change"]
     draft = c["target"]["item_id"]
@@ -499,6 +506,7 @@ async def test_merge_item_per_role(client):
 
 
 async def test_reconcile_and_keep_both(client):
+    """Keeping both look-alike items clears the match; merging one links it."""
     w = await World().build()
     c = (await w.add(client, "owner", "Bulk import"))["change"]
     draft = c["target"]["item_id"]
@@ -549,6 +557,7 @@ async def _seed_suggestions(w: World, n: int = 4) -> list[str]:
 
 
 async def test_goal_suggestions_accept_reject_per_role(client):
+    """Accepting a goal suggestion adds the item at once, by the decider or owner only."""
     w = await World().build()
     ids = await _seed_suggestions(w)
     r = await client.get(SUGGESTIONS, headers=w.as_("viewer"), params={"goal_id": w.goals["quiet"]})
@@ -593,6 +602,7 @@ async def test_goal_suggestions_accept_reject_per_role(client):
 
 
 async def test_rejected_goal_suggestion_reopens(client):
+    """A rejected goal suggestion can be reopened by its decider, not re-accepted."""
     w = await World().build()
     ids = await _seed_suggestions(w, 2)
     r = await client.post(f"{SUGGESTIONS}/{ids[0]}/reject", headers=w.as_("decider"),
@@ -615,6 +625,7 @@ async def test_rejected_goal_suggestion_reopens(client):
 
 
 async def test_empty_goal_suggests_once(client):
+    """An empty goal gets suggestions queued once, not again while one is pending."""
     w = await World().build()
 
     async def jobs(s) -> list[LlmJob]:
@@ -837,6 +848,7 @@ async def _suggest(client, w: World, who: str, title: str, outcome="Fewer alerts
 
 
 async def test_people_suggest_per_role(client):
+    """A person-suggested goal idea is open to commenters, refused to viewers."""
     w = await World().build()
     for who in ("owner", "decider", "approver", "commenter"):
         out = await _suggest(client, w, who, f"  Quiet   hours {who} ")
@@ -881,6 +893,7 @@ async def test_people_suggest_per_role(client):
 
 
 async def test_no_decider_the_approving_owners_decide(client):
+    """With no decider named, only an owner may accept a goal suggestion."""
     w = await World().build(decider=False)
     out = await _suggest(client, w, "commenter", "Snooze")
     r = await client.get(SUGGESTIONS, headers=w.as_("commenter"),
@@ -925,6 +938,7 @@ def test_lookalike_code_is_a_display_code_never_a_key():
 
 
 def test_suggestion_title_is_the_first_clause():
+    """A chat-suggested feature's title is just its first clause, trimmed and capped."""
     t = chat_actions.suggestion_title
     assert t("audit log export, so admins can review changes") == "Audit log export"
     assert t("let teams invite people with a link to onboard faster") == (
@@ -937,6 +951,7 @@ def test_suggestion_title_is_the_first_clause():
 
 
 async def test_chat_suggest_feature_card(client):
+    """A chat-suggested feature names a look-alike existing one its author may apply."""
     w = await World().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         f = await s.get(Entity, uuid.UUID(w.features["audit-log"]))

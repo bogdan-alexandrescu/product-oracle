@@ -133,6 +133,7 @@ BOTH = ["C0PRODUCT", "C0ROADMAP"]
 
 
 async def test_a_later_since_deletes_older_messages(a, tenant_id, alice, slack):
+    """A later start date deletes now-out-of-range older messages on sync."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await sync(a, source)
     assert len(await live(a, source)) == 4
@@ -158,6 +159,7 @@ async def test_a_later_since_deletes_older_messages(a, tenant_id, alice, slack):
 
 
 async def test_a_thread_started_before_since_is_deleted(a, tenant_id, alice, slack):
+    """A thread started before the new start date is deleted despite a later reply."""
     parent = slack.channels["C0PRODUCT"][0]
     parent.update(reply_count=1, latest_reply=ts("2025-10-06"), thread_ts=parent["ts"])
     reply = {"ts": ts("2025-10-06"), "user": "U0ADA", "text": "late", "thread_ts": parent["ts"]}
@@ -174,6 +176,7 @@ async def test_a_thread_started_before_since_is_deleted(a, tenant_id, alice, sla
 async def test_an_earlier_until_deletes_later_messages_but_keeps_threads_in_range(
     a, tenant_id, alice, slack
 ):
+    """An earlier end date deletes later messages but keeps in-range threads."""
     parent = slack.channels["C0PRODUCT"][1]  # 2025-10-05, replied to on 2025-10-08
     parent.update(reply_count=1, latest_reply=ts("2025-10-08"), thread_ts=parent["ts"])
     reply = {"ts": ts("2025-10-08"), "user": "U0ADA", "text": "late", "thread_ts": parent["ts"]}
@@ -191,6 +194,7 @@ async def test_an_earlier_until_deletes_later_messages_but_keeps_threads_in_rang
 
 
 async def test_removing_a_channel_deletes_its_messages(a, tenant_id, alice, slack):
+    """Removing a channel from the allowlist deletes its messages on sync."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await sync(a, source)
 
@@ -203,6 +207,7 @@ async def test_removing_a_channel_deletes_its_messages(a, tenant_id, alice, slac
 
 
 async def test_a_sync_without_a_change_deletes_nothing(a, tenant_id, alice, slack):
+    """A sync with no configuration change deletes nothing."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await sync(a, source)
     result = await sync(a, source)
@@ -217,6 +222,7 @@ TWO = ["example-org/two:issue:1", "example-org/two:release:7"]
 
 
 async def test_removing_a_repo_deletes_its_items(a, tenant_id, alice, github):
+    """Removing a repo from the selection deletes that repo's items on sync."""
     config = {"repos": ["example-org/one", "Example-Org/Two"], "include": ["issues", "releases"]}
     source = await add(a, tenant_id, alice, "github", config)
     await sync(a, source)
@@ -231,6 +237,7 @@ async def test_removing_a_repo_deletes_its_items(a, tenant_id, alice, github):
 
 
 async def test_dropping_an_include_deletes_those_items(a, tenant_id, alice, github):
+    """Dropping an included item kind deletes items of that kind on sync."""
     config = {"repos": ["example-org/one"], "include": ["issues", "releases"]}
     source = await add(a, tenant_id, alice, "github", config)
     await sync(a, source)
@@ -247,6 +254,7 @@ async def test_dropping_an_include_deletes_those_items(a, tenant_id, alice, gith
 async def test_a_sync_running_while_a_channel_is_removed_keeps_nothing_of_it(
     a, tenant_id, alice, monkeypatch
 ):
+    """Items from a channel removed mid-sync are not kept, even partly read ones."""
     world = SlackWorld()
     world.channels["C0SECRET"] = [{"ts": ts("2025-10-04"), "user": "U0ADA", "text": "secret"}]
     edit: dict = {}
@@ -351,6 +359,7 @@ async def test_names_saved_with_a_widening_are_still_checked_with_slack(a, tenan
 
 
 async def test_a_rate_limit_after_narrowing_keeps_the_sweep(a, tenant_id, alice, slack):
+    """A rate limit right after narrowing still finishes the removal sweep once."""
     parent = slack.channels["C0PRODUCT"][1]
     parent.update(reply_count=1, latest_reply=ts("2025-10-06"), thread_ts=parent["ts"])
     reply = {"ts": ts("2025-10-06"), "user": "U0ADA", "text": "r", "thread_ts": parent["ts"]}
@@ -373,6 +382,7 @@ async def test_a_rate_limit_after_narrowing_keeps_the_sweep(a, tenant_id, alice,
 
 
 async def test_a_large_channel_checkpoints_each_page(a, tenant_id, alice, slack, monkeypatch):
+    """A large channel checkpoints each page and resumes from its last page."""
     monkeypatch.setattr(slack_module, "PAGE_SIZE", 1)
     source = await add(a, tenant_id, alice, "slack", {"channels": ["C0PRODUCT"]})
     # Two pages of history, then Slack asks to slow down.
@@ -399,6 +409,7 @@ async def test_a_large_channel_checkpoints_each_page(a, tenant_id, alice, slack,
 
 
 async def test_a_message_deleted_in_slack_is_deleted(a, tenant_id, alice, slack):
+    """A message deleted directly in Slack is detected and deleted on sync."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await sync(a, source)
     gone = slack.channels["C0PRODUCT"].pop(1)
@@ -411,6 +422,7 @@ async def test_a_message_deleted_in_slack_is_deleted(a, tenant_id, alice, slack)
 
 
 async def test_narrowed_out_items_keep_their_versions(a, tenant_id, alice, slack):
+    """Items narrowed out of a source keep their stored content versions."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     await sync(a, source)
     await narrow(a, source, {"channels": ["C0PRODUCT"]})
@@ -468,6 +480,7 @@ class GithubFilesWorld:
 async def test_a_file_deleted_upstream_is_deleted_after_the_selection_changes(
     a, tenant_id, alice, monkeypatch
 ):
+    """A file deleted upstream is removed once the source's selection resyncs."""
     world = GithubFilesWorld()
     client = httpx.AsyncClient(transport=httpx.MockTransport(world))
     monkeypatch.setitem(base._registry, "github", GithubConnector(client))
@@ -486,6 +499,7 @@ async def test_a_file_deleted_upstream_is_deleted_after_the_selection_changes(
 async def test_widening_again_brings_back_files_without_new_versions(
     a, tenant_id, alice, monkeypatch
 ):
+    """Widening a selection brings deleted items back with no new versions."""
     world = GithubFilesWorld()
     client = httpx.AsyncClient(transport=httpx.MockTransport(world))
     monkeypatch.setitem(base._registry, "github", GithubConnector(client))
@@ -508,6 +522,7 @@ async def test_widening_again_brings_back_files_without_new_versions(
 
 
 async def test_a_source_over_the_channel_cap_needs_attention(a, tenant_id, alice, slack):
+    """A source with too many channels needs attention until it is trimmed."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     too_many = [f"C{n:08d}" for n in range(slack_module.MAX_CHANNELS + 1)]
     async with tenant_session(tenant_id) as s:
@@ -539,6 +554,7 @@ async def test_a_source_over_the_channel_cap_needs_attention(a, tenant_id, alice
 
 
 async def test_a_source_with_a_now_refused_date_needs_attention(a, tenant_id, alice, slack):
+    """A source with an out-of-range start date needs attention, plain words."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     async with tenant_session(tenant_id) as s:
         await s.execute(
@@ -560,6 +576,7 @@ async def test_a_source_with_a_now_refused_date_needs_attention(a, tenant_id, al
 
 
 async def test_a_source_with_a_now_refused_order_names_the_edit(a, tenant_id, alice, slack):
+    """A source whose end date is before its start date needs attention, clearly."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     async with tenant_session(tenant_id) as s:
         await s.execute(
@@ -583,6 +600,7 @@ async def test_a_source_with_a_now_refused_order_names_the_edit(a, tenant_id, al
 
 
 async def test_a_message_with_a_colon_reads_as_one_sentence(a, tenant_id, alice, slack):
+    """An error message with a colon in an id still reads as one plain sentence."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     async with tenant_session(tenant_id) as s:
         await s.execute(
@@ -599,6 +617,7 @@ async def test_a_message_with_a_colon_reads_as_one_sentence(a, tenant_id, alice,
 
 
 async def test_an_active_source_has_no_attention(a, tenant_id, alice, slack):
+    """A source with nothing wrong reports no attention item."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     assert source["attention"] is None
 
@@ -632,6 +651,7 @@ async def _mcp_token(tenant_id, user, scope: str) -> str:
 
 
 async def test_a_read_only_mcp_client_cannot_change_sources(a, tenant_id, alice, slack):
+    """A read-only MCP token cannot change a source; a read-write token can."""
     source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
     raw = await _mcp_token(tenant_id, alice, "oracle:read")
     async with client_for(headers={"Authorization": f"Bearer {raw}"}) as mcp:

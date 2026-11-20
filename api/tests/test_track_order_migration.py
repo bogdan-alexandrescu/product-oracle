@@ -60,11 +60,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The track-order migration chains directly after the branch's single head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_backfills_newest_last_and_downgrade_drops(scratch_db):
+    """The track-order migration backfills tenants' tracks oldest first."""
     upgrade(_cfg(), PREVIOUS)
     one, two = uuid.uuid4(), uuid.uuid4()
     for t, name in ((one, "Example Co"), (two, "Sample Inc")):

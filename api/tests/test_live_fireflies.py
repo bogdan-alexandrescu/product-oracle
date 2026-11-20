@@ -117,6 +117,7 @@ async def _conn(tenant_id, conn_id) -> Connection:
 async def test_live_sources_lists_own_active_fireflies_connections(
     sources, tenant_id, alice, bob, archive
 ):
+    """Only a person's own active Fireflies connections are listed, with no cite."""
     await _fireflies(tenant_id, bob, ARCHIVE_ENDPOINT, label="Bob's archive")
     expired = await _fireflies(tenant_id, alice, ARCHIVE_ENDPOINT, label="Old")
     async with tenant_session(tenant_id) as s:
@@ -150,6 +151,7 @@ async def test_live_sources_lists_own_active_fireflies_connections(
 # total, the backend is GraphQL for another host, or the cite's fields drift;
 # no_claim=the reply text's "4,321" (lane 2).
 async def test_archive_count_with_limit_1(sources, tenant_id, alice, archive):
+    """A limited meeting list reports the true total and a cite for the read."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/meetings", params={"limit": 1})
     assert resp.status_code == 200, resp.text
@@ -187,6 +189,7 @@ async def test_archive_count_with_limit_1(sources, tenant_id, alice, archive):
 # fails_when=any of these is read wrongly or the bad entry is kept; no_claim=the shapes
 # amendment A tolerates beyond the real one (test_amendment_a_tolerated_shapes).
 async def test_archive_meetings_are_read_by_field_name(sources, tenant_id, alice, archive):
+    """Meeting fields are read by name, so one skipped field skips just that meeting."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/meetings")
     body = resp.json()
@@ -210,6 +213,7 @@ async def test_archive_meetings_are_read_by_field_name(sources, tenant_id, alice
 # start_time (seconds), unknown fields ignored; fails_when=any of these is read wrongly;
 # no_claim=that the archive sends them (its real shape is the fake's).
 def test_amendment_a_tolerated_shapes():
+    """Older and newer shapes of a meeting or line are both read the same way."""
     meeting = fireflies_live.read_meeting(
         {
             "id": 7,
@@ -242,6 +246,7 @@ def test_amendment_a_tolerated_shapes():
 # YYYY-MM-DD, series, limit, offset); fails_when=an argument is renamed or dropped;
 # no_claim=how the archive interprets a day.
 async def test_archive_list_passes_filters(sources, tenant_id, alice, archive):
+    """Date, series and limit filters on an archive list reach the source unchanged."""
     async with client_for(alice) as a:
         resp = await a.get(
             f"/v1/live/fireflies/{archive}/meetings",
@@ -288,6 +293,7 @@ async def test_archive_list_passes_filters(sources, tenant_id, alice, archive):
 # max_lines 1..2000, part summary|all); fails_when=a value outside them reaches the
 # source; no_claim=the wording of FastAPI's validation errors.
 async def test_query_limits(sources, tenant_id, alice, archive, route, params):
+    """Every live query parameter outside its allowed range is refused with 422."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/{route}", params=params)
     assert resp.status_code == 422, resp.text
@@ -297,6 +303,7 @@ async def test_query_limits(sources, tenant_id, alice, archive, route, params):
 # protects=C4: date_to before date_from answers 422 before the source is called;
 # fails_when=it is sent on; no_claim=the Company time zone's effect (GraphQL test).
 async def test_date_to_before_date_from_is_422(sources, tenant_id, alice, archive):
+    """An end date before the start date, or a malformed date, is refused with 422."""
     async with client_for(alice) as a:
         resp = await a.get(
             f"/v1/live/fireflies/{archive}/meetings",
@@ -315,6 +322,7 @@ async def test_date_to_before_date_from_is_422(sources, tenant_id, alice, archiv
 # id/title/date/snippet, query and people go to search_meetings; fails_when=the shape or
 # the arguments drift; no_claim=ranking.
 async def test_archive_search(sources, tenant_id, alice, archive):
+    """Searching the archive passes the people filter and returns a snippet."""
     async with client_for(alice) as a:
         resp = await a.get(
             f"/v1/live/fireflies/{archive}/search",
@@ -342,6 +350,7 @@ async def test_archive_search(sources, tenant_id, alice, archive):
 # to max_lines with truncated, and the cite names the meeting; fails_when=the shape,
 # truncation or item_id drift; no_claim=the chip (lane 3).
 async def test_archive_get_meeting(sources, tenant_id, alice, archive):
+    """A meeting can be read as a short summary or in full with a line limit."""
     async with client_for(alice) as a:
         summary = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-301")
         full = await a.get(
@@ -379,6 +388,7 @@ async def test_archive_get_meeting(sources, tenant_id, alice, archive):
 # wrapper (a real summary reads as none), or drops attendees or speakers; no_claim=the
 # keywords, chapters and action items (not answered by get_meeting).
 async def test_archive_get_meeting_reads_overview_as_summary(sources, tenant_id, alice, archive):
+    """A meeting with no summary falls back to its overview text."""
     async with client_for(alice) as a:
         summarised = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-301")
         unsummarised = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-299")
@@ -400,6 +410,7 @@ async def test_archive_get_meeting_reads_overview_as_summary(sources, tenant_id,
 # start_ms..end_ms; fails_when=either kind is sent wrongly or next_offset is lost;
 # no_claim=the archive's own paging rules.
 async def test_archive_get_lines(sources, tenant_id, alice, archive):
+    """Meeting lines can be read by page or by a time window, each a cite source."""
     async with client_for(alice) as a:
         first = await a.get(
             f"/v1/live/fireflies/{archive}/meetings/m-301/lines", params={"limit": 4}
@@ -447,6 +458,7 @@ async def test_archive_get_lines(sources, tenant_id, alice, archive):
 # 422 with the sentence; fails_when=the source is called or the sentence drifts;
 # no_claim=-.
 async def test_lines_windows_are_one_kind(sources, tenant_id, alice, archive, params, detail):
+    """Asking for both a page and a time window on lines is refused with 422."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-301/lines", params=params)
     assert resp.status_code == 422
@@ -462,6 +474,7 @@ async def test_lines_windows_are_one_kind(sources, tenant_id, alice, archive, pa
 # the Company time zone (C4); fails_when=the backend is MCP, the count comes from elsewhere
 # or a dated total is not null; no_claim=Fireflies' real plan limits.
 async def test_graphql_count_and_dates(sources, tenant_id, alice, graphql):
+    """The GraphQL backend converts minutes to seconds and epoch ms to a date."""
     async with client_for(alice) as a:
         count = await a.get(f"/v1/live/fireflies/{graphql}/meetings", params={"limit": 1})
         dated = await a.get(
@@ -488,6 +501,7 @@ async def test_graphql_count_and_dates(sources, tenant_id, alice, graphql):
 # protects=a plan that refuses user { num_transcripts }: total is null and the answer says
 # the count is not offered; fails_when=the call fails or a total is made up; no_claim=-.
 async def test_graphql_count_refused_is_null(sources, tenant_id, alice, graphql):
+    """When a plan can't count meetings, the total is null, not guessed."""
     sources.graphql.count_refused = True
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{graphql}/meetings", params={"limit": 1})
@@ -503,6 +517,7 @@ async def test_graphql_count_refused_is_null(sources, tenant_id, alice, graphql)
 # failure fails the whole call or a total is made up; no_claim=a count that times out
 # (the same path: any LiveError of the count).
 async def test_graphql_count_failure_keeps_the_list(sources, tenant_id, alice, graphql, fail):
+    """A failed meeting count still returns the list, with the total null."""
     sources.graphql.count_fail = fail
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{graphql}/meetings", params={"limit": 1})
@@ -518,6 +533,7 @@ async def test_graphql_count_failure_keeps_the_list(sources, tenant_id, alice, g
 # answer 422 with their sentences, search's total is null; fails_when=more than 50 is sent,
 # a filter is silently dropped, or a total is made up; no_claim=-.
 async def test_graphql_caps_and_refusals(sources, tenant_id, alice, graphql):
+    """GraphQL caps the page size and refuses filters only the archive supports."""
     async with client_for(alice) as a:
         capped = await a.get(f"/v1/live/fireflies/{graphql}/meetings", params={"limit": 200})
         series = await a.get(f"/v1/live/fireflies/{graphql}/meetings", params={"series": "x"})
@@ -543,6 +559,7 @@ async def test_graphql_caps_and_refusals(sources, tenant_id, alice, graphql):
 # participants then meeting_attendees (de-duplicated, in order), and lines sliced by
 # offset/limit or start_ms..end_ms; fails_when=any of these drifts; no_claim=-.
 async def test_graphql_meeting_and_lines(sources, tenant_id, alice, graphql):
+    """GraphQL meetings and lines are read with participants deduplicated in order."""
     async with client_for(alice) as a:
         full = await a.get(
             f"/v1/live/fireflies/{graphql}/meetings/g-12", params={"part": "all", "max_lines": 4}
@@ -588,6 +605,7 @@ async def test_graphql_meeting_and_lines(sources, tenant_id, alice, graphql):
 async def test_source_refused_key_is_424_and_needs_reconnect(
     sources, tenant_id, alice, archive, graphql, refusal
 ):
+    """A refused key answers 424 and marks the connection as needing reconnect."""
     sources.archive.fail = refusal
     sources.graphql.fail = refusal
     async with client_for(alice) as a:
@@ -614,6 +632,7 @@ async def test_source_refused_key_is_424_and_needs_reconnect(
 # protects=errors table row 2: the source's 429 answers 429 with its Retry-After in the
 # sentence and the header; fails_when=the wait is lost or the status drifts; no_claim=-.
 async def test_source_rate_limit_is_429_with_retry_after(sources, tenant_id, alice, archive):
+    """A rate-limited source answers 429 with a retry-after time in seconds."""
     sources.archive.fail = 429
     sources.archive.retry_after = "17"
     async with client_for(alice) as a:
@@ -630,6 +649,7 @@ async def test_source_rate_limit_is_429_with_retry_after(sources, tenant_id, ali
 # protects=errors table row 4 for 5xx: 502 with the reason and the sentence; fails_when=
 # the status or sentence drifts, or the connection is marked; no_claim=-.
 async def test_source_5xx_is_502(sources, tenant_id, alice, archive, graphql, fail, reason):
+    """A source that answers nothing gets 502, and the connection stays active."""
     sources.archive.fail = fail
     sources.graphql.fail = fail
     async with client_for(alice) as a:
@@ -651,6 +671,7 @@ async def test_source_5xx_is_502(sources, tenant_id, alice, archive, graphql, fa
 # shorter here) answers 502 "did not answer (timed out)"; fails_when=the request hangs or
 # the sentence drifts; no_claim=the exact 10 s (a constant, checked below).
 async def test_source_timeout_is_502(sources, tenant_id, alice, archive, monkeypatch):
+    """A source that never answers in time gets 502 after the timeout."""
     from oracle.live import fireflies as live_fireflies
 
     assert live_fireflies.TIMEOUT_SECONDS == 10
@@ -672,6 +693,7 @@ async def test_source_timeout_is_502(sources, tenant_id, alice, archive, monkeyp
 # or the DELETE turns the answer into a 424/502 or marks the connection expired;
 # no_claim=an archive that sends no session id (no GET, no DELETE: the other tests).
 async def test_archive_session_errors_do_not_decide(sources, tenant_id, alice, archive, fail):
+    """Only the tool call's own answer decides the result, not its side channel."""
     sources.archive.session_id = "s-1"
     sources.archive.fail_other = fail
     async with client_for(alice) as a:
@@ -685,6 +707,7 @@ async def test_archive_session_errors_do_not_decide(sources, tenant_id, alice, a
 # protects=errors table row 5 on both backends: an unknown meeting answers 404 "No meeting
 # <id> in <label>."; fails_when=it reads as an empty meeting or another status; no_claim=-.
 async def test_unknown_meeting_is_404(sources, tenant_id, alice, archive, graphql):
+    """Reading an unknown meeting id answers 404."""
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-999")
         lines = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-999/lines")
@@ -701,6 +724,7 @@ async def test_unknown_meeting_is_404(sources, tenant_id, alice, archive, graphq
 # the sentence and leaves the connection active; fails_when=it is read as no meetings or
 # the connection is marked; no_claim=-.
 async def test_malformed_answer_is_502(sources, tenant_id, alice, archive, kind):
+    """An answer that is not one readable block gets 502, connection stays active."""
     sources.archive.malformed = kind
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/meetings")
@@ -714,6 +738,7 @@ async def test_malformed_answer_is_502(sources, tenant_id, alice, archive, kind)
 # source is never called; fails_when=B reads A's connection or the sentence drifts;
 # no_claim=-.
 async def test_not_your_connection_is_404(sources, tenant_id, alice, bob, archive):
+    """Reading someone else's or a wrong-kind connection answers 404, unread."""
     slack = await make_connection(tenant_id, alice, "slack")
     async with client_for(bob) as b:
         routes = [
@@ -763,6 +788,7 @@ def _text(result) -> str:
 # answers the count; fails_when=a tool is missing or B reads A's meetings; no_claim=the
 # olt_ token's tools/list (lane 2).
 async def test_mcp_lists_live_tools_and_is_owner_only(sources, tenant_id, alice, bob, archive):
+    """Live tools over MCP only work for the connection's own owner."""
     async with _mcp(await _personal_token(tenant_id, bob)) as c:
         names = {t.name for t in (await c.list_tools()).tools}
         assert LIVE_TOOLS <= names
@@ -794,6 +820,7 @@ async def _spent(tenant_id, conn_id, kind: str, calls: int, ago: timedelta) -> N
 # with the sentence at the limit; fails_when=the limits or the sentence drift, or a refused
 # call reaches the source; no_claim=the 8-per-reply rule (lane 2).
 async def test_archive_budget_120_a_minute_3000_a_day(sources, tenant_id, alice, archive):
+    """A connection's live reads are capped per minute and per day."""
     await _spent(tenant_id, archive, "browse", 500, timedelta(seconds=5))
     await _spent(tenant_id, archive, "live", 119, timedelta(seconds=5))
     async with client_for(alice) as a:
@@ -830,6 +857,7 @@ async def test_archive_budget_120_a_minute_3000_a_day(sources, tenant_id, alice,
 # (picker calls count against it); fails_when=live reads spend Fireflies' quota beyond the
 # picker's limits; no_claim=Fireflies' own plan counter.
 async def test_graphql_budget_shares_the_pickers(sources, tenant_id, alice, graphql):
+    """A connection's live read budget is shared with its browse call budget."""
     await _spent(tenant_id, graphql, "browse", 9, timedelta(seconds=5))
     async with client_for(alice) as a:
         ok = await a.get(f"/v1/live/fireflies/{graphql}/meetings/g-12")
@@ -858,6 +886,7 @@ async def test_graphql_budget_shares_the_pickers(sources, tenant_id, alice, grap
 async def test_cache_keeps_read_at_and_costs_nothing(
     sources, tenant_id, alice, archive, monkeypatch
 ):
+    """A live read within the cache window returns the same answer at no cost."""
     from oracle.live import router as live_router
 
     now = [1000.0]
@@ -890,6 +919,7 @@ async def test_cache_keeps_read_at_and_costs_nothing(
 # fails_when=a column is missing, the label is read later, or the query is stored;
 # no_claim=message_id (lane 2 sets it for olt_ calls).
 async def test_live_reads_rows_written_at_read_time(sources, tenant_id, alice, archive):
+    """Each live read is written to live_reads as it happens, with no leaked text."""
     async with client_for(alice) as a:
         await a.get(f"/v1/live/fireflies/{archive}/meetings/m-301")
         await a.get(f"/v1/live/fireflies/{archive}/search", params={"q": "secretword"})
@@ -924,6 +954,7 @@ async def test_live_reads_rows_written_at_read_time(sources, tenant_id, alice, a
 # off." on every /v1/live route and calls no source; fails_when=any route still reads;
 # no_claim=the replies' MCP server (lane 2).
 async def test_off_switch_is_503(sources, tenant_id, alice, archive, monkeypatch):
+    """With live reads turned off, every live route answers 503."""
     monkeypatch.setattr(get_settings(), "live_reads", "off")
     async with client_for(alice) as a:
         answers = [
@@ -947,6 +978,7 @@ async def test_off_switch_is_503(sources, tenant_id, alice, archive, monkeypatch
 async def test_fake_key_appears_in_no_answer_log_or_row(
     sources, tenant_id, alice, archive, graphql, caplog
 ):
+    """The source key never appears in a response body or a log line."""
     caplog.set_level(logging.DEBUG)
     bodies = []
     async with client_for(alice) as a:
@@ -999,6 +1031,7 @@ async def test_fake_key_appears_in_no_answer_log_or_row(
 # other host is that host's /mcp; fails_when=a path is kept or the host test drifts;
 # no_claim=-.
 def test_backend_by_host(endpoint, backend, url):
+    """The Fireflies host picked decides whether GraphQL or MCP serves the call."""
     from oracle.live import fireflies as live_fireflies
 
     assert live_fireflies.backend_of(endpoint) == (backend, url)

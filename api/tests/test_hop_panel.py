@@ -59,6 +59,7 @@ async def add_change(ctx, d_id: str, doc: str, status: str) -> None:
 # discussion" row; fails_when=another member reads it or is added to it; no_claim=G1 access
 # internals (tested there).
 async def test_a_panel_chat_is_just_you_and_oracle(client):
+    """A panel chat is just its starter and Oracle: no one else can join or be named."""
     ctx, doc = await company(client)
     d = await panel(client, ctx, doc, message={"body": "Why is this ranked third?"})
     assert d["origin"] == "panel" and d["visibility"] == "private"
@@ -97,6 +98,7 @@ async def test_a_panel_chat_is_just_you_and_oracle(client):
 # the panel chat stays private and cannot be made open in place; the audit names both ids;
 # fails_when=the chat is made open, changes are lost or closed ones copied; no_claim=the UI.
 async def test_share_as_discussion_starts_an_open_one_and_the_chat_stays_private(client):
+    """Sharing a panel chat opens a new discussion while the original stays private."""
     ctx, doc = await company(client)
     d = await panel(client, ctx, doc, message={"body": "What would we cut?"})
     for status in ("proposed", "staged", "dismissed"):
@@ -144,6 +146,7 @@ async def test_share_as_discussion_starts_an_open_one_and_the_chat_stays_private
 # the first message is required; fails_when=another member or a G1 discussion is shared;
 # no_claim=the share dialog's copy.
 async def test_only_the_starter_shares_a_panel_chat(client):
+    """Only the chat's starter can share it, and only a panel chat can be shared."""
     ctx, doc = await company(client)
     d = await panel(client, ctx, doc)
     await share(client, ctx, d["id"], who="approver", expect=403)
@@ -164,6 +167,7 @@ async def test_only_the_starter_shares_a_panel_chat(client):
 # protects=3.6: share_discussion is an MCP tool like any route, and create_discussion takes
 # origin "panel"; fails_when=MCP cannot share or start a panel chat; no_claim=MCP auth.
 async def test_mcp_starts_and_shares_a_panel_chat(client):
+    """The MCP tool list offers tools to start and share a discussion."""
     ctx, doc = await company(client)
     token = await api_token(ctx.tenant_id, "owner")
     async with mcp_client(token) as c:
@@ -216,6 +220,7 @@ async def company_data(client):
 # fails_when=a screen context includes source items, goals or anything else;
 # no_claim=the reply's wording.
 async def test_sources_and_settings_contexts_hold_only_the_page_name(client):
+    """A chat on Sources or Settings gets only the page name, no roadmap context."""
     ctx, _doc = await company_data(client)
     for path, name in (("/sources", "Sources"), ("/settings/members", "Settings · Members")):
         built = await screen_context(client, ctx, path)
@@ -228,6 +233,7 @@ async def test_sources_and_settings_contexts_hold_only_the_page_name(client):
 # protects=Screen context: /inbox (personal), /requests, /company/updates (H8) and an unknown
 # page hold only the page name; fails_when=they include company data; no_claim=wording.
 async def test_personal_and_unbuilt_pages_hold_only_the_page_name(client):
+    """A chat on a personal or unbuilt page carries no roadmap context, just the page."""
     ctx, _doc = await company_data(client)
     for path in ("/inbox", "/requests", "/company/updates", "/somewhere"):
         built = await screen_context(client, ctx, path)
@@ -239,6 +245,7 @@ async def test_personal_and_unbuilt_pages_hold_only_the_page_name(client):
 # tracks with status and counts of open runs and checkpoints, and no source items;
 # fails_when=goals or tracks are missing or an own-source excerpt is read; no_claim=wording.
 async def test_home_context_has_goals_and_tracks_and_no_source_items(client):
+    """A chat on Home carries its goals and tracks with current numbers, not sources."""
     ctx, _doc = await company_data(client)
     text = data_of(built := await screen_context(client, ctx, "/home"))
     kinds = {e["kind"] for e in built.entries.values()}
@@ -252,6 +259,7 @@ async def test_home_context_has_goals_and_tracks_and_no_source_items(client):
 # protects=Screen context: /documents lists titles, kinds and versions, /runs the active runs
 # with status; fails_when=they are missing or a finished run is listed; no_claim=wording.
 async def test_documents_and_runs_contexts(client):
+    """A chat on Documents or Runs carries that page's own list of items."""
     ctx, _doc = await company_data(client)
     text = data_of(await screen_context(client, ctx, "/documents"))
     assert "Checkout redesign PRD" in text and "prd" in text and "latest v1" in text
@@ -263,6 +271,7 @@ async def test_documents_and_runs_contexts(client):
 # protects=3.1: a screen subject reads as its page ("General" for the panel's General chat);
 # fails_when=the header shows a raw path; no_claim=the panel's own label for the open page.
 async def test_a_screen_subject_is_labelled_by_its_page(client):
+    """A chat started on a page is titled by the page's name, never its URL path."""
     ctx, _doc = await company(client)
     # qa-shell-2: a chat started on Detailed Home is titled "Home", never "/home".
     for path, label in (
@@ -284,6 +293,7 @@ async def test_a_screen_subject_is_labelled_by_its_page(client):
 # goals it serves; fails_when=asked for focus areas with their features, General has goals
 # only and maps from meetings; no_claim=the reply's wording.
 async def test_general_context_has_baseline_features_with_status_and_goals(client):
+    """A chat's general context lists features with status and goal, never rejected."""
     from oracle.baseline.models import Edge
 
     ctx, _doc = await company_data(client)
@@ -318,6 +328,7 @@ async def test_general_context_has_baseline_features_with_status_and_goals(clien
 # the first message everyone reads ("only [c:1]." reads "only."); fails_when=the posted
 # discussion shows "[c:1]" or "[l:2]"; no_claim=the share form's pre-fill (Playwright).
 async def test_share_drops_raw_tokens_from_the_first_message(client):
+    """Sharing a panel chat strips raw citation tokens from its first message."""
     ctx, doc = await company(client)
     d = await panel(client, ctx, doc, message={"body": "What would we cut?"})
     raw = "Caps read the plan thresholds only [c:1]. Then detection [l:2]."
@@ -332,6 +343,7 @@ async def test_share_drops_raw_tokens_from_the_first_message(client):
 # "<PRD> · Introduction", as the PRD page names it; fails_when=the PRD's name shows twice;
 # no_claim=the panel's heading (Playwright).
 async def test_a_chat_on_the_title_section_is_about_its_introduction(client):
+    """A chat on a document's title section is labelled by its Introduction."""
     ctx, doc = await company(client)
     d = await panel(client, ctx, doc, subject=section(doc, key="title"))
     assert d["subject_label"] == "Checkout redesign PRD · Introduction"

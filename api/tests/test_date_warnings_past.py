@@ -42,6 +42,7 @@ MILESTONES = (
 
 
 def test_the_production_counts_when_cell_is_not_flagged():
+    """A production's own 'counts when' cell is not flagged as unbacked."""
     assert flagged(ITEMS + MILESTONES.replace("@cell", CELL), ref=DAY) == []
 
 
@@ -56,10 +57,12 @@ def test_the_production_counts_when_cell_is_not_flagged():
     ],
 )
 def test_a_past_event_s_year_less_date_is_not_a_schedule_date(line):
+    """A past event's year-less date reads as already happened, not a claim."""
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == []
 
 
 def test_a_future_claim_without_a_basis_still_warns():
+    """A future-reading year-less date with no basis still warns, even as a plan."""
     # The same day as a plan: read as the next Oct 27, with no basis.
     assert flagged("## Notes {#notes}\n\nGift wrap ships on Oct 27.\n\n" + ITEMS, ref=DAY) == [
         ("notes", "Oct 27")
@@ -86,6 +89,7 @@ def test_a_future_claim_without_a_basis_still_warns():
     ],
 )
 def test_counts_when_evidence_and_sources_are_not_schedule_places(cell):
+    """Evidence and sources cells and labels are not read as schedule places."""
     assert flagged(ITEMS + MILESTONES.replace("@cell", cell), ref=DAY) == []
     evidence = (
         "\n## Proof {#proof}\n\n"
@@ -107,6 +111,7 @@ def test_counts_when_evidence_and_sources_are_not_schedule_places(cell):
     ],
 )
 def test_a_future_year_less_day_in_an_evidence_place_warns(cell, date):
+    """A future year-less day still warns even inside an evidence cell or table."""
     assert flagged(ITEMS + MILESTONES.replace("@cell", cell), ref=DAY) == [
         ("plan-milestones", date)
     ]
@@ -126,12 +131,14 @@ def test_a_future_year_less_day_in_an_evidence_place_warns(cell, date):
     ],
 )
 def test_a_future_year_less_day_in_a_labelled_sentence_warns(line, dates):
+    """A future year-less day warns even in an Evidence- or Sources-labelled line."""
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [
         ("notes", d) for d in dates
     ]
 
 
 def test_a_future_milestone_date_without_a_basis_still_warns():
+    """An unbacked future milestone date still warns, with the usual year-less reading."""
     body = ITEMS + MILESTONES.replace("@cell", CELL)
     assert flagged(body.replace("| Dec 15, 2026 |", "| Dec 10 |"), ref=DAY) == [
         ("plan-milestones", "Dec 10")
@@ -176,6 +183,7 @@ def test_a_future_milestone_date_without_a_basis_still_warns():
     ],
 )
 def test_a_far_or_planned_past_reading_still_warns(line):
+    """A year-less date read far in the past, or clearly still planned, still warns."""
     found = flagged(f"## Notes {{#notes}}\n\n{line}\n", bases=[], ref=DAY)
     assert len(found) == 1 and found[0][0] == "notes", found
 
@@ -190,16 +198,19 @@ def test_a_far_or_planned_past_reading_still_warns(line):
     ],
 )
 def test_a_far_past_reading_in_a_table_still_warns(table):
+    """A far-past year-less reading inside a table still warns as unbacked."""
     assert flagged(f"## Notes {{#notes}}\n\n{table}\n", bases=[], ref=DAY) == [("notes", "Dec 15")]
 
 
 @pytest.mark.parametrize("header", ["Proof due", "Sources & dates"])
 def test_only_a_whole_evidence_header_is_not_a_schedule_place(header):
+    """Only a column header wholly about evidence is skipped, not a near match."""
     table = f"| Item | {header} |\n|---|---|\n| [Gift notes](#now-gift-notes) | Dec 10 |"
     assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
 
 
 def test_a_label_skips_only_its_own_sentence():
+    """An evidence label skips only its own sentence; the next sentence still warns."""
     line = "Evidence: be#1358 closed on Oct 27. Gift notes ship on Dec 10."
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
     line = "Counts when: be#1358 closed on Oct 27.\nGift notes ship on Dec 10."
@@ -219,6 +230,7 @@ def test_a_label_skips_only_its_own_sentence():
 
 
 def test_an_evidence_place_still_warns_on_a_full_future_date():
+    """A written future date still warns even in evidence; a past one does not."""
     # Only a past event's day is skipped there: a written future day is a claim.
     table = "| Item | Evidence |\n|---|---|\n| [Gift notes](#now-gift-notes) | ships Dec 20, 2026 |"
     assert flagged(f"## Notes {{#notes}}\n\n{table}\n", bases=[], ref=DAY) == [
@@ -240,6 +252,7 @@ def test_an_evidence_place_still_warns_on_a_full_future_date():
     ["Start date", "Target date", "Delivery date", "ETA", "When", "Planned date", "Deadline"],
 )
 def test_a_named_date_column_keeps_the_usual_reading(header):
+    """A plainly date-named column keeps the usual future year-less reading."""
     table = f"| Milestone | {header} |\n|---|---|\n| Holiday shop | closed on Oct 27 |"
     assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Oct 27")]
 
@@ -273,6 +286,7 @@ async def _run_pinned(client, auth, tenant_id, runtime, markdown: str) -> dict: 
 
 @pytest.mark.usefixtures("pinned")
 async def test_the_production_cell_passes_approval(client, owner, runtime):  # noqa: F811
+    """A roadmap with no unbacked dates, including a production cell, can be approved."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     beta = "| Beta | Nov 30, 2026 | Payment step |  |"
@@ -286,6 +300,7 @@ async def test_the_production_cell_passes_approval(client, owner, runtime):  # n
 
 @pytest.mark.usefixtures("pinned")
 async def test_a_future_milestone_date_without_a_basis_blocks_approval(client, owner, runtime):  # noqa: F811
+    """An unbacked future milestone date written in prose blocks approving it."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     beta = "| Beta | Nov 30, 2026 | Payment step |  |"
@@ -301,6 +316,7 @@ async def test_a_future_milestone_date_without_a_basis_blocks_approval(client, o
 
 @pytest.mark.usefixtures("pinned")
 async def test_a_far_past_reading_blocks_approval(client, owner, runtime):  # noqa: F811
+    """A far-past year-less reading with no basis still blocks approving it."""
     # "done on Dec 10" in a Nov 4 version: Dec 10, 2025 is 11 months back, so it is the
     # next Dec 10, with no basis.
     tenant_id, auth = owner
@@ -315,6 +331,7 @@ async def test_a_far_past_reading_blocks_approval(client, owner, runtime):  # no
 
 @pytest.mark.usefixtures("pinned")
 async def test_a_future_year_less_evidence_day_blocks_approval(client, owner, runtime):  # noqa: F811
+    """An unbacked future year-less day in evidence text blocks approving it."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     md = with_line("Evidence: GA ships Dec 20.", "summary", ROADMAP_MD)

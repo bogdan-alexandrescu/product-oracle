@@ -53,6 +53,7 @@ def _line_of(md: str, text: str) -> int:
 
 
 def test_the_prd_writer_is_told_to_list_sources_by_title_and_name_issues_and_codes():
+    """The PRD writer's prompt tells it to name sources by title, not by key or file."""
     for role in flows.FLOWS["baseline_to_prd"].segment("prd_draft").roles:
         text = _prompt("baseline_to_prd", "prd_draft", role)
         assert flows.PRD_SOURCE_WORDS in text
@@ -65,6 +66,7 @@ def test_the_prd_writer_is_told_to_list_sources_by_title_and_name_issues_and_cod
 
 
 def test_the_prd_template_shapes_sources_by_title_not_by_id():
+    """The PRD template's Sources section asks for titles, not citation or source ids."""
     text = TEMPLATE.read_text()
     sources = text[text.index("## Sources and data points {#sources}") :]
     assert "citation id" not in sources and "source id" not in sources
@@ -77,6 +79,7 @@ def test_the_prd_template_shapes_sources_by_title_not_by_id():
 
 
 def test_clean_sources_raise_nothing():
+    """Source lines named by title raise no warning, even with lookalike numbers."""
     md = _sources(
         "- Calendar survey (web, as of Sep 30)",
         "- Alerting design notes (GitHub, Oct 2)",
@@ -100,6 +103,7 @@ def test_clean_sources_raise_nothing():
 
 
 def test_a_key_counts_only_when_it_is_one_of_the_drafts_citations_and_names_the_source():
+    """Only a key actually cited in the draft is flagged as replacing a name."""
     md = _cited(
         _sources(
             "- c9: a key the draft never cites",
@@ -119,6 +123,7 @@ def test_a_key_counts_only_when_it_is_one_of_the_drafts_citations_and_names_the_
 
 
 def test_a_citation_key_a_file_path_and_a_tag_in_sources_are_flagged_with_their_line():
+    """A citation key, file path and tag in Sources are each flagged by line."""
     md = _cited(
         _sources(
             "- c7, github: example-org/web docs/alerting.md",
@@ -154,6 +159,7 @@ def test_a_citation_key_a_file_path_and_a_tag_in_sources_are_flagged_with_their_
 
 
 def test_a_code_without_its_name_in_sources_or_a_data_points_table_is_flagged():
+    """A code shown without its name, in prose or a data table, is flagged by line."""
     md = _sources(
         "### Data points {#sources-data}",
         "",
@@ -174,6 +180,7 @@ def test_a_code_without_its_name_in_sources_or_a_data_points_table_is_flagged():
 
 
 def test_a_code_in_its_own_cell_is_named_by_a_name_in_the_same_row():
+    """A code in its own table column is named if its row also has a name column."""
     md = _sources(
         "### Data points {#sources-data}",
         "",
@@ -185,6 +192,7 @@ def test_a_code_in_its_own_cell_is_named_by_a_name_in_the_same_row():
 
 
 def test_an_issue_named_by_its_number_in_the_body_is_flagged_with_its_line():
+    """An issue named only by its number in the body is flagged by section and line."""
     md = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss shared deadlines (be#1357).")
     [warning] = source_words.check(parse_draft(md).sections, md)
     assert warning.code == "issue_number"
@@ -194,6 +202,7 @@ def test_an_issue_named_by_its_number_in_the_body_is_flagged_with_its_line():
 
 
 def test_a_hash_and_number_that_is_not_an_issue_is_left_alone():
+    """Hash-and-number text that is not an issue, like cache#2, is left alone."""
     for text in (
         "The `cache#2` layer is reused.",
         "It is written in C#7 by the team.",
@@ -206,6 +215,7 @@ def test_a_hash_and_number_that_is_not_an_issue_is_left_alone():
 
 
 def test_a_bare_issue_reference_is_still_flagged_beside_code_and_links():
+    """A real issue reference is flagged even beside similar-looking text."""
     for token in ("issue #12", "PR #40", "web#12"):
         text = f"Teams miss shared deadlines (`cache#2`, [notes](notes.md#2), {token})."
         md = replace(DRAFT, "Teams miss shared deadlines.", text)
@@ -216,6 +226,7 @@ def test_a_bare_issue_reference_is_still_flagged_beside_code_and_links():
 
 
 def test_letter_suffixed_and_key_result_codes_need_names_in_the_body():
+    """A feature or key-result code needs its name nearby, in prose or in parentheses."""
     assert named_codes.findings("F-25b ships first.", prd=True).unnamed == ["F-25b"]
     assert named_codes.findings("KR 1.1 moves.", prd=True).unnamed == ["KR 1.1"]
     assert named_codes.findings("KR 1.1 Weekly planners moves.", prd=True).unnamed == []
@@ -223,6 +234,7 @@ def test_letter_suffixed_and_key_result_codes_need_names_in_the_body():
 
 
 def test_key_result_and_slice_codes_leave_a_roadmap_draft_alone():
+    """Roadmap drafts are not required to name their key-result and feature codes."""
     md = (
         "---\ndocument: plan\ntitle: Plan\n---\n\n# Plan {#title}\n\n"
         "## Now {#now}\n\nKR 1.1 moves first, then F-25b ships.\n"
@@ -233,12 +245,14 @@ def test_key_result_and_slice_codes_leave_a_roadmap_draft_alone():
 
 
 def test_the_issue_line_names_the_token_too():
+    """The issue-number warning quotes the exact token, not just its line."""
     md = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss shared deadlines (be#1357).")
     [warning] = source_words.check(parse_draft(md).sections, md)
     assert f"line {_line_of(md, 'be#1357')}: 'be#1357'" in warning.message
 
 
 def test_the_send_back_subject_says_what_the_warnings_are():
+    """The send-back subject names the kinds of trouble found, joined with 'and'."""
     assert workflow.warning_subject(["unnamed_code"]) == "codes"
     assert workflow.warning_subject(["source_not_named"]) == "source lines"
     assert workflow.warning_subject(["issue_number"]) == "issue numbers"
@@ -247,6 +261,7 @@ def test_the_send_back_subject_says_what_the_warnings_are():
 
 
 def test_a_prd_draft_runs_the_source_check_and_sends_it_back():
+    """A PRD draft is sent back for source and issue problems, with a plain-word lead."""
     md = _sources("- c7, github: example-org/web docs/alerting.md")
     codes = [w.code for w in draft_checks.run_warnings("prd", parse_draft(md).sections, md)]
     assert "source_not_named" in codes
@@ -261,12 +276,14 @@ def test_a_prd_draft_runs_the_source_check_and_sends_it_back():
 
 
 def test_named_puts_the_name_first_and_the_code_beside_it():
+    """A name is shown before its code, or just the code when none is given."""
     assert wording.named("Grow activation", "G-C") == "Grow activation (G-C)"
     assert wording.named("", "G-C") == "G-C"
     assert wording.named("G-C", "G-C") == "G-C"
 
 
 def test_the_goal_trace_note_names_the_goal_with_its_code_beside_it():
+    """A missing target goal in the Goal trace is named with its title and code."""
     run = SimpleNamespace(knobs={"target_goals": [{"key": "G-C", "title": "Grow activation"}]})
     art: dict = {"notes": []}
     imported: dict = {}
@@ -275,6 +292,7 @@ def test_the_goal_trace_note_names_the_goal_with_its_code_beside_it():
 
 
 def test_the_feature_set_names_an_unserved_target_goal_with_its_code_beside_it():
+    """An unserved target goal in the feature set is named with its title and code."""
     known = feature_set.Known(targets={"G-C": "Grow activation"})
     check = feature_set.check_feature_set("version: 1\nfeatures: []\n", document=None, known=known)
     messages = [p["message"] for p in check.as_json()["problems"]]
@@ -303,6 +321,7 @@ def _quality(served: bool) -> QualityInputs:
 
 
 def test_the_goal_alignment_check_names_features_and_goals_with_their_codes():
+    """The goal-alignment check names both the feature and the goal it serves by code."""
     reasons = criteria.goal_alignment(_quality(served=False)).rationale
     assert "Bulk import (F-12) serves no confirmed goal" in reasons
     reasons = criteria.goal_alignment(_quality(served=True)).rationale

@@ -16,6 +16,7 @@ def _columns() -> set[str]:
 
 
 def test_0005_up_down_up(scratch_db):  # noqa: F811
+    """An old token keeps working with no user; deleting a user removes just its own."""
     cfg = _cfg()
     upgrade(cfg, "0004")
     tenant, user = uuid.uuid4(), uuid.uuid4()

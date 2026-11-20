@@ -60,6 +60,7 @@ def scratch_db():
 
 
 def test_the_migration_follows_0015_and_precedes_0014_intake():
+    """This migration chains after 0015 and before later migrations, one head."""
     # Re-chained at the wave 1 integration: the blockers lane's 0014 comes after main's
     # 0014 chain (quality, usage_retry_at, trace).
     script = ScriptDirectory.from_config(_cfg())
@@ -102,6 +103,7 @@ def _snapshots(entity_id) -> list[tuple]:
 
 
 def test_upgrade_snapshots_readable_legacy_blockers_and_downgrade_removes_them(scratch_db):
+    """Upgrading snapshots every readable legacy blocker; downgrading removes them."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t = uuid.uuid4()
@@ -188,6 +190,7 @@ def test_upgrade_snapshots_readable_legacy_blockers_and_downgrade_removes_them(s
 
 
 def test_full_downgrade_and_upgrade_with_a_snapshot_written(scratch_db):
+    """The full migration chain upgrades and downgrades without losing the snapshot."""
     # Production runs migrations at startup: the whole chain from 0013 goes up over
     # seeded blockers, and back down to 0013, without errors.
     cfg = _cfg()

@@ -68,6 +68,7 @@ async def pdf(ctx) -> str:
 
 
 async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
+    """The PDF prints a timeline then one page per milestone, each code named."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
@@ -113,6 +114,7 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
 
 
 async def test_pdf_bar_codes_fit_the_bar(client):
+    """A bar too narrow for every code shows a cut label, full names stay in the key."""
     import re
 
     data = {**DATA, "features": [
@@ -136,6 +138,7 @@ async def test_pdf_bar_codes_fit_the_bar(client):
 
 
 async def test_pdf_without_a_dated_plan_stays_one_page(client):
+    """A PRD with no dated plan prints as one page, with no timeline at all."""
     ctx = await world(client)
     html = await pdf(ctx)
     assert '<meta name="oracle-page-fit" content="one_page">' in html

@@ -50,6 +50,7 @@ from tests.test_simple_visuals_api import roadmap_world
 
 
 async def test_visual_reads_are_never_cached(client):
+    """A visual's read, pending or done, always tells the browser never to cache it."""
     ctx = await prd_world(client)
     _, item = await roadmap_world(ctx)
     path = f"{VISUALS}/feature/{item.id}"
@@ -65,6 +66,7 @@ async def test_visual_reads_are_never_cached(client):
 
 
 async def test_item_code_is_the_features_code(client):
+    """A roadmap item's code is its linked feature's code, or none without one."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -82,6 +84,7 @@ async def test_item_code_is_the_features_code(client):
 
 
 async def test_draft_rows_lend_no_prd_code(client):
+    """A feature's draft copy never lends its PRD code to another same-name feature."""
     ctx = await make_people()
     w = await PriorityWorld(ctx).build()
     async with tenant_session(ctx.tenant_id) as s:
@@ -104,6 +107,7 @@ async def test_draft_rows_lend_no_prd_code(client):
 
 
 def test_later_code_key_never_renames_an_older_feature():
+    """A feature's short code never changes once given, even as later ones are added."""
     keys = ["delivery-integrity", "F-06"]
     prd = {"delivery-integrity": "F-06"}
     older = short_codes(keys[:1], prd)
@@ -114,6 +118,7 @@ def test_later_code_key_never_renames_an_older_feature():
 
 
 async def test_looks_like_and_merged_into_read_prd_codes(client):
+    """A duplicate's likely match and its merge target show by PRD code, not raw id."""
     w = await AdditionsWorld().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         row = await s.get(RoadmapItem, uuid.UUID(w.ids["import-a"]))
@@ -132,6 +137,7 @@ async def test_looks_like_and_merged_into_read_prd_codes(client):
 
 
 async def test_next_review_drops_who_is_no_longer_listed(client):
+    """Marking someone absent drops them from the next review until the ritual re-adds."""
     w = await meeting_world()
     ritual_id, due = await ritual(w, owner="owner")
     await start(client, w, "owner", ritual_id=ritual_id, due_at=due.isoformat())
@@ -173,6 +179,7 @@ async def test_next_review_drops_who_is_no_longer_listed(client):
 
 
 async def test_next_review_keeps_past_attendees_after_the_scheduler_runs(client, monkeypatch):
+    """The scheduler moving a ritual on keeps its past attendees on the next review."""
     w = await meeting_world()
     ritual_id, due = await ritual(w, owner="owner")
     await start(client, w, "owner", ritual_id=ritual_id, due_at=due.isoformat())

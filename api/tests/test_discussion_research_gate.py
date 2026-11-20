@@ -71,6 +71,7 @@ async def _stored(ctx, d, asked, run_id, memo_id) -> tuple[str, str]:
 # approver's stream still reads it; fails_when=a delta or a citations event names the memo;
 # no_claim=paraphrase (Hidden.names matches titles, slugs and ids).
 async def test_the_stream_withholds_what_the_list_withholds(client):
+    """A reply's live stream hides a withheld memo just like the message list does."""
     set_runtime(FakeRuntime())
     try:
         ctx, _doc = await company(client)
@@ -97,6 +98,7 @@ async def test_the_stream_withholds_what_the_list_withholds(client):
 # the memo streams to a commenter without that citation; fails_when=the citations event
 # names the memo; no_claim=the browser's rendering.
 async def test_the_stream_drops_a_hidden_citation(client):
+    """A stream reply drops a citation pointing to a document the reader cannot see."""
     set_runtime(FakeRuntime())
     try:
         ctx, _doc = await company(client)
@@ -150,6 +152,7 @@ def _routes(d: dict, run_id: str) -> list[str]:
 # reads the run and its answer; fails_when=a non-reader sees the run's row or gets the
 # answer's text; no_claim=the web's runs page (it reads these routes).
 async def test_a_private_research_run_is_only_for_the_discussions_readers(client):
+    """A private research run and its secret stay hidden from everyone but its readers."""
     try:
         ctx, doc = await company(client)
         d, run_id = await _private_research(client, ctx, doc)
@@ -190,6 +193,7 @@ async def test_a_private_research_run_is_only_for_the_discussions_readers(client
 # every member who reads the discussion; fails_when=the gate hides runs of discussions the
 # reader may read; no_claim=private discussions (above).
 async def test_an_open_discussions_research_run_stays_visible(client):
+    """A research run started in an open discussion stays visible to everyone in it."""
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: SECRET})]}))
     try:
         ctx, doc = await company(client)
@@ -211,6 +215,7 @@ async def test_an_open_discussions_research_run_stays_visible(client):
 # even when an approver asks; fails_when=the memo reaches the model's prompt;
 # no_claim=paraphrase.
 async def test_a_live_reply_reads_as_a_member(client, fake):  # noqa: F811
+    """A live reply to a mention answers with the asker's own access, not more."""
     ctx, _doc = await company(client)
     await with_key(ctx)
     memo_id = await _memo(client, ctx)
@@ -231,6 +236,7 @@ async def test_a_live_reply_reads_as_a_member(client, fake):  # noqa: F811
 # still reads why; fails_when=the commenter reads the refusal's text; no_claim=which
 # refusal.
 async def test_a_failed_start_shows_a_commenter_no_detail(client, monkeypatch):
+    """A failed research start hides its internal detail from commenters and viewers."""
     from oracle.runs import service as runs_service
 
     detail = f"A baseline build is already under way (run {uuid.uuid4()})"

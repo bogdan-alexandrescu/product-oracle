@@ -85,6 +85,7 @@ def check(yaml_text: str, **kw) -> tuple[list[dict], list[dict]]:
 
 
 def test_low_confidence_by_word_and_by_the_company_threshold():
+    """An item is flagged low confidence by the word low or by the company's threshold."""
     items = [
         item("a", confidence="low"),
         item("b", confidence=0.4),
@@ -101,6 +102,7 @@ def test_low_confidence_by_word_and_by_the_company_threshold():
 
 
 def test_serves_no_goal_traced_and_untraced():
+    """An untraced or goal-less feature gets its own serves-no-goal reason and text."""
     items = [item("mobile-push"), item("ghost"), item("pay")]
     features = {
         "mobile-push": TracedFeature("mobile-push", "Mobile push", ("serves_no_goal",)),
@@ -123,6 +125,7 @@ def test_serves_no_goal_traced_and_untraced():
 
 
 def test_horizon_changed_new_and_dropped_against_the_base():
+    """Against a prior roadmap, a moved, dropped or new item each gets its own reason."""
     items = [item("a", horizon="next"), item("c", horizon="later")]
     base_items = {
         "a": {"horizon": "now", "raw": item("a", horizon="now")},
@@ -150,6 +153,7 @@ def test_horizon_changed_new_and_dropped_against_the_base():
 
 
 def test_the_base_comparison_goes_through_the_one_diff(monkeypatch):
+    """Comparing roadmap items against their base always goes through the one diff."""
     calls = []
     real = item_diff.diff_items
 
@@ -169,6 +173,7 @@ def test_the_base_comparison_goes_through_the_one_diff(monkeypatch):
 
 
 def test_a_top_rank_in_later():
+    """A top-ranked item parked in Later is flagged as a horizon mismatch."""
     assert TOP_RANKS == 3
     items = [
         item("a", horizon="later", priority={"rank": 2}),
@@ -184,6 +189,7 @@ def test_a_top_rank_in_later():
 
 
 def test_linked_blocker_only_while_unresolved():
+    """An item's linked blocker is a reason only while it is still open."""
     items = [item("pay"), item("ship")]
     blockers = {
         "pay": [LinkedBlocker("psp", "Payment provider rate limit", "open")],
@@ -197,6 +203,7 @@ def test_linked_blocker_only_while_unresolved():
 
 
 def test_stale_section_when_its_hash_moved_or_it_is_gone():
+    """An item is flagged stale when its PRD section changed hash or disappeared."""
     items = [
         item("a", prd_section="s-1"),
         item("b", prd_section="s-2"),
@@ -250,6 +257,7 @@ items:
 
 
 def test_every_item_problem_becomes_one_blocking_reason_with_a_fix():
+    """Every items-file problem becomes exactly one blocking reason, each with a fix."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: next, prd_section: s-1,
      milestone: {name: Beta, date: 2026-11-30}, depends_on: [b, nope],
@@ -316,6 +324,7 @@ def test_every_item_problem_becomes_one_blocking_reason_with_a_fix():
 
 
 def test_unverified_date_reads_in_full():
+    """An unverified date's reason reads month first; its data keeps the ISO day."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
      milestone: {name: Beta, date: 2026-11-30, date_source: a hunch}}
@@ -338,6 +347,7 @@ def test_unverified_date_reads_in_full():
 
 
 def test_a_milestone_moment_reads_as_its_calendar_day_month_first():
+    """A milestone's date and time reads as just its calendar day, month first."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
      milestone: {name: Beta, date: 2027-02-03T09:30:00, date_source: a hunch}}
@@ -349,6 +359,7 @@ def test_a_milestone_moment_reads_as_its_calendar_day_month_first():
 
 
 def test_a_milestone_date_given_as_a_quoted_string_reads_month_first():
+    """Stops a YAML-quoted ISO date from leaking into the message a person reads."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
      milestone: {name: Beta, date: "2026-11-30", date_source: a hunch}}
@@ -360,6 +371,7 @@ def test_a_milestone_date_given_as_a_quoted_string_reads_month_first():
 
 
 def test_file_problems_are_not_reasons_and_are_counted():
+    """A whole-file problem yields no item reason but still counts in the summary."""
     items, problems = check("version: 1\nitems: []\n")
     out = reasons_for(items, problems, ctx())
     assert out == []
@@ -369,6 +381,7 @@ def test_file_problems_are_not_reasons_and_are_counted():
 
 
 def test_order_and_counts_are_stable():
+    """Reasons for the same items come out in the same order and count every time."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: later, prd_section: s-1, depends_on: [b],
      confidence: low, priority: {rank: 1}}
@@ -392,6 +405,7 @@ def test_order_and_counts_are_stable():
 
 
 def test_fix_builders_target_the_item_and_its_field():
+    """Each reason's fix names its own item and field, and skips a fix already true."""
     items = [item("a", horizon="now", confidence="low")]
     (r,) = reasons_for(items, [], ctx())
     assert [f["action"] for f in r["fixes"]] == [
@@ -405,6 +419,7 @@ def test_fix_builders_target_the_item_and_its_field():
 
 
 def test_without_a_context_only_blocking_reasons():
+    """With no review context, only blocking reasons are produced, no confirm ones."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: later, prd_section: s-1, confidence: low,
      depends_on: [x]}
@@ -453,6 +468,7 @@ async def roadmap_items_check(client, auth, runtime, items: str) -> tuple[dict, 
 
 
 async def test_advance_stores_reasons_on_the_segment_and_the_checkpoint(client, owner, runtime):  # noqa: F811
+    """Advancing the items check stores its reasons on both the segment and checkpoint."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -498,6 +514,7 @@ async def test_advance_stores_reasons_on_the_segment_and_the_checkpoint(client, 
 
 
 async def test_no_base_on_a_first_roadmap(client, owner, runtime):  # noqa: F811
+    """A roadmap with no prior version has no base, so no horizon-change reasons fire."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -512,6 +529,7 @@ async def test_no_base_on_a_first_roadmap(client, owner, runtime):  # noqa: F811
 
 
 async def test_a_resolved_blocker_and_a_confirmed_goal_clear_on_recompute(client, owner, runtime):  # noqa: F811
+    """Resolving a blocker and confirming its goal both clear on the next recompute."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -542,6 +560,7 @@ async def test_a_resolved_blocker_and_a_confirmed_goal_clear_on_recompute(client
 
 
 async def test_the_company_low_threshold_is_read(client, owner, runtime):  # noqa: F811
+    """The low-confidence reason uses the company's own threshold, not a default."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     resp = await client.put(
@@ -562,6 +581,7 @@ async def test_a_failing_reason_context_keeps_the_tick_and_the_blocking_reasons(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """A failing reason context still lets the tick finish with its blocking reasons."""
     _, auth = owner
     await approved_prd(client, auth)
 
@@ -608,6 +628,7 @@ async def test_stale_section_compares_with_every_newer_prd_version(client, owner
 
 
 async def test_another_companys_roadmap_is_never_the_base(client, owner, runtime):  # noqa: F811
+    """Another company's roadmap is never picked as a base, by id or by slug."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -686,6 +707,7 @@ def test_dependency_problems_do_not_rescan_the_items_for_each_problem():
 
 
 def test_date_fixes_name_a_date_source_not_a_basis():
+    """A date reason's fix says Add a date source, never the word basis."""
     # protects=qa-plan-21: the date reasons' fixes and the gate's refusal say "Add a date source",
     # the words of the button that does it; fails_when=either still says "Record basis" or
     # "record a verified basis"; no_claim=the fixes' buttons (data, tested above).
@@ -702,6 +724,7 @@ LEDGER = Elsewhere("account-health-ledger", "Account health ledger (Safety PRD)"
 
 
 def test_a_cross_prd_and_a_local_dependency_each_get_their_own_reason_and_fixes():
+    """A dependency on another PRD and a local one each get their own reason and fixes."""
     # protects=an item waiting on another PRD's feature (Later) and on its own item (Next)
     # gets one reason per dependency, each in its own words with its own fixes;
     # fails_when=the other PRD's problem is paired with the local item's words and fixes
@@ -739,6 +762,7 @@ def test_a_cross_prd_and_a_local_dependency_each_get_their_own_reason_and_fixes(
 
 
 def test_only_a_cross_prd_dependency_reads_in_plain_words_with_its_fixes():
+    """A lone cross-PRD dependency reads in plain words, with its own fixes, not code."""
     # protects=a lone dependency on another PRD's feature in a later horizon reads with
     # its name, its PRD and its fixes; fails_when=the reason is the check's line, no fix.
     body = """\
@@ -757,6 +781,7 @@ def test_only_a_cross_prd_dependency_reads_in_plain_words_with_its_fixes():
 
 
 def test_a_fix_answers_only_its_own_reason_of_two_with_one_code():
+    """Staging one of two same-code dependency fixes answers only its own reason."""
     # protects=of an item's two dependency reasons (another PRD's and its own), staging one's
     # fix clears that one only, in the review's counts and in the file sent back;
     # fails_when=an action naming the code answers both reasons.
@@ -793,6 +818,7 @@ def test_a_fix_answers_only_its_own_reason_of_two_with_one_code():
 
 
 def test_a_waive_by_its_ref_answers_its_reason_in_the_review_counts():
+    """A waiver naming its own ref answers its own reason, not a same-code other one."""
     # protects=a waiver naming one problem by its own ref (gate.problem_ref) counts that
     # problem answered in the review's counts, as the file sent back counts it;
     # fails_when=only an answer equal to the code counts.
@@ -837,6 +863,7 @@ def _staged(field_: str, value: object, answers: list[str]):
 
 
 def test_a_move_to_the_later_dependency_horizon_answers_both_horizon_reasons():
+    """Moving a dependent item to Later clears both horizon reasons; to Next, only one."""
     # protects=Move to Later on the reason of the dependency in Later also clears the one in
     # Next (the item then ships after both); Move to Next clears only the Next one;
     # fails_when=a horizon edit answers only the reason whose fix has its exact value.
@@ -851,6 +878,7 @@ def test_a_move_to_the_later_dependency_horizon_answers_both_horizon_reasons():
 
 
 def test_one_dependency_edit_removing_both_answers_both_reasons():
+    """One edit removing both dependencies answers both reasons; removing one, one."""
     # protects=Remove dependency pressed on both reasons is one depends_on edit removing
     # both, and it answers both; fails_when=only an edit equal to one fix's value answers.
     from oracle.runs import actions, review_file

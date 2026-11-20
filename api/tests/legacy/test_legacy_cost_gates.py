@@ -62,11 +62,13 @@ async def _get(client, headers, run) -> dict:
 
 
 def test_the_thresholds_are_the_decided_ones():
+    """The cost approval threshold and overrun factor match the decided values."""
     assert flows.APPROVAL_THRESHOLD_USD == Decimal(50)
     assert flows.OVERRUN_FACTOR == Decimal("1.5")
 
 
 async def test_over_50_waits_for_an_owner_and_only_an_owner_approves(client, runtime):
+    """A run estimated over $50 waits for an owner to approve before it starts."""
     tenant_id, owner = await seed_auth()
     approver = await user_cookie(tenant_id, "approver")
     run = await _create(client, approver, knobs={"depth": "deep"})
@@ -89,6 +91,7 @@ async def test_over_50_waits_for_an_owner_and_only_an_owner_approves(client, run
 
 
 async def test_exactly_50_starts_without_approval(client, runtime):
+    """A run estimated at exactly $50 starts right away, with no approval needed."""
     _, owner = await seed_auth()
     run = await _create(client, owner, knobs={"depth": "deep", "roles": ROLES_AT_50})
     est = await _estimate(client, owner, run)
@@ -99,6 +102,7 @@ async def test_exactly_50_starts_without_approval(client, runtime):
 
 
 async def test_the_budget_gates_the_estimate(client, runtime):
+    """A run over its own set budget cannot be started at all, approved or not."""
     _, owner = await seed_auth()
     run = await _create(client, owner, knobs={"budget_usd": 20})
     assert (await _estimate(client, owner, run))["within_budget"] is False
@@ -108,6 +112,7 @@ async def test_the_budget_gates_the_estimate(client, runtime):
 
 
 async def test_overrun_pauses_after_the_segment_and_only_an_owner_resumes(client, runtime):
+    """A run overrunning its ceiling pauses after its segment; only an owner resumes."""
     tenant_id, owner = await seed_auth()
     approver = await user_cookie(tenant_id, "approver")
     runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND, polls=1)]
@@ -137,6 +142,7 @@ async def test_overrun_pauses_after_the_segment_and_only_an_owner_resumes(client
 
 
 async def test_an_owner_cancels_a_paused_run(client, runtime):
+    """An owner can cancel a run that is paused for going over its cost ceiling."""
     _, owner = await seed_auth()
     runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND, polls=1)]
     run = await _create(client, owner)
@@ -150,6 +156,7 @@ async def test_an_owner_cancels_a_paused_run(client, runtime):
 
 
 async def test_the_roadmap_flow_has_the_same_approval_gate(client, runtime):
+    """The PRD-to-roadmap flow needs the same owner approval gate above $50 as others."""
     tenant_id, owner = await seed_auth()
     assert (await import_md(client, owner, fixture("legacy_prd_v1.md"))).status_code == 201
     approve = await client.post(f"/v1/documents/{DOC}/versions/1/approve", headers=owner)

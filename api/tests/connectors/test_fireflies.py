@@ -85,11 +85,13 @@ PAGES = {0: "list_page1", 2: "list_page2", 4: "list_page3"}
 
 
 def test_registered_without_oauth():
+    """Fireflies is registered as a connector that needs no OAuth app."""
     assert isinstance(get_connector("fireflies"), FirefliesConnector)
     assert fireflies.OAUTH is None
 
 
 async def test_validate():
+    """A valid from date and title filter pass Fireflies config validation."""
     await connector(FakeFireflies()).validate(
         {"from_date": "2026-09-01", "title_contains": ["product"]}, CREDENTIAL
     )
@@ -104,11 +106,13 @@ async def test_validate():
     ],
 )
 async def test_validate_config_errors(config, credential, match):
+    """Bad dates, wrong types and a missing key all fail Fireflies validation."""
     with pytest.raises(ConnectorConfigError, match=match):
         await connector(FakeFireflies()).validate(config, credential)
 
 
 async def test_full_sync_pages_newest_first_and_yields_oldest_first():
+    """A full sync reads pages newest first yet yields each transcript oldest first."""
     fake = FakeFireflies(PAGES)
     events = await collect(connector(fake), {})
 
@@ -167,6 +171,7 @@ async def test_full_sync_pages_newest_first_and_yields_oldest_first():
 
 
 async def test_from_date_and_title_filter():
+    """A full pass reads one page past the from date, then the title filter trims it."""
     fake = FakeFireflies(PAGES)
     config = {"from_date": "2026-10-01", "title_contains": ["PRODUCT", "pricing"]}
     events = await collect(connector(fake), config)
@@ -180,6 +185,7 @@ async def test_from_date_and_title_filter():
 
 
 async def test_incremental_sync_reads_back_an_overlap():
+    """An incremental sync rereads its overlap to catch a late-processed meeting."""
     cursor = {"since": "2026-10-08T09:30:00Z", "recent": {"01TRANSCRIPT3": "2026-10-08T09:30:00Z"}}
     fake = FakeFireflies({0: "list_incremental"})
     events = await collect(connector(fake), {}, cursor)
@@ -208,6 +214,7 @@ async def test_incremental_sync_reads_back_an_overlap():
 
 
 async def test_nothing_new_yields_nothing():
+    """A sync with nothing new since the cursor yields no events at all."""
     cursor = {
         "since": "2026-10-10T15:00:00Z",
         "recent": {
@@ -227,6 +234,7 @@ async def test_nothing_new_yields_nothing():
     ],
 )
 async def test_auth_error(response):
+    """An auth error in the response body is caught even when Fireflies replies 200."""
     fake = FakeFireflies(error=response)
     with pytest.raises(ConnectorAuthError):
         await connector(fake).validate({}, CREDENTIAL)
@@ -235,6 +243,7 @@ async def test_auth_error(response):
 
 
 async def test_rate_limited():
+    """A Fireflies rate limit is raised with its Retry-After seconds when given."""
     fake = FakeFireflies(error=httpx.Response(200, json=fixture("rate_error")))
     with pytest.raises(ConnectorRateLimited):
         await collect(connector(fake), {})

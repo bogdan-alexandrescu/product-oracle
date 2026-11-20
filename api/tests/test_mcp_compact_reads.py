@@ -43,6 +43,7 @@ def size(result) -> int:
 
 
 async def test_list_entities_is_compact_filtered_and_paged(tenant_id):
+    """list_entities filters, pages, and drops bodies unless fields ask for them."""
     ids = await seed_entities(tenant_id)
     token = await api_token(tenant_id, "owner")
     async with mcp_client(token) as c:
@@ -89,6 +90,7 @@ def big_summary() -> dict:
 
 
 def test_intake_summary_reads_as_an_outline_then_by_section():
+    """A huge intake summary reads as a small outline, then section by section."""
     data = big_summary()
     assert len(json.dumps(data)) > 100_000
     outline = compact.summary_view(data, None, 0, None)
@@ -102,6 +104,7 @@ def test_intake_summary_reads_as_an_outline_then_by_section():
 
 
 def test_long_text_reads_in_pages():
+    """Long text reads back in pages small enough for a client's reply limit."""
     text = "".join(f"line {i}\n" for i in range(20_000))  # ~200 KB
     first = compact.text_page(text, 0, None)
     assert len(first) < compact.TEXT_PAGE + 300
@@ -111,6 +114,7 @@ def test_long_text_reads_in_pages():
 
 
 def test_search_hits_drop_item_bodies():
+    """Search results drop each hit's body, keeping only its snippet, to stay small."""
     hits = {
         "query": "checkout",
         "hits": [
@@ -168,6 +172,7 @@ def prompt_ctx() -> "flows.PromptContext":
 
 
 def test_writer_prompt_keeps_its_context_small():
+    """A PRD writer reads entities by id and by section only, never the whole baseline."""
     flow = flows.FLOWS["baseline_to_prd"]
     seg = flow.segment("prd_draft")
     ctx = prompt_ctx()
@@ -187,6 +192,7 @@ def test_writer_prompt_keeps_its_context_small():
 
 
 def test_other_flows_are_not_told_to_write_a_prd():
+    """Flows that do not write a PRD skip the writer's context room instructions."""
     for key in ("prd_to_roadmap", "feedback_loop", "strategy_draft"):
         flow = flows.FLOWS[key]
         for seg in flow.segments:
@@ -213,12 +219,14 @@ def summary_with_work(n_work: int, pad: int) -> dict:
 
 
 def test_a_small_or_medium_intake_summary_comes_back_whole():
+    """A small or medium intake summary comes back unchanged, with nothing trimmed."""
     for pad in (0, 25):
         data = summary_with_work(6, pad)
         assert compact.summary_view(data, None, 0, None) == data
 
 
 def test_a_large_intake_summary_outline_keeps_work_features_and_goals_whole():
+    """A large summary's outline keeps work, features and goals whole, trims items."""
     data = summary_with_work(12, 60)
     assert len(json.dumps(data)) > compact.SUMMARY_WHOLE
     outline = compact.summary_view(data, None, 0, None)
@@ -230,6 +238,7 @@ def test_a_large_intake_summary_outline_keeps_work_features_and_goals_whole():
 
 
 async def test_list_entities_ids_take_keys_too(tenant_id):
+    """list_entities accepts an item's key as well as its id when asked by id."""
     await seed_entities(tenant_id)
     token = await api_token(tenant_id, "owner")
     async with mcp_client(token) as c:
@@ -322,6 +331,7 @@ async def test_a_realistic_writer_session_stays_under_budget(tenant_id):
 
 
 def test_a_whole_section_comes_back_uncut():
+    """A requested work, features or goals section comes back uncut, even when long."""
     # Review r1 (a): the writer is told to read section=work; a long work item is a
     # requirement, so it is never cut.
     data = summary_with_work(3, 0)
@@ -334,6 +344,7 @@ def test_a_whole_section_comes_back_uncut():
 
 
 async def test_the_tool_descriptions_say_what_comes_back(tenant_id):
+    """list_entities and get_intake_summary describe their limits and full answer."""
     # Review r1 (2): people's MCP clients read what list_entities and get_intake_summary
     # now return, and where the full REST answer is.
     token = await api_token(tenant_id, "owner")

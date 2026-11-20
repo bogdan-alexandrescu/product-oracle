@@ -53,6 +53,7 @@ async def _needing_attention(user: User) -> Source:
 
 @pytest.mark.parametrize(("role", "may_change"), [("commenter", False), ("approver", True)])
 async def test_only_an_approver_or_owner_changes_a_source(client, slack, role, may_change):
+    """Only an approver or owner can change or delete a source; a commenter cannot."""
     user = await _signed_in(client, role)
     source = await _needing_attention(user)
     path = f"/v1/sources/{source.id}"
@@ -82,6 +83,7 @@ async def test_only_an_approver_or_owner_changes_a_source(client, slack, role, m
 
 
 async def test_a_commenter_still_adds_a_source(client, slack):
+    """A commenter can still create a new source."""
     user = await _signed_in(client, "commenter")
     conn = await make_connection(user.tenant_id, user, "slack")
     made = await client.post(
@@ -97,6 +99,7 @@ async def test_a_commenter_still_adds_a_source(client, slack):
 
 
 async def test_capabilities_say_a_commenter_cannot_change_a_source():
+    """The declared operation roles match which role can actually change a source."""
     from oracle.capabilities import operation_roles
     from oracle.main import app
 

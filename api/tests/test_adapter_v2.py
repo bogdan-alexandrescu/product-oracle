@@ -172,6 +172,7 @@ async def run_token_row(tenant_id, raw: str) -> RunToken:
 
 
 async def test_features_follow_each_switch(client, owner):
+    """MCP turns on only after a registration is accepted, never from a read alone."""
     _, auth = owner
     for mcp, wait, answer in [
         (False, False, False),
@@ -226,6 +227,7 @@ async def test_features_follow_each_switch(client, owner):
 
 @pytest.mark.timing
 async def test_features_are_cached_and_bounded_by_the_timeout(monkeypatch):
+    """Feature reads are cached, and a slow check gives up by its timeout, not later."""
     import asyncio
     import time
 
@@ -259,6 +261,7 @@ async def test_features_are_cached_and_bounded_by_the_timeout(monkeypatch):
 
 
 def test_wait_setting_is_held_to_300_86400():
+    """Checkpoint wait and tail seconds are clamped between 5 minutes and a day."""
     assert RuntimeSettings(checkpoint_wait_seconds=10).checkpoint_wait_seconds == 300
     assert RuntimeSettings(checkpoint_wait_seconds=10**6).checkpoint_wait_seconds == 86400
     assert RuntimeSettings().checkpoint_wait_seconds == 72000  # W2b: 20 h
@@ -269,6 +272,7 @@ def test_wait_setting_is_held_to_300_86400():
 
 
 async def test_registration_is_idempotent(client, owner):
+    """Registering the same MCP server twice creates nothing twice, only updates it."""
     _, auth = owner
     swarm = FakeSwarmCloud(mcp=True)
     runtime = use(swarm)
@@ -308,6 +312,7 @@ async def test_registration_is_idempotent(client, owner):
 
 
 async def test_one_workflow_credential_map_and_step_inputs(client, owner):
+    """A whole run submits as one workflow, sharing its credential across every step."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -373,6 +378,7 @@ async def _wf(tenant_id, run_id) -> dict:
 
 
 async def test_credential_lifetime_is_the_budget_and_never_over_86400(client, owner, monkeypatch):
+    """A run token lives only as long as its steps need, capped at a day."""
     tenant_id, auth = owner
     monkeypatch.setenv("ORACLE_CHECKPOINT_WAIT_SECONDS", "600")
     monkeypatch.setenv("ORACLE_STEP_SECONDS", "900")
@@ -397,6 +403,7 @@ async def test_credential_lifetime_is_the_budget_and_never_over_86400(client, ow
 
 
 async def test_two_round_workflow_answers_replay_and_the_revise_step(client, owner):
+    """A revise step runs again only after a NOT_YET verdict, not on every round."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -525,6 +532,7 @@ async def test_two_round_workflow_answers_replay_and_the_revise_step(client, own
 
 
 async def test_multi_segment_run_is_one_workflow(client, owner):
+    """A whole multi segment run submits as a single SwarmCloud workflow, not many."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -556,6 +564,7 @@ async def test_multi_segment_run_is_one_workflow(client, owner):
 
 
 async def test_changes_mid_workflow_continue_as_a_new_workflow(client, owner):
+    """Requested changes cancel the live workflow and start a fresh one with the note."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -581,6 +590,7 @@ async def test_changes_mid_workflow_continue_as_a_new_workflow(client, owner):
 
 
 async def test_late_decision_cancels_and_continues_early_one_is_posted(client, owner, monkeypatch):
+    """A decision posts to the open wait only while enough credential time is left."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -610,6 +620,7 @@ async def test_late_decision_cancels_and_continues_early_one_is_posted(client, o
 
 
 def test_tail_covers_the_agent_steps_after_the_wait():
+    """The credential's tail covers only the agent steps left after a checkpoint."""
     plan = [
         {"seq": 1, "work": ["a", "b"], "checkpoint": True, "reviews": ["r"], "revises": []},
         {"seq": 2, "work": ["c", "d"], "checkpoint": False, "reviews": [], "revises": []},
@@ -651,6 +662,7 @@ async def test_a_decision_leaving_too_little_for_the_next_steps_continues(
 
 
 async def test_a_decision_with_enough_left_for_the_next_steps_is_posted(client, owner, monkeypatch):
+    """A decision made with enough credential time left is posted, not deferred."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -665,6 +677,7 @@ async def test_a_decision_with_enough_left_for_the_next_steps_is_posted(client, 
 
 
 async def test_expiry_keeps_the_checkpoint_open_and_continues_as_a_new_workflow(client, owner):
+    """An expired wait leaves the checkpoint open for a person, nothing auto approved."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -693,6 +706,7 @@ async def test_expiry_keeps_the_checkpoint_open_and_continues_as_a_new_workflow(
 
 
 async def test_person_required_falls_back_to_todays_flow(client, owner):
+    """When only a person may answer, the run falls back to one workflow per segment."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -888,6 +902,7 @@ async def test_console_changes_mid_run_then_approval_continues_once(client, owne
 
 @pytest.mark.parametrize("reason", ["not_open", "expired", "cancelled"])
 async def test_a_closed_wait_continues_as_a_new_workflow(client, owner, reason):
+    """A closed wait, whatever the reason, starts a fresh workflow, not a failed run."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -916,6 +931,7 @@ async def test_a_closed_wait_continues_as_a_new_workflow(client, owner, reason):
     ],
 )
 async def test_other_refusals_are_not_posted_and_continue(client, owner, status, reason):
+    """An answer refused for other reasons is not retried; the run still finishes."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -932,6 +948,7 @@ async def test_other_refusals_are_not_posted_and_continue(client, owner, status,
 
 @pytest.mark.parametrize("reason", ["membership_unavailable", "role_unavailable", "unavailable"])
 async def test_503_is_retried(client, owner, reason):
+    """A temporary 503 on an answer is retried, not treated as a final refusal."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -958,6 +975,7 @@ def _task_lookups(swarm: FakeSwarmCloud) -> list[httpx.Request]:
 
 
 async def test_a_lost_submit_is_found_by_its_key(client, owner):
+    """A submission lost in transit is found again by its own key, not resent."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -984,6 +1002,7 @@ async def test_a_lost_submit_is_found_by_its_key(client, owner):
 
 
 async def test_a_lost_submit_is_found_on_a_later_page(client, owner):
+    """Finding a lost submission pages through SwarmCloud's task list as needed."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -998,6 +1017,7 @@ async def test_a_lost_submit_is_found_on_a_later_page(client, owner):
 
 
 async def test_a_lost_submit_and_lookup_is_looked_up_again_before_resubmitting(client, owner):
+    """A lost submission is looked up again before Oracle ever resubmits it."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -1014,6 +1034,7 @@ async def test_a_lost_submit_and_lookup_is_looked_up_again_before_resubmitting(c
 
 
 async def test_a_submit_lost_before_swarmcloud_created_it_is_sent_again(client, owner):
+    """A submit that failed before SwarmCloud made anything is safely sent again."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -1031,6 +1052,7 @@ async def test_a_submit_lost_before_swarmcloud_created_it_is_sent_again(client, 
 
 
 async def test_fallback_while_switches_are_off(client, owner):
+    """With every feature off, each segment runs its own plain workflow, no MCP."""
     _, auth = owner
     swarm = FakeSwarmCloud()
     use(swarm)
@@ -1054,6 +1076,7 @@ async def test_fallback_while_switches_are_off(client, owner):
 
 
 async def test_await_input_refused_at_submit_falls_back_per_segment(client, owner):
+    """A refused await-input step falls the run back to one workflow per segment."""
     _, auth = owner
     # await-input not reported: tried, refused with 422, submitted per segment with MCP.
     swarm = FakeSwarmCloud(mcp=True, service_answer=True, report_capacity=False)
@@ -1085,6 +1108,7 @@ async def test_segment_mode_attaches_the_token_whenever_mcp_is_on(client, owner)
 
 
 async def test_mcp_switched_off_before_submit_falls_back(client, owner):
+    """MCP switched off right before a submit leaves nothing attached to the run."""
     _, auth = owner
     # Caller MCP read as on, switched off before the submit: 503, nothing attached.
     swarm = on()
@@ -1100,6 +1124,7 @@ async def test_mcp_switched_off_before_submit_falls_back(client, owner):
 
 
 async def test_unregistered_server_is_registered_again(client, owner):
+    """If SwarmCloud loses the MCP server, Oracle registers it again before running."""
     _, auth = owner
     swarm = on()
     runtime = use(swarm)
@@ -1121,6 +1146,7 @@ async def test_unregistered_server_is_registered_again(client, owner):
     ],
 )
 async def test_step_failures_say_what_to_do(client, owner, code, says):
+    """A failed step's error names the exact fix, not just an opaque code."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -1132,6 +1158,7 @@ async def test_step_failures_say_what_to_do(client, owner, code, says):
 
 
 async def test_credential_missing_park_is_noted(client, owner):
+    """A run parked for a missing credential notes how an operator fixes it."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -1158,6 +1185,7 @@ def _person_note(run: dict, code: str, *says: str) -> dict:
 
 
 def test_every_contract_code_has_advice():
+    """Every known refusal code has real advice behind it, not a blank message."""
     for code in (
         "mcp_server_unregistered",
         "mcp_server_profile_refused",
@@ -1217,6 +1245,7 @@ async def mcp_session(token: str, forwarded: str | None):
 
 
 def test_client_address_takes_the_right_hop():
+    """The caller's address is read from the right forwarded hop, never a spoofed one."""
     from starlette.requests import Request
 
     def req(*values: str) -> Request:
@@ -1233,6 +1262,7 @@ def test_client_address_takes_the_right_hop():
 
 
 async def test_run_tokens_only_from_swarmclouds_egress(client, owner):
+    """A run's MCP token only works from SwarmCloud's own egress addresses."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -1290,6 +1320,7 @@ async def test_run_tokens_only_from_swarmclouds_egress(client, owner):
 
 
 async def test_an_egress_listing_without_addresses_is_not_reread_per_request():
+    """An empty egress listing is not refetched on every single request."""
     swarm = on()
     swarm.egress = None  # type: ignore[assignment]
     runtime = swarm.runtime(egress_refresh=300)
@@ -1304,6 +1335,7 @@ async def test_an_egress_listing_without_addresses_is_not_reread_per_request():
 
 
 async def test_unauthenticated_run_tokens_do_not_each_call_swarmcloud(client, owner):
+    """Bad run tokens are rejected without a SwarmCloud call for each one."""
     swarm = on()
     swarm.egress = None  # type: ignore[assignment]
     use(swarm)
@@ -1323,6 +1355,7 @@ async def test_unauthenticated_run_tokens_do_not_each_call_swarmcloud(client, ow
 
 
 async def test_get_run_output_takes_a_whole_seq_and_a_plain_file_name(client, owner):
+    """get_run_output refuses any seq or file name that is not a plain, whole value."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -1353,6 +1386,7 @@ async def test_get_run_output_takes_a_whole_seq_and_a_plain_file_name(client, ow
 
 
 async def test_no_credential_in_any_response_note_or_log(client, owner, caplog):
+    """No run credential ever appears in a response, a note or a log line."""
     tenant_id, auth = owner
     caplog.set_level(logging.DEBUG)
     swarm = on()
@@ -1409,6 +1443,7 @@ async def _ceiling(tenant_id, run_id: str, usd: str) -> None:
 
 
 async def test_a_run_paused_on_overrun_cancels_its_workflow_and_opens_in_the_inbox(client, owner):
+    """A run paused for overspending cancels its workflow and surfaces in the Inbox."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -1436,6 +1471,7 @@ async def test_a_run_paused_on_overrun_cancels_its_workflow_and_opens_in_the_inb
 
 
 async def test_checkpoint_off_segments_stop_spending_when_paused(client, owner):
+    """Pausing a run for overspend stops its segments even with checkpoints off."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -1539,6 +1575,7 @@ async def test_an_unreadable_recorded_verdict_is_never_a_correction(client, owne
 
 
 async def test_same_verdict_other_findings_records_what_was_applied(client, owner):
+    """A changed note over a console verdict records what was asked against what ran."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -1589,6 +1626,7 @@ def _refuse_closed(swarm: FakeSwarmCloud) -> None:
 async def test_a_failed_cancel_on_a_decision_is_finished_by_the_tick(
     client, owner, monkeypatch, path
 ):
+    """A cancel that fails on a decision is retried and finished by a later tick."""
     tenant_id, auth = owner
     swarm = on()
     run, decision, prefix = await _arm(client, auth, tenant_id, swarm, path, monkeypatch)
@@ -1624,6 +1662,7 @@ async def test_a_failed_cancel_on_a_decision_is_finished_by_the_tick(
 
 
 async def test_a_failed_cancel_on_overrun_keeps_the_workflow_attached(client, owner):
+    """A failed cancel on overrun keeps the workflow attached so spend keeps showing."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -1665,6 +1704,7 @@ async def test_a_failed_cancel_on_overrun_keeps_the_workflow_attached(client, ow
 
 
 async def test_a_cancelled_run_whose_cancel_failed_is_cancelled_by_the_tick(client, owner):
+    """A run stays cancelled even when its cancel call failed; the tick confirms it."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -1687,6 +1727,7 @@ async def test_a_cancelled_run_whose_cancel_failed_is_cancelled_by_the_tick(clie
 
 
 async def test_a_console_answer_while_waiting_is_followed_by_the_tick(client, owner):
+    """An answer given straight in SwarmCloud's console is still followed by the run."""
     tenant_id, auth = owner
     swarm = on()
     await as_user(tenant_id, "approver", "lead@example.com")  # an Oracle approver (W5)
@@ -1715,6 +1756,7 @@ async def test_a_console_answer_while_waiting_is_followed_by_the_tick(client, ow
 
 
 async def test_the_tick_reads_a_waiting_step_at_most_once_a_minute(client, owner, monkeypatch):
+    """A waiting step's answer is checked at most once a minute, not every tick."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -1731,6 +1773,7 @@ async def test_the_tick_reads_a_waiting_step_at_most_once_a_minute(client, owner
 
 
 async def test_spend_over_the_ceiling_while_waiting_pauses_the_run(client, owner):
+    """Spend crossing the ceiling pauses a waiting run and keeps its checkpoint open."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -1791,6 +1834,7 @@ async def test_a_console_merge_with_later_checkpoints_off_completes_from_the_har
 
 
 async def test_the_run_token_is_sent_only_once_caller_mcp_is_confirmed(client, owner):
+    """A run token is only sent once the caller's MCP registration is confirmed."""
     _, auth = owner
     swarm = on()
     await swarm.runtime().ensure_mcp_server(MCP_URL)  # registered by an earlier process
@@ -1808,6 +1852,7 @@ async def test_the_run_token_is_sent_only_once_caller_mcp_is_confirmed(client, o
 
 
 async def test_refusal_codes_and_details_are_redacted_everywhere(client, owner):
+    """A secret echoed back in a refusal is redacted everywhere it could be stored."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -1845,6 +1890,7 @@ async def test_refusal_codes_and_details_are_redacted_everywhere(client, owner):
 
 
 def test_the_reason_wins_over_the_message():
+    """A specific refusal reason wins over a generic error message every time."""
     from oracle.swarm.swarmcloud import _code
 
     def resp(reason: str, message: str) -> httpx.Response:
@@ -1859,6 +1905,7 @@ def test_the_reason_wins_over_the_message():
 
 
 async def test_an_answer_reusing_oracles_answer_id_from_the_console_is_not_oracles(client, owner):
+    """An answer id copied from the console is not mistaken for Oracle's own answer."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -1873,6 +1920,7 @@ async def test_an_answer_reusing_oracles_answer_id_from_the_console_is_not_oracl
 
 
 async def test_already_answered_does_not_switch_service_answers_on(client, owner):
+    """Finding a step already answered does not make service answers look enabled."""
     from oracle.swarm import get_runtime
 
     tenant_id, auth = owner
@@ -1914,6 +1962,7 @@ def _one_wait_spec() -> WorkflowSpec:
 
 
 async def test_person_required_keeps_service_answers_off_past_the_cache(monkeypatch):
+    """Service answers stay off past the cache until SwarmCloud reports it fixed."""
     import time
     from types import SimpleNamespace
 
@@ -1940,6 +1989,7 @@ async def test_person_required_keeps_service_answers_off_past_the_cache(monkeypa
 
 
 async def test_find_by_label_stops_on_a_repeated_cursor():
+    """A repeating page cursor ends a label search as inconclusive, not a miss."""
     from oracle.swarm import SwarmCloudRuntime
     from oracle.swarm.swarmcloud import StaticBearer
 
@@ -1970,6 +2020,7 @@ async def test_find_by_label_stops_on_a_repeated_cursor():
     ],
 )
 async def test_answer_record_survives_odd_bodies(workflow_body, form):
+    """Reading an answer survives odd or malformed workflow bodies without crashing."""
     from oracle.swarm import SwarmCloudRuntime
     from oracle.swarm.swarmcloud import StaticBearer
 
@@ -1997,6 +2048,7 @@ async def test_answer_record_survives_odd_bodies(workflow_body, form):
 
 
 async def test_a_5xx_submit_that_landed_is_found_before_resubmitting(client, owner):
+    """A submit that errored but still landed is found before it is sent again."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -2010,6 +2062,7 @@ async def test_a_5xx_submit_that_landed_is_found_before_resubmitting(client, own
 
 
 def test_plain_file_names_refuse_dots_and_blanks():
+    """A plain file name refuses dots, blanks and path separators."""
     from oracle.mcp.curated import _plain_file_name
 
     for bad in (".", "..", " ", "   ", " . ", "", "a/b", "x\\y", "a..b"):
@@ -2019,6 +2072,7 @@ def test_plain_file_names_refuse_dots_and_blanks():
 
 
 async def test_a_listing_without_addresses_does_not_keep_the_old_list_fresh(monkeypatch):
+    """An empty egress listing keeps the old addresses instead of clearing them."""
     import time
     from types import SimpleNamespace
 
@@ -2081,6 +2135,7 @@ async def _tick_errors(client, auth) -> list[str]:
 
 
 async def test_a_failing_wait_read_still_reads_spend_and_pauses_on_the_ceiling(client, owner):
+    """A wait read that keeps failing still reads spend and pauses on the ceiling."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -2097,6 +2152,7 @@ async def test_a_failing_wait_read_still_reads_spend_and_pauses_on_the_ceiling(c
 
 
 async def test_a_retryable_wait_read_error_is_retried_next_tick(client, owner):
+    """A retryable error reading a wait is tried again on the very next tick."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2110,6 +2166,7 @@ async def test_a_retryable_wait_read_error_is_retried_next_tick(client, owner):
 
 
 async def test_a_console_change_request_over_the_ceiling_pauses_and_reruns_nothing(client, owner):
+    """Keeps a flagged redo from spending past the budget ceiling instead of pausing it."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "lead@example.com")
@@ -2125,6 +2182,7 @@ async def test_a_console_change_request_over_the_ceiling_pauses_and_reruns_nothi
 
 
 async def test_a_cancel_confirmed_as_the_cost_crosses_the_ceiling_submits_nothing(client, owner):
+    """A cancel confirmed just as cost crosses the ceiling submits nothing more."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2157,6 +2215,7 @@ async def test_a_cancel_confirmed_as_the_cost_crosses_the_ceiling_submits_nothin
 
 
 async def test_a_console_not_yet_without_findings_does_not_take_the_inbox_note(client, owner):
+    """A console NOT_YET without findings does not take over a later note."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2171,6 +2230,7 @@ async def test_a_console_not_yet_without_findings_does_not_take_the_inbox_note(c
 
 
 async def test_a_console_answer_by_a_non_member_stays_open_for_an_approver(client, owner):
+    """A console answer from a non member needs an approver's confirm to count."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2197,6 +2257,7 @@ async def test_a_console_answer_by_a_non_member_stays_open_for_an_approver(clien
 
 
 async def test_a_console_answer_by_a_viewer_does_not_count(client, owner):
+    """A viewer's console answer never counts until an approver confirms it."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "viewer@example.com", "viewer")
@@ -2221,6 +2282,7 @@ async def test_a_console_answer_by_a_viewer_does_not_count(client, owner):
 
 
 async def test_a_counted_console_not_yet_mid_run_waits_and_continue_follows(client, owner):
+    """A counted NOT_YET mid run waits for a choice, never reruns on its own."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "lead@example.com")
@@ -2249,6 +2311,7 @@ async def test_a_counted_console_not_yet_mid_run_waits_and_continue_follows(clie
 
 
 async def test_redo_from_a_console_not_yet_reruns_the_segment_once_with_the_findings(client, owner):
+    """Sends the reviewer's full feedback to the rerun once, not clipped or duplicated."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "lead@example.com")
@@ -2272,6 +2335,7 @@ async def test_redo_from_a_console_not_yet_reruns_the_segment_once_with_the_find
 
 
 async def test_redo_and_continue_need_a_counted_console_change_request(client, owner):
+    """Redo and continue need a counted console change request, or they are refused."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2281,6 +2345,7 @@ async def test_redo_and_continue_need_a_counted_console_change_request(client, o
 
 
 async def test_a_counted_console_answer_is_attributed_to_answered_by(client, owner):
+    """A counted console answer is attributed in the audit to who actually answered."""
     from oracle.models import AuditEvent
 
     tenant_id, auth = owner
@@ -2311,6 +2376,7 @@ async def test_a_counted_console_answer_is_attributed_to_answered_by(client, own
 
 
 async def test_a_failed_registration_patch_sends_no_run_token(client, owner, monkeypatch):
+    """A failed registration update sends no run token until it is fixed."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -2326,6 +2392,7 @@ async def test_a_failed_registration_patch_sends_no_run_token(client, owner, mon
 
 
 async def test_a_refused_wait_read_on_an_answered_step_is_not_unanswered(client, owner):
+    """A step that already succeeded stays answered even when reading its wait fails."""
     tenant_id, auth = owner
     swarm = on()
     off = {
@@ -2357,6 +2424,7 @@ async def test_a_refused_wait_read_on_an_answered_step_is_not_unanswered(client,
 
 
 async def test_an_unreadable_console_verdict_surfaces_in_the_inbox_with_a_way_out(client, owner):
+    """An unreadable console verdict shows in the Inbox with redo as a way out."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2402,6 +2470,7 @@ def _metadata_handler(answered_by: str, token_email: str):
 
 
 async def test_oracles_principal_is_resolved_from_an_access_token():
+    """Oracle's own principal is told apart from others using its access token."""
     from oracle.swarm import SwarmCloudRuntime
     from oracle.swarm.swarmcloud import GoogleAccessToken
 
@@ -2421,6 +2490,7 @@ async def test_oracles_principal_is_resolved_from_an_access_token():
 
 
 async def test_oracles_principal_is_resolved_from_a_jwt_bearer():
+    """Oracle's own principal is also recognized from a JWT bearer token."""
     import jwt as pyjwt
 
     from oracle.swarm import SwarmCloudRuntime
@@ -2436,6 +2506,7 @@ async def test_oracles_principal_is_resolved_from_a_jwt_bearer():
 
 
 def test_a_specific_top_level_code_wins_over_a_generic_reason():
+    """A specific top level error code wins over a generic detail reason."""
     from oracle.swarm.swarmcloud import _code
 
     body = {"code": "already_answered", "message": "x", "detail": {"reason": "conflict"}}
@@ -2445,6 +2516,7 @@ def test_a_specific_top_level_code_wins_over_a_generic_reason():
 
 
 async def test_a_non_json_5xx_is_never_a_definite_refusal():
+    """A non JSON server error is treated as lost, never a sure refusal."""
     from oracle.swarm import SwarmCloudRuntime
     from oracle.swarm.swarmcloud import StaticBearer
 
@@ -2460,6 +2532,7 @@ async def test_a_non_json_5xx_is_never_a_definite_refusal():
 
 
 async def test_the_run_token_is_revoked_while_a_cancel_is_pending(client, owner):
+    """A run token is revoked as soon as its workflow's cancel is pending."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2472,6 +2545,7 @@ async def test_the_run_token_is_revoked_while_a_cancel_is_pending(client, owner)
 
 
 async def test_a_confirmed_cancel_reads_the_final_cost(client, owner):
+    """A confirmed cancel still reads the workflow's final cost before closing."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -2483,6 +2557,7 @@ async def test_a_confirmed_cancel_reads_the_final_cost(client, owner):
 
 
 async def test_cancelling_a_run_cancels_a_lost_submission_that_landed(client, owner):
+    """Cancelling a run also cancels a lost submission once found to have landed."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -2498,6 +2573,7 @@ async def test_cancelling_a_run_cancels_a_lost_submission_that_landed(client, ow
 
 
 async def test_cancelling_a_run_retries_the_lookup_of_a_lost_submission(client, owner):
+    """Cancelling a run retries the lookup of a submission still lost from it."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2514,6 +2590,7 @@ async def test_cancelling_a_run_retries_the_lookup_of_a_lost_submission(client, 
 
 
 async def test_an_inconclusive_lookup_holds_the_submission(client, owner):
+    """An inconclusive lookup holds a submission as pending, not lost or found."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -2544,6 +2621,7 @@ class _Endless(httpx.AsyncByteStream):
 
 @pytest.mark.parametrize("declared", [True, False])
 async def test_answer_record_never_reads_a_form_past_its_limit(declared):
+    """Reading an answer form stops at its byte limit instead of reading forever."""
     from oracle.swarm import SwarmCloudRuntime
     from oracle.swarm.swarmcloud import MAX_FORM_BYTES, StaticBearer
 
@@ -2566,6 +2644,7 @@ async def test_answer_record_never_reads_a_form_past_its_limit(declared):
 
 
 def test_run_tokens_joined_by_an_underscore_are_redacted():
+    """A run token glued to other text by an underscore is still redacted."""
     from oracle.swarm.swarmcloud import _redact
 
     for said in ("credential_ort_abcdefgh12345", "x_po_abcdefgh12345", "id=poa_abcdefgh123"):
@@ -2574,6 +2653,7 @@ def test_run_tokens_joined_by_an_underscore_are_redacted():
 
 
 async def test_a_pending_cancel_of_an_unknown_workflow_gives_up_cleanly(client, owner):
+    """Cancelling a workflow SwarmCloud no longer knows about gives up cleanly."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2590,6 +2670,7 @@ async def test_a_pending_cancel_of_an_unknown_workflow_gives_up_cleanly(client, 
 
 
 async def test_a_per_segment_cancel_is_retried_by_the_tick(client, owner):
+    """A failed cancel on a per segment workflow is retried by the next tick."""
     tenant_id, auth = owner
     swarm = FakeSwarmCloud(mcp=True)  # one workflow per segment
     use(swarm)
@@ -2631,6 +2712,7 @@ async def test_a_lookup_past_older_tasks_concludes_and_resubmits_once(client, ow
 
 
 async def test_a_lost_submission_that_landed_is_found_before_older_tasks(client, owner):
+    """A lost submission that landed is found before scanning past older tasks."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -2667,6 +2749,7 @@ async def _past_the_lookup_cap(monkeypatch) -> None:
 async def test_an_endless_lookup_surfaces_in_the_inbox_and_retry_submits_once(
     client, owner, monkeypatch
 ):
+    """A lookup that never concludes surfaces in the Inbox; Retry submits only once."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2710,6 +2793,7 @@ async def test_an_endless_lookup_surfaces_in_the_inbox_and_retry_submits_once(
 async def test_an_endless_lookup_cancelled_from_the_inbox_gives_up_cleanly(
     client, owner, monkeypatch
 ):
+    """Cancelling a stuck lookup from the Inbox gives up cleanly and keeps searching."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2735,6 +2819,7 @@ async def test_an_endless_lookup_cancelled_from_the_inbox_gives_up_cleanly(
 
 
 async def test_a_no_id_cancel_ends_when_the_lookup_concludes_not_found(client, owner):
+    """A cancel with no workflow id ends once its lookup concludes not found."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2776,6 +2861,7 @@ async def _writes(token: str) -> dict[str, str]:
 
 
 async def test_a_console_answer_that_does_not_count_makes_the_run_token_read_only(client, owner):
+    """Keeps a non-counted answer from killing the run's token, only pausing its writes."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "viewer@example.com", "viewer")
@@ -2811,6 +2897,7 @@ async def test_a_console_answer_that_does_not_count_makes_the_run_token_read_onl
 
 
 async def test_deciding_over_a_console_answer_that_did_not_count_ends_the_hold(client, owner):
+    """Deciding over an answer that did not count ends the token's read only hold."""
     tenant_id, auth = owner
     swarm = on()
     run = await _waiting(client, auth, tenant_id, swarm)
@@ -2841,6 +2928,7 @@ async def test_deciding_over_a_console_answer_that_did_not_count_ends_the_hold(c
 
 
 async def test_a_bare_html_404_never_gives_up_cancelling(client, owner):
+    """A bare HTML 404 is retried forever while cancelling, never taken as gone."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2861,6 +2949,7 @@ async def test_a_bare_html_404_never_gives_up_cancelling(client, owner):
 
 
 def test_only_an_enveloped_not_found_says_the_workflow_is_gone():
+    """Only SwarmCloud's own not found envelope marks a workflow as gone."""
     from oracle.swarm.swarmcloud import _refusal
 
     enveloped = httpx.Response(
@@ -2900,6 +2989,7 @@ def _record_runtime(form_response: httpx.Response):
 
 @pytest.mark.parametrize("valid", [True, False])
 async def test_a_gzip_encoded_error_body_is_runtime_unavailable(valid):
+    """A gzip encoded error body, valid or broken, still reads as unavailable."""
     import gzip
 
     envelope = json.dumps({"code": "unavailable", "detail": {"reason": "unavailable"}}).encode()
@@ -2913,6 +3003,7 @@ async def test_a_gzip_encoded_error_body_is_runtime_unavailable(valid):
 
 
 async def test_a_large_error_body_is_an_error_not_unreadable():
+    """An oversized error body is still read as its error, not as unreadable."""
     runtime = _record_runtime(
         httpx.Response(503, headers={"content-length": str(10**9)}, stream=_Endless(10**6))
     )
@@ -2922,6 +3013,7 @@ async def test_a_large_error_body_is_an_error_not_unreadable():
 
 
 async def test_an_unread_final_cost_keeps_the_workflow_for_one_more_read(client, owner):
+    """A cancelled workflow whose final cost was not read is kept for one more try."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2941,6 +3033,7 @@ async def test_an_unread_final_cost_keeps_the_workflow_for_one_more_read(client,
 
 
 async def test_a_final_cost_unread_twice_detaches(client, owner):
+    """A final cost unread twice gives up and detaches the workflow from the run."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -2956,6 +3049,7 @@ async def test_a_final_cost_unread_twice_detaches(client, owner):
 
 
 async def test_a_redacted_answerer_is_never_matched_to_a_member(client, owner):
+    """A long email padded to a member's length is never mistaken for that member."""
     tenant_id, auth = owner
     swarm = on()
     member = "x" * 188 + "@example.com"
@@ -2974,6 +3068,7 @@ async def test_a_redacted_answerer_is_never_matched_to_a_member(client, owner):
 async def test_console_answerers_differing_only_by_case_are_matched_deterministically(
     client, owner
 ):
+    """An answerer matching two members only by letter case counts for neither."""
     tenant_id, auth = owner
     async with tenant_session(tenant_id) as s:
         from oracle.auth.models import User
@@ -3024,6 +3119,7 @@ _RUN = "ort" + "_" + _TAIL
     ],
 )
 def test_run_tokens_however_joined_are_redacted(text):
+    """A run token is redacted however it is punctuated or escaped around it."""
     from oracle.swarm.swarmcloud import _redact, redact_whole
 
     for fn in (_redact, redact_whole):
@@ -3042,12 +3138,14 @@ def test_run_tokens_however_joined_are_redacted(text):
     ],
 )
 def test_ordinary_words_are_not_withheld(text):
+    """Ordinary words that merely resemble token syntax are never redacted."""
     from oracle.swarm.swarmcloud import _redact, redact_whole
 
     assert _redact(text) == text and redact_whole(text) == text
 
 
 async def test_redo_needs_findings_or_a_note(client, owner):
+    """Redo is refused without real findings or a note explaining why."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "lead@example.com")
@@ -3109,6 +3207,7 @@ async def _inbox(client, auth) -> dict:
 
 @pytest.mark.parametrize("cause", ["oversized_form", "odd_verdict", "refused_read"])
 async def test_an_unreadable_console_answer_makes_the_run_token_read_only(client, owner, cause):
+    """An unreadable console answer makes the run token read only until decided."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -3159,6 +3258,7 @@ async def _retried(client, auth, swarm, clock) -> dict:
 async def test_a_retried_lost_submission_is_found_later_cancelled_and_costed(
     client, owner, monkeypatch
 ):
+    """A retried lost submission is still found later, cancelled, and its cost kept."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3202,6 +3302,7 @@ async def test_a_retried_lost_submission_is_found_later_cancelled_and_costed(
 async def test_a_background_search_ends_when_the_credential_would_have_expired(
     client, owner, monkeypatch
 ):
+    """A background search for a lost submission stops once its credential expired."""
     _, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3221,6 +3322,7 @@ async def test_a_background_search_ends_when_the_credential_would_have_expired(
 async def test_a_cancelled_runs_lost_submission_is_found_later_cancelled_and_costed(
     client, owner, monkeypatch
 ):
+    """A lost submission on a cancelled run is still found, cancelled and costed."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3249,6 +3351,7 @@ async def test_a_cancelled_runs_lost_submission_is_found_later_cancelled_and_cos
 
 
 async def test_a_ruled_out_background_search_ends_quietly(client, owner, monkeypatch):
+    """A search ruled out as never submitted ends quietly, no false found note."""
     _, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3278,6 +3381,7 @@ async def test_a_ruled_out_background_search_ends_quietly(client, owner, monkeyp
     ],
 )
 async def test_a_404_on_an_answer_post_surfaces_in_the_inbox_after_n_tries(client, owner, refusal):
+    """Repeated 404s posting an answer surface in the Inbox after enough tries."""
     _, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -3298,6 +3402,7 @@ async def test_a_404_on_an_answer_post_surfaces_in_the_inbox_after_n_tries(clien
 
 
 async def test_an_answer_post_that_works_after_a_404_clears_the_count(client, owner):
+    """An answer post that succeeds after a 404 clears the stuck try count."""
     _, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -3310,6 +3415,7 @@ async def test_an_answer_post_that_works_after_a_404_clears_the_count(client, ow
 async def test_a_bare_404_while_cancelling_surfaces_in_the_inbox_after_n_tries(
     client, owner, monkeypatch
 ):
+    """Repeated bare 404s while cancelling surface in the Inbox after enough tries."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3340,6 +3446,7 @@ async def test_a_bare_404_while_cancelling_surfaces_in_the_inbox_after_n_tries(
 
 
 def test_the_fake_answers_a_missing_route_without_swarmclouds_envelope():
+    """An unknown route from the fake answers plainly, without SwarmCloud's envelope."""
     from oracle.swarm.swarmcloud import _refusal
 
     swarm = on()
@@ -3380,6 +3487,7 @@ def _row(task: str, at: datetime, key: str = "other", wf: str = "w") -> dict:
 
 
 async def test_find_by_label_does_not_conclude_on_a_listing_out_of_order():
+    """A label search concludes not found only when the listing is newest first."""
     since = datetime.now(service.UTC)
     day = timedelta(days=1)
     # An old row, then a newer one: not newest first, so the old row proves nothing.
@@ -3398,6 +3506,7 @@ async def test_find_by_label_does_not_conclude_on_a_listing_out_of_order():
 
 
 async def test_find_by_label_widens_the_skew_margin_when_oracles_clock_is_ahead():
+    """A label search widens its time margin when Oracle's own clock runs ahead."""
     oracle_now = datetime.now(service.UTC)
     swarm_now = oracle_now - timedelta(minutes=30)  # Oracle's clock is 30 min ahead
     since = oracle_now - timedelta(minutes=1)
@@ -3410,6 +3519,7 @@ async def test_find_by_label_widens_the_skew_margin_when_oracles_clock_is_ahead(
 
 
 async def test_read_limited_raises_for_an_error_body_over_the_limit():
+    """Reading a limited response still raises the right error past its byte cap."""
     from oracle.swarm import SwarmCloudRuntime
     from oracle.swarm.swarmcloud import StaticBearer
 
@@ -3426,6 +3536,7 @@ async def test_read_limited_raises_for_an_error_body_over_the_limit():
 
 
 async def test_a_broken_gzip_form_is_unreadable_not_lost():
+    """A broken gzip answer form reads as unreadable, not as never answered."""
     runtime = _record_runtime(
         httpx.Response(
             200, headers={"content-encoding": "gzip"}, stream=httpx.ByteStream(b"not gzip")
@@ -3446,6 +3557,7 @@ async def test_a_broken_gzip_form_is_unreadable_not_lost():
     ],
 )
 def test_round_5_ordinary_words_are_not_withheld(text):
+    """More ordinary words that merely resemble tokens are never redacted."""
     from oracle.swarm.swarmcloud import _redact, redact_whole
 
     assert _redact(text) == text and redact_whole(text) == text
@@ -3462,6 +3574,7 @@ def test_round_5_ordinary_words_are_not_withheld(text):
     ],
 )
 def test_round_5_run_tokens_however_joined_are_redacted(text):
+    """More ways a run token can be joined to text still get it redacted."""
     from oracle.swarm.swarmcloud import _redact, redact_whole
 
     for fn in (_redact, redact_whole):
@@ -3470,6 +3583,7 @@ def test_round_5_run_tokens_however_joined_are_redacted(text):
 
 
 async def test_a_pending_cancel_without_times_still_stops_looking(client, owner, monkeypatch):
+    """A pending cancel missing its recorded times still gives up after enough tries."""
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
@@ -3505,6 +3619,7 @@ async def _row_is_free(tenant_id, run_id: str) -> bool:
 
 
 async def test_retry_looks_up_outside_the_runs_row_lock_and_rechecks(client, owner, monkeypatch):
+    """Retry looks up a submission outside the row lock, then rechecks before acting."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3535,6 +3650,7 @@ async def test_retry_looks_up_outside_the_runs_row_lock_and_rechecks(client, own
 
 
 async def test_cancel_calls_swarmcloud_outside_the_runs_row_lock(client, owner, monkeypatch):
+    """Cancelling a run calls SwarmCloud outside the row lock, not while it is held."""
     tenant_id, auth = owner
     swarm = on()
     runtime = use(swarm)
@@ -3690,6 +3806,7 @@ async def _stuck_cancel(client, auth, tenant_id, swarm, clock) -> dict:
 async def test_stop_cancelling_keeps_counting_the_spend_and_the_ceiling_still_trips(
     client, owner, monkeypatch
 ):
+    """Stop cancelling still counts spend afterward, so the ceiling can still trip."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3731,6 +3848,7 @@ async def test_stop_cancelling_keeps_counting_the_spend_and_the_ceiling_still_tr
 
 
 async def test_stop_cancelling_a_cancelled_run_still_counts_its_spend(client, owner, monkeypatch):
+    """Stop cancelling an already cancelled run still keeps counting its spend."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3756,6 +3874,7 @@ async def test_stop_cancelling_a_cancelled_run_still_counts_its_spend(client, ow
 async def test_a_plain_cancel_on_a_stuck_run_tries_one_more_cancel_first(
     client, owner, monkeypatch
 ):
+    """A plain cancel on a stuck run tries the cancel call once more before giving up."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3820,6 +3939,7 @@ async def test_cancel_never_reuses_a_lookup_of_an_earlier_submission_under_the_s
 
 
 async def test_search_results_are_kept_when_the_rest_of_the_tick_fails(client, owner, monkeypatch):
+    """A found search result is kept even when the rest of that tick's work fails."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3849,6 +3969,7 @@ async def test_search_results_are_kept_when_the_rest_of_the_tick_fails(client, o
 async def test_a_found_search_answered_with_bare_404s_rests_and_surfaces_in_the_inbox(
     client, owner, monkeypatch
 ):
+    """A found workflow answering 404s rests between reads before the Inbox shows it."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3873,6 +3994,7 @@ async def test_a_found_search_answered_with_bare_404s_rests_and_surfaces_in_the_
 async def test_a_confirmed_cancel_with_a_gone_read_keeps_the_entry_until_its_cost_is_read(
     client, owner, monkeypatch
 ):
+    """A cancel read as gone is still tracked until its final cost is read."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3896,6 +4018,7 @@ async def test_a_confirmed_cancel_with_a_gone_read_keeps_the_entry_until_its_cos
 async def test_a_background_search_allows_slack_past_the_credentials_end(
     client, owner, monkeypatch
 ):
+    """A background search keeps going a while past where its credential would end."""
     _, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3908,6 +4031,7 @@ async def test_a_background_search_allows_slack_past_the_credentials_end(
 async def test_a_non_attach_submissions_search_is_not_bounded_by_the_run_token_ttl(
     client, owner, monkeypatch
 ):
+    """A search for a submission with no credential attached ignores the token ttl."""
     _, auth = owner
     swarm = FakeSwarmCloud()  # caller MCP off: nothing attached, no credential bound
     clock = _Clock(monkeypatch)
@@ -3920,6 +4044,7 @@ async def test_a_non_attach_submissions_search_is_not_bounded_by_the_run_token_t
 async def test_a_found_search_still_running_past_its_end_is_read_until_it_ends(
     client, owner, monkeypatch
 ):
+    """A found workflow still running past its expected end is read until it ends."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3940,6 +4065,7 @@ async def test_a_found_search_still_running_past_its_end_is_read_until_it_ends(
 async def test_the_first_background_lookup_comes_on_the_next_tick_after_retry(
     client, owner, monkeypatch
 ):
+    """The first background lookup for a retry starts on the very next tick."""
     _, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -3950,6 +4076,7 @@ async def test_the_first_background_lookup_comes_on_the_next_tick_after_retry(
 
 
 async def test_cancel_never_lowers_a_recorded_cost(client, owner, monkeypatch):
+    """Cancelling a run never lowers a cost that was already recorded higher."""
     _, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -3971,6 +4098,7 @@ async def test_cancel_never_lowers_a_recorded_cost(client, owner, monkeypatch):
 async def test_retry_rechecks_under_the_lock_before_clearing_a_stuck_lookup(
     client, owner, monkeypatch
 ):
+    """Retry rechecks the run's state under lock before clearing a stuck lookup."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4011,6 +4139,7 @@ async def test_retry_rechecks_under_the_lock_before_clearing_a_stuck_lookup(
 
 
 async def test_advance_takes_the_current_attempt_not_the_last_listed(client, owner):
+    """Advancing a run reads its current attempt, not whichever is listed last."""
     tenant_id, auth = owner
     swarm = FakeSwarmCloud()  # one workflow per segment
     use(swarm)
@@ -4066,6 +4195,7 @@ async def test_advance_takes_the_current_attempt_not_the_last_listed(client, own
     ],
 )
 def test_round_6_tokens_however_joined_are_redacted(text):
+    """Still more escaped or encoded ways of joining a run token get it redacted."""
     from oracle.swarm.swarmcloud import _redact, redact_whole
 
     for fn in (_redact, redact_whole):
@@ -4089,6 +4219,7 @@ def test_round_6_tokens_however_joined_are_redacted(text):
     ],
 )
 def test_round_6_ordinary_words_are_not_withheld(text):
+    """Still more ordinary looking words are never mistaken for a secret token."""
     from oracle.swarm.swarmcloud import _redact, redact_whole
 
     assert _redact(text) == text and redact_whole(text) == text
@@ -4163,6 +4294,7 @@ async def test_an_open_wait_holds_the_token_until_an_answer_that_counts_is_read(
 
 
 async def test_an_approvers_console_answer_holds_until_oracle_reads_it(client, owner, monkeypatch):
+    """An approver's console answer holds the token read only until Oracle reads it."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4299,6 +4431,7 @@ async def _stopped(client, auth, tenant_id, swarm, clock) -> dict:
 
 
 async def test_a_stopped_workflow_is_read_on_every_tick(client, owner, monkeypatch):
+    """A stopped workflow's cost keeps being read on every single tick."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4344,6 +4477,7 @@ async def test_a_stopped_workflow_whose_status_never_reads_shows_as_cost_unknown
 
 
 async def test_bare_404s_on_a_stopped_workflow_offer_retry_lookup(client, owner, monkeypatch):
+    """Bare 404s on a stopped workflow offer a manual retry lookup in the Inbox."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4366,6 +4500,7 @@ async def test_bare_404s_on_a_stopped_workflow_offer_retry_lookup(client, owner,
 
 
 async def test_retry_lookup_needs_a_cost_unknown_workflow(client, owner):
+    """Retry lookup is refused unless the workflow's cost is actually unknown."""
     _, auth = owner
     use(on())
     run = await started(client, auth)
@@ -4386,6 +4521,7 @@ def _label_search(at: str) -> dict:
 
 
 def test_search_for_merges_a_stop_into_the_label_search_of_the_same_submission():
+    """A stop request merges into the existing search for the same submission."""
     run = Run(knobs={"searches": [_label_search("2026-10-19T10:00:00+00:00")]})
     service._search_for(
         run,
@@ -4416,6 +4552,7 @@ def test_search_for_merges_a_stop_into_the_label_search_of_the_same_submission()
 
 
 def test_search_for_compares_normalised_submission_times():
+    """Submission times are compared after normalising, not by exact string match."""
     run = Run(knobs={})
     for at in ("2026-10-19T10:00:00", "2026-10-19T10:00:00", "2026-10-19T10:00:00+00:00"):
         service._search_for(
@@ -4459,6 +4596,7 @@ async def test_cancel_keeps_a_confirmed_cancel_whose_status_is_unread_on_searche
 async def test_a_found_searchs_confirmed_cancel_is_read_until_it_is_terminal(
     client, owner, monkeypatch
 ):
+    """A found workflow's confirmed cancel is read until it reaches a terminal state."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4483,6 +4621,7 @@ async def test_a_found_searchs_confirmed_cancel_is_read_until_it_is_terminal(
 async def test_a_confirmed_cancel_on_the_main_path_is_read_until_it_is_terminal(
     client, owner, monkeypatch
 ):
+    """A confirmed cancel on the main path is read until it reaches a terminal state."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -4501,6 +4640,7 @@ async def test_a_confirmed_cancel_on_the_main_path_is_read_until_it_is_terminal(
 async def test_a_later_segment_left_running_on_a_detached_workflow_is_not_counted_twice(
     client, owner
 ):
+    """A later segment's spend on a detached workflow is never counted twice."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -4543,6 +4683,7 @@ async def test_a_pause_over_an_unread_answer_leaves_it_for_an_approver(client, o
 
 
 def test_a_per_segment_attach_carries_its_submission_time():
+    """Attaching a segment for cancel carries forward its own submission time."""
     seg = RunSegment(
         seq=1,
         name="baseline",
@@ -4562,6 +4703,7 @@ def test_a_per_segment_attach_carries_its_submission_time():
 async def test_a_searched_workflows_cancel_call_rests_while_its_cost_is_read_every_tick(
     client, owner, monkeypatch
 ):
+    """A searched workflow's cancel call rests, but its cost still reads every tick."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4749,6 +4891,7 @@ async def test_a_wait_that_never_comes_says_what_it_waited_for():
 
 
 async def test_a_slow_status_read_times_out_to_read_only(client, owner, monkeypatch):
+    """A status read stuck past its timeout falls back to read only, not a hang."""
     _, auth = owner
     swarm = on()
     runtime = use(swarm)
@@ -4767,6 +4910,7 @@ async def test_a_slow_status_read_times_out_to_read_only(client, owner, monkeypa
 
 
 async def test_the_swarmcloud_runtime_reuses_one_http_client(monkeypatch):
+    """The SwarmCloud runtime reuses one http client, not a new one each call."""
     made: list[int] = []
     real = httpx.AsyncClient
 
@@ -4804,6 +4948,7 @@ async def _writable_between_waits(client, auth, tenant_id, swarm, clock) -> dict
 async def test_a_wait_that_opens_after_the_request_starts_refuses_the_write(
     client, owner, monkeypatch
 ):
+    """A write refused once a wait opens applies even if the wait opened mid request."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -4915,6 +5060,7 @@ async def test_cancel_again_turns_the_cancel_calls_back_on(client, owner, monkey
 async def test_a_read_only_answer_is_cached_for_five_seconds_and_may_write_never(
     client, owner, monkeypatch
 ):
+    """A read only verdict is cached for five seconds; a may write check never is."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -5020,6 +5166,7 @@ async def test_an_advance_interrupted_after_its_first_commit_recovers(client, ow
 
 
 async def test_the_cap_drop_is_audited_and_keeps_the_overrun(client, owner, monkeypatch):
+    """Dropping a search past its cap is audited and keeps the overrun on record."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5066,6 +5213,7 @@ async def _cost_unknown_stopped(client, auth, tenant_id, swarm, clock) -> dict:
 async def test_retry_lookup_reads_one_entry_outside_the_row_lock_with_a_cooldown(
     client, owner, monkeypatch
 ):
+    """Stops a retry click from locking the run or touching searches it was not asked for."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5120,6 +5268,7 @@ async def test_retry_lookup_reads_one_entry_outside_the_row_lock_with_a_cooldown
 async def test_a_confirmed_cancel_stuck_cancelling_is_capped_like_cost_unknown(
     client, owner, monkeypatch
 ):
+    """A cancel stuck in cancelling is capped and dropped like a cost unknown search."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5148,6 +5297,7 @@ async def test_a_confirmed_cancel_stuck_cancelling_is_capped_like_cost_unknown(
 
 
 async def test_a_confirmed_cancel_later_read_as_gone_has_ended(client, owner):
+    """A confirmed cancel later read as gone is taken as ended after one more read."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -5169,6 +5319,7 @@ async def test_a_confirmed_cancel_later_read_as_gone_has_ended(client, owner):
 
 
 def test_two_label_only_searches_merge():
+    """Two searches for the same label only, with nothing else, merge into one."""
     run = Run(knobs={})
     for _ in range(2):
         service._search_for(
@@ -5276,6 +5427,7 @@ async def _interrupted(client, auth, monkeypatch, swarm) -> tuple[dict, _ImportF
 async def test_a_resume_that_keeps_failing_stops_at_five_and_still_reads_the_workflow(
     client, owner, monkeypatch
 ):
+    """A resume that keeps failing stops after five tries, still reading its cost."""
     tenant_id, auth = owner
     swarm = on()
     run, fails = await _interrupted(client, auth, monkeypatch, swarm)
@@ -5312,6 +5464,7 @@ async def test_a_resume_that_keeps_failing_stops_at_five_and_still_reads_the_wor
 
 
 async def test_a_failing_resume_does_not_skip_the_ceiling(client, owner, monkeypatch):
+    """A failing resume still checks the spend ceiling, never skipping past it."""
     tenant_id, auth = owner
     swarm = on()
     run, _ = await _interrupted(client, auth, monkeypatch, swarm)
@@ -5340,6 +5493,7 @@ async def test_a_failing_resume_is_tried_and_counted_once_per_tick(client, owner
 
 
 async def test_a_failing_resume_does_not_skip_a_workflow_that_ended(client, owner, monkeypatch):
+    """A failing resume still notices when its workflow has already ended."""
     _, auth = owner
     swarm = on()
     run, _ = await _interrupted(client, auth, monkeypatch, swarm)
@@ -5351,6 +5505,7 @@ async def test_a_failing_resume_does_not_skip_a_workflow_that_ended(client, owne
 
 
 async def test_retry_import_is_an_owners_audited_and_resets_the_count(client, owner, monkeypatch):
+    """Retry import is owner only, audited, and resets the failed try count."""
     tenant_id, auth = owner
     swarm = on()
     run, fails = await _interrupted(client, auth, monkeypatch, swarm)
@@ -5378,6 +5533,7 @@ async def test_retry_import_is_an_owners_audited_and_resets_the_count(client, ow
 
 
 async def test_retry_import_resets_the_count_to_five_more_tries(client, owner, monkeypatch):
+    """Retry import resets the failure count, giving five more tries."""
     tenant_id, auth = owner
     swarm = on()
     run, fails = await _interrupted(client, auth, monkeypatch, swarm)
@@ -5463,6 +5619,7 @@ def hold_runtime(monkeypatch):
 
 
 async def test_a_joiner_on_a_may_write_check_reads_for_itself(hold_runtime):
+    """A joiner on a may write check always makes its own fresh read."""
     runtime = hold_runtime(_DEP)
     key = (uuid.uuid4(), "wf_x", (("r1", "w1"),))
     first = asyncio.create_task(service._live_hold(*key))
@@ -5478,6 +5635,7 @@ async def test_a_joiner_on_a_may_write_check_reads_for_itself(hold_runtime):
 
 
 async def test_a_read_only_check_refuses_every_joiner_without_another_read(hold_runtime):
+    """A read only check refuses every joiner from one shared read, then caches it."""
     runtime = hold_runtime("RUNNING")
     key = (uuid.uuid4(), "wf_x", (("r1", "w1"),))
     first = asyncio.create_task(service._live_hold(*key))
@@ -5497,6 +5655,7 @@ async def test_a_read_only_check_refuses_every_joiner_without_another_read(hold_
 
 
 async def test_the_hold_cache_does_not_leak_across_runs(hold_runtime):
+    """The hold cache never leaks an answer from one run into another."""
     runtime = hold_runtime("RUNNING")
     runtime.gate.set()
     one = (uuid.uuid4(), "wf_1", (("r1", "w1"),))
@@ -5511,6 +5670,7 @@ async def test_the_hold_cache_does_not_leak_across_runs(hold_runtime):
 
 
 async def test_expired_hold_answers_are_pruned_on_reads_too(hold_runtime, monkeypatch):
+    """Expired hold cache entries are pruned on a live read, not just on write."""
     runtime = hold_runtime("RUNNING")
     runtime.gate.set()
     now = [1000.0]
@@ -5528,6 +5688,7 @@ async def test_expired_hold_answers_are_pruned_on_reads_too(hold_runtime, monkey
 
 
 def test_no_list_of_step_states_leaves_the_token_writable():
+    """No state list can let PENDING or SKIPPED release the run token again."""
     # W5 structural rule (owner 2026-10-20): PENDING and SKIPPED no longer release.
     from oracle.swarm import runtime as swarm_runtime
 
@@ -5540,6 +5701,7 @@ def test_no_list_of_step_states_leaves_the_token_writable():
     [_DEP, "PENDING", "SKIPPED", "RUNNING", "PARKED", "SUCCEEDED", "FAILED", "CANCELLED", "NEW"],
 )
 async def test_only_a_dependency_park_leaves_the_token_writable(hold_runtime, state):
+    """Only a dependency park leaves the run token writable; nothing else does."""
     runtime = hold_runtime(state)
     runtime.gate.set()
     held = await service._live_hold(uuid.uuid4(), "wf_1", (("r1", "w1"),))
@@ -5562,6 +5724,7 @@ async def _curated_writes(token: str) -> dict[str, tuple[bool, str]]:
 async def test_curated_writes_are_refused_while_held_and_write_nothing(
     client, owner, monkeypatch, why
 ):
+    """Makes sure a held run's blocked writes never slip a document or change through anyway."""
     from dataclasses import replace
 
     from oracle.baseline.models import Proposal
@@ -5690,6 +5853,7 @@ async def _edit_run(tenant_id, run_id: str, **changes) -> None:
 async def test_cancel_again_is_refused_unless_the_ui_would_offer_it(
     client, owner, monkeypatch, case
 ):
+    """Cancel again is refused whenever the UI would not offer it, and nothing changes."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5713,6 +5877,7 @@ async def test_cancel_again_is_refused_unless_the_ui_would_offer_it(
 
 
 async def test_cancel_again_who_and_which_run(client, owner, monkeypatch):
+    """Cancel again is restricted to the run's own creator and that exact run."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5741,6 +5906,7 @@ async def test_cancel_again_who_and_which_run(client, owner, monkeypatch):
 async def test_an_overrun_from_before_the_end_is_not_recorded_as_after_the_end(
     client, owner, monkeypatch
 ):
+    """Spend from before a run ended is never recorded as overrun after the end."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5768,6 +5934,7 @@ async def test_an_overrun_from_before_the_end_is_not_recorded_as_after_the_end(
 
 
 async def test_a_dismissed_overrun_does_not_block_a_new_one(client, owner, monkeypatch):
+    """Dismissing an overrun does not block a later, bigger one from being recorded."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5800,6 +5967,8 @@ def _runtime_on(handler) -> SwarmCloudRuntime:
 
 
 async def test_a_pool_timeout_never_left_so_it_is_not_lost():
+    """A pool timeout counts as retryable, never as a run lost to SwarmCloud."""
+
     def handler(request):
         raise httpx.PoolTimeout("no connection free in the pool")
 
@@ -5809,6 +5978,7 @@ async def test_a_pool_timeout_never_left_so_it_is_not_lost():
 
 
 async def test_a_submit_stuck_in_the_pool_is_not_lost_and_holds_nothing(client, owner, monkeypatch):
+    """A submit stuck in the pool is retried safely, without holding the token."""
     tenant_id, auth = owner
     swarm = on()
     pool_timeouts = 1
@@ -5832,6 +6002,7 @@ async def test_a_submit_stuck_in_the_pool_is_not_lost_and_holds_nothing(client, 
 
 
 async def test_cookies_are_not_shared_across_calls():
+    """Cookies from one call are never reused on the next call."""
     seen: list[str | None] = []
 
     def handler(request):
@@ -5848,6 +6019,8 @@ async def test_cookies_are_not_shared_across_calls():
 
 
 def test_the_old_client_is_closed_when_the_event_loop_changes():
+    """A fresh client replaces and closes the old one when the event loop changes."""
+
     def handler(request):
         return httpx.Response(404, json={"error": "not_found"})
 
@@ -5874,6 +6047,7 @@ async def _cancel(client, auth, run) -> None:
 
 
 async def test_gone_right_after_a_confirmed_cancel_reads_the_cost_once_more(client, owner):
+    """A 404 right after a confirmed cancel still gets one more cost read."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -5887,6 +6061,7 @@ async def test_gone_right_after_a_confirmed_cancel_reads_the_cost_once_more(clie
 
 
 async def test_gone_on_a_searched_cancelled_workflow_reads_once_more_even_if_costed(client, owner):
+    """A gone workflow already searched and costed still gets read once more."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -5905,6 +6080,7 @@ async def test_gone_on_a_searched_cancelled_workflow_reads_once_more_even_if_cos
 
 
 async def test_gone_on_the_ticks_read_after_a_confirmed_cancel_reads_once_more(client, owner):
+    """A gone read after a confirmed cancel still reads its last cost once more."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -5921,6 +6097,7 @@ async def test_gone_on_the_ticks_read_after_a_confirmed_cancel_reads_once_more(c
 
 
 async def test_a_failed_read_after_gone_follows_the_cost_unknown_rules(client, owner, monkeypatch):
+    """A failed read after a gone workflow leaves its cost correctly unknown."""
     tenant_id, auth = owner
     swarm = on()
     run = await _at_baseline(client, auth, swarm)
@@ -6017,6 +6194,7 @@ async def test_a_step_parked_on_its_dependencies_does_not_hold_the_run_token(cli
     ],
 )
 def test_not_reached_counts_a_step_parked_on_its_dependencies(state, reason, reached):
+    """A step is not reached only when it is parked on an unmet dependency."""
     from oracle.swarm.runtime import not_reached
 
     before = StepStatus("w", "t0", "RUNNING", task_read=True)
@@ -6025,6 +6203,7 @@ def test_not_reached_counts_a_step_parked_on_its_dependencies(state, reason, rea
 
 
 def test_not_reached_fails_closed_without_a_task_or_with_an_opened_wait():
+    """Without a read task, or with an opened wait, a step counts as reached."""
     from oracle.swarm.runtime import not_reached
 
     before = StepStatus("w", "t0", "RUNNING", task_read=True)
@@ -6041,6 +6220,7 @@ def test_not_reached_fails_closed_without_a_task_or_with_an_opened_wait():
 async def test_a_review_step_with_no_task_in_the_page_holds_the_run_token_and_reads_cleanly(
     monkeypatch,
 ):
+    """A step missing from the task page still holds the token and reads cleanly."""
     from oracle.swarm.swarmcloud import SwarmCloudRuntime
 
     rt = object.__new__(SwarmCloudRuntime)

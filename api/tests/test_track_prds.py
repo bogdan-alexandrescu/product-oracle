@@ -95,6 +95,7 @@ async def suggestions(client, ctx: Ctx, role: str = "owner") -> list[dict]:
 
 
 async def test_two_prds_on_one_track_read_everywhere(client):
+    """Two PRDs on one track show up together everywhere a track is read."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     tid = ids["track_id"]
@@ -141,6 +142,7 @@ async def test_two_prds_on_one_track_read_everywhere(client):
 
 
 async def test_a_prd_taken_off_a_track_starts_none_again(client):
+    """Taking a PRD off its track clears it everywhere; a fresh suggestion can start."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     await change(client, ctx, "owner", "edit_track", {"track_id": ids["track_id"]},
@@ -163,6 +165,7 @@ async def test_a_prd_taken_off_a_track_starts_none_again(client):
 
 
 async def test_a_new_prd_gets_one_suggestion_and_confirming_links_it(client):
+    """A new PRD gets one track suggestion, shown only to its owner, until confirmed."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -193,6 +196,7 @@ async def test_a_new_prd_gets_one_suggestion_and_confirming_links_it(client):
 
 
 async def test_new_track_from_a_suggestion(client):
+    """Starting a new track from a suggestion clears that suggestion and holds the PRD."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -267,6 +271,7 @@ async def test_confirming_a_track_another_decides_waits_for_them(client):
 
 
 async def test_a_declined_track_proposal_brings_the_suggestion_back(client):
+    """Declining a track proposal brings its suggestion back; asking again starts new."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     await owned_by_approver(ctx, ids)
@@ -284,6 +289,7 @@ async def test_a_declined_track_proposal_brings_the_suggestion_back(client):
 
 
 async def test_a_proposed_removal_takes_off_only_that_prd(client):
+    """Accepting a proposed removal takes off only that PRD, not one added since."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     tid = ids["track_id"]
@@ -302,6 +308,7 @@ async def test_a_proposed_removal_takes_off_only_that_prd(client):
 
 @pytest.mark.parametrize("form", ["add_prd_id", "prd_ids"])
 async def test_placing_a_prd_directly_closes_its_open_proposal(client, form):
+    """Placing a PRD on a track directly closes its own open proposal in every inbox."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     tid = ids["track_id"]
@@ -338,6 +345,7 @@ async def test_placing_a_prd_directly_closes_its_open_proposal(client, form):
 
 
 async def test_placing_one_prd_of_a_two_prd_proposal_keeps_the_rest_open(client):
+    """Placing one PRD of a two-PRD proposal directly leaves the rest still open."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     tid = ids["track_id"]

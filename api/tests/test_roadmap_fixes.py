@@ -94,6 +94,7 @@ PROBES = {
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(PROBES))
 def test_each_probe_is_a_problem_in_under_100_ms(name):
+    """Each malicious items file is flagged as a problem in under 100 ms."""
     text = PROBES[name]
     started = time.monotonic()
     out = check_items(text)
@@ -104,12 +105,14 @@ def test_each_probe_is_a_problem_in_under_100_ms(name):
 
 @pytest.mark.parametrize("name", sorted(PROBES))
 def test_the_loader_raises_only_its_refusal(name):
+    """The raw YAML loader refuses every unsafe probe with its own error, not a crash."""
     with pytest.raises(items_file.ItemsYamlError):
         items_file.load_items_yaml(PROBES[name])
 
 
 @pytest.mark.timing
 def test_a_base60_value_is_a_string_read_at_once():
+    """A sexagesimal-looking value like 1:30 stays a string and parses at once."""
     started = time.monotonic()
     data = items_file.load_items_yaml(BASE60)
     assert time.monotonic() - started < 0.1
@@ -118,6 +121,7 @@ def test_a_base60_value_is_a_string_read_at_once():
 
 @pytest.mark.timing
 def test_the_one_megabyte_base60_scalar_is_refused_at_once():
+    """A huge base60 scalar is refused as too large without delay."""
     text = _in_economics(base60(1_000_000))
     started = time.monotonic()
     out = check_items(text)
@@ -126,6 +130,7 @@ def test_the_one_megabyte_base60_scalar_is_refused_at_once():
 
 
 def test_only_plain_decimal_numbers_are_numbers():
+    """Only plain decimal numbers parse as numbers; hex, octal and time stay strings."""
     data = items_file.load_items_yaml(
         "a: 1:30\nb: 0x1F\nc: 0o17\nd: 1_000\ne: 12\nf: -3.5\ng: 1e3\nj: 1.5e+3\n"
         "h: 2026-11-30\ni: true\n"
@@ -138,6 +143,7 @@ def test_only_plain_decimal_numbers_are_numbers():
 
 
 def test_explicit_tags_are_refused():
+    """An explicit YAML tag, even on a plain value, is refused."""
     tagged = ("!!int 1:1:1", "!!float 1e3", "!!binary aGk=", "!!python/name:os.system ''", "!x y")
     for value in tagged:
         out = check_items(_in_economics(value))
@@ -145,6 +151,7 @@ def test_explicit_tags_are_refused():
 
 
 def test_an_over_long_value_is_refused(monkeypatch):
+    """A scalar longer than the configured max length is refused as too large."""
     monkeypatch.setattr(safe_yaml, "MAX_SCALAR_CHARS", 50)
     out = check_items(_in_economics('"' + "x " * 40 + '"'))
     assert [p["code"] for p in out.problems] == ["too_large"]
@@ -152,6 +159,8 @@ def test_an_over_long_value_is_refused(monkeypatch):
 
 @pytest.mark.timing
 def test_the_parse_runs_in_a_worker_thread_with_a_time_cap(monkeypatch):
+    """A slow items parse is time-capped and runs off the event loop, not blocking it."""
+
     def slow(text, **kw):
         time.sleep(1)
         return items_file.ItemsCheck()
@@ -182,6 +191,8 @@ def test_the_parse_runs_in_a_worker_thread_with_a_time_cap(monkeypatch):
 
 
 def test_any_other_failure_of_the_check_is_a_problem(monkeypatch):
+    """An unexpected error while checking items is reported as a problem, not a crash."""
+
     def boom(text):
         raise MemoryError("out of memory")
 
@@ -192,6 +203,7 @@ def test_any_other_failure_of_the_check_is_a_problem(monkeypatch):
 @pytest.mark.timing
 @pytest.mark.parametrize("probe", ["long_decimal", "deep_sequence", "deep_mapping"])
 async def test_the_tick_completes_and_revokes_the_token(client, owner, runtime, probe):  # noqa: F811
+    """A rejected roadmap items file fails the run and revokes tokens, not the tick."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": PROBES[probe]})]
@@ -228,6 +240,7 @@ async def test_the_tick_completes_and_revokes_the_token(client, owner, runtime, 
     ],
 )
 def test_nan_and_infinity_are_refused(change):
+    """NaN and infinity values in items are refused as non-finite numbers."""
     out = check_items(ITEMS.replace(*change, 1))
     assert [p["code"] for p in out.problems] == ["non_finite_number"], out.problems
     assert out.items == []
@@ -251,6 +264,7 @@ async def test_a_run_s_items_file_is_parsed_once_per_step(client, owner, runtime
 
 
 def test_a_reference_matches_only_as_an_exact_token():
+    """A tracker reference matches only as a whole token, not inside another one."""
     day = date(2026, 11, 30)
     basis = Basis(uuid.uuid4(), "estimate", "ENG-41", day)
     for source in ("ENG-41 estimate", "(ENG-41).", "eng-41, capacity", "ENG-41/"):
@@ -264,6 +278,7 @@ async def test_a_tracker_basis_milestone_is_rechecked_when_records_are_rematched
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A tracker-record basis is rechecked when the record's item match changes."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -312,6 +327,7 @@ async def test_a_basis_from_a_record_without_a_track_still_checks_the_prd(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A schedule basis from a trackless record still ties only to its own PRD."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -351,6 +367,7 @@ async def test_a_basis_from_a_record_without_a_track_still_checks_the_prd(
 
 
 async def test_a_disabled_member_cannot_own_a_track(client, owner, runtime, monkeypatch):  # noqa: F811
+    """A disabled member cannot be made a track's owner."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     track = await track_of(client, auth)
@@ -412,6 +429,7 @@ def _roadmap_probe(name: str) -> str:
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 def test_the_safe_loader_refuses_each_probe_at_once(name):
+    """The safe YAML loader refuses every unsafe probe in under 100 ms."""
     started = time.monotonic()
     with pytest.raises(safe_yaml.SafeYamlError):
         safe_yaml.load(YAML_PROBES[name])
@@ -419,6 +437,7 @@ def test_the_safe_loader_refuses_each_probe_at_once(name):
 
 
 def test_duplicate_keys_are_refused_and_yaml11_words_stay_strings():
+    """Duplicate keys are refused with their line; words like On or NO stay strings."""
     with pytest.raises(safe_yaml.SafeYamlError) as exc:
         safe_yaml.load("a: 1\nb: 2\na: 3\n")
     assert exc.value.code == "duplicate_key" and exc.value.line == 3
@@ -427,6 +446,7 @@ def test_duplicate_keys_are_refused_and_yaml11_words_stay_strings():
 
 
 def test_items_keep_yaml11_booleans_as_strings_and_refuse_duplicate_keys():
+    """Items keep YAML1.1 words like On as strings and refuse duplicate keys anywhere."""
     data = items_file.load_items_yaml("title: NO\nconfidence: On\n")
     assert data == {"title": "NO", "confidence": "On"}
     with pytest.raises(items_file.ItemsYamlError) as exc:
@@ -437,6 +457,7 @@ def test_items_keep_yaml11_booleans_as_strings_and_refuse_duplicate_keys():
 
 
 def test_an_export_never_writes_aliases_the_loader_would_refuse():
+    """An export never writes the YAML aliases its own strict loader would refuse."""
     shared = {"k": "v"}
     text = safe_yaml.dump({"a": shared, "b": shared})
     assert "&" not in text and safe_yaml.load(text) == {"a": shared, "b": shared}
@@ -445,6 +466,7 @@ def test_an_export_never_writes_aliases_the_loader_would_refuse():
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 def test_parse_draft_refuses_each_probe_in_front_matter_at_once(name):
+    """A draft's front matter refuses every unsafe YAML probe in under 100 ms."""
     started = time.monotonic()
     with pytest.raises(DraftError) as exc:
         parse_draft(_front_matter_probe(name))
@@ -454,6 +476,7 @@ def test_parse_draft_refuses_each_probe_in_front_matter_at_once(name):
 
 @pytest.mark.timing
 def test_a_template_front_matter_probe_is_a_problem():
+    """A template's front matter is checked against the same unsafe YAML probes."""
     from oracle.templates.validation import check_template
 
     for name in YAML_PROBES:
@@ -466,6 +489,7 @@ def test_a_template_front_matter_probe_is_a_problem():
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 async def test_post_versions_refuses_each_probe(client, owner, name):  # noqa: F811
+    """Posting a version with unsafe front matter is refused in under a second."""
     _, auth = owner
     started = time.monotonic()
     resp = await client.post(
@@ -479,6 +503,7 @@ async def test_post_versions_refuses_each_probe(client, owner, name):  # noqa: F
 
 
 async def test_post_versions_refuses_a_body_over_one_megabyte(client, owner):  # noqa: F811
+    """A document version body over one megabyte is refused as too large."""
     _, auth = owner
     limit = get_settings().max_body_bytes
     body = _front_matter_probe("long_decimal", "# T {#t}\n\n" + "word " * (limit // 5))
@@ -496,6 +521,7 @@ async def test_post_versions_refuses_a_body_over_one_megabyte(client, owner):  #
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 async def test_baseline_yaml_refuses_each_probe(client, owner, name):  # noqa: F811
+    """Posting baseline YAML with an unsafe probe is refused, not accepted."""
     _, auth = owner
     started = time.monotonic()
     resp = await client.post(
@@ -509,6 +535,7 @@ async def test_baseline_yaml_refuses_each_probe(client, owner, name):  # noqa: F
 
 @pytest.mark.timing
 async def test_the_draft_parse_runs_off_the_event_loop(monkeypatch):
+    """A slow draft parse is time-capped and keeps the event loop running."""
     import asyncio
 
     from oracle.docs import parser
@@ -542,6 +569,7 @@ async def test_a_runs_roadmap_md_probe_fails_the_import_not_the_tick(
     runtime,  # noqa: F811
     name,
 ):
+    """A run's own bad roadmap.md fails its import, never the tick that reads it."""
     _, auth = owner
     await approved_prd(client, auth)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
@@ -562,6 +590,7 @@ async def test_a_runs_roadmap_md_probe_fails_the_import_not_the_tick(
 @pytest.mark.timing
 @pytest.mark.parametrize("name", ["long_decimal", "deep_mapping", "alias_bomb"])
 async def test_a_runs_prd_md_probe_fails_the_import_not_the_tick(client, owner, runtime, name):  # noqa: F811
+    """A run's own bad prd.md fails its import, never the tick that reads it."""
     from tests.fixtures import draft
 
     _, auth = owner
@@ -627,6 +656,7 @@ def _with_paragraph(text: str, md: str = ROADMAP_MD) -> str:
 
 
 async def test_every_probe_is_refused_on_a_person_s_import(client, owner, runtime):  # noqa: F811
+    """Every unverified date probe is refused on import; a verified date still imports."""
     from tests.test_roadmap import built_roadmap
 
     _, auth = owner
@@ -656,6 +686,7 @@ async def _run_import(client, auth, runtime, markdown: str) -> dict:  # noqa: F8
 
 
 async def test_every_probe_is_a_warning_and_a_marker_on_a_run_s_import(client, owner, runtime):  # noqa: F811
+    """Each unverified date gets one warning and a marker, not one warning per mention."""
     _, auth = owner
     await approved_prd(client, auth)
     await _run_import(client, auth, runtime, _with_paragraph("\n\n".join(DATE_PROBES)))
@@ -693,6 +724,7 @@ async def test_title_notes_and_layout_text_are_read_but_layout_yaml_and_sources_
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A title's or layout's prose date is checked; its YAML and Sources are not."""
     from tests.test_roadmap import built_roadmap
 
     _, auth = owner
@@ -721,6 +753,7 @@ async def test_title_notes_and_layout_text_are_read_but_layout_yaml_and_sources_
 
 
 async def test_sources_must_be_the_last_part(client, owner, runtime):  # noqa: F811
+    """Sources and data points must be the last section, or dates after it still count."""
     from tests.test_roadmap import built_roadmap
 
     _, auth = owner
@@ -748,6 +781,7 @@ async def test_sources_must_be_the_last_part(client, owner, runtime):  # noqa: F
 
 
 async def test_markers_sit_after_the_exact_span_everywhere(client, owner, runtime):  # noqa: F811
+    """The unverified-date marker sits right after the exact date, everywhere shown."""
     _, auth = owner
     await approved_prd(client, auth)
     await _run_import(
@@ -786,6 +820,7 @@ async def test_markers_sit_after_the_exact_span_everywhere(client, owner, runtim
 
 
 async def test_mcp_markdown_carries_the_markers_and_date_marks(client, owner, runtime):  # noqa: F811
+    """The MCP markdown tool also carries the unverified-date marker and date marks."""
     from tests.test_mcp import api_token, mcp_client, text_of
 
     tid, auth = owner
@@ -804,6 +839,7 @@ async def test_mcp_markdown_carries_the_markers_and_date_marks(client, owner, ru
 
 
 async def test_approval_is_refused_while_a_date_is_marked(client, owner, runtime):  # noqa: F811
+    """A version with an unverified date cannot be approved until a basis verifies it."""
     _, auth = owner
     await approved_prd(client, auth)
     await _run_import(client, auth, runtime, _with_paragraph("GA 2026-12-15."))
@@ -830,6 +866,7 @@ async def test_a_withdrawn_date_on_an_unapproved_version_also_refuses_approval(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """Withdrawing a date's basis blocks approval too, even before approval happens."""
     _, auth = owner
     await approved_prd(client, auth)
     await _run_import(client, auth, runtime, ROADMAP_MD)
@@ -857,6 +894,7 @@ async def test_a_database_error_while_checking_items_rolls_back_and_the_tick_goe
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """A database error in the items check rolls back cleanly; the tick still finishes."""
     from sqlalchemy import text
 
     from oracle.roadmap import schedule
@@ -890,6 +928,7 @@ async def test_the_runs_items_file_is_not_parsed_again_on_each_roadmap_import(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """The run's items file is parsed once, not again on each later roadmap import."""
     _, auth = owner
     await approved_prd(client, auth)
     parses = []
@@ -926,6 +965,7 @@ async def test_the_runs_items_file_is_not_parsed_again_on_each_roadmap_import(
 
 
 async def test_an_item_basis_counts_only_where_its_item_owns_the_date(client, owner, runtime):  # noqa: F811
+    """An item's verified date counts only where its own section or link names it."""
     from tests.test_roadmap import built_roadmap
     from tests.test_roadmap_doc_dates import record
 
@@ -958,6 +998,7 @@ async def test_an_item_basis_counts_only_where_its_item_owns_the_date(client, ow
 
 
 async def test_a_roadmap_takes_its_prd_from_its_own_link_not_from_its_text(client, owner):  # noqa: F811
+    """A roadmap's PRD comes from its own declared link, never from mentioning text."""
     _, auth = owner
     await approved_prd(client, auth)
     loose = ROADMAP_MD.replace("document: checkout-redesign-roadmap", "document: loose-roadmap")
@@ -970,6 +1011,7 @@ async def test_a_roadmap_takes_its_prd_from_its_own_link_not_from_its_text(clien
 
 
 async def test_start_draft_exempts_the_template_s_literal_dates_not_the_title(client, owner):  # noqa: F811
+    """A template's own date stays exempt in a new draft; a typed title date is not."""
     _, auth = owner
     body = (
         "---\nkind: roadmap\nbrief: [summary]\n---\n\n# Roadmap {#roadmap}\n\n"
@@ -1006,6 +1048,7 @@ async def test_start_draft_exempts_the_template_s_literal_dates_not_the_title(cl
 
 
 async def test_a_refinement_checks_only_the_section_it_changes(client, owner, runtime):  # noqa: F811
+    """Refining one section checks only that section, not the whole document again."""
     from oracle.llm import gateway
     from tests.claude_account_helpers import add_account, window
     from tests.test_llm_jobs import FakeClaude
@@ -1048,6 +1091,7 @@ async def test_a_refinement_checks_only_the_section_it_changes(client, owner, ru
 
 
 async def test_a_disabled_owner_is_refused_once_the_column_exists(client, owner):  # noqa: F811
+    """A disabled user cannot become a track's owner once the disabled column exists."""
     from sqlalchemy import text
 
     from oracle.auth.service import create_user

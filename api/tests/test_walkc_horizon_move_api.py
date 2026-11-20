@@ -24,6 +24,7 @@ async def read_items(client, ctx) -> dict:
 
 
 async def test_a_horizon_move_moves_an_items_own_dates(client):
+    """Moving an item to a new horizon shifts its own dates; undo restores them."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["change_horizon"])
     read = (await client.get(URL, headers=ctx.as_("owner"))).json()

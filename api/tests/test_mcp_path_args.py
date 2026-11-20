@@ -78,6 +78,7 @@ def _caller() -> McpCaller:
 
 
 def test_every_path_tool_is_walked():
+    """Every MCP tool with a path argument is checked, not a hand-picked sample."""
     # The walk below covers what the app has, not a hand-picked list.
     tools = _path_tools()
     assert len(tools) > 300

@@ -157,6 +157,7 @@ async def version_count(tenant_id) -> int:
 async def test_accepting_stages_the_item_and_the_staged_list_says_who_and_where(
     client, ctx, pool, fake
 ):
+    """Accepting a suggestion stages it for next draft without touching the document."""
     ids = await staged_setup(client, ctx, fake)
     fb = await feedback(client, ctx)
     assert (fb[ids["goal"]]["state"], fb[ids["goal"]]["staged_for_version"]) == ("staged", 2)
@@ -182,6 +183,7 @@ async def test_accepting_stages_the_item_and_the_staged_list_says_who_and_where(
 
 
 async def test_items_staged_on_an_earlier_draft_stay_staged_for_the_latest(client, ctx, pool, fake):
+    """An item staged on an old draft stays staged for whichever draft is now latest."""
     ids = await staged_setup(client, ctx, fake)
     # Draft 2 arrives by another path (an agent's import), without the staged changes,
     # and without the Proposed solution section.
@@ -216,6 +218,7 @@ async def test_items_staged_on_an_earlier_draft_stay_staged_for_the_latest(clien
 
 
 async def test_build_queues_one_batch_job_over_the_latest_version(client, ctx, pool, fake):
+    """Building next draft queues one batch job covering every staged change at once."""
     ids = await staged_setup(client, ctx, fake)
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
     assert resp.status_code == 201, resp.text
@@ -254,6 +257,7 @@ async def test_build_queues_one_batch_job_over_the_latest_version(client, ctx, p
 
 
 async def test_build_respects_roles_the_job_switch_and_locked_sections(client, ctx, pool, fake):
+    """Building next draft respects roles, the job's switch, and locked sections."""
     ids = await staged_setup(client, ctx, fake)
     for role in ("viewer", "commenter"):
         headers = await token_with_role(ctx["tenant_id"], role)
@@ -292,6 +296,7 @@ async def test_build_respects_roles_the_job_switch_and_locked_sections(client, c
 
 
 async def test_build_with_nothing_staged_is_refused(client, ctx, pool, fake):
+    """Building next draft with nothing staged is refused, not left to build empty."""
     await import_draft(client, ctx)
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
     assert resp.status_code == 422 and "nothing" in resp.json()["detail"].lower()
@@ -301,6 +306,7 @@ async def test_build_with_nothing_staged_is_refused(client, ctx, pool, fake):
 
 
 async def test_preview_then_apply_makes_exactly_one_version(client, ctx, pool, fake):
+    """Previewing then applying a build makes exactly one new document version."""
     ids = await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     resp = await client.get(f"{DOC}/next-draft/{job['id']}", headers=ctx["headers"])
@@ -354,6 +360,7 @@ async def test_preview_then_apply_makes_exactly_one_version(client, ctx, pool, f
 
 
 async def test_dropping_a_section_keeps_its_item_staged_and_edits_win(client, ctx, pool, fake):
+    """Dropping a section on apply keeps its item staged and lets manual edits win."""
     ids = await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     resp = await client.post(
@@ -380,6 +387,7 @@ async def test_dropping_a_section_keeps_its_item_staged_and_edits_win(client, ct
 
 
 async def test_apply_validates_its_input(client, ctx, pool, fake):
+    """Applying a build validates its drop and edit lists and who may apply or discard."""
     await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     url = f"{DOC}/next-draft/{job['id']}/apply"
@@ -397,6 +405,7 @@ async def test_apply_validates_its_input(client, ctx, pool, fake):
 
 
 async def test_apply_is_refused_when_a_newer_version_appeared(client, ctx, pool, fake):
+    """Applying a build is refused once a newer document version has appeared."""
     await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     await import_draft(client, ctx, DRAFT_V1.replace("Owner: product.", "Owner: growth."))
@@ -410,6 +419,7 @@ async def test_apply_is_refused_when_a_newer_version_appeared(client, ctx, pool,
 
 
 async def test_apply_refuses_a_section_locked_since_the_build(client, ctx, pool, fake):
+    """Applying a build is refused if its section got locked since the build ran."""
     await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     await verdict(client, ctx, "solution", "approved")
@@ -418,6 +428,7 @@ async def test_apply_refuses_a_section_locked_since_the_build(client, ctx, pool,
 
 
 async def test_discard_keeps_everything_staged(client, ctx, pool, fake):
+    """Discarding a build keeps every item staged, as if the build never ran."""
     ids = await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     resp = await client.post(f"{DOC}/next-draft/{job['id']}/discard", headers=ctx["headers"])
@@ -437,6 +448,7 @@ async def test_discard_keeps_everything_staged(client, ctx, pool, fake):
 
 
 async def test_a_running_build_previews_its_status_only(client, ctx, pool, fake):
+    """A build still running or queued can only be previewed, not applied yet."""
     await staged_setup(client, ctx, fake)
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
     job = resp.json()
@@ -447,6 +459,7 @@ async def test_a_running_build_previews_its_status_only(client, ctx, pool, fake)
 
 
 async def test_a_section_missing_from_the_answer_stays_staged(client, ctx, pool, fake):
+    """A section the answer left out stays staged instead of being silently dropped."""
     ids = await staged_setup(client, ctx, fake)
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
     job = resp.json()
@@ -468,6 +481,7 @@ async def test_a_section_missing_from_the_answer_stays_staged(client, ctx, pool,
 
 
 async def test_a_section_past_the_200k_cap_is_skipped_with_its_reason(client, ctx, pool, fake):
+    """An answer section over the size cap is skipped with its reason, not truncated."""
     # Model output is capped like an approver's edit: the house rules never read more.
     await staged_setup(client, ctx, fake)
     resp = await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
@@ -490,6 +504,7 @@ async def test_a_section_past_the_200k_cap_is_skipped_with_its_reason(client, ct
 
 
 async def test_single_section_refine_and_apply_still_work(client, ctx, pool, fake):
+    """Refining and applying just one section still works alongside the batch build."""
     ids = await staged_setup(client, ctx, fake)
     resp = await client.post(V(1, "/sections/solution/refine"), json={}, headers=ctx["headers"])
     assert resp.status_code == 201
@@ -508,6 +523,7 @@ async def test_single_section_refine_and_apply_still_work(client, ctx, pool, fak
 
 
 def test_next_draft_operations_are_mcp_tools_with_strict_scopes():
+    """The next-draft operations are MCP tools with their own strict write scopes."""
     ops = {op.operation_id: op for op in app_operations(app)}
     expected = {
         "list_staged_changes": ("GET", "read:documents"),
@@ -531,6 +547,7 @@ def test_next_draft_operations_are_mcp_tools_with_strict_scopes():
 
 
 async def test_inbox_states_new_and_staged_rows(client, ctx, pool, fake):
+    """The inbox sorts feedback into new, staged, declined and done with right counts."""
     ids = await staged_setup(client, ctx, fake)
     resp = await client.get("/v1/inbox", headers=ctx["headers"])
     assert resp.status_code == 200, resp.text
@@ -582,6 +599,7 @@ async def test_inbox_states_new_and_staged_rows(client, ctx, pool, fake):
 
 
 async def test_inbox_done_after_apply(client, ctx, pool, fake):
+    """Applying a build marks staged feedback done, pinned to the version it landed in."""
     ids = await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     await client.post(f"{DOC}/next-draft/{job['id']}/apply", json={}, headers=ctx["headers"])
@@ -595,6 +613,7 @@ async def test_inbox_done_after_apply(client, ctx, pool, fake):
 
 
 async def test_commenters_get_no_feedback_states(client, ctx, pool, fake):
+    """Commenters get no personal feedback states back from the inbox."""
     await staged_setup(client, ctx, fake)
     commenter = await token_with_role(ctx["tenant_id"], "commenter")
     inbox = (await client.get("/v1/inbox", headers=commenter)).json()
@@ -602,6 +621,7 @@ async def test_commenters_get_no_feedback_states(client, ctx, pool, fake):
 
 
 async def test_the_batch_job_kind_is_allowed_by_the_database(client, ctx, pool, fake):
+    """The database allows the refinement-batch job kind, not just the older kinds."""
     await staged_setup(client, ctx, fake)
     await client.post(f"{DOC}/next-draft", json={}, headers=ctx["headers"])
     async with tenant_session(ctx["tenant_id"]) as s:
@@ -628,6 +648,7 @@ async def test_inbox_total_counts_each_new_or_open_item(client, ctx, pool, fake)
 
 
 async def test_inbox_document_with_only_staged_items_has_no_open_row(client, ctx, pool, fake):
+    """A document with only staged feedback shows no separate open row in the inbox."""
     ids = await staged_setup(client, ctx, fake)
     resp = await client.post(
         f"/v1/suggestions/{ids['still_s']}/accept", json={}, headers=ctx["headers"]
@@ -661,6 +682,7 @@ async def test_dismissing_a_suggestion_without_declining_keeps_the_item_open(
 
 
 async def test_two_concurrent_builds_queue_exactly_one_job(client, ctx, pool, fake):
+    """Two builds started at once still queue exactly one job, never two."""
     import asyncio
 
     await staged_setup(client, ctx, fake)
@@ -679,6 +701,7 @@ async def test_two_concurrent_builds_queue_exactly_one_job(client, ctx, pool, fa
 
 
 async def test_resolving_a_thread_closes_its_item_and_reopening_reopens_it(client, ctx, pool, fake):
+    """Resolving a comment thread closes its inbox item; reopening it reopens the item."""
     ids = await staged_setup(client, ctx, fake)
     assert (await client.get("/v1/inbox", headers=ctx["headers"])).json()["total"] == 1
     cid = (await feedback(client, ctx))[ids["still"]]["comment_id"]
@@ -696,6 +719,7 @@ async def test_resolving_a_thread_closes_its_item_and_reopening_reopens_it(clien
 
 
 async def test_apply_skips_a_suggestion_dismissed_during_the_build(client, ctx, pool, fake):
+    """Dismissing a staged suggestion during a build leaves it out when applied."""
     ids = await staged_setup(client, ctx, fake)
     job = await build(client, ctx, fake)
     resp = await client.post(

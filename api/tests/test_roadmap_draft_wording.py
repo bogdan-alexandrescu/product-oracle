@@ -72,6 +72,7 @@ Depends on: F-03 Sensor feed, F-07 Alert rules. Held back per D-12 Ship alert-ch
 
 
 def test_a_goal_column_of_bare_goal_codes_is_unnamed_not_a_list():
+    """A goal column of bare codes with no names is flagged, not read as a list."""
     found = named_codes.findings(
         "| Horizon | Item | Goal | Outcome |\n|---|---|---|---|\n"
         "| Now | [Alert checks](#now-alert-checks) | G-B, G-C, G-A1 | Fewer missed alerts |"
@@ -81,16 +82,19 @@ def test_a_goal_column_of_bare_goal_codes_is_unnamed_not_a_list():
 
 
 def test_lettered_goal_codes_with_their_names_pass():
+    """Goal codes written together with their names pass the unnamed check."""
     found = named_codes.findings("Serves G-B Faster setup and G-A1 (fewer missed alerts).")
     assert found.unnamed == [] and found.runs == []
 
 
 def test_a_bare_depends_on_line_and_a_decision_code_are_found():
+    """A bare dependency line or decision code with no name is flagged."""
     found = named_codes.findings("Depends on: F-03, F-07. Held back per D-12.")
     assert found.unnamed == ["F-03", "F-07", "D-12"]
 
 
 def test_a_run_roadmap_draft_is_checked_for_codes_and_date_words():
+    """A roadmap draft is checked for unnamed codes and risky date wording."""
     draft = parse_draft(ROADMAP)
     codes = [w.code for w in draft_checks.run_warnings("roadmap", draft.sections)]
     assert codes == ["unnamed_code", "queue_said_as_estimate", "unverified_written"]
@@ -100,6 +104,7 @@ def test_a_run_roadmap_draft_is_checked_for_codes_and_date_words():
 
 
 def test_the_wording_warnings_send_the_draft_back_in_plain_words():
+    """Every wording warning is sent back in plain words, not its own code."""
     assert set(draft_words.CODES) <= set(draft_checks.SENT_BACK)
     assert set(named_codes.CODES) <= set(draft_checks.SENT_BACK)
     trouble = workflow.code_name_trouble(["queue_said_as_estimate", "unverified_written"])
@@ -111,6 +116,7 @@ def test_the_wording_warnings_send_the_draft_back_in_plain_words():
 
 
 def test_queue_dates_said_to_come_from_the_items_own_estimate_are_flagged():
+    """Text claiming a queue date comes from the item's own estimate is flagged."""
     for text in (
         "Each end date comes from that item's own engineering estimate.",
         "The end dates come from each item's own estimate.",
@@ -139,6 +145,7 @@ def test_a_sentence_that_denies_the_dates_are_estimates_is_not_sent_back():
 
 
 def test_the_writer_never_marks_a_date_unverified_itself():
+    """A writer marking its own date unverified is flagged, outside sources."""
     for text in (
         "Ends Nov 30, 2026 (date unverified).",
         "Nov 30 [unverified]",
@@ -173,6 +180,7 @@ def _shown(*items: variants.ItemView) -> dict[str, list[variants.ItemView]]:
 
 
 def test_a_written_goal_cell_of_bare_codes_renders_the_items_goal_by_name():
+    """A goal cell of bare codes is rewritten with the item's goal name."""
     item = _item(goals=["Faster setup"])
     written = (
         "| Horizon | Item | Goal | Outcome |\n|---|---|---|---|\n"
@@ -195,6 +203,7 @@ def test_a_written_goal_cell_of_bare_codes_renders_the_items_goal_by_name():
 
 
 def test_a_queue_date_reads_as_the_items_place_in_the_queue_with_its_own_effort():
+    """A capacity milestone reads as its place in the queue, with its effort."""
     item = _item(
         milestone={"name": "Pilot", "date": "2027-02-12", "date_source": "cap-team"},
         date_kind="capacity",
@@ -223,6 +232,7 @@ def _roadmap_prompt(segment: str) -> str:
 
 
 def test_the_roadmap_writer_is_told_the_wording_rules():
+    """The roadmap writer's prompt spells out every wording rule it must follow."""
     text = _roadmap_prompt("roadmap_draft")
     assert flows.NAMED_CODES in text
     for words in (
@@ -236,6 +246,7 @@ def test_the_roadmap_writer_is_told_the_wording_rules():
 
 
 def test_the_items_and_dates_prompts_read_a_dependency_at_its_slice():
+    """The items and dates prompts tell the writer to name a dependency's slice."""
     assert "slice the estimate names" in flows.ITEM_FIELDS
     assert "slice the estimate names" in _roadmap_prompt("roadmap_items")
     assert "kind capacity" in flows.ENG_DATES_TASK
@@ -294,6 +305,7 @@ def test_a_dependency_on_a_later_slice_than_the_estimate_names_is_a_problem():
 
 
 def test_a_later_slice_reads_in_plain_words_on_the_items_review():
+    """A dependency on a later slice reads in plain words on the items review."""
     from oracle.runs import reasons
     from oracle.runs.roadmap import check_items
 

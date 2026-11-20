@@ -60,6 +60,7 @@ async def recent(client, w, who: str) -> list[dict]:
 
 
 async def test_new_chat_per_role(client):
+    """A new chat per role starts clean; passing its id keeps adding to the same one."""
     w = await world()
     for who in ROLES:
         a = await post(client, w, who, "who owns Ledger v2?", page="/simple", new_chat=True)
@@ -77,6 +78,7 @@ async def test_new_chat_per_role(client):
 
 
 async def test_recent_lists_own_chats_by_page_not_meetings(client):
+    """Recent lists only a person's own chats, grouped by page, not meeting chats."""
     w = await world()
     m = await start(client, w)
     r = await client.post(f"{MEETINGS}/{m['id']}/chat/messages",
@@ -97,6 +99,7 @@ async def test_recent_lists_own_chats_by_page_not_meetings(client):
 
 
 async def test_chat_is_the_callers_own(client):
+    """A chat is read only by the one who started it; others get 404, even in meetings."""
     w = await world()
     mine = await post(client, w, "commenter", "who owns Ledger v2?", page="/simple", new_chat=True)
     for who in ("owner", "approver", "viewer"):
@@ -117,6 +120,7 @@ async def test_chat_is_the_callers_own(client):
 
 
 async def test_link_ask_discussion(client):
+    """Linking Ask to a discussion needs a discussion owned by the same person."""
     w = await world()
     chat = await post(client, w, "commenter", "who owns Ledger v2?", page="/simple", new_chat=True)
 
@@ -147,6 +151,7 @@ async def test_link_ask_discussion(client):
 
 
 async def test_link_ask_needs_private_discussion(client):
+    """Linking Ask to a discussion needs it still private, not opened to others."""
     w = await world()
     chat = await post(client, w, "commenter", "who owns Ledger v2?", page="/simple", new_chat=True)
     r = await client.post("/v1/discussions", headers=w.ctx.as_("commenter"), json={
@@ -163,6 +168,7 @@ async def test_link_ask_needs_private_discussion(client):
 
 
 async def test_general_chat_listed_as_general(client):
+    """A general chat is flagged and listed apart from a chat tied to one page."""
     w = await world()
     for who in ROLES:
         a = await post(client, w, who, "who owns Ledger v2?", page="/simple/roadmap",
@@ -180,6 +186,7 @@ async def test_general_chat_listed_as_general(client):
 
 
 async def test_recent_names_each_chat_by_its_first_question(client):
+    """A chat is named by its first question, or by its linked Ask question if moved."""
     w = await world()
     for who in ROLES:
         a = await post(client, w, who, "who owns   Ledger v2?", page="/simple", new_chat=True)

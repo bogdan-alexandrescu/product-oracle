@@ -37,6 +37,7 @@ def runtime():
 
 
 async def test_later_sources_do_not_rewrite_the_intake_until_it_is_repinned(client):
+    """Analyzing an intake reads its pinned snapshot, not sources synced in since."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -90,6 +91,7 @@ async def test_only_the_author_repins_or_reanalyses(client):
 
 
 async def test_an_existing_snapshot_and_chosen_sources_can_be_pinned(client):
+    """An intake can pin an existing snapshot or narrow itself to chosen sources."""
     ctx = await company()
     first = await make_item(ctx, "commenter", content="Buyers complain about retyping.")
     resp = await client.post(
@@ -114,6 +116,7 @@ async def test_an_existing_snapshot_and_chosen_sources_can_be_pinned(client):
 
 
 async def test_a_run_started_from_an_intake_reads_its_pinned_snapshot(client, runtime):
+    """A run started from an intake keeps reading the intake's pinned snapshot."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -217,6 +220,7 @@ async def test_a_sync_that_commits_after_the_pin_never_joins_the_pinned_set(clie
 
 
 async def test_items_created_and_deleted_after_the_pin_are_not_reported_deleted(client):
+    """New evidence skips items both created and deleted after the pin."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]

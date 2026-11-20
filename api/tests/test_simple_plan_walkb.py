@@ -42,6 +42,7 @@ PRD = """\
 
 
 def test_features_table_names_a_milestone_once_per_group():
+    """A features table's grouped milestone heading applies to every row under it."""
     data = plan.parse(PRD, date(2026, 11, 1))
     assert data is not None
     placed = {f["code"]: f["milestones"] for f in data["features"]}
@@ -54,6 +55,7 @@ def test_features_table_names_a_milestone_once_per_group():
 
 
 def test_job_answer_keeps_the_prds_features():
+    """A job's answer keeps every PRD feature, even ones it left out itself."""
     text = PRD.split("## Milestones")[0]
     answer = {
         "milestones": [
@@ -71,6 +73,7 @@ def test_job_answer_keeps_the_prds_features():
 
 
 def test_accepted_engineering_dates_date_the_plan():
+    """Accepted dates fill in missing milestone dates, found by code, name or feature."""
     data = plan.parse(
         PRD.replace("Dec 18, 2026", "").replace("Jan 4, 2027", "").replace("Feb 26, 2027", ""),
         date(2026, 11, 1),
@@ -107,6 +110,7 @@ from tests.test_eng_dates_stop import (  # noqa: E402
 
 
 async def test_accepted_dates_reads_the_leads_changed_day(client, owner, runtime):  # noqa: F811
+    """An approved estimate edit's supporting date becomes an accepted plan date."""
     import uuid
 
     from oracle.tenancy import tenant_session

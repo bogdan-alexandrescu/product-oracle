@@ -92,6 +92,7 @@ async def _planner(client):
 
 
 async def test_derive_traces_finds_a_feature_by_its_old_key(client):
+    """Deriving a trace still finds a feature by the key it had before its code."""
     ctx, planner = await _planner(client)
     async with tenant_session(ctx.tenant_id) as s:
         (trace,) = await roadmap_items.derive_traces(
@@ -101,6 +102,7 @@ async def test_derive_traces_finds_a_feature_by_its_old_key(client):
 
 
 async def test_item_goal_links_find_a_feature_by_its_old_key(client):
+    """Grouping roadmap items by goal still finds a feature by its old key."""
     ctx, planner = await _planner(client)
     async with tenant_session(ctx.tenant_id) as s:
         goal = Entity(type="goal", key="more-trips", title="More trips booked", attrs={},
@@ -116,6 +118,7 @@ async def test_item_goal_links_find_a_feature_by_its_old_key(client):
 
 
 async def test_unknown_keys_know_a_features_old_key(client):
+    """Checking for unknown keys still recognizes a feature's old key too."""
     ctx, _ = await _planner(client)
 
     class NoItems:
@@ -128,6 +131,7 @@ async def test_unknown_keys_know_a_features_old_key(client):
 
 
 async def test_a_lost_race_on_join_is_refused(client, monkeypatch):
+    """A feature that loses a race for the same code keeps its old key, unconfirmed."""
     ctx = await make_ctx()
     one = await entity(client, ctx, "approver", type="feature", key="packing-list",
                        title="Packing list", status="proposed")  # fmt: skip
@@ -150,6 +154,7 @@ async def test_a_lost_race_on_join_is_refused(client, monkeypatch):
 
 
 async def test_a_create_with_another_features_old_key_names_it(client):
+    """Creating a feature with another's old key is refused, named clearly."""
     ctx, _ = await _planner(client)
     body = {"type": "feature", "key": "trip-planner", "title": "Trips"}
     r = await client.post(f"{B}/entities", headers=ctx.as_("approver"), json=body)
@@ -167,6 +172,7 @@ def _yaml(n: int, prefix: str) -> str:
 
 
 async def test_a_yaml_import_reads_the_codes_taken_once(client):
+    """A large YAML import reads taken codes once, not once per feature."""
     ctx = await make_ctx()
     reads = []
     for n, prefix in ((1, "one"), (5, "five")):
@@ -182,6 +188,7 @@ async def test_a_yaml_import_reads_the_codes_taken_once(client):
 
 
 async def test_a_roadmap_dependency_on_a_features_old_key_shows_its_name(client):
+    """A roadmap item depending on a feature's old key still shows its name."""
     ctx, _ = await _planner(client)
     await roadmap_with_items(client, ctx, [("trip-sharing", "now", None)], track=False)
     async with tenant_session(ctx.tenant_id) as s:
@@ -197,6 +204,7 @@ async def test_a_roadmap_dependency_on_a_features_old_key_shows_its_name(client)
 
 
 async def test_a_strategy_naming_a_features_old_key_is_no_unknown_feature(client):
+    """A strategy naming a feature by its old key is never flagged as unknown."""
     ctx, _ = await _planner(client)
     md = strategy_md([choice("one", goals=[]), choice("trips", "stop", features=["trip-planner"])])
     v = await imported(client, ctx.as_("owner"), STRATEGY, md)
@@ -204,6 +212,7 @@ async def test_a_strategy_naming_a_features_old_key_is_no_unknown_feature(client
 
 
 async def test_an_approved_strategy_naming_a_features_old_key_sets_its_edge(client):
+    """Approving a strategy naming a feature's old key still links it right."""
     ctx, planner = await _planner(client)
     md = strategy_md([choice("one", goals=[]), choice("trips", "stop", features=["trip-planner"])])
     await imported(client, ctx.as_("owner"), STRATEGY, md)
@@ -215,6 +224,7 @@ async def test_an_approved_strategy_naming_a_features_old_key_sets_its_edge(clie
 async def test_an_engineering_brief_for_a_features_old_key_reads_its_requirements(
     client, monkeypatch
 ):
+    """A tech brief lookup by a feature's old key still works after it is coded."""
     from tests.tech_brief_helpers import NO_MAP, BriefsRuntime, flow_with_eng_check, seed_features
     from tests.test_tech_briefs import advance_to, brief_rows, decide, start
 
@@ -247,6 +257,7 @@ async def test_an_engineering_brief_for_a_features_old_key_reads_its_requirement
 
 
 async def test_an_approved_check_sets_the_size_on_a_feature_by_its_old_key(client):
+    """Approving the check sets a feature's size even staged by its old key."""
     ctx, planner = await _planner(client)
     lead = ctx.users["approver"]
     principal = Principal(tenant_id=ctx.tenant_id, kind="user", role="approver",

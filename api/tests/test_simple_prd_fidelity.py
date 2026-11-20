@@ -70,6 +70,7 @@ PRD = """# Team space
 
 
 def test_tables_give_why_decisions_risks_and_summary():
+    """A milestone's why, decisions, risks and the plan's summary parse from tables."""
     view = plan.compute(plan.parse(PRD, date(2026, 10, 28)))
     m1, m2 = view.milestones
     assert m1.why == "No team sets up without help yet." and m2.why is None
@@ -98,6 +99,7 @@ def test_tables_give_why_decisions_risks_and_summary():
 
 
 def test_older_plans_and_job_answers_still_read():
+    """An older stored plan or job answer, missing newer fields, still reads fine."""
     stored = plan.parse(PRD, date(2026, 10, 28))
     stored["milestones"][0]["risks"] = ["Pilot teams may be busy"]
     stored.pop("summary")
@@ -145,6 +147,7 @@ QUESTIONS = """
 
 
 async def test_plan_takes_the_prds_questions(client):
+    """A PRD's open questions become milestone decisions due by the right date."""
     ctx = await make_ctx()
     ids = await seed(ctx, FIXTURE + QUESTIONS)
     async with tenant_session(ctx.tenant_id) as s:

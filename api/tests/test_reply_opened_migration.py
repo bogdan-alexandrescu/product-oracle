@@ -68,11 +68,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The reply-opened migration chains on the branch's own head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """The reply-opened migration adds and removes its column cleanly, both ways."""
     upgrade(_cfg(), REVISION)
     assert _columns()["opened_at"] == "YES"
 

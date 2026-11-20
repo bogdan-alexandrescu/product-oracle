@@ -13,16 +13,19 @@ def _counts(**kw: int) -> dict[str, int]:
 
 
 def test_one_item_with_two_reasons_reads_as_one_item() -> None:
+    """A track's headline counts one item once, even with two reasons, not twice."""
     text = _headline("at_risk", _counts(at_risk=1, stale=1, slipping=1), None)
     assert text == "At risk: 1 of 7 items needs attention (may be out of date and slipping)."
     assert "1 slipping" not in text
 
 
 def test_several_items_keep_a_count_per_reason() -> None:
+    """A track's headline with several items shows a separate count per reason."""
     text = _headline("at_risk", _counts(at_risk=2, blocked=1, slipping=2), None)
     assert text == "At risk: 2 of 7 items need attention (1 blocked, 2 slipping)."
 
 
 def test_a_single_item_track_says_the_item() -> None:
+    """A track with a single item says 'the item', not a count of one."""
     text = _headline("off_track", {**_counts(at_risk=1, slipping=1), "items": 1}, None)
     assert text == "Off track: the item needs attention (slipping)."

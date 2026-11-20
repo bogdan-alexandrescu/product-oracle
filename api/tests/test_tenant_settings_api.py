@@ -22,6 +22,7 @@ async def owner(tenant_id):
 
 
 async def test_owner_only(client, tenant_id, owner):
+    """Settings are owner only: an approver gets 403, and reading needs a sign in."""
     approver = await make_person(tenant_id, "approver@example.com", "approver")
     for method, url in [("GET", "/v1/settings"), ("GET", "/v1/settings/iap_default_role")]:
         assert (await client.request(method, url, headers=approver.headers)).status_code == 403
@@ -33,6 +34,7 @@ async def test_owner_only(client, tenant_id, owner):
 
 
 async def test_defaults_and_unknown_keys(client, owner):
+    """The settings list ships every known key with its documented default value."""
     listed = (await client.get("/v1/settings", headers=owner.headers)).json()
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
@@ -114,6 +116,7 @@ async def test_defaults_and_unknown_keys(client, owner):
 
 
 async def test_iap_default_role(client, tenant_id, owner):
+    """iap_default_role accepts only viewer or commenter; reset restores commenter."""
     bad = await client.put(
         "/v1/settings/iap_default_role", json={"value": "admin"}, headers=owner.headers
     )
@@ -139,12 +142,14 @@ async def test_iap_default_role(client, tenant_id, owner):
 
 
 async def test_the_claude_plan_setting_is_gone(client, owner):
+    """The removed Claude connection setting is gone; models run on a shared pool."""
     # Oracle's model calls run on the Claude account pool, not a default connection.
     url = "/v1/settings/default_claude_connection_id"
     assert (await client.get(url, headers=owner.headers)).status_code == 404
 
 
 async def test_confidence_weights_api(client, owner):
+    """Confidence weights can be stored through settings, and a bad shape is rejected."""
     url = "/v1/settings/confidence_weights"
     good = {"weights": {"source": 0.5}, "source": {"slack": 0.3, "github:issue": 0.8}, "low": 0.3}
     ok = await client.put(url, json={"value": good}, headers=owner.headers)
@@ -172,11 +177,13 @@ async def test_confidence_weights_api(client, owner):
     ],
 )
 def test_confidence_weights_rejects(value, message):
+    """Confidence weight validation rejects every bad shape, with a clear reason."""
     with pytest.raises(InvalidSetting, match=message):
         validate_confidence_weights(value)
 
 
 def test_confidence_weights_accepts_defaults_shape():
+    """Confidence weight validation accepts its own documented defaults shape."""
     from oracle.confidence import DEFAULTS
 
     assert validate_confidence_weights(DEFAULTS) == DEFAULTS
@@ -186,6 +193,7 @@ def test_confidence_weights_accepts_defaults_shape():
 
 
 async def test_company_email_domains(client, owner):
+    """Company email domains are lowercased and deduped; bad entries are rejected."""
     url = "/v1/settings/company_email_domains"
     ok = await client.put(
         url, json={"value": ["Example.COM", "@corp.example", "example.com"]}, headers=owner.headers
@@ -198,6 +206,7 @@ async def test_company_email_domains(client, owner):
 
 
 async def test_company_shared_drives(client, owner):
+    """Shared drive entries are trimmed and deduped by id; bad shapes are rejected."""
     url = "/v1/settings/company_shared_drives"
     ok = await client.put(
         url,
@@ -221,6 +230,7 @@ SHAPE = (
 
 
 async def test_planning_horizons_confirm_and_reset(client, tenant_id, owner):
+    """Planning horizons start as a default; only an owner may confirm or reset."""
     # protects=Confirm stores the defaults as a row, Reset removes it (owner only);
     # fails_when=confirming leaves is_default true or a non-owner may store it;
     # no_claim=UI copy.
@@ -256,6 +266,7 @@ async def test_planning_horizons_confirm_and_reset(client, tenant_id, owner):
     ],
 )
 async def test_planning_horizons_validation(client, owner, change, message):
+    """A planning horizon edit is rejected with a reason when the window is off."""
     # protects=only a typed, coherent horizon set is stored; fails_when=a bad value is
     # stored or the message does not say what to fix; no_claim=UI copy.
     url = "/v1/settings/planning_horizons"
@@ -266,6 +277,7 @@ async def test_planning_horizons_validation(client, owner, change, message):
 
 
 def test_horizon_windows_with_the_defaults():
+    """Default planning horizons turn into the right dates for a given day."""
     # protects=one way to turn horizons into dates for later picks; fails_when=a window
     # starts or ends on the wrong day; no_claim=agents use them.
     windows = horizon_windows(DEFAULTS["planning_horizons"], date(2026, 10, 20))

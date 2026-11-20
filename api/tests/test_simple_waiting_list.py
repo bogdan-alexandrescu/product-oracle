@@ -83,6 +83,7 @@ def find(items: list[dict], kind: str, ref_id: str) -> dict | None:
 
 
 async def test_question_waiting_and_decide(client):
+    """A question waits only for the decider, and deciding it clears it from the list."""
     ctx = await make_ctx()
     await seed(ctx, FIXTURE)
     r = await client.get("/v1/simple/decisions", headers=ctx.as_("decider"))
@@ -98,6 +99,7 @@ async def test_question_waiting_and_decide(client):
 
 
 async def test_proposal_waiting_and_accept(client):
+    """A proposed change waits only for who decides it, and accepting clears the wait."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["edit_title"])
     c = (await w.post(client, "commenter", "edit_title")).json()["change"]
@@ -109,6 +111,7 @@ async def test_proposal_waiting_and_accept(client):
 
 
 async def test_date_and_broken_link_waiting(client):
+    """Unconfirmed dates and a broken link wait only for the decider, until fixed."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["edit_title"])
     a_id, b_id, u_id = (w.ids[f"edit_title-{x}"] for x in "abu")
@@ -136,6 +139,7 @@ async def test_date_and_broken_link_waiting(client):
 
 
 async def test_draft_waiting_and_approve(client):
+    """A submitted draft waits only for its required approver until it is approved."""
     w = await drafts_world(reviewers=("approver",))
     await edit_title(client, w, "decider")
     d = await the_draft(client, w)
@@ -149,6 +153,7 @@ async def test_draft_waiting_and_approve(client):
 
 
 async def test_draft_waits_for_its_decider(client):
+    """A submitted draft also waits on its decider, alongside its required approver."""
     w = await drafts_world(reviewers=("approver",))
     await edit_title(client, w, "owner")
     d = await the_draft(client, w, "owner")
@@ -166,6 +171,7 @@ async def test_draft_waits_for_its_decider(client):
 
 
 async def test_goal_suggestion_waiting_and_reject(client):
+    """A proposed goal suggestion waits only for the decider, until it is rejected."""
     w = await AdditionsWorld().build(decider=True)
     async with tenant_session(w.ctx.tenant_id) as s:
         sug = SimpleGoalSuggestion(
@@ -184,6 +190,7 @@ async def test_goal_suggestion_waiting_and_reject(client):
 
 
 async def test_goal_waiting_and_confirm(client):
+    """A proposed goal waits for who confirms goals, in one plain line, no repeat."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         goal = Entity(type="goal", key="cut-early-churn", title="Cut early churn",
@@ -206,6 +213,7 @@ async def test_goal_waiting_and_confirm(client):
 
 
 async def test_run_stop_waiting_and_decide(client):
+    """A run paused at a checkpoint waits only for its approver, until decided."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         run = Run(flow="baseline_to_prd", status="awaiting_checkpoint",
@@ -230,6 +238,7 @@ async def test_run_stop_waiting_and_decide(client):
 
 
 async def test_decision_log_call_waiting_and_decide(client):
+    """An open decision call waits for its decider and counts in the same waiting list."""
     ctx = await make_ctx()
     d = await propose(client, ctx, "commenter", title="Ship the example export first")
     ref = str(d["number"])
@@ -247,6 +256,7 @@ async def test_decision_log_call_waiting_and_decide(client):
 
 
 def test_day_reads_this_year_in_the_company_zone(monkeypatch):
+    """A waiting item's date reads in the company's own time zone, not UTC."""
     # 07:30 UTC on Jan 1, 2027 is still Dec 31, 2026 in the company's zone (Los Angeles).
     monkeypatch.setattr(company_time, "now", lambda: datetime(2027, 1, 1, 7, 30, tzinfo=UTC))
     today = company_time.today()

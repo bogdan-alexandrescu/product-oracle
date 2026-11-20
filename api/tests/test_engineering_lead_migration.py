@@ -76,6 +76,7 @@ def _checks() -> list[str]:
 
 
 def test_the_chain_ends_here_after_feedback_agent_staging():
+    """This migration chains onto the branch's own head, keeping one alembic head."""
     # protects=one alembic head; fails_when=a second head or a fixed down_revision drifts;
     # no_claim=the columns (below).
     script = ScriptDirectory.from_config(_cfg())
@@ -83,6 +84,7 @@ def test_the_chain_ends_here_after_feedback_agent_staging():
 
 
 def test_up_down_up_keeps_members_and_invites(scratch_db):
+    """Migrating up and down keeps users and invites, defaulting the flag false."""
     # protects=AC14, the migration on a database holding users and invites; fails_when=a
     # row is lost, an existing row reads true, or the downgrade leaves a column or check;
     # no_claim=the API.

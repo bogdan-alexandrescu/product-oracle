@@ -40,6 +40,7 @@ async def inbox_items(client, ctx) -> set[str]:
 
 
 async def test_dates_set_here_close_the_suggestion(client):
+    """Setting an item's dates closes its date suggestion and clears it from waiting."""
     ctx = await make_people()
     w = await World(ctx).build(decider=False, ops=["move_dates"])
     u = w.ids["move_dates-u"]
@@ -66,6 +67,7 @@ async def test_dates_set_here_close_the_suggestion(client):
 
 
 async def test_a_new_dependency_closes_a_suggestion_it_moves(client):
+    """A dependency that moves an item's start closes its now-wrong date suggestion."""
     ctx = await make_people()
     w = await World(ctx).build(decider=False, ops=["move_dates"])
     a, u = w.ids["move_dates-a"], w.ids["move_dates-u"]
@@ -97,6 +99,7 @@ async def test_a_new_dependency_closes_a_suggestion_it_moves(client):
 
 
 async def test_a_dependency_outdated_suggestion_is_no_estimate_basis(client):
+    """A dependency that sets an item's start retires the old suggestion as its basis."""
     ctx = await make_people()
     w = await World(ctx).build(decider=False, ops=["move_dates"])
     a, u = w.ids["move_dates-a"], w.ids["move_dates-u"]

@@ -68,6 +68,7 @@ async def _post(tenant_id, config):
     ],
 )
 async def test_a_bad_id_is_a_400_before_any_drive_call(tenant_id, drive, config):
+    """An invalid Drive file or folder id is refused with a 400 before any Drive call."""
     _, resp = await _post(tenant_id, config)
     assert resp.status_code == 400, resp.text
     assert "is not a Drive file or folder id" in resp.json()["detail"]
@@ -75,6 +76,7 @@ async def test_a_bad_id_is_a_400_before_any_drive_call(tenant_id, drive, config)
 
 
 async def test_a_bad_id_in_an_edit_is_a_400_too(tenant_id, drive):
+    """Editing a source with a bad Drive id is refused the same way, before any call."""
     pat, resp = await _post(tenant_id, {"docs": ["1DocA000000"]})
     assert resp.status_code == 201, resp.text
     drive.clear()
@@ -85,6 +87,7 @@ async def test_a_bad_id_in_an_edit_is_a_400_too(tenant_id, drive):
 
 
 def test_valid_ids():
+    """A Drive id's own check accepts real ids and rejects malformed or injected ones."""
     assert google_docs.valid_id("1AbC_dEf-0123456789")
     for bad in ("root", "Root", "", "1Doc", "a b c d e f g h", "1DocA00000'", INJECTED, None, 7):
         assert not google_docs.valid_id(bad)
@@ -93,6 +96,7 @@ def test_valid_ids():
 
 
 async def test_children_escapes_quotes_and_backslashes():
+    """A folder name with quotes and backslashes escapes into one safe query term."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -109,6 +113,7 @@ async def test_children_escapes_quotes_and_backslashes():
 
 
 async def test_paths_are_quoted_segments():
+    """A Drive file id in a path is percent-encoded so it cannot escape its segment."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -144,6 +149,7 @@ async def test_a_bare_dot_segment_stays_one_segment():
 
 
 def test_valid_id_matches_the_whole_value():
+    """A Drive id check matches the whole string, rejecting a newline or a dot-dot."""
     assert valid_id("1DocA000000")
     assert not valid_id("1DocA000000\n")
     assert not valid_id("1DocA000000\r\n")

@@ -73,6 +73,7 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The outcome-tracking migration chains onto the branch's one revision head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0039_company_timezone chains on it; one head.
@@ -90,6 +91,7 @@ def _record(t: uuid.UUID, goal: uuid.UUID, prediction: dict) -> uuid.UUID:
 
 
 def test_upgrade_keeps_old_rows_and_sets_their_due_date(scratch_db):
+    """Upgrading outcome tracking keeps old rows and backfills their due date."""
     upgrade(_cfg(), PREVIOUS)
     t, goal = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)

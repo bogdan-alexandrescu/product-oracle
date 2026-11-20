@@ -64,6 +64,7 @@ async def _twin_left(w) -> bool:
 
 
 async def test_a_commenter_proposes_a_twin_merge_an_owner_approves(client):
+    """A commenter's twin-merge proposal waits for an owner, who accepts it to merge."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-1", "ledger-copy"))
@@ -84,6 +85,7 @@ async def test_a_commenter_proposes_a_twin_merge_an_owner_approves(client):
 
 
 async def test_a_twin_merge_proposal_names_both_features_by_code(client):
+    """A twin-merge proposal names both features by their short code, never by raw id."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     # Each by the short code Priorities shows it with: the row's, and the twin's own.
@@ -98,6 +100,7 @@ async def test_a_twin_merge_proposal_names_both_features_by_code(client):
 
 
 async def test_a_declined_twin_merge_changes_nothing(client):
+    """Declining a twin-merge proposal leaves both features and their device untouched."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-1", "ledger-copy"))
@@ -110,6 +113,7 @@ async def test_a_declined_twin_merge_changes_nothing(client):
 
 
 async def test_a_twin_merge_proposal_needs_a_same_name_feature(client):
+    """A twin merge is refused unless the two features share the same name."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     r = await _propose(client, w, into="insights")
@@ -120,6 +124,7 @@ async def test_a_twin_merge_proposal_needs_a_same_name_feature(client):
 
 
 async def test_an_approved_twin_merge_keeps_merge_twins_refusals(client):
+    """Accepting a twin merge still honors the engine's own refusal rules beneath it."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-1", "ledger-copy"), decider="decider")
@@ -137,6 +142,7 @@ async def test_an_approved_twin_merge_keeps_merge_twins_refusals(client):
 
 
 async def test_a_viewer_cannot_propose_a_twin_merge(client):
+    """A viewer cannot propose a twin merge, and the twin feature stays as is."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     r = await _propose(client, w, who="viewer")
@@ -150,6 +156,7 @@ def _twin_merges(out: dict, w) -> list[dict]:
 
 
 async def test_a_waiting_twin_merge_shows_on_its_twin(client):
+    """A pending twin-merge proposal shows on both features, but only one decides it."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-1", "ledger-copy"))
@@ -166,6 +173,7 @@ async def test_a_waiting_twin_merge_shows_on_its_twin(client):
 
 
 async def test_a_direct_twin_merge_closes_its_waiting_proposal(client):
+    """Merging twins directly closes any proposal already waiting on the same pair."""
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, ("dev-1", "ledger-copy"))

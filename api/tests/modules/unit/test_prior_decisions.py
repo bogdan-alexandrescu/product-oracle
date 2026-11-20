@@ -33,6 +33,7 @@ def added(key, reason="Needed here"):
 
 
 def test_a_removed_module_stays_out_when_the_next_change_adds_another():
+    """A module removed earlier stays out when a later change adds another."""
     ctx = context("ai-agent.platform", inputs=PLATFORM, prior_decisions=(
         removed("agents.knowledge-memory"),
     ))  # fmt: skip
@@ -46,6 +47,7 @@ def test_a_removed_module_stays_out_when_the_next_change_adds_another():
 
 
 def test_an_added_module_survives_a_later_change():
+    """A module added earlier survives a later, unrelated change."""
     ctx = context("ai-agent.platform", inputs=PLATFORM, prior_decisions=(
         added("platform.brand-governance", "Customers brand their agents"),
     ))  # fmt: skip
@@ -57,6 +59,7 @@ def test_an_added_module_survives_a_later_change():
 
 
 def test_without_any_change_the_prior_decisions_still_hold():
+    """With no new change at all, every prior decision still holds."""
     ctx = context("ai-agent.platform", inputs=PLATFORM, prior_decisions=(
         removed("agents.knowledge-memory"), added("platform.brand-governance"),
     ))  # fmt: skip
@@ -66,6 +69,7 @@ def test_without_any_change_the_prior_decisions_still_hold():
 
 
 def test_this_request_overrides_a_prior_decision():
+    """A new request can reverse an earlier add or remove, with a fresh reason."""
     ctx = context("ai-agent.platform", inputs=PLATFORM, prior_decisions=(
         removed("agents.knowledge-memory"), added("platform.brand-governance"),
     ))  # fmt: skip
@@ -86,6 +90,7 @@ def test_this_request_overrides_a_prior_decision():
 
 
 def test_a_person_s_order_is_kept_and_new_modules_slot_in():
+    """A person's chosen order is kept; a new module slots into it."""
     base = compose(context("ai-agent.platform", inputs=PLATFORM))
     keys = [m.key for m in base.included]
     # Move risks before scope: allowed (no ordering constraint between them).
@@ -108,11 +113,13 @@ def test_a_person_s_order_is_kept_and_new_modules_slot_in():
 
 
 def test_a_default_order_is_not_marked_as_a_person_s():
+    """The default module order is never marked as a person's choice."""
     comp = compose(context("ai-agent.platform", inputs=PLATFORM))
     assert not any(m.ordered_by_user for m in comp.modules)
 
 
 def test_a_removed_module_that_became_mandatory_comes_back_and_says_why():
+    """A removed module that becomes mandatory returns, flagged non-fatal."""
     ctx = context(
         "ai-agent.platform",
         inputs=PLATFORM,
@@ -128,6 +135,7 @@ def test_a_removed_module_that_became_mandatory_comes_back_and_says_why():
 
 
 def test_a_removed_dependency_comes_back_when_a_new_module_needs_it():
+    """A removed dependency returns once a new module needs it."""
     # platform.cost-quotas depends on economics.value, which the company relaxed to
     # optional and a person removed earlier.
     ctx = context(
@@ -144,6 +152,7 @@ def test_a_removed_dependency_comes_back_when_a_new_module_needs_it():
 
 
 def test_a_carried_addition_that_is_now_disabled_is_dropped_with_a_note():
+    """A carried addition the company later disabled is dropped, flagged."""
     ctx = context(
         "ai-agent.platform",
         inputs=PLATFORM,
@@ -158,6 +167,7 @@ def test_a_carried_addition_that_is_now_disabled_is_dropped_with_a_note():
 
 
 def test_a_carried_addition_of_a_module_now_archived_is_dropped_with_a_note():
+    """A carried addition of a module later archived is dropped, flagged."""
     ctx = context(
         "startup.standard",
         unavailable={"company.extra"},

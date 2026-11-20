@@ -35,6 +35,7 @@ def _with_resolutions(text: str, block: str) -> str:
 
 
 def test_note_answers_parse_and_a_bad_resolution_is_dropped():
+    """Note answers parse apart from resolutions; an invalid resolution is dropped."""
     parsed = parse_draft(_with_resolutions(V1, NOTE_ANSWERS))
     assert parsed.resolutions == []
     assert [(n.id, n.status) for n in parsed.note_resolutions] == [
@@ -48,6 +49,7 @@ def test_note_answers_parse_and_a_bad_resolution_is_dropped():
 
 
 def test_the_production_note_answers_without_a_kind_parse():
+    """Note answers written without a kind or feedback_id field still parse."""
     # The writer's own shape on Nov 3: note-1..note-8, no feedback_id, no kind.
     block = "resolutions:\n" + "".join(
         f"  - id: note-{i}\n    status: addressed\n    note: Point {i} done\n" for i in range(1, 9)
@@ -58,6 +60,7 @@ def test_the_production_note_answers_without_a_kind_parse():
 
 
 async def test_a_draft_with_note_answers_and_a_bad_resolution_imports(client):
+    """A draft with valid note answers imports despite one bad resolution."""
     _, auth = await seed_auth()
     resp = await import_draft(client, auth, _with_resolutions(V1, NOTE_ANSWERS))
     assert resp.status_code == 201, resp.text
@@ -75,6 +78,7 @@ async def test_send_back_to_writer_with_no_note_sends_the_import_problems(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """Sending a rejected draft back with no note tells the writer its import problems."""
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     resp = await _decide(client, auth, run, "changes_requested", None)
@@ -92,6 +96,7 @@ async def test_the_stop_names_the_import_problem_in_plain_words(
     runtime,  # noqa: F811
     monkeypatch,
 ):
+    """A checkpoint blocked by a failed import names the problem in plain words."""
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     blocked = pending(run)["cannot_approve"]
@@ -113,6 +118,7 @@ async def test_the_stop_names_the_import_problem_in_plain_words(
     ],
 )
 def test_a_refused_resolution_reads_in_plain_words(message, plain):
+    """A refused resolution's internal error message is reworded for the writer."""
     from oracle.docs.schemas import ImportProblem
     from oracle.runs import rejection
 
@@ -123,6 +129,7 @@ def test_a_refused_resolution_reads_in_plain_words(message, plain):
 
 
 def test_the_writer_is_told_how_to_answer_a_note_only_send_back():
+    """A note-only send back tells the writer to answer with kind note, no feedback_id."""
     from types import SimpleNamespace
 
     from oracle.runs import review_file

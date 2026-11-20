@@ -64,6 +64,7 @@ def _text(content: bytes) -> str:
 
 
 async def test_exports_never_print_the_placeholder_company(client):
+    """An export never prints the placeholder company name, set or not."""
     ctx = await world(client)
     # The seed's placeholder is no name: neither export prints it.
     assert PLACEHOLDER not in await _one_pager_html(ctx)
@@ -87,6 +88,7 @@ async def test_exports_never_print_the_placeholder_company(client):
 
 @requires_pdf
 async def test_one_page_overflow_is_told_to_the_person_not_printed(client, monkeypatch):
+    """A one-pager PDF that overflows one page still prints, flagged only in a header."""
     ctx = await world(client)
     long = "<li>" + "A long line about setup that goes on. " * 40 + "</li>"
 
@@ -119,6 +121,7 @@ class _Laid:
 
 
 async def test_one_page_overflow_without_pango(client, monkeypatch):
+    """The overflow page count is reported correctly even without the Pango renderer."""
     ctx = await world(client)
     laid: list[str] = []
     pages = {"n": 3}
@@ -138,6 +141,7 @@ async def test_one_page_overflow_without_pango(client, monkeypatch):
 
 
 async def test_branding_never_offers_or_saves_the_placeholder(client):
+    """Branding refuses to save the placeholder company name, even one stored earlier."""
     ctx = await world(client)
     got = await client.get("/v1/branding", headers=ctx.as_("owner"))
     assert got.status_code == 200 and got.json()["display_name"] == ""
@@ -161,6 +165,7 @@ async def test_branding_never_offers_or_saves_the_placeholder(client):
 
 
 async def test_shared_and_public_pages_never_name_the_placeholder(client):
+    """A shared or public page names the company as 'Our', never the placeholder."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         assert await render.company(s) is None
@@ -173,6 +178,7 @@ MONTH_FIRST = re.compile(r"[A-Z][a-z]{2}\s\d{1,2},\s\d{4},\s\d{1,2}:\d{2}\s[AP]M
 
 
 async def test_cover_times_read_month_first(client):
+    """A one-pager's cover shows times month first, like Oct 30, never ISO."""
     ctx = await world(client)
     full = await client.get(FULL, params={"format": "html"}, headers=ctx.as_("viewer"))
     assert full.status_code == 200

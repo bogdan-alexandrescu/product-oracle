@@ -116,6 +116,7 @@ async def status_of(tenant_id, conn) -> str:
 
 
 async def test_the_same_list_within_a_minute_is_read_once(client, alice, slack_conn, provider):
+    """The same search within a minute is served from cache, not fetched again."""
     first = await client.get(channels(slack_conn, "?search=prod"), headers=alice.headers)
     again = await client.get(channels(slack_conn, "?search=prod"), headers=alice.headers)
     assert first.status_code == again.status_code == 200
@@ -127,6 +128,7 @@ async def test_the_same_list_within_a_minute_is_read_once(client, alice, slack_c
 
 
 async def test_the_cache_expires(client, alice, github_conn, provider, monkeypatch):
+    """A cached list is fetched again once its cache time passes."""
     now = [time.monotonic()]
     monkeypatch.setattr(browse, "_clock", lambda: now[0])
     await client.get(repos(github_conn), headers=alice.headers)
@@ -141,6 +143,7 @@ async def test_the_cache_expires(client, alice, github_conn, provider, monkeypat
 async def test_the_cache_still_checks_the_connection(
     client, tenant_id, alice, slack_conn, provider
 ):
+    """A cached list still checks access and connection status on every read."""
     await client.get(channels(slack_conn), headers=alice.headers)
     bob = await make_person(tenant_id, "bob@example.com", "owner")
     assert (await client.get(channels(slack_conn), headers=bob.headers)).status_code == 404
@@ -158,6 +161,7 @@ async def test_the_cache_still_checks_the_connection(
 async def test_searches_past_the_limit_are_refused_without_calling_the_provider(
     client, alice, slack_conn, github_conn, provider
 ):
+    """Past the search rate limit, new requests are refused, but cached hits work."""
     for n in range(browse.RATE_LIMIT):
         resp = await client.get(channels(slack_conn, f"?search=s{n}"), headers=alice.headers)
         assert resp.status_code == 200, resp.text
@@ -176,6 +180,7 @@ async def test_searches_past_the_limit_are_refused_without_calling_the_provider(
 async def test_the_limit_frees_up_as_the_window_moves(
     client, alice, github_conn, provider, monkeypatch
 ):
+    """The rate limit lifts once its time window moves past it."""
     now = [datetime.now(UTC)]
     monkeypatch.setattr(browse, "_now", lambda: now[0])
     for n in range(browse.RATE_LIMIT):
@@ -191,6 +196,7 @@ async def test_the_limit_frees_up_as_the_window_moves(
 
 
 async def test_a_slack_bot_token_is_refused(client, tenant_id, alice, provider):
+    """A Slack bot token cannot browse channels, and the connection stays active."""
     provider.bot = True
     bot = await add_connection(
         tenant_id, alice.id, "slack", bundle={"access_token": "xoxb-example-bot"}, account_id="T0B"
@@ -209,6 +215,7 @@ async def test_a_slack_bot_token_is_refused(client, tenant_id, alice, provider):
 async def test_slack_no_permission_does_not_expire_the_connection(
     client, tenant_id, alice, slack_conn, provider
 ):
+    """Slack refusing for missing permission does not expire the connection."""
     provider.slack_answer = httpx.Response(200, json={"ok": False, "error": "no_permission"})
     resp = await client.get(channels(slack_conn), headers=alice.headers)
     assert resp.status_code == 403
@@ -219,6 +226,7 @@ async def test_slack_no_permission_does_not_expire_the_connection(
 async def test_slack_http_403_does_not_expire_the_connection(
     client, tenant_id, alice, slack_conn, provider
 ):
+    """A plain Slack 403 does not expire the connection either."""
     provider.slack_answer = httpx.Response(403, json={"ok": False})
     resp = await client.get(channels(slack_conn), headers=alice.headers)
     assert resp.status_code == 403
@@ -228,6 +236,7 @@ async def test_slack_http_403_does_not_expire_the_connection(
 async def test_github_403_that_is_not_a_rate_limit_does_not_expire_the_connection(
     client, tenant_id, alice, github_conn, provider
 ):
+    """A permissions refusal from GitHub must not be treated as an expired connection."""
     provider.github_answer = httpx.Response(
         403, json={"message": "Resource not accessible by personal access token"}
     )
@@ -240,6 +249,7 @@ async def test_github_403_that_is_not_a_rate_limit_does_not_expire_the_connectio
 async def test_a_rejected_token_still_expires_the_connection(
     client, tenant_id, alice, github_conn, provider
 ):
+    """A GitHub token GitHub itself rejects does expire the connection."""
     provider.github_answer = httpx.Response(401, json={"message": "Bad credentials"})
     resp = await client.get(repos(github_conn), headers=alice.headers)
     assert resp.status_code == 409
@@ -252,6 +262,7 @@ async def test_a_rejected_token_still_expires_the_connection(
 async def test_an_mcp_client_acting_as_the_person_can_browse(
     tenant_id, alice, slack_conn, github_conn, provider
 ):
+    """An MCP client acting for a signed-in person can list Slack and GitHub items."""
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "agent", user_id=alice.id)
         await s.commit()
@@ -273,6 +284,7 @@ async def test_an_mcp_client_acting_as_the_person_can_browse(
 
 
 async def test_a_github_403_body_is_not_echoed(client, alice, github_conn, provider):
+    """GitHub's 403 body text is never echoed back in the error detail."""
     provider.github_answer = httpx.Response(403, json={"message": "SECRET-ish text"})
     resp = await client.get(repos(github_conn), headers=alice.headers)
     assert resp.status_code == 403
@@ -286,6 +298,7 @@ async def test_a_github_403_body_is_not_echoed(client, alice, github_conn, provi
 async def test_a_provider_error_body_is_not_echoed(
     client, alice, github_conn, slack_conn, provider
 ):
+    """A provider's server error body is never echoed back, for GitHub or Slack."""
     provider.github_answer = httpx.Response(500, json={"message": "SECRET-ish internals"})
     resp = await client.get(repos(github_conn), headers=alice.headers)
     assert resp.status_code == 502
@@ -303,6 +316,7 @@ async def test_a_provider_error_body_is_not_echoed(
 async def test_a_github_cursor_that_is_not_ascii_digits_is_refused(
     client, alice, github_conn, provider, cursor
 ):
+    """A GitHub cursor that is not plain ASCII digits is refused before any call."""
     resp = await client.get(repos(github_conn, f"?cursor={cursor}"), headers=alice.headers)
     assert resp.status_code == 422, resp.text
     assert provider.calls == []
@@ -344,6 +358,7 @@ def endless_github(provider: Provider):
 async def test_each_slack_page_counts_and_a_short_budget_returns_what_was_read(
     client, alice, slack_conn, provider
 ):
+    """Each Slack page counts toward the limit; a short budget returns what it read."""
     endless_slack(provider)
     for n in range(browse.RATE_LIMIT - 3):
         await client.get(channels(slack_conn, f"?cursor=p{100 + n}"), headers=alice.headers)
@@ -362,6 +377,7 @@ async def test_each_slack_page_counts_and_a_short_budget_returns_what_was_read(
 async def test_each_github_page_counts_and_a_short_budget_returns_what_was_read(
     client, alice, github_conn, provider
 ):
+    """Each GitHub page counts toward the limit; a short budget returns what it read."""
     endless_github(provider)
     for n in range(browse.RATE_LIMIT - 3):
         await client.get(repos(github_conn, f"?cursor={100 + n}"), headers=alice.headers)
@@ -378,6 +394,7 @@ async def test_each_github_page_counts_and_a_short_budget_returns_what_was_read(
 async def test_provider_calls_in_a_window_never_exceed_the_limit(
     client, alice, slack_conn, github_conn, provider
 ):
+    """Provider calls in one window never exceed the rate limit, for either provider."""
     endless_slack(provider)
     for n in range(browse.RATE_LIMIT):
         await client.get(channels(slack_conn, f"?search=zzz{n}"), headers=alice.headers)
@@ -395,6 +412,7 @@ async def test_provider_calls_in_a_window_never_exceed_the_limit(
 async def test_expired_cache_entries_and_call_counts_are_dropped(
     client, tenant_id, alice, slack_conn, github_conn, provider, monkeypatch
 ):
+    """Expired cache entries and old call counts are swept away as time passes."""
     now = [10_000.0]
     later = [datetime.now(UTC)]
     monkeypatch.setattr(browse, "_clock", lambda: now[0])
@@ -420,6 +438,7 @@ async def test_expired_cache_entries_and_call_counts_are_dropped(
 async def test_a_service_api_token_cannot_browse(
     client, tenant_id, slack_conn, github_conn, provider
 ):
+    """A service API token cannot browse Slack or GitHub at all."""
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "service")
         await s.commit()
@@ -432,6 +451,7 @@ async def test_a_service_api_token_cannot_browse(
 async def test_a_run_token_cannot_browse(
     client, tenant_id, alice, slack_conn, github_conn, provider
 ):
+    """A run's own token cannot browse pickers, over REST or MCP."""
     raw = await run_token(tenant_id, list(RUN_SCOPES), created_by=alice.id)
     headers = {"Authorization": f"Bearer {raw}"}
     # Not a REST credential at all.
@@ -454,6 +474,7 @@ async def test_a_run_token_cannot_browse(
 
 
 async def test_another_tenants_connection_is_not_found(client, slack_conn, github_conn, provider):
+    """A connection is invisible to someone in another company, never found."""
     other = await make_tenant("Other Co")
     mallory = await make_person(other, "mallory@example.com", "owner")
     assert (await client.get(channels(slack_conn), headers=mallory.headers)).status_code == 404

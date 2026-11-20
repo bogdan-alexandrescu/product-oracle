@@ -50,6 +50,7 @@ def _concrete(path: str) -> str:
 
 
 def test_openapi_has_every_spec_route():
+    """Every route the API spec promises exists in the generated OpenAPI schema."""
     paths = app.openapi()["paths"]
     for method, path in SPEC_ROUTES:
         assert method.lower() in paths.get(path, {}), f"{method} {path} missing"
@@ -57,5 +58,6 @@ def test_openapi_has_every_spec_route():
 
 @pytest.mark.parametrize(("method", "path"), [r for r in SPEC_ROUTES if r not in PUBLIC])
 async def test_protected_routes_require_auth(client, method, path):
+    """Every protected spec route refuses a request with no authentication."""
     resp = await client.request(method, _concrete(path))
     assert resp.status_code == 401

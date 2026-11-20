@@ -126,6 +126,7 @@ async def suggestion_status(w: World, op: str) -> str | None:
 
 
 async def test_every_op_records_who_and_when(client):
+    """Every change op records who made it and exactly when, listed back the same."""
     w = await world()
     for op in ALL:
         who = "owner" if ALL.index(op) % 2 else "commenter"
@@ -144,6 +145,7 @@ async def test_every_op_records_who_and_when(client):
 
 @pytest.mark.parametrize("op", ALL)
 async def test_every_op_undo_restores_exactly(client, op):
+    """Every change op's undo restores the exact prior state and suggestion status."""
     w = await world(ops=[op])
     before = await snapshot(w, op)
     suggested = await suggestion_status(w, op)
@@ -173,6 +175,7 @@ async def the_draft(client, w: World) -> dict:
 
 @pytest.mark.parametrize("op", ALL)
 async def test_every_op_waits_in_the_working_draft(client, op):
+    """Every change op waits in the working draft until review publishes it live."""
     w = await world(ops=[op])
     published = await snapshot(w, op, published=True)
     seen = await client.get(ROADMAP, headers=w.ctx.as_("viewer"))
@@ -203,6 +206,7 @@ async def test_every_op_waits_in_the_working_draft(client, op):
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_new_ops_role_matrix(client, role):
+    """Only an owner or decider applies the newer ops directly; a viewer is refused."""
     w = await world(ops=MORE)
     applies = role in ("owner", "decider")
     for op in MORE:
@@ -220,6 +224,7 @@ async def test_new_ops_role_matrix(client, role):
 
 
 async def test_every_op_refuses_viewers_and_runs(client):
+    """Every change op is refused to a viewer, and to a run acting on its own."""
     w = await world(ops=["edit_title"])
     a = w.ids["edit_title-a"]
     run = await run_headers(w.ctx, "owner")
@@ -236,6 +241,7 @@ async def test_every_op_refuses_viewers_and_runs(client):
 
 
 async def test_tenant_isolation(client):
+    """One company's items, changes and people stay unreachable from another company."""
     w = await world(ops=["edit_title", "move_dates", "set_owner"])
     other = await make_people()
     before = await snapshot(w, "edit_title")
@@ -265,6 +271,7 @@ async def test_tenant_isolation(client):
 
 
 async def test_constraint_flags_on_a_broken_date(client):
+    """Moving dates that break a dependency flags the dependent red either way."""
     w = await world(ops=["move_dates"])
     b = w.ids["move_dates-b"]
     # move_dates-a ends after its dependent starts: applied, the dependent flagged red.
@@ -287,6 +294,7 @@ def item_flags(view: dict) -> dict[str, list]:
 
 @pytest.mark.parametrize("op", ALL)
 async def test_every_op_returns_the_checker_flags(client, op):
+    """Every change op returns the checker's flags for the items it just touched."""
     w = await world(ops=[op])
     r = await w.post(client, "commenter", op)
     assert r.status_code == 201, r.text
@@ -318,6 +326,7 @@ def _unviewed(by_item: dict) -> dict:
 
 @pytest.mark.parametrize("op", ALL)
 async def test_every_op_refuses_a_stale_before(client, op):
+    """Every change op refuses a stale before, writing nothing and naming the change."""
     w = await world(ops=[op])
     r = await w.post(client, "decider", op)
     assert r.status_code == 201, r.text

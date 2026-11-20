@@ -78,6 +78,7 @@ def _goal(tenant: uuid.UUID, key: str) -> uuid.UUID:
 # protects=one head, Members and access (A5) right after this one; fails_when=a second head
 # or a gap in the chain; no_claim=what the column does.
 def test_the_chain_ends_here():
+    """The migration chain still ends at the same revision after it lands."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0042_members_access").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
@@ -87,6 +88,7 @@ def test_the_chain_ends_here():
 # and a goal cannot be its own parent; fails_when=the column is missing, a delete takes
 # the subgoal with it, or the downgrade leaves the column; no_claim=the API's rules.
 def test_parent_column_up_down_up(scratch_db):
+    """The parent_id column round-trips up, down and up, refusing self-parents."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     assert _columns() == []

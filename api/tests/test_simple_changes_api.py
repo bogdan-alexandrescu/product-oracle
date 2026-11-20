@@ -215,6 +215,7 @@ async def changed(w: World, op: str) -> bool:
 @pytest.mark.parametrize("with_decider", [True, False], ids=["decider", "no-decider"])
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
 async def test_permission_matrix(client, role, with_decider):
+    """An owner or routed decider applies now; a viewer is refused, others propose."""
     ctx = await make_people()
     w = await World(ctx).build(decider=with_decider)
     # restore needs a cut item first: cut in the published version (S3b: an owner's cut
@@ -242,6 +243,7 @@ async def test_permission_matrix(client, role, with_decider):
 
 
 async def test_proposal_routes_to_the_track_owner_without_a_decider(client):
+    """With no decider set, a proposal routes to the track's own owner instead."""
     ctx = await make_people()
     w = await World(ctx).build(decider=False, track_owner="approver", ops=["edit_title"])
     r = await w.post(client, "commenter", "edit_title")
@@ -253,6 +255,7 @@ async def test_proposal_routes_to_the_track_owner_without_a_decider(client):
 
 
 async def test_stale_before_is_409(client):
+    """A change against stale data is refused, returning the item's current values."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["edit_title"])
     first = await w.post(client, "decider", "edit_title")
@@ -273,6 +276,7 @@ async def test_stale_before_is_409(client):
 
 
 async def test_undo_rules(client):
+    """Undo is refused to anyone but its author, and refused again once already undone."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["edit_title", "move_dates"])
     change = (await w.post(client, "decider", "edit_title")).json()["change"]
@@ -316,6 +320,7 @@ async def test_undo_rules(client):
 
 
 async def test_proposal_accept_decline_and_outdated(client):
+    """Accepting or declining a proposal updates it once; a second decision is refused."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["edit_title", "move_dates"])
     proposal = (await w.post(client, "commenter", "edit_title")).json()["change"]
@@ -358,6 +363,7 @@ async def test_proposal_accept_decline_and_outdated(client):
 
 
 async def test_changes_made_in_the_same_instant_list_in_the_order_made(client):
+    """Changes made in the same instant list newest first, in order made, not by id."""
     # Two proposals made in the same instant (the clock is frozen) list newest first in the
     # order they were made, not by their random ids: the later one is given the larger id
     # here, so a list that falls back to the id (or to nothing) shows them the wrong way.
@@ -386,6 +392,7 @@ async def test_changes_made_in_the_same_instant_list_in_the_order_made(client):
 
 
 async def test_constraint_flags_returned(client):
+    """A proposed change reports the conflicts it would cause as if already applied."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     b = w.ids["move_dates-b"]
@@ -406,6 +413,7 @@ async def test_constraint_flags_returned(client):
 
 
 async def test_idle_sessions_close_on_the_tick(client, clock):
+    """An idle editing session closes on the tick; one still being used stays open."""
     from oracle.ticker.body import tick_company
 
     ctx = await make_people()
@@ -448,6 +456,7 @@ async def test_idle_sessions_close_on_the_tick(client, clock):
 
 
 async def test_fixes_shift_dependents_and_move_dependency(client):
+    """Shifting a dependency's dates also shifts everything that depends on it."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["shift_dependents", "move_dependency"])
     # c depends on shift_dependents-b and starts the day after b ends: shifting b moves it.
@@ -544,6 +553,7 @@ async def test_shift_dependents_moves_every_sibling_but_an_accepted_risk(client)
 
 
 async def test_list_filters_audit_and_tools(client):
+    """The change list can be filtered by session, status, document or just one's own."""
     from oracle.main import app
     from oracle.mcp import tools
 

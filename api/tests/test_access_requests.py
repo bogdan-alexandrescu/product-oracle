@@ -64,6 +64,7 @@ async def _owner(tenant_id):
 
 
 async def test_request_rule_keeps_an_uninvited_person_waiting(client, fetches):
+    """An uninvited sign-in waits as pending; signing in again changes nothing."""
     r = await _seed_request()
     resp = await client.get("/v1/me", headers=_as(NEW))
     assert resp.status_code == 401
@@ -88,6 +89,7 @@ async def test_request_rule_keeps_an_uninvited_person_waiting(client, fetches):
 
 
 async def test_access_state_without_google_sign_in(client):
+    """Without a Google sign-in yet, the access state reports none."""
     await seed()
     resp = await client.get("/v1/auth/access")
     assert resp.json() == {
@@ -97,6 +99,7 @@ async def test_access_state_without_google_sign_in(client):
 
 
 async def test_the_note_is_set_on_the_pending_request(client, fetches):
+    """A pending requester's note can be set only once signed in."""
     r = await _seed_request()
     assert (
         await client.post("/v1/auth/access/note", json={"note": "x"}, headers=_as(NEW))
@@ -114,6 +117,7 @@ async def test_the_note_is_set_on_the_pending_request(client, fetches):
 
 
 async def test_inbox_lists_requests_for_owners_and_approvers_only(client, fetches):
+    """Access requests show in the inbox only to owners and approvers."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     owner = await _owner(r.tenant_id)
@@ -166,6 +170,7 @@ async def test_the_requests_list_presets_the_stored_default_role(client, fetches
 
 
 async def test_approve_lets_them_in_with_the_role_and_name(client, fetches):
+    """Approving a request lets the person in with the given role, once."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)
@@ -194,6 +199,7 @@ async def test_approve_lets_them_in_with_the_role_and_name(client, fetches):
 
 
 async def test_decline_keeps_them_out_until_an_invite(client, fetches):
+    """Declining a request keeps the person out until reopened or invited."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)
@@ -220,6 +226,7 @@ async def test_decline_keeps_them_out_until_an_invite(client, fetches):
 
 
 async def test_reopen_an_approved_request_revokes_its_unclaimed_invite(client, fetches):
+    """Stops a reopened request's unused invite from still letting that person sign in."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)
@@ -236,6 +243,7 @@ async def test_reopen_an_approved_request_revokes_its_unclaimed_invite(client, f
 
 
 async def test_join_and_refuse_rules_and_new_sign_ins_off(client, fetches, monkeypatch):
+    """The sign-in-without-invite setting decides join, wait or refuse."""
     r = await seed()
     await _setting(r.tenant_id, "sign_in_without_invite", "join")
     joined = await client.get("/v1/me", headers=_as("lee@example.com"))
@@ -256,6 +264,7 @@ async def test_join_and_refuse_rules_and_new_sign_ins_off(client, fetches, monke
 async def test_sign_in_domains_include_the_company_setting_never_inferred(
     client, fetches, monkeypatch
 ):
+    """Allowed sign-in domains come only from the company's setting."""
     settings = get_settings()
     monkeypatch.setattr(settings, "iap_allowed_domains", [])
     monkeypatch.setattr(settings, "infer_company_domains", True)
@@ -274,6 +283,7 @@ async def test_sign_in_domains_include_the_company_setting_never_inferred(
 
 
 async def test_removed_member_state(client, fetches):
+    """A disabled member's access state reports removed, an active one member."""
     r = await seed()
     async with tenant_session(r.tenant_id) as s:
         user = await s.scalar(select(User).where(User.email == "admin@example.com"))
@@ -288,6 +298,7 @@ async def test_removed_member_state(client, fetches):
 
 
 async def test_default_role_and_rule_settings(client):
+    """The default role and sign-in settings refuse invalid values."""
     r = await seed()
     owner = await _owner(r.tenant_id)
     for bad in ("approver", "owner"):
@@ -310,6 +321,7 @@ async def test_default_role_and_rule_settings(client):
 
 
 async def test_sign_in_rules(client, fetches):
+    """The sign-in rules route reports every domain and refuses non-owners."""
     r = await seed()
     owner = await _owner(r.tenant_id)
     await _setting(r.tenant_id, "company_email_domains", ["example.org"])
@@ -330,6 +342,7 @@ async def test_sign_in_rules(client, fetches):
 
 
 async def test_approvers_approve_as_viewer_or_commenter_only(client, fetches):
+    """An approver may approve a request only as viewer or commenter."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)
@@ -379,6 +392,7 @@ async def test_an_owner_demoted_while_waiting_cannot_approve_an_approver(
 
 
 async def test_an_approve_for_someone_already_a_member_closes_the_request(client, fetches):
+    """Approving someone already a member fails and closes the request."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)
@@ -395,6 +409,7 @@ async def test_an_approve_for_someone_already_a_member_closes_the_request(client
 
 
 async def test_a_pending_request_is_closed_when_an_invite_lets_them_in(client, fetches):
+    """A direct invite that admits a pending requester closes their request."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     owner = await _owner(r.tenant_id)
@@ -407,6 +422,7 @@ async def test_a_pending_request_is_closed_when_an_invite_lets_them_in(client, f
 
 
 async def test_last_seen_is_touched_after_ten_minutes(client, fetches):
+    """A pending request's last-seen time updates only after ten minutes."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     old = datetime.now(UTC) - timedelta(minutes=11)
@@ -429,6 +445,7 @@ CROSS_SITE = (
 
 
 async def test_an_uninvited_google_sign_in_joins_at_once_by_default(client, fetches):
+    """An uninvited Google sign-in from an allowed domain joins at once."""
     # Until the /access page a waiting person sees exists, the default stays ``join``:
     # an uninvited Google sign-in from the company's domains lands, never a 401.
     r = await seed()
@@ -442,6 +459,7 @@ async def test_an_uninvited_google_sign_in_joins_at_once_by_default(client, fetc
 
 
 async def test_the_body_less_access_and_resend_posts_refuse_another_origin(client, fetches):
+    """Access request and invite-resend actions need the app's own origin."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)
@@ -477,6 +495,7 @@ async def test_the_body_less_access_and_resend_posts_refuse_another_origin(clien
 
 
 async def test_an_approver_cannot_undo_an_approval_another_person_gave(client, fetches):
+    """An approver can undo only their own approval, never another's."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)

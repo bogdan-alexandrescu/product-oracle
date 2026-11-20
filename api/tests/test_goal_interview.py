@@ -208,6 +208,7 @@ async def vague(client, ctx, who="viewer") -> list[dict]:
 # owner_id; no_claim=a real model could still mention them in prose (only stored changes
 # are checked).
 def test_oracle_goal_measure_strips_weight_and_owner():
+    """Building a goal's measure strips owner and weight fields unless the actor is a person."""
     goal = str(uuid.uuid4())
     with pytest.raises(goals.GoalFieldsError) as bad:
         kinds.goal_measure({"entity_id": goal, **version(unit="Parsecs!")}, "oracle")
@@ -229,6 +230,7 @@ def test_oracle_goal_measure_strips_weight_and_owner():
 # protects=the version card's sentence (3.3); fails_when=the comparison, figure, unit or
 # date reads otherwise; no_claim=the web's own wording around it.
 def test_goal_measure_label_wording():
+    """A goal interview's accepted change is labeled with its goal and its new target in words."""
     goal = str(uuid.uuid4())
     target = {"entity_id": goal, "title": "Cut early churn"}
     stored = kinds.goal_measure({"entity_id": goal, **version()}, "oracle")
@@ -249,6 +251,7 @@ def test_goal_measure_label_wording():
 # fails_when=the block or its start reaches readers, or a body without one changes;
 # no_claim=a model that writes the block twice (the first is read).
 def test_change_block_is_taken_out_of_the_reply():
+    """A change block is stripped out of a goal interview reply, leaving the visible text alone."""
     text = reply_with([change(version())])
     body, found = goal_interview.take_changes(text)
     assert body == f"{OPENING}\n\nWho should own this goal?"
@@ -265,6 +268,7 @@ def test_change_block_is_taken_out_of_the_reply():
 # protects=run tokens reach none of the interview routes (3.5); fails_when=a run-token
 # scope names one of them; no_claim=the MCP listing itself (covered by test_mcp's parity).
 def test_run_tokens_reach_no_interview_route():
+    """A run token cannot reach any of the goal interview routes."""
     for method, path in (
         ("POST", "/v1/baseline/entities/{goal_id}/interview"),
         ("POST", "/v1/baseline/goals/interview"),
@@ -281,6 +285,7 @@ def test_run_tokens_reach_no_interview_route():
 # 404 on none; fails_when=a second discussion opens, the owner is left out, or a 422 is
 # missed; no_claim=the owner's Inbox row (test_the_goal_owner_gets_an_inbox_row).
 async def test_start_creates_one_interview_with_the_owner(client):
+    """Starting a goal interview makes one discussion, once, and only for its own goal."""
     ctx = await company()
     goal = await vague_goal(client, ctx)
     first = await start(client, ctx, goal["id"])
@@ -317,6 +322,7 @@ async def test_start_creates_one_interview_with_the_owner(client):
 # row in the Inbox (G6 Discussion rows in the Inbox); fails_when=no row for the owner, or a
 # row for the starter; no_claim=the row's wording and states (tests/test_discussion_inbox.py).
 async def test_the_goal_owner_gets_an_inbox_row(client):
+    """Starting a goal interview puts an inbox row in front of the goal's owner."""
     ctx = await company()
     goal = await vague_goal(client, ctx)
     await start(client, ctx, goal["id"])
@@ -338,6 +344,7 @@ async def test_the_goal_owner_gets_an_inbox_row(client):
 # readers; the goal prompt rides on discussion_reply's; fails_when=a fourth or an invalid
 # version is stored, owner or weight survive, or the block streams; no_claim=a real model.
 async def test_opening_turn_stores_versions(client, fake, monkeypatch):
+    """The interview's first turn stores each proposed version as a change, no leaks."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -380,6 +387,7 @@ async def test_opening_turn_stores_versions(client, fake, monkeypatch):
 # reaches the request, or the block is missing; no_claim=fake model; does not grade the
 # model's answers.
 async def test_goal_context_has_no_private_items(client, fake):
+    """A goal interview's context never includes another person's private items."""
     ctx = await company()
     goal = await vague_goal(client, ctx)
     await measurable_goal(client, ctx)
@@ -426,6 +434,7 @@ async def test_goal_context_has_no_private_items(client, fake):
 # fails_when=the goal changes before Accept, the actor or reason differ, or the discussion
 # stays open; no_claim=the card's wording (E2E).
 async def test_propose_then_accept_closes_the_interview(client, fake):
+    """Accepting a proposed change from the interview applies it and closes the interview."""
     fake.text = reply_with([change(version())])
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -462,6 +471,7 @@ async def test_propose_then_accept_closes_the_interview(client, fake):
 # fails_when=a subgoal is skipped or refused, or accepting its version loses its parent;
 # no_claim=the parent's roll-up (tests/test_subgoals.py).
 async def test_a_subgoal_is_interviewed_like_any_goal(client, fake):
+    """A subgoal is interviewed the same way as any top-level goal."""
     fake.text = reply_with([change(version())])
     ctx = await company()
     parent = await measurable_goal(client, ctx)
@@ -488,6 +498,7 @@ async def test_a_subgoal_is_interviewed_like_any_goal(client, fake):
 # no discussion; fails_when=an open interview on the goal is closed or written to;
 # no_claim=proposals on other goals (same lookup).
 async def test_accepting_another_proposal_changes_no_discussion(client):
+    """Accepting an unrelated proposal leaves an interview's discussion unchanged."""
     ctx = await company()
     goal = await vague_goal(client, ctx)
     d_id = (await start(client, ctx, goal["id"]))["discussion_id"]
@@ -513,6 +524,7 @@ async def test_accepting_another_proposal_changes_no_discussion(client):
 # creates nothing; fails_when=a proposal is made or the version moves on; no_claim=every B5
 # rule (test_goal_fields covers them).
 async def test_propose_with_bad_fields_is_422_and_creates_nothing(client, fake):
+    """Proposing a change with invalid fields is refused as a 422 and creates nothing."""
     fake.text = reply_with([change(version())])
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -533,6 +545,7 @@ async def test_propose_with_bad_fields_is_422_and_creates_nothing(client, fake):
 # fails_when=no pushback, a second one, or the override is not in the summary;
 # no_claim=pushback on evidence above the threshold (the model's, G2).
 async def test_pushback_once_then_the_override_is_recorded(client, fake):
+    """A pushed-back target is only recorded once overridden, with the override reason kept."""
     fake.text = reply_with([change(version())])
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -569,6 +582,7 @@ async def test_pushback_once_then_the_override_is_recorded(client, fake):
 # fails_when=a viewer writes, a commenter dismisses, or a private one is read by an outsider;
 # no_claim=MCP clients (same routes).
 async def test_roles_and_a_private_interview(client, fake):
+    """Role limits and private interview visibility hold on the interview routes."""
     fake.text = reply_with([change(version()), change(version(target=6))])
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -607,6 +621,7 @@ async def test_roles_and_a_private_interview(client, fake):
 # still acts, answers without the pointer, or is still listed; no_claim=the web's calls
 # (the mock specs).
 async def test_b6_routes_are_gone_with_a_pointer(client, fake):
+    """The old goal-measure routes are gone and point callers to the new routes."""
     from oracle.main import app
 
     fake.text = reply_with([change(version())])
@@ -633,6 +648,7 @@ async def test_b6_routes_are_gone_with_a_pointer(client, fake):
 # first turn it into their suggestion; fails_when=the edit is lost or the route refuses a
 # payload; no_claim=entity_edit's own fields.
 async def test_generic_propose_takes_the_persons_edit(client, fake):
+    """Proposing a change takes the person's own edited values over the agent's suggestion."""
     fake.text = reply_with([change(version())])
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -649,6 +665,7 @@ async def test_generic_propose_takes_the_persons_edit(client, fake):
 # in order, and again reopens them; fails_when=a measurable goal is interviewed, a goal is
 # skipped, or a second call opens new ones; no_claim=the stepper (E2E).
 async def test_interview_every_vague_goal(client):
+    """Interviewing every vague goal at once creates or reuses a discussion for each."""
     ctx = await company()
     first = await vague_goal(client, ctx)
     await measurable_goal(client, ctx)
@@ -670,6 +687,7 @@ async def test_interview_every_vague_goal(client):
 # fails_when=an interview starts on its own, Oracle's model is called, or the count is
 # missing; no_claim=the after-review line's copy (E2E).
 async def test_approving_the_baseline_starts_no_interview(client, owner, runtime, fake):
+    """Approving the baseline starts no goal interview on its own."""
     tenant_id, auth = owner
     for key in ("early-churn", "support-load"):
         resp = await client.post(
@@ -710,6 +728,7 @@ def g3_block(goal_id: str) -> str:
 # goal_interview and G3's changes object is taken out; fails_when=one block swallows the
 # other or either is left in the text; no_claim=the stream (the route test below).
 def test_a_goal_reply_splits_versions_from_changes():
+    """A goal interview reply splits version proposals from entity-edit changes."""
     from oracle.discussions import changes as g3
 
     versions = reply_with([change(version())])
@@ -732,6 +751,7 @@ def test_a_goal_reply_splits_versions_from_changes():
 # version is lost to G3's hold-back, or G3's change is not extracted; no_claim=the model's
 # judgement about what to propose (the fake reply stands in).
 async def test_goal_reply_with_versions_and_changes(client, fake):
+    """A goal interview reply can carry both version proposals and entity edits together."""
     ctx = await company()
     goal = await vague_goal(client, ctx)
     fake.text = f"{reply_with([change(version())])}\n{g3_block(goal['id'])}"
@@ -759,6 +779,7 @@ async def test_goal_reply_with_versions_and_changes(client, fake):
 # fails_when=it reads "Make “…” measurable" while the goal has its metric, target and horizon;
 # no_claim=the opening turn's wording (the reply tests).
 async def test_owner_only_gap_titles_the_interview_by_its_question(client):
+    """An interview opened only to ask who owns the goal titles itself by that question."""
     ctx = await company()
     attrs = {
         "metric": "Trials that move to a paid plan", "unit": "%",

@@ -41,6 +41,7 @@ from tests.test_simple_meetings_api import get, start, world
 
 
 async def test_two_cards_on_one_item_only_the_newest_acts(client):
+    """Only the newest card on an item can act; an older one is blocked once replaced."""
     ctx = await make_people()
     w = await World(ctx).build()
     old = (await say(client, ctx, "owner", "move Ledger v2 to Q2"))["cards"][0]
@@ -59,6 +60,7 @@ async def test_two_cards_on_one_item_only_the_newest_acts(client):
 
 
 async def test_cards_on_two_items_each_stay_active(client):
+    """Cards on different items stay independently active, not replacing each other."""
     ctx = await make_people()
     await World(ctx).build()
     a1 = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A"))["cards"][0]
@@ -73,6 +75,7 @@ async def test_cards_on_two_items_each_stay_active(client):
 
 
 async def test_acting_on_a_card_replaces_every_earlier_card(client):
+    """Acting on any card replaces every earlier card still open on the same item."""
     ctx = await make_people()
     w = await World(ctx).build()
     a = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A"))["cards"][0]
@@ -99,6 +102,7 @@ async def test_acting_on_a_card_replaces_every_earlier_card(client):
 
 
 async def test_meeting_chat_follows_the_same_rule(client, meetings):  # noqa: F811
+    """A meeting's chat follows the same rule: the newest card replaces earlier ones."""
     ctx = await make_people()
     await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
@@ -114,6 +118,7 @@ async def test_meeting_chat_follows_the_same_rule(client, meetings):  # noqa: F8
 
 
 async def test_apply_all_applies_only_active_cards(client):
+    """Apply-all only applies cards still active, skipping any already replaced."""
     w = await world()
     mid = (await start(client, w))["id"]
     a, b = str(w.ids["move_dates-a"]), str(w.ids["move_dates-b"])
@@ -166,6 +171,7 @@ async def _active(client, w, who: str, cards: list[dict], mid=None) -> list:
 
 
 async def test_two_notes_in_a_meeting_both_stay_active(client):
+    """Two independent notes in a meeting both stay open, neither replacing the other."""
     from tests.test_simple_chat_actions import one_card
 
     w = await world()
@@ -183,6 +189,7 @@ async def test_two_notes_in_a_meeting_both_stay_active(client):
 
 
 async def test_two_decisions_both_stay_active(client):
+    """Two independent decisions in a meeting both stay open until one is applied."""
     from tests.test_simple_chat_actions import one_card
 
     w = await world()
@@ -196,6 +203,7 @@ async def test_two_decisions_both_stay_active(client):
 
 
 async def test_two_suggestions_for_one_goal_both_stay_active(client):
+    """Two feature suggestions for one goal both stay open, not replacing each other."""
     from tests.test_simple_additions_api import World as Goals
     from tests.test_simple_additions_api import _say
 
@@ -210,6 +218,7 @@ async def test_two_suggestions_for_one_goal_both_stay_active(client):
 
 
 async def test_drafts_sharing_most_words_are_different_records(client):
+    """Near-identical drafts stay separate unless one explicitly corrects the other."""
     from tests.test_simple_chat_actions import one_card
 
     w = await world()
@@ -237,6 +246,7 @@ async def test_drafts_sharing_most_words_are_different_records(client):
 
 
 async def test_make_it_april_instead_replaces_the_march_draft(client):
+    """Saying 'X instead' redoes the one named earlier draft, not any other open card."""
     from tests.test_simple_chat_actions import one_card
 
     w = await world()
@@ -262,6 +272,7 @@ async def test_make_it_april_instead_replaces_the_march_draft(client):
 
 
 async def test_concurrent_apply_of_an_older_and_a_newer_card(client, monkeypatch):
+    """Of two concurrent applies, the older one loses to the newer with a conflict."""
     import asyncio
 
     from oracle.simple import changes
@@ -296,6 +307,7 @@ async def test_concurrent_apply_of_an_older_and_a_newer_card(client, monkeypatch
 
 
 async def test_a_retry_on_a_closed_session_checks_replaced_again(client, meetings, monkeypatch):  # noqa: F811
+    """A retried apply after its session closed rechecks whether the card was replaced."""
     import uuid
 
     from sqlalchemy import update
@@ -341,6 +353,7 @@ async def test_a_retry_on_a_closed_session_checks_replaced_again(client, meeting
 
 
 def test_redo_line_reads_only_a_short_change_request_ending_instead():
+    """redo_line only recognizes a short line ending in 'instead' as a redo request."""
     assert card_order.redo_line("make it April instead") == "make it April instead"
     assert card_order.redo_line("April instead.") == "April instead."
     assert card_order.redo_line("no, note: the budget is approved") == (
@@ -356,6 +369,7 @@ def test_redo_line_reads_only_a_short_change_request_ending_instead():
 
 
 async def test_only_a_short_change_request_ending_instead_is_a_redo(client):
+    """Only a short 'instead' line replaces an earlier draft; unrelated notes do not."""
     from tests.test_simple_chat_actions import one_card
 
     w = await world()
@@ -370,6 +384,7 @@ async def test_only_a_short_change_request_ending_instead_is_a_redo(client):
 
 
 async def test_no_after_a_plain_answer_starts_a_new_card(client):
+    """Saying 'no, ...' with no open card starts a fresh card instead of a redo."""
     from tests.test_simple_chat_actions import one_card
 
     w = await world()

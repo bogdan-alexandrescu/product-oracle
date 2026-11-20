@@ -27,6 +27,7 @@ def snap(key: str, position: int, **kw) -> ItemSnapshot:
 
 
 def test_the_plan_fields_count_and_confidence_is_a_note():
+    """The roadmap diff counts fixed fields; confidence is a note, not counted."""
     assert set(COUNTED_FIELDS) == {
         "title", "outcome", "horizon", "milestone_name", "milestone_date", "depends_on",
         "prd_section", "rank",
@@ -37,6 +38,7 @@ def test_the_plan_fields_count_and_confidence_is_a_note():
 
 
 def test_one_of_each_class():
+    """The roadmap diff classifies each item as added, dropped, moved or changed."""
     base = [
         snap("a", 0, horizon="now"),
         snap("b", 1, horizon="next", outcome="Fewer drop-offs"),
@@ -61,6 +63,7 @@ def test_one_of_each_class():
 
 
 def test_a_renamed_item_is_matched_by_its_title():
+    """A roadmap item whose key changed is still matched by title as a rename."""
     base = [snap("pay", 0, title="Payment step", horizon="now")]
     head = [snap("payment-step", 0, title="  payment STEP! ", horizon="now")]
     out = diff_items(base, head)
@@ -72,6 +75,7 @@ def test_a_renamed_item_is_matched_by_its_title():
 
 
 def test_an_ambiguous_title_is_not_a_rename():
+    """Two items sharing one title are never guessed as a rename."""
     base = [snap("x", 0, title="Alerts")]
     head = [snap("y", 0, title="Alerts"), snap("z", 1, title="alerts")]
     out = diff_items(base, head)
@@ -79,6 +83,7 @@ def test_an_ambiguous_title_is_not_a_rename():
 
 
 def test_rank_moves_count_from_the_threshold():
+    """A rank move only counts as changed once it passes a threshold."""
     base = [snap("a", 0, rank=1), snap("b", 1, rank=2)]
     head = [snap("a", 0, rank=2), snap("b", 1, rank=5)]
     out = diff_items(base, head)
@@ -90,6 +95,7 @@ def test_rank_moves_count_from_the_threshold():
 
 
 def test_confidence_and_date_state_are_notes_only():
+    """Confidence and date state changes are notes, never a changed status."""
     base = [snap("a", 0, confidence="high", date_state="proposed")]
     head = [snap("a", 0, confidence="low", date_state="verified")]
     (item,) = diff_items(base, head).items
@@ -101,6 +107,7 @@ def test_confidence_and_date_state_are_notes_only():
 
 
 def test_a_dropped_item_keeps_its_place():
+    """A dropped roadmap item keeps its original position in the diff output."""
     base = [snap("a", 0), snap("b", 1), snap("c", 2), snap("first", -1)]
     head = [snap("a", 0), snap("c", 1), snap("n", 2)]
     out = diff_items(base, head)
@@ -114,6 +121,7 @@ def test_a_dropped_item_keeps_its_place():
 
 
 def test_snapshots_from_the_file_and_from_a_row():
+    """Snapshots from a parsed file and from a stored row read the same way."""
     raw = {
         "id": "pay",
         "title": "Payment step",
