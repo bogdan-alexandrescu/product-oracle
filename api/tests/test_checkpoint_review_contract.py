@@ -13,16 +13,16 @@ renamed or retyped; no_claim: the screen's behaviour (Playwright) and the values
 computes (test_checkpoint_review.py, test_approve_with_edits.py, test_checkpoint_gate.py).
 Synthetic placeholders only."""
 
-import json
-from pathlib import Path
 from typing import Any
 
 from oracle.runs.schemas import CheckpointOut, CheckpointReview, Gate, NeedsAgents
+from tests._own_tree_only import contract
 from tests.test_approve_with_edits import DROP, LATER, NO_DATE, _stage, cp_of, edits  # noqa: F401
 from tests.test_roadmap import owner, runtime  # noqa: F401 - fixtures
 from tests.test_runs import get
 
-FIXTURE = Path(__file__).resolve().parents[2] / "web/lib/api/mock/checkpoint-review.json"
+# The web publishes its fixture as docs/contracts/mock-checkpoint-review.json (#1570).
+FIXTURE = "mock-checkpoint-review"
 
 # Every field the screen reads (web/app/runs/[id]/review/[checkpoint]/_items-review.tsx and
 # components/review/DecisionBar.tsx), as dotted paths into the review.
@@ -57,7 +57,7 @@ _MISSING = object()
 
 
 def _fixture() -> dict[str, Any]:
-    return json.loads(FIXTURE.read_text())
+    return contract(FIXTURE)
 
 
 def _at(obj: Any, path: str) -> Any:

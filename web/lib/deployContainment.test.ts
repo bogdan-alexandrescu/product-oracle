@@ -1,4 +1,4 @@
-// #1569: node --test web/lib/deployContainment.test.ts (Node's own runner; no new package).
+// #1569: npm run test:unit (Vitest, #1583).
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { test } from "vitest";
 import { containment, servedSha } from "./deployContainment.ts";
 
 const A = "1111111111111111111111111111111111111111";

@@ -1,0 +1,9 @@
+{
+  "kinds": [
+    "review_comments",
+    "reporting",
+    "refinement",
+    "quality_review",
+    "public_text"
+  ]
+}

@@ -5,9 +5,7 @@ Each test's card is one line: protects / fails_when / no_claim. Synthetic placeh
 only.
 """
 
-import re
 import uuid
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -21,6 +19,7 @@ from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
+from tests._own_tree_only import contract
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import (
     answer,
@@ -123,11 +122,9 @@ def test_the_web_proxy_waits_longer_than_a_turn_takes():
     """protects=the web's /v1 proxy (next.config.ts proxyTimeout) waits past a turn's
     model deadline plus recording the answer, so a long answer's first Send answer
     comes back; fails_when=proxyTimeout is missing (Next's 30 s default) or under that;
-    no_claim=the network between the browser and the web."""
-    config = (Path(__file__).parents[2] / "web" / "next.config.ts").read_text(encoding="utf-8")
-    found = re.search(r"proxyTimeout:\s*([\d_]+)", config)
-    assert found, "next.config.ts sets no proxyTimeout: Next's 30-second default applies"
-    waits = int(found.group(1).replace("_", "")) / 1000
+    no_claim=the network between the browser and the web. The web publishes the timeout in
+    docs/contracts/web-proxy.json (#1570)."""
+    waits = contract("web-proxy")["proxy_timeout_ms"] / 1000
     assert waits > interview_turns.DEADLINE_SECONDS + RECORDING_SECONDS
 
 

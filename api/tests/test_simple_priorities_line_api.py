@@ -11,6 +11,7 @@ from datetime import date
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple.models import RoadmapKeyDate
 from oracle.tenancy import tenant_session
+from tests._own_tree_only import contract
 from tests.test_simple_changes_api import clock, make_people  # noqa: F401
 from tests.test_simple_priorities_api import URL, World, rows_by_code
 from tests.test_simple_targets_api import no_llm  # noqa: F401
@@ -119,14 +120,12 @@ def test_docs_and_preferences_say_the_same_default_line():
     """protects=docs/mvp-app.md and the Preferences schema name one default for an unset
     ``priorities_line`` (u-followups review); fails_when=either words it differently (one
     said `now`, the other this quarter); no_claim=the default itself
-    (test_default_line_is_this_quarter)."""
-    from pathlib import Path
-
+    (test_default_line_is_this_quarter). The docs publish what mvp-app.md says in
+    docs/contracts/docs-wording.json (#1570)."""
     from oracle.preferences.router import Preferences
 
     said = "unset, this quarter (`now`)"
-    docs = (Path(__file__).resolve().parents[2] / "docs" / "mvp-app.md").read_text()
-    assert said in docs
+    assert said in contract("docs-wording")["says"]["mvp-app.md"]
     assert said in " ".join((Preferences.__doc__ or "").split()).replace("``", "`")
 
 
