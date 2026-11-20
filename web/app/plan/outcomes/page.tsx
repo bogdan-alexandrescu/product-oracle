@@ -248,28 +248,30 @@ function Outcomes() {
     rows.find((o) => o.id === selected) ??
     shown[0];
 
-  // A state with nothing in it is dimmed and cannot be picked.
+  // A state with nothing in it is dimmed and cannot be picked. A read that failed counts
+  // nothing: no 0 that reads as none (#1586).
+  const tally = (n: number) => (q.error ? null : n);
   const filterItems: FilterChip<Filter>[] = [
-    { value: "due", label: "Check due", count: count("due"), disabled: count("due") === 0 },
+    { value: "due", label: "Check due", count: tally(count("due")), disabled: count("due") === 0 },
     {
       value: "measuring",
       label: "Measuring",
-      count: count("measuring"),
+      count: tally(count("measuring")),
       disabled: count("measuring") === 0,
     },
     {
       value: "needs",
       label: "Needs prediction",
-      count: count("needs"),
+      count: tally(count("needs")),
       disabled: count("needs") === 0,
     },
     {
       value: "assessed",
       label: "Assessed",
-      count: count("assessed"),
+      count: tally(count("assessed")),
       disabled: count("assessed") === 0,
     },
-    { value: "all", label: "All", count: rows.length },
+    { value: "all", label: "All", count: tally(rows.length) },
   ];
   // A filter left with no rows names itself, with a way back to All (owner, Nov 13).
   const emptyFilter = (
@@ -476,7 +478,7 @@ function Outcomes() {
                 if (phone) setSheet(true);
               }}
               loading={q.loading && !q.data}
-              empty={emptyFilter}
+              empty={q.error ? null : emptyFilter}
               rowProps={(o) => ({
                 "data-testid": "outcome-row",
                 "data-state": stateOf(o),

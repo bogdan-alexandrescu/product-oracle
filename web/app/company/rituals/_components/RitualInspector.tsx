@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorRow, InspectorSection, confirmInPage } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
+import { ErrorNote, INPUT, LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatMoney } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -174,6 +174,7 @@ export function RitualInspector({
 
   const recent = (
     <InspectorSection label="Recent occurrences" testId="ritual-occurrences">
+      {occurrencesQ.error && <LoadError what="the occurrences" error={occurrencesQ.error} onRetry={() => void occurrencesQ.reload()} />}
       {occurrencesQ.data?.length === 0 && <p className="text-sm text-text2">No pre-read yet</p>}
       <ul className="flex flex-col">
         {(occurrencesQ.data ?? []).map((o) => (

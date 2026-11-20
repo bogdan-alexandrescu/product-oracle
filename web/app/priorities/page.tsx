@@ -1634,7 +1634,7 @@ function Priorities() {
               selected={current?.key ?? null}
               onSelect={(k) => pick(k)}
               loading={snapshotId ? cq.loading && !cmp : q.loading}
-              empty="No features ranked"
+              empty={(snapshotId ? cq.error : q.error) ? null : "No features ranked"}
               rowProps={(f) => ({ "data-testid": `priority-row-${f.key}` })}
             />
           </Panel>

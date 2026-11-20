@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, Chip } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
@@ -21,15 +22,17 @@ export function useHeldRewrites(doc: string) {
   );
   const rows = q.data ?? [];
   // refresh: a quiet re-read (the page's live refresh), the rows kept until it answers.
-  return { rows, open: rows.filter((p) => p.status === "open").length, reload: () => setKey((k) => k + 1), refresh: q.reload };
+  // #1586: a failed read has no count (null), never 0; its error goes to the panel.
+  const open = q.error ? null : rows.filter((p) => p.status === "open").length;
+  return { rows, open, error: q.error, reload: () => setKey((k) => k + 1), refresh: q.reload };
 }
 
 /** "Held rewrites" with a badge counting the ones still waiting for a decision. */
-export function HeldRewritesButton({ open, active, onClick }: { open: number; active: boolean; onClick: () => void }) {
+export function HeldRewritesButton({ open, active, onClick }: { open: number | null; active: boolean; onClick: () => void }) {
   return (
     <Button icon="flag" aria-expanded={active} onClick={onClick}>
       Held rewrites
-      {open > 0 && (
+      {open != null && open > 0 && (
         <b className="tnum ml-1 rounded-full bg-warn-bg px-1.5 text-warn" data-testid="held-count">
           {open}
         </b>
@@ -46,6 +49,7 @@ export function HeldRewritesButton({ open, active, onClick }: { open: number; ac
 export function HeldRewritesPanel({
   doc,
   rows,
+  error,
   headings,
   canDecide,
   onChanged,
@@ -53,6 +57,7 @@ export function HeldRewritesPanel({
 }: {
   doc: string;
   rows: Patch[];
+  error?: string | null;
   headings: Map<string, string>;
   canDecide: boolean;
   onChanged: () => void;
@@ -88,7 +93,11 @@ export function HeldRewritesPanel({
         An agent draft rewrote these sections after they were approved in an earlier version. The approved text was kept until
         someone decides.
       </p>
-      {ordered.length === 0 && <p className="mt-2 text-sm text-text2">No held rewrites.</p>}
+      {error ? (
+        <div className="mt-2">
+          <LoadError what="the held rewrites" error={error} onRetry={onChanged} />
+        </div>
+      ) : ordered.length === 0 && <p className="mt-2 text-sm text-text2">No held rewrites.</p>}
       <ul className="mt-2 flex flex-col gap-2">
         {ordered.map((p) => (
           <HeldRewrite key={p.id} doc={doc} patch={p} heading={headings.get(p.section_key) ?? p.heading} canDecide={canDecide} onChanged={onChanged} />

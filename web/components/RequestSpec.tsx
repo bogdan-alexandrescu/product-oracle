@@ -8,7 +8,7 @@ import { Field, Frame } from "@/components/DateBasisDialog";
 import { Button, InfoTip, Notice, SegmentedControl, type ChipKind } from "@/components/ds";
 import { PersonPicker, type Person } from "@/components/PersonPicker";
 import { sizeText } from "@/components/tech-brief";
-import { INPUT } from "@/components/ui";
+import { INPUT, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -255,6 +255,8 @@ export function RequestSpecDialog({
               </p>
               <p className="text-sm text-text2">The spec must not contradict what the engineering review decided without saying so.</p>
             </>
+          ) : briefs.error ? (
+            <LoadError what="the tech briefs" error={briefs.error} onRetry={() => void briefs.reload()} />
           ) : (
             <p className="text-sm text-text2">{briefs.data ? "No approved tech brief for this feature." : "…"}</p>
           )}

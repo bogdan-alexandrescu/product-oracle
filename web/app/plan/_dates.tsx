@@ -292,7 +292,7 @@ export function DatesTab() {
           "data-status": b.status,
         })}
         detail={(b) => (reasonOf(b) ? <Reason basis={b} /> : null)}
-        empty="No date sources yet."
+        empty={bases.error ? null : "No date sources yet."}
       />
       {dialog?.kind === "record" && rights.data && (
         <DateBasisDialog rights={rights.data} onClose={() => setDialog(null)} onSaved={done} />

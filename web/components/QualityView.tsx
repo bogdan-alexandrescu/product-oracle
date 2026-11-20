@@ -642,7 +642,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
               </>
             )}
             rowProps={(i) => ({ "data-testid": "criterion-row", "data-key": i.key })}
-            empty="No criteria match this filter"
+            empty={readinessQ.error ? null : "No criteria match this filter"}
           />
           {readiness && (
             <p className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-[13px] text-text2 max-[600px]:px-3" data-testid="latest-report">
