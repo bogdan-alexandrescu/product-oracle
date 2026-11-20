@@ -214,7 +214,7 @@ async def test_a_slow_status_read_times_out_to_read_only(client, owner, monkeypa
     monkeypatch.setattr(service, "HOLD_READ_SECONDS", 0.3, raising=False)
 
     async def hangs(workflow_id):
-        await asyncio.sleep(30)
+        await asyncio.Event().wait()  # never answers; only the read's timeout ends it
 
     monkeypatch.setattr(runtime, "status", hangs)
     err, said = await asyncio.wait_for(_push(token), 10)

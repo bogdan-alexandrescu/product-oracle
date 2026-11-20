@@ -201,7 +201,7 @@ async def test_features_are_cached_and_bounded_by_the_timeout():
     assert len(swarm.requests) == 2 * calls
 
     async def slow(request):
-        await asyncio.sleep(5)
+        await asyncio.Event().wait()  # never answers; only the 0.2 s timeout ends it
         return httpx.Response(200, json={})
 
     from oracle.swarm import SwarmCloudRuntime
