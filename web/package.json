@@ -18,7 +18,6 @@
   "dependencies": {
     "next": "16.4.6",
     "openapi-fetch": "0.17.0",
-    "pyright": "1.1.414",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -31,6 +30,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",
     "openapi-typescript": "7.13.0",
+    "pyright": "1.1.414",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"
   }
