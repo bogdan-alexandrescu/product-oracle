@@ -257,10 +257,11 @@ function Launches() {
                   value={current}
                   onChange={(v) => setFilter(v)}
                   items={[
-                    { value: "ready", label: "Ready", count: count("ready") },
-                    { value: "planned", label: "Planned", count: count("planned") },
-                    { value: "launched", label: "Launched", count: count("launched") },
-                    { value: "all", label: "All", count: rows.length },
+                    // #1586: a list still loading or failed counts nothing, never 0.
+                    { value: "ready", label: "Ready", count: q.data ? count("ready") : null },
+                    { value: "planned", label: "Planned", count: q.data ? count("planned") : null },
+                    { value: "launched", label: "Launched", count: q.data ? count("launched") : null },
+                    { value: "all", label: "All", count: q.data ? rows.length : null },
                   ]}
                 />
               )

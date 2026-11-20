@@ -662,7 +662,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         <HistoryPanel
           n={n}
           reports={reports}
-          loading={reportsQ.loading || jobsQ.loading || !readiness}
+          loading={reportsQ.loading || jobsQ.loading || (!readiness && !readinessQ.error)}
           error={reportsQ.error ?? jobsQ.error}
           jobs={jobs}
           jobsAnswered={!!jobsQ.data}
@@ -1201,7 +1201,7 @@ function HistoryPanel({
         rowKey={(r) => r.id}
         loading={loading && !all}
         rowProps={() => ({ "data-testid": "history-row" })}
-        empty={!all && error ? null : all && all.length === 0 ? <EmptyHistory n={n} maySnapshot={maySnapshot} mayRate={mayRate} mayQueue={mayQueue} /> : "No reports match this filter"}
+        empty={!all ? null : all.length === 0 ? <EmptyHistory n={n} maySnapshot={maySnapshot} mayRate={mayRate} mayQueue={mayQueue} /> : "No reports match this filter"}
       />
     </Panel>
   );
