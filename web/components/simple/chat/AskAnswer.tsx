@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { createContext, Fragment, useContext, useMemo, type ReactNode } from "react";
 
 import { FeatureMarks, MarkFor, WithFeatureMarks, type FeatureState } from "@/components/current-state/CurrentState";

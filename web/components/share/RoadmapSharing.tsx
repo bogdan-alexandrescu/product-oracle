@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
 import { useId, useRef, useState, type ReactNode } from "react";
 
 import { Button, DataTable, Icon, InfoTip, LinkButton, Notice, Panel, toast, useFocusTrap, type Column } from "@/components/ds";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { Button, confirmInPage, Icon, InfoTip, toast } from "@/components/ds";

@@ -6,8 +6,7 @@
  * revokes the token at Slack, and ends every discussion's Slack mirror, G8), and the report's
  * schedule. No credential is ever shown.
  */
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { Link, useSearchParams } from "@/lib/nav";
 import { useState } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";

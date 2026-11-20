@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Button, Chip, Icon, Page, PageHeader, SegmentedControl, toast } from "@/components/ds";

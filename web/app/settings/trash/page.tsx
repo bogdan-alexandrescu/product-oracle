@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useState } from "react";
 
 import { entrySummary, entryText, itemKind, itemTitle } from "@/components/ArtifactMenu";

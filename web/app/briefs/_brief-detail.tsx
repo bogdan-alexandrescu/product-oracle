@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import type { ReactNode } from "react";
 
 import { Chip, Icon, LinkButton, NotFoundPanel, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";

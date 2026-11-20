@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Button, LinkButton } from "@/components/ds";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import type { DraftRoadmapSummary } from "@/lib/api/draft-roadmap";
 

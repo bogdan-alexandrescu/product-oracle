@@ -4,7 +4,7 @@
 // at a time, then the draft. It makes the same brief (POST /v1/intakes) and run Detailed's New
 // PRD makes, so a PRD started here opens in Detailed too.
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 
 import { Chip } from "@/components/ds";

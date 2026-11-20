@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { Chip, DataTable, InfoTip, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
 

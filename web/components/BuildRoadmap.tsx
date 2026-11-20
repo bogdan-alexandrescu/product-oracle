@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useId, useState } from "react";
 
 import { EstimateSummary, type EstimateOut } from "@/app/runs/_lib";

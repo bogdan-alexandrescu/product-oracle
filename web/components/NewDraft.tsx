@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {

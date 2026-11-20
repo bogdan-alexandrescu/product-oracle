@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound, redirect } from "@/lib/nav";
 
 import type { RouteProps } from "@/lib/route-props";
 import { SIMPLE_MODE } from "@/lib/simple-mode";

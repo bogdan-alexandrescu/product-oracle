@@ -19,7 +19,7 @@ export default defineConfig({
         test: {
           name: "logic",
           environment: "node",
-          include: ["{app,components,lib}/**/*.test.ts"],
+          include: ["{app,components,lib,scripts}/**/*.test.ts"],
           exclude: ["**/node_modules/**", "**/*.timing.test.ts"],
         },
       },

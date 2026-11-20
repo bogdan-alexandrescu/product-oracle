@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";

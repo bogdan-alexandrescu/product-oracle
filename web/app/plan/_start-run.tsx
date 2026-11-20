@@ -7,7 +7,7 @@
  * Start for $N starts it. Over the approval limit an owner approves it as they start it.
  */
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useEffect, useState } from "react";
 
 import { Button, Dialog } from "@/components/ds";

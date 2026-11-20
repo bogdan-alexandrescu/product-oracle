@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useState } from "react";
 
 import { Button, Chip, confirmInPage, Dialog, InfoTip, Notice, type ChipKind } from "@/components/ds";

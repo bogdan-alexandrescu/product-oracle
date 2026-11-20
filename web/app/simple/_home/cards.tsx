@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useState, type ReactNode } from "react";
 
 import { Icon, type IconName } from "@/components/ds/Icon";

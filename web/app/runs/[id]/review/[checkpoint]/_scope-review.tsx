@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button, Chip, FilterChips, Icon, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";

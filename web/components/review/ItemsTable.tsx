@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useMemo, type ReactNode } from "react";
 
 import { Chip, DataTable, Ring, type Column } from "@/components/ds";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "@/lib/nav";
 import { type FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import {

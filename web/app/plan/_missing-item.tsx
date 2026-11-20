@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { Button, Notice } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";

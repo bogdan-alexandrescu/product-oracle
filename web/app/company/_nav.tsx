@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, usePathname } from "@/lib/nav";
 import { cloneElement, isValidElement, Suspense, type ReactElement, type ReactNode } from "react";
 
 import { Chip, InfoTip, PageHeader, PageTabsProvider, ScrollStrip, ViewOnly } from "@/components/ds";

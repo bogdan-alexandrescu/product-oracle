@@ -1,6 +1,6 @@
 "use client";
 
-import { notFound } from "next/navigation";
+import { notFound } from "@/lib/nav";
 import { Suspense } from "react";
 
 import { SIMPLE_MODE } from "../_flag";

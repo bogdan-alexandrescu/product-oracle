@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";

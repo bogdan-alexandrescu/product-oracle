@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { Chip, JOURNEY_STEPS, JourneyTrack, LinkButton, Panel } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";

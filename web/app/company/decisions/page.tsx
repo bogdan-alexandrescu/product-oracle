@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { Link, useSearchParams } from "@/lib/nav";
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button, Chip, type Column, DataTable, FilterChips, InfoTip, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";

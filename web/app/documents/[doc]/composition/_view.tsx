@@ -1,7 +1,7 @@
 "use client";
 
 import { RoleBadge } from "@/components/RoleBadge";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "@/lib/nav";
 import { useState, useSyncExternalStore } from "react";
 
 import { DocCrumb } from "@/components/DocToolbar";

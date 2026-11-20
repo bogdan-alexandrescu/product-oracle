@@ -8,7 +8,7 @@
  * gateway runs on it (`pool.on_fallback`), and the notice says so and until when instead.
  * Drawn on Home and Settings > Claude accounts, owners only.
  */
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { Button, Notice } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";

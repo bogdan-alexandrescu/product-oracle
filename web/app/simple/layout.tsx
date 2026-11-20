@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import { Suspense, type ReactNode } from "react";
 
 import { HomeSkeleton } from "@/app/simple/_home/skeleton";

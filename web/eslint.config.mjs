@@ -47,6 +47,18 @@ const ROLE_RULES = [
   },
 ];
 
+// #1579: links and navigation come from lib/nav.ts only, so a move off Next changes one file.
+// A lane that brings in a next/* import runs `node scripts/nav-codemod.mjs` to re-point it.
+const NAV_RULE = [
+  "error",
+  {
+    paths: ["next/link", "next/navigation"].map((name) => ({
+      name,
+      message: "Import links and navigation from @/lib/nav (node scripts/nav-codemod.mjs re-points them).",
+    })),
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -57,7 +69,12 @@ const eslintConfig = defineConfig([
       "no-alert": "error",
       "no-restricted-globals": ["error", "confirm", "alert", "prompt"],
       "no-restricted-syntax": ["error", ...DATE_RULES],
+      "no-restricted-imports": NAV_RULE,
     },
+  },
+  {
+    files: ["lib/nav.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
   {
     files: ["app/**", "components/**"],

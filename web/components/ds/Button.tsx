@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
 import { Icon, type IconName } from "./Icon";

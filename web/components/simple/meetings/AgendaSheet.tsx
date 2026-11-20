@@ -9,7 +9,7 @@
  * the decider, anyone else reads. A removed item waits in Settings › Trash (port-an-decisions):
  * the done line has Undo and Open Trash, where its Restore puts it back.
  */
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useRef, useState } from "react";
 
 import { InfoTip, Sheet, toast } from "@/components/ds";

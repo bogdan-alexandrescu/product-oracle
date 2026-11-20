@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useEffect, type ComponentType } from "react";
 
-import Link from "next/link";
 
 import { Icon, LinkButton, NotFoundPanel, Page } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";

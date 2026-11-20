@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button, Chip, FilterChips, Icon, LinkButton, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";

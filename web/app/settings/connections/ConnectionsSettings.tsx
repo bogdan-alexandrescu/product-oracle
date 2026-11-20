@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { Link, useSearchParams } from "@/lib/nav";
 import { useId, useState, type FormEvent } from "react";
 
 import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";

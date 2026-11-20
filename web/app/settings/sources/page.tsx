@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { KIND_LABEL } from "@/app/sources/_components/confidence";

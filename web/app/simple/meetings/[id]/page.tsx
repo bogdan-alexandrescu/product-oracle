@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound } from "@/lib/nav";
 import { Suspense } from "react";
 
 import type { RouteProps } from "@/lib/route-props";
