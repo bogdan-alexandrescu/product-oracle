@@ -1,6 +1,6 @@
 """Templates and themes: built-in seeding, versioning, archive, validation, contrast."""
 
-from pathlib import Path
+import hashlib
 
 import pytest
 from sqlalchemy import func, select
@@ -11,10 +11,9 @@ from oracle.templates.defaults import DEFAULT_TEMPLATE_BODY, ensure_default_temp
 from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.templates.validation import check_template, check_theme_tokens, contrast
 from oracle.tenancy import tenant_session
+from tests._own_tree_only import contract
 from tests.conftest import seed_company
 from tests.test_priorities import _token
-
-REPO = Path(__file__).resolve().parents[2]
 
 VALID = """---
 theme: clean-document
@@ -38,11 +37,11 @@ brief: [problem]
 
 
 def test_packaged_skeletons_match_the_research_copies():
-    research = REPO / "docs" / "research" / "templates"
-    if not research.exists():  # e.g. inside the API image
-        pytest.skip("docs/ not available")
+    """docs/research/templates, as the docs publish it (docs-research-templates.json, #1570)."""
+    research = contract("docs-research-templates")["sha256"]  # skips inside the API image
     for t in BUILTIN_TEMPLATES:
-        assert t.path.read_text() == (research / t.kind / f"{t.key}.md").read_text(), t.key
+        got = hashlib.sha256(t.path.read_bytes()).hexdigest()
+        assert got == research[f"{t.kind}/{t.key}.md"], t.key
     assert len([t for t in BUILTIN_TEMPLATES if t.kind == "prd"]) == 7
     assert len([t for t in BUILTIN_TEMPLATES if t.kind == "roadmap"]) == 5
 

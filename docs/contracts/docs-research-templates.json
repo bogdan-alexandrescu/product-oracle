@@ -1,0 +1,16 @@
+{
+  "sha256": {
+    "prd/ai-feature.md": "9bee6e6f28adfdbe060323ffb3f284796ac74b3df8c1e4f3f8b6279a4cd9f82f",
+    "prd/narrative-memo.md": "6dfcf03cc8c3ff5b4c0a9a75a540e58709c7f1c63fbed60c3535ddcf5f40b47e",
+    "prd/one-pager.md": "7ef807bf706b5012641da80cd5a4d83ad0b634363b4b678b8381fa6ae263abf3",
+    "prd/oracle-default.md": "85a1ce63f0603326f948f0555d6c15289fe79f49c6836ca97430328f588f8a1b",
+    "prd/pr-faq.md": "ac88e642bc8b1cd5436fe18d431190ff95e549442b61b8219c2269370028275b",
+    "prd/prd-rfc.md": "74121158237abe2ad7312600ece8d0daddf94c13e15f90d9e6cf195c75f8ff88",
+    "prd/shape-up-pitch.md": "63734ac46baee2cf6aa91e717d1fb0a8f55fa1f94203bd6fe792e0079cec2233",
+    "roadmap/cycle-bets.md": "4ebc4841b21d35a5078c52e4a1d32def12c272c2aefa5ea43d25d767e751a038",
+    "roadmap/now-next-later.md": "3651de4c05434f1ec2173666709c941d5ad1548b40c9e8dba1befa988dbebe58",
+    "roadmap/outcome-roadmap.md": "ca3a27555c83f2f9cf72f1dd0f6ddd41be24255eadb6c7bba506b29e284024ef",
+    "roadmap/quarterly-timeline.md": "4a8c7409b5a1cc009fa50944116609d1ee4ca146a8ccf2d2c94d828feaf08d2a",
+    "roadmap/release-plan.md": "0c905436bd24cca9038d1c47dc9ba577bee708bb468719ee345a2791974d6257"
+  }
+}

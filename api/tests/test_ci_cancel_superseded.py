@@ -4,6 +4,11 @@ older runs still in progress are cancelled, except one whose deploy has started.
 import importlib.util
 from pathlib import Path
 
+import pytest
+
+# The code under test is CI's own script, not a value another tree publishes (#1570).
+pytestmark = pytest.mark.foreign_read(".github/scripts/cancel_superseded_runs.py")
+
 SCRIPT = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "cancel_superseded_runs.py"
 
 

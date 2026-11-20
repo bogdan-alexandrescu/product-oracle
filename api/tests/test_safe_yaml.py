@@ -1,5 +1,5 @@
 """Untrusted YAML (oracle.safe_yaml): the probes from the security review answer fast,
-with a 422/413 or a failed import, on every path that reads YAML; the repo's own YAML
+with a 422/413 or a failed import, on every path that reads YAML; the API's own YAML
 (templates, fixtures, modules) parses as it did with yaml.safe_load."""
 
 import asyncio
@@ -21,7 +21,8 @@ from tests.fixtures import MARKDOWN, draft, import_draft, seed_auth
 from tests.test_mcp import api_token, mcp_client, text_of
 from tests.test_runs import get, started, tick
 
-REPO = Path(__file__).resolve().parents[2]
+# The API reads its own tree only (#1570): the web and docs parse their YAML themselves.
+REPO = Path(__file__).resolve().parents[1]
 FAST = 0.1  # seconds: every probe is answered within this
 # ...but 50,000 values are allowed, and building them takes longer (on the parse pool).
 BUDGET = {"many_nodes": 3.0}
@@ -431,7 +432,7 @@ _SKIP_DIRS = {
 
 
 def _repo_yaml() -> list[tuple[str, str]]:
-    """Every YAML file, draft/template front matter and yaml block in the repo."""
+    """Every YAML file, draft/template front matter and yaml block in api/."""
     out: list[tuple[str, str]] = []
     for path in sorted(REPO.rglob("*")):
         rel = path.relative_to(REPO)

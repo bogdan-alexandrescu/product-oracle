@@ -1,7 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
 import { audienceSections, redact, type BoardItem } from "../lib/api/mock/audience";
+import { contract } from "../lib/ownTreeOnly";
 import { expect, test } from "./test";
 
 /**
@@ -21,7 +19,8 @@ type Case = {
   engineering: string;
 };
 
-const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/tests/fixtures/audience_redaction.json"), "utf8"));
+// The API publishes its cases as docs/contracts/api-audience-redaction.json (#1570).
+const CASES = contract("api-audience-redaction") as Case[];
 
 // Words Board writes itself (headings, column heads, the left-out and no-items lines).
 const BOARD_WORDS = new Set(

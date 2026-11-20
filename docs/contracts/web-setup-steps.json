@@ -1,0 +1,12 @@
+{
+  "steps": [
+    "connect",
+    "sources",
+    "invite",
+    "domains",
+    "eng_lead",
+    "horizons",
+    "timezone",
+    "build_baseline"
+  ]
+}

@@ -12,7 +12,6 @@ Invented example data only.
 """
 
 import json
-import re
 import uuid
 
 import pytest
@@ -29,6 +28,7 @@ from oracle.runs import service as runs_service
 from oracle.runs.models import Run
 from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, ProductIntake
+from tests._own_tree_only import contract
 from tests.baseline_helpers import cite, confirm, entity, make_item
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import company, create_intake, summary
@@ -264,14 +264,12 @@ def test_a_long_upload_is_read_by_the_sections_that_speak_to_the_brief():
 
 
 def test_the_intake_spec_names_the_current_prompt():
-    from pathlib import Path
-
+    """The prompts spec-INT2.md names, as the docs publish them (docs-wording.json, #1570)."""
     from oracle.jobs import prompting
 
-    spec = Path(__file__).parents[2] / "docs/product-oracle-v2/specs/spec-INT2.md"
     current = prompting.CURRENT["intake_analysis"]
-    named = set(re.findall(r"intake_analysis\.v\d+", spec.read_text()))
-    assert named == {current}
+    named = contract("docs-wording")["prompts"]["product-oracle-v2/specs/spec-INT2.md"]
+    assert set(named) == {current}
 
 
 DESCRIBED = "described_called_missing"

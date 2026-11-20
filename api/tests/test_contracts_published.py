@@ -33,7 +33,8 @@ PUBLISHED = {
 
 @pytest.mark.parametrize("name", PUBLISHED)
 def test_the_apis_published_contract_is_its_fixture(name):
-    contract(name)  # skips where docs/contracts is not available (the API image)
+    if not CONTRACTS.is_dir():
+        pytest.skip("docs/contracts is not available (the API image)")
     value = PUBLISHED[name]()
     if os.environ.get("CONTRACTS_WRITE") == "1":
         text = json.dumps(value, indent=2, ensure_ascii=False) + "\n"

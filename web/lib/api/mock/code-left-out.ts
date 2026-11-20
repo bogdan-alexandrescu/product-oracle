@@ -1,5 +1,6 @@
-// Kept apart, with no imports, so api/tests/test_export_visual_e.py can run it through node and
-// check it gives what export/deck.py code_left_out gives for the same input.
+// Kept apart, with no imports: e2e/contracts-published.spec.ts publishes what it gives for the
+// API's cases (docs/contracts/mock-code-left-out.json), and api/tests/test_export_visual_e.py
+// checks export/deck.py code_left_out gives the same.
 const LIST_ITEM = /^( {0,3}(?:[-*+]|\d{1,9}[.)]))( +|\t|$)/;
 const BREAK = /^ {0,3}(?:(?:\* *){3,}|(?:- *){3,}|(?:_ *){3,})$/;
 const SETEXT = /^ {0,3}(?:=+|-+) *$/;
