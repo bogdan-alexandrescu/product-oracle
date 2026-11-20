@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useRouter, useSearchParams } from '@/lib/nav';
 import { type FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
@@ -192,7 +193,7 @@ function useIsPhone(): boolean {
   );
 }
 
-export default function SourcesPage() {
+function SourcesPage() {
   return (
     <Suspense fallback={<Loading label="Loading sources…" />}>
       <SourcesSearchPage />
@@ -610,3 +611,5 @@ function SourcesSearchPage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/sources/')({ component: SourcesPage });

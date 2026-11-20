@@ -1,0 +1,24 @@
+# #1581: the API on the same origin, included by default.conf when API_INTERNAL_URL is set.
+location ^~ /v1/ {
+    proxy_pass ${API_INTERNAL_URL};
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;          # lib/stream.ts: server-sent events
+    proxy_read_timeout 120s;      # brief-answers: a long model call plus saving
+    proxy_send_timeout 120s;
+    client_max_body_size 100m;    # Sources uploads; the API keeps its own limits
+    gzip off;
+}
+location ^~ /uploads/ {
+    proxy_pass ${API_INTERNAL_URL};
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location = /healthz {
+    proxy_pass ${API_INTERNAL_URL};
+    proxy_set_header Host $host;
+}

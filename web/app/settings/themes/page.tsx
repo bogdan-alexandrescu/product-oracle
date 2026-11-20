@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useState } from 'react';
 
@@ -163,7 +164,7 @@ function ThemeInspector({ t }: { t: Theme }) {
   );
 }
 
-export default function ThemesPage() {
+function ThemesPage() {
   const { can, capsReady } = useMe();
   const canCreate = can('create_theme');
   const [showArchived, setShowArchived] = useState(false);
@@ -243,3 +244,5 @@ export default function ThemesPage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/themes/')({ component: ThemesPage });

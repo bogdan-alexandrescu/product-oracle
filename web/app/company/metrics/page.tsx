@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { usePathname, useRouter, useSearchParams } from '@/lib/nav';
 import { Suspense, useState, useSyncExternalStore } from 'react';
 
@@ -53,7 +54,7 @@ function useIsPhone(): boolean {
   );
 }
 
-export default function MetricsPage() {
+function MetricsPage() {
   return (
     <Suspense fallback={<PageSkeleton bare />}>
       <Metrics />
@@ -363,3 +364,5 @@ function Metrics() {
     </>
   );
 }
+
+export const Route = createFileRoute('/company/metrics/')({ component: MetricsPage });

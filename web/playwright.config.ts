@@ -19,9 +19,9 @@ const CI_REPORTERS: ReporterDescription[] = [['list'], ['html', { open: 'never' 
 if (process.env.E2E_BLOB === '1') CI_REPORTERS.push(['blob']);
 
 /**
- * Runs against a production build in mock mode (NEXT_PUBLIC_API_MOCKS=1), built into
- * .next-mock so it never clobbers the real build. Each test gets a fresh browser
- * context, hence freshly seeded mock data.
+ * Runs against a production build in mock mode (`vite build --mode mock`, VITE_API_MOCKS=1 from
+ * .env.mock), built into dist-mock so it never clobbers the real build, and served by
+ * `vite preview`. Each test gets a fresh browser context, hence freshly seeded mock data.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -47,13 +47,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 1366, height: 820 } },
     },
   ],
-  // E2E_PREBUILT=1: the mock build is already in .next-mock (CI builds it in its own step), so the
+  // E2E_PREBUILT=1: the mock build is already in dist-mock (CI builds it in its own step), so the
   // server only starts; E2E_SERVER_TIMEOUT_MS gives a slow build more than three minutes.
   webServer: {
     command:
       process.env.E2E_PREBUILT === '1'
-        ? `npm run start:mock -- -p ${PORT}`
-        : `npm run build:mock && npm run start:mock -- -p ${PORT}`,
+        ? `npm run start:mock -- --port ${PORT}`
+        : `npm run build:mock && npm run start:mock -- --port ${PORT}`,
     url: `http://localhost:${PORT}/login`,
     timeout: Number(process.env.E2E_SERVER_TIMEOUT_MS ?? 180_000),
     reuseExistingServer: !process.env.CI,

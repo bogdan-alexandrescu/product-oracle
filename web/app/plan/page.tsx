@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
@@ -108,7 +109,7 @@ function BuildRoadmaps() {
  */
 const noSubscribe = () => () => {};
 
-export default function PlanPage() {
+function PlanPage() {
   const { me, can, capsReady } = useMe();
   const userId = me?.user_id ?? null;
   // #370: approvers start PRDs (a PRD is any approver's; only a vision, strategy or update
@@ -498,3 +499,5 @@ export default function PlanPage() {
     </div>
   );
 }
+
+export const Route = createFileRoute('/plan/')({ component: PlanPage });

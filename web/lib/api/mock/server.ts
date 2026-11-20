@@ -15878,7 +15878,7 @@ let queue: Promise<unknown> = Promise.resolve();
  * gives up on its first post; `__poMockSlack.posting({title})` makes it wait for its first
  * post (no thread yet).
  */
-if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_MOCKS === '1') {
+if (typeof window !== 'undefined' && import.meta.env.VITE_API_MOCKS === '1') {
   (globalThis as { __poMockSlack?: unknown }).__poMockSlack = {
     reply: (input: { title: string; email: string; text: string }) => {
       const next = queue.then(() => {
@@ -15922,7 +15922,7 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_MOCKS === '1') 
  * the app's own calls (each reads the data, answers, then saves it), so a call in flight never
  * saves over a seed. Resolves with what `change` returns, once saved.
  */
-if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_MOCKS === '1') {
+if (typeof window !== 'undefined' && import.meta.env.VITE_API_MOCKS === '1') {
   (globalThis as { __poMockWrite?: unknown }).__poMockWrite = <T>(
     change: (db: Db) => T,
   ): Promise<T> => {

@@ -1,6 +1,9 @@
 # Generated (make openapi): never edited by hand.
 lib/api/openapi.json
 lib/api/schema.d.ts
+routeTree.gen.ts
+# Its inline scripts are lib/theme.ts's and ModeSwitch's, byte for byte (lib/index-html.test.ts).
+index.html
 
 # Written by scripts: their own output is the format.
 package-lock.json
@@ -10,12 +13,11 @@ e2e/prose-ceilings.json
 e2e/real/fixtures/
 
 # Build and test output.
-.next/
-.next-*/
+dist/
+dist-*/
 out/
 build/
 coverage/
 test-results/
 playwright-report/
 blob-report/
-next-env.d.ts

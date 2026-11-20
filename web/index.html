@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" class="h-full antialiased">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="PRD review loop" />
+    <title>Product Oracle</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-icon.png" />
+    <!-- I3 type (Open sky): self-hosted woff2 files (public/fonts, @font-face in globals.css). -->
+    <link
+      rel="preload"
+      href="/fonts/inter-tight-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="/fonts/dm-mono-latin-400.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="/fonts/dm-mono-latin-500.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <!-- lib/theme.ts THEME_SCRIPT and ModeSwitch's MODE_SCRIPT, before paint (lib/index-html.test.ts keeps them equal). -->
+    <script>try{var t=localStorage.getItem("oracle-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+    <script>try{document.documentElement.dataset.mode=/^\/simple(\/|$)/.test(location.pathname)?"simple":"detailed"}catch(e){}</script>
+  </head>
+  <body class="min-h-full">
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

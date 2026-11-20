@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useState } from 'react';
 
@@ -169,7 +170,7 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
  * with each entry's kind as a chip. Owners see everything; others what they deleted (features,
  * goals, decisions, questions, meeting agenda items), which they restore themselves (its
  * can_restore). */
-export default function TrashPage() {
+function TrashPage() {
   const { can, loading } = useMe();
   const sees = can('list_trash');
   const q = useQuery(sees ? 'trash' : 'trash|none', () =>
@@ -290,3 +291,5 @@ export default function TrashPage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/trash/')({ component: TrashPage });

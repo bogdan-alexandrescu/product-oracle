@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useSearchParams } from '@/lib/nav';
 import {
   Suspense,
@@ -1240,7 +1241,7 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
 
 const PRIORITIES_SUBJECT = { kind: 'priorities' as const, subject: {} };
 
-export default function PrioritiesPage() {
+function PrioritiesPage() {
   // G7 3.3: the panel is about the priority order.
   useScreenSubject(PRIORITIES_SUBJECT, 'Priority order');
   // The query string is read on the client: the page streams in under Suspense.
@@ -2071,3 +2072,5 @@ function OrderReason({ reason, features }: { reason: string; features: RankedFea
   }
   return <li>{reason}</li>;
 }
+
+export const Route = createFileRoute('/priorities/')({ component: PrioritiesPage });

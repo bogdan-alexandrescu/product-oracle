@@ -400,7 +400,6 @@ function UserMenu({
     const still = await api.GET('/v1/me').catch(() => undefined);
     if (still?.response.ok) {
       // A full page load on purpose: IAP answers this URL, it never reaches Next.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign('/?gcp-iap-mode=CLEAR_LOGIN_COOKIE');
       return;
     }
@@ -488,7 +487,6 @@ function UserMenu({
             if (!yes) return;
             resetMockData();
             // Full reload on purpose: every view re-reads the freshly seeded state.
-            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             window.location.assign('/login');
           }}
           className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"

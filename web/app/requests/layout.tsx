@@ -1,4 +1,5 @@
-import { Suspense, type ReactNode } from 'react';
+import { Outlet, createFileRoute } from '@tanstack/react-router';
+import { Suspense } from 'react';
 
 import { PageTabsProvider } from '@/components/ds';
 
@@ -11,7 +12,7 @@ import { RequestsNav } from './_nav';
  * (qa-shell-33), whatever the page's header holds. The tabs share their filters, ticked
  * requests, selection and themes (RequestsStateProvider), so moving between them keeps them.
  */
-export default function RequestsLayout({ children }: { children: ReactNode }) {
+function RequestsLayout() {
   // The shared state reads the session's queries, so it renders on the client only.
   return (
     <Suspense fallback={null}>
@@ -22,9 +23,11 @@ export default function RequestsLayout({ children }: { children: ReactNode }) {
               <RequestsNav where="top" />
             </Suspense>
           </div>
-          {children}
+          <Outlet />
         </PageTabsProvider>
       </RequestsStateProvider>
     </Suspense>
   );
 }
+
+export const Route = createFileRoute('/requests')({ component: RequestsLayout });

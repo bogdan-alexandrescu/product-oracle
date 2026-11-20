@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useRouter } from '@/lib/nav';
 
 import { Chip, DataTable, Icon, Page, Panel, type Column } from '@/components/ds';
@@ -103,7 +104,7 @@ const COLUMNS: Column<InterviewSummary>[] = [
  * phone the rows stack as cards; the table's column widths are dropped there so nothing is
  * wider than the screen (qa-work-42).
  */
-export default function InterviewsPage() {
+function InterviewsPage() {
   const router = useRouter();
   const triage = useTriage();
   const q = useQuery('interviews', () =>
@@ -135,3 +136,5 @@ export default function InterviewsPage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/requests/interviews/')({ component: InterviewsPage });

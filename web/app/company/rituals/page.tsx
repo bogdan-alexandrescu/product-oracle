@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useSearchParams } from '@/lib/nav';
 import { Suspense, useState } from 'react';
 
@@ -45,7 +46,7 @@ import {
   type SummarySettings,
 } from './_components/lib';
 
-export default function RitualsPage() {
+function RitualsPage() {
   return (
     <Suspense fallback={<PageSkeleton bare />}>
       <Rituals />
@@ -540,3 +541,5 @@ function AddRitual({
     </form>
   );
 }
+
+export const Route = createFileRoute('/company/rituals/')({ component: RitualsPage });

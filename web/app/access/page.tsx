@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useRouter } from '@/lib/nav';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
@@ -63,7 +64,7 @@ function body(a: Access): string {
  * /login: waiting for an owner (with a note for them), declined, an expired invite, invite
  * only, outside the company's domains, or removed. Members and password sign-in go on to Oracle.
  */
-export default function AccessPage() {
+function AccessPage() {
   const router = useRouter();
   const [access, setAccess] = useState<Access | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +87,6 @@ export default function AccessPage() {
             return router.replace('/login');
           setAccess(data);
           // Approved: on into Oracle with a full load (the session is new).
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           if (data.state === 'approved') window.location.assign('/');
         },
         (e) => live.current && setCheckError(errorMessage(e)),
@@ -134,7 +134,6 @@ export default function AccessPage() {
     // Google sign-in in front of Oracle: ask it to clear its own cookie, which leads to
     // Google's account chooser. The mock has no Google in front: back to sign-in.
     if (MOCK_MODE) return router.push('/login');
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign('/?gcp-iap-mode=CLEAR_LOGIN_COOKIE');
   }
 
@@ -203,3 +202,5 @@ export default function AccessPage() {
     </AuthCard>
   );
 }
+
+export const Route = createFileRoute('/access/')({ component: AccessPage });

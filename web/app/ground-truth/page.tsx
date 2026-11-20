@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useRouter, useSearchParams } from '@/lib/nav';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -237,7 +238,7 @@ function StateViewFromUrl({ onView }: { onView: (v: 'desired' | 'current') => vo
   return null;
 }
 
-export default function BaselinePage() {
+function BaselinePage() {
   const { me, can, capsReady, capsError } = useMe();
   const [stateView, setStateView] = useState<'desired' | 'current'>('desired');
   const states = useFeatureStates();
@@ -1046,3 +1047,5 @@ export default function BaselinePage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/ground-truth/')({ component: BaselinePage });

@@ -11,7 +11,7 @@ import {
 
 /**
  * End-to-end against the real stack: the API (uvicorn) on a fresh database and a
- * production build of the web app proxying /v1 to it. Needs a running Postgres 16
+ * production build of the web app, served by nginx, proxying /v1 to it. Needs a running Postgres 16
  * (e.g. `docker compose up -d postgres`); the E2E database is dropped and recreated
  * on every run. Run with `make e2e`.
  */
@@ -53,10 +53,10 @@ export default defineConfig({
       stdout: 'pipe',
     },
     {
-      // Rewrites are resolved at build time, so this build points at the E2E API.
-      command: `next build && next start -p ${WEB_PORT}`,
+      // The production build (dist-e2e) behind nginx with the image's config, /v1 to the E2E API.
+      command: 'sh e2e/real/start-web.sh',
       url: `http://localhost:${WEB_PORT}/login`,
-      env: { API_INTERNAL_URL: API_URL, NEXT_DIST_DIR: '.next-e2e' },
+      env: { E2E_API_URL: API_URL, E2E_WEB_PORT: String(WEB_PORT) },
       timeout: 240_000,
       reuseExistingServer: false,
     },

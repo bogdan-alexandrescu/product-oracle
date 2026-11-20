@@ -24,9 +24,7 @@ declare global {
 /** Whether the mock app's own Google stand-in is used (mock mode, and no spec fakes Google itself). */
 export function mockGoogleOn(): boolean {
   return (
-    process.env.NEXT_PUBLIC_API_MOCKS === '1' &&
-    typeof window !== 'undefined' &&
-    !window.__googleFaked
+    import.meta.env.VITE_API_MOCKS === '1' && typeof window !== 'undefined' && !window.__googleFaked
   );
 }
 

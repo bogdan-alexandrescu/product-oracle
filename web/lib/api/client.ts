@@ -5,12 +5,12 @@ import { sharedReads } from './shared-reads';
 import type { components, paths } from './schema';
 
 /**
- * Mock mode (NEXT_PUBLIC_API_MOCKS=1, inlined at build time) swaps the transport for
+ * Mock mode (VITE_API_MOCKS=1, from .env.mock: `vite build --mode mock`) swaps the transport for
  * an in-browser fake of the API backed by fixtures; every call site stays the same.
  */
-export const MOCK_MODE = process.env.NEXT_PUBLIC_API_MOCKS === '1';
+export const MOCK_MODE = import.meta.env.VITE_API_MOCKS === '1';
 
-// Same-origin: next.config.ts proxies /v1/* to the API, so the session cookie
+// Same-origin: nginx (vite.config.ts in dev) proxies /v1/* to the API, so the session cookie
 // set by POST /v1/auth/login is sent on every call. Reads of the same URL are shared
 // (./shared-reads, simple-call-budget).
 export const api = createClient<paths>({

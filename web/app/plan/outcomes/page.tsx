@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useSearchParams } from '@/lib/nav';
 import { Suspense, useState, useSyncExternalStore } from 'react';
 
@@ -28,7 +29,7 @@ import {
 import { Named, NOT_IN_GT, NotInGt } from '@/components/simple/FeatureName';
 import { Loading } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
-import { CATEGORY_LABEL } from '@/app/intakes/[id]/_lib';
+import { CATEGORY_LABEL } from '@/app/intakes/$id/_lib';
 import { formatDate, goalFigure } from '@/lib/format';
 import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
@@ -204,7 +205,7 @@ function StateChip({ o, hero = false }: { o: Outcome; hero?: boolean }) {
  * notices the item shipped, and proposes the actual from the goal's own values; a person
  * confirms it.
  */
-export default function OutcomesPage() {
+function OutcomesPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
       <Outcomes />
@@ -1646,3 +1647,5 @@ function LearningRow({
     </li>
   );
 }
+
+export const Route = createFileRoute('/plan/outcomes/')({ component: OutcomesPage });
