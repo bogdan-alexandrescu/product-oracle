@@ -16,7 +16,6 @@ from oracle.runs.service import (
     _current_attempt,
     _detach,
     _drivable,
-    _harvest,
     _live,
     _locked,
     _note,
@@ -229,7 +228,7 @@ async def _pause_workflow(
         done = status.step(producers[-1])
         held = None
         if done is not None and done.state == "SUCCEEDED":
-            held = await _harvest(db, run, current, wf["id"], producers)
+            held = await service._harvest(db, run, current, wf["id"], producers)
         if done is None or done.state != "SUCCEEDED" or held is not None:
             art = _art(current)
             if art["attempts"]:
