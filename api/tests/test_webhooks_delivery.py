@@ -835,8 +835,14 @@ def test_the_loopback_switch_is_refused_in_a_real_deployment():
     from oracle.config import Settings
 
     assert Settings(webhooks_allow_loopback_for_tests=True).webhooks_allow_loopback_for_tests
-    with pytest.raises(ValueError):
-        Settings(webhooks_allow_loopback_for_tests=True, cookie_secure=True)
+    key = "an-example-key-made-up-for-this-test-0123456789"
+    with pytest.raises(ValueError, match="LOOPBACK"):
+        Settings(
+            webhooks_allow_loopback_for_tests=True,
+            cookie_secure=True,
+            allow_reserved_email_domains=False,
+            secret_key=key,
+        )
 
 
 def test_the_loopback_switch_is_refused_when_oracle_env_is_production():
@@ -845,9 +851,10 @@ def test_the_loopback_switch_is_refused_when_oracle_env_is_production():
     deployment with neither set starts with the switch on."""
     from oracle.config import Settings
 
-    with pytest.raises(ValueError, match="ORACLE_ENV"):
-        Settings(env="production", webhooks_allow_loopback_for_tests=True)
-    assert Settings(env="production").env == "production"
+    key = "an-example-key-made-up-for-this-test-0123456789"
+    with pytest.raises(ValueError, match="LOOPBACK"):
+        Settings(env="production", webhooks_allow_loopback_for_tests=True, secret_key=key)
+    assert Settings(env="production", secret_key=key).env == "production"
     assert Settings(webhooks_allow_loopback_for_tests=True).env != "production"
 
 

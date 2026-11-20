@@ -8,6 +8,7 @@ meeting decisions stay; running it twice adds nothing; the migration chains as t
 fails_when=old comments still count as decisions in old meetings, or a comment is lost or
 doubled; no_claim=the web's comment list (e2e/fix4-simple-decide-review.spec.ts)."""
 
+import importlib.util
 import uuid
 
 from alembic.config import Config
@@ -21,6 +22,16 @@ from oracle.tenancy import tenant_session
 from tests.conftest import API_DIR
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_meetings_api import get, start, world
+
+REVISION = "0093_meeting_comments_as_notes"
+
+
+def _migration():
+    path = API_DIR / "migrations" / "versions" / f"{REVISION}.py"
+    spec = importlib.util.spec_from_file_location(REVISION, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 async def test_old_comment_decisions_become_comments(client):
@@ -41,9 +52,10 @@ async def test_old_comment_decisions_become_comments(client):
         await s.commit()
     titles = [d["title"] for d in (await get(client, w, m["id"]))["meeting_decisions"]]
     assert "Comment: Keep the beta" in titles
+    move = _migration()._comment_decisions_to_notes  # #1575: frozen in the migration
     for _ in range(2):  # a second run adds nothing
         async with tenant_session(w.ctx.tenant_id) as s:
-            await s.run_sync(lambda ss: meetings.comment_decisions_to_notes(ss.connection()))
+            await s.run_sync(lambda ss: move(ss.connection()))
             await s.commit()
     out = await get(client, w, m["id"])
     assert [d["title"] for d in out["meeting_decisions"]] == ["Ship the beta"]
@@ -63,6 +75,4 @@ def test_the_migration_is_the_one_head():
     cfg = Config(str(API_DIR / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     assert len(script.get_heads()) == 1
-    assert script.get_revision("0093_meeting_comments_as_notes").down_revision == (
-        "0092_feedback_discussion"
-    )
+    assert script.get_revision(REVISION).down_revision == ("0092_feedback_discussion")
