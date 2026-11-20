@@ -559,8 +559,9 @@ export function PublishView({ doc }: { doc: string }) {
       : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n }, query: { purpose: "publish" } } })),
   );
   // #254: the confirm names how many sections are not reviewed.
+  // #1586: a failed read says so (below the header), never "every section reviewed" or "no blocks".
   const versionQ = useQuery(`version|${doc}|${n}`, () =>
-    n == null ? Promise.resolve(undefined) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch(() => undefined),
+    n == null ? Promise.resolve(undefined) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
   );
   const sections = versionQ.data?.sections ?? [];
   const unreviewed = sections.filter((s) => !s.verdict).length;
@@ -598,7 +599,7 @@ export function PublishView({ doc }: { doc: string }) {
   // step, so it is published once its version is shared as a link's publication too.
   const sharable = d?.kind === "roadmap";
   const pubsQ = useQuery(`publications|${doc}|${sharable}`, () =>
-    sharable ? unwrap(api.GET("/v1/documents/{doc}/publications", { params: { path: { doc } } })).catch(() => undefined) : Promise.resolve(undefined),
+    sharable ? unwrap(api.GET("/v1/documents/{doc}/publications", { params: { path: { doc } } })) : Promise.resolve(undefined),
   );
   const published = approved && (!sharable || !!pubsQ.data?.some((p) => p.version_number === n));
   // A published version has nothing left to block it: no blocks, even for a roadmap's dates.
@@ -793,6 +794,8 @@ export function PublishView({ doc }: { doc: string }) {
       />
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}
       {readinessQ.error && <ErrorNote>{readinessQ.error}</ErrorNote>}
+      {versionQ.error && <ErrorNote>{versionQ.error}</ErrorNote>}
+      {pubsQ.error && <ErrorNote>{pubsQ.error}</ErrorNote>}
       {notice && <Notice tone="pass">{notice}</Notice>}
       {sharable && n != null && d && (
         // build-review (QV4 a): one line says what Publish does, and once published, Share a link.

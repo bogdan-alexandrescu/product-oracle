@@ -87,7 +87,7 @@ test.describe("PRDs list, no PRDs yet", () => {
     });
     await page.reload();
     await answered(page, "/v1/documents?kind=prd");
-    await expect(page.getByRole("table", { name: "PRDs" })).toHaveAttribute("aria-busy", "true");
+    await expect(page.getByTestId("documents-table").locator("table")).toHaveAttribute("aria-busy", "true");
     await expect(page.getByTestId("prds-empty")).toHaveCount(0);
     await expect(page.getByTestId("prds-empty")).toBeVisible({ timeout: 15_000 });
   });

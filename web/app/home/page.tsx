@@ -143,7 +143,7 @@ export default function HomePage() {
     }
   }
 
-  const { goals, history, historyPending, error: goalsError, loading: goalsLoading } = useGoals("home", { short: true });
+  const { goals, history, historyPending, historyFailed, error: goalsError, loading: goalsLoading } = useGoals("home", { short: true });
   const goalIndex: GoalIndex = useMemo(
     () => new Map((goals ?? []).map((g) => [g.id, { id: g.id, tag: g.tag, title: g.title, proposed: g.proposed }])),
     [goals],
@@ -311,6 +311,7 @@ export default function HomePage() {
           goals={goals}
           history={history}
           historyPending={historyPending}
+          historyFailed={historyFailed}
           error={goalsError}
           loading={goalsLoading}
           canImport={canBuild}

@@ -95,7 +95,7 @@ export function RoadmapItemsPane({
   const item = items.find((i) => i.item_key === selected);
   const historyQ = useQuery(`roadmap-item-history|${source?.slug ?? ""}|${row && !row.ghost ? row.key : ""}`, () =>
     source?.slug && row && !row.ghost
-      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: source.slug, item_key: row.key } } })).catch(() => null)
+      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: source.slug, item_key: row.key } } }))
       : Promise.resolve(null),
   );
 
@@ -161,7 +161,7 @@ export function RoadmapItemsPane({
       }
     >
       {change && <WhatChanged change={change} since={since} titles={titles} />}
-      {!r.ghost && <ItemHistory history={historyQ.data} />}
+      {!r.ghost && <ItemHistory q={historyQ} />}
     </ItemInspector>
   );
 

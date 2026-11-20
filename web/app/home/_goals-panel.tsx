@@ -16,6 +16,7 @@ function GoalCard({
   subs,
   history,
   historyPending,
+  historyFailed,
   canInterview,
   openGoal,
 }: {
@@ -23,6 +24,8 @@ function GoalCard({
   subs: GoalView[];
   history: Point[] | undefined;
   historyPending: boolean;
+  /** #1586: why the trend could not be read; the card says so, never draws "no trend". */
+  historyFailed: string | undefined;
   canInterview: boolean;
   openGoal: boolean;
 }) {
@@ -95,6 +98,14 @@ function GoalCard({
       {/* The trend's room (the Sparkline's 240 x 40) is kept while it loads, so the band does not
           grow under the page a moment after it is drawn (#520: a goal chip's card below it closed). */}
       {history === undefined && historyPending && g.currentText && <div aria-hidden className="aspect-[6/1] w-full" data-testid="goal-trend-pending" />}
+      {historyFailed && (
+        <span data-testid="goal-trend-failed" role="status" className="inline-flex items-center gap-1.5 text-[13px] text-text2">
+          Could not load the trend.
+          <InfoTip label="the error" align="start">
+            {historyFailed}
+          </InfoTip>
+        </span>
+      )}
       {trend && (
         <div className="min-w-0 [&>svg]:h-auto [&>svg]:w-full" data-testid="goal-trend">
           <Sparkline
@@ -198,6 +209,7 @@ export function GoalsPanel({
   goals,
   history,
   historyPending = false,
+  historyFailed,
   error,
   loading,
   canImport,
@@ -210,6 +222,8 @@ export function GoalsPanel({
   history: Map<string, Point[]>;
   /** The trends are still loading (useGoals). */
   historyPending?: boolean;
+  /** #1586: the goals whose trend could not be read, with the reason (useGoals). */
+  historyFailed?: Map<string, string>;
   error: string | null;
   loading: boolean;
   /** Approvers and owners build the baseline; a viewer sees no action they cannot take. */
@@ -307,6 +321,7 @@ export function GoalsPanel({
               subs={goals!.filter((s) => s.parentId === g.id)}
               history={history.get(g.id)}
               historyPending={historyPending}
+              historyFailed={historyFailed?.get(g.id)}
               canInterview={canInterview}
               openGoal={openGoals}
             />

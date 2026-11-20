@@ -473,57 +473,63 @@ export default function DocumentsPage() {
           )}
         </Panel>
       ) : (
-        <Split
-          // qa-docs-16: on a phone a tapped row opens its PRD, so no panel waits below the list.
-          inspector={selected && !phone ? <DocInspector d={selected} canPublish={can("publish_version")} names={names} /> : undefined}
-        >
-          <Panel>
-            <div
-              onKeyDownCapture={(e) => {
-                byKey.current = ["ArrowUp", "ArrowDown", "Home", "End", " "].includes(e.key);
-              }}
-              onPointerDownCapture={() => {
-                byKey.current = false;
-              }}
-            >
-              <DataTable
-                label="PRDs"
-                testId="documents-table"
-                columns={columns}
-                rows={q.data ? documents : undefined}
-                loading={q.loading}
-                rowKey={(d) => d.slug}
-                selected={phone ? picked : (selected?.slug ?? null)}
-                onSelect={(k) => {
-                  const moved = byKey.current;
-                  byKey.current = false;
-                  if (phone && !moved) router.push(`/documents/${k}`);
-                  else setPicked(k);
+        <>
+          {/* #1586: with no PRDs, whether a brief waits in Ideas is unknown when the ideas failed: say so. */}
+          {ideasQ.error && q.data?.length === 0 && <LoadError what="the ideas" error={ideasQ.error} onRetry={() => void ideasQ.reload()} />}
+          <Split
+            // qa-docs-16: on a phone a tapped row opens its PRD, so no panel waits below the list.
+            inspector={selected && !phone ? <DocInspector d={selected} canPublish={can("publish_version")} names={names} /> : undefined}
+          >
+            <Panel>
+              <div
+                onKeyDownCapture={(e) => {
+                  byKey.current = ["ArrowUp", "ArrowDown", "Home", "End", " "].includes(e.key);
                 }}
-                onActivate={(k) => router.push(`/documents/${k}`)}
-                empty={
-                  filter === "in_review" ? (
-                    "No PRDs in review"
-                  ) : ideaCount > 0 ? (
-                    // qa-onboarding-15: a first brief waits under Ideas, not here: say so and open it.
-                    <span data-testid="prds-empty-ideas" className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-2 whitespace-normal">
-                      <span>
-                        No PRDs yet. {plural(ideaCount, "brief")} {ideaCount === 1 ? "waits" : "wait"} in Ideas.
+                onPointerDownCapture={() => {
+                  byKey.current = false;
+                }}
+              >
+                <DataTable
+                  label="PRDs"
+                  testId="documents-table"
+                  columns={columns}
+                  rows={q.data ? documents : undefined}
+                  // #1586: no PRDs reads as empty only once the ideas have answered too, since the
+                  // empty line says whether a brief waits in Ideas.
+                  loading={q.loading || (documents.length === 0 && ideasQ.loading)}
+                  rowKey={(d) => d.slug}
+                  selected={phone ? picked : (selected?.slug ?? null)}
+                  onSelect={(k) => {
+                    const moved = byKey.current;
+                    byKey.current = false;
+                    if (phone && !moved) router.push(`/documents/${k}`);
+                    else setPicked(k);
+                  }}
+                  onActivate={(k) => router.push(`/documents/${k}`)}
+                  empty={
+                    filter === "in_review" ? (
+                      "No PRDs in review"
+                    ) : ideaCount > 0 ? (
+                      // qa-onboarding-15: a first brief waits under Ideas, not here: say so and open it.
+                      <span data-testid="prds-empty-ideas" className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-2 whitespace-normal">
+                        <span>
+                          No PRDs yet. {plural(ideaCount, "brief")} {ideaCount === 1 ? "waits" : "wait"} in Ideas.
+                        </span>
+                        <Button onClick={() => setView("ideas")}>Open Ideas</Button>
                       </span>
-                      <Button onClick={() => setView("ideas")}>Open Ideas</Button>
-                    </span>
-                  ) : (
-                    // qa-shell-9: the next step, only for someone who can take it.
-                    <span data-testid="prds-empty" className="inline-block max-w-prose whitespace-normal">
-                      {canPropose ? "No PRDs yet. Start one with New PRD." : "No PRDs yet. They appear here once someone starts one."}
-                    </span>
-                  )
-                }
-                rowProps={() => ({ "data-testid": "document-row" })}
-              />
-            </div>
-          </Panel>
-        </Split>
+                    ) : (
+                      // qa-shell-9: the next step, only for someone who can take it.
+                      <span data-testid="prds-empty" className="inline-block max-w-prose whitespace-normal">
+                        {canPropose ? "No PRDs yet. Start one with New PRD." : "No PRDs yet. They appear here once someone starts one."}
+                      </span>
+                    )
+                  }
+                  rowProps={() => ({ "data-testid": "document-row" })}
+                />
+              </div>
+            </Panel>
+          </Split>
+        </>
       )}
     </Page>
   );

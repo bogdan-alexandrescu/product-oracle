@@ -158,7 +158,7 @@ export function DraftRoadmapPane({
   const historyKey = selectedRow && !selectedRow.ghost ? selectedRow.key : "";
   const historyQ = useQuery(`roadmap-item-history|${doc}|${historyKey}`, () =>
     historyKey
-      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: doc, item_key: historyKey } } })).catch(() => null)
+      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: doc, item_key: historyKey } } }))
       : Promise.resolve(null),
   );
   const onSelect = useCallback((key: string) => {
@@ -266,7 +266,7 @@ export function DraftRoadmapPane({
     return (
       <ItemInspector row={r} item={r.ghost ? undefined : item} total={rows.length} rows={rows} documentHref={key ? sectionHref(doc, n, key) : null}>
         {change && <WhatChanged change={change} since={since} titles={titles} />}
-        {!r.ghost && <ItemHistory history={historyQ.data} />}
+        {!r.ghost && <ItemHistory q={historyQ} />}
         {(byItem.get(r.key)?.length ?? 0) > 0 && (
           <InspectorSection label="Check" testId="item-problems">
             <ul className="flex flex-col gap-1.5 text-sm text-warn">
