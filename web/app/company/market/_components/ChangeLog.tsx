@@ -210,10 +210,11 @@ export function ChangeLog({
         <div className="px-4 max-[600px]:px-3" data-testid="web-findings">
           {findings.error && <ErrorNote>{findings.error}</ErrorNote>}
           {findings.data && open.length === 0 ? (
-            <CompanyEmpty testId="findings-empty" title="Nothing from the web to vet">
-              Once a month Oracle searches the web for news, reviews and launches about each alternative. What it finds waits here for an
-              approver to promote to the change log or dismiss.
-            </CompanyEmpty>
+            <CompanyEmpty
+              testId="findings-empty"
+              title="Nothing from the web to vet"
+              tip="Once a month Oracle searches the web for news, reviews and launches about each alternative. What it finds waits here for an approver to promote to the change log or dismiss."
+            />
           ) : (
             <div className="flex flex-col divide-y divide-line">
               {open.map((f) => (

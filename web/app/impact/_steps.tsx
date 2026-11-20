@@ -69,8 +69,12 @@ export function PlanSteps({
         {mayAct ? (
           <Settle output={output} review={proposal.action === "review"} onChanged={onChanged} />
         ) : (
-          <p className="text-sm text-text2">
-            You decide on this {isDoc ? output.category.replace("_", " ") : "output"}, so you can regenerate it. Settling its staleness needs an approver.
+          // #1590: who may settle stays one visible line; why this reader may still regenerate sits behind the (i).
+          <p className="flex items-center gap-1.5 text-sm text-text2">
+            Settling its staleness needs an approver.
+            <InfoTip label="settling staleness" align="start" testId="settle-tip">
+              You decide on this {isDoc ? output.category.replace("_", " ") : "output"}, so you can regenerate it.
+            </InfoTip>
           </p>
         )}
       </Step>

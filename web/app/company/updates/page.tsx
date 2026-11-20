@@ -36,10 +36,9 @@ export default function UpdatesPage() {
           <CompanyEmpty
             testId="updates-not-found"
             title="Updates are for owners and approvers"
+            tip="The board and investor updates stay with owners and approvers until an owner shares one with the whole company."
             action={<LinkButton href="/company">Back to Company</LinkButton>}
-          >
-            The board and investor updates stay with owners and approvers until an owner shares one with the whole company.
-          </CompanyEmpty>
+          />
         </Panel>
       </>
     );
@@ -165,6 +164,7 @@ function Updates() {
           <CompanyEmpty
             testId="updates-empty"
             title="No updates yet"
+            tip="Oracle drafts the board and investor updates from your goals and metrics."
             action={
               mayCreate ? (
                 // Review r2 of PR 1286: on a phone it reads as the header's ("+ Update"), named in full.
@@ -174,9 +174,7 @@ function Updates() {
                 </Button>
               ) : undefined
             }
-          >
-            Oracle drafts the board and investor updates from your goals and metrics.
-          </CompanyEmpty>
+          />
         ) : (
           <DataTable
             label="Updates"
