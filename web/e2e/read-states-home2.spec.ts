@@ -1,5 +1,5 @@
 import { REPLACED_PRD_SCENARIO } from "../lib/api/mock/replaced-prd";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { GOAL_BUCKETS_KR_TARGET_SCENARIO, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -183,4 +183,20 @@ test.describe("Roadmap: Needs a decision", () => {
     await expect(part.getByText("None waiting.")).toHaveCount(0);
     await reason(page, part.getByTestId("load-error"));
   });
+});
+
+test("Priorities: key results that could not be read say so, never goals with none", async ({ page }) => {
+  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, GOAL_BUCKETS_KR_TARGET_SCENARIO] as const);
+  await login(page);
+  await page.goto("/simple/priorities?tab=buckets");
+  const krs = page.locator('[data-testid="plan-goal"][data-goal="Grow retention"]').getByRole("list", { name: "Grow retention's key results" });
+  await expect(krs.getByTestId("goal-kr").filter({ hasText: "Teams read their alerts" })).toHaveCount(1);
+  await expect(loadError(page, "Could not load the key results.")).toHaveCount(0);
+
+  await failGets(page, "/v1/baseline/entities?type=goal");
+  await page.reload();
+  const failed = loadError(page, "Could not load the key results.");
+  await expect(failed).toBeVisible();
+  await expect(krs.getByTestId("goal-kr")).toHaveCount(0);
+  await reason(page, failed);
 });
