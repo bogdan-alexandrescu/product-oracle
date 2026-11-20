@@ -23,8 +23,6 @@ from oracle.runs.service import (
     _art,
     _console_findings,
     _flow,
-    _next,
-    _rt,
     _segments,
     _set_art,
     _set_knob,
@@ -289,7 +287,7 @@ async def _decide_in_workflow(
         }
     )
     on_behalf_of = await _email(db, user_id)
-    runtime = _rt()
+    runtime = service._rt()
     try:
         answer = await runtime.answer(
             wf["id"],
@@ -526,7 +524,7 @@ async def _read_recorded(
     record = RecordedAnswer()
     for _ in range(2):
         try:
-            record = await _rt().answer_record(wf["id"], wait["step_id"], artifact)
+            record = await service._rt().answer_record(wf["id"], wait["step_id"], artifact)
         except RuntimeUnavailable as read:
             if read.retryable:
                 # Answered, not read yet (W5): held until it is (decide_checkpoint).
@@ -576,7 +574,7 @@ async def _follow(
             more = round_ < len(entry.get("reviews") or []) or stop_rest
             if not await service._detach(db, run, cancel=more, state="ended") and strict:
                 return False
-        await _next(db, run, segment, segments)
+        await service._next(db, run, segment, segments)
         return True
     # NOT_YET: the revision step runs in the workflow, then the next round's wait.
     entry["round"] = round_ + 1

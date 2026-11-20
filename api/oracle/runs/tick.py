@@ -25,13 +25,9 @@ from oracle.runs.service import (
     _art,
     _attempts_cost,
     _ceiling,
-    _finish,
     _flow,
     _known_sum,
-    _recompute_spend,
     _refs,
-    _replay,
-    _rt,
     _segments,
     _set_art,
     _set_knob,
@@ -92,7 +88,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     status: WorkflowStatus | None = None
     if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
         try:
-            status = await _rt().status(wf["id"])
+            status = await service._rt().status(wf["id"])
         except RuntimeUnavailable:
             status = None  # read again where it is needed, and failing there as before
     resuming = service._resuming(run, segments)
@@ -193,7 +189,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         service._cost_on(
             run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
         )
-    _recompute_spend(run, segments)
+    service._recompute_spend(run, segments)
     service._record_agents(running, workflow_id, status)
     service._record_wait(
         run,
@@ -230,7 +226,9 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
                 else status.error or f"the workflow ended {status.state}"
             )
             _set_art(running, art)
-            await _finish(db, run, "failed", f"{service._title(run, running)}: {running.error}")
+            await service._finish(
+                db, run, "failed", f"{service._title(run, running)}: {running.error}"
+            )
             await audit.record(db, None, "run.failed", "run", run.id, {"segment": running.name})
             await db.commit()
             return
@@ -303,7 +301,7 @@ def _take_cost(
                 first = False
         start.cost_usd = _attempts_cost(art)
         _set_art(start, art)
-    _recompute_spend(run, segments)
+    service._recompute_spend(run, segments)
     return start
 
 
@@ -358,7 +356,7 @@ async def _retry_pending_cancel(
     does not know (404) is given up, and recorded. A 404 that proves nothing is counted:
     past :data:`NOT_FOUND_TRIES` the run shows in the Inbox with Cancel, and is tried
     again every :data:`STUCK_LOOKUP_SECONDS`."""
-    runtime = _rt()
+    runtime = service._rt()
     pending = wf.get("cancel_pending") or {}
     state = pending.get("state") or "ended"
     # Past the cap only the cancel call rests: its status and cost are read every tick.
@@ -681,13 +679,13 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                         errors.append(f"run {run_id}: {exception_text(exc)}")
                 # Each replay puts back only what its own unfinished passes counted: what an
                 # earlier one committed (the searches' pause, say) stays counted.
-                await _replay(
+                await service._replay(
                     db,
                     deadline,
                     lambda run_id=run_id: _tick_searches(db, run_id, stats),
                     reset=_resetter(stats),
                 )
-                ran = await _replay(
+                ran = await service._replay(
                     db,
                     deadline,
                     lambda run_id=run_id, deadline=deadline: _tick_one(db, run_id, stats, deadline),

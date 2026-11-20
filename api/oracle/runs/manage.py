@@ -25,7 +25,6 @@ from oracle.runs import feature_set, flows, rejection, service
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.scope_models import PrdScope
 from oracle.runs.service import (
-    CANCEL_FOLLOW_UP_GRACE_SECONDS,
     CHECKPOINT_TITLES,
     FINAL,
     Forbidden,
@@ -35,17 +34,14 @@ from oracle.runs.service import (
     _art,
     _can_dismiss_overrun,
     _cancel_again_ids,
-    _cancel_follow_up,
     _ceiling,
     _checkpoints,
     _cost_unknown,
-    _finish,
     _flow,
     _import_failed,
     _segments,
     _set_art,
     _set_knob,
-    _settle_cancel_follow_ups,
     _target_kind,
     _TickStats,
     log,
@@ -876,7 +872,7 @@ async def end_as_oracle(db: AsyncSession, run_id: uuid.UUID, reason: str) -> boo
             service.unqueue(segment)
             segment.status = "cancelled"
             segment.finished_at = service._now()
-    await _finish(db, run, "cancelled", reason)
+    await service._finish(db, run, "cancelled", reason)
     await audit.record(db, audit.ORACLE, "run.cancelled", "run", run.id, {"reason": reason})
     return True
 
@@ -935,9 +931,13 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     # Each cancel is recorded as a follow-up before SwarmCloud is called (no lock held):
     # a crash in between leaves it for the tick, after a grace that keeps the tick off
     # the call this request is making. Settled below, with the run's change.
-    follow_ups = {i: _cancel_follow_up(db, member_id, targets.get(i, run_id), i) for i in ids}
+    follow_ups = {
+        i: service._cancel_follow_up(db, member_id, targets.get(i, run_id), i) for i in ids
+    }
     for row in follow_ups.values():
-        row.next_attempt_at = service._now() + timedelta(seconds=CANCEL_FOLLOW_UP_GRACE_SECONDS)
+        row.next_attempt_at = service._now() + timedelta(
+            seconds=service.CANCEL_FOLLOW_UP_GRACE_SECONDS
+        )
     await db.commit()
     follow_up_ids = {i: row.id for i, row in follow_ups.items()}
     done = {i: await service._cancel_call({"id": i}) for i in ids}
@@ -989,7 +989,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     else:
         await db.rollback()
         raise Unavailable("the run kept changing while Oracle cancelled it; cancel it again")
-    await _settle_cancel_follow_ups(db, follow_up_ids, done)
+    await service._settle_cancel_follow_ups(db, follow_up_ids, done)
     if run.status in FINAL:
         if not await _stop_cancelling(db, run):
             await db.commit()  # the follow-ups' outcomes
@@ -1102,7 +1102,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     # A cancel SwarmCloud does not confirm leaves the workflow attached: the tick cancels
     # it again and counts its cost. One stuck on 404s that this one more try did not
     # confirm either: Oracle stops cancelling it, and keeps reading its cost.
-    await _finish(db, run, "cancelled", state="cancelled", done=done)
+    await service._finish(db, run, "cancelled", state="cancelled", done=done)
     await _stop_cancelling(db, run)
     if service._cancel_pending(run) and segments:
         service._note(
@@ -1149,7 +1149,7 @@ async def stop_run(
         done[wf["id"]] = service._Cancelled(
             error=RuntimeUnavailable("cancelled at the runtime once the disable commits")
         )
-    await _finish(db, run, "cancelled", state="cancelled", done=done)
+    await service._finish(db, run, "cancelled", state="cancelled", done=done)
     await audit.record(db, principal, "run.cancelled", "run", run.id, data or {})
 
 

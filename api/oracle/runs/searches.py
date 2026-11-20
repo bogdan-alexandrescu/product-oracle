@@ -18,11 +18,8 @@ from oracle.runs.service import (
     ITEMS_FILE,
     _art,
     _attempts_cost,
-    _finish,
     _flow,
     _known_sum,
-    _recompute_spend,
-    _rt,
     _set_art,
     _set_knob,
     _spent,
@@ -193,7 +190,7 @@ def _cost_on(run: Run, segments: list[RunSegment], entry: dict[str, Any], cost: 
             first = False
     segment.cost_usd = _attempts_cost(art)
     _set_art(segment, art)
-    _recompute_spend(run, segments)
+    service._recompute_spend(run, segments)
 
 
 def _higher(cost: Decimal | None, recorded: Any) -> float | None:
@@ -218,7 +215,7 @@ async def _read_call(workflow_id: str) -> _Cancelled:
     cost and whether it ended. A call only, nothing written."""
     out = _Cancelled()
     try:
-        out.final = await _rt().status(workflow_id)
+        out.final = await service._rt().status(workflow_id)
     except RuntimeUnavailable as exc:
         if exc.gone:
             out.gone = True
@@ -240,7 +237,7 @@ async def _search_earlier(
     entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
     if not entries:
         return
-    runtime = _rt()
+    runtime = service._rt()
     target = segments[0] if segments else None
     keep: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
@@ -624,7 +621,7 @@ async def _harvest(
     a later step's file of the same name wins. A file SwarmCloud refuses to serve for good
     is noted and left out; when the import needs it, nothing is taken and the reason is
     returned (the segment keeps running and is read again)."""
-    files, skipped = await _rt().read_artifacts(workflow_id, steps)
+    files, skipped = await service._rt().read_artifacts(workflow_id, steps)
     art = _art(segment)
     if skipped:
         held = _note_refused(run, segment, art, skipped, await _import_names(db, run, segment))
@@ -657,7 +654,7 @@ async def _tick_workflow(
     with the wait to answer, and notice expiry, failures and the end. ``status``: the
     workflow's status, when the pass read it already."""
     if status is None:
-        status = await _rt().status(wf["id"])
+        status = await service._rt().status(wf["id"])
     start = service._take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
     service._record_running(wf, status, segments)
@@ -787,7 +784,7 @@ async def _tick_workflow(
             current.status = "failed" if status.state != "cancelled" else "cancelled"
             current.error = error
             current.finished_at = service._now()
-        await _finish(db, run, "failed", f"{_title(run, current)}: {error}")
+        await service._finish(db, run, "failed", f"{_title(run, current)}: {error}")
         await audit.record(db, None, "run.failed", "run", run.id, {"workflow": wf["id"]})
 
 

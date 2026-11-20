@@ -23,12 +23,9 @@ from oracle.runs.schemas import QueueWait
 from oracle.runs.service import (
     Unavailable,
     _art,
-    _disarm,
     _flow,
     _knobs,
-    _next,
     _prompt_context,
-    _rt,
     _segments,
     _set_art,
     _set_knob,
@@ -452,7 +449,7 @@ def _not_found(exc: RuntimeUnavailable | None) -> bool:
 async def _cancel_call(wf: dict[str, Any]) -> _Cancelled:
     """Cancel workflow ``wf`` and read it after (its last cost, or that it ended): calls
     only, nothing written, so the caller may hold no lock."""
-    runtime = _rt()
+    runtime = service._rt()
     out = _Cancelled()
     if not wf.get("id"):
         # A lost submission not found yet: the tick looks it up, then cancels it.
@@ -672,7 +669,7 @@ async def _submit_now(
     checkpoints wait for a person in SwarmCloud (oracle.runs.workflow). A refusal that
     names a switched-off feature submits again without it; a lost answer is looked up by
     the submission's label before anything is submitted again."""
-    runtime = _rt()
+    runtime = service._rt()
     settings = get_runtime_settings()
     flow, knobs = _flow(run), _knobs(run)
     sdef = flow.segment(segment.name)
@@ -848,7 +845,7 @@ async def _submit_now(
             # Nothing held across the call: a cancel or a disable never waits on it. From
             # here the submission is not run again (:func:`_replay`).
             await db.commit()
-            _disarm()
+            service._disarm()
         try:
             try:
                 workflow_id = await runtime.submit(spec)
@@ -1076,7 +1073,7 @@ async def _draft_items_ready(
     segment.cost_usd = Decimal("0")
     segment.finished_at = service._now()
     segment.error = None
-    await _next(db, run, segment, segments)
+    await service._next(db, run, segment, segments)
     return False
 
 

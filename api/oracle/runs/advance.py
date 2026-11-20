@@ -47,11 +47,9 @@ from oracle.runs.service import (
     SENT_KNOBS,
     _art,
     _checkpoints,
-    _finish,
     _flow,
     _frozen_queue,
     _knobs,
-    _next,
     _segments,
     _set_art,
     _set_knob,
@@ -796,9 +794,9 @@ async def _advance(
         # No stop (F5-2's code_map index): a failed import fails the run, else it goes on.
         for result in (baseline_import, imported, launch_import):
             if result is not None and result.get("error"):
-                await _finish(db, run, "failed", result["error"])
+                await service._finish(db, run, "failed", result["error"])
                 return True
-        await _next(db, run, segment, segments)
+        await service._next(db, run, segment, segments)
         return True
     checkpoint_kind = sdef.checkpoint_for(await _target_kind(db, run))
     if (
@@ -853,23 +851,23 @@ async def _advance(
     await _link_order(db, snapshot_id, checkpoint_id)
     for result in (baseline_import, imported, launch_import, triage_import):
         if result is not None and result.get("error"):
-            await _finish(db, run, "failed", result["error"])
+            await service._finish(db, run, "failed", result["error"])
             return True
     if flow.stores_draft_items:
         # E1: the items are stored with their problems; the review is on the Roadmap
         # tab. The run fails only when nothing could be stored.
         if draft_error:
-            await _finish(db, run, "failed", draft_error)
+            await service._finish(db, run, "failed", draft_error)
             return True
     elif items_check is not None and items_check["problems"]:
         problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
-        await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
+        await service._finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
     if fs_check is not None:
         blocking = [p for p in fs_check["problems"] if p.get("blocking", True)]
         if blocking or scope_id is None:
             problems = "; ".join(f"[{p['code']}] {p['message']}" for p in blocking[:5])
-            await _finish(db, run, "failed", f"{feature_set.FILE} was rejected: {problems}")
+            await service._finish(db, run, "failed", f"{feature_set.FILE} was rejected: {problems}")
             return True
         # Rule 5 (C6): the stop is off and nothing blocks, so Oracle approves the scope.
         scope = await db.get(PrdScope, scope_id)
@@ -887,7 +885,7 @@ async def _advance(
         blocking = [p for p in order_check["problems"] if p.get("blocking", True)]
         if blocking or snapshot_id is None:
             problems = "; ".join(f"[{p['code']}] {p['message']}" for p in blocking[:5])
-            await _finish(db, run, "failed", f"{run_order.FILE} was rejected: {problems}")
+            await service._finish(db, run, "failed", f"{run_order.FILE} was rejected: {problems}")
             return True
         # Rule 5 (C8): the stop is off and nothing blocks, so Oracle saves the order.
         snapshot = await db.get(PrioritySnapshot, snapshot_id)
@@ -908,7 +906,7 @@ async def _advance(
             )
             if oracle_orders:
                 await _tell_order_saved(db, run)
-    await _next(db, run, segment, segments)
+    await service._next(db, run, segment, segments)
     return True
 
 

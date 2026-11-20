@@ -48,11 +48,9 @@ from oracle.runs.service import (
     _about,
     _art,
     _checkpoints,
-    _finish,
     _flow,
     _open_questions,
     _record_decider,
-    _replay,
     _segments,
     _set_art,
     _set_knob,
@@ -582,7 +580,7 @@ async def _continue_decided(
         target, restore = segment, segment.status
         segment.status = "pending"
     if target is None:
-        await _finish(db, run, "succeeded")
+        await service._finish(db, run, "succeeded")
         return
     # Until its workflow is submitted, the segment remembers the decision that started
     # it: a disable of the decider voids it.
@@ -641,7 +639,7 @@ async def _complete_decision(
     cancel it may need counts (its errors, a pause on the ceiling); a request logs those."""
     mine = stats or _TickStats()
     try:
-        await _replay(
+        await service._replay(
             db,
             deadline,
             lambda: _finish_decision(db, run_id, checkpoint_id, mine),

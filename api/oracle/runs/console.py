@@ -20,7 +20,6 @@ from oracle.runs.service import (
     _checkpoints,
     _flow,
     _record_decider,
-    _rt,
     _staged_actions,
     _usd,
     approve_gate_of,
@@ -81,7 +80,7 @@ async def _watch_wait(
     seq = (cp.payload or {}).get("segment_seq")
     segment = next(s for s in segments if s.seq == seq)
     try:
-        record = await _rt().answer_record(
+        record = await service._rt().answer_record(
             wf["id"], wait["step_id"], wait.get("artifact") or workflow.review_artifact(round_)
         )
     except RuntimeUnavailable as exc:
