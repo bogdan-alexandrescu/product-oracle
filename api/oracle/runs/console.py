@@ -16,7 +16,6 @@ from oracle.members.leads import SPEC_FLOW, decides, engineering_leads, lead_sto
 from oracle.runs import apply_edits, service, stop_answers, workflow
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.service import (
-    WATCH_SECONDS,
     _about,
     _checkpoints,
     _clip,
@@ -81,7 +80,7 @@ async def _watch_wait(
         checked = datetime.fromisoformat(wait["checked_at"])
     except (KeyError, TypeError, ValueError):
         checked = None
-    if checked is not None and (service._now() - checked).total_seconds() < WATCH_SECONDS:
+    if checked is not None and (service._now() - checked).total_seconds() < service.WATCH_SECONDS:
         return
     round_ = int(wait.get("round") or 1)
     step = status.step(wait.get("step_id", ""))
