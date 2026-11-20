@@ -14,7 +14,7 @@ import { servedSha } from "../lib/deployContainment.ts";
 
 const args = process.argv.slice(2);
 const at = args.indexOf("--wait");
-const wait = at === -1 ? 0 : Number(args[at + 1]);
+const wait = at === -1 ? 0 : /^\d+$/.test(args[at + 1] ?? "") ? Number(args[at + 1]) : NaN;
 const [target, ...urls] = at === -1 ? args : [...args.slice(0, at), ...args.slice(at + 2)];
 if (!target || !/^[0-9a-f]{7,40}$/i.test(target) || urls.length === 0 || !Number.isFinite(wait)) {
   console.error("usage: deploy-serves.ts <sha> <version-url>... [--wait <seconds>]");

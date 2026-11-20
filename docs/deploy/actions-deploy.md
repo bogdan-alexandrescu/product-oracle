@@ -13,9 +13,9 @@ Names in angle brackets are placeholders; nothing here names real infrastructure
 On a push to `main`, after every test job of the workflow has passed (`needs:` lists them all;
 `api/tests/test_deploy_workflow.py` fails when one is missing):
 
-1. **Already served?** `web/scripts/deploy-serves.ts` asks both `/version` routes. Exit 0 (the
-   serving commit contains this one: a newer run deployed first) skips the rest, so a slow run
-   never rolls the services back.
+1. **Already served?** `web/scripts/deploy-serves.ts` asks each `/version` route. A service
+   that answers 0 (it serves a commit that contains this one: a newer run deployed it first)
+   is left alone, so a slow run never rolls a service back.
 2. **Build and push** `oracle-api` and `oracle-web` to Artifact Registry, tagged with the
    commit, built with `--build-arg GIT_SHA=<commit>`; deployed by digest.
 3. **Back up** the Cloud SQL instance (`gcloud sql backups create`, waits for it).
@@ -134,9 +134,10 @@ gcloud projects add-iam-policy-binding <project-id> --member="$SA" \
   --condition='expression=resource.name == "projects/<project-id>/instances/<instance>",title=oracle-instance-only'
 ```
 
-To check before turning the job on: `gcloud run deploy` waits on the service's operation; if
-it is refused `run.operations.get`, grant `roles/run.viewer` on the same two services (not the
-project).
+To check before turning the job on (not verified against a project yet): `gcloud run deploy`
+waits on the service's operation, and `gcloud run jobs execute --wait` reads the execution it
+started; if either is refused (`run.operations.get`, `run.executions.get`), grant
+`roles/run.viewer` on the same services and job (not the project).
 
 ### 3. The migrate job
 
@@ -158,6 +159,14 @@ gcloud run jobs add-iam-policy-binding oracle-api-migrate --project=<project-id>
 ```
 
 ### 4. Turn it on
+
+Once, before the first run: keep the serving API from migrating at start, so an instance it
+adds during a deploy's migration never runs Alembic itself:
+
+```sh
+gcloud run services update oracle-api --project=<project-id> --region=<region> \
+  --update-env-vars=ORACLE_MIGRATE_AT_START=0
+```
 
 Set the variables above, then `ORACLE_DEPLOY_ENABLED=true`. The first run after that deploys
 the head of `main`. To turn it off at once, set `ORACLE_DEPLOY_ENABLED` to anything else.

@@ -140,4 +140,6 @@ test("deploy-serves exits 0, 1 or 2", async () => {
 test("deploy-serves without a commit or a service is a usage error: 2", () => {
   assert.equal(spawnSync(process.execPath, [SCRIPT]).status, 2);
   assert.equal(spawnSync(process.execPath, [SCRIPT, A]).status, 2);
+  assert.equal(spawnSync(process.execPath, [SCRIPT, A, "http://127.0.0.1:1/version", "--wait", ""]).status, 2);
+  assert.equal(spawnSync(process.execPath, [SCRIPT, A, "http://127.0.0.1:1/version", "--wait", "-5"]).status, 2);
 });

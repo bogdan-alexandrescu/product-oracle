@@ -386,18 +386,21 @@ jobs:
             [ -n "${!v}" ] || missing="$missing $v"
           done
           [ -z "$missing" ] || { echo "Repository variables not set (docs/deploy/actions-deploy.md):$missing"; exit 1; }
-      # A run whose tests finished after a newer run deployed must not roll the services back:
-      # 0 (served: the commit serving contains this one) skips the rest.
-      - name: Skip when this commit is already served
+      # A run whose tests finished after a newer run deployed must not roll a service back: each
+      # service already serving this commit or one that contains it (exit 0) is left alone.
+      - name: Skip what already serves this commit
         id: served
         run: |
-          code=0
-          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$API_VERSION_URL" "$WEB_VERSION_URL" || code=$?
-          echo "skip=$([ "$code" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          for s in api web; do
+            url=API_VERSION_URL; [ "$s" = web ] && url=WEB_VERSION_URL
+            code=0
+            node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "${!url}" || code=$?
+            echo "$s=$([ "$code" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          done
       # Workload Identity Federation by hand (what google-github-actions/auth writes): GitHub's
       # OIDC token for this job, exchanged for the deploy service account's short-lived token.
       - name: Sign in to Google Cloud
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true' || steps.served.outputs.web != 'true'
         run: |
           cred="$RUNNER_TEMP/gcp-wif.json"
           umask 077
@@ -416,42 +419,49 @@ jobs:
           gcloud config set project "$PROJECT"
           gcloud auth configure-docker "${REGISTRY%%/*}" --quiet
       - name: Build and push both images, the commit stamped in
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true' || steps.served.outputs.web != 'true'
         run: |
-          docker build --build-arg GIT_SHA="$SHA" -t "$REGISTRY/oracle-api:$SHA" api
-          docker build --build-arg GIT_SHA="$SHA" --build-arg API_INTERNAL_URL="$API_INTERNAL_URL" -t "$REGISTRY/oracle-web:$SHA" web
-          docker push "$REGISTRY/oracle-api:$SHA"
-          docker push "$REGISTRY/oracle-web:$SHA"
-          # Deployed by digest: what was built here is what runs.
-          echo "API_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/oracle-api:$SHA")" >> "$GITHUB_ENV"
-          echo "WEB_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/oracle-web:$SHA")" >> "$GITHUB_ENV"
+          # Only the images of the services that do not serve this commit yet.
+          for s in api web; do
+            [ "$s" = api ] && done_="$API_SERVED" || done_="$WEB_SERVED"
+            [ "$done_" = true ] && continue
+            args=(--build-arg GIT_SHA="$SHA")
+            [ "$s" = web ] && args+=(--build-arg API_INTERNAL_URL="$API_INTERNAL_URL")
+            docker build "${args[@]}" -t "$REGISTRY/oracle-$s:$SHA" "$s"
+            docker push "$REGISTRY/oracle-$s:$SHA"
+            # Deployed by digest: what was built here is what runs.
+            echo "${s^^}_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/oracle-$s:$SHA")" >> "$GITHUB_ENV"
+          done
+        env:
+          API_SERVED: ${{ steps.served.outputs.api }}
+          WEB_SERVED: ${{ steps.served.outputs.web }}
       - name: Back up the database
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true'
         run: gcloud sql backups create --instance="$SQL_INSTANCE" --description="before deploying $SHA" --quiet
       # The new API revision, started and warm, with no traffic. ORACLE_MIGRATE_AT_START=0: it
       # serves without migrating (api/oracle/startup.py), so only the next step changes the schema.
       - name: Stage the API's new revision with no traffic
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true'
         run: |
           gcloud run deploy "$API_SERVICE" --image="$API_IMAGE" --region="$REGION" \
             --no-traffic --tag="c-${SHA:0:12}" --update-env-vars=ORACLE_MIGRATE_AT_START=0 --quiet
       # A failure here ends the job before any traffic moves.
       - name: Migrate the database (the new image, as a Cloud Run job)
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true'
         run: |
           gcloud run jobs update "$MIGRATE_JOB" --image="$API_IMAGE" --region="$REGION" \
             --command=python --args=-m,oracle.startup,migrate --max-retries=0 --quiet
           gcloud run jobs execute "$MIGRATE_JOB" --region="$REGION" --wait --quiet
       - name: Move the API's traffic to the new revision
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true'
         run: |
           gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --to-latest --quiet
           gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --remove-tags="c-${SHA:0:12}" --quiet
       - name: Deploy the web
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.web != 'true'
         run: gcloud run deploy "$WEB_SERVICE" --image="$WEB_IMAGE" --region="$REGION" --quiet
       # 0 served, 1 not served, 2 could not ask (web/scripts/deploy-serves.ts); asked again for up
       # to 5 minutes while the new revisions take their traffic. Anything but 0 fails the job.
       - name: Containment check
-        if: steps.served.outputs.skip != 'true'
+        if: steps.served.outputs.api != 'true' || steps.served.outputs.web != 'true'
         run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$API_VERSION_URL" "$WEB_VERSION_URL" --wait 300
