@@ -278,3 +278,22 @@ async def test_the_refresh_button_goes_through_the_same_writer_and_recovers(
     ).json()
     assert body["refresh"]["reason"] == "reauth_required"
     assert body["account"]["state"] == "REAUTH_REQUIRED"
+
+
+async def test_an_unreadable_access_token_says_why_nothing_was_written(caplog):
+    # #1574: a failed read of the access column was UNKNOWN with no trace of the cause.
+    r, s = _refresher({"a-refresh": _pair(timedelta(hours=12)), "a": "acc"})
+    s.fail_reads.add("a")
+    with caplog.at_level("ERROR", logger="oracle.claude_accounts.credentials"):
+        out = await r.refresh_secret("a")
+    assert out.reason == "unverified_skipped"
+    assert out.error == "store down"
+    assert any(getattr(rec, "error", None) == "store down" for rec in caplog.records)
+
+
+async def test_a_store_that_cannot_be_read_carries_its_reason():
+    r, s = _refresher({"c-refresh": _pair(timedelta(hours=1))})
+    s.fail_reads.add("c-refresh")
+    out = await r.refresh_secret("c")
+    assert (out.reason, out.error) == ("store_unavailable", "store down")
+    assert "error" not in out.as_dict()
