@@ -12,6 +12,11 @@ Test cards (protects / fails_when / no_claim):
   every milestone's roadmap_code over each roadmap view on the company seed
   (tests/roadmap_scale_seed.py) hashes to the digest the walk gave; fails_when=any milestone's
   code, or the order of the milestones it was given, moves; no_claim=other reads.
+- test_roadmap_answers_the_same_whatever_order_the_milestones_are_stored_in: protects=the
+  goal milestones' order in the read (and so the order assign is given) is the data's, not
+  the order Postgres scans their rows in (flaky-digests: the two digests above moved on a
+  CI worker whose earlier tests had left the table's free space elsewhere); fails_when=the
+  rows are read without a total order; no_claim=which order people see.
 """
 
 import hashlib
@@ -21,8 +26,10 @@ import uuid
 from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import text
 
 from oracle import company_time
+from oracle.db import get_engine
 from oracle.simple import roadmap_codes
 from oracle.simple.schemas import SimpleGoalMilestone
 from tests.roadmap_scale_seed import NOW, seed_company
@@ -106,3 +113,28 @@ async def test_assign_answers_the_same_codes_on_the_company_seed(client, clock, 
     got = hashlib.sha256(json.dumps(seen).encode()).hexdigest()
     print(got)
     assert got == DIGEST
+
+
+async def test_roadmap_answers_the_same_whatever_order_the_milestones_are_stored_in(client, clock):
+    """The Roadmap answers the same when the same milestones are stored in another order."""
+    ctx = await seed_company()
+    owner = ctx.as_("owner")
+    # The first read stores the PRDs' milestones; the second reads them back.
+    assert (await client.get(ROADMAP, headers=owner)).status_code == 200
+    before = await client.get(ROADMAP, headers=owner)
+    assert before.status_code == 200, before.text
+    # The same values written again move each goal's own milestone after the PRDs' in the
+    # table, as a worker's earlier tests can leave them: nothing a reader sees changes.
+    async with get_engine().begin() as conn:
+        moved = await conn.execute(
+            text(
+                "UPDATE track_milestones SET name = name WHERE origin_prd_id IS NULL"
+                " AND roadmap_id IS NOT NULL"
+            )
+        )
+        assert moved.rowcount == 40
+    after = await client.get(ROADMAP, headers=owner)
+    assert after.status_code == 200, after.text
+    ids = [[m["id"] for m in r.json()["goal_milestones"]] for r in (before, after)]
+    assert ids[1] == ids[0]
+    assert after.content == before.content
