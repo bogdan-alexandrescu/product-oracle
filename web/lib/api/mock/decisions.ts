@@ -551,6 +551,26 @@ export function logMeetingDecision(
 }
 
 /**
+ * edit-decisions: a decision only Simple's sheet holds, as the API's DecisionOut (one decisions table in the
+ * API): the fields the sheet keeps, the rest as a fresh decision has them.
+ */
+export function sheetDecisionOut(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  d: { id: string; number: number; title: string; origin: string; status: Row["status"]; approver_id: string; at: string; subjects: Row["subjects"]; chosen?: string; ask?: string | null; context?: string | null; review_at?: string | null; created_by?: string | null },
+): DecisionOut {
+  const decided = d.status === "decided";
+  const row = blank(ctx, db, {
+    title: d.title, origin: d.origin as Row["origin"], approver_id: d.approver_id, status: d.status,
+    question: d.ask ?? null, context: d.context ?? null, review_at: d.review_at ?? null, subjects: d.subjects,
+    chosen_option: decided ? (d.chosen ?? "decided") : null, decided_at: decided ? d.at : null,
+    decided_by: decided ? d.approver_id : null, decided_actor: decided ? "user" : null,
+    created_by: d.created_by ?? null, created_at: d.at,
+  });
+  return outOf(ctx, db, { ...row, id: d.id, number: d.number });
+}
+
+/**
  * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
  * pricing, the pricing owner its approver; the same one again on a repeat.
  */

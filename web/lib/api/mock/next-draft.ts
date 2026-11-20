@@ -710,11 +710,7 @@ export async function nextDraftRoute(
     for (const r of ctx.db.next_draft_changes ?? [])
       if (builtRows.has(r.id) && r.status === "staged") Object.assign(r, { status: "applied", applied_in_version: next.number });
     hooks.onImported(doc, next);
-    // mock-types: apply_next_draft's response is VersionOut, but this file's Version (LlmContext,
-    // from ./llm-jobs.ts) only carries id/document_id/number/created_at/sections - not the schema's
-    // other required fields (content_hash, warnings, brief_source, approval_lapses, ...); blocked
-    // without editing llm-jobs.ts, which is outside this task's 4 files.
-    return json(201, { number: next.number, document_id: doc.id, id: next.id });
+    return reply("/v1/documents/{doc}/next-draft/{job_id}/apply", "post", ctx.versionOut(next), 201);
   }
   return fail(404, "Route not found");
 }

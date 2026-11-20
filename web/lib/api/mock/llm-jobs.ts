@@ -101,6 +101,8 @@ export type LlmContext = {
     replace: Record<string, { heading: string; body: string }>,
     resolutions: { feedback_id: string; status: "addressed" | "declined"; note: string | null }[],
   ) => Version;
+  /** A version as the API returns it (VersionOut). */
+  versionOut: (v: Version) => Schemas["VersionOut"];
   /** G4: a discussion as the caller sees it (a private one they are not in names nothing). */
   discussion?: (id: string) => Schemas["StagingDiscussion"] | null;
   /** A member's name (their email) for "accepted by". */
@@ -770,26 +772,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
         }
       }
       if (enabled(doc, "reporting")) db.jobs.push(makeJob(ctx, doc, "reporting", next));
-      return reply(
-        "/v1/llm-jobs/{job_id}/apply",
-        "post",
-        {
-          id: next.id,
-          document_id: doc.id,
-          number: next.number,
-          content_hash: next.id,
-          warnings: [],
-          notes: [],
-          brief_source: "none",
-          created_at: next.created_at,
-          approval_lapses: [],
-          front_matter: {},
-          sections: [],
-          citations: [],
-          date_marks: [],
-        },
-        201,
-      );
+      return reply("/v1/llm-jobs/{job_id}/apply", "post", ctx.versionOut(next), 201);
     }
     return fail(404, "Route not found");
   }

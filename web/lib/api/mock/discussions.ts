@@ -1223,7 +1223,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     d.last_message_at = row.created_at;
     return row;
   };
-  const post = (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Response => {
+  const post = (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Response | MessageRow => {
     if (input.body.length > 8000) return refuse(422, "A message can be at most 8,000 characters");
     if (!input.body.trim()) return refuse(422, "A message needs some text");
     const mentions = [...new Set(input.mentions ?? [])];
@@ -1238,7 +1238,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       mentions_oracle: !!input.mention_oracle,
       reply_to: input.reply_to ?? null,
     });
-    return json(201, messageOut(row));
+    return row;
   };
   /** G2: always while it is just one person; else only when Oracle is addressed. */
   const wantsReply = (d: DiscussionRow, x: MessageRow) => {
@@ -1252,10 +1252,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       ...db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "person" && y.author_id).map((y) => y.author_id!),
     ]);
   const postWithReply = async (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Promise<Response> => {
-    const res = post(d, input);
-    if (!res.ok) return res;
-    const message = (await res.json()) as Schemas["DiscussionMessageOut"];
-    const row = db.messages.find((x) => x.id === message.id)!;
+    const row = post(d, input);
+    if (row instanceof Response) return row;
+    const message = messageOut(row);
     const people = peopleIn(d);
     const alone = d.visibility === "private" && people.size === 1 && people.has(me.id);
     const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? ctx.liveReply?.(row, alone) ?? null) : null;

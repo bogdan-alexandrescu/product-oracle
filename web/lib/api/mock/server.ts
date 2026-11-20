@@ -30,7 +30,7 @@ import { stripRawTokens } from "@/lib/raw-tokens";
 import { POOL_SPENT_SCENARIO, SIMPLE_CHAT_POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal, poolSpentUntil } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
-import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, sheetDecisionOut, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { FIT_COMPANY_SCENARIO, FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
@@ -3443,6 +3443,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     importRevision: (doc, base, key, heading, body, resolutions) =>
       importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
     importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
+    versionOut: (v) => versionOut(db, v as VersionRow),
     memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
     discussion: (id) => {
       const d = db.discussions?.discussions.find((x) => x.id === id);
@@ -8961,10 +8962,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const to = decisionsCtx.members.find((x) => x.id === b.approver_id);
     if (!to || to.status === "disabled" || !["approver", "owner"].includes(to.role)) return json(422, { detail: "The approver must be an active member with the approver role or above" });
     simpleOnly.approver_id = b.approver_id;
-    // mock-types: this reply is a Simple-only decision row, far short of the schema's full DecisionOut; the
-    // page (DecisionSheet.tsx) discards the body, but a conforming reply would need to fabricate ~40 fields
-    // (driver, reviews, class, reversibility, ...) this mock never tracks for a sheet-only decision.
-    return json(200, { id: simpleOnly.id, number: simpleOnly.number, title: simpleOnly.title, approver_id: b.approver_id });
+    return reply("/v1/decisions/{decision}/reassign", "post", sheetDecisionOut(decisionsCtx, db.decisions!, { ...simpleOnly, approver_id: b.approver_id }));
   }
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
   // edit-decisions: a decision made from Simple's sheet is listed there; Reassign shows there too.

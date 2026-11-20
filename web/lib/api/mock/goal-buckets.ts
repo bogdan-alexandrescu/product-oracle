@@ -346,7 +346,7 @@ export function placeBucketGoals(db: GoalBucketsDb, baseline: { key: string; typ
  * Ground Truth's goals): its attrs.position is its place in the one goal order, and the Ground Truth's goal
  * of the same key takes it too, so every page follows. Approvers and owners, as the API.
  */
-export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: { id?: string; key: string; type: string; attrs?: Record<string, unknown> | null }[]): Promise<Response | null> {
+export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: Omit<Schemas["EntityOut"], "evidence_count">[]): Promise<Response | null> {
   if (p[1] !== "baseline" || p[2] !== "entities" || !p[3] || p[4] || req.method !== "PATCH") return null;
   const g = simple.goal_buckets?.goals.find((x) => x.id === p[3]);
   if (!g) return null;
@@ -358,7 +358,23 @@ export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, 
   // goal-map-editing: or the Ground Truth goal of the same id (goal-ladder's goals are both).
   const e = baseline.find((x) => x.type === "goal" && (x.key === orderKey(g) || x.id === g.id));
   if (e) e.attrs = { ...e.attrs, position: g.position };
-  return json(200, { applied: true, entity: { id: g.id, type: "goal", key: orderKey(g), title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { ...(e?.attrs ?? {}), position: g.position } }, proposal: null });
+  const stamp = new Date().toISOString();
+  const entity: Schemas["EntityOut"] = {
+    origin: "user",
+    locked: false,
+    created_at: stamp,
+    updated_at: stamp,
+    ...e,
+    id: g.id,
+    type: "goal",
+    key: orderKey(g),
+    title: g.title,
+    status: g.archived ? "rejected" : "confirmed",
+    attrs: { ...(e?.attrs ?? {}), position: g.position },
+    evidence_count: 0,
+    position: g.position,
+  };
+  return reply("/v1/baseline/entities/{entity_id}", "patch", { applied: true, entity, proposal: null });
 }
 /** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there;
  * `propose`: a commenter's goal delete as a `delete_goal` change (./simple-changes.ts). */
