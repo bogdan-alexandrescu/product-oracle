@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -116,7 +117,7 @@ async def validate_policy(db: AsyncSession, value: Any) -> dict[str, Any]:
     """A policy value (the company setting or a document's), checked; JSON-ready."""
     try:
         policy = ReviewPolicyIn.model_validate(value)
-    except Exception as e:  # noqa: BLE001 - pydantic's message is the answer
+    except ValidationError as e:
         raise PolicyError(f"review_policy: {exception_text(e)}") from None
     if policy.decider_id is not None:
         await _approver_users(db, [policy.decider_id], "decider_id")

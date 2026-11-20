@@ -48,6 +48,7 @@ from oracle.claude_accounts.accounts import (
     WindowReading,
 )
 from oracle.company_time import company_time_zone
+from oracle.errors import exception_text
 from oracle.llm.transports import (
     ClaudeCodeTransport,
     LlmAuthError,
@@ -340,8 +341,9 @@ async def _run(
                 assignment = await _swap(tenant_id, assignment, SWAP_DRAIN, swaps)
             try:
                 token = await pool.access_token(tenant_id, assignment)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - swapped to another account, never raised
                 # If no account can take it, the hold is released as unusable.
+                log.warning("account credential read failed: %s", exception_text(exc))
                 unusable = "the credential could not be read"
                 _time_for_a_call(deadline)
                 assignment = await _swap(tenant_id, assignment, SWAP_UNUSABLE, swaps)
@@ -412,7 +414,8 @@ async def _give_back(
 ) -> None:
     try:
         got = await assigning
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - the cancelled assignment failed; nothing to give back
+        log.warning("cancelled call's assignment failed: %s", exception_text(exc))
         return  # nothing was assigned
     if isinstance(got, pool.Assignment):
         try:

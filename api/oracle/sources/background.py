@@ -106,7 +106,7 @@ async def sync_due(db: AsyncSession, now: datetime, deadline: float | None = Non
             continue
         except Exception as e:  # noqa: BLE001 - one source must not stop the others
             await db.rollback()
-            log.error("background sync of a source failed: %s", type(e).__name__)
+            log.error("background sync of a source failed: %s", exception_text(e))
             # Raised before the sync started, so the engine wrote no error on the source.
             if isinstance(e, service.InvalidError | service.NotFoundError):
                 error = exception_text(e)

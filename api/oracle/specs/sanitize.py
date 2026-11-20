@@ -26,6 +26,7 @@ text run, so a design check under a budget stops at its cap.
 """
 
 import html
+import logging
 import re
 import xml.etree.ElementTree as ET
 from bisect import bisect_left
@@ -34,6 +35,8 @@ from html.parser import HTMLParser
 
 from oracle import parse_budget
 from oracle.errors import exception_text
+
+log = logging.getLogger(__name__)
 
 SVG_NS = "http://www.w3.org/2000/svg"
 XLINK_NS = "http://www.w3.org/1999/xlink"
@@ -449,7 +452,8 @@ def sanitize_wireframe(
         parser.close()
     except parse_budget.Exceeded:
         raise
-    except Exception as exc:  # HTMLParser is lenient; anything else is a broken input
+    except Exception as exc:  # noqa: BLE001 - HTMLParser is lenient; anything else is broken input
+        log.warning("wireframe %s could not be sanitized: %s", title, exception_text(exc))
         return Sanitized("", blocked=[f"unreadable HTML: {type(exc).__name__}"])
     if parser.nodes > MAX_NODES:
         return Sanitized("", blocked=[f"more than {MAX_NODES} elements"])

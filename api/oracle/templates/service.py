@@ -9,6 +9,7 @@ company is created, and on the write paths here (:func:`seed_builtins`).
 """
 
 import json
+import logging
 import re
 import unicodedata
 import uuid
@@ -29,6 +30,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.parser import DraftError, split_front_matter
 from oracle.docs.schemas import UpdatePeriod
 from oracle.docs.visibility import default_for as default_visibility
+from oracle.errors import exception_text
 from oracle.templates import validation
 from oracle.templates.builtins import (
     BUILTIN_TEMPLATES_BY_KEY,
@@ -61,6 +63,8 @@ from oracle.templates.schemas import (
     ThemeUpdate,
 )
 from oracle.tenant_settings import TenantSetting
+
+log = logging.getLogger(__name__)
 
 DRAFT_DEFAULTS_KEY = "draft_defaults"
 
@@ -896,7 +900,8 @@ def slide_groups_of(yaml_text: str | None) -> list[list[str]] | None:
         return None
     try:
         meta = safe_yaml.load(yaml_text)
-    except Exception:  # noqa: BLE001 - a template's metadata is checked when it is saved
+    except Exception as exc:  # noqa: BLE001 - a template's metadata is checked when it is saved
+        log.warning("template slide metadata could not be read: %s", exception_text(exc))
         return None
     groups = meta.get("slides") if isinstance(meta, dict) else None
     if isinstance(groups, list) and all(

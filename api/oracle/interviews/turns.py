@@ -31,6 +31,7 @@ from typing import Any
 from sqlalchemy import or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.errors import exception_text
 from oracle.interviews.models import Interview, InterviewMessage
 from oracle.jobs import prompting
 from oracle.llm import gateway
@@ -142,8 +143,8 @@ async def customer_turn(
             ),
             timeout=DEADLINE_SECONDS,
         )
-    except Exception as e:  # timeout or any gateway failure: the next question instead
-        log.warning("interview turn failed: %s", type(e).__name__)
+    except Exception as e:  # noqa: BLE001 - timeout or gateway failure moves to next question
+        log.warning("interview turn failed: %s", exception_text(e))
         return None, None
     usage = dict(completion.usage or {})
     spent = Spent(completion.model, usage, _cost(usage))

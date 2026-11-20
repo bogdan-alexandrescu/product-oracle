@@ -179,14 +179,14 @@ def _start_check(connect_args: tuple[list, dict]) -> tuple[int, int]:
         os.close(read)
         try:
             answer = (at_head(connect_args), time.perf_counter() - started, None)
-        except BaseException as e:  # raised again in the server's process
+        except BaseException as e:  # noqa: BLE001 - re-raised later; no log (forked, pre os._exit)
             answer = (None, time.perf_counter() - started, e)
         with os.fdopen(write, "wb") as out:
             try:
                 pickle.dump(answer, out)
-            except Exception as e:  # an error that does not pickle: its text
+            except Exception as e:  # noqa: BLE001 - unpicklable error: kept as text, no log here
                 pickle.dump((None, answer[1], RuntimeError(repr(answer[2] or e))), out)
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - must reach os._exit; no log (forked, pre os._exit)
         code = 1
     finally:
         os._exit(code)

@@ -44,6 +44,7 @@ document data, so it is not a change-engine op.
 
 import hashlib
 import json
+import logging
 import re
 import uuid
 from collections.abc import Callable
@@ -61,6 +62,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.errors import exception_text
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
@@ -97,6 +99,8 @@ from oracle.simple.schemas import (
     SimpleDocRef,
     SimplePersonRef,
 )
+
+log = logging.getLogger(__name__)
 
 # set_section_number (owner, Nov 5): a "Needs a look" numbers item's one-click fix.
 NUMBER_OP = "set_section_number"
@@ -245,7 +249,8 @@ def _template_specs(body: str | None) -> tuple[Spec, ...] | None:
         return None
     try:
         meta = safe_yaml.load(body[3:end]) or {}
-    except Exception:  # noqa: BLE001 - a template that does not parse names no blocks
+    except Exception as exc:  # noqa: BLE001 - a template that does not parse names no blocks
+        log.warning("template front matter could not be parsed: %s", exception_text(exc))
         return None
     blocks = ((meta.get("one_pager") or {}) if isinstance(meta, dict) else {}).get("blocks")
     if not isinstance(blocks, list) or not blocks:

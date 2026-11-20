@@ -336,7 +336,7 @@ async def test_a_turn_right_after_the_claim_is_released_never_races_its_writes(
                 json={"question_id": q, "body": FULL},
                 headers=ctx.as_("commenter"),
             )
-        except Exception as e:  # the app's exception, raised through the transport
+        except Exception as e:  # noqa: BLE001 - the app's exception, raised through the transport
             return e
 
     async def released_then_second_turn(tenant_id, interview_id, at):

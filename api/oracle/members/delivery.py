@@ -438,7 +438,7 @@ async def deliver(
                 try:
                     await sender.send(http, message)
                     status, error = "sent", None
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - retried once, then recorded as failed
                     # Only Oracle's own short reason, never a body from Google.
                     error = (
                         exception_text(exc)[:MAX_ERROR_CHARS]

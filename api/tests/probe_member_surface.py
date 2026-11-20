@@ -408,7 +408,7 @@ async def _walk_routes(client, callers: dict, values, sec: Secrets, result: Out)
                     status, body = resp.status_code, resp.text
                 except TimeoutError:
                     status, body = "timeout", ""
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:  # noqa: BLE001 - any failure is a probed route's result
                     status, body = f"error:{type(e).__name__}", ""
                 result.counts["routes_walked"] += 1
                 where = f"GET {url}" + (f" {query}" if query else "")
@@ -474,7 +474,7 @@ async def _call_tools(c, caller, tools, values, sec, result, only=None) -> None:
                     status = f"error:{m.group(1)}" if m else "error"
             except TimeoutError:
                 body, status = "", "timeout"
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001 - any failure is a probed tool's result
                 body, status = "", f"exception:{type(e).__name__}"
             result.counts["tools_called"] += 1
             where = f"{tool.name} {json.dumps(args, default=str)}"

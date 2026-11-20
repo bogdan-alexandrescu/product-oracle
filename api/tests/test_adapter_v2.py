@@ -5095,7 +5095,7 @@ async def test_retry_lookup_reads_one_entry_outside_the_row_lock_with_a_cooldown
                     text("SELECT id FROM runs WHERE id = :id FOR UPDATE NOWAIT"), {"id": run["id"]}
                 )
                 locked.append(False)
-            except Exception:
+            except Exception:  # noqa: BLE001 - any lock refusal means the row is locked
                 locked.append(True)
             await s.rollback()
         return await real(workflow_id)
