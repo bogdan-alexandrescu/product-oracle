@@ -8,12 +8,18 @@ import { parseQuery, stringifyQuery } from './router-query';
  * fails_when=a query does not come back as it went in;
  * no_claim=the encoding of a character URLSearchParams writes another way.
  */
-test.each(['?latest', '?request=r-1', '?tab=proposals&x=1', '?a=1&a=2', '?q=two+words', ''])(
-  '%s comes back unchanged',
-  (query) => {
-    expect(stringifyQuery(parseQuery(query))).toBe(query);
-  },
-);
+test.each([
+  '?latest',
+  '?item=usage-alerts:alert-quiet-hours',
+  '?next=/plan/x',
+  '?request=r-1',
+  '?tab=proposals&x=1',
+  '?a=1&a=2',
+  '?q=two+words',
+  '',
+])('%s comes back unchanged', (query) => {
+  expect(stringifyQuery(parseQuery(query))).toBe(query);
+});
 
 test('values stay strings', () => {
   expect(parseQuery('?n=2&ok=true')).toEqual({ n: '2', ok: 'true' });

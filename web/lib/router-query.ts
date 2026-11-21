@@ -12,15 +12,16 @@ export function parseQuery(search: string): Query {
   return out;
 }
 
+/** Only what would change the query's meaning is escaped (`:` and `/` stay as typed, as Next kept them). */
+const encode = (text: string) =>
+  text.replace(/[%&=#+\s]/g, (c) => (c === ' ' ? '+' : encodeURIComponent(c)));
+
 /** Back to text as it came: a key with no value stays bare (`?latest`, not `?latest=`). */
 export function stringifyQuery(search: Record<string, unknown>): string {
   const parts = Object.entries(search).flatMap(([k, v]) =>
     (Array.isArray(v) ? v : [v])
       .filter((x) => x !== undefined)
-      .map((x) => {
-        const pair = new URLSearchParams([[k, String(x)]]).toString();
-        return x === '' ? pair.replace(/=$/, '') : pair;
-      }),
+      .map((x) => (x === '' ? encode(k) : `${encode(k)}=${encode(String(x))}`)),
   );
   return parts.length ? `?${parts.join('&')}` : '';
 }

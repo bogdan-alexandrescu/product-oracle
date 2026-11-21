@@ -46,7 +46,11 @@ export function useFocusTrap(
     // Its ancestors, the scrim among them (a click on it closes the dialog), stay live.
     const restore = ref.current ? inertOutside(ref.current) : () => {};
     (ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current)?.focus();
+    // #1581: the key that opened the dialog (Escape asking "Discard?") is still on its way up
+    // to the document, past React's root (#root, not the document as under Next): not ours.
+    const opening = window.event;
     const onKey = (e: KeyboardEvent) => {
+      if (e === opening) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         close.current();

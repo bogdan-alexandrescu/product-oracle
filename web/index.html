@@ -35,6 +35,10 @@
     <script>try{document.documentElement.dataset.mode=/^\/simple(\/|$)/.test(location.pathname)?"simple":"detailed"}catch(e){}</script>
   </head>
   <body class="min-h-full">
+    <!-- Sign-in runs in the browser: without JavaScript, the page says so instead of a blank card. -->
+    <noscript>
+      <p>Signing in needs JavaScript. Turn it on in your browser's settings, then reload this page.</p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/main.tsx"></script>
   </body>
