@@ -93,7 +93,7 @@ const NAV_RULE = [
 // plugins (docs/vite-migration/dependencies.md, Lint after eslint-config-next).
 const eslintConfig = defineConfig([
   js.configs.recommended,
-  ...tseslintConfigs.recommendedTypeChecked,
+  ...tseslintConfigs.recommended,
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
   reactHooks.configs.flat['recommended-latest'],
@@ -123,16 +123,17 @@ const eslintConfig = defineConfig([
   },
   // #1585 phase 1, core and imports, every rule at error. Findings from before it sit in
   // eslint-suppressions.json (`npx eslint --suppress-all`) and only go down from there:
-  // `npx eslint --prune-suppressions` after a fix.
+  // `npx eslint --prune-suppressions` after a fix. Typed rules (projectService) wait for a later
+  // phase: over this tree they ran `npm run lint` out of memory even at a 4 GB heap.
   {
-    languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
-    },
     plugins: { 'import-x': importX, 'unused-imports': unusedImports },
     settings: {
       'import-x/extensions': ['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs', '.cjs'],
       'import-x/external-module-folders': ['node_modules', 'node_modules/@types'],
       'import-x/parsers': { '@typescript-eslint/parser': ['.ts', '.tsx', '.mts'] },
+      // Packages' own exports are TypeScript's to check; reading every .d.ts under node_modules
+      // into import-x's export maps ran `npm run lint` out of memory.
+      'import-x/ignore': ['node_modules'],
       // The `@/` alias, from tsconfig.json's paths.
       'import-x/resolver-next': [
         createNodeResolver({
@@ -152,20 +153,8 @@ const eslintConfig = defineConfig([
       'no-param-reassign': 'error',
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
       '@typescript-eslint/no-import-type-side-effects': 'error',
-      // The router's redirect() and notFound() are thrown, by its design (lib/nav.ts).
-      '@typescript-eslint/only-throw-error': [
-        'error',
-        {
-          allow: [
-            {
-              from: 'package',
-              package: '@tanstack/router-core',
-              name: ['Redirect', 'NotFoundError'],
-            },
-          ],
-        },
-      ],
       'import-x/no-unresolved': ['error', { ignore: ['^virtual:', '\\?(raw|url|inline)$'] }],
+      // TypeScript checks named imports already (tsc --noEmit).
       'import-x/named': 'off',
       'import-x/namespace': 'error',
       'import-x/default': 'error',
@@ -177,7 +166,7 @@ const eslintConfig = defineConfig([
       'import-x/newline-after-import': 'error',
       'import-x/no-absolute-path': 'error',
       'import-x/no-self-import': 'error',
-      'import-x/no-cycle': 'error',
+      'import-x/no-cycle': ['error', { ignoreExternal: true }],
       'import-x/no-useless-path-segments': 'error',
       'import-x/no-mutable-exports': 'error',
       'import-x/order': [
@@ -193,11 +182,6 @@ const eslintConfig = defineConfig([
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': 'error',
     },
-  },
-  {
-    // Scripts and configs sit outside tsconfig.json: untyped rules only.
-    files: ['**/*.{js,mjs,cjs}'],
-    extends: [tseslintConfigs.disableTypeChecked],
   },
   {
     rules: {

@@ -1,8 +1,5 @@
 {
   "app/access/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
@@ -12,42 +9,17 @@
       "count": 1
     }
   },
-  "app/baseline/_components/AddItem.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "app/baseline/_components/BlockerInspector.tsx": {
     "import-x/order": {
       "count": 1
     }
   },
   "app/baseline/_components/BuildBaseline.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "app/baseline/_components/ConflictsTab.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/baseline/_components/EntityDrawer.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 11
     }
@@ -57,26 +29,12 @@
       "count": 2
     }
   },
-  "app/baseline/_components/GoalInterview.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/baseline/_components/GraphTab.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 6
     }
   },
   "app/baseline/_components/GroundTruthFlags.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -86,41 +44,12 @@
       "count": 2
     }
   },
-  "app/baseline/_components/LinkTools.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "app/baseline/_components/PromoteBlocker.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/baseline/_components/ProposalsTab.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "app/baseline/_components/Tabs.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "app/baseline/_components/common.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
   "app/baseline/_components/goal-fields.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -146,41 +75,16 @@
     }
   },
   "app/company/decisions/_components/DecisionInspector.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 7
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "app/company/decisions/_components/LinksPicker.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
-  "app/company/decisions/_components/ProposeDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "app/company/decisions/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 6
     }
   },
   "app/company/market/_components/Alternatives.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 1
     }
@@ -190,28 +94,12 @@
       "count": 1
     }
   },
-  "app/company/market/_components/DealDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "app/company/market/_components/FindingCard.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "app/company/market/_components/NewPricingMemo.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/company/market/_components/Positioning.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
@@ -222,9 +110,6 @@
     }
   },
   "app/company/market/_components/WinLoss.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 1
     }
@@ -234,23 +119,12 @@
       "count": 4
     }
   },
-  "app/company/metrics/_components/MetricForm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
   "app/company/metrics/_components/MetricInspector.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 5
     }
   },
   "app/company/metrics/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
@@ -266,42 +140,21 @@
     }
   },
   "app/company/rituals/_components/MetricBlocks.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/company/rituals/_components/OccurrenceDetail.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
   },
   "app/company/rituals/_components/RitualInspector.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/company/rituals/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 5
     }
@@ -312,17 +165,11 @@
     }
   },
   "app/company/strategy/_components/DraftSheet.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/company/strategy/_components/DriftList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 3
     }
@@ -333,24 +180,13 @@
     }
   },
   "app/company/strategy/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/company/updates/_components/NewUpdateDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "app/company/updates/_components/VisibilityDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
     }
   },
   "app/company/updates/page.tsx": {
@@ -358,44 +194,17 @@
       "count": 6
     }
   },
-  "app/design/_gallery.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    }
-  },
   "app/documents/$doc/composition/_confirm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "app/documents/$doc/composition/_lib.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
     }
   },
   "app/documents/$doc/composition/_module-inspector.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/order": {
-      "count": 1
-    }
-  },
-  "app/documents/$doc/composition/_policy.tsx": {
-    "@typescript-eslint/no-misused-promises": {
       "count": 1
     }
   },
   "app/documents/$doc/composition/_view.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
@@ -466,20 +275,11 @@
     }
   },
   "app/documents/page.tsx": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 6
     }
   },
   "app/ground-truth/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 17
     }
@@ -489,15 +289,7 @@
       "count": 5
     }
   },
-  "app/home/_goals.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/home/_goals.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -510,36 +302,17 @@
       "count": 4
     }
   },
-  "app/home/_use-goals.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    }
-  },
   "app/home/_welcome.tsx": {
     "import-x/order": {
       "count": 2
     }
   },
   "app/home/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 6
     }
   },
-  "app/i/$token/_chat.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    }
-  },
   "app/impact/_explorer.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
@@ -559,11 +332,6 @@
       "count": 3
     }
   },
-  "app/inbox/_access.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
   "app/inbox/_actions.tsx": {
     "import-x/order": {
       "count": 2
@@ -575,74 +343,31 @@
     }
   },
   "app/inbox/_needs.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 23
-    },
     "import-x/order": {
       "count": 12
     }
   },
   "app/inbox/_proposals.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/intakes/$id/_draft-sheet.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 5
     }
   },
-  "app/intakes/$id/_findings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "app/intakes/$id/_gaps.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/intakes/$id/_inspector.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 5
     }
   },
   "app/intakes/$id/_proposals.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/intakes/$id/_questions.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 2
     }
@@ -653,9 +378,6 @@
     }
   },
   "app/intakes/$id/_shell.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 4
     }
@@ -671,9 +393,6 @@
     }
   },
   "app/oauth/consent/ConsentScreen.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 4
     }
@@ -684,28 +403,16 @@
     }
   },
   "app/plan/_dates.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/plan/_edit-plan.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 11
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/plan/_inspector.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 13
     }
@@ -721,9 +428,6 @@
     }
   },
   "app/plan/_nav.tsx": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -749,9 +453,6 @@
     }
   },
   "app/plan/_tracks.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -762,20 +463,11 @@
     }
   },
   "app/plan/outcomes/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 7
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 8
     }
   },
   "app/plan/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 5
     }
@@ -786,20 +478,11 @@
     }
   },
   "app/plan/reports/_generate.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/plan/reports/_report.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -814,45 +497,17 @@
       "count": 4
     }
   },
-  "app/priorities/_components/overrides.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    }
-  },
-  "app/priorities/_components/words.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    }
-  },
   "app/priorities/page.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 15
     }
   },
   "app/requests/_components/FoundInSources.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/requests/_components/InterviewDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
@@ -863,54 +518,18 @@
     }
   },
   "app/requests/_components/RequestInspector.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/requests/_components/RequestList.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "app/requests/_components/RequestsScreen.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "app/requests/_components/Themes.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    }
-  },
-  "app/requests/_components/Triage.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "app/requests/_components/WhyNot.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 8
     }
   },
   "app/requests/_nav.tsx": {
@@ -919,9 +538,6 @@
     }
   },
   "app/requests/interviews/$id/_detail.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -952,9 +568,6 @@
     }
   },
   "app/roadmap/changelog/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 1
     }
@@ -965,9 +578,6 @@
     }
   },
   "app/roadmap/launches/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 11
-    },
     "import-x/order": {
       "count": 4
     }
@@ -983,25 +593,11 @@
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-review.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
   },
-  "app/runs/$id/review/$checkpoint/_items-lib.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
   "app/runs/$id/review/$checkpoint/_items-review.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
@@ -1011,23 +607,7 @@
       "count": 1
     }
   },
-  "app/runs/$id/review/$checkpoint/_scope-inspector.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "app/runs/$id/review/$checkpoint/_scope-lib.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/runs/$id/review/$checkpoint/_scope-review.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 8
     }
@@ -1043,29 +623,11 @@
     }
   },
   "app/runs/_new-run-dialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/runs/_run-detail.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 14
-    },
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/require-await": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 11
     }
@@ -1085,28 +647,9 @@
       "count": 2
     }
   },
-  "app/settings/analytics/AnalyticsSettings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
   "app/settings/analytics/page.tsx": {
     "import-x/order": {
       "count": 2
-    }
-  },
-  "app/settings/autonomy/AutonomySettings.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
     }
   },
   "app/settings/autonomy/page.tsx": {
@@ -1115,9 +658,6 @@
     }
   },
   "app/settings/claude-accounts/ClaudeAccounts.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 1
     }
@@ -1138,9 +678,6 @@
     }
   },
   "app/settings/connections/ConnectionsSettings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 2
     }
@@ -1151,9 +688,6 @@
     }
   },
   "app/settings/notifications/NotificationsSettings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 6
-    },
     "import-x/order": {
       "count": 2
     }
@@ -1169,36 +703,16 @@
     }
   },
   "app/settings/sources/CompanyDrive.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 3
     }
   },
-  "app/settings/sources/DriveFiles.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/settings/sources/NotionPicker.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "app/settings/sources/_code-maps.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -1209,9 +723,6 @@
     }
   },
   "app/settings/sources/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 10
-    },
     "import-x/order": {
       "count": 8
     }
@@ -1222,9 +733,6 @@
     }
   },
   "app/settings/templates/new/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
@@ -1240,9 +748,6 @@
     }
   },
   "app/settings/themes/new/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 7
     }
@@ -1253,9 +758,6 @@
     }
   },
   "app/settings/trash/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
@@ -1296,9 +798,6 @@
     }
   },
   "app/simple/_home/cards.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -1319,9 +818,6 @@
     }
   },
   "app/simple/decisions/_decisions.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 11
     }
@@ -1337,20 +833,11 @@
     }
   },
   "app/simple/goals/_map.tsx": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/simple/goals/_panel.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -1365,24 +852,7 @@
       "count": 4
     }
   },
-  "app/simple/meetings/$id/_draft.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "app/simple/meetings/$id/_meeting.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 22
     }
@@ -1428,23 +898,11 @@
     }
   },
   "app/simple/page.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 29
     }
   },
   "app/simple/priorities/goal-buckets.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
@@ -1460,38 +918,12 @@
     }
   },
   "app/simple/priorities/priorities.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 24
     }
   },
   "app/simple/priorities/task-edit.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
-      "count": 1
-    }
-  },
-  "app/simple/roadmap/_add.tsx": {
-    "@typescript-eslint/no-misused-promises": {
       "count": 1
     }
   },
@@ -1506,11 +938,6 @@
     },
     "import-x/order": {
       "count": 11
-    }
-  },
-  "app/simple/roadmap/_drafts.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
     }
   },
   "app/simple/roadmap/_export.ts": {
@@ -1529,25 +956,11 @@
     }
   },
   "app/simple/roadmap/_lanes.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "app/simple/roadmap/_lib.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    }
-  },
   "app/simple/roadmap/_milestones.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     }
@@ -1558,48 +971,21 @@
     }
   },
   "app/simple/roadmap/_panel.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "app/simple/roadmap/_removed.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/simple/roadmap/_roadmap.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 3
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 34
     }
   },
   "app/simple/roadmap/_timeline.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -1608,11 +994,6 @@
     },
     "no-param-reassign": {
       "count": 1
-    }
-  },
-  "app/simple/roadmap/_tracks.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
     }
   },
   "app/simple/roadmap/_zoom.tsx": {
@@ -1631,9 +1012,6 @@
     }
   },
   "app/sources/page.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
@@ -1643,41 +1021,17 @@
       "count": 3
     }
   },
-  "components/AddEvidenceLink.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
-  "components/AnswerQuestion.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    }
-  },
   "components/ApiTokensSettings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 5
     }
   },
   "components/ArtifactMenu.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "components/AskTeammate.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "components/BuildRoadmap.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 3
     }
@@ -1695,15 +1049,7 @@
       "count": 2
     }
   },
-  "components/CommentPopover.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
   "components/DateBasisDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 1
     }
@@ -1714,9 +1060,6 @@
     }
   },
   "components/DesignReview.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -1732,63 +1075,26 @@
     }
   },
   "components/DocumentOverview.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 17
     }
   },
   "components/EditSection.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/FeedbackPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 6
     }
   },
   "components/HeldRewrites.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "components/JobsPanel.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    }
-  },
-  "components/LinkIssueDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "components/LoginForm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -1799,45 +1105,21 @@
     }
   },
   "components/MembersSettings.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 9
     }
   },
   "components/MyAccount.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 8
     }
   },
   "components/NewDraft.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 11
     }
   },
   "components/NextDraft.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 3
     }
@@ -1858,17 +1140,11 @@
     }
   },
   "components/PublishView.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 8
     }
   },
   "components/QualityView.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 6
-    },
     "import-x/order": {
       "count": 4
     }
@@ -1879,48 +1155,23 @@
     }
   },
   "components/RefineSection.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 4
     }
   },
   "components/ReportsPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/RequestSpec.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "components/ReviewSetup.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
     }
   },
   "components/SectionBackLink.tsx": {
     "import-x/order": {
       "count": 2
-    }
-  },
-  "components/SectionReviewBar.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
     }
   },
   "components/SectionView.tsx": {
@@ -1933,36 +1184,22 @@
       "count": 2
     }
   },
-  "components/SuggestionCard.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 7
-    }
-  },
   "components/TemplateBodyEditor.tsx": {
     "import-x/order": {
       "count": 2
     }
   },
   "components/TemplateDetail.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 4
     }
   },
   "components/ThemeDetail.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "components/VersionActions.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 4
     }
@@ -1973,15 +1210,6 @@
     }
   },
   "components/VersionView.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 32
     }
@@ -2000,9 +1228,6 @@
     }
   },
   "components/discuss/ChangeForm.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     }
@@ -2021,15 +1246,6 @@
     }
   },
   "components/discuss/DiscussionThread.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2053,20 +1269,11 @@
     }
   },
   "components/discuss/cited.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "components/ds/AppShell.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2080,9 +1287,6 @@
     }
   },
   "components/ds/CodeChip.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 3
     }
@@ -2093,21 +1297,7 @@
     }
   },
   "components/ds/DataTable.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/order": {
-      "count": 1
-    }
-  },
-  "components/ds/Figures.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
-    "@typescript-eslint/restrict-template-expressions": {
       "count": 1
     }
   },
@@ -2141,20 +1331,12 @@
       "count": 1
     }
   },
-  "components/ds/Toast.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "components/ds/index.ts": {
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "components/evidence/EvidencePane.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
@@ -2173,17 +1355,11 @@
     }
   },
   "components/members/AccessRequests.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "components/members/ChangePreview.tsx": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
@@ -2194,55 +1370,28 @@
     }
   },
   "components/members/MemberInspector.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "components/members/SignInRules.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "components/review/FeedbackList.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/review/ItemInspector.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/review/ItemsTable.tsx": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "components/review/RawFileSheet.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
     }
   },
   "components/review/ReviewPanel.tsx": {
     "import-x/order": {
       "count": 2
-    }
-  },
-  "components/review/RunReviewBar.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
     }
   },
   "components/review/parts.tsx": {
@@ -2254,9 +1403,6 @@
     }
   },
   "components/roadmap/DraftRoadmapPane.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 5
     }
@@ -2266,77 +1412,24 @@
       "count": 2
     }
   },
-  "components/roadmap/StalenessActions.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "components/roadmap/VersionTabs.tsx": {
     "import-x/order": {
       "count": 2
     }
   },
   "components/roadmap/item-row.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
   },
-  "components/roadmap/item-row.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "components/roadmap/useItemsDiff.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    }
-  },
   "components/share/PublicCheck.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
   },
   "components/share/RoadmapSharing.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 7
-    },
     "import-x/order": {
       "count": 5
-    }
-  },
-  "components/share/SharedRoadmap.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
     }
   },
   "components/simple/DecidedWho.tsx": {
@@ -2350,54 +1443,21 @@
     }
   },
   "components/simple/FeatureDelete.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
-  "components/simple/FitDate.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    }
-  },
-  "components/simple/FlowViews.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "components/simple/FlowVisual.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    }
-  },
   "components/simple/GoalSuggestions.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/simple/NewPrd.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "components/simple/OnePager.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 26
     }
@@ -2423,25 +1483,16 @@
     }
   },
   "components/simple/SimpleShell.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 5
     }
   },
   "components/simple/WaitingItems.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 6
     }
   },
   "components/simple/chat/AskAnswer.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2449,15 +1500,7 @@
       "count": 2
     }
   },
-  "components/simple/chat/ChatCard.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "components/simple/chat/ChatThread.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2471,9 +1514,6 @@
     }
   },
   "components/simple/chat/SimpleAsk.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2482,12 +1522,6 @@
     }
   },
   "components/simple/meetings/AgendaSheet.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 3
     }
@@ -2503,25 +1537,11 @@
     }
   },
   "components/simple/meetings/StartSheet.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "components/simple/questions/DecisionSheet.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "components/simple/questions/Questions.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
@@ -2552,15 +1572,6 @@
     }
   },
   "e2e/ah-prd-milestones-once.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 12
-    },
     "import-x/order": {
       "count": 1
     }
@@ -2576,39 +1587,8 @@
     }
   },
   "e2e/approve-with-edits.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "e2e/approved-prd-roadmap.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
-    }
-  },
-  "e2e/approved-prd-shown-once.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 14
     }
   },
   "e2e/approved-roadmap-to-simple.spec.ts": {
@@ -2832,9 +1812,6 @@
     }
   },
   "e2e/branding.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -2875,9 +1852,6 @@
     }
   },
   "e2e/build-plan-picks.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
@@ -2926,23 +1900,11 @@
     }
   },
   "e2e/checkpoint-gate.spec.ts": {
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "e2e/citation-confidence.spec.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -2988,18 +1950,6 @@
     }
   },
   "e2e/company-day-review-file.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3015,18 +1965,6 @@
     }
   },
   "e2e/company-timezone-dates.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3057,9 +1995,6 @@
     }
   },
   "e2e/contracts-published.spec.ts": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
@@ -3075,9 +2010,6 @@
     }
   },
   "e2e/counts-wait-for-every-part.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -3218,9 +2150,6 @@
     }
   },
   "e2e/detailed-rail-labels.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3316,12 +2245,6 @@
     }
   },
   "e2e/dod-one-pager-mode.spec.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -3352,40 +2275,16 @@
     }
   },
   "e2e/draft-roadmap.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/drive-picker.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/e2e-minors-detailed-docs.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     }
@@ -3476,15 +2375,6 @@
     }
   },
   "e2e/feature-code-on-join.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3515,15 +2405,6 @@
     }
   },
   "e2e/fireflies-picker.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3539,15 +2420,6 @@
     }
   },
   "e2e/fix-plan-review-impact.spec.ts": {
-    "@typescript-eslint/no-implied-eval": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3741,9 +2613,6 @@
     }
   },
   "e2e/fix4-docs-review.spec.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3804,9 +2673,6 @@
     }
   },
   "e2e/fix4-plan-simple-roadmap.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -3842,9 +2708,6 @@
     }
   },
   "e2e/fix4-runs-list.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -3925,9 +2788,6 @@
     }
   },
   "e2e/fix4-simple-home-walk.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4191,18 +3051,6 @@
     }
   },
   "e2e/goals-interview.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4213,35 +3061,11 @@
     }
   },
   "e2e/ground-truth-goal-attr-add-remove.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/ground-truth-goal-attr-shapes.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4252,89 +3076,26 @@
     }
   },
   "e2e/ground-truth-goal-edit-form-minors-2.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/ground-truth-goal-edit-form-minors-3.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/ground-truth-goal-edit-form-minors-4.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/ground-truth-goal-edit-form-minors-5.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/ground-truth-goal-edit-form-minors.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4370,30 +3131,13 @@
     }
   },
   "e2e/ground-truth-refs.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/ground-truth-visual-qa.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "e2e/ground-truth-words-source.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
     }
   },
   "e2e/ground-truth-words.spec.ts": {
@@ -4402,27 +3146,7 @@
     }
   },
   "e2e/header-pills.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/order": {
-      "count": 2
-    }
-  },
-  "e2e/helpers.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
       "count": 2
     }
   },
@@ -4437,18 +3161,6 @@
     }
   },
   "e2e/home-fixes.spec.ts": {
-    "@typescript-eslint/no-implied-eval": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4484,9 +3196,6 @@
     }
   },
   "e2e/hop-panel.spec.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     },
@@ -4520,26 +3229,11 @@
     }
   },
   "e2e/inbox-checkpoint-counts.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/inbox-columns-1024.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
@@ -4565,12 +3259,6 @@
     }
   },
   "e2e/inbox-one.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4591,9 +3279,6 @@
     }
   },
   "e2e/inbox-suggestions.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4629,9 +3314,6 @@
     }
   },
   "e2e/intake-late-answers.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4692,9 +3374,6 @@
     }
   },
   "e2e/launches.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4715,9 +3394,6 @@
     }
   },
   "e2e/markdown-export-shape.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -4728,9 +3404,6 @@
     }
   },
   "e2e/meeting-agenda-edit.spec.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -4770,14 +3443,6 @@
       "count": 2
     }
   },
-  "e2e/metrics.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "e2e/milestone-asks.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -4799,12 +3464,6 @@
     }
   },
   "e2e/mock-goal-restore-items.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
@@ -4816,14 +3475,6 @@
   },
   "e2e/mock-order-inbox-toast.spec.ts": {
     "import-x/order": {
-      "count": 1
-    }
-  },
-  "e2e/mock-route-coverage.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
     }
   },
@@ -4883,43 +3534,16 @@
     }
   },
   "e2e/next-draft-section-changes.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/next-draft.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/notion-picker.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5095,9 +3719,6 @@
     }
   },
   "e2e/pdf-export-feedback.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
@@ -5163,15 +3784,6 @@
     }
   },
   "e2e/prd-nothing-written.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5202,9 +3814,6 @@
     }
   },
   "e2e/present-fit.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5270,17 +3879,11 @@
     }
   },
   "e2e/priorities-keydates.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "e2e/priorities-scrollbar-room.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5296,9 +3899,6 @@
     }
   },
   "e2e/priorities-words.spec.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5319,12 +3919,6 @@
     }
   },
   "e2e/prose-guard.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 6
     }
@@ -5350,21 +3944,6 @@
     }
   },
   "e2e/publish.spec.ts": {
-    "@typescript-eslint/no-implied-eval": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5385,12 +3964,6 @@
     }
   },
   "e2e/qa-company-inbox.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5516,33 +4089,12 @@
     }
   },
   "e2e/qa-leftovers.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
-      "count": 1
-    }
-  },
-  "e2e/qa-nov17-goals-priorities.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "e2e/qa-nov17-gt-codes.spec.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
       "count": 1
     }
   },
   "e2e/qa-nov17-plan-home.spec.ts": {
     "import-x/order": {
-      "count": 2
-    }
-  },
-  "e2e/qa-nov17-roadmap-data.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     }
   },
@@ -5587,17 +4139,11 @@
     }
   },
   "e2e/qa-plan-plantracks.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/qa-plan-priorities.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 4
     }
@@ -5648,12 +4194,6 @@
     }
   },
   "e2e/qa2-company-inbox.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5775,12 +4315,6 @@
     }
   },
   "e2e/qa3-company-inbox.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5846,12 +4380,6 @@
     }
   },
   "e2e/qa3-docs-tabs.spec.ts": {
-    "@typescript-eslint/no-implied-eval": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -5964,11 +4492,6 @@
       "count": 2
     }
   },
-  "e2e/qa4-simple-decide-meeting.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    }
-  },
   "e2e/qa4-simple-decide.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -5985,20 +4508,12 @@
     }
   },
   "e2e/qa4-simple-home.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/qa4-simple-plan.spec.ts": {
     "import-x/order": {
-      "count": 1
-    }
-  },
-  "e2e/qa4-simple-prd.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
@@ -6073,9 +4588,6 @@
     }
   },
   "e2e/qa4fix-plan-priorities.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6150,11 +4662,6 @@
       "count": 2
     }
   },
-  "e2e/qa5-simple-decide-rest.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "e2e/quality.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -6206,81 +4713,16 @@
     }
   },
   "e2e/real/discussion-stream.spec.ts": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "e2e/real/feedback-loop.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
-  "e2e/real/publish.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 9
-    }
-  },
-  "e2e/real/slice.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    }
-  },
-  "e2e/real/stack.ts": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "e2e/real/ui.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
   "e2e/rebuild-sign.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 30
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 15
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 44
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6296,15 +4738,6 @@
     }
   },
   "e2e/requests-mock.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 33
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6315,9 +4748,6 @@
     }
   },
   "e2e/requests-queue.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6348,15 +4778,6 @@
     }
   },
   "e2e/review-chain-defaults.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6390,15 +4811,6 @@
     }
   },
   "e2e/review.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6474,18 +4886,6 @@
     }
   },
   "e2e/roadmap-items-review.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6496,15 +4896,6 @@
     }
   },
   "e2e/roadmap-items-tab.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6515,9 +4906,6 @@
     }
   },
   "e2e/roadmap-md-prds.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -6656,9 +5044,6 @@
     }
   },
   "e2e/run-queue-waits.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6674,43 +5059,16 @@
     }
   },
   "e2e/run-segment-retry.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/runs-no-document.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "e2e/runs-qa-fixes.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6721,27 +5079,6 @@
     }
   },
   "e2e/runs.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 15
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 21
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -6936,9 +5273,6 @@
     }
   },
   "e2e/simple-deciders.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -6991,11 +5325,6 @@
   "e2e/simple-home-qa-nov12-inbox-open-dates.spec.ts": {
     "import-x/order": {
       "count": 1
-    }
-  },
-  "e2e/simple-home-qa-nov12-meeting.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
     }
   },
   "e2e/simple-home-review.spec.ts": {
@@ -7068,17 +5397,6 @@
       "count": 1
     }
   },
-  "e2e/simple-merged-into-own-roadmap.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
   "e2e/simple-mode.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -7124,32 +5442,12 @@
       "count": 1
     }
   },
-  "e2e/simple-one-pager-prd-order.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "e2e/simple-one-pager-run-prd.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "e2e/simple-one-pager-walkb.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7170,9 +5468,6 @@
     }
   },
   "e2e/simple-plan-charts.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     },
@@ -7234,9 +5529,6 @@
     }
   },
   "e2e/simple-prd-timeline.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7287,9 +5579,6 @@
     }
   },
   "e2e/simple-roadmap-drag-reads.spec.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7299,15 +5588,7 @@
       "count": 1
     }
   },
-  "e2e/simple-roadmap-export-cues.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "e2e/simple-roadmap-export-qa-e.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7328,12 +5609,6 @@
     }
   },
   "e2e/simple-roadmap-goal-milestones.spec.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7349,9 +5624,6 @@
     }
   },
   "e2e/simple-roadmap-key-results.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7367,9 +5639,6 @@
     }
   },
   "e2e/simple-roadmap-milestone-labels.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7400,17 +5669,11 @@
     }
   },
   "e2e/simple-roadmap-same-day-badge.spec.ts": {
-    "@typescript-eslint/await-thenable": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "e2e/simple-roadmap-stale-filters.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7456,9 +5719,6 @@
     }
   },
   "e2e/simple-visuals.spec.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7489,9 +5749,6 @@
     }
   },
   "e2e/simple-walk-prio.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7522,32 +5779,11 @@
     }
   },
   "e2e/source-github-include.spec.ts": {
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/source-pickers.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7558,18 +5794,6 @@
     }
   },
   "e2e/source-stale.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7600,18 +5824,6 @@
     }
   },
   "e2e/spec-from-plan.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7627,18 +5839,6 @@
     }
   },
   "e2e/staging.spec.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 18
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7714,9 +5914,6 @@
     }
   },
   "e2e/trash-features-goals.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7737,12 +5934,6 @@
     }
   },
   "e2e/value-effort-wording.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -7768,9 +5959,6 @@
     }
   },
   "e2e/vqa-b-documents.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7786,12 +5974,6 @@
     }
   },
   "e2e/vqa-b-runs-inbox.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 2
     },
@@ -7835,9 +6017,6 @@
     }
   },
   "e2e/vqa/capture.vqa.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    },
     "import-x/order": {
       "count": 2
     }
@@ -7845,14 +6024,6 @@
   "e2e/vqa/vqa.config.ts": {
     "import-x/order": {
       "count": 2
-    }
-  },
-  "e2e/vxe-counts.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
     }
   },
   "e2e/walk-1023.spec.ts": {
@@ -7871,26 +6042,11 @@
     }
   },
   "e2e/walk-docs-inbox.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "e2e/walk-docs-priorities.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 3
     }
@@ -7986,15 +6142,6 @@
     }
   },
   "e2e/webhooks.spec.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 3
     }
@@ -8015,57 +6162,16 @@
     }
   },
   "lib/api/branding.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "lib/api/client.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 1
-    }
-  },
-  "lib/api/discussion-changes.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    }
-  },
-  "lib/api/goal-interview.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
-  "lib/api/interviews.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "lib/api/members-types.ts": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
     }
   },
   "lib/api/mock/account.ts": {
@@ -8091,32 +6197,7 @@
       "count": 2
     }
   },
-  "lib/api/mock/autonomy.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    }
-  },
-  "lib/api/mock/baseline.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 2
-    }
-  },
   "lib/api/mock/baseline.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 2
     },
@@ -8128,15 +6209,6 @@
     }
   },
   "lib/api/mock/blockers.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 6
-    },
     "import-x/order": {
       "count": 2
     }
@@ -8152,9 +6224,6 @@
     }
   },
   "lib/api/mock/checkpoint-review.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "no-param-reassign": {
       "count": 1
     }
@@ -8165,12 +6234,6 @@
     }
   },
   "lib/api/mock/connections.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 2
     }
@@ -8190,46 +6253,17 @@
       "count": 1
     }
   },
-  "lib/api/mock/decisions.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    }
-  },
   "lib/api/mock/describe.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "lib/api/mock/discussions.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "lib/api/mock/draft-roadmap.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/no-cycle": {
       "count": 1
     }
@@ -8239,21 +6273,8 @@
       "count": 1
     }
   },
-  "lib/api/mock/feature-codes.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
   "lib/api/mock/fireflies.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/no-cycle": {
-      "count": 1
-    }
-  },
-  "lib/api/mock/fit-date-engine.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
@@ -8271,9 +6292,6 @@
     }
   },
   "lib/api/mock/goal-buckets.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8282,15 +6300,6 @@
     }
   },
   "lib/api/mock/goal-interview.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 8
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8298,49 +6307,17 @@
       "count": 3
     }
   },
-  "lib/api/mock/goal-map-tracks.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "lib/api/mock/goal-map.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 32
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "lib/api/mock/goals.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "lib/api/mock/ground-truth.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8349,31 +6326,11 @@
     }
   },
   "lib/api/mock/impact.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
   },
-  "lib/api/mock/intake.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 36
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "lib/api/mock/intake.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8382,9 +6339,6 @@
     }
   },
   "lib/api/mock/interviews.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8393,18 +6347,6 @@
     }
   },
   "lib/api/mock/lane-f.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 2
     },
@@ -8413,9 +6355,6 @@
     }
   },
   "lib/api/mock/llm-jobs.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8442,47 +6381,16 @@
     }
   },
   "lib/api/mock/modules.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 12
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 2
     }
   },
-  "lib/api/mock/modules.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "lib/api/mock/next-draft.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "lib/api/mock/one-pager-checks.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
     }
   },
   "lib/api/mock/one-roadmap.ts": {
@@ -8496,9 +6404,6 @@
     }
   },
   "lib/api/mock/pricing.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 2
     }
@@ -8509,9 +6414,6 @@
     }
   },
   "lib/api/mock/quality.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -8529,15 +6431,7 @@
       "count": 1
     }
   },
-  "lib/api/mock/replaced-prd.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "lib/api/mock/reports.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8546,12 +6440,6 @@
     }
   },
   "lib/api/mock/requests.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8569,37 +6457,12 @@
       "count": 1
     }
   },
-  "lib/api/mock/roadmap-diff.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "lib/api/mock/roadmap-read.ts": {
     "import-x/no-cycle": {
       "count": 1
     }
   },
-  "lib/api/mock/roadmap.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 30
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 5
-    }
-  },
   "lib/api/mock/roadmap.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 16
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8611,18 +6474,6 @@
     }
   },
   "lib/api/mock/runs.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    },
     "import-x/no-cycle": {
       "count": 2
     },
@@ -8631,38 +6482,11 @@
     }
   },
   "lib/api/mock/scope.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 3
     }
   },
   "lib/api/mock/server.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 15
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 6
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8674,12 +6498,6 @@
     }
   },
   "lib/api/mock/shares.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8687,38 +6505,12 @@
       "count": 6
     }
   },
-  "lib/api/mock/simple-change-words.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 11
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 4
-    }
-  },
   "lib/api/mock/simple-changes.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "lib/api/mock/simple-changes.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 51
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 3
     },
@@ -8727,31 +6519,11 @@
     }
   },
   "lib/api/mock/simple-chat.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 19
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "import-x/order": {
       "count": 6
     }
   },
-  "lib/api/mock/simple-meeting-agenda.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 3
-    }
-  },
   "lib/api/mock/simple-meetings.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 11
-    },
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 6
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8763,12 +6535,6 @@
     }
   },
   "lib/api/mock/simple-milestones.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -8779,12 +6545,6 @@
     }
   },
   "lib/api/mock/simple-one-pager.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 17
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8798,18 +6558,6 @@
     }
   },
   "lib/api/mock/simple-priorities.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8818,31 +6566,16 @@
     }
   },
   "lib/api/mock/simple-questions.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 1
     }
   },
   "lib/api/mock/simple-questions.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "lib/api/mock/simple-removed.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
     "import-x/order": {
       "count": 2
     }
@@ -8859,15 +6592,6 @@
   },
   "lib/api/mock/simple-roadmap.ts": {
     "@typescript-eslint/consistent-type-imports": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
     "import-x/first": {
@@ -8890,16 +6614,8 @@
     }
   },
   "lib/api/mock/simple-runs.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
-    }
-  },
-  "lib/api/mock/simple-suggestions.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
     }
   },
   "lib/api/mock/simple-suggestions.ts": {
@@ -8912,29 +6628,12 @@
       "count": 2
     }
   },
-  "lib/api/mock/simple-visuals.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "lib/api/mock/slack.ts": {
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "lib/api/mock/sources.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -8942,11 +6641,6 @@
       "count": 3
     },
     "no-param-reassign": {
-      "count": 1
-    }
-  },
-  "lib/api/mock/specs.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
@@ -8959,17 +6653,11 @@
     }
   },
   "lib/api/mock/strategy.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "lib/api/mock/trace.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "import-x/order": {
       "count": 3
     }
@@ -8998,32 +6686,8 @@
     }
   },
   "lib/api/mock/webhooks.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
-    }
-  },
-  "lib/api/schema.d.ts": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 2
-    }
-  },
-  "lib/api/shared-reads.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    }
-  },
-  "lib/api/shared-reads.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 3
     }
   },
   "lib/api/track-alerts.ts": {
@@ -9036,19 +6700,9 @@
       "count": 3
     }
   },
-  "lib/code-index.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
-    }
-  },
   "lib/coderabbitCliReview.test.ts": {
     "import-x/order": {
       "count": 2
-    }
-  },
-  "lib/coderabbitCliReview.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
     }
   },
   "lib/coderabbitReviewStatus.test.ts": {
@@ -9071,11 +6725,6 @@
       "count": 5
     }
   },
-  "lib/diff.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    }
-  },
   "lib/format.ts": {
     "import-x/no-cycle": {
       "count": 1
@@ -9092,16 +6741,6 @@
       "count": 1
     }
   },
-  "lib/google-picker-mock.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    }
-  },
-  "lib/key-results.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    }
-  },
   "lib/markdown.ts": {
     "no-param-reassign": {
       "count": 1
@@ -9115,31 +6754,7 @@
       "count": 2
     }
   },
-  "lib/ownTreeOnly.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 1
-    }
-  },
-  "lib/preferences.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    }
-  },
-  "lib/risk-policy.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "lib/screen-subject.tsx": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
@@ -9150,32 +6765,10 @@
     }
   },
   "lib/simple-home.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 3
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    },
     "import-x/no-cycle": {
       "count": 1
     },
     "no-param-reassign": {
-      "count": 1
-    }
-  },
-  "lib/stream.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "lib/stream.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
     }
   },
@@ -9189,26 +6782,12 @@
       "count": 2
     }
   },
-  "lib/version-href.ts": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 2
-    }
-  },
   "main.tsx": {
-    "@typescript-eslint/await-thenable": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 2
     }
   },
   "scripts/agent-setup.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    },
     "import-x/order": {
       "count": 1
     }
@@ -9227,9 +6806,6 @@
     }
   },
   "scripts/coderabbit-review-status.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
     "import-x/order": {
       "count": 1
     }
