@@ -1141,6 +1141,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       width: '64px',
       align: 'right',
       phoneLabel: 'Tokens ',
+      // qa4-settings-21: at text-sm Status, Signed in and Tokens still share one phone line.
+      className: 'max-[600px]:gap-0!',
       cell: (m) => (
         <Link
           href={`/settings/api-tokens?member=${m.id}`}

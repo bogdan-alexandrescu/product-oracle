@@ -599,7 +599,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
                     aria-current={active ? 'page' : undefined}
                     aria-label={d.label}
                     aria-describedby={shownOf(d) ? `${id}-count` : undefined}
-                    className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-sm leading-4 ${
+                    className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-xs leading-4 ${
                       active
                         ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
                         : 'font-medium text-rail-text'
@@ -626,7 +626,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
                 aria-controls="simple-more-sheet"
                 data-testid="simple-tab-more"
                 onClick={() => setMore((m) => !m)}
-                className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-sm leading-4 ${
+                className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-xs leading-4 ${
                   more || moreActive
                     ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
                     : 'font-medium text-rail-text'

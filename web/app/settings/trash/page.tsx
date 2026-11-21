@@ -137,7 +137,7 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
         </p>
         {error && <Notice tone="error">{error}</Notice>}
       </div>
-      <div className="flex flex-none items-center gap-2">
+      <div className="flex max-w-full flex-none flex-wrap items-center gap-2 max-[600px]:gap-1.5">
         <Chip kind={e.days_left <= 3 ? 'warn' : 'line'}>
           {e.days_left} {e.days_left === 1 ? 'day' : 'days'} left
         </Chip>

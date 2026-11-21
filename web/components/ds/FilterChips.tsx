@@ -48,7 +48,10 @@ export function FilterChips<V extends string>({
             data-testid={it.testId}
             disabled={it.disabled && !on}
             onClick={() => onChange(it.value)}
-            className={`flex h-8 flex-none items-center gap-1.5 rounded-full border px-2 text-sm font-medium whitespace-nowrap max-[639px]:h-11 max-[639px]:px-3.5 ${
+            className={`flex h-8 flex-none items-center gap-1.5 rounded-full border px-2 text-sm font-medium whitespace-nowrap max-[639px]:h-11 ${
+              // One row: four chips fit a 390 px phone at text-sm (qa-plan-19).
+              oneRow ? 'max-[639px]:px-2.5' : 'max-[639px]:px-3.5'
+            } ${
               on
                 ? 'border-accent bg-accent text-on-accent'
                 : 'border-line-strong bg-surface text-text hover:bg-surface2'

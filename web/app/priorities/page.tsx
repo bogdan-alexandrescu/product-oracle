@@ -1625,7 +1625,7 @@ function Priorities() {
           >
             {/* Between words; a word wider than the column hyphenated, never cut bare
                 ("instrumentatio / n", priorities-words). */}
-            {(fonts ? fitWords(text, depsRoom, 400, 13) : text) || '—'}
+            {(fonts ? fitWords(text, depsRoom, 400, 14) : text) || '—'}
           </span>
         );
       },
@@ -1648,10 +1648,11 @@ function Priorities() {
         const rest = flags.slice(shown);
         return (
           // A blue chip is the card surface with an accent edge, never the selected row's blue
-          // (qa-plan-48), and the same on every row: one look per flag (qa4-plan-9).
+          // (qa-plan-48), and the same on every row: one look per flag (qa4-plan-9). Its chips are
+          // text-xs: at text-sm a flag no longer fits the 144 px column (qa-plan-49).
           <span
             data-testid="row-flags"
-            className="flex flex-wrap items-center gap-1.5 py-0.5 [&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]"
+            className="flex flex-wrap items-center gap-1.5 py-0.5 [&_[data-kind]]:text-xs [&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]"
           >
             {byKey.get(f.key)?.problems.map((p) => (
               <ProblemChip key={p.code} p={p} />

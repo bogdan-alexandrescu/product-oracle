@@ -104,7 +104,7 @@ export function ReviewPanel({
               ] as const
             ).map(([label, value, testId]) => (
               <div key={label} data-testid={testId} className="flex flex-col-reverse">
-                <dt className="text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                <dt className="text-xs leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                   {label}
                 </dt>
                 <dd className="tnum font-display text-3xl leading-10 font-bold tracking-[-0.03em]">

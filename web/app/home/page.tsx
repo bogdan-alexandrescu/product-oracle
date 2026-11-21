@@ -91,7 +91,7 @@ function Count({ kind, label, n }: { kind: NeedKind; label: string; n: number })
       href={`/inbox?kind=${kind}`}
       data-testid={`home-count-${kind}`}
       aria-label={`${label}: ${n} in the Inbox`}
-      className="inline-flex h-[26px] items-center gap-1 text-sm font-medium whitespace-nowrap text-text2 hover:text-accent-ink hover:underline"
+      className="inline-flex h-[26px] items-center gap-1 text-sm font-medium whitespace-nowrap text-text2 hover:text-accent-ink hover:underline max-[600px]:text-xs"
     >
       {label} <b className="tnum text-text">{n}</b>
     </Link>
