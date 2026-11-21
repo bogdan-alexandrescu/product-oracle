@@ -31,6 +31,22 @@ function versionRoute(): Plugin {
   return { name: 'oracle-version', configureServer: serve, configurePreviewServer: serve };
 }
 
+/**
+ * Mock build only: a stand-in `__poMockWrite` from the first line of the page, so a spec that
+ * seeds as soon as sign-in's full load lands at its page is not refused while the app's bundle
+ * (the mock with it) still loads. Its changes wait for the mock, which runs them in its own
+ * turn (lib/api/mock/server.ts). Before the stylesheet, which would hold an inline script back.
+ */
+function mockWriteQueue(): Plugin {
+  const children =
+    'globalThis.__poMockWrite=function(c){return new Promise(function(r,j){' +
+    '(globalThis.__poMockWrites=globalThis.__poMockWrites||[]).push([c,r,j])})}';
+  return {
+    name: 'oracle-mock-write-queue',
+    transformIndexHtml: () => [{ tag: 'script', children, injectTo: 'head-prepend' }],
+  };
+}
+
 export function createViteConfig(command: 'build' | 'serve', mode: string): UserConfig {
   const root = fileURLToPath(new URL('.', import.meta.url));
   const env = loadEnv(mode, root, '');
@@ -62,6 +78,7 @@ export function createViteConfig(command: 'build' | 'serve', mode: string): User
       react(),
       tailwindcss(),
       versionRoute(),
+      ...(mock ? [mockWriteQueue()] : []),
     ],
     resolve: { alias: { '@': root } },
     // Tailwind's output goes through Lightning CSS only: PostCSS rejects some arbitrary-property

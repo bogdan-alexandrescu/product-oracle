@@ -15935,6 +15935,16 @@ if (typeof window !== 'undefined' && process.env.VITE_API_MOCKS === '1') {
     queue = next.catch(() => undefined);
     return next;
   };
+  // Seeds made before this module ran (index.html's mock-only stand-in, vite.config.mts
+  // mockWriteQueue) take their turn now, in the order they were made.
+  type Queued = [(db: Db) => unknown, (out: unknown) => void, (err: unknown) => void];
+  const g = globalThis as {
+    __poMockWrites?: Queued[];
+    __poMockWrite?: (c: Queued[0]) => Promise<unknown>;
+  };
+  for (const [change, resolve, reject] of g.__poMockWrites?.splice(0) ?? []) {
+    g.__poMockWrite!(change).then(resolve, reject);
+  }
 }
 
 /** GET /v1/simple/decisions/waiting with `items` (./waiting-list.ts), as the signed-in person reads each route. */
