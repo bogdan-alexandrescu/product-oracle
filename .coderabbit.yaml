@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit does not review pull requests here: lanes run the CodeRabbit CLI
+# locally before they push (`make agent-setup` installs it), and the CLI reads
+# this file. The installed app still posts a `CodeRabbit` status ("Review
+# skipped") that says nothing about the code.
+reviews:
+  auto_review:
+    enabled: false
+    drafts: false
