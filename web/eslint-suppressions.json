@@ -1,5 +1,8 @@
 {
   "app/access/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     }
@@ -9,34 +12,105 @@
       "count": 1
     }
   },
+  "app/baseline/_components/AddItem.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/baseline/_components/BlockerInspector.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
   "app/baseline/_components/BuildBaseline.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/baseline/_components/EntityDrawer.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "app/baseline/_components/EvidenceChip.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/FlaggedTab.tsx": {
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/baseline/_components/FromRunTab.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/GoalInterview.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/baseline/_components/GraphTab.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/baseline/_components/GroundTruthFlags.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/baseline/_components/ItemsTab.tsx": {
@@ -45,13 +119,25 @@
     }
   },
   "app/baseline/_components/ProposalsTab.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/baseline/_components/goal-fields.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/briefs/$id/page.tsx": {
@@ -60,8 +146,14 @@
     }
   },
   "app/briefs/_brief-detail.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/_empty.tsx": {
@@ -75,22 +167,71 @@
     }
   },
   "app/company/decisions/_components/DecisionInspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 2
     }
   },
+  "app/company/decisions/_components/ProposeDialog.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/company/decisions/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/market/_components/Alternatives.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "app/company/market/_components/ChangeLog.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/company/market/_components/DealDialog.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -110,23 +251,63 @@
     }
   },
   "app/company/market/_components/WinLoss.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "app/company/market/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    }
+  },
+  "app/company/metrics/_components/MetricChart.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/company/metrics/_components/MetricForm.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/metrics/_components/MetricInspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/metrics/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/page.tsx": {
@@ -140,33 +321,75 @@
     }
   },
   "app/company/rituals/_components/MetricBlocks.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/rituals/_components/OccurrenceDetail.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/rituals/_components/RitualInspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/rituals/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/strategy/_components/Cards.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/strategy/_components/DraftSheet.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/strategy/_components/DriftList.tsx": {
@@ -175,18 +398,30 @@
     }
   },
   "app/company/strategy/_components/StackTable.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     }
   },
   "app/company/strategy/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/updates/_components/NewUpdateDialog.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/company/updates/page.tsx": {
@@ -194,19 +429,59 @@
       "count": 6
     }
   },
+  "app/design/_gallery.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/documents/$doc/composition/_confirm.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/documents/$doc/composition/_module-inspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/documents/$doc/composition/_policy.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "app/documents/$doc/composition/_view.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/documents/$doc/composition/page.tsx": {
@@ -275,31 +550,70 @@
     }
   },
   "app/documents/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/ground-truth/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 17
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/home/_goals-panel.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/home/_goals.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/home/_in-flight.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/home/_welcome.tsx": {
@@ -308,18 +622,55 @@
     }
   },
   "app/home/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/i/$token/_chat.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/impact/_explorer.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "app/impact/_names.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "app/impact/_steps.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/impact/changes/$id/page.tsx": {
@@ -333,33 +684,94 @@
     }
   },
   "app/inbox/_actions.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/inbox/_inbox.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/inbox/_needs.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 12
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
     }
   },
   "app/inbox/_proposals.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/inbox/_webhooks.tsx": {
+    "complexity": {
+      "count": 1
     }
   },
   "app/intakes/$id/_draft-sheet.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/intakes/$id/_gaps.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/intakes/$id/_inspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/intakes/$id/_proposals.tsx": {
@@ -368,18 +780,39 @@
     }
   },
   "app/intakes/$id/_questions.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/intakes/$id/_read.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/intakes/$id/_shell.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/intakes/$id/page.tsx": {
@@ -403,18 +836,39 @@
     }
   },
   "app/plan/_dates.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/plan/_edit-plan.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/plan/_inspector.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 13
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/_lib.test.ts": {
@@ -453,23 +907,59 @@
     }
   },
   "app/plan/_tracks.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/plan/documents/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/plan/outcomes/page.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/plan/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/plan/reports/$id/page.tsx": {
@@ -485,6 +975,9 @@
   "app/plan/reports/_report.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/reports/latest/page.tsx": {
@@ -497,9 +990,29 @@
       "count": 4
     }
   },
+  "app/priorities/_components/overrides.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/priorities/page.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 15
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/requests/_components/FoundInSources.tsx": {
@@ -508,17 +1021,44 @@
     }
   },
   "app/requests/_components/InterviewDialog.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/requests/_components/NewRequest.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/requests/_components/RequestInspector.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 2
     }
   },
@@ -528,8 +1068,25 @@
     }
   },
   "app/requests/_components/RequestsScreen.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/requests/_components/WhyNot.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/requests/_nav.tsx": {
@@ -538,8 +1095,17 @@
     }
   },
   "app/requests/interviews/$id/_detail.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/requests/interviews/$id/page.tsx": {
@@ -568,18 +1134,39 @@
     }
   },
   "app/roadmap/changelog/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "app/roadmap/launches/_new-launch.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/roadmap/launches/page.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/runs/$id/page.tsx": {
@@ -588,18 +1175,53 @@
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-dates.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-review.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_items-lib.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_items-review.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_review.tsx": {
@@ -607,9 +1229,37 @@
       "count": 1
     }
   },
+  "app/runs/$id/review/$checkpoint/_scope-inspector.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_scope-lib.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
   "app/runs/$id/review/$checkpoint/_scope-review.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/runs/$id/review/$checkpoint/_shell.tsx": {
@@ -622,22 +1272,57 @@
       "count": 2
     }
   },
+  "app/runs/_lib.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/runs/_new-run-dialog.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/runs/_run-detail.tsx": {
+    "complexity": {
+      "count": 6
+    },
     "import-x/order": {
       "count": 11
-    }
-  },
-  "app/runs/page.tsx": {
-    "import-x/order": {
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 3
     }
   },
+  "app/runs/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/settings/_gate.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     }
@@ -647,9 +1332,25 @@
       "count": 2
     }
   },
+  "app/settings/analytics/AnalyticsSettings.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/settings/analytics/page.tsx": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "app/settings/autonomy/AutonomySettings.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/autonomy/page.tsx": {
@@ -660,10 +1361,24 @@
   "app/settings/claude-accounts/ClaudeAccounts.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/claude-accounts/page.tsx": {
     "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/company/BrandingPanel.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -673,13 +1388,25 @@
     }
   },
   "app/settings/company/page.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/connections/ConnectionsSettings.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/members/page.tsx": {
@@ -688,8 +1415,14 @@
     }
   },
   "app/settings/notifications/NotificationsSettings.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/notifications/page.tsx": {
@@ -705,14 +1438,56 @@
   "app/settings/sources/CompanyDrive.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/DriveFiles.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/FirefliesPicker.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/settings/sources/NotionPicker.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/_browse-list.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "app/settings/sources/_code-maps.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
@@ -723,8 +1498,17 @@
     }
   },
   "app/settings/sources/page.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/settings/templates/$key/page.tsx": {
@@ -733,8 +1517,14 @@
     }
   },
   "app/settings/templates/new/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/settings/templates/page.tsx": {
@@ -748,6 +1538,9 @@
     }
   },
   "app/settings/themes/new/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 7
     }
@@ -780,11 +1573,17 @@
   "app/settings/webhooks/WebhookInspector.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/settings/webhooks/WebhooksSettings.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/settings/webhooks/page.tsx": {
@@ -808,8 +1607,17 @@
     }
   },
   "app/simple/_home/walk.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/simple/_home/welcome.tsx": {
@@ -818,8 +1626,17 @@
     }
   },
   "app/simple/decisions/_decisions.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/simple/decisions/page.tsx": {
@@ -830,11 +1647,26 @@
   "app/simple/goals/_editors.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/goals/_map.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "app/simple/goals/_panel.tsx": {
@@ -852,9 +1684,23 @@
       "count": 4
     }
   },
+  "app/simple/meetings/$id/_draft.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/simple/meetings/$id/_meeting.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 22
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/simple/meetings/$id/chat/_chat.tsx": {
@@ -878,6 +1724,9 @@
     }
   },
   "app/simple/meetings/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     }
@@ -893,22 +1742,56 @@
     }
   },
   "app/simple/one-pagers/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/simple/page.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 29
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/simple/priorities/goal-buckets.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/simple/priorities/goal-drag.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/simple/priorities/key-results.tsx": {
+    "complexity": {
       "count": 1
     }
   },
   "app/simple/priorities/mark-counts.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     }
   },
@@ -917,18 +1800,61 @@
       "count": 3
     }
   },
+  "app/simple/priorities/plan-buckets.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/simple/priorities/priorities.tsx": {
+    "complexity": {
+      "count": 11
+    },
     "import-x/order": {
       "count": 24
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 6
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "app/simple/priorities/task-edit.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_add.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "app/simple/roadmap/_board.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -936,33 +1862,103 @@
     "@typescript-eslint/consistent-type-imports": {
       "count": 2
     },
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_drafts.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_export.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_fields.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_keydates.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_lanes.tsx": {
+    "complexity": {
+      "count": 4
+    },
     "import-x/order": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "max-params": {
       "count": 2
     }
   },
+  "app/simple/roadmap/_lib.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/simple/roadmap/_milestones.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/no-cycle": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
     }
   },
   "app/simple/roadmap/_mk.tsx": {
@@ -971,6 +1967,9 @@
     }
   },
   "app/simple/roadmap/_panel.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
@@ -981,24 +1980,70 @@
     }
   },
   "app/simple/roadmap/_roadmap.tsx": {
+    "complexity": {
+      "count": 5
+    },
     "import-x/order": {
       "count": 34
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 4
+    }
+  },
+  "app/simple/roadmap/_tasks.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_timeline.tsx": {
+    "complexity": {
+      "count": 9
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 10
     },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 2
+    },
     "no-param-reassign": {
       "count": 1
     }
   },
+  "app/simple/roadmap/_tracks.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "app/simple/roadmap/_zoom.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 10
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "app/simple/roadmap/page.tsx": {
@@ -1007,13 +2052,28 @@
     }
   },
   "app/sources/_components/coverage.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/sources/page.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "app/specs/$id/design/$versionId/page.tsx": {
@@ -1021,19 +2081,48 @@
       "count": 3
     }
   },
+  "components/AddEvidenceLink.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "components/ApiTokensSettings.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/ArtifactMenu.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/BuildRoadmap.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/CitationChip.tsx": {
@@ -1050,7 +2139,16 @@
     }
   },
   "components/DateBasisDialog.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -1060,13 +2158,28 @@
     }
   },
   "components/DesignReview.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/DiffView.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/DocToolbar.tsx": {
@@ -1075,8 +2188,17 @@
     }
   },
   "components/DocumentOverview.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 17
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/EditSection.tsx": {
@@ -1087,11 +2209,19 @@
   "components/FeedbackPanel.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/HeldRewrites.tsx": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "components/JobsPanel.tsx": {
+    "complexity": {
+      "count": 1
     }
   },
   "components/LoginForm.tsx": {
@@ -1100,28 +2230,67 @@
     }
   },
   "components/MarkdownBody.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/MembersSettings.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 9
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/MyAccount.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/NewDraft.tsx": {
+    "complexity": {
+      "count": 5
+    },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
     }
   },
   "components/NextDraft.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/PersonPicker.tsx": {
@@ -1130,8 +2299,17 @@
     }
   },
   "components/PresentMode.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/PricingDecide.tsx": {
@@ -1140,33 +2318,77 @@
     }
   },
   "components/PublishView.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/QualityView.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
     }
   },
   "components/RebuildSign.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/RefineSection.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/ReportsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/RequestSpec.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/ReviewSetup.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "components/SectionBackLink.tsx": {
@@ -1174,29 +2396,75 @@
       "count": 2
     }
   },
+  "components/SectionReviewBar.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "components/SectionView.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/SpecStaleness.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    }
+  },
+  "components/SuggestionCard.tsx": {
+    "complexity": {
+      "count": 1
     }
   },
   "components/TemplateBodyEditor.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/TemplateDetail.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/ThemeDetail.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/VersionActions.tsx": {
@@ -1210,8 +2478,17 @@
     }
   },
   "components/VersionView.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 32
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/account/SlackPingsPanel.tsx": {
@@ -1220,24 +2497,45 @@
     }
   },
   "components/current-state/CurrentState.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/discuss/ChangeForm.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "components/discuss/ChangesCard.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/discuss/DiscussionList.tsx": {
@@ -1246,11 +2544,20 @@
     }
   },
   "components/discuss/DiscussionThread.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "components/discuss/LinkedDiscussion.tsx": {
@@ -1274,11 +2581,20 @@
     }
   },
   "components/ds/AppShell.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/ds/Button.tsx": {
@@ -1286,9 +2602,23 @@
       "count": 2
     }
   },
+  "components/ds/Charts.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "components/ds/CodeChip.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/ds/ConfirmDialog.tsx": {
@@ -1297,7 +2627,21 @@
     }
   },
   "components/ds/DataTable.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/ds/Dialog.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -1308,6 +2652,9 @@
   },
   "components/ds/Layout.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -1327,7 +2674,18 @@
     }
   },
   "components/ds/Sheet.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/ds/Toast.tsx": {
+    "complexity": {
       "count": 1
     }
   },
@@ -1337,16 +2695,34 @@
     }
   },
   "components/evidence/EvidencePane.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 2
     }
   },
   "components/hop/HopPanel.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/hop/ShareForm.tsx": {
@@ -1362,6 +2738,9 @@
   "components/members/ChangePreview.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/members/MemberApprovals.tsx": {
@@ -1370,28 +2749,87 @@
     }
   },
   "components/members/MemberInspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
+  "components/members/SignInRules.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/review/DecisionBar.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "components/review/FeedbackList.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 2
     }
   },
   "components/review/ItemInspector.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/review/ItemsTable.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/review/Outline.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/review/ReviewPanel.tsx": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "components/review/RunReviewBar.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/review/parts.tsx": {
@@ -1403,13 +2841,28 @@
     }
   },
   "components/roadmap/DraftRoadmapPane.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/roadmap/RoadmapItemsPane.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/roadmap/VersionTabs.tsx": {
@@ -1423,13 +2876,39 @@
     }
   },
   "components/share/PublicCheck.tsx": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/share/RoadmapSharing.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "components/share/SharedRoadmap.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/DecidedWho.tsx": {
@@ -1447,19 +2926,73 @@
       "count": 1
     }
   },
+  "components/simple/FitDate.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/simple/FlowViews.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/simple/FlowVisual.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "components/simple/GoalSuggestions.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/NewPrd.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/OnePager.tsx": {
+    "complexity": {
+      "count": 5
+    },
     "import-x/order": {
       "count": 26
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 4
     }
   },
   "components/simple/OnePagerSlides.tsx": {
@@ -1468,13 +3001,44 @@
     }
   },
   "components/simple/PlanByMonth.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "components/simple/PrdMenu.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     }
   },
-  "components/simple/PrdMenu.tsx": {
-    "import-x/order": {
-      "count": 3
+  "components/simple/PrdTimeline.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "components/simple/RunReviewStep.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/SimplePage.tsx": {
@@ -1482,14 +3046,34 @@
       "count": 2
     }
   },
+  "components/simple/SimplePrd.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "components/simple/SimpleShell.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/WaitingItems.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/chat/AskAnswer.tsx": {
@@ -1498,32 +3082,73 @@
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "components/simple/chat/ChatCard.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/chat/ChatThread.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/chat/MeetingChat.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "components/simple/chat/SimpleAsk.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "components/simple/meetings/AgendaSheet.tsx": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/meetings/PreRead.tsx": {
@@ -1537,12 +3162,41 @@
     }
   },
   "components/simple/meetings/StartSheet.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "components/simple/questions/DecisionSheet.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "components/simple/questions/Questions.tsx": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -1734,6 +3388,9 @@
   "e2e/baseline-ground-truth-flags.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/baseline-items.spec.ts": {
@@ -1773,6 +3430,9 @@
   },
   "e2e/baseline.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -1829,11 +3489,20 @@
   "e2e/build-agentqs.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/build-detailed.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/build-engcheck.spec.ts": {
@@ -1853,6 +3522,9 @@
   },
   "e2e/build-plan-picks.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -1999,6 +3671,11 @@
       "count": 1
     }
   },
+  "e2e/contrast-helpers.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "e2e/cost-prominence.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -2006,6 +3683,9 @@
   },
   "e2e/counts-failed-part.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -2017,10 +3697,16 @@
   "e2e/current-state-places.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/current-state.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -2257,6 +3943,12 @@
   "e2e/dod-roadmap-actions.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/draft-layer-roadmap.spec.ts": {
@@ -2282,11 +3974,17 @@
   "e2e/drive-picker.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/e2e-minors-detailed-docs.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/e2e-minors-detailed-run.spec.ts": {
@@ -2297,6 +3995,9 @@
   "e2e/e2e-minors-detailed-stops.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/edit-goals-prds-fix.spec.ts": {
@@ -2357,6 +4058,9 @@
   "e2e/evidence-inspector.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/evidence-links.spec.ts": {
@@ -2379,6 +4083,11 @@
       "count": 2
     }
   },
+  "e2e/feature-panel-qa.spec.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "e2e/feature-set-check.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -2397,6 +4106,12 @@
   "e2e/fidelity-picks-nov4.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/fireflies-endpoint.spec.ts": {
@@ -2407,6 +4122,9 @@
   "e2e/fireflies-picker.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/first-draft.spec.ts": {
@@ -2549,6 +4267,9 @@
   },
   "e2e/fix2-simple-roadmap-page.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -2820,6 +4541,9 @@
   "e2e/fix4-simple-roadmap-page.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/fix4-simple-roadmap-parts.spec.ts": {
@@ -2858,6 +4582,9 @@
   "e2e/fix4-templates-themes.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/fix5-cut-dependents.spec.ts": {
@@ -2928,6 +4655,12 @@
   "e2e/goal-buckets-editing.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/goal-buckets-key-result-target.spec.ts": {
@@ -2937,6 +4670,12 @@
   },
   "e2e/goal-buckets-tasks.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -3018,6 +4757,9 @@
   "e2e/goal-map-tracks-grid.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/goal-money-full.spec.ts": {
@@ -3053,6 +4795,9 @@
   "e2e/goals-interview.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/ground-truth-confirm.spec.ts": {
@@ -3140,6 +4885,14 @@
       "count": 2
     }
   },
+  "e2e/ground-truth-words-source.spec.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "e2e/ground-truth-words.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -3148,6 +4901,11 @@
   "e2e/header-pills.spec.ts": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "e2e/helpers.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/home-deleted-roadmap.spec.ts": {
@@ -3178,6 +4936,9 @@
   "e2e/home-milestone-labels.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/home-milestone-rename.spec.ts": {
@@ -3187,6 +4948,12 @@
   },
   "e2e/home-waiting-one-list.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -3234,6 +5001,9 @@
     }
   },
   "e2e/inbox-columns-1024.spec.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     }
@@ -3281,6 +5051,12 @@
   "e2e/inbox-suggestions.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/inbox-track-alerts-walk.spec.ts": {
@@ -3398,6 +5174,11 @@
       "count": 2
     }
   },
+  "e2e/market.spec.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "e2e/meet-chat-right-prd.spec.ts": {
     "import-x/order": {
       "count": 3
@@ -3405,6 +5186,9 @@
   },
   "e2e/meeting-agenda-edit.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -3441,6 +5225,11 @@
   "e2e/members.spec.ts": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "e2e/metrics.spec.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/milestone-asks.spec.ts": {
@@ -3558,6 +5347,11 @@
       "count": 2
     }
   },
+  "e2e/one-feature-panel.spec.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "e2e/one-goal-store.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -3671,6 +5465,12 @@
   "e2e/panel-menu-tree.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/panel-menu.spec.ts": {
@@ -3686,6 +5486,9 @@
   "e2e/pass-f-members-failed-load.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/pass-f-members-round1.spec.ts": {
@@ -3781,6 +5584,9 @@
   "e2e/prd-navigation.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/prd-nothing-written.spec.ts": {
@@ -3826,6 +5632,9 @@
   "e2e/pricing.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/print-detailed-version.spec.ts": {
@@ -3861,6 +5670,9 @@
   "e2e/prio-twins.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/prio-unranked.spec.ts": {
@@ -3921,6 +5733,9 @@
   "e2e/prose-guard.spec.ts": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/prose-tips.spec.ts": {
@@ -3946,6 +5761,9 @@
   "e2e/publish.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/qa-company-decisions.spec.ts": {
@@ -4061,6 +5879,9 @@
   "e2e/qa-docs-version.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/qa-f-settings-analytics.spec.ts": {
@@ -4171,6 +5992,9 @@
   "e2e/qa-work-requests.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/qa-work-review.spec.ts": {
@@ -4317,11 +6141,17 @@
   "e2e/qa3-company-inbox.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/qa3-company-records.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/qa3-company-rituals.spec.ts": {
@@ -4357,6 +6187,9 @@
   "e2e/qa3-docs-share-link.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-nested-callbacks": {
+      "count": 1
     }
   },
   "e2e/qa3-docs-share-publish-items.spec.ts": {
@@ -4387,6 +6220,9 @@
   "e2e/qa3-docs-version.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/qa3-onboarding-owner-welcome.spec.ts": {
@@ -4406,6 +6242,9 @@
   },
   "e2e/qa3-simple-plan.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -4492,6 +6331,14 @@
       "count": 2
     }
   },
+  "e2e/qa4-simple-decide-meeting.spec.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "e2e/qa4-simple-decide.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -4514,6 +6361,14 @@
   },
   "e2e/qa4-simple-plan.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-simple-prd.spec.ts": {
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -4665,6 +6520,9 @@
   "e2e/quality.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/questions-inbox.spec.ts": {
@@ -4685,6 +6543,9 @@
   "e2e/read-states-home2.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/read-states-last.spec.ts": {
@@ -4695,6 +6556,9 @@
   "e2e/read-states-rest.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/read-states-simple.spec.ts": {
@@ -4723,8 +6587,14 @@
     }
   },
   "e2e/rebuild-sign.spec.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/replaced-prd-history.spec.ts": {
@@ -4750,6 +6620,9 @@
   "e2e/requests-queue.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/requests-start-prd.spec.ts": {
@@ -4764,6 +6637,9 @@
   },
   "e2e/requests-why-not.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -4828,6 +6704,9 @@
   "e2e/rituals.spec.ts": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/roadmap-build-draft.spec.ts": {
@@ -4838,6 +6717,9 @@
   "e2e/roadmap-cross-prd-reasons.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/roadmap-dates.spec.ts": {
@@ -4847,6 +6729,9 @@
   },
   "e2e/roadmap-decide.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -4888,6 +6773,9 @@
   "e2e/roadmap-items-review.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/roadmap-items-roles.spec.ts": {
@@ -4898,6 +6786,9 @@
   "e2e/roadmap-items-tab.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/roadmap-keydates.spec.ts": {
@@ -4922,6 +6813,9 @@
   },
   "e2e/roadmap-nov10-findings.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -4953,6 +6847,12 @@
   "e2e/roadmap-track-bands-milestone-kinds.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/roadmap-track-order.spec.ts": {
@@ -4962,6 +6862,9 @@
   },
   "e2e/roadmap-tracks-sheet.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5081,6 +6984,9 @@
   "e2e/runs.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/scope-review-other-prd.spec.ts": {
@@ -5125,6 +7031,9 @@
   },
   "e2e/share-links-table-width.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     },
     "no-param-reassign": {
@@ -5179,6 +7088,12 @@
   },
   "e2e/simple-additions.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5235,6 +7150,12 @@
   "e2e/simple-chat-actions.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-chat-followups.spec.ts": {
@@ -5260,6 +7181,9 @@
   "e2e/simple-chat-reader.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-chat.spec.ts": {
@@ -5274,6 +7198,22 @@
   },
   "e2e/simple-deciders.spec.ts": {
     "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-decision-sheet.spec.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "e2e/simple-decisions-questions.spec.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5294,6 +7234,12 @@
   },
   "e2e/simple-flows.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5335,6 +7281,9 @@
   "e2e/simple-home.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-meeting-chat-kind.spec.ts": {
@@ -5395,11 +7344,20 @@
   "e2e/simple-meetings-walk.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-mode.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-nav-counts-wait.spec.ts": {
@@ -5471,6 +7429,12 @@
     "import-x/order": {
       "count": 2
     },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 2
     }
@@ -5531,6 +7495,12 @@
   "e2e/simple-prd-timeline.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-priorities-codes.spec.ts": {
@@ -5546,6 +7516,9 @@
   "e2e/simple-priorities-qa.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-priorities-suggest-one-way.spec.ts": {
@@ -5553,8 +7526,19 @@
       "count": 1
     }
   },
+  "e2e/simple-priorities.spec.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "e2e/simple-replaced-prds.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5581,6 +7565,9 @@
   "e2e/simple-roadmap-drag-reads.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-effort-start.spec.ts": {
@@ -5591,10 +7578,24 @@
   "e2e/simple-roadmap-export-qa-e.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-filter.spec.ts": {
+    "max-params": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-formats.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5606,15 +7607,24 @@
   "e2e/simple-roadmap-gantt.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-goal-milestones.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-home-qa.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5631,15 +7641,30 @@
   "e2e/simple-roadmap-keys.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-lanes.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-milestone-labels.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5655,6 +7680,14 @@
   },
   "e2e/simple-roadmap-phone-axis.spec.ts": {
     "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-plus.spec.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5681,6 +7714,12 @@
   "e2e/simple-roadmap-talk.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-track-open.spec.ts": {
@@ -5696,15 +7735,24 @@
   "e2e/simple-roadmap-zoom-3m.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-suggest.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -5750,6 +7798,12 @@
   },
   "e2e/simple-walk-prio.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     }
   },
@@ -5841,6 +7895,9 @@
   "e2e/staging.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "e2e/stored-refusal.spec.ts": {
@@ -5866,6 +7923,9 @@
   "e2e/strategy.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/stuck-milestone-decline.spec.ts": {
@@ -5915,6 +7975,9 @@
   },
   "e2e/trash-features-goals.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6144,6 +8207,9 @@
   "e2e/webhooks.spec.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/welcome.spec.ts": {
@@ -6167,6 +8233,9 @@
     }
   },
   "lib/api/client.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -6175,16 +8244,25 @@
     }
   },
   "lib/api/mock/account.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "lib/api/mock/approved-roadmap.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/audience.test.ts": {
@@ -6193,15 +8271,38 @@
     }
   },
   "lib/api/mock/audience.ts": {
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 2
     }
   },
+  "lib/api/mock/autonomy.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
   "lib/api/mock/baseline.ts": {
+    "complexity": {
+      "count": 6
+    },
     "import-x/no-cycle": {
       "count": 2
     },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
       "count": 1
     },
     "no-param-reassign": {
@@ -6209,17 +8310,38 @@
     }
   },
   "lib/api/mock/blockers.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "lib/api/mock/branding.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "lib/api/mock/brief.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     }
   },
@@ -6229,16 +8351,48 @@
     }
   },
   "lib/api/mock/claude-accounts.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/code-left-out.ts": {
+    "complexity": {
       "count": 1
     }
   },
   "lib/api/mock/connections.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/no-cycle": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
       "count": 2
     }
   },
   "lib/api/mock/currentstate.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 2
+    },
     "no-param-reassign": {
       "count": 1
     }
@@ -6253,76 +8407,217 @@
       "count": 1
     }
   },
+  "lib/api/mock/decisions.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
   "lib/api/mock/describe.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     }
   },
   "lib/api/mock/discussions.ts": {
+    "complexity": {
+      "count": 5
+    },
     "import-x/no-cycle": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "lib/api/mock/draft-roadmap.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     }
   },
   "lib/api/mock/engineering.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
   "lib/api/mock/fireflies.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/fit-date-engine.ts": {
+    "max-lines": {
       "count": 1
     }
   },
   "lib/api/mock/fit-date.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/fixtures.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/from-run.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     }
   },
   "lib/api/mock/goal-buckets.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/goal-interview.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
-  "lib/api/mock/goal-map.ts": {
-    "import-x/order": {
+  "lib/api/mock/goal-ladder.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
       "count": 2
     }
   },
+  "lib/api/mock/goal-map-tracks.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/goal-map.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 4
+    }
+  },
   "lib/api/mock/goals.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "lib/api/mock/ground-truth.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/home-milestones.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 4
     }
   },
   "lib/api/mock/impact.ts": {
@@ -6331,40 +8626,119 @@
     }
   },
   "lib/api/mock/intake.ts": {
+    "complexity": {
+      "count": 5
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 5
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
     }
   },
   "lib/api/mock/interviews.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "lib/api/mock/lane-f.ts": {
+    "complexity": {
+      "count": 9
+    },
     "import-x/no-cycle": {
       "count": 2
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/launches.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/live.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "lib/api/mock/llm-jobs.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/market.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/meeting-draft.ts": {
@@ -6372,11 +8746,28 @@
       "count": 1
     }
   },
+  "lib/api/mock/members.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
   "lib/api/mock/metrics.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -6385,12 +8776,43 @@
       "count": 2
     }
   },
+  "lib/api/mock/modules.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 3
+    }
+  },
   "lib/api/mock/next-draft.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/one-pager-checks.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/one-roadmap.ts": {
@@ -6399,26 +8821,59 @@
     }
   },
   "lib/api/mock/plan-edits.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
   "lib/api/mock/pricing.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/public-links.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "lib/api/mock/quality.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/rebuilds.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -6432,28 +8887,69 @@
     }
   },
   "lib/api/mock/reports.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/requests.ts": {
+    "complexity": {
+      "count": 4
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "lib/api/mock/review-v2.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
   "lib/api/mock/rituals.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/roadmap-codes.ts": {
+    "complexity": {
       "count": 1
     }
   },
@@ -6463,30 +8959,72 @@
     }
   },
   "lib/api/mock/roadmap.ts": {
+    "complexity": {
+      "count": 11
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 7
     },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 4
+    },
+    "max-params": {
+      "count": 5
+    },
     "no-param-reassign": {
       "count": 1
     }
   },
   "lib/api/mock/runs.ts": {
+    "complexity": {
+      "count": 17
+    },
     "import-x/no-cycle": {
       "count": 2
     },
     "import-x/order": {
       "count": 14
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 10
     }
   },
   "lib/api/mock/scope.ts": {
+    "complexity": {
+      "count": 5
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/server.ts": {
+    "complexity": {
+      "count": 11
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -6495,14 +9033,40 @@
     },
     "import-x/order": {
       "count": 102
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 6
+    },
+    "max-params": {
+      "count": 3
     }
   },
   "lib/api/mock/shares.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-change-words.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-changes.test.ts": {
@@ -6511,32 +9075,85 @@
     }
   },
   "lib/api/mock/simple-changes.ts": {
+    "complexity": {
+      "count": 17
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 2
     },
     "no-param-reassign": {
       "count": 1
     }
   },
   "lib/api/mock/simple-chat.ts": {
+    "complexity": {
+      "count": 12
+    },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "max-params": {
+      "count": 12
+    }
+  },
+  "lib/api/mock/simple-meeting-agenda.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-meetings.ts": {
+    "complexity": {
+      "count": 8
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 18
     },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    },
     "no-param-reassign": {
       "count": 1
     }
   },
   "lib/api/mock/simple-milestones.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 5
     }
   },
   "lib/api/mock/simple-one-pager.test.ts": {
@@ -6545,11 +9162,31 @@
     }
   },
   "lib/api/mock/simple-one-pager.ts": {
+    "complexity": {
+      "count": 6
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-plan.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-priorities.test.ts": {
@@ -6558,11 +9195,20 @@
     }
   },
   "lib/api/mock/simple-priorities.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-questions.test.ts": {
@@ -6571,13 +9217,34 @@
     }
   },
   "lib/api/mock/simple-questions.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-removed.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-roadmap.goal-order.test.ts": {
@@ -6594,6 +9261,9 @@
     "@typescript-eslint/consistent-type-imports": {
       "count": 1
     },
+    "complexity": {
+      "count": 7
+    },
     "import-x/first": {
       "count": 5
     },
@@ -6609,6 +9279,15 @@
     "import-x/order": {
       "count": 19
     },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 2
     }
@@ -6619,12 +9298,32 @@
     }
   },
   "lib/api/mock/simple-suggestions.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-visuals.test.ts": {
     "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-visuals.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
       "count": 2
     }
   },
@@ -6634,14 +9333,37 @@
     }
   },
   "lib/api/mock/sources.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
       "count": 3
     },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 2
+    },
     "no-param-reassign": {
       "count": 1
+    }
+  },
+  "lib/api/mock/specs.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
     }
   },
   "lib/api/mock/staging.ts": {
@@ -6653,20 +9375,44 @@
     }
   },
   "lib/api/mock/strategy.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/trace.ts": {
+    "complexity": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "lib/api/mock/trash.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -6676,17 +9422,57 @@
     }
   },
   "lib/api/mock/v2.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
-    }
-  },
-  "lib/api/mock/waiting-list.ts": {
-    "import-x/order": {
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 2
     }
   },
-  "lib/api/mock/webhooks.ts": {
+  "lib/api/mock/waiting-list.ts": {
+    "complexity": {
+      "count": 1
+    },
     "import-x/order": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/webhooks.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    }
+  },
+  "lib/api/schema.d.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/simple-chat.ts": {
+    "max-lines": {
       "count": 1
     }
   },
@@ -6700,9 +9486,19 @@
       "count": 3
     }
   },
+  "lib/code-index.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "lib/coderabbitCliReview.test.ts": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "lib/coderabbitCliReview.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "lib/coderabbitReviewStatus.test.ts": {
@@ -6725,6 +9521,11 @@
       "count": 5
     }
   },
+  "lib/experience-paths.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "lib/format.ts": {
     "import-x/no-cycle": {
       "count": 1
@@ -6742,6 +9543,9 @@
     }
   },
   "lib/markdown.ts": {
+    "complexity": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 1
     }
@@ -6765,10 +9569,30 @@
     }
   },
   "lib/simple-home.ts": {
+    "complexity": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    },
     "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/stream.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
       "count": 1
     }
   },
@@ -6793,7 +9617,16 @@
     }
   },
   "scripts/check-timing-tags.mjs": {
+    "complexity": {
+      "count": 4
+    },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     },
     "no-param-reassign": {

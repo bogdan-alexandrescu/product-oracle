@@ -183,6 +183,18 @@ const eslintConfig = defineConfig([
       'unused-imports/no-unused-vars': 'error',
     },
   },
+  // #1585 phase 2, size and complexity, at error with the same suppressions baseline. A file or
+  // function over a limit is split, never given a higher one.
+  {
+    rules: {
+      'max-lines': ['error', { max: 400, skipBlankLines: false, skipComments: false }],
+      'max-lines-per-function': ['error', { max: 200, skipBlankLines: false, skipComments: false }],
+      complexity: ['error', 20],
+      'max-depth': ['error', 5],
+      'max-params': ['error', 5],
+      'max-nested-callbacks': ['error', 5],
+    },
+  },
   {
     rules: {
       // Ask in the page (confirmInPage, components/ds): a browser dialog blocks the tab,
