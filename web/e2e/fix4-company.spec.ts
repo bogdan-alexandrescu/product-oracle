@@ -202,7 +202,7 @@ test("qa-settings-15: the Accent row uses the form's type sizes and font", async
   await card.getByLabel('Accent').fill('');
   const swatch = card.getByTestId('accent-swatch');
   await expect(swatch).toHaveText('None');
-  await expect(swatch).toHaveCSS('font-size', '13px');
+  await expect(swatch).toHaveCSS('font-size', '14px');
   // "None" fits its swatch.
   expect(await swatch.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   const font = await card
