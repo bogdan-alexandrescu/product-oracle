@@ -526,21 +526,34 @@ def test_running_header_detection(css, running):
 @pytest.mark.parametrize(
     "hostile",
     [
-        ".doc-header " * 8_000,
-        ".doc-header " * 4_000 + "{" + "position " * 4_000,
-        ".doc-header{" * 8_000,
-        "/*" * 40_000,
+        lambda n: ".doc-header " * n,
+        lambda n: ".doc-header " * (n // 2) + "{" + "position " * (n // 2),
+        lambda n: ".doc-header{" * n,
+        lambda n: "/*" * (5 * n),
     ],
+    ids=["selectors", "open-rule", "open-braces", "comment-starts"],
 )
 def test_running_header_detection_is_linear(hostile):
-    """Detecting a repeating PDF header stays fast even on adversarial, huge input."""
+    """Detecting a repeating PDF header stays linear even on adversarial, huge input.
+
+    Compared with itself at n and 4n, so a slow or busy machine does not decide: linear
+    time grows about 4x, quadratic about 16x. The absolute ceiling is only a backstop.
+    """
     import time
 
     from oracle.export.render import running_header
 
-    started = time.perf_counter()
-    running_header(hostile)
-    assert time.perf_counter() - started < 0.1
+    def best_of(css: str, runs: int = 7) -> float:
+        best = float("inf")
+        for _ in range(runs):
+            started = time.perf_counter()
+            running_header(css)
+            best = min(best, time.perf_counter() - started)
+        return best
+
+    small, large = best_of(hostile(8_000)), best_of(hostile(32_000))
+    assert large / small < 8, f"n: {small:.4f}s, 4n: {large:.4f}s"
+    assert large < 2.0
 
 
 def test_header_caps_keep_the_version_and_whole_words():
