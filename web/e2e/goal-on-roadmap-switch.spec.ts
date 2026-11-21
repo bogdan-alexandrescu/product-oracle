@@ -64,9 +64,15 @@ test("a goal's On the roadmap switch takes its target-date milestone off the Mil
       'simple-plan',
     ] as const);
   await login(page);
-  // The goals as Priorities lists them (the mock reads its goal buckets there first).
+  // The goals as Priorities lists them (the mock reads its goal buckets there first). The goal's
+  // card is drawn from the plan before its goal is read; its Edit button only once the goal buckets
+  // are (and the mock has kept them), which the roadmap's goal milestone takes its date from.
   await page.goto('/simple/priorities?tab=buckets');
-  await expect(page.locator(`[data-testid="plan-goal"][data-goal="${TITLE}"]`)).toBeVisible();
+  await expect(
+    page
+      .locator(`[data-testid="plan-goal"][data-goal="${TITLE}"]`)
+      .getByRole('button', { name: `Edit ${TITLE}` }),
+  ).toBeVisible();
   await roadmap(page);
   // The goal's target date, drawn as a goal milestone named for the goal.
   expect(await goalOnBand(page, TITLE)).toBe(1);
