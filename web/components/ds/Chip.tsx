@@ -43,7 +43,7 @@ export function Chip({
       title={title}
       data-kind={kind}
       {...rest}
-      className={`tnum inline-flex max-w-full items-center gap-1.5 px-2.5 text-[13px] font-semibold ${
+      className={`tnum inline-flex max-w-full items-center gap-1.5 px-2.5 text-sm font-semibold ${
         wrap
           ? 'min-h-[26px] rounded-[13px] py-1 leading-[18px]'
           : 'h-[26px] rounded-full leading-none whitespace-nowrap'
@@ -72,7 +72,7 @@ export function GoalTag({
   return (
     <span
       title={title ?? (proposed ? `${id} · proposed` : id)}
-      className={`tnum inline-grid h-6 flex-none place-items-center rounded-goal px-[7px] font-mono text-[13px] leading-none font-medium ${
+      className={`tnum inline-grid h-6 flex-none place-items-center rounded-goal px-[7px] font-mono text-sm leading-none font-medium ${
         proposed ? 'bg-warn-bg text-warn' : 'bg-accent-soft text-accent-ink'
       }`}
     >

@@ -163,7 +163,7 @@ export function SetupChip({
       data-testid="home-setup-chip"
       onClick={onShow}
       disabled={busy}
-      className="tnum inline-flex h-[26px] items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:brightness-95 disabled:opacity-70"
+      className="tnum inline-flex h-[26px] items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-sm leading-none font-semibold whitespace-nowrap text-accent-ink hover:brightness-95 disabled:opacity-70"
     >
       {/* qa-company-13: the same words as the open checklist's count. */}
       Set up {setup.done} of {setup.total}
@@ -238,7 +238,7 @@ export function SetupPanel({
                 <span
                   data-testid="setup-status"
                   title={status}
-                  className="tnum ml-auto min-w-0 truncate text-[15px] text-text2 max-[600px]:ml-0 max-[600px]:max-w-full max-[600px]:whitespace-normal max-[600px]:break-words"
+                  className="tnum ml-auto min-w-0 truncate text-base text-text2 max-[600px]:ml-0 max-[600px]:max-w-full max-[600px]:whitespace-normal max-[600px]:break-words"
                 >
                   {status}
                 </span>

@@ -167,7 +167,7 @@ export function PlanByMonth({
   const axis = (
     <div className={`${rowGrid} items-end ${tipCol ? 'min-w-0 flex-1' : ''}`}>
       <span aria-hidden className="max-[600px]:hidden" />
-      <div className="relative h-6 text-[13px] text-text2">
+      <div className="relative h-6 text-sm text-text2">
         {plan.months.map((m) => (
           <span
             key={m}

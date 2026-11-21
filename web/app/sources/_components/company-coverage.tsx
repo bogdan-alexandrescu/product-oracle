@@ -42,7 +42,7 @@ function MemberLabel({ member }: { member: MemberCoverage['member'] }) {
   return (
     <span className="flex min-w-0 flex-col">
       <span className="min-w-0 truncate">{member.name}</span>
-      <span className="min-w-0 truncate text-[13px] font-normal text-text2">{member.email}</span>
+      <span className="min-w-0 truncate text-sm font-normal text-text2">{member.email}</span>
     </span>
   );
 }

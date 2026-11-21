@@ -268,7 +268,7 @@ export function AnotherAnswer({
             maxLength={500}
             onChange={(e) => setText(e.target.value)}
             placeholder="Your answer, in one line"
-            className="h-10 min-w-0 flex-1 rounded-[10px] border border-line-strong bg-bg px-3 text-[16px] text-text"
+            className="h-10 min-w-0 flex-1 rounded-[10px] border border-line-strong bg-bg px-3 text-base text-text"
           />
           <button type="submit" className="simple-button" disabled={busy || !text.trim()}>
             {verb}

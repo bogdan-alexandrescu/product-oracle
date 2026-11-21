@@ -98,7 +98,7 @@ export function WhyNot({
   const reopenedSent = replies.some((r) => r.kind === 'reopened');
   const open = replies.filter((r) => r.status === 'drafted');
   return (
-    <div data-testid="why-not" className="flex min-w-0 flex-col gap-3 text-[15px]">
+    <div data-testid="why-not" className="flex min-w-0 flex-col gap-3 text-base">
       {request.loop_closed_on && (
         <p data-testid="loop-closed" className="font-semibold text-pass">
           Loop closed · {calendarDay(request.loop_closed_on)}

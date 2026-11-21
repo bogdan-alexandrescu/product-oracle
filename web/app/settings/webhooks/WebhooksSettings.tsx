@@ -78,7 +78,7 @@ export function WebhooksSettings() {
       header: 'Host',
       width: '22%',
       phone: 'hide',
-      cell: (h) => <span className="block truncate font-mono text-[13px]">{h.host}</span>,
+      cell: (h) => <span className="block truncate font-mono text-sm">{h.host}</span>,
     },
     {
       key: 'events',

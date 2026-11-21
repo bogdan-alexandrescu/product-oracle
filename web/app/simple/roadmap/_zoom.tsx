@@ -1619,7 +1619,7 @@ const TimelineRow = memo(function TimelineRow({
             <span
               data-testid="draft-tag"
               title={lk.chip}
-              className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
+              className="flex-none rounded-full bg-surface2 px-1.5 text-xs text-text2"
             >
               {lk.chip}
             </span>
@@ -1630,7 +1630,7 @@ const TimelineRow = memo(function TimelineRow({
             </span>
           )}
           {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
-          <NotInGt item={i} short className="h-[18px]! px-1.5! text-[11px]!" />
+          <NotInGt item={i} short className="h-[18px]! px-1.5! text-xs!" />
         </button>
         <div className="relative" style={{ width: trackW }}>
           <div
@@ -1886,7 +1886,7 @@ function QuarterList(props: TimelineProps) {
                             {lk.chip ? (
                               <span
                                 data-testid="draft-tag"
-                                className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2"
+                                className="ml-2 rounded-full bg-surface2 px-1.5 text-xs font-normal text-text2"
                               >
                                 {lk.chip}
                               </span>

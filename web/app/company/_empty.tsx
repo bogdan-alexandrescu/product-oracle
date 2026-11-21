@@ -26,7 +26,7 @@ export function CompanyEmpty({
       data-testid={testId}
       className="flex flex-col items-center gap-2 px-4 py-8 text-center max-[600px]:px-3"
     >
-      <p className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-text">
+      <p className="inline-flex items-center gap-1.5 text-base font-semibold text-text">
         {title}
         {tip && (
           <InfoTip label={title} align="start" testId={testId ? `${testId}-tip` : undefined}>

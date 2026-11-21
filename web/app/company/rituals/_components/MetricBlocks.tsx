@@ -77,7 +77,7 @@ export function MetricsTable({ rows }: { rows: MetricRow[] }) {
               <span className="text-sm text-text2">No value this week</span>
             ) : (
               <>
-                <span className="tnum text-[15px] font-semibold">{valueText(r.value, r.unit)}</span>
+                <span className="tnum text-base font-semibold">{valueText(r.value, r.unit)}</span>
                 <span className="tnum text-sm" title="Against the week before">
                   {vs(r.change, r.change_pct)}
                 </span>
@@ -227,7 +227,7 @@ function VarianceCard({
       {ownerName && <p className="text-sm text-text2">Owner: {ownerName}</p>}
       {v.possible_causes.length > 0 && (
         <div className="mt-2">
-          <h4 className="text-[13px] font-semibold text-text2">Possible causes</h4>
+          <h4 className="text-sm font-semibold text-text2">Possible causes</h4>
           <ul className="flex flex-col gap-0.5 text-sm">
             {v.possible_causes.map((c, i) => (
               <li key={i} data-testid="variance-cause" className="[overflow-wrap:anywhere]">
@@ -241,20 +241,20 @@ function VarianceCard({
         </div>
       )}
       {v.status === 'explained' && v.explanation && (
-        <p className="mt-2 text-[15px] whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <p className="mt-2 text-base whitespace-pre-wrap [overflow-wrap:anywhere]">
           {v.explanation}
           {v.explained_by_name && (
-            <span className="block text-[13px] text-text2">Explained by {v.explained_by_name}</span>
+            <span className="block text-sm text-text2">Explained by {v.explained_by_name}</span>
           )}
         </p>
       )}
       {v.status === 'noise' && v.noise_reason && (
-        <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">{v.noise_reason}</p>
+        <p className="mt-2 text-base [overflow-wrap:anywhere]">{v.noise_reason}</p>
       )}
       {!explains && open && draft && (
-        <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">
+        <p className="mt-2 text-base [overflow-wrap:anywhere]">
           {draft}
-          <span className="block text-[13px] text-text2">Drafted by Oracle</span>
+          <span className="block text-sm text-text2">Drafted by Oracle</span>
         </p>
       )}
       {answers && open && (
@@ -270,7 +270,7 @@ function VarianceCard({
               />
             </label>
           )}
-          {explains && drafted && <p className="text-[13px] text-text2">Drafted by Oracle</p>}
+          {explains && drafted && <p className="text-sm text-text2">Drafted by Oracle</p>}
           {mode === 'unknown' && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Find out by
@@ -401,7 +401,7 @@ export type PriorityChangeRow = {
  */
 export function TracksBlock({ rows }: { rows: TrackRow[] }) {
   return (
-    <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]" data-testid="ritual-tracks">
+    <ul className="flex flex-col gap-1 px-4 py-3 text-base" data-testid="ritual-tracks">
       {rows.map((r) => (
         <li key={r.track_id} className="min-w-0 [overflow-wrap:anywhere]">
           <Link href={r.href} className="font-medium text-accent-ink hover:underline">
@@ -428,7 +428,7 @@ export function TracksBlock({ rows }: { rows: TrackRow[] }) {
 /** detailed-b 7: a potentially stale item, its code and name where it has one (named()), linked to its place on the roadmap. */
 export function StaleItemsBlock({ rows }: { rows: StaleItemRow[] }) {
   return (
-    <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]" data-testid="ritual-stale-items">
+    <ul className="flex flex-col gap-1 px-4 py-3 text-base" data-testid="ritual-stale-items">
       {rows.map((r) => {
         const label = namedText(named(r.title, r.item_key));
         return (
@@ -453,7 +453,7 @@ export function StaleItemsBlock({ rows }: { rows: StaleItemRow[] }) {
  */
 export function PriorityChangesBlock({ rows }: { rows: PriorityChangeRow[] }) {
   return (
-    <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]" data-testid="ritual-priority-changes">
+    <ul className="flex flex-col gap-1 px-4 py-3 text-base" data-testid="ritual-priority-changes">
       {rows.map((r) => (
         <li key={r.key} className="min-w-0 [overflow-wrap:anywhere]">
           <Link href={r.href} className="text-accent-ink hover:underline">

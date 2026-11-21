@@ -141,7 +141,7 @@ export function InterviewDetail({ id }: { id: string }) {
       )}
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
         <Panel title="About" testId="interview-about">
-          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[15px]">
+          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-base">
             <Fact label="What it was about">{iv.title}</Fact>
             <Fact label="Created by">
               {iv.created_by_name ?? '—'}
@@ -196,9 +196,9 @@ export function InterviewDetail({ id }: { id: string }) {
         </Panel>
 
         <Panel title="Questions" count={iv.guide.length} testId="interview-guide">
-          {iv.intro && <p className="px-4 pt-3 text-[15px] text-text2">{iv.intro}</p>}
+          {iv.intro && <p className="px-4 pt-3 text-base text-text2">{iv.intro}</p>}
           {iv.guide.length ? (
-            <ol className="flex list-decimal flex-col gap-2 py-3 pr-4 pl-9 text-[15px]">
+            <ol className="flex list-decimal flex-col gap-2 py-3 pr-4 pl-9 text-base">
               {iv.guide.map((g) => (
                 <li key={g.id}>
                   <span data-user-content>{g.prompt}</span>
@@ -222,11 +222,11 @@ export function InterviewDetail({ id }: { id: string }) {
                 >
                   <Label>{m.role === 'oracle' ? 'Oracle' : iv.interviewee_name}</Label>
                   {m.kind === 'skip' ? (
-                    <p className="text-[15px] text-text2 italic">
+                    <p className="text-base text-text2 italic">
                       Skipped: {prompt(m.guide_item) ?? 'this question'}
                     </p>
                   ) : (
-                    <p className="text-[15px] break-words whitespace-pre-wrap" data-user-content>
+                    <p className="text-base break-words whitespace-pre-wrap" data-user-content>
                       {m.body}
                     </p>
                   )}
@@ -240,7 +240,7 @@ export function InterviewDetail({ id }: { id: string }) {
 
         <Panel title="Snapshot" testId="interview-snapshot">
           {hasSnapshot ? (
-            <div className="flex flex-col gap-4 px-4 py-3 text-[15px]">
+            <div className="flex flex-col gap-4 px-4 py-3 text-base">
               {facts.length > 0 && (
                 <Part title="Quick facts">
                   <ul className="list-disc pl-5">
@@ -318,7 +318,7 @@ export function InterviewDetail({ id }: { id: string }) {
               />
             </div>
           ) : iv.request_ids.length ? (
-            <ul className="flex flex-col gap-1.5 px-4 py-3 text-[15px]">
+            <ul className="flex flex-col gap-1.5 px-4 py-3 text-base">
               {iv.request_ids.map((rid, i) => (
                 <li key={rid}>
                   <Link

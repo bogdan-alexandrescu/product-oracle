@@ -196,7 +196,7 @@ function PreviewFrame({
         </div>
       )}
       {(pending || !html) && !error && (
-        <span className="absolute top-2 right-2 rounded-full bg-surface px-2 py-0.5 text-[13px] text-text2 shadow-panel">
+        <span className="absolute top-2 right-2 rounded-full bg-surface px-2 py-0.5 text-sm text-text2 shadow-panel">
           Updating…
         </span>
       )}
@@ -282,10 +282,7 @@ export function ThemeThumbnail({
           fontFamily: tokens.fonts?.heading ?? undefined,
         }}
       >
-        <span
-          className="text-[10px] leading-tight font-bold"
-          style={{ color: c.heading ?? '#111827' }}
-        >
+        <span className="text-xs leading-tight font-bold" style={{ color: c.heading ?? '#111827' }}>
           {kind === 'roadmap' ? 'Product roadmap' : 'Feature PRD'}
         </span>
         <span className="h-0.5 w-1/2 rounded" style={{ background: c.accent ?? '#2f5bd3' }} />

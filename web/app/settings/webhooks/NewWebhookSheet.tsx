@@ -104,7 +104,7 @@ export function NewWebhookSheet({
     >
       {created ? (
         <div className="flex flex-col gap-4 p-4">
-          <p className="text-[15px]">
+          <p className="text-base">
             <b>{created.webhook.name}</b> sends to {created.webhook.host}.
           </p>
           <SecretOnce secret={created.secret} />
@@ -143,7 +143,7 @@ export function NewWebhookSheet({
           <div className="sticky bottom-0 z-[2] -mx-4 -mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-4 py-3">
             {missing && (
               <span
-                className="mr-auto text-[13px] leading-[18px] text-text2"
+                className="mr-auto text-sm leading-[18px] text-text2"
                 data-testid="create-missing"
               >
                 {missing}
@@ -191,7 +191,7 @@ export function TestEvent({ hook, onSent }: { hook: Webhook; onSent?: (d: Delive
       </Button>
       {/* qa4-settings-25: a failure in words, never the raw error code. */}
       {result && (
-        <span className="text-[15px] font-semibold" data-testid="test-result">
+        <span className="text-base font-semibold" data-testid="test-result">
           {/* F-65: a retry still going carries no failure cross. */}
           {result.status === 'failed'
             ? `✕ ${failureText(result, hook.host)}`
@@ -264,7 +264,7 @@ export function WebhookFields({
         />
       </Field>
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        <legend className="mb-1 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
           Events
         </legend>
         {GROUPS.map((g) => {
@@ -273,7 +273,7 @@ export function WebhookFields({
           const all = of.every((t) => types.includes(t.type));
           return (
             <div key={g.id} className="flex flex-col gap-1.5" data-testid={`events-${g.id}`}>
-              <label className="flex items-center gap-2 text-[15px] font-semibold">
+              <label className="flex items-center gap-2 text-base font-semibold">
                 <input
                   type="checkbox"
                   aria-label={`All ${g.label}`}
@@ -286,7 +286,7 @@ export function WebhookFields({
               {of.map((t) => (
                 <label
                   key={t.type}
-                  className="flex items-start gap-2 pl-6 text-[15px]"
+                  className="flex items-start gap-2 pl-6 text-base"
                   title={t.type}
                 >
                   <input
@@ -306,7 +306,7 @@ export function WebhookFields({
         <div className="flex flex-col gap-2">
           {/* Owner's decision (Nov 5): the switch is "Private details", its (i) says what that is. */}
           <span className="inline-flex items-center gap-2">
-            <label className="inline-flex items-center gap-2 text-[15px] font-semibold">
+            <label className="inline-flex items-center gap-2 text-base font-semibold">
               <input
                 type="checkbox"
                 role="switch"
@@ -321,7 +321,7 @@ export function WebhookFields({
             </InfoTip>
           </span>
           {/* qa4-settings-31: what is sent and who sees it, in plain words. */}
-          <p className="text-[13px] leading-[18px] text-text2" data-testid="approvers-content-help">
+          <p className="text-sm leading-[18px] text-text2" data-testid="approvers-content-help">
             Also sends events that only owners and approvers can see in Oracle: updates, pricing
             memos, and their runs, checkpoints and approvals. Anyone who can read the receiving tool
             will see them. Turning it on or off needs a reason, which Oracle keeps with the change.

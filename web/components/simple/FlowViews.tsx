@@ -498,14 +498,14 @@ function StepMark({ n, decision }: { n: number; decision: boolean }) {
   return decision ? (
     <span
       aria-hidden
-      className="m-[3px] grid h-[22px] w-[22px] rotate-45 place-items-center rounded-md bg-accent text-[13px] leading-none font-bold text-on-accent"
+      className="m-[3px] grid h-[22px] w-[22px] rotate-45 place-items-center rounded-md bg-accent text-sm leading-none font-bold text-on-accent"
     >
       <span className="-rotate-45">{n}</span>
     </span>
   ) : (
     <span
       aria-hidden
-      className="grid h-7 w-7 place-items-center rounded-full bg-accent text-[13px] leading-none font-bold text-on-accent"
+      className="grid h-7 w-7 place-items-center rounded-full bg-accent text-sm leading-none font-bold text-on-accent"
     >
       {n}
     </span>
@@ -520,7 +520,7 @@ function StepExtras({ s }: { s: FlowStep }) {
       {s.change !== 'same' && (
         <>
           {' '}
-          <span className="ml-0.5 inline-flex rounded-full bg-pass-bg px-2 align-[1px] text-[12px] leading-5 font-semibold text-pass">
+          <span className="ml-0.5 inline-flex rounded-full bg-pass-bg px-2 align-[1px] text-xs leading-5 font-semibold text-pass">
             {s.change === 'new' ? 'New' : 'Changed'}
           </span>
         </>
@@ -544,7 +544,7 @@ export function FlowStepList({ flow, boxed = false }: { flow: Flow; boxed?: bool
             )}
             <StepMark n={i + 1} decision={dec} />
             <span
-              className={`min-w-0 text-[15px] leading-[22px] break-words ${boxed ? `rounded-[10px] border px-2.5 py-2 ${dec ? 'border-accent-mid bg-accent-soft' : 'border-line bg-surface'}` : ''}`}
+              className={`min-w-0 text-base leading-[22px] break-words ${boxed ? `rounded-[10px] border px-2.5 py-2 ${dec ? 'border-accent-mid bg-accent-soft' : 'border-line bg-surface'}` : ''}`}
             >
               <span className="sr-only">{i + 1} </span>
               {dec ? <b className="font-[650]">Decision: </b> : null}
@@ -553,7 +553,7 @@ export function FlowStepList({ flow, boxed = false }: { flow: Flow; boxed?: bool
               {dec && s.no ? (
                 <>
                   {' '}
-                  <span className="mt-0.5 block text-[13px] leading-[18px] text-text2">
+                  <span className="mt-0.5 block text-sm leading-[18px] text-text2">
                     If no: {outcome(s.no)}
                   </span>
                 </>
@@ -569,7 +569,7 @@ export function FlowStepList({ flow, boxed = false }: { flow: Flow; boxed?: bool
 /** The screen the flow touches as the mock-up's wireframe: its regions as numbered dashed boxes,
  * the first across the top, the rest in two columns. */
 export function FlowScreen({ flow, size = 12 }: { flow: Flow; size?: number }) {
-  if (!flow.touches_screen) return <p className="text-[15px] text-text2">It touches no screen.</p>;
+  if (!flow.touches_screen) return <p className="text-base text-text2">It touches no screen.</p>;
   const regions = flow.screen.regions;
   const rest = regions.slice(1);
   const half = Math.ceil(rest.length / 2);
@@ -583,7 +583,7 @@ export function FlowScreen({ flow, size = 12 }: { flow: Flow; size?: number }) {
         className="flex items-center gap-1.5 font-[650] text-text"
         style={{ fontSize: size, lineHeight: '16px' }}
       >
-        <i className="grid h-4 w-4 flex-none place-items-center rounded-full bg-text text-[10px] not-italic text-surface">
+        <i className="grid h-4 w-4 flex-none place-items-center rounded-full bg-text text-xs not-italic text-surface">
           {n}
         </i>
         <span className="min-w-0 break-words">{r}</span>
@@ -627,17 +627,17 @@ export function StoryCard({ s, n, big = false }: { s: FlowStep; n: number; big?:
     <li
       data-testid="story-card"
       aria-label={`Step ${n}`}
-      className={`flex flex-none flex-col gap-1.5 rounded-xl border ${dec ? 'border-accent-mid bg-accent-soft' : 'border-line bg-surface'} ${big ? 'w-full px-[18px] py-4 text-[17px] leading-[26px]' : 'w-[128px] px-3 py-2.5 text-[14px] leading-5'}`}
+      className={`flex flex-none flex-col gap-1.5 rounded-xl border ${dec ? 'border-accent-mid bg-accent-soft' : 'border-line bg-surface'} ${big ? 'w-full px-[18px] py-4 text-lg leading-[26px]' : 'w-[128px] px-3 py-2.5 text-sm leading-5'}`}
     >
       <div className="flex items-center gap-1.5">
         <span
-          className={`grid flex-none place-items-center bg-accent leading-none font-bold text-on-accent ${dec ? 'rounded-[5px]' : 'rounded-full'} ${big ? 'h-7 w-7 text-[14px]' : 'h-[22px] w-[22px] text-[12px]'}`}
+          className={`grid flex-none place-items-center bg-accent leading-none font-bold text-on-accent ${dec ? 'rounded-[5px]' : 'rounded-full'} ${big ? 'h-7 w-7 text-sm' : 'h-[22px] w-[22px] text-xs'}`}
         >
           {n}
         </span>
         <span
           data-testid="story-who"
-          className={`ml-auto font-semibold text-text2 ${big ? 'text-[14px] leading-5' : 'text-[13px] leading-4'}`}
+          className={`ml-auto font-semibold text-text2 ${big ? 'text-sm leading-5' : 'text-sm leading-4'}`}
         >
           {who(s)}
         </span>
@@ -649,7 +649,7 @@ export function StoryCard({ s, n, big = false }: { s: FlowStep; n: number; big?:
       {dec && (s.yes || s.no) && (
         <p
           data-testid="story-yes-no"
-          className={`mt-auto border-t border-dashed border-line-strong pt-1.5 font-medium text-text2 ${big ? 'text-[15px] leading-[22px]' : 'text-[12px] leading-[17px]'}`}
+          className={`mt-auto border-t border-dashed border-line-strong pt-1.5 font-medium text-text2 ${big ? 'text-base leading-[22px]' : 'text-xs leading-[17px]'}`}
         >
           {s.yes && (
             <>
@@ -682,22 +682,22 @@ export function ScreenCard({
     <li
       data-testid="story-card"
       aria-label="The screen"
-      className={`flex flex-none flex-col gap-1.5 rounded-xl border border-line bg-surface2 ${big ? 'w-full px-[18px] py-4 text-[17px] leading-[26px]' : 'w-[181px] px-3 py-2.5 text-[14px] leading-5'}`}
+      className={`flex flex-none flex-col gap-1.5 rounded-xl border border-line bg-surface2 ${big ? 'w-full px-[18px] py-4 text-lg leading-[26px]' : 'w-[181px] px-3 py-2.5 text-sm leading-5'}`}
     >
       <div className="flex items-center gap-1.5">
         <span
-          className={`grid flex-none place-items-center rounded-[5px] bg-text leading-none font-bold text-surface ${big ? 'h-7 w-7 text-[14px]' : 'h-[22px] w-[22px] text-[12px]'}`}
+          className={`grid flex-none place-items-center rounded-[5px] bg-text leading-none font-bold text-surface ${big ? 'h-7 w-7 text-sm' : 'h-[22px] w-[22px] text-xs'}`}
         >
           S
         </span>
         <span
-          className={`ml-auto font-semibold text-text2 ${big ? 'text-[14px] leading-5' : 'text-[13px] leading-4'}`}
+          className={`ml-auto font-semibold text-text2 ${big ? 'text-sm leading-5' : 'text-sm leading-4'}`}
         >
           Screen
         </span>
       </div>
       <p className="font-[650] break-words">{flow.screen.title}</p>
-      <ol className="flex flex-col gap-px text-[13px] leading-[18px] text-text2">
+      <ol className="flex flex-col gap-px text-sm leading-[18px] text-text2">
         {flow.screen.regions.map((r, i) => (
           <li key={`${i}-${r}`}>
             {i + 1} {r}
@@ -707,7 +707,7 @@ export function ScreenCard({
       <button
         type="button"
         onClick={onOpen}
-        className="mt-auto inline-flex h-8 items-center self-start rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-semibold whitespace-nowrap text-text hover:bg-surface2"
+        className="mt-auto inline-flex h-8 items-center self-start rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold whitespace-nowrap text-text hover:bg-surface2"
       >
         Open the screen
       </button>
@@ -770,7 +770,7 @@ export const ICONS = {
 export function Code({ code, className = '' }: { code: string; className?: string }) {
   return (
     <span
-      className={`rounded-md bg-surface2 px-1.5 font-mono text-[13px] leading-5 font-semibold whitespace-nowrap text-text ${className}`}
+      className={`rounded-md bg-surface2 px-1.5 font-mono text-sm leading-5 font-semibold whitespace-nowrap text-text ${className}`}
     >
       {code}
     </span>
@@ -811,7 +811,7 @@ export function Tabs<T extends string>({
           aria-selected={value === it.value}
           onClick={() => onChange(it.value)}
           style={value === it.value ? SEG_ON : undefined}
-          className={`grid h-[30px] place-items-center rounded-lg px-3 text-[14px] leading-none whitespace-nowrap ${value === it.value ? 'bg-surface font-semibold text-text' : 'font-medium text-text2'}`}
+          className={`grid h-[30px] place-items-center rounded-lg px-3 text-sm leading-none whitespace-nowrap ${value === it.value ? 'bg-surface font-semibold text-text' : 'font-medium text-text2'}`}
         >
           {it.label}
         </button>

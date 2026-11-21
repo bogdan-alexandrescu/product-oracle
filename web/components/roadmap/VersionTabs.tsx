@@ -59,7 +59,7 @@ export function VersionTabs({
             href={t.href}
             data-testid={`version-tab-${t.key}`}
             aria-current={on ? 'page' : undefined}
-            className={`tnum -mb-px flex h-10 flex-none items-center border-b-2 px-3 text-[15px] font-semibold whitespace-nowrap max-[639px]:h-11 ${
+            className={`tnum -mb-px flex h-10 flex-none items-center border-b-2 px-3 text-base font-semibold whitespace-nowrap max-[639px]:h-11 ${
               on ? 'border-accent text-text' : 'border-transparent text-text2 hover:text-text'
             }`}
           >

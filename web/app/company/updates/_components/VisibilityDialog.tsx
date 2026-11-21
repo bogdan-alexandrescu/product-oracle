@@ -76,7 +76,7 @@ export function VisibilityDialog({
           onSubmit={submit}
           noValidate
         >
-          <p className="text-[15px] text-text">
+          <p className="text-base text-text">
             {opening
               ? `Every member will see “${update.title}”, its versions and its feedback.`
               : `Only owners and approvers will see “${update.title}”; commenters and viewers will not.`}

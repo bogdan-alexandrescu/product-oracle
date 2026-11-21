@@ -241,7 +241,7 @@ export function OwnerName({
   );
 }
 
-const LABEL = 'flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+const LABEL = 'flex min-w-0 flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
 
 /** A problem the API reports, under the field it is about. */
 function FieldError({ field, problems }: { field: string; problems: GoalProblem[] }) {
@@ -251,7 +251,7 @@ function FieldError({ field, problems }: { field: string; problems: GoalProblem[
     <span
       role="alert"
       data-testid={`field-error-${field}`}
-      className="text-[13px] font-medium tracking-normal text-crit"
+      className="text-sm font-medium tracking-normal text-crit"
     >
       {mine.map((p) => p.message).join(' ')}
     </span>
@@ -282,7 +282,7 @@ function OwnerPicker({
     <div className="flex min-w-0 flex-col gap-1.5">
       {value && (
         <span
-          className="flex min-w-0 items-center gap-2 text-[15px] font-normal tracking-normal text-text"
+          className="flex min-w-0 items-center gap-2 text-base font-normal tracking-normal text-text"
           data-testid="owner-picked"
         >
           <span className="min-w-0 truncate">
@@ -335,17 +335,14 @@ function OwnerPicker({
                     setOpen(false);
                   }
                 }}
-                className="flex min-w-0 cursor-pointer flex-col px-2.5 py-1.5 text-[15px] font-normal tracking-normal text-text hover:bg-surface2 focus:bg-surface2"
+                className="flex min-w-0 cursor-pointer flex-col px-2.5 py-1.5 text-base font-normal tracking-normal text-text hover:bg-surface2 focus:bg-surface2"
               >
                 <span className="truncate font-medium">{p.name}</span>
                 <span className="truncate text-sm text-text2">{p.email}</span>
               </li>
             ))}
           </ul>
-          <p
-            data-testid="owner-invite"
-            className="text-[13px] font-normal tracking-normal text-text2"
-          >
+          <p data-testid="owner-invite" className="text-sm font-normal tracking-normal text-text2">
             {can('create_invite') ? (
               <>
                 Not a member yet?{' '}
@@ -460,9 +457,7 @@ export function GoalFields({
   );
   const target = (
     <fieldset className="flex min-w-0 flex-col gap-1">
-      <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
-        Target
-      </legend>
+      <legend className="mb-1 text-sm font-semibold tracking-[0.02em] text-text2">Target</legend>
       <div className="grid min-w-0 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
         <label className={LABEL}>
           Comparison

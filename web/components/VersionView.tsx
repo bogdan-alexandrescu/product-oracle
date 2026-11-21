@@ -1211,7 +1211,7 @@ export function VersionView({
         </span>
       )}
       <span className="flex min-w-0 flex-col">
-        <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
           {dir === 'prev' ? 'Previous' : 'Next'}
         </span>
         <span className="truncate text-sm leading-5 font-semibold text-text">{s.heading}</span>
@@ -1993,7 +1993,7 @@ export function VersionView({
               onClick={() => setSheet('sections')}
               aria-haspopup="dialog"
               data-testid="phone-sections"
-              className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button border border-line-strong px-3 text-[15px] font-semibold text-text"
+              className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button border border-line-strong px-3 text-base font-semibold text-text"
             >
               {/* qa4-docs-37: the open section's place, in words: "N/M" elsewhere counts reviews. */}
               <span className="tnum truncate">
@@ -2021,7 +2021,7 @@ export function VersionView({
               onClick={() => setSheet('review')}
               aria-haspopup="dialog"
               data-testid="phone-review"
-              className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button bg-accent px-3 text-[15px] font-semibold text-on-accent"
+              className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button bg-accent px-3 text-base font-semibold text-on-accent"
             >
               <span className="truncate">Review</span>
               <span className="tnum flex-none">· {openFeedback ?? '–'}</span>

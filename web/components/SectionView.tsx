@@ -26,7 +26,7 @@ import { blocksText, type Block } from '@/lib/markdown';
 import { useMe } from '@/lib/me';
 
 const HEADING_CLASS: Record<number, string> = {
-  1: 'font-display text-[26px] leading-8 font-bold tracking-heading max-[600px]:text-[22px] max-[600px]:leading-7',
+  1: 'font-display text-2xl leading-8 font-bold tracking-heading max-[600px]:text-xl max-[600px]:leading-7',
   2: 'font-display text-xl leading-7 font-bold tracking-heading',
   3: 'font-display tracking-heading text-lg leading-6 font-bold',
 };

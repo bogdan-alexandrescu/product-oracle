@@ -326,7 +326,7 @@ function Section({
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={title}>
       <div className="flex min-h-9 items-center gap-2">
-        <h3 className="text-[15px] font-semibold">{title}</h3>
+        <h3 className="text-base font-semibold">{title}</h3>
         {count != null && <span className="tnum text-sm text-text2">{count}</span>}
         <span className="ml-auto flex items-center">{action}</span>
       </div>
@@ -564,7 +564,7 @@ export function FirefliesPicker({
               className={`${INPUT} w-[160px]`}
             />
           </label>
-          <label className="flex h-9 items-center gap-2 text-[15px]">
+          <label className="flex h-9 items-center gap-2 text-base">
             <input
               type="checkbox"
               className={CHECK}
@@ -589,7 +589,7 @@ export function FirefliesPicker({
       <div className="flex min-h-9 items-center gap-2 rounded-button bg-surface2 px-3 py-1.5">
         <Label className="hidden flex-none @[520px]:inline">Includes</Label>
         <span
-          className="tnum min-w-0 flex-1 text-[15px] font-semibold"
+          className="tnum min-w-0 flex-1 text-base font-semibold"
           data-testid="fireflies-summary"
           aria-live="polite"
         >
@@ -606,7 +606,7 @@ export function FirefliesPicker({
       {titleRule && (
         <div className="flex flex-wrap items-center gap-2" data-testid="title-rule">
           <Chip kind="warn">Title rule</Chip>
-          <span className="min-w-0 text-[15px]">{titleRule.map((t) => `“${t}”`).join(', ')}</span>
+          <span className="min-w-0 text-base">{titleRule.map((t) => `“${t}”`).join(', ')}</span>
           <InfoTip label="title rule" align="end">
             Saved before meetings could be picked: all meetings whose title contains one of these.
             Saving replaces it with the choice above.
@@ -635,7 +635,7 @@ export function FirefliesPicker({
               <span className="block h-11 animate-pulse rounded-button bg-surface2" aria-busy />
             )}
             {series.data && seriesRows.length === 0 && (
-              <p className="px-1 text-[15px] text-text2">No recurring meetings</p>
+              <p className="px-1 text-base text-text2">No recurring meetings</p>
             )}
             {series.data?.truncated && (
               <Notice testId="fireflies-series-partial" tone="warn">
@@ -676,7 +676,7 @@ export function FirefliesPicker({
                         aria-label={s.title}
                       />
                       <span
-                        className="min-w-0 flex-1 truncate text-[15px] font-medium"
+                        className="min-w-0 flex-1 truncate text-base font-medium"
                         title={s.title}
                       >
                         {s.title}
@@ -789,7 +789,7 @@ export function FirefliesPicker({
                 !meetings.error &&
                 meetings.rows.length === 0 &&
                 earlier.length === 0 && (
-                  <p className="px-3 py-3 text-[15px] text-text2">No meetings</p>
+                  <p className="px-3 py-3 text-base text-text2">No meetings</p>
                 )}
               {meetings.loading && (
                 <span className="m-3 block h-3 w-2/3 animate-pulse rounded bg-surface2" />
@@ -822,7 +822,7 @@ function MeetingGroup({
     <div role="group" aria-labelledby={id} className="border-t border-line first:border-t-0">
       <div
         id={id}
-        className="sticky top-0 z-[1] bg-surface2 px-3 py-1 text-[13px] font-semibold tracking-[0.02em] text-text2"
+        className="sticky top-0 z-[1] bg-surface2 px-3 py-1 text-sm font-semibold tracking-[0.02em] text-text2"
       >
         {heading}
       </div>
@@ -857,7 +857,7 @@ function MeetingRow({
         onChange={(e) => onChange(e.target.checked)}
         aria-label={title}
       />
-      <span className="min-w-0 flex-1 truncate text-[15px]">{title}</span>
+      <span className="min-w-0 flex-1 truncate text-base">{title}</span>
       {bySeries && (
         <span className="hidden flex-none @[520px]:inline-flex">
           <Chip kind="acc">Series</Chip>

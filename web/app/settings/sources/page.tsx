@@ -220,7 +220,7 @@ function RowMenu({
                 setOpen(false);
                 it.onSelect();
               }}
-              className={`flex h-9 items-center rounded-lg px-3 text-left text-[15px] font-medium whitespace-nowrap hover:bg-surface2 ${
+              className={`flex h-9 items-center rounded-lg px-3 text-left text-base font-medium whitespace-nowrap hover:bg-surface2 ${
                 it.danger ? 'text-crit' : 'text-text'
               }`}
             >
@@ -1553,7 +1553,7 @@ function SourceSettingsPage() {
                 data-testid="sources-empty"
               >
                 {/* Just words: the header's Add a source is the one way in (qa-onboarding-18). */}
-                <p className="text-[15px] text-text2">No sources yet</p>
+                <p className="text-base text-text2">No sources yet</p>
               </div>
             )}
             {list.length > 0 && (

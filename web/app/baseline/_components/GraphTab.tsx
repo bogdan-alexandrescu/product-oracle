@@ -839,7 +839,7 @@ function Ledger({
   onOpen: (id: string) => void;
 }) {
   const cols = 3 + goals.length;
-  const th = 'bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2';
+  const th = 'bg-surface2 px-2 text-sm leading-4 font-semibold text-text2';
   // The Feature column stays in view while the goals scroll by, with a line at its edge so no goal
   // slides under it unseen; a phone stacks the row instead.
   const pin =
@@ -856,7 +856,7 @@ function Ledger({
         aria-label="Feature × goal"
         role="table"
         style={{ '--goals': goals.length } as CSSProperties}
-        className="w-full min-w-[calc(220px+228px+var(--goals)*var(--goal-w))] table-fixed border-collapse text-[15px] leading-[22px] [--goal-w:148px] @max-[900px]:[--goal-w:96px] max-[600px]:block max-[600px]:min-w-0"
+        className="w-full min-w-[calc(220px+228px+var(--goals)*var(--goal-w))] table-fixed border-collapse text-base leading-[22px] [--goal-w:148px] @max-[900px]:[--goal-w:96px] max-[600px]:block max-[600px]:min-w-0"
       >
         <colgroup>
           <col />

@@ -156,7 +156,7 @@ const BASE_COLUMNS: Column<Need>[] = [
     // The item's text keeps its room: a chip or a note goes to a second line rather than cut it.
     cell: (n) => (
       <span
-        className={`flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 ${n.childOf ? 'text-[14px] max-[600px]:border-l-2 max-[600px]:border-line-strong max-[600px]:pl-2' : ''}`}
+        className={`flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 ${n.childOf ? 'text-sm max-[600px]:border-l-2 max-[600px]:border-line-strong max-[600px]:pl-2' : ''}`}
       >
         {n.item}
       </span>
@@ -184,7 +184,7 @@ const BASE_COLUMNS: Column<Need>[] = [
         {ageOf(n.at)}
         {n.left && (
           <span
-            className="block text-[12px] leading-4 text-warn max-[600px]:ml-1.5 max-[600px]:inline"
+            className="block text-xs leading-4 text-warn max-[600px]:ml-1.5 max-[600px]:inline"
             data-testid="need-left"
           >
             {n.left}
@@ -357,7 +357,7 @@ export function NeedTable({
         <h3
           id={headingId}
           data-testid={`${testId}-heading`}
-          className="flex flex-wrap items-center gap-x-1.5 border-t border-line px-4 pt-3 pb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2 max-[600px]:px-3"
+          className="flex flex-wrap items-center gap-x-1.5 border-t border-line px-4 pt-3 pb-1 text-sm leading-4 font-semibold tracking-[0.02em] text-text2 max-[600px]:px-3"
         >
           {heading}
         </h3>
@@ -441,11 +441,7 @@ export function usePerms(): Perms {
 /** Who acts on a row the signed-in person cannot act on: said in the action's place. */
 function ByRole({ who, title }: { who: string; title?: string }) {
   return (
-    <span
-      className="text-[13px] whitespace-nowrap text-text2"
-      title={title}
-      data-testid="need-by-role"
-    >
+    <span className="text-sm whitespace-nowrap text-text2" title={title} data-testid="need-by-role">
       {who}
     </span>
   );
@@ -635,7 +631,7 @@ export function feedbackNeeds(
           {/* The row names no section key (qa-company-11): its link opens the section. D13:
               feedback on the whole draft says so. */}
           {!f.section_key && (
-            <span className="flex-none text-[13px] text-text2" data-testid="inbox-general">
+            <span className="flex-none text-sm text-text2" data-testid="inbox-general">
               General
             </span>
           )}
@@ -1462,7 +1458,7 @@ function childNeeds(
     // A reason's dates month first ("… supports Nov 13, 2026."), as the review page reads them.
     context: (
       <span
-        className="block truncate text-[14px] text-text2"
+        className="block truncate text-sm text-text2"
         title={datesInWords(child.reason.text)}
         data-testid="child-reason"
       >
@@ -1487,11 +1483,7 @@ function childNeeds(
       icon: 'flag',
       kind: '',
       item: (
-        <Link
-          href={review}
-          className="truncate text-[14px] hover:underline"
-          data-testid="child-more"
-        >
+        <Link href={review} className="truncate text-sm hover:underline" data-testid="child-more">
           +{summary.more} more · {summary.handled} handled
         </Link>
       ),
@@ -1546,7 +1538,7 @@ function ChildActions({
       {staged || (staging && fix) ? (
         <>
           <span
-            className="inline-flex items-center gap-1 text-[14px] text-pass"
+            className="inline-flex items-center gap-1 text-sm text-pass"
             data-testid="child-done"
           >
             {/* The app's check icon: the ✓ character draws as an empty box without a font that has it (detailed-b 4). */}
@@ -1586,7 +1578,7 @@ function ChildActions({
         </>
       ) : child.suggested ? (
         <>
-          <span className="text-[14px] text-text2" data-testid="child-suggested">
+          <span className="text-sm text-text2" data-testid="child-suggested">
             Suggested: {actionWords(child.suggested, false)}
           </span>
           <Button
@@ -1652,7 +1644,7 @@ function ChildActions({
       {error && (
         <span
           role="alert"
-          className="basis-full text-right text-[13px] text-crit max-[600px]:text-left"
+          className="basis-full text-right text-sm text-crit max-[600px]:text-left"
           data-testid="child-error"
         >
           {error}
@@ -2567,10 +2559,7 @@ function AskedAgainActions({
     void act(key, () => call().catch((e) => setError(errorMessage(e))));
   };
   const errorLine = error && (
-    <span
-      role="alert"
-      className="basis-full text-right text-[13px] text-crit max-[600px]:text-left"
-    >
+    <span role="alert" className="basis-full text-right text-sm text-crit max-[600px]:text-left">
       {error}
     </span>
   );
@@ -2590,7 +2579,7 @@ function AskedAgainActions({
           );
         }}
       >
-        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+        <label htmlFor={fieldId} className="text-sm leading-4 font-semibold text-text2">
           Why keep the no
         </label>
         <input
@@ -2999,7 +2988,7 @@ export function trackNeeds(
         ),
         context: (
           <span
-            className="block truncate text-[14px] text-text2"
+            className="block truncate text-sm text-text2"
             title={alertSentence(a)}
             data-testid="track-alert-detail"
           >
@@ -3016,7 +3005,7 @@ export function trackNeeds(
           item: (
             <Link
               href="/plan"
-              className="truncate text-[14px] hover:underline"
+              className="truncate text-sm hover:underline"
               data-testid="child-more"
             >
               {[
@@ -3079,7 +3068,7 @@ export function trackNeeds(
               {alertTitle(a)} · {alertSentence(a)}
             </span>
             <span
-              className="flex-none truncate text-[14px] text-text2"
+              className="flex-none truncate text-sm text-text2"
               data-testid="track-alert-outcome"
               title={outcome}
             >
@@ -3132,7 +3121,7 @@ function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | 
   const errorLine = error && (
     <span
       role="alert"
-      className="basis-full text-right text-[13px] text-crit max-[600px]:text-left"
+      className="basis-full text-right text-sm text-crit max-[600px]:text-left"
       data-testid="child-error"
     >
       {error}
@@ -3149,7 +3138,7 @@ function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | 
           run(`keep-${a.id}`, () => keepTrackAlert(a.id, note.trim() || null));
         }}
       >
-        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+        <label htmlFor={fieldId} className="text-sm leading-4 font-semibold text-text2">
           Note (optional)
         </label>
         <input

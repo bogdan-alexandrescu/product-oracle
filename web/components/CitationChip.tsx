@@ -77,7 +77,7 @@ export function CitationChip({
         }
       >
         <span
-          className="mb-1 block text-[13px] font-semibold tracking-[0.02em] text-text2"
+          className="mb-1 block text-sm font-semibold tracking-[0.02em] text-text2"
           data-testid="cite-source"
         >
           {/* The writer's confidence beside the source, or its note when unscored (text). */}
@@ -108,7 +108,7 @@ export function CitationChip({
           </a>
         ) : (
           // A Ground Truth item named in free text: no link to open.
-          <span className="mt-2 block font-mono text-[13px] text-text2" data-testid="cite-ref">
+          <span className="mt-2 block font-mono text-sm text-text2" data-testid="cite-ref">
             {citationRefText(citation.ref)}
           </span>
         )}

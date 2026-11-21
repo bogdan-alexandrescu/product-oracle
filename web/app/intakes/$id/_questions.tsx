@@ -137,7 +137,7 @@ function OracleBubble({ message, testId }: { message: Message; testId: string })
       >
         <Mark size={16} />
       </span>
-      <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2 text-[15px] leading-[22px] break-words text-text">
+      <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2 text-base leading-[22px] break-words text-text">
         {message.body}
       </p>
     </div>
@@ -156,7 +156,7 @@ function PendingBubble({ message }: { message: Message }) {
   return (
     <div data-testid="pending-answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
       <Avatar name="You" initials={initials} tone="me" />
-      <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+      <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2 text-base leading-[22px] break-words whitespace-pre-wrap text-text">
         {message.body}
       </p>
     </div>
@@ -258,7 +258,7 @@ function AnswerBubble({
     <div data-testid="answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
       <Avatar name={who} initials={mine ? myInitials : undefined} tone={mine ? 'me' : 'default'} />
       <div className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
           <span className="font-semibold text-text">{who}</span>
           {/* rirs-28: the day reads at full contrast on the tinted bubble, light and dark. */}
           <time dateTime={answer.created_at} title={when(answer.created_at)} className="text-text">
@@ -267,7 +267,7 @@ function AnswerBubble({
           {label && <Chip kind={kind}>{label}</Chip>}
         </div>
         <p
-          className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text"
+          className="mt-1 text-base leading-[22px] break-words whitespace-pre-wrap text-text"
           data-user-content={answer.kind === 'answer' ? true : undefined}
         >
           {answer.kind === 'answer'
@@ -422,10 +422,8 @@ function QuestionBubble({
           aria-label={q.prompt}
           className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2.5 shadow-panel"
         >
-          <p className="text-[15px] leading-[22px] font-semibold break-words text-text">
-            {q.prompt}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[13px] text-text2">
+          <p className="text-base leading-[22px] font-semibold break-words text-text">{q.prompt}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-text2">
             <Chip kind="line">
               {q.category === 'general' ? 'Question' : CATEGORY_LABEL[q.category]}
             </Chip>
@@ -677,7 +675,7 @@ function NextQuestions({
           <p className="text-sm text-text2">Reading Oracle&apos;s next questions…</p>
         )}
         {preview && (
-          <p className="text-[15px] font-semibold text-text">
+          <p className="text-base font-semibold text-text">
             {n === 0 ? 'Oracle has no more questions.' : `Oracle has ${plural(n, 'more question')}`}
           </p>
         )}
@@ -703,7 +701,7 @@ function NextQuestions({
                   </span>
                   {c.gap?.importance === 'critical' && <Chip kind="crit">Critical</Chip>}
                   {/* rirs-31: the drop-down says what it picks. */}
-                  <label className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-[13px] text-text2">
+                  <label className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-sm text-text2">
                     <span aria-hidden>Who answers</span>
                     <select
                       aria-label={`Who answers: ${c.question.prompt}`}
@@ -877,7 +875,7 @@ export function QuestionsTab({
             aria-label={`Batch ${b.batch}`}
             className="flex min-w-0 flex-col gap-3"
           >
-            <h2 className="text-[13px] font-semibold tracking-[0.02em] text-text2">
+            <h2 className="text-sm font-semibold tracking-[0.02em] text-text2">
               Batch {b.batch} · {plural(b.questions.length, 'question')}
               {askedOn(b) ? ` · asked ${askedOn(b)}` : ''}
             </h2>

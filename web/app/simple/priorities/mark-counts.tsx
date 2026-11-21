@@ -207,14 +207,14 @@ function CountListRow<T extends CountRow>({
         data-code={r.code}
         data-shape={shape(r)}
         onClick={() => onOpen(r)}
-        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] leading-[22px] hover:bg-surface2"
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-base leading-[22px] hover:bg-surface2"
       >
         <span className="w-6 flex-none text-right font-[650] tabular-nums">{r.rank}</span>
         {mark(r)}
         {r.own_key && (
           <span
             data-testid="vxe-crowd-code"
-            className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text"
+            className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-sm font-semibold tabular-nums text-text"
           >
             {r.own_key}
           </span>
@@ -222,7 +222,7 @@ function CountListRow<T extends CountRow>({
         <span className="min-w-0 flex-1 truncate">{r.title}</span>
         {!r.own_key && <NotInGt />}
         {nums && (
-          <span className="flex-none whitespace-nowrap text-[13px] tabular-nums text-text2">
+          <span className="flex-none whitespace-nowrap text-sm tabular-nums text-text2">
             {rowNums(r)}
           </span>
         )}

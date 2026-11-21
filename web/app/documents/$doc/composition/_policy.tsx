@@ -164,7 +164,7 @@ export function PolicyTab({
       <>
         {selected.description && (
           <InspectorSection label="Description">
-            <p className="text-[15px]">{selected.description}</p>
+            <p className="text-base">{selected.description}</p>
           </InspectorSection>
         )}
         <InspectorSection label="Company policy">
@@ -189,7 +189,7 @@ export function PolicyTab({
               )}
             </>
           ) : (
-            <p className="text-[15px]">{LANES.find((l) => l.lane === lane)!.title}</p>
+            <p className="text-base">{LANES.find((l) => l.lane === lane)!.title}</p>
           )}
         </InspectorSection>
         <CatalogFacts e={selected} />
@@ -347,7 +347,7 @@ export function PolicyTab({
                     {inLane.length}
                   </span>
                 </div>
-                <p className="mb-2 px-1 text-[13px] text-text2">{hint}</p>
+                <p className="mb-2 px-1 text-sm text-text2">{hint}</p>
                 <div className="flex flex-col gap-2">
                   {inLane.length ? inLane.map(card) : <Empty>No modules</Empty>}
                 </div>

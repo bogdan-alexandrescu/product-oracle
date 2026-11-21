@@ -418,7 +418,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">
+          <span className="font-display text-lg font-semibold whitespace-nowrap text-rail-active-text">
             Product Oracle
           </span>
         </span>
@@ -499,7 +499,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2"
         >
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">
+          <span className="font-display text-lg font-semibold whitespace-nowrap text-rail-active-text">
             Product Oracle
           </span>
         </Link>
@@ -568,12 +568,12 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
               data-testid="simple-person-name"
               title={me?.email || me?.name || undefined}
               aria-hidden={!!me?.email && personLine(me) === me.email ? true : undefined}
-              className={`font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? 'truncate text-[13px]' : 'text-[15px] [overflow-wrap:break-word]'}`}
+              className={`font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? 'truncate text-sm' : 'text-base [overflow-wrap:break-word]'}`}
             >
               {/* qa4-simple-home-20: an email stays on one line, a size smaller so a short one shows whole; a long one is cut with an ellipsis (whole in its tooltip). */}
               {personLine(me)}
             </span>
-            <span className="text-[14px] text-rail-text capitalize">{role ?? ''}</span>
+            <span className="text-sm text-rail-text capitalize">{role ?? ''}</span>
           </span>
         </div>
       </nav>
@@ -599,7 +599,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
                     aria-current={active ? 'page' : undefined}
                     aria-label={d.label}
                     aria-describedby={shownOf(d) ? `${id}-count` : undefined}
-                    className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+                    className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-sm leading-4 ${
                       active
                         ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
                         : 'font-medium text-rail-text'
@@ -626,7 +626,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
                 aria-controls="simple-more-sheet"
                 data-testid="simple-tab-more"
                 onClick={() => setMore((m) => !m)}
-                className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+                className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-sm leading-4 ${
                   more || moreActive
                     ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
                     : 'font-medium text-rail-text'

@@ -95,7 +95,7 @@ function BrandGrounds({ tid }: { tid: string }) {
           className="flex flex-col gap-4 rounded-button border border-line p-4"
           style={{ background: g.bg, color: g.ink }}
         >
-          <span className="text-[13px] font-semibold">{g.name}</span>
+          <span className="text-sm font-semibold">{g.name}</span>
           <div className="flex items-end gap-5">
             <Mark size={44} tone={g.sky ? 'sky' : 'current'} label="Full mark, 44 px" />
             <Mark size={22} tone={g.sky ? 'sky' : 'current'} label="Compact mark, 22 px" />
@@ -542,7 +542,7 @@ export function Gallery({ tid = 'design' }: { tid?: string }) {
           <State name="Open">
             {/* A static copy of the open state, drawn with the tip's own tokens. */}
             <span className="inline-flex flex-col items-start gap-2.5" aria-hidden>
-              <span className="grid size-5 place-items-center rounded-full border-[1.5px] border-accent bg-accent font-serif text-[13px] leading-none font-bold text-on-accent italic">
+              <span className="grid size-5 place-items-center rounded-full border-[1.5px] border-accent bg-accent font-serif text-sm leading-none font-bold text-on-accent italic">
                 i
               </span>
               <span className="max-w-[260px] rounded-button bg-tip px-3.5 py-2.5 text-sm leading-5 text-tip-text shadow-tip">
@@ -552,7 +552,7 @@ export function Gallery({ tid = 'design' }: { tid?: string }) {
           </State>
           <State name="Hero">
             <HeroStrip>
-              <span className="text-[13px] font-semibold text-hero-text2">Run cost</span>
+              <span className="text-sm font-semibold text-hero-text2">Run cost</span>
               <InfoTip label="run cost" hero side="bottom" align="start">
                 Spent so far against the estimate.
               </InfoTip>
@@ -726,7 +726,7 @@ export function Gallery({ tid = 'design' }: { tid?: string }) {
               <span className="text-text">
                 <Icon name={n} />
               </span>
-              <span className="min-w-0 font-mono text-[13px] break-all">{n}</span>
+              <span className="min-w-0 font-mono text-sm break-all">{n}</span>
             </li>
           ))}
         </ul>

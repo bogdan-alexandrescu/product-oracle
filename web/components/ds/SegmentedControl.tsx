@@ -48,7 +48,7 @@ export function SegmentedControl<V extends string>({
     e.preventDefault();
     els[(at + (e.key === 'ArrowRight' ? 1 : -1) + els.length) % els.length]?.focus();
   };
-  const h = `${size === 'sm' ? 'h-8 text-sm' : 'h-9 text-[15px]'} ${fill ? 'min-w-0 flex-auto justify-center px-1.5' : size === 'sm' ? 'px-3' : 'px-3.5'}`;
+  const h = `${size === 'sm' ? 'h-8 text-sm' : 'h-9 text-base'} ${fill ? 'min-w-0 flex-auto justify-center px-1.5' : size === 'sm' ? 'px-3' : 'px-3.5'}`;
   return (
     <div
       ref={ref}

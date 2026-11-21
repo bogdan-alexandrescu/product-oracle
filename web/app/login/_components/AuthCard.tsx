@@ -29,9 +29,7 @@ export function AuthCard({
           <Mark size={40} className="flex-none" />
           <Wordmark className="text-xl" />
         </div>
-        <h1 className="mb-5 font-display text-[28px] leading-8 font-bold tracking-heading">
-          {title}
-        </h1>
+        <h1 className="mb-5 font-display text-2xl leading-8 font-bold tracking-heading">{title}</h1>
         {children}
       </section>
     </div>

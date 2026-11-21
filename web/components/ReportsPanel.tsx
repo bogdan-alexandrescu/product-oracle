@@ -92,7 +92,7 @@ export function ReportsPanel({
         <div className="flex flex-wrap items-center gap-2">
           {!failed &&
             (q.data.generated_at ? (
-              <span className="tnum text-[13px] font-semibold text-text2">
+              <span className="tnum text-sm font-semibold text-text2">
                 Written {formatDateTime(q.data.generated_at)}
               </span>
             ) : (
@@ -161,19 +161,19 @@ export function ReportsPanel({
       )}
       {tab === 'resolution' && r && (
         <section aria-label="Resolution report" className="flex flex-col gap-2">
-          <p className="text-[15px] leading-[22px] font-medium text-text">{r.summary}</p>
+          <p className="text-base leading-[22px] font-medium text-text">{r.summary}</p>
           <ol className="flex flex-col">
             {r.items.map((i) => (
               <li key={i.feedback_id} className="border-b border-line py-2.5 last:border-b-0">
                 <div className="flex items-center gap-2">
                   <FeedbackStatusChip status={i.status as FeedbackStatus} />
                   {i.section_key && (
-                    <span className="truncate text-[13px] text-text2">
+                    <span className="truncate text-sm text-text2">
                       {sectionName(i.section_key)}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-[15px] leading-[22px] text-text">{i.summary}</p>
+                <p className="mt-1 text-base leading-[22px] text-text">{i.summary}</p>
                 {(i.explanation || i.resolution_note) && (
                   <p className="mt-1 text-sm leading-5 text-text2">
                     {i.explanation || i.resolution_note}
@@ -186,7 +186,7 @@ export function ReportsPanel({
       )}
       {tab === 'changes' && c && (
         <section aria-label="What changed" className="flex flex-col gap-2">
-          <p className="text-[15px] leading-[22px] font-medium text-text">{c.summary}</p>
+          <p className="text-base leading-[22px] font-medium text-text">{c.summary}</p>
           {c.sections.length > 0 && (
             <ul className="flex flex-col">
               {c.sections.map((sec) => (
@@ -200,7 +200,7 @@ export function ReportsPanel({
                   >
                     {sec.heading}
                   </a>{' '}
-                  <span className="text-[13px] text-text2">({sec.status})</span>
+                  <span className="text-sm text-text2">({sec.status})</span>
                   {sec.summary && <span className="text-text">: {sec.summary}</span>}
                 </li>
               ))}
@@ -208,7 +208,7 @@ export function ReportsPanel({
           )}
           {c.new_sources.length > 0 && (
             <>
-              <h3 className="mt-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+              <h3 className="mt-1 text-sm font-semibold tracking-[0.02em] text-text2">
                 New sources
               </h3>
               <ul

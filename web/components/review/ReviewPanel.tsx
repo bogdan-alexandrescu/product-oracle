@@ -104,10 +104,10 @@ export function ReviewPanel({
               ] as const
             ).map(([label, value, testId]) => (
               <div key={label} data-testid={testId} className="flex flex-col-reverse">
-                <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                <dt className="text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                   {label}
                 </dt>
-                <dd className="tnum font-display text-[34px] leading-10 font-bold tracking-[-0.03em]">
+                <dd className="tnum font-display text-3xl leading-10 font-bold tracking-[-0.03em]">
                   {value}
                 </dd>
               </div>
@@ -173,7 +173,7 @@ function sourceRow(c: CitationOut, number: number) {
           qa4-docs-19: label and title wrap to two lines rather than being cut. */}
       <span
         title={citationSourceLabel(c)}
-        className="line-clamp-2 max-w-[45%] min-w-0 flex-none text-[13px] font-semibold break-words text-text2"
+        className="line-clamp-2 max-w-[45%] min-w-0 flex-none text-sm font-semibold break-words text-text2"
         data-testid="source-label"
       >
         {citationSourceLabel(c)}
@@ -222,7 +222,7 @@ function SourcesTab({ version }: { version: VersionOut }) {
             value={
               // A timestamp reads like every other date; anything else (a snapshot label) stays as given.
               Number.isNaN(Date.parse(version.snapshot)) ? (
-                <span className="font-mono text-[13px] font-medium">{version.snapshot}</span>
+                <span className="font-mono text-sm font-medium">{version.snapshot}</span>
               ) : (
                 <span className="text-sm font-medium" title={version.snapshot}>
                   {formatDateTime(version.snapshot)}
@@ -378,7 +378,7 @@ function Fold({
           aria-expanded={open}
           aria-controls={`${id}-b`}
           onClick={() => setOpen((o) => !o)}
-          className="flex min-h-9 w-full items-center gap-1.5 text-left font-display text-[15px] font-bold tracking-heading text-text max-[639px]:min-h-11"
+          className="flex min-h-9 w-full items-center gap-1.5 text-left font-display text-base font-bold tracking-heading text-text max-[639px]:min-h-11"
         >
           <Icon name={open ? 'chevron-down' : 'chevron-right'} size={16} className="text-text2" />
           {title}

@@ -109,7 +109,7 @@ export function WebhookInspector({
         <InspectorRow value={<span className="font-normal">{hook.host}</span>}>
           Sends to
         </InspectorRow>
-        <p className="mb-2 truncate font-mono text-[13px] text-text2" title={hook.url}>
+        <p className="mb-2 truncate font-mono text-sm text-text2" title={hook.url}>
           {hook.url}
         </p>
         <InspectorRow value={<span data-testid="secret-hint">…{hook.secret_hint}</span>}>
@@ -148,7 +148,7 @@ export function WebhookInspector({
             </InfoTip>
           </span>
         </InspectorRow>
-        <div className="mt-2 text-[13px] leading-[18px] text-text2">
+        <div className="mt-2 text-sm leading-[18px] text-text2">
           {hook.event_types.length} event{hook.event_types.length === 1 ? '' : 's'}:{' '}
           {hook.event_types.map((t) => labels.get(t) ?? t).join(' · ')}
         </div>
@@ -234,7 +234,7 @@ export function WebhookInspector({
           },
         ]}
       >
-        <label className="flex items-center gap-2 text-[15px]">
+        <label className="flex items-center gap-2 text-base">
           <input
             type="checkbox"
             className="size-4 accent-[var(--accent)]"

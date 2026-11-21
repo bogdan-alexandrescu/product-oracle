@@ -170,7 +170,7 @@ export function CodeTag({ code, title }: { code: string; title?: string }) {
     <span
       data-testid="prio-code"
       title={title}
-      className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-[13px] font-semibold leading-5 tabular-nums text-text"
+      className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-sm font-semibold leading-5 tabular-nums text-text"
     >
       {code}
     </span>
@@ -247,7 +247,7 @@ function GoalBar({
       data-goal={goal}
       className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-1.5 sm:grid-cols-[170px_1fr_90px]"
     >
-      <div className="min-w-0 text-[17px] font-[650] leading-6">
+      <div className="min-w-0 text-lg font-[650] leading-6">
         <span data-testid="goal-bar-name">{goalLabel(goal).name}</span>
         {code && (
           <>
@@ -269,7 +269,7 @@ function GoalBar({
               data-testid="goal-bar-segment"
               data-milestone={p.milestone}
               title={`${named(p.milestone)}: ${engineerWeeks(p.weeks)}`}
-              className="relative flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-[13px] font-[650] text-on-accent tabular-nums"
+              className="relative flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-sm font-[650] text-on-accent tabular-nums"
               style={{
                 width: `${(p.weeks / max) * 100}%`,
                 background: milestoneColour(plan, p.milestone).bar,
@@ -287,7 +287,7 @@ function GoalBar({
           );
         })}
       </div>
-      <b data-testid="goal-bar-total" className="text-right text-[16px] font-[650] tabular-nums">
+      <b data-testid="goal-bar-total" className="text-right text-base font-[650] tabular-nums">
         {weeksWords(total)}
       </b>
     </li>
@@ -315,8 +315,8 @@ export function PlanBucketsHead<G extends { name: string }>({
       data-testid="buckets-head"
       className="rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-4 sm:px-5"
     >
-      <h2 className="text-[21px] font-[650] leading-7">Where each goal&apos;s work lands</h2>
-      <p className="mb-2 mt-0.5 flex items-center gap-1.5 text-[16px] leading-6 text-text2">
+      <h2 className="text-xl font-[650] leading-7">Where each goal&apos;s work lands</h2>
+      <p className="mb-2 mt-0.5 flex items-center gap-1.5 text-base leading-6 text-text2">
         <span data-testid="buckets-summary">{shortSummary(plan)}</span>
         <InfoTip label="these bars" align="start" testId="buckets-about">
           <span data-testid="buckets-summary-full">{summary(plan)}</span>{' '}
@@ -337,7 +337,7 @@ export function PlanBucketsHead<G extends { name: string }>({
               key={m.code}
               data-testid="milestone-chip"
               title={`${m.code} ${name}`}
-              className="inline-flex items-center gap-1.5 text-[14px] leading-5 tabular-nums"
+              className="inline-flex items-center gap-1.5 text-sm leading-5 tabular-nums"
             >
               <span
                 aria-hidden

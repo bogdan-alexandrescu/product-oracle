@@ -592,7 +592,7 @@ function GoalCounters({
     >
       {/* QA Nov 14 #8: a phone's long title wraps to two lines, as the metric does. */}
       <p
-        className="text-[15px] font-semibold break-words max-sm:line-clamp-2 sm:truncate"
+        className="text-base font-semibold break-words max-sm:line-clamp-2 sm:truncate"
         title={g.title}
         data-testid="goal-counter-title"
       >
@@ -629,7 +629,7 @@ function GoalCounters({
       data-testid="goal-counter-empty"
       className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2"
     >
-      <p className="truncate text-[15px] font-semibold" title={g.goal.title}>
+      <p className="truncate text-base font-semibold" title={g.goal.title}>
         <GoalNum n={numberOf(g.goal.id, g.goal.title)} />
         {g.goal.title}
       </p>
@@ -655,7 +655,7 @@ function GoalCounters({
           data-testid="goal-counter-empty"
           className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2"
         >
-          <p className="truncate text-[15px] font-semibold" title={only?.title}>
+          <p className="truncate text-base font-semibold" title={only?.title}>
             {only?.title}
           </p>
           <p className="truncate text-sm text-text2">No items in these filters</p>
@@ -837,7 +837,7 @@ function DraftBanner({
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 max-[640px]:gap-x-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
-        <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
+        <p className="min-w-0 flex-1 text-base max-[640px]:basis-full" data-testid="draft-words">
           {many ? (
             <>
               <b>Your working drafts</b> · {working.length} roadmaps ·{' '}
@@ -904,7 +904,7 @@ function DraftBanner({
               data-testid="draft-line"
               ref={d.id === focus ? onFocus : undefined}
               data-focused={d.id === focus ? 'true' : undefined}
-              className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border-t border-accent-mid pt-1.5 text-[15px] ${d.id === focus ? 'bg-surface px-2 pb-1.5 ring-2 ring-accent-mid' : ''}`}
+              className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border-t border-accent-mid pt-1.5 text-base ${d.id === focus ? 'bg-surface px-2 pb-1.5 ring-2 ring-accent-mid' : ''}`}
             >
               <span className="min-w-0 flex-1">
                 <b>{d.document.title}</b> · {d.changes} {d.changes === 1 ? 'change' : 'changes'} ·{' '}
@@ -1023,7 +1023,7 @@ function DoneItems({
         aria-expanded={shown}
         aria-controls="roadmap-done-items"
         onClick={() => setShown((v) => !v)}
-        className="inline-flex min-h-9 items-center gap-1.5 text-[14px] font-semibold text-text2 hover:text-text"
+        className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-text2 hover:text-text"
       >
         <span
           aria-hidden
@@ -1043,11 +1043,11 @@ function DoneItems({
                 data-bar-id={i.id}
                 aria-pressed={open === i.id}
                 onClick={() => onOpen(i)}
-                className="min-h-9 truncate text-left text-[14px] font-medium text-text underline-offset-2 hover:underline"
+                className="min-h-9 truncate text-left text-sm font-medium text-text underline-offset-2 hover:underline"
               >
                 {itemName(i)}
               </button>
-              {i.goal && <span className="truncate text-[13px] text-text2">{i.goal.title}</span>}
+              {i.goal && <span className="truncate text-sm text-text2">{i.goal.title}</span>}
             </li>
           ))}
         </ul>
@@ -1335,7 +1335,7 @@ function DecisionTray({
       : opWords(c.op).toLowerCase();
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
-      <span className="min-w-0 flex-1 text-[15px]">
+      <span className="min-w-0 flex-1 text-base">
         {!asked(c) && !ms(c) && !kd(c)?.name && byId.get(String(c.target.item_id))
           ? named(byId.get(String(c.target.item_id))!)
           : title(c)}
@@ -1446,7 +1446,7 @@ function DecisionTray({
           <ul>
             {brokenItems.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-broken">
-                <p className="text-[15px] font-medium">{named(i)}</p>
+                <p className="text-base font-medium">{named(i)}</p>
                 {/* qa4-simple-roadmap-38: its broken links only; its other flags are listed once, under Other flags. */}
                 {brokenLinks(i).map((f) => (
                   <div key={`${f.kind}-${f.subject}`}>
@@ -1467,7 +1467,7 @@ function DecisionTray({
           <ul>
             {flagged.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-flag">
-                <p className="text-[15px] font-medium">{named(i)}</p>
+                <p className="text-base font-medium">{named(i)}</p>
                 {broken(i)
                   .filter((f) => !brokenLinks(i).includes(f))
                   .map((f) => (
@@ -1508,7 +1508,7 @@ function DecisionTray({
                 data-testid="tray-date"
                 data-item={i.id}
               >
-                <div className="min-w-0 flex-1 text-[15px]">
+                <div className="min-w-0 flex-1 text-base">
                   {/* QA Nov 12 #6: an item with only Oracle's estimate reads as it does on the chart, Oracle's dates after it. */}
                   <span>
                     {named(i)}:{' '}
@@ -1568,7 +1568,7 @@ function DecisionTray({
           <ul>
             {twins.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-twin">
-                <p className="text-[15px] font-medium">{named(i)}</p>
+                <p className="text-base font-medium">{named(i)}</p>
                 <LooksLike item={i} act={act} canChange={canChange} />
               </li>
             ))}
@@ -3068,13 +3068,13 @@ export function SimpleRoadmap() {
                   // one-line chip stays a pill (its radius is over half its height).
                   <span
                     data-testid="roadmap-scope"
-                    className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-[15px] font-semibold break-words text-accent-ink"
+                    className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-base font-semibold break-words text-accent-ink"
                   >
                     {data.roadmap.title}
                   </span>
                 ) : (
                   readable.length > 1 && (
-                    <span data-testid="roadmap-scope" className="text-[15px] text-text2">
+                    <span data-testid="roadmap-scope" className="text-base text-text2">
                       All roadmaps
                     </span>
                   )
@@ -3168,7 +3168,7 @@ export function SimpleRoadmap() {
               {/* D3: a phone's Gantt shows its scale, and which milestone the weeks hide, over the chart. */}
               {phone && format === 'gantt' && (
                 <div
-                  className="flex flex-wrap items-center gap-2 text-[13px] text-text2"
+                  className="flex flex-wrap items-center gap-2 text-sm text-text2"
                   data-testid="phone-scale"
                 >
                   <span className="flex items-center gap-1.5">
@@ -3242,7 +3242,7 @@ export function SimpleRoadmap() {
               )}
               {blank && !suggestions.error && !suggestions.data && <Loading />}
               {blank && suggestions.data && (
-                <p className="text-[15px] text-text2" data-testid="roadmap-empty">
+                <p className="text-base text-text2" data-testid="roadmap-empty">
                   {hasGoals ? (
                     <>
                       No features yet: accept one Oracle suggests under a goal, and it shows here on
@@ -3283,7 +3283,7 @@ export function SimpleRoadmap() {
                         data-testid="filters-gone"
                         className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-3"
                       >
-                        <p className="text-[15px] font-semibold">
+                        <p className="text-base font-semibold">
                           {linked.length > 1
                             ? 'That PRD and goal are no longer on this roadmap'
                             : linked[0] === 'prd'
@@ -3298,7 +3298,7 @@ export function SimpleRoadmap() {
                         data-testid="filters-empty"
                         className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-6"
                       >
-                        <p className="text-[15px] font-semibold">Nothing matches these filters</p>
+                        <p className="text-base font-semibold">Nothing matches these filters</p>
                         <Button onClick={clearFilters}>Clear filters</Button>
                       </div>
                     ) : format === 'board' ? (

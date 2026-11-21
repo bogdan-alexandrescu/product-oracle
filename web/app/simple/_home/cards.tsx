@@ -226,7 +226,7 @@ export function HomeRow({
             aria-expanded={wide}
             data-testid="home-flow-thumb"
             onClick={() => setWide((w) => !w)}
-            className="mt-1 flex h-14 w-24 items-center justify-center rounded-lg border border-dashed border-line-strong text-[13px] text-text2 hover:bg-surface2"
+            className="mt-1 flex h-14 w-24 items-center justify-center rounded-lg border border-dashed border-line-strong text-sm text-text2 hover:bg-surface2"
           >
             Flow
           </button>
@@ -268,7 +268,7 @@ export function Avatar({ name }: { name: string }) {
   return (
     <span
       aria-hidden
-      className="grid size-9 place-items-center rounded-full bg-surface2 text-[13px] font-semibold text-text2"
+      className="grid size-9 place-items-center rounded-full bg-surface2 text-sm font-semibold text-text2"
     >
       {initials}
     </span>

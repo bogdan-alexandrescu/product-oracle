@@ -86,7 +86,7 @@ export function FoundInSources({
                 className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3"
               >
                 <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
-                  <span className="truncate text-[15px] font-semibold" title={c.body ?? c.title}>
+                  <span className="truncate text-base font-semibold" title={c.body ?? c.title}>
                     {c.title}
                   </span>
                   <span className="flex min-w-0 items-center gap-2 text-sm text-text2">

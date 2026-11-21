@@ -168,7 +168,7 @@ function Field({
       className="flex min-w-0 flex-col gap-2 bg-surface px-4 py-3 [overflow-wrap:anywhere] max-[600px]:px-3"
     >
       <div className="flex items-center gap-2">
-        <h3 className="font-display text-[17px] font-bold">{field.title}</h3>
+        <h3 className="font-display text-lg font-bold">{field.title}</h3>
         <span className="flex-1" />
         {canEdit && !editing && (
           <Button
@@ -206,7 +206,7 @@ function Field({
       ) : items.length === 0 ? (
         <p className="text-sm text-text2">Not written yet</p>
       ) : (
-        <ul className="flex list-disc flex-col gap-1 pl-5 text-[15px]">
+        <ul className="flex list-disc flex-col gap-1 pl-5 text-base">
           {items.map((i) => (
             <li key={i.id} data-testid="positioning-item">
               {i.text}
@@ -220,7 +220,7 @@ function Field({
           data-testid="positioning-suggestion"
           className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2"
         >
-          <p className="text-[15px]">
+          <p className="text-base">
             <span className="font-semibold">Oracle suggests · {ACTION_LABEL[s.action]}</span>
             {suggestionText(s, items)}
           </p>

@@ -18,7 +18,7 @@ import { errorMessage } from '@/lib/use-query';
 
 import { sourceKindLabel, titleOf } from './common';
 
-const LABEL = 'flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+const LABEL = 'flex min-w-0 flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
 
 export const RELATIONS = [
   { type: 'depends_on', label: 'Depends on' },

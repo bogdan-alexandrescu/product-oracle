@@ -382,16 +382,16 @@ function Facts({ text }: { text: string }) {
   );
 }
 
-const SEC_H = 'text-[13px] leading-[18px] font-bold uppercase tracking-[.07em] text-text-faint';
-const H3 = 'text-[20px] leading-[28px] font-[650]';
+const SEC_H = 'text-sm leading-[18px] font-bold uppercase tracking-[.07em] text-text-faint';
+const H3 = 'text-xl leading-[28px] font-[650]';
 const PAPER = 'min-w-0 rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)]';
 const CODE =
-  'self-start justify-self-start whitespace-nowrap rounded-[6px] px-[7px] py-px font-mono text-[13px] leading-[20px] font-semibold';
+  'self-start justify-self-start whitespace-nowrap rounded-[6px] px-[7px] py-px font-mono text-sm leading-[20px] font-semibold';
 
 function MTag({ plan, code, small }: { plan: Plan; code: string; small?: boolean }) {
   return (
     <span
-      className={`inline-grid flex-none place-items-center font-mono font-bold leading-none ${small ? 'h-6 min-w-8 rounded-[8px] px-2 text-[13px]' : 'h-7 min-w-[38px] rounded-[8px] px-2 text-[15px]'}`}
+      className={`inline-grid flex-none place-items-center font-mono font-bold leading-none ${small ? 'h-6 min-w-8 rounded-[8px] px-2 text-sm' : 'h-7 min-w-[38px] rounded-[8px] px-2 text-base'}`}
       style={{ background: hue(plan, code).line, color: 'var(--simple-paper)' }}
     >
       {code}
@@ -546,12 +546,12 @@ function NoMilestone({ loose }: { loose: Loose[] }) {
                   type="button"
                   data-testid="timeline-no-milestone-open"
                   onClick={() => open({ id: x.id, code: x.code ?? '', name: x.title })}
-                  className="text-left text-[15px] leading-5 font-bold hover:underline"
+                  className="text-left text-base leading-5 font-bold hover:underline"
                 >
                   {x.title}
                 </button>
               ) : (
-                <b className="text-[15px] leading-5 font-bold">{x.title}</b>
+                <b className="text-base leading-5 font-bold">{x.title}</b>
               )}
               {/* OP1: an item with no code is flagged, never hidden. */}
               {x.code !== undefined && !x.code && <NotInGt />}
@@ -644,14 +644,14 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
       data-testid="timeline-no-dates"
       className="flex flex-wrap items-center gap-3 rounded-[10px] border border-dashed border-line-strong px-3 py-2.5"
     >
-      <span className="text-[14px] leading-5">
+      <span className="text-sm leading-5">
         <b className="font-bold">No dates yet:</b>{' '}
         {undated.map((x) => {
           const c = hue(plan, x.code);
           return (
             <span
               key={x.code}
-              className="mr-1.5 inline-flex h-6 items-center whitespace-nowrap rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold"
+              className="mr-1.5 inline-flex h-6 items-center whitespace-nowrap rounded-xl px-[9px] text-sm leading-[18px] font-semibold"
               style={{ background: c.bg, color: c.line }}
             >
               {x.code} · {x.name}
@@ -659,7 +659,7 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
           );
         })}
       </span>
-      <span className="basis-full text-[14px] leading-5 text-text2">
+      <span className="basis-full text-sm leading-5 text-text2">
         {plan.can_read_again
           ? 'Add dates to the milestones in the PRD, then read it again.'
           : `The PRD gives no dates for ${undated.length === 1 ? 'it' : 'them'} yet.`}
@@ -670,14 +670,14 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
           disabled={busy}
           aria-busy={busy}
           onClick={() => void read()}
-          className="simple-noprint inline-flex min-h-[34px] items-center whitespace-nowrap rounded-[9px] border border-accent bg-accent px-2.5 text-[14px] font-semibold text-on-accent disabled:opacity-60"
+          className="simple-noprint inline-flex min-h-[34px] items-center whitespace-nowrap rounded-[9px] border border-accent bg-accent px-2.5 text-sm font-semibold text-on-accent disabled:opacity-60"
         >
           {busy ? 'Reading the plan…' : 'Read the plan again'}
         </button>
       )}
       {again && (
         // qa-simple-prd-p3-5: with some milestones dated, it names the ones still without.
-        <span role="status" className="text-[14px] text-text-faint">
+        <span role="status" className="text-sm text-text-faint">
           {plan.milestones.some(dated)
             ? `Read again: ${andList(undated.map((x) => x.code))} still ${undated.length === 1 ? 'has' : 'have'} no dates.`
             : 'Read again: the PRD still gives no dates.'}
@@ -702,14 +702,14 @@ function GoalList({ plan }: { plan: Plan }) {
             className="list-none border-t border-[var(--simple-rule)] py-1.5 first:border-t-0"
           >
             <span className="flex flex-wrap items-baseline gap-x-2">
-              <b className="text-[15px] leading-5 font-bold">{g.name}</b>
+              <b className="text-base leading-5 font-bold">{g.name}</b>
               <small
-                className={`text-[13px] leading-[18px] ${g.on_track === false ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                className={`text-sm leading-[18px] ${g.on_track === false ? 'font-[650] text-crit' : 'text-text-faint'}`}
               >
                 {measuredWords(g)}
               </small>
             </span>
-            <small className="block text-[13px] leading-[18px] text-text2">{targetSteps(g)}</small>
+            <small className="block text-sm leading-[18px] text-text2">{targetSteps(g)}</small>
           </li>
         ))}
       </ul>
@@ -724,7 +724,7 @@ function GoalList({ plan }: { plan: Plan }) {
 function DecisionLine({ plan, d, today }: { plan: Plan; d: Decision; today: string }) {
   const due = d.due_on ? dueWords(plan, d.due_on, today) : null;
   return (
-    <li className="relative list-none pl-[18px] text-[14px] leading-5">
+    <li className="relative list-none pl-[18px] text-sm leading-5">
       <span
         aria-hidden
         className="absolute top-[5px] left-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]"
@@ -758,10 +758,10 @@ function UndatedList({ plan, today }: { plan: Plan; today: string }) {
         >
           <span className="flex items-center gap-2">
             <MTag plan={plan} code={x.code} small />{' '}
-            <b className="text-[15px] leading-5 font-bold">{x.name}</b>
+            <b className="text-base leading-5 font-bold">{x.name}</b>
           </span>
           {x.targets.length > 0 && (
-            <p className="mt-1 text-[13px] leading-[18px] text-text2">
+            <p className="mt-1 text-sm leading-[18px] text-text2">
               <b className="font-semibold">Targets:</b> {x.targets.map((t) => t.target).join(' · ')}
             </p>
           )}
@@ -807,7 +807,7 @@ function TimelineCard({
           {plan.summary.map((line) => (
             <li
               key={line}
-              className="relative mt-1.5 list-none pl-5 text-[17px] leading-[26px] before:absolute before:top-[11px] before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint"
+              className="relative mt-1.5 list-none pl-5 text-lg leading-[26px] before:absolute before:top-[11px] before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint"
             >
               <Bolded text={line} />
             </li>
@@ -820,7 +820,7 @@ function TimelineCard({
       <UndatedList plan={plan} today={today} />
       {!anyDated && <GoalList plan={plan} />}
       {anyDated && undatedDecisions > 0 && (
-        <p className="-mt-2 text-[14px] leading-5 text-text-faint">
+        <p className="-mt-2 text-sm leading-5 text-text-faint">
           {undatedDecisions} more {undatedDecisions === 1 ? 'decision has' : 'decisions have'} no
           date yet; {undatedDecisions === 1 ? 'it is' : 'they are'} listed under{' '}
           {undatedDecisions === 1 ? 'its' : 'their'} milestone.
@@ -844,10 +844,10 @@ function TimelineCard({
               type="button"
               aria-pressed={on}
               onClick={() => onShow(x.code)}
-              className="flex items-center gap-2.5 rounded-[8px] text-left text-[18px] leading-6 font-[650]"
+              className="flex items-center gap-2.5 rounded-[8px] text-left text-lg leading-6 font-[650]"
             >
               <span
-                className="inline-grid h-[26px] min-w-9 flex-none place-items-center rounded-[8px] px-[7px] font-mono text-[14px] leading-none font-bold"
+                className="inline-grid h-[26px] min-w-9 flex-none place-items-center rounded-[8px] px-[7px] font-mono text-sm leading-none font-bold"
                 style={{
                   background: hue(plan, x.code).line,
                   color: 'var(--simple-paper)',
@@ -993,7 +993,7 @@ function Strip({
           {/* The month row: months and the Today pill. */}
           <div
             data-testid="timeline-axis"
-            className="relative text-[13px] leading-[22px] font-[650] text-text-faint"
+            className="relative text-sm leading-[22px] font-[650] text-text-faint"
             style={at(1, 2)}
           >
             {shown.map((x) => (
@@ -1010,7 +1010,7 @@ function Strip({
               </span>
             ))}
             <span
-              className="absolute top-0.5 z-[7] h-[18px] -translate-x-1/2 rounded-[9px] bg-crit px-[7px] text-[11.5px] leading-[18px] font-[750] whitespace-nowrap text-[var(--simple-paper)]"
+              className="absolute top-0.5 z-[7] h-[18px] -translate-x-1/2 rounded-[9px] bg-crit px-[7px] text-xs leading-[18px] font-[750] whitespace-nowrap text-[var(--simple-paper)]"
               style={{ left: Math.max(XT, 26) }}
             >
               Today
@@ -1028,7 +1028,7 @@ function Strip({
                   key={x.code}
                   type="button"
                   onClick={() => onPick(x.code)}
-                  className={`absolute top-0 z-[5] flex items-center gap-1 rounded-[5px] bg-[var(--simple-paper)] px-1 text-[12.5px] leading-5 font-bold whitespace-nowrap ${flip ? '' : '-translate-x-full'}`}
+                  className={`absolute top-0 z-[5] flex items-center gap-1 rounded-[5px] bg-[var(--simple-paper)] px-1 text-xs leading-5 font-bold whitespace-nowrap ${flip ? '' : '-translate-x-full'}`}
                   style={{
                     left: flip ? at + 4 : at - 5,
                     color: hue(plan, x.code).line,
@@ -1051,17 +1051,17 @@ function Strip({
                   style={at(3 + i, 1)}
                 >
                   <span className="flex items-baseline gap-2">
-                    <b className="text-[15px] leading-5 font-bold whitespace-nowrap">{l.name}</b>
+                    <b className="text-base leading-5 font-bold whitespace-nowrap">{l.name}</b>
                     {l.goal && (
                       <small
-                        className={`text-[13px] leading-[17px] ${l.goal.on_track === false ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                        className={`text-sm leading-[17px] ${l.goal.on_track === false ? 'font-[650] text-crit' : 'text-text-faint'}`}
                       >
                         {measuredWords(l.goal)}
                       </small>
                     )}
                   </span>
                   {l.goal && (
-                    <small className="text-[13px] leading-[17px] text-text2">
+                    <small className="text-sm leading-[17px] text-text2">
                       {targetSteps(l.goal)}
                     </small>
                   )}
@@ -1103,7 +1103,7 @@ function Strip({
                               p.slices.map((s) => s.code),
                             )
                           }
-                          className={`absolute z-[2] flex items-center overflow-hidden rounded-full px-[9px] text-[12px] leading-none font-[650] whitespace-nowrap ${p.pm ? 'border-[1.5px] border-dashed bg-[var(--simple-paper)] text-text2' : 'border-[1.5px] border-solid'}`}
+                          className={`absolute z-[2] flex items-center overflow-hidden rounded-full px-[9px] text-xs leading-none font-[650] whitespace-nowrap ${p.pm ? 'border-[1.5px] border-dashed bg-[var(--simple-paper)] text-text2' : 'border-[1.5px] border-solid'}`}
                           style={{
                             left: x0,
                             width: room,
@@ -1132,8 +1132,8 @@ function Strip({
                 className="flex flex-col justify-center border-t border-[var(--simple-rule)] py-1 pr-2.5 pl-4"
                 style={at(lastRow, 1)}
               >
-                <b className="text-[15px] leading-5 font-bold">Decisions</b>
-                <small className="text-[12.5px] leading-4 text-text-faint">with a date</small>
+                <b className="text-base leading-5 font-bold">Decisions</b>
+                <small className="text-xs leading-4 text-text-faint">with a date</small>
               </div>
               <div
                 className="relative border-t border-[var(--simple-rule)]"
@@ -1143,7 +1143,7 @@ function Strip({
                   <div
                     key={d.day}
                     data-testid="timeline-decision"
-                    className={`absolute z-[3] flex items-start gap-1.5 text-[13px] leading-[17px] whitespace-nowrap ${d.right ? '-translate-x-full flex-row-reverse text-right' : ''}`}
+                    className={`absolute z-[3] flex items-start gap-1.5 text-sm leading-[17px] whitespace-nowrap ${d.right ? '-translate-x-full flex-row-reverse text-right' : ''}`}
                     style={{ left: d.right ? d.x + 6 : d.x - 6, top: 6 + d.lvl * DIA_LEVEL }}
                   >
                     <i
@@ -1157,7 +1157,7 @@ function Strip({
                     >
                       <b className="font-bold">{d.label}</b>
                       <small
-                        className={`block text-[13px] ${d.due.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                        className={`block text-sm ${d.due.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
                       >
                         {d.due.words}
                       </small>
@@ -1215,7 +1215,7 @@ function Strip({
       )}
       <div
         data-testid="timeline-legend"
-        className="flex flex-wrap gap-x-4 gap-y-1.5 pt-2 text-[13px] leading-[18px] text-text-faint"
+        className="flex flex-wrap gap-x-4 gap-y-1.5 pt-2 text-sm leading-[18px] text-text-faint"
       >
         {ds.map((x) => (
           <span key={x.code} className="inline-flex items-center gap-1.5 whitespace-nowrap">
@@ -1341,7 +1341,7 @@ function PhonePlan({
       order: 0,
       node: (
         <div key={`d-${d.day}`} data-testid="timeline-decision" className="relative">
-          <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-text2">
+          <span className="absolute top-0.5 -left-16 w-[46px] text-right text-xs leading-[15px] font-bold text-text2">
             {dm(d.day)}
           </span>
           <span
@@ -1349,11 +1349,11 @@ function PhonePlan({
             className="absolute top-[5px] -left-4 h-2.5 w-2.5 rotate-45 rounded-[2px]"
             style={{ background: due.late ? 'var(--crit)' : 'var(--warn)' }}
           />
-          <div className="text-[14px] leading-[19px]">
+          <div className="text-sm leading-[19px]">
             <b className="font-bold">{d.label}</b>
             {due.words && (
               <small
-                className={`block text-[13px] ${due.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                className={`block text-sm ${due.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
               >
                 {due.words}
               </small>
@@ -1368,14 +1368,14 @@ function PhonePlan({
     order: 1,
     node: (
       <div key="today" className="relative">
-        <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-crit">
+        <span className="absolute top-0.5 -left-16 w-[46px] text-right text-xs leading-[15px] font-bold text-crit">
           {dm(today)}
         </span>
         <span
           aria-hidden
           className="absolute top-[5px] -left-[17px] h-3 w-3 rounded-full border-2 border-[var(--simple-paper)] bg-crit"
         />
-        <div className="text-[13px] leading-[19px] font-[750] text-crit">Today</div>
+        <div className="text-sm leading-[19px] font-[750] text-crit">Today</div>
       </div>
     ),
   });
@@ -1386,10 +1386,10 @@ function PhonePlan({
       {bar && (
         <div
           data-testid="timeline-stick"
-          className="fixed inset-x-0 top-0 z-20 flex items-center gap-2 border-b border-[var(--simple-rule)] bg-[var(--simple-paper)] px-4 py-[9px] text-[15px] font-[650] max-[600px]:top-[var(--phone-top-bar)]"
+          className="fixed inset-x-0 top-0 z-20 flex items-center gap-2 border-b border-[var(--simple-rule)] bg-[var(--simple-paper)] px-4 py-[9px] text-base font-[650] max-[600px]:top-[var(--phone-top-bar)]"
         >
           <span className="min-w-0 truncate">{title}</span>
-          <span className="ml-auto flex-none text-[14px] leading-5 text-text-faint">{bar}</span>
+          <span className="ml-auto flex-none text-sm leading-5 text-text-faint">{bar}</span>
         </div>
       )}
       <GoalList plan={plan} />
@@ -1454,7 +1454,7 @@ function PhoneMilestone({
     : 'No dates yet';
   return (
     <div data-testid="timeline-step" className="relative">
-      <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-text2">
+      <span className="absolute top-0.5 -left-16 w-[46px] text-right text-xs leading-[15px] font-bold text-text2">
         {m.start_date ? dm(m.start_date) : ''}
       </span>
       <span
@@ -1473,9 +1473,9 @@ function PhoneMilestone({
           className="flex items-center gap-2 text-left"
         >
           <MTag plan={plan} code={m.code} small />{' '}
-          <b className="text-[16px] leading-[21px] font-bold">{m.name}</b>
+          <b className="text-base leading-[21px] font-bold">{m.name}</b>
         </button>
-        <div className="text-[14px] leading-5 text-text2">
+        <div className="text-sm leading-5 text-text2">
           <Facts text={facts} />
           {open && st.week && (
             <>
@@ -1498,7 +1498,7 @@ function PhoneMilestone({
             e.preventDefault();
             onShow(m.code);
           }}
-          className={`${TAP44} self-start text-[14px] font-semibold whitespace-nowrap text-accent underline underline-offset-[3px]`}
+          className={`${TAP44} self-start text-sm font-semibold whitespace-nowrap text-accent underline underline-offset-[3px]`}
         >
           {linkWords(slices.length, flows, m.decisions.length)}
         </a>
@@ -1515,13 +1515,13 @@ function Checks({ items, small }: { items: string[]; small?: boolean }) {
       {items.map((d) => (
         <li
           key={d}
-          className={`relative list-none before:absolute before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint ${small ? 'mt-[5px] pl-5 text-[15px] leading-[21px] before:top-[8px]' : 'mt-1.5 pl-5 text-[16px] leading-[23px] before:top-[9px]'}`}
+          className={`relative list-none before:absolute before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint ${small ? 'mt-[5px] pl-5 text-base leading-[21px] before:top-[8px]' : 'mt-1.5 pl-5 text-base leading-[23px] before:top-[9px]'}`}
         >
           {d}
         </li>
       ))}
       {!items.length && (
-        <li className="mt-[5px] list-none text-[15px] text-text-faint">Not written yet</li>
+        <li className="mt-[5px] list-none text-base text-text-faint">Not written yet</li>
       )}
     </ul>
   );
@@ -1567,18 +1567,18 @@ export function MilestoneCard({
     >
       <div className="flex flex-wrap items-center gap-3">
         <h2
-          className={`flex items-center gap-3 font-bold tracking-[-.01em] ${phone ? 'text-[22px] leading-7' : 'text-[26px] leading-8'}`}
+          className={`flex items-center gap-3 font-bold tracking-[-.01em] ${phone ? 'text-xl leading-7' : 'text-2xl leading-8'}`}
         >
           <MTag plan={plan} code={m.code} /> <span>{m.name}</span>
         </h2>
         <span
-          className={`inline-flex h-6 items-center rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap ${st.now ? 'bg-accent-soft text-accent-ink' : 'bg-na-bg text-na'}`}
+          className={`inline-flex h-6 items-center rounded-xl px-[9px] text-sm leading-[18px] font-semibold whitespace-nowrap ${st.now ? 'bg-accent-soft text-accent-ink' : 'bg-na-bg text-na'}`}
         >
           {st.words}
         </span>
       </div>
       {(dated(m) || facts) && (
-        <p className="-mt-1 text-[15px] leading-[22px] text-text2" data-testid="part-dates">
+        <p className="-mt-1 text-base leading-[22px] text-text2" data-testid="part-dates">
           {dated(m) && (
             <b className="font-bold text-text">{spanWords(m.start_date!, m.end_date!)}</b>
           )}
@@ -1587,8 +1587,8 @@ export function MilestoneCard({
         </p>
       )}
       {m.why && (
-        <p data-testid="part-why" className="flex items-baseline gap-3 text-[17px] leading-[26px]">
-          <span className="w-[72px] flex-none text-[12px] leading-[18px] font-[750] tracking-[.07em] text-text-faint uppercase">
+        <p data-testid="part-why" className="flex items-baseline gap-3 text-lg leading-[26px]">
+          <span className="w-[72px] flex-none text-xs leading-[18px] font-[750] tracking-[.07em] text-text-faint uppercase">
             Why now
           </span>
           <span>{m.why}</span>
@@ -1615,14 +1615,12 @@ export function MilestoneCard({
                     title={t.goal}
                     className="rounded-[12px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-3 py-2.5"
                   >
-                    <div className="text-[28px] leading-[34px] font-[750] tracking-[-.01em]">
-                      {v}
-                    </div>
-                    <div className="text-[14px] leading-[19px] text-text2">{u}</div>
+                    <div className="text-2xl leading-[34px] font-[750] tracking-[-.01em]">{v}</div>
+                    <div className="text-sm leading-[19px] text-text2">{u}</div>
                   </div>
                 );
               })}
-              {!m.targets.length && <p className="text-[15px] text-text-faint">No targets yet</p>}
+              {!m.targets.length && <p className="text-base text-text-faint">No targets yet</p>}
             </div>
           </div>
         </div>
@@ -1630,7 +1628,7 @@ export function MilestoneCard({
           <h3 className={`${H3} mb-2`}>
             What we build{' '}
             {slices.length > 0 && (
-              <span className="text-[16px] font-medium text-text-faint">
+              <span className="text-base font-medium text-text-faint">
                 · {slices.length} {slices.length === 1 ? 'feature' : 'features'}, by kind
               </span>
             )}
@@ -1638,7 +1636,7 @@ export function MilestoneCard({
           <div className="flex flex-col gap-3.5">
             {groups.map(([kind, of]) => (
               <div key={kind}>
-                <h4 className="mb-1 text-[12px] leading-4 font-[750] tracking-[.07em] text-text-faint uppercase">
+                <h4 className="mb-1 text-xs leading-4 font-[750] tracking-[.07em] text-text-faint uppercase">
                   {kind.split(' ').slice(0, -1).join(' ')}{' '}
                   <span data-testid="kind-tail" className="whitespace-nowrap">
                     {kind.split(' ').at(-1)} <span className="font-semibold">· {of.length}</span>
@@ -1649,7 +1647,7 @@ export function MilestoneCard({
                     <li
                       key={s.code}
                       data-marked={marked.includes(s.code) ? 'true' : undefined}
-                      className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? 'bg-accent-soft' : ''} border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? 'grid-cols-[62px_minmax(0,1fr)] gap-y-0.5' : 'grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5'}`}
+                      className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? 'bg-accent-soft' : ''} border-[var(--simple-rule)] py-1.5 text-base leading-[21px] ${phone ? 'grid-cols-[62px_minmax(0,1fr)] gap-y-0.5' : 'grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5'}`}
                     >
                       <span className={`${CODE} border border-line bg-surface2 text-text`}>
                         {s.code}
@@ -1676,7 +1674,7 @@ export function MilestoneCard({
                           <SliceMark s={s} />
                         </span>
                         {s.flow_steps.length > 0 && (
-                          <span className="text-[13px] font-[650] whitespace-nowrap">
+                          <span className="text-sm font-[650] whitespace-nowrap">
                             {' · '}
                             <button
                               type="button"
@@ -1700,7 +1698,7 @@ export function MilestoneCard({
                 </ul>
               </div>
             ))}
-            {!groups.length && <p className="text-[15px] text-text-faint">Nothing planned yet</p>}
+            {!groups.length && <p className="text-base text-text-faint">Nothing planned yet</p>}
           </div>
         </div>
       </div>
@@ -1714,7 +1712,7 @@ export function MilestoneCard({
               data-testid="part-flow"
               className="scroll-mt-28 rounded-[12px] border border-dashed border-line-strong bg-[var(--simple-paper)] px-3.5 pt-2.5 pb-3"
             >
-              <div className="mb-1 flex flex-wrap items-center gap-2 text-[13px] leading-[18px] font-[650] text-text2">
+              <div className="mb-1 flex flex-wrap items-center gap-2 text-sm leading-[18px] font-[650] text-text2">
                 <FlowIcon />
                 Flow · {s.code} {s.name}
                 <span className="ml-auto flex gap-3 font-medium text-text-faint">
@@ -1745,7 +1743,7 @@ export function MilestoneCard({
         <div data-testid="part-decisions">
           <h3 className={H3}>
             Decisions it needs{' '}
-            <span className="text-[16px] font-medium text-text-faint">· {m.decisions.length}</span>
+            <span className="text-base font-medium text-text-faint">· {m.decisions.length}</span>
           </h3>
           <ul>
             {m.decisions.map((d) => {
@@ -1760,16 +1758,16 @@ export function MilestoneCard({
                 >
                   <span className={`${CODE} bg-warn-bg text-warn`}>{d.code}</span>
                   <div>
-                    <b className="text-[16px] leading-[22px] font-[650]">{d.title}</b>
+                    <b className="text-base leading-[22px] font-[650]">{d.title}</b>
                     {d.recommendation && (
-                      <div className="mt-0.5 text-[14px] leading-5 text-text2">
+                      <div className="mt-0.5 text-sm leading-5 text-text2">
                         <em className="font-bold text-text not-italic">Recommended:</em>{' '}
                         {d.recommendation}
                       </div>
                     )}
                   </div>
                   <span
-                    className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap ${phone ? 'col-start-2' : 'text-right'} ${when.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                    className={`pt-0.5 text-sm leading-[18px] whitespace-nowrap ${phone ? 'col-start-2' : 'text-right'} ${when.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
                   >
                     {when.words}
                   </span>
@@ -1777,14 +1775,13 @@ export function MilestoneCard({
               );
             })}
             {!m.decisions.length && (
-              <li className="list-none py-2.5 text-[15px] text-text-faint">No open decisions</li>
+              <li className="list-none py-2.5 text-base text-text-faint">No open decisions</li>
             )}
           </ul>
         </div>
         <div data-testid="part-risks">
           <h3 className={H3}>
-            Risks{' '}
-            <span className="text-[16px] font-medium text-text-faint">· {m.risks.length}</span>
+            Risks <span className="text-base font-medium text-text-faint">· {m.risks.length}</span>
           </h3>
           <ul>
             {m.risks.map((r) => (
@@ -1801,16 +1798,16 @@ export function MilestoneCard({
                   <span />
                 )}
                 <div>
-                  <b className="text-[16px] leading-[22px] font-[650]">{r.title}</b>
+                  <b className="text-base leading-[22px] font-[650]">{r.title}</b>
                   {r.what_we_do && (
-                    <div className="mt-0.5 text-[14px] leading-5 text-text2">
+                    <div className="mt-0.5 text-sm leading-5 text-text2">
                       <em className="font-bold text-text not-italic">What we do:</em> {r.what_we_do}
                     </div>
                   )}
                 </div>
                 {riskLevel(r) && (
                   <span
-                    className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap text-text-faint ${phone ? 'col-start-2' : 'text-right'}`}
+                    className={`pt-0.5 text-sm leading-[18px] whitespace-nowrap text-text-faint ${phone ? 'col-start-2' : 'text-right'}`}
                   >
                     {riskLevel(r)}
                   </span>
@@ -1818,7 +1815,7 @@ export function MilestoneCard({
               </li>
             ))}
             {!m.risks.length && (
-              <li className="list-none py-2.5 text-[15px] text-text-faint">No risks written yet</li>
+              <li className="list-none py-2.5 text-base text-text-faint">No risks written yet</li>
             )}
           </ul>
         </div>

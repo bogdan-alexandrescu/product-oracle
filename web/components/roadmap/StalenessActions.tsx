@@ -94,7 +94,7 @@ export function StalenessActions({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               maxLength={500}
-              className="h-10 rounded-button border border-line-strong bg-surface px-2.5 text-[15px] font-normal text-text"
+              className="h-10 rounded-button border border-line-strong bg-surface px-2.5 text-base font-normal text-text"
             />
           </label>
           <div className="flex flex-wrap gap-2">

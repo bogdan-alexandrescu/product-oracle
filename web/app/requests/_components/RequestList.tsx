@@ -115,7 +115,7 @@ export function RequestList({
       <div
         aria-hidden
         data-testid="request-list-head"
-        className={`flex items-start gap-3 border-b border-line bg-surface2 px-4 py-1.5 text-[13px] leading-4 font-semibold text-text2 ${ticking ? 'max-[600px]:px-3' : 'max-[600px]:hidden'}`}
+        className={`flex items-start gap-3 border-b border-line bg-surface2 px-4 py-1.5 text-sm leading-4 font-semibold text-text2 ${ticking ? 'max-[600px]:px-3' : 'max-[600px]:hidden'}`}
       >
         {/* qa-work-8, qa4-work-15: the boxes' column says what ticking is for, in a word that fits on one line. */}
         {ticking && (
@@ -247,7 +247,7 @@ export function RequestList({
                 <div className="flex min-w-0 items-center gap-2">
                   <button
                     type="button"
-                    className="min-h-8 min-w-0 flex-1 truncate text-left text-[15px] font-semibold max-[600px]:min-h-11 max-[600px]:whitespace-normal max-[600px]:[overflow-wrap:anywhere]"
+                    className="min-h-8 min-w-0 flex-1 truncate text-left text-base font-semibold max-[600px]:min-h-11 max-[600px]:whitespace-normal max-[600px]:[overflow-wrap:anywhere]"
                     title={r.body ?? r.title}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -258,10 +258,7 @@ export function RequestList({
                   </button>
                 </div>
                 {ticking && !free(r) && (
-                  <span
-                    data-testid="request-choose-why"
-                    className="text-[13px] leading-4 text-text2"
-                  >
+                  <span data-testid="request-choose-why" className="text-sm leading-4 text-text2">
                     {notFreeShort(r)}
                   </span>
                 )}
@@ -272,7 +269,7 @@ export function RequestList({
                       data-field={c.key}
                       className="flex min-w-0 items-center gap-1.5"
                     >
-                      <span className="sr-only text-[13px] font-semibold text-text2 max-[600px]:not-sr-only max-[600px]:w-[4.75rem] max-[600px]:flex-none">
+                      <span className="sr-only text-sm font-semibold text-text2 max-[600px]:not-sr-only max-[600px]:w-[4.75rem] max-[600px]:flex-none">
                         {c.label}
                       </span>
                       {cells[c.key]}

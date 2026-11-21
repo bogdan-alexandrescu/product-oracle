@@ -27,7 +27,7 @@ const DISABLED_OUTLINE =
 
 const VARIANT: Record<ButtonVariant, string> = {
   // One per screen, top-right (I3 rule 3).
-  primary: `h-10 rounded-button px-4 text-[15px] bg-accent text-on-accent hover:brightness-110 ${DISABLED_FILL}`,
+  primary: `h-10 rounded-button px-4 text-base bg-accent text-on-accent hover:brightness-110 ${DISABLED_FILL}`,
   // Row actions everywhere (Decide, Approve, Resolve) are outline.
   secondary: `h-8 rounded-lg px-3 text-sm border border-line-strong bg-surface text-text hover:bg-surface2 ${DISABLED_OUTLINE}`,
   // A form's submit inside a panel: filled like primary, at row size; never a row action.

@@ -36,7 +36,7 @@ export function Avatar({
       aria-label={name}
       title={name}
       style={{ width: size, height: size }}
-      className={`inline-grid flex-none place-items-center rounded-full text-[13px] leading-none font-semibold ${cls}`}
+      className={`inline-grid flex-none place-items-center rounded-full text-sm leading-none font-semibold ${cls}`}
     >
       {ini}
     </span>
@@ -69,14 +69,14 @@ export function CostFigure({
   /** Inside an Inspector head. */
   hero?: boolean;
 }) {
-  if (usd == null) return <span className="text-[13px] text-text2">—</span>;
+  if (usd == null) return <span className="text-sm text-text2">—</span>;
   const text = `${usdFmt.format(usd)}${of != null ? ` / ${usdFmt.format(of)}` : ''}${est ? ' est.' : ''}`;
   if (prominent) {
     const over = of != null && usd > of;
     return (
       <span
         data-cost="prominent"
-        className={`tnum inline-flex h-7 items-center rounded-lg px-2 text-[15px] font-medium whitespace-nowrap ${
+        className={`tnum inline-flex h-7 items-center rounded-lg px-2 text-base font-medium whitespace-nowrap ${
           over ? 'bg-crit-bg text-crit' : 'bg-warn-bg text-warn'
         }`}
       >
@@ -87,7 +87,7 @@ export function CostFigure({
   return (
     <span
       data-cost="small"
-      className={`tnum text-[13px] leading-none font-medium whitespace-nowrap ${hero ? 'text-hero-text2' : 'text-text2'}`}
+      className={`tnum text-sm leading-none font-medium whitespace-nowrap ${hero ? 'text-hero-text2' : 'text-text2'}`}
     >
       {text}
     </span>
@@ -110,10 +110,10 @@ export function Numeral({
 }) {
   const sz =
     size === 'lg'
-      ? 'text-[44px] leading-[46px]'
+      ? 'text-4xl leading-[46px]'
       : size === 'sm'
-        ? 'text-[28px] leading-8'
-        : 'text-[34px] leading-9';
+        ? 'text-2xl leading-8'
+        : 'text-3xl leading-9';
   return (
     <span
       className={`tnum font-display font-bold tracking-[-0.03em] ${sz} ${
@@ -164,7 +164,7 @@ export function KpiStrip({
           data-testid={k.testId}
           className="flex min-w-0 flex-col-reverse justify-end border-r border-line px-[18px] pt-3.5 pb-3 last:border-r-0 max-[600px]:px-3"
         >
-          <dt className="flex items-center gap-1.5 truncate text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <dt className="flex items-center gap-1.5 truncate text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             {k.label}
             {k.extra}
           </dt>

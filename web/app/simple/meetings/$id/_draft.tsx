@@ -74,7 +74,7 @@ function Bars({
     <div role="img" aria-label={label} className="min-w-0 overflow-hidden">
       <div
         aria-hidden
-        className="grid border-b border-line text-[13px] text-text2"
+        className="grid border-b border-line text-sm text-text2"
         style={{ gridTemplateColumns: cols.map((c) => `${c.days}fr`).join(' ') }}
       >
         {cols.map((c, n) => (
@@ -89,7 +89,7 @@ function Bars({
             <div
               data-bar={i.key}
               title={`${i.title}: ${span(i)}${solid ? '' : ' (draft, not approved)'}`}
-              className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-[13px] font-medium whitespace-nowrap ${solid ? 'bg-accent text-white' : 'text-text'} ${picked === i.key ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]' : ''}`}
+              className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-sm font-medium whitespace-nowrap ${solid ? 'bg-accent text-white' : 'text-text'} ${picked === i.key ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]' : ''}`}
               style={{
                 left: `${x(i.start)}%`,
                 width: `${x(i.end, true) - x(i.start)}%`,
@@ -239,7 +239,7 @@ export function DraftDates({
       <h2 className="simple-h2">{m.prd.title} on the roadmap</h2>
       <div className="mt-2 space-y-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="inline-flex items-center gap-1.5 text-[15px] text-text2">
+          <span className="inline-flex items-center gap-1.5 text-base text-text2">
             <span aria-hidden className="inline-block h-3.5 w-6 rounded-sm" style={HATCH} />
             Draft from the run: not approved
           </span>

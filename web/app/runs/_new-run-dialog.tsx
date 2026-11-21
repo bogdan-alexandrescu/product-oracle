@@ -179,7 +179,7 @@ export function NewRunDialog({
   const docOptions = prdsFirst(prds.data, documents.data);
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
   const legendCls =
-    'mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2';
+    'mb-1.5 flex items-center gap-1.5 text-sm font-semibold tracking-[0.02em] text-text2';
 
   return (
     <div
@@ -204,7 +204,7 @@ export function NewRunDialog({
           <span className="flex-1" />
           <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
         </div>
-        <div className="space-y-5 px-5 py-4 text-[15px] max-[600px]:px-4">
+        <div className="space-y-5 px-5 py-4 text-base max-[600px]:px-4">
           {catalog.error && <ErrorNote>{catalog.error}</ErrorNote>}
           {!catalog.data && !catalog.error && <Loading />}
           {guide && (
@@ -367,7 +367,7 @@ export function NewRunDialog({
                               aria-pressed={on}
                               title={`${r.description} · ${usd(r.base_usd)} at standard depth`}
                               onClick={() => toggleRole(s, r.key)}
-                              className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[13px] font-semibold ${
+                              className={`inline-flex h-7 items-center rounded-full border px-2.5 text-sm font-semibold ${
                                 on
                                   ? 'border-accent bg-accent text-on-accent'
                                   : 'border-line-strong text-text2 hover:bg-surface2'

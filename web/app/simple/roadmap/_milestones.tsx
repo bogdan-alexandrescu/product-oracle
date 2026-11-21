@@ -1181,7 +1181,7 @@ export function MsLayer(props: MsLayerProps) {
               .join(', ')}`}
             onClick={() => setDayList((d) => (d === date ? null : date))}
             // A 12 px count, its tap area 24 px on a phone (an invisible pad round it).
-            className="absolute z-[25] h-3 min-w-3 cursor-pointer before:absolute before:inset-0 before:content-[''] max-[600px]:before:-inset-1.5 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+            className="absolute z-[25] h-3 min-w-3 cursor-pointer before:absolute before:inset-0 before:content-[''] max-[600px]:before:-inset-1.5 rounded-full bg-text px-1 text-center text-xs leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
             style={{ left: mx + 3, top: axisY - 24 }}
           >
             {many}
@@ -2118,7 +2118,7 @@ export function MsCard() {
           <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
         )}
         <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold">
+          <h2 className="text-base font-semibold">
             <span style={{ color: msInk(msCode(m)) }}>{msCode(m)}</span> {m.name}
           </h2>
           <span className="rounded-full bg-na-bg px-2 text-xs leading-5 text-na">From the PRD</span>
@@ -2190,7 +2190,7 @@ export function MsCard() {
           <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
         )}
         <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold">{head}</h2>
+          <h2 className="text-base font-semibold">{head}</h2>
           <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
         </div>
         <NameField
@@ -2245,7 +2245,7 @@ export function MsCard() {
           <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
         )}
         <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold">{head}</h2>
+          <h2 className="text-base font-semibold">{head}</h2>
           <span className="text-xs text-text2">{fullDay(d.date)}</span>
         </div>
         <span className="flex items-center gap-1 text-xs font-semibold text-text2">
@@ -2338,7 +2338,7 @@ export function MsCard() {
         <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
       )}
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold">{head}</h2>
+        <h2 className="text-base font-semibold">{head}</h2>
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
       </div>
       {also}

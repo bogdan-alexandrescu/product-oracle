@@ -115,7 +115,7 @@ export function DraftPrdsRead({
 /** The legend chip for a draft: a hatched swatch and its words. */
 function DraftKey({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[15px] text-text2">
+    <span className="inline-flex items-center gap-1.5 text-base text-text2">
       <span aria-hidden className="inline-block h-3.5 w-6 rounded-sm" style={HATCH} />
       {children}
     </span>
@@ -139,7 +139,7 @@ function DraftBars({
   return (
     <div role="group" aria-label={`${prd.title} draft timeline`} className="mt-2 min-w-0">
       <div
-        className="grid border-b border-line text-[13px] text-text2"
+        className="grid border-b border-line text-sm text-text2"
         style={{ gridTemplateColumns: cols.map((c) => `${c.days}fr`).join(' ') }}
       >
         {cols.map((c, n) => (
@@ -157,7 +157,7 @@ function DraftBars({
               aria-label={`${i.title}, ${draftSpan(i)}, draft, not approved`}
               title={`${i.title}: ${draftSpan(i)} (draft, not approved)`}
               onClick={() => onOpen(i)}
-              className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-[13px] font-medium whitespace-nowrap text-text ${picked === i.id ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]' : ''}`}
+              className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-sm font-medium whitespace-nowrap text-text ${picked === i.id ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]' : ''}`}
               style={{
                 left: `${x(i.start)}%`,
                 width: `${Math.max(x(i.end) - x(i.start), 2)}%`,
@@ -413,7 +413,7 @@ export function DraftDetails({
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-[15px] text-crit">
+        <p role="alert" className="mt-2 text-base text-crit">
           {error}
         </p>
       )}

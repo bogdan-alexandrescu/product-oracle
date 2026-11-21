@@ -26,7 +26,7 @@ function Diff({ before, after }: { before: string; after: string }) {
 }
 
 const CHIP =
-  'inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px]';
+  'inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface px-3 py-1 text-base';
 
 /**
  * build-review (QV1 a, picked Nov 1): Send for approval… asks first: the changes being sent,
@@ -61,7 +61,7 @@ export function SendForApproval({
         </Button>
       }
     >
-      <div className="space-y-4 text-[15px]">
+      <div className="space-y-4 text-base">
         <p>
           Each reviewer gets an Inbox note.{' '}
           {v.published_at
@@ -149,7 +149,7 @@ export function InReviewBar({ v }: { v: View }) {
           {v.in_review.map((c, i) => (
             <li
               key={`${c.line_id}-${c.kind}-${i}`}
-              className="rounded-md border border-[var(--simple-rule)] bg-surface px-3 py-2 text-[15px]"
+              className="rounded-md border border-[var(--simple-rule)] bg-surface px-3 py-2 text-base"
             >
               <span className="text-sm text-text-faint">
                 {lineName(v, c.line_id)} ·{' '}

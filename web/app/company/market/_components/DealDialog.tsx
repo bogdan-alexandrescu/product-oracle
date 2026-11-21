@@ -131,7 +131,7 @@ export function DealDialog({
       onClose={onClose}
     >
       <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
-        <p className="text-[13px] text-text2">Fields marked (required) must be filled in.</p>
+        <p className="text-sm text-text2">Fields marked (required) must be filled in.</p>
         <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
           <label className={LABEL}>
             Result

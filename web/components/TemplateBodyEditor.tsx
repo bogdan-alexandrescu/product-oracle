@@ -156,11 +156,11 @@ export function BriefFix() {
       </p>
       <ul className="mt-1 list-disc space-y-1 pl-5">
         <li>
-          <code className="font-mono text-[13px]">brief: [summary, problem, decisions]</code> in the
+          <code className="font-mono text-sm">brief: [summary, problem, decisions]</code> in the
           front matter
         </li>
         <li>
-          <code className="font-mono text-[13px]">{'# Full version {#full}'}</code> after the brief
+          <code className="font-mono text-sm">{'# Full version {#full}'}</code> after the brief
           sections
         </li>
       </ul>
@@ -382,7 +382,7 @@ export function SectionRows({ secs, onChange }: { secs: Sec[]; onChange: (secs: 
           />
         </div>
       ))}
-      <div className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-center gap-2 rounded-lg border border-dashed border-line p-2 text-[15px] text-text2 max-[700px]:grid-cols-1">
+      <div className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-center gap-2 rounded-lg border border-dashed border-line p-2 text-base text-text2 max-[700px]:grid-cols-1">
         <span className="px-3 font-semibold text-text">Sources and data points</span>
         <span className="px-3">
           <InfoTip label="sources and data points">
@@ -484,7 +484,7 @@ export function TemplateBodyEditor({
     <div className="flex flex-col gap-2">
       <span className="flex items-center gap-1.5">
         <label
-          className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
           htmlFor="template-body"
         >
           {label}

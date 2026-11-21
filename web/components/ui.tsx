@@ -30,7 +30,7 @@ export function Badge({
   return (
     <span
       title={title}
-      className={`tnum inline-flex h-[26px] items-center gap-1 rounded-full px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap ${TONES[tone]}`}
+      className={`tnum inline-flex h-[26px] items-center gap-1 rounded-full px-2.5 text-sm leading-none font-semibold whitespace-nowrap ${TONES[tone]}`}
     >
       {children}
     </span>
@@ -139,7 +139,7 @@ export function Button({
       type="button"
       {...props}
       className={`inline-flex items-center justify-center gap-1.5 font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-        size === 'sm' ? 'h-8 rounded-lg px-2.5 text-[13px]' : 'h-9 rounded-button px-3.5 text-sm'
+        size === 'sm' ? 'h-8 rounded-lg px-2.5 text-sm' : 'h-9 rounded-button px-3.5 text-sm'
       } ${VARIANTS[variant]} ${className}`}
     />
   );
@@ -147,14 +147,14 @@ export function Button({
 
 /** INPUT without its width: a select in a filter row that takes its own width (#549). */
 export const INPUT_INLINE =
-  'rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px] text-text';
+  'rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-base text-text';
 
 /** Class names of a text input, select or textarea in a settings form. */
 export const INPUT = `w-full ${INPUT_INLINE}`;
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded border border-line-strong bg-surface2 px-1 font-mono text-[13px] text-text2">
+    <kbd className="rounded border border-line-strong bg-surface2 px-1 font-mono text-sm text-text2">
       {children}
     </kbd>
   );

@@ -124,7 +124,7 @@ export function StackPending({ load, testId }: { load: StackLoad; testId: string
         data-testid={`${testId}-failed`}
         className="flex flex-col items-center gap-2 px-4 py-8 text-center max-[600px]:px-3"
       >
-        <p className="text-[15px] font-semibold text-text">Could not load the strategy</p>
+        <p className="text-base font-semibold text-text">Could not load the strategy</p>
         <Button onClick={load.onRetry} disabled={load.loading}>
           Try again
         </Button>

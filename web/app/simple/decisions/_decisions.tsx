@@ -850,7 +850,7 @@ function MeetingGroup({
       )}
       {minutes && minutes.open_questions.length > 0 && (
         <div>
-          <h3 className="text-[18px] leading-[26px] font-[650]">Open questions</h3>
+          <h3 className="text-lg leading-[26px] font-[650]">Open questions</h3>
           <ul className="list-disc pl-5">
             {minutes.open_questions.map((x) => {
               // An open decision the minutes name ("D-3: ...") is listed here only (qa-simple-decide-20):
@@ -873,7 +873,7 @@ function MeetingGroup({
       )}
       {minutes && minutes.action_items.length > 0 && (
         <div>
-          <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
+          <h3 className="text-lg leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
             {minutes.action_items.map((a, i) => (
               <li key={i}>
@@ -888,7 +888,7 @@ function MeetingGroup({
       )}
       {minutes && minutes.waits.length > 0 && (
         <div>
-          <h3 className="text-[18px] leading-[26px] font-[650]">What waits on whom</h3>
+          <h3 className="text-lg leading-[26px] font-[650]">What waits on whom</h3>
           <ul className="list-disc pl-5">
             {minutes.waits.map((w, i) => (
               <li key={i}>
@@ -905,7 +905,7 @@ function MeetingGroup({
         return (
           notes.length > 0 && (
             <div key={kind}>
-              <h3 className="text-[18px] leading-[26px] font-[650]">
+              <h3 className="text-lg leading-[26px] font-[650]">
                 {kind === 'note' ? 'Notes' : 'Comments'}
               </h3>
               <ul
@@ -922,7 +922,7 @@ function MeetingGroup({
           )
         );
       })}
-      <h3 className="text-[18px] leading-[26px] font-[650]">Decisions</h3>
+      <h3 className="text-lg leading-[26px] font-[650]">Decisions</h3>
       {g.decisions.length ? <Rows rows={g.decisions} /> : <p className="simple-meta">None.</p>}
     </section>
   );
@@ -977,7 +977,7 @@ function RunsGroup({ runs }: { runs: RunGroup[] }) {
           className="mt-4 border-t border-line pt-4 first-of-type:border-t-0"
           data-testid="decisions-run"
         >
-          <h3 className="text-[18px] leading-[26px] font-[650]">
+          <h3 className="text-lg leading-[26px] font-[650]">
             {r.name}{' '}
             <span className="simple-meta font-normal">
               · {r.prd ? `${r.prd.title} · ` : ''}

@@ -278,7 +278,7 @@ export function SuggestionCard({
       )}
       {shown && !editing && (
         <div className="mt-2">
-          <p className="text-[13px] font-semibold tracking-[0.02em] text-text2">
+          <p className="text-sm font-semibold tracking-[0.02em] text-text2">
             {s.kind === 'answer'
               ? 'Suggested answer'
               : heading

@@ -153,7 +153,7 @@ function ThemeRow({
         </form>
       ) : (
         <span
-          className={`min-w-0 flex-1 basis-64 truncate text-[15px] font-semibold ${theme.archived ? 'text-text2' : ''}`}
+          className={`min-w-0 flex-1 basis-64 truncate text-base font-semibold ${theme.archived ? 'text-text2' : ''}`}
         >
           {theme.title}
         </span>
@@ -286,7 +286,7 @@ export function ProblemBlock({
     );
   }
   return (
-    <div data-testid="theme-problem" className="flex min-w-0 flex-col gap-1.5 text-[15px]">
+    <div data-testid="theme-problem" className="flex min-w-0 flex-col gap-1.5 text-base">
       {suggested && (
         <p className="text-sm font-semibold text-text2">Oracle suggests this problem</p>
       )}

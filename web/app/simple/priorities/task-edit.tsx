@@ -28,11 +28,11 @@ type ChangeIn = Schemas['SimpleChangeIn'];
 type Change = Schemas['SimpleChangeOut'];
 
 const PRIMARY =
-  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
+  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-sm font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
 const INPUT =
-  'h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text';
+  'h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-base text-text';
 const BAD =
-  'h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-[15px] text-text';
+  'h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-base text-text';
 
 /** A task as the buckets show it: its roadmap item, its code and name. */
 export type Task = { itemId: string; code: string; name: string };
@@ -77,9 +77,9 @@ export function milestoneOptions(
 function Field({ label, children, error }: { label: string; children: ReactNode; error?: string }) {
   return (
     <label className="block min-w-0">
-      <span className="text-[13px] font-[650] text-text2">{label}</span>
+      <span className="text-sm font-[650] text-text2">{label}</span>
       {children}
-      {error && <span className="mt-0.5 block text-[13px] text-warn">{error}</span>}
+      {error && <span className="mt-0.5 block text-sm text-warn">{error}</span>}
     </label>
   );
 }
@@ -131,8 +131,8 @@ export function TaskForm({
       }}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        <h4 className="whitespace-nowrap text-[17px] font-[650]">{title}</h4>
-        <span className="min-w-0 text-[13px] text-text2 max-sm:basis-full sm:ml-auto">
+        <h4 className="whitespace-nowrap text-lg font-[650]">{title}</h4>
+        <span className="min-w-0 text-sm text-text2 max-sm:basis-full sm:ml-auto">
           Goal: {goal}
         </span>
       </div>
@@ -171,7 +171,7 @@ export function TaskForm({
         <button type="button" className={BTN} onClick={onCancel}>
           Cancel
         </button>
-        {!done && <span className="min-w-0 text-[13px] text-text2">A task needs a name.</span>}
+        {!done && <span className="min-w-0 text-sm text-text2">A task needs a name.</span>}
       </div>
     </form>
   );
@@ -220,13 +220,13 @@ export function CutDialog({
         </h2>
         <p
           data-testid="cut-dependents"
-          className={`mt-2 text-[15px] ${dependents.length ? 'text-warn' : 'text-text2'}`}
+          className={`mt-2 text-base ${dependents.length ? 'text-warn' : 'text-text2'}`}
         >
           {dependents.length
             ? `⚠ ${andList(dependents)} ${dependents.length === 1 ? 'depends' : 'depend'} on it.`
             : 'Nothing depends on it.'}
         </p>
-        <p className="mt-1 text-[15px] text-text2">
+        <p className="mt-1 text-base text-text2">
           It is not deleted: the roadmap keeps it as cut, and Undo brings it back.
         </p>
         <div className="mt-3 flex items-center gap-2">
@@ -493,7 +493,7 @@ export function TaskRow({
       data-testid="plan-feature"
       data-code={code}
       data-lifted={lifted ? '' : undefined}
-      className={`relative flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] max-sm:flex-wrap max-sm:gap-y-1 ${lifted ? '[&>*]:opacity-30' : ''}`}
+      className={`relative flex items-center gap-2 border-b border-line py-[5px] text-base leading-[22px] max-sm:flex-wrap max-sm:gap-y-1 ${lifted ? '[&>*]:opacity-30' : ''}`}
     >
       {grip && (
         <button
@@ -502,7 +502,7 @@ export function TaskRow({
           title="Drag to another goal"
           aria-label={`Move ${name} to another goal`}
           aria-describedby="bucket-move-help"
-          className={`-mx-1 flex-none cursor-grab touch-none select-none rounded px-1 text-[15px] ${lifted ? 'text-accent-ink' : 'text-text2'}`}
+          className={`-mx-1 flex-none cursor-grab touch-none select-none rounded px-1 text-base ${lifted ? 'text-accent-ink' : 'text-text2'}`}
           onPointerDown={grip.onPointerDown}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -519,7 +519,7 @@ export function TaskRow({
         <span
           data-testid="prio-code"
           title={name}
-          className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-[13px] font-semibold leading-5 tabular-nums text-text"
+          className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-sm font-semibold leading-5 tabular-nums text-text"
         >
           {code}
         </span>
@@ -544,7 +544,7 @@ export function TaskRow({
         )}
         {!gtCode(code) && <NotInGt />}
         {draft && (
-          <span className="ml-1.5 inline-flex h-5 items-center rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2">
+          <span className="ml-1.5 inline-flex h-5 items-center rounded-full border border-line-strong px-1.5 align-[1px] text-xs font-[650] text-text2">
             Draft
           </span>
         )}
@@ -554,7 +554,7 @@ export function TaskRow({
         <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">
           <span
             data-testid="task-milestone"
-            className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2"
+            className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-xs font-[650] text-text2"
           >
             {coded(milestone)}
           </span>
@@ -562,7 +562,7 @@ export function TaskRow({
       )}
       <span
         data-testid="plan-feature-total"
-        className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2"
+        className="min-w-[56px] flex-none text-right text-base tabular-nums text-text2"
       >
         {weeks}
       </span>
@@ -662,7 +662,7 @@ export function useBucketTasks({
         <li data-testid="add-task" className="pt-1">
           <button
             type="button"
-            className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-[15px] font-[650] text-text2 disabled:opacity-40"
+            className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-base font-[650] text-text2 disabled:opacity-40"
             disabled
           >
             + Add a feature
@@ -686,7 +686,7 @@ export function useBucketTasks({
         ) : (
           <button
             type="button"
-            className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-[15px] font-[650] text-text2 hover:bg-surface2 disabled:opacity-40"
+            className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-base font-[650] text-text2 hover:bg-surface2 disabled:opacity-40"
             onClick={() => setEditing(key)}
             disabled={!!editing}
           >

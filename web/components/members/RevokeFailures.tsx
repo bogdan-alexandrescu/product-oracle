@@ -137,7 +137,7 @@ export function RevokeFailuresSection({
         ))}
       </ul>
       {error && (
-        <p role="alert" className="text-[13px] font-medium text-crit">
+        <p role="alert" className="text-sm font-medium text-crit">
           {error}
         </p>
       )}

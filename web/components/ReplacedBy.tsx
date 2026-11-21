@@ -111,15 +111,15 @@ function ReplacedByDialog({
       {listQ.error && <Notice tone="error">{listQ.error}</Notice>}
       {!listQ.data && !listQ.error && <Loading />}
       {listQ.data && others.length === 0 && (
-        <p className="text-[15px] text-text2">No other PRDs yet.</p>
+        <p className="text-base text-text2">No other PRDs yet.</p>
       )}
       {others.length > 0 && (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <legend className="mb-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             PRDs
           </legend>
           {others.map((d) => (
-            <label key={d.id} className="flex items-center gap-2 text-[15px]">
+            <label key={d.id} className="flex items-center gap-2 text-base">
               <input
                 type="checkbox"
                 checked={picked.includes(d.slug)}

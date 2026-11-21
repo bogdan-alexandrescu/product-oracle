@@ -59,8 +59,8 @@ const WHY: Partial<Record<Question['category'], string>> = {
 };
 
 const FIELD =
-  'w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-[16px] leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30';
-const LABEL = 'text-[15px] font-semibold text-text';
+  'w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-base leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30';
+const LABEL = 'text-base font-semibold text-text';
 
 /** Who may start a PRD here: whoever may make the brief and start its draft. */
 export function useCanStartPrd(): boolean {
@@ -126,7 +126,7 @@ function Answered({ q, given }: { q: Question; given: Given }) {
       className="flex flex-col gap-0.5 border-b border-line py-2 last:border-b-0"
       data-testid="np-answered"
     >
-      <span className="text-[15px] font-semibold">{q.prompt}</span>
+      <span className="text-base font-semibold">{q.prompt}</span>
       {given.kind === 'unknown' ? (
         <span className="simple-small">
           <span className="simple-tag">I don&apos;t know</span> The draft marks it as open.
@@ -506,7 +506,7 @@ export function NewPrdSheet({
             <span className="simple-small tnum">
               Question {at + 1} of {questions.length}
             </span>
-            <label htmlFor="np-answer" className="text-[18px] leading-7 font-semibold">
+            <label htmlFor="np-answer" className="text-lg leading-7 font-semibold">
               {current.prompt}
             </label>
             <span className="simple-small" data-testid="np-why">
@@ -536,7 +536,7 @@ export function NewPrdSheet({
                           >
                             <span
                               aria-hidden
-                              className="grid size-7 flex-none place-items-center rounded-full bg-surface2 text-[12px] font-semibold"
+                              className="grid size-7 flex-none place-items-center rounded-full bg-surface2 text-xs font-semibold"
                             >
                               {initials(p.name)}
                             </span>

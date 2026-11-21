@@ -91,7 +91,7 @@ function Count({ kind, label, n }: { kind: NeedKind; label: string; n: number })
       href={`/inbox?kind=${kind}`}
       data-testid={`home-count-${kind}`}
       aria-label={`${label}: ${n} in the Inbox`}
-      className="inline-flex h-[26px] items-center gap-1 text-[13px] font-medium whitespace-nowrap text-text2 hover:text-accent-ink hover:underline"
+      className="inline-flex h-[26px] items-center gap-1 text-sm font-medium whitespace-nowrap text-text2 hover:text-accent-ink hover:underline"
     >
       {label} <b className="tnum text-text">{n}</b>
     </Link>
@@ -467,7 +467,7 @@ function HomePage() {
               <Link
                 href="/inbox"
                 data-testid="home-inbox-link"
-                className="ml-1 inline-flex h-8 items-center gap-1 rounded-lg px-1.5 text-[15px] font-semibold text-accent-ink hover:underline"
+                className="ml-1 inline-flex h-8 items-center gap-1 rounded-lg px-1.5 text-base font-semibold text-accent-ink hover:underline"
               >
                 Inbox
                 <Icon name="arrow" size={16} />
@@ -570,7 +570,7 @@ function HomePage() {
               <span className="hidden font-display text-lg font-bold tracking-heading min-[601px]:inline">
                 In flight
               </span>
-              <span className="text-[15px] font-semibold text-text2">Nothing in flight</span>
+              <span className="text-base font-semibold text-text2">Nothing in flight</span>
               {newPrd('ml-auto')}
             </div>
           ) : (

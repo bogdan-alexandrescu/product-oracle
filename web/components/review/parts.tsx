@@ -22,10 +22,9 @@ import { runLabel } from '@/lib/labels';
  */
 
 /** Form fields on tokens (13 px label, 15 px input). */
-export const FIELD_LABEL =
-  'flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+export const FIELD_LABEL = 'flex flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
 export const TEXTAREA =
-  'w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px] font-normal tracking-normal text-text placeholder:text-text2';
+  'w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-base font-normal tracking-normal text-text placeholder:text-text2';
 export const SELECT =
   'h-8 rounded-lg border border-line-strong bg-surface px-2 text-sm font-medium tracking-normal text-text';
 
@@ -123,7 +122,7 @@ export function LockedChip() {
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-line-strong bg-surface2 px-1 font-mono text-[13px] leading-none text-text">
+    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-line-strong bg-surface2 px-1 font-mono text-sm leading-none text-text">
       {children}
     </kbd>
   );
@@ -196,7 +195,7 @@ export function TabBar<T extends string>({
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(t.id)}
             className={`-mb-px flex flex-none items-center gap-1.5 border-b-2 whitespace-nowrap max-[639px]:h-11 ${
-              size === 'sm' ? 'h-9 px-2 text-sm' : 'h-10 px-2 text-[15px]'
+              size === 'sm' ? 'h-9 px-2 text-sm' : 'h-10 px-2 text-base'
             } ${on ? 'border-accent font-semibold text-text' : 'border-transparent font-medium text-text2 hover:text-text'}`}
           >
             {t.label}
@@ -205,7 +204,7 @@ export function TabBar<T extends string>({
                 role={t.countLabel ? 'img' : undefined}
                 aria-label={t.countLabel}
                 title={t.countLabel}
-                className={`tnum text-[13px] font-bold ${on ? 'text-accent-ink' : 'text-text2'}`}
+                className={`tnum text-sm font-bold ${on ? 'text-accent-ink' : 'text-text2'}`}
               >
                 {t.count}
               </span>

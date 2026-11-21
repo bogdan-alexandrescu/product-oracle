@@ -66,13 +66,13 @@ function Group({
 }) {
   return (
     <section data-testid={testId} aria-label={title} className="flex flex-col gap-1.5">
-      <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{title}</h3>
+      <h3 className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">{title}</h3>
       {children}
     </section>
   );
 }
 
-const LINES = 'flex list-disc flex-col gap-1 pl-5 text-[15px] leading-[22px]';
+const LINES = 'flex list-disc flex-col gap-1 pl-5 text-base leading-[22px]';
 
 /** "Ends now": only for a removal. */
 function EndsNow({ ends }: { ends: NonNullable<Impact['ends']> }) {
@@ -151,7 +151,7 @@ function Lapses({ lapses, memberId }: { lapses: Impact['lapses']; memberId: stri
   if (!parts.length) return null;
   return (
     <Group title="Lapses for good" testId="preview-lapses">
-      <p className="text-[15px] leading-[22px]">
+      <p className="text-base leading-[22px]">
         {parts.join(' and ')}{' '}
         <button
           type="button"
@@ -262,7 +262,7 @@ function HandOverRows({
   const everyone = people.filter((p) => p.status !== 'disabled' && p.id !== subjectId);
   return (
     <Group title={title} testId={testId}>
-      <label className="flex flex-wrap items-center gap-2 text-[15px]">
+      <label className="flex flex-wrap items-center gap-2 text-base">
         Hand everything to
         <select
           aria-label="Hand everything to"
@@ -294,7 +294,7 @@ function HandOverRows({
             data-testid="handover-row"
             className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-2 first:border-t-0"
           >
-            <span className="min-w-0 flex-1 text-[15px]">
+            <span className="min-w-0 flex-1 text-base">
               {rowLabel(r)} {!countInLabel && <span className="tnum text-text2">· {r.count}</span>}
             </span>
             <HandOverSelect
@@ -388,7 +388,7 @@ export function RemoveDialog({
         <p
           role="status"
           data-testid="preview-checking"
-          className="flex items-center gap-2 text-[13px] text-text2"
+          className="flex items-center gap-2 text-sm text-text2"
         >
           <span
             aria-hidden

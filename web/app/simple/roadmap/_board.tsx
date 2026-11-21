@@ -67,7 +67,7 @@ export function LegendKeys({
   return (
     <div
       data-testid="legend"
-      className={`flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] leading-[18px] text-text-faint ${className}`}
+      className={`flex flex-wrap gap-x-4 gap-y-1.5 text-sm leading-[18px] text-text-faint ${className}`}
     >
       {entries.map((e) => (
         <span
@@ -545,7 +545,7 @@ export function Board({
           {/* QA Nov 12 #1: the code before the name ("F-06 Weekly alert digest"); #2: no code, flagged. */}
           <p
             data-testid="board-card-name"
-            className={`text-[16px] leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
+            className={`text-base leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
           >
             {itemName(item)}
           </p>

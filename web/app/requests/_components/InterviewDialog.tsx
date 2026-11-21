@@ -420,7 +420,7 @@ function GuideStep({
               {iv.guide_job?.error ? `: ${iv.guide_job.error}` : '.'}
             </Notice>
           ) : (
-            <p role="status" data-testid="guide-drafting" className="text-[15px] text-text2">
+            <p role="status" data-testid="guide-drafting" className="text-base text-text2">
               Oracle is drafting questions for {iv.interviewee_name}…
             </p>
           )}
