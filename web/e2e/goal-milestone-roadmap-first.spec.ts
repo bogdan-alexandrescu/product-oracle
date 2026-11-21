@@ -28,10 +28,15 @@ test("Roadmap opened first shows a goal's target-date milestone", async ({ page 
   await page.goto('/simple/roadmap');
   await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await expect(page.getByTestId('ms-band')).toBeVisible();
-  const diamond = page.locator(
-    `[data-testid="ms-diamond"][data-kind="goal"][data-day="2027-02-12"]`,
+  // The goal's target date, drawn as a goal milestone named for the goal.
+  await expect(
+    page
+      .getByTestId('ms-label')
+      .filter({ has: page.locator('[data-testid="mk-icon"][data-kind="goal"]') })
+      .filter({ hasText: TITLE }),
+  ).toHaveCount(1);
+  await page.locator(`[data-testid="ms-diamond"][data-kind="goal"][data-day="2027-02-12"]`).click();
+  await expect(page.getByTestId('ms-card').getByRole('textbox', { name: 'Name' })).toHaveValue(
+    TITLE,
   );
-  await expect(diamond).toHaveCount(1);
-  await diamond.click();
-  await expect(page.getByTestId('ms-card')).toContainText(TITLE);
 });
