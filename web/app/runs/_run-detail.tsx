@@ -81,7 +81,7 @@ import {
   type RunOut,
   type SegmentOut,
 } from './_lib';
-import { openText, reviewCounts } from './[id]/review/[checkpoint]/_items-lib';
+import { openText, reviewCounts } from './$id/review/$checkpoint/_items-lib';
 
 const POLL_MS = 5000;
 // D8: a pending checkpoint's shared draft is read again this often while the page shows.

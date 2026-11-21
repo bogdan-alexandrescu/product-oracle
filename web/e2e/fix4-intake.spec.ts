@@ -3,7 +3,7 @@ import { expect, test, type Page } from './test';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
 import { V2_IDS } from '../lib/api/mock/v2';
-import { statusChip, type Summary } from '../app/intakes/[id]/_lib';
+import { statusChip, type Summary } from '../app/intakes/$id/_lib';
 
 import { login } from './helpers';
 

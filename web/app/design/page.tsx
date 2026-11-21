@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useState, useSyncExternalStore } from 'react';
 
 import { Notice, Page, PageHeader, SegmentedControl } from '@/components/ds';
@@ -34,7 +35,7 @@ function useSystemDark(): boolean {
  * navigation). Light and Dark switch the app's theme; Both draws the gallery twice,
  * the second copy scoped to the other theme by `.ds-light` / `.ds-dark`.
  */
-export default function DesignPage() {
+function DesignPage() {
   const { can, capsReady } = useMe();
   const [theme, setTheme] = useTheme();
   const systemDark = useSystemDark();
@@ -102,3 +103,5 @@ export default function DesignPage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/design/')({ component: DesignPage });

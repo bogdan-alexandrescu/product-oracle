@@ -1,6 +1,6 @@
 /**
  * Mock of PRD quality and readiness, outcome tracking and learnings
- * (api/oracle/quality/router.py) for NEXT_PUBLIC_API_MOCKS=1. The readiness dashboard is a
+ * (api/oracle/quality/router.py) for VITE_API_MOCKS=1. The readiness dashboard is a
  * fixed, synthetic evaluation (the mock does not run the rules); stored reports go into the
  * v2 evaluation tables so the foundation's read routes list them. Same role checks as the
  * API: viewers read, commenters store evaluations and ratings, approvers queue a model

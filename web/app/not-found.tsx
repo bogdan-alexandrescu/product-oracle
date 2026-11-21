@@ -1,11 +1,5 @@
-import type { Metadata } from 'next';
-
 import { LinkButton, NotFoundPanel } from '@/components/ds';
 import { SectionBackLink } from '@/components/SectionBackLink';
-
-export const metadata: Metadata = {
-  title: 'Page not found · Product Oracle',
-};
 
 /**
  * A wrong URL (qa-shell-3), in the app's one not-found pattern (NotFoundPanel, qa-shell-8):

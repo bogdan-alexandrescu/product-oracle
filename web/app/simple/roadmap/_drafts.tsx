@@ -22,7 +22,7 @@ import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { calendarDay } from '@/lib/dates';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { DatesForm, HATCH, months, movedWords } from '../meetings/[id]/_draft';
+import { DatesForm, HATCH, months, movedWords } from '../meetings/$id/_draft';
 
 export type DraftPrd = Schemas['SimpleRoadmapDraftPrd'];
 export type DraftItem = DraftPrd['items'][number];

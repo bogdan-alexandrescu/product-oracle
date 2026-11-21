@@ -1,5 +1,5 @@
 /**
- * Mock of Trash, delete/restore and Regenerate (#482) for NEXT_PUBLIC_API_MOCKS=1.
+ * Mock of Trash, delete/restore and Regenerate (#482) for VITE_API_MOCKS=1.
  * Mirrors api/oracle/trash: owners delete a document (with the documents built from it and
  * the runs that write them), an intake (with the PRD it became) or a run; Settings › Trash
  * lists one entry per delete with its days left; Restore brings the entry back together.

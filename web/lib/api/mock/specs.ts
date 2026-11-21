@@ -1,5 +1,5 @@
 /**
- * Mock of the specs lane's routes (api/oracle/specs/router.py) for NEXT_PUBLIC_API_MOCKS=1:
+ * Mock of the specs lane's routes (api/oracle/specs/router.py) for VITE_API_MOCKS=1:
  * spec requests from an approved PRD, their versions with the approach status, sections by
  * part, SVG flows and grayscale wireframes with annotations and reviews, staleness and the
  * proposed regeneration. One seeded, synthetic spec; no run executes in the mock (a new

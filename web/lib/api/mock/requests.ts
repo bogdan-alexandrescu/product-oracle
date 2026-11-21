@@ -1,6 +1,6 @@
 /**
  * Mock of the requests routes (api/oracle/requests/router.py, C1) for
- * NEXT_PUBLIC_API_MOCKS=1: the request queue with its tab counts and channel facet, a
+ * VITE_API_MOCKS=1: the request queue with its tab counts and channel facet, a
  * request with what was merged into it, edits, qualify (needs a confirmed goal), merge
  * (to the root, no cycles), disqualify (Other needs a note), reopen, accepting or declining
  * Oracle's suggestion (#348), and themes. It keeps the API's shapes and role rules.

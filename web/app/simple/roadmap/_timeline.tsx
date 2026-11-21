@@ -206,7 +206,9 @@ export function layout(
     const beside = !tail || (n === 1 && textWidth(words, size, 400) + tail <= w);
     // Under the name, the pill and the mark share a line where both fit, else take one each.
     const under = beside ? 0 : pill && gt && tail > w ? 2 : 1;
-    const h = padY + n * lineH + under * (18 + gapY) + (own ? 16 + gapY : 0);
+    // A one-line name can keep its 20 px pill beside it and send only the mark under (#1581).
+    const first = !beside && n === 1 && pill && gt ? Math.max(lineH, 20) : n * lineH;
+    const h = padY + first + under * (18 + gapY) + (own ? 16 + gapY : 0);
     if (h > rowH) nameH.set(it.id, h);
   }
   const hs = rows.map((r) => {
@@ -300,6 +302,23 @@ function textWidth(s: string, size: number, weight: number): number {
   const w = measured(s, size, weight);
   if (measure) widths.set(key, w);
   return w;
+}
+/** Measures again once the web fonts have loaded (#1581: they can load after the first layout). */
+function useFontsReady(): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (!live) return;
+      // Widths measured in a fallback font are measured again in the web font.
+      widths.clear();
+      setN(1);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return n;
 }
 function measured(s: string, size: number, weight: number): number {
   if (typeof document !== 'undefined') {
@@ -730,7 +749,9 @@ export function Chart({
   const wrapRows = compact && format === 'waterfall';
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
   const states = useContext(FeatureMarks);
+  const fonts = useFontsReady();
   const tails = useMemo(() => {
+    void fonts;
     if (!states) return null;
     const m = new Map<string, number>();
     for (const i of data.items) {
@@ -745,10 +766,13 @@ export function Chart({
         );
     }
     return m;
-  }, [compact, states, data.items, data.today]);
+  }, [compact, states, data.items, data.today, fonts]);
   const l = useMemo(
-    () => layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null, tails),
-    [data, compact, lane, top, wrapRows, chartW, tails],
+    () => (
+      void fonts,
+      layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null, tails)
+    ),
+    [data, compact, lane, top, wrapRows, chartW, tails, fonts],
   );
   // fix4 qa-simple-roadmap-5: the part of the chart in view (it scrolls sideways), so a row whose
   // bar is out of view says where it lies, with a button that scrolls to it.

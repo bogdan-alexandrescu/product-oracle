@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { notFound } from '@/lib/nav';
 import { Suspense } from 'react';
 
@@ -9,7 +10,7 @@ import { SIMPLE_MODE } from '../_flag';
 import { SimpleRoadmap } from './_roadmap';
 
 /** Simple S4 (#723): the company-wide roadmap (direction "A · Wall"). */
-export default function SimpleRoadmapPage() {
+function SimpleRoadmapPage() {
   if (!SIMPLE_MODE) notFound();
   return (
     <Suspense>
@@ -19,3 +20,5 @@ export default function SimpleRoadmapPage() {
     </Suspense>
   );
 }
+
+export const Route = createFileRoute('/simple/roadmap/')({ component: SimpleRoadmapPage });

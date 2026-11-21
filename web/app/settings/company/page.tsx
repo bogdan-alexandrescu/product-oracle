@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
 
@@ -860,7 +861,7 @@ function PricingOwnerPanel() {
  * time zone, whether Oracle reads new briefs (INT2), the pricing owner and the branding (O5 lane 4).
  * Every member reads the branding.
  */
-export default function CompanySettingsPage() {
+function CompanySettingsPage() {
   // #370: Settings' gate answers a role that cannot read the company settings or the branding.
   const { can, capsReady } = useMe();
   // #401: the time zone is an owner's to change; a role that reads the page but changes nothing sees View only.
@@ -905,3 +906,5 @@ export default function CompanySettingsPage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/company/')({ component: CompanySettingsPage });

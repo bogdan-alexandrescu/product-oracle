@@ -400,7 +400,6 @@ function UserMenu({
     const still = await api.GET('/v1/me').catch(() => undefined);
     if (still?.response.ok) {
       // A full page load on purpose: IAP answers this URL, it never reaches Next.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign('/?gcp-iap-mode=CLEAR_LOGIN_COOKIE');
       return;
     }
@@ -488,7 +487,6 @@ function UserMenu({
             if (!yes) return;
             resetMockData();
             // Full reload on purpose: every view re-reads the freshly seeded state.
-            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             window.location.assign('/login');
           }}
           className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
@@ -1120,7 +1118,7 @@ export function panelHidden(pathname: string): boolean {
  */
 function HopDock() {
   const pathname = usePathname();
-  const { me } = useMe();
+  const { me, loading } = useMe();
   const open = usePanelOpen();
   const shown = !!me && !panelHidden(pathname);
   const simple = modeOf(pathname) === 'simple';
@@ -1173,7 +1171,16 @@ function HopDock() {
       window.clearTimeout(stop);
     };
   }, [open]);
-  if (!shown) return null;
+  // While /v1/me loads, the strip's column is kept (as the rail is), so a signed-in page never
+  // narrows by 45 px once it arrives.
+  if (!shown) {
+    return loading && !simple && !panelHidden(pathname) && !bare(pathname) ? (
+      <div
+        aria-hidden
+        className="col-start-3 row-start-1 h-dvh w-[45px] border-l border-line bg-surface max-[600px]:hidden"
+      />
+    ) : null;
+  }
   if (simple && !open) return null;
   // Sticky, the dock is its own stacking layer: z-40 keeps it (and the drawer that overlays
   // the page below 1600 px) above anything in the page that sets its own z-index.

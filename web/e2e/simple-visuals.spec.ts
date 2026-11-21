@@ -319,6 +319,12 @@ test.describe('a drawing that takes a while lands without a reload', () => {
     const wide = page.getByRole('group', {
       name: "User flow of “Invite suggestions from the admin's",
     });
+    // The old address's redirect runs in the router after the load event (#1581): count from
+    // the drawn page.
+    await expect(page).toHaveURL(/\/simple\/one-pagers\/guided-setup$/);
+    await expect(
+      page.getByRole('button', { name: "Draw the flow for “Invite suggestions from the admin's" }),
+    ).toBeVisible();
     const loads = await noReloads(page);
     await page
       .getByRole('button', { name: "Draw the flow for “Invite suggestions from the admin's" })

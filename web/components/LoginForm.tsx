@@ -11,18 +11,6 @@ import { MOCK_LOGIN } from '@/lib/api/mock/fixtures';
 import { loadLanding } from '@/lib/experience';
 import { safeNextPath } from '@/lib/safe-next';
 
-/** Sign-in runs in the browser: without JavaScript, the card says so instead of waiting. */
-export function NoScriptNote() {
-  return (
-    <noscript>
-      <span className="mt-2 block text-text">
-        Signing in needs JavaScript. Turn it on in your browser&apos;s settings, then reload this
-        page.
-      </span>
-    </noscript>
-  );
-}
-
 /** How long the session check may take before the form shows anyway. */
 const CHECK_WAIT_MS = 10_000;
 
@@ -125,7 +113,6 @@ export function LoginForm() {
           className="py-6 text-center text-[15px] text-text2"
         >
           Checking your session…
-          <NoScriptNote />
         </p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">

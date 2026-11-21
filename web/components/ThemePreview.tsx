@@ -298,7 +298,6 @@ export function ThemeThumbnail({
         ))}
       </div>
       {src && broken !== src && (
-        // eslint-disable-next-line @next/next/no-img-element -- a data: SVG made here, not an asset to optimise
         <img
           alt=""
           src={src}

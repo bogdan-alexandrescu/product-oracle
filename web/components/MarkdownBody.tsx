@@ -282,7 +282,6 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
         // API checks a spec's labels the same way: an image is no visible text).
         const stored = storedImageSrc(n.src);
         if (stored) {
-          // eslint-disable-next-line @next/next/no-img-element
           return <img key={k} src={stored} alt={n.alt} loading="lazy" className="max-w-full" />;
         }
         const host = remoteHost(n.src);

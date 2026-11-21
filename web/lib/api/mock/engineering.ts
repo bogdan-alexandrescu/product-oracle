@@ -1,5 +1,5 @@
 /**
- * Mock of api/oracle/engineering/router.py for NEXT_PUBLIC_API_MOCKS=1.
+ * Mock of api/oracle/engineering/router.py for VITE_API_MOCKS=1.
  *
  * Tech briefs (F5-1): `GET /v1/tech-briefs?prd=&feature=` and `GET /v1/tech-briefs/{id}`.
  * The seed stands for what an approved Engineering check registered on the checkout PRD:

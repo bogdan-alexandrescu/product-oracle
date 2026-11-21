@@ -1,11 +1,12 @@
-import { Suspense, type ReactNode } from 'react';
+import { Outlet, createFileRoute } from '@tanstack/react-router';
+import { Suspense } from 'react';
 
 import { Page, PageTabsProvider } from '@/components/ds';
 
 import { CompanyNav } from './_nav';
 
 /** Every Company page: the page, its tabs under the title (Strategy, Decisions, Rituals, Updates, Metrics, Market). */
-export default function CompanyLayout({ children }: { children: ReactNode }) {
+function CompanyLayout() {
   return (
     <Page>
       <PageTabsProvider
@@ -15,8 +16,10 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
           </Suspense>
         }
       >
-        {children}
+        <Outlet />
       </PageTabsProvider>
     </Page>
   );
 }
+
+export const Route = createFileRoute('/company')({ component: CompanyLayout });

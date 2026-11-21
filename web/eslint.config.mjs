@@ -1,6 +1,10 @@
+import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
-import nextVitals from 'eslint-config-next/core-web-vitals';
-import nextTs from 'eslint-config-next/typescript';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 // #401: display dates and times are in the Company time zone, through lib/dates.ts;
 // only machine values sent to the API stay ISO/UTC.
@@ -53,22 +57,68 @@ const ROLE_RULES = [
   },
 ];
 
-// #1579: links and navigation come from lib/nav.ts only, so a move off Next changes one file.
+// #1579: links and navigation come from lib/nav.ts only, so a move off Next changed one file.
 // A lane that brings in a next/* import runs `node scripts/nav-codemod.mjs` to re-point it.
+// #1581: the router's own hooks and Link stay behind lib/nav.ts too (route files import
+// createFileRoute and Outlet from it directly).
 const NAV_RULE = [
   'error',
   {
-    paths: ['next/link', 'next/navigation'].map((name) => ({
-      name,
-      message:
-        'Import links and navigation from @/lib/nav (node scripts/nav-codemod.mjs re-points them).',
-    })),
+    paths: [
+      ...['next/link', 'next/navigation'].map((name) => ({
+        name,
+        message:
+          'Import links and navigation from @/lib/nav (node scripts/nav-codemod.mjs re-points them).',
+      })),
+      {
+        name: '@tanstack/react-router',
+        importNames: [
+          'Link',
+          'useNavigate',
+          'useParams',
+          'useRouter',
+          'useRouterState',
+          'useLocation',
+          'useSearch',
+        ],
+        message: 'Import links and navigation from @/lib/nav.',
+      },
+    ],
   },
 ];
 
+// #1581: what eslint-config-next's core-web-vitals and typescript sets gave, from their own
+// plugins (docs/vite-migration/dependencies.md, Lint after eslint-config-next).
 const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  react.configs.flat.recommended,
+  react.configs.flat['jsx-runtime'],
+  reactHooks.configs.flat['recommended-latest'],
+  {
+    plugins: { 'jsx-a11y': jsxA11y },
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+    settings: { react: { version: 'detect' } },
+    rules: {
+      // As eslint-config-next set them.
+      'react/no-unknown-property': 'off',
+      'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
+      'react/jsx-no-target-blank': 'off',
+      'jsx-a11y/alt-text': ['warn', { elements: ['img'], img: ['Image'] }],
+      'jsx-a11y/aria-props': 'warn',
+      'jsx-a11y/aria-proptypes': 'warn',
+      'jsx-a11y/aria-unsupported-elements': 'warn',
+      'jsx-a11y/role-has-required-aria-props': 'warn',
+      'jsx-a11y/role-supports-aria-props': 'warn',
+      // eslint-config-next did not turn on @eslint/js's recommended set; these four of it fail
+      // on code that passed there (control characters and escapes in regexes, NBSP in copy).
+      'no-control-regex': 'off',
+      'no-irregular-whitespace': 'off',
+      'no-useless-escape': 'off',
+      'no-constant-binary-expression': 'off',
+    },
+  },
   {
     rules: {
       // Ask in the page (confirmInPage, components/ds): a browser dialog blocks the tab,
@@ -93,18 +143,12 @@ const eslintConfig = defineConfig([
     files: ['lib/dates.ts', 'lib/api/mock/**', 'e2e/**'],
     rules: { 'no-restricted-syntax': 'off' },
   },
-  // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
-    '.next/**',
+    'dist/**',
+    'dist-*/**',
     'out/**',
     'build/**',
-    'next-env.d.ts',
-    // Playwright builds (mock and real-stack) and output.
-    '.next-mock/**',
-    '.next-e2e/**',
-    '.next-local/**',
-    '.next-check/**',
+    'routeTree.gen.ts',
     'test-results/**',
     'playwright-report/**',
   ]),

@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { RequestsScreen } from '../_components/RequestsScreen';
 
 /**
@@ -7,6 +8,8 @@ import { RequestsScreen } from '../_components/RequestsScreen';
  * queue's rows; a row opens the same inspector as All requests (qa-work-6). An interview's
  * requests are marked Unverified. rirs-36: its address names the tab (an old /requests/new?request= link redirects here).
  */
-export default function ToDecidePage() {
+function ToDecidePage() {
   return <RequestsScreen view="new" />;
 }
+
+export const Route = createFileRoute('/requests/to-decide/')({ component: ToDecidePage });

@@ -1,0 +1,23 @@
+'use client';
+
+import { createFileRoute } from '@tanstack/react-router';
+import { useParams } from '@/lib/nav';
+import { Suspense } from 'react';
+
+import { PublishView } from '@/components/PublishView';
+import { PageSkeleton } from '@/components/ds';
+
+function Publish() {
+  const { doc } = useParams<{ doc: string }>();
+  return <PublishView key={doc} doc={doc} />;
+}
+
+function PublishPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Publish />
+    </Suspense>
+  );
+}
+
+export const Route = createFileRoute('/documents/$doc/publish/')({ component: PublishPage });

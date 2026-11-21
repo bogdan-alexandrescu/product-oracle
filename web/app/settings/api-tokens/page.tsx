@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { ApiTokensSettings } from '@/components/ApiTokensSettings';
@@ -10,10 +11,12 @@ function Tokens() {
   return <ApiTokensSettings initialMember={member.length === 1 ? member[0] : null} />;
 }
 
-export default function ApiTokensPage() {
+function ApiTokensPage() {
   return (
     <Suspense fallback={null}>
       <Tokens />
     </Suspense>
   );
 }
+
+export const Route = createFileRoute('/settings/api-tokens/')({ component: ApiTokensPage });

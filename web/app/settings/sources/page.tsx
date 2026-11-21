@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useRouter } from '@/lib/nav';
 import {
   type ComponentType,
@@ -1339,7 +1340,7 @@ function toAddSource() {
   document.getElementById('add-source-name')?.focus({ preventScroll: true });
 }
 
-export default function SourceSettingsPage() {
+function SourceSettingsPage() {
   const sources = useQuery('sources', () => unwrap(api.GET('/v1/sources')));
   const kinds = useQuery('source-kinds', () => unwrap(api.GET('/v1/sources/kinds')));
   const { can, capsReady } = useMe();
@@ -1582,3 +1583,5 @@ export default function SourceSettingsPage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/sources/')({ component: SourceSettingsPage });

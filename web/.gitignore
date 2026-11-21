@@ -13,8 +13,9 @@
 # testing
 /coverage
 
-# next.js
-/.next/
+# vite builds (dist, dist-mock, dist-e2e)
+/dist/
+/dist-*/
 /out/
 
 # production
@@ -32,18 +33,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# the mock build's flags (vite build --mode mock)
+!.env.mock
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
-# Playwright builds (mock and real-stack) and output
-/.next-mock/
+# Playwright output
 /test-results/
 /playwright-report/
 /blob-report/
-/.next-e2e/
-/.next-*/

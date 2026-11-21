@@ -1,0 +1,56 @@
+# #1581: the web image's one server (docs/vite-migration/nginx.md). Rendered at container start
+# by nginx/40-oracle-config.sh, so ORACLE_GIT_SHA and API_INTERNAL_URL are the container's.
+server {
+    listen 3000;
+    server_tokens off;
+    root /usr/share/nginx/html;
+    include /etc/nginx/security-headers.conf;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # The API on the same origin (session cookie, no CORS), when API_INTERNAL_URL is set: in
+    # local and real-stack runs. In production Cloud Run's load balancer sends /v1/* and /healthz
+    # to the API, so the image leaves it unset and this file is empty (40-oracle-config.sh).
+    include /etc/nginx/api-proxy.conf;
+
+    # #1569: the commit this image was built from, for the deploy's containment check.
+    location = /version {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+        default_type application/json;
+        return 200 '{"git_sha":"${ORACLE_GIT_SHA}"}';
+    }
+
+    # Redirects: lib/redirects.ts, row for row (lib/redirects.test.ts checks each has one).
+    location = /roadmap { return 308 /plan$is_args$args; }
+    location ~ ^/baseline(/.*)?$ { return 308 /ground-truth$1$is_args$args; }
+    location ~ ^/simple/prds/([^/]+)/?$ { return 307 /simple/one-pagers/$1$is_args$args; }
+    location = /requests/new {
+        if ($args = "") { return 307 /requests?compose=request; }
+        return 307 /requests/to-decide$is_args$args;
+    }
+    # A trailing slash is dropped with a 308, as Next did, so old links behave the same.
+    location ~ ^(.+)/$ { return 308 $1$is_args$args; }
+
+    # Hashed build output: immutable; a missing chunk is a 404 nobody caches.
+    location ^~ /assets/ {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri @missing_asset;
+    }
+    location @missing_asset {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+        return 404;
+    }
+
+    # Everything else: a real file, or the app shell.
+    location / {
+        try_files $uri /index.html;
+    }
+    location = /index.html {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+    }
+}

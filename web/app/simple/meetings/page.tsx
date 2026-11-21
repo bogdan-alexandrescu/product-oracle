@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, notFound, useSearchParams } from '@/lib/nav';
 import { Suspense, useState } from 'react';
 
@@ -29,7 +30,7 @@ const TAP = 'inline-flex items-center max-[600px]:min-h-11';
  * where the row's can_start says (owners and the ritual's owner). Home's "Open pre-read" opens
  * here (`?pre_read=` the occurrence) with that review's pre-read on top (PreRead).
  */
-export default function SimpleMeetings() {
+function SimpleMeetings() {
   return (
     <Suspense fallback={<PageSkeleton />}>
       <Meetings />
@@ -236,3 +237,5 @@ function Meetings() {
     </SimplePage>
   );
 }
+
+export const Route = createFileRoute('/simple/meetings/')({ component: SimpleMeetings });

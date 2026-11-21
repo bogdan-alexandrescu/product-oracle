@@ -1,6 +1,6 @@
 /**
  * Mock of the roadmap alignment and product track routes (api/oracle/roadmap/router.py,
- * CR-11) for NEXT_PUBLIC_API_MOCKS=1: roadmap items traced to their PRD version, the
+ * CR-11) for VITE_API_MOCKS=1: roadmap items traced to their PRD version, the
  * read-only alignment report, verified schedule bases, tracker records, tracks with
  * their overview and monitoring, milestones (a date only with a verified basis that
  * supports it), the tracker plan and the disabled two-way gate.

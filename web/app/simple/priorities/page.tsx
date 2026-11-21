@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { notFound } from '@/lib/nav';
 import { Suspense } from 'react';
 
@@ -8,7 +9,7 @@ import { SIMPLE_MODE } from '@/lib/simple-mode';
 import { Priorities } from './priorities';
 
 /** Simple S6 (#723, D9): priorities as a ranked list, a value/effort 2x2 and goal buckets. */
-export default function SimplePrioritiesPage() {
+function SimplePrioritiesPage() {
   if (!SIMPLE_MODE) notFound();
   return (
     <Suspense>
@@ -16,3 +17,5 @@ export default function SimplePrioritiesPage() {
     </Suspense>
   );
 }
+
+export const Route = createFileRoute('/simple/priorities/')({ component: SimplePrioritiesPage });

@@ -1,6 +1,6 @@
 /**
  * Mock of the v2 review routes (api/oracle/review/v2_router.py, lane v2-review) for
- * NEXT_PUBLIC_API_MOCKS=1: section review state per revision, assignments and due
+ * VITE_API_MOCKS=1: section review state per revision, assignments and due
  * dates, the review policy, section edits with 409 conflicts, section patches,
  * feedback campaigns, in-app notifications, the publish check and publications.
  * No screen uses them yet (the UI wave builds them on the design system); the fixtures

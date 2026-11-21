@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 
@@ -135,7 +136,7 @@ const dateOf = (l: Summary) => l.launched_at ?? l.ready_at ?? l.created_at;
  * Launches (H6): every shipped item gets a tier, a checklist, a changelog entry and a personal
  * note to the people who asked. Oracle drafts; people check, send and mark it launched.
  */
-export default function LaunchesPage() {
+function LaunchesPage() {
   return (
     <Suspense fallback={null}>
       <Launches />
@@ -1117,3 +1118,5 @@ function NoteRow({
     </li>
   );
 }
+
+export const Route = createFileRoute('/roadmap/launches/')({ component: LaunchesPage });

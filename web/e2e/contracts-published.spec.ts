@@ -21,7 +21,10 @@ function pages(dir: string, at = ''): string[] {
   const subs = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory());
   return [
     ...here,
-    ...subs.flatMap((e) => pages(path.join(dir, e.name), at ? `${at}/${e.name}` : e.name)),
+    ...subs.flatMap((e) => {
+      const name = e.name.replace(/^\$(\w+)$/, '[$1]');
+      return pages(path.join(dir, e.name), at ? `${at}/${name}` : name);
+    }),
   ].sort();
 }
 
@@ -59,19 +62,26 @@ const PUBLISHED: Record<string, () => unknown> = {
       /^ {2}(\w+): \{$/gm,
     ),
   }),
-  // How long the web's /v1 proxy (next.config.ts proxyTimeout) waits for the API.
+  // How long the web's /v1 proxy (nginx's proxy_read_timeout, #1581) waits for the API.
   'web-proxy': () => ({
-    proxy_timeout_ms: Number(
-      listed(read('next.config.ts'), /proxyTimeout:\s*([\d_]+)/, /(\d+)/g).join(''),
-    ),
+    proxy_timeout_ms:
+      1000 *
+      Number(
+        listed(
+          read('nginx', 'api-proxy.conf.template'),
+          /proxy_read_timeout\s+(\d+)s;/,
+          /(\d+)/g,
+        )[0],
+      ),
   }),
   // The app's icon, which the API's invite mail carries inline, byte for byte.
   'web-app-icon': () => ({
     sha256: createHash('sha256')
-      .update(fs.readFileSync(path.join(WEB, 'app', 'apple-icon.png')))
+      .update(fs.readFileSync(path.join(WEB, 'public', 'apple-icon.png')))
       .digest('hex'),
   }),
-  // Every page the app has (a folder of app/ with a page.tsx), for the API's links.
+  // Every page the app has (a folder of app/ with a page.tsx), for the API's links; a `$name`
+  // folder (#1581) is written `[name]`, as the API reads it.
   'web-pages': () => ({ pages: pages(path.join(WEB, 'app')) }),
 };
 

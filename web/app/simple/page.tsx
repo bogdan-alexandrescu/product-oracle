@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
@@ -212,7 +213,7 @@ const STATUS_TONE: Record<GoalTile['status'], string> = {
 /** An item's dates in a change's before or after. */
 type Dates = { start_date?: string | null; end_date?: string | null };
 
-export default function SimpleHome() {
+function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
@@ -2709,3 +2710,5 @@ function BrokenRow({
     </li>
   );
 }
+
+export const Route = createFileRoute('/simple/')({ component: SimpleHome });

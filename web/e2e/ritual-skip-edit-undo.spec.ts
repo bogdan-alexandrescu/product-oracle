@@ -18,6 +18,8 @@ async function openTheEndedRefresh(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, 'rituals'), MOCK_SCENARIO_KEY);
   await login(page);
   await page.goto('/inbox');
+  // The page's code loads after the load event (#1581): its rituals are read on Oct 23 first.
+  await expect(page.getByTestId('inbox-rituals')).toBeVisible();
   await page.clock.setSystemTime(new Date('2026-11-04T12:00:00Z'));
   await page.goto('/inbox');
   // inbox-ritual-seen: not opened yet, the Record notes row is New, never Seen.

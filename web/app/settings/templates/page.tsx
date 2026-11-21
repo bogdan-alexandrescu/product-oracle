@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useState } from 'react';
 
@@ -144,7 +145,7 @@ function TemplateInspector({
   );
 }
 
-export default function TemplatesPage() {
+function TemplatesPage() {
   const { can, capsReady } = useMe();
   const canCreate = can('create_template');
   const [showArchived, setShowArchived] = useState(false);
@@ -236,3 +237,5 @@ export default function TemplatesPage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/templates/')({ component: TemplatesPage });

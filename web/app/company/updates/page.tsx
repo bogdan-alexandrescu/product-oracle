@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useMemo, useState } from 'react';
 
@@ -29,7 +30,7 @@ import {
  * approvers see them; commenters and viewers have no tab, and this page tells them it is for
  * owners and approvers, with the way back to Company. Owners start one (New update) and choose who sees it (a row's Share or Limit).
  */
-export default function UpdatesPage() {
+function UpdatesPage() {
   const { can, capsReady, capsError } = useMe();
   if (!capsReady && !capsError) return <Loading />;
   // #370: the Updates tab's own read (company/_tabs.ts), for any item.
@@ -243,3 +244,5 @@ function Updates() {
     </>
   );
 }
+
+export const Route = createFileRoute('/company/updates/')({ component: UpdatesPage });

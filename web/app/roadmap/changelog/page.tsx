@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
@@ -132,7 +133,7 @@ function grouped(entries: Entry[]): [string, [Entry['category'], Entry[]][]][] {
  * are for every member; an approver publishes public ones, then exports them for a person to
  * post on the company's site. Oracle posts nothing outside.
  */
-export default function ChangelogPage() {
+function ChangelogPage() {
   const q = useQuery('changelog', () =>
     unwrap(api.GET('/v1/changelog', { params: { query: { limit: 500 } } })),
   );
@@ -452,3 +453,5 @@ function EntryRow({
     </li>
   );
 }
+
+export const Route = createFileRoute('/roadmap/changelog/')({ component: ChangelogPage });

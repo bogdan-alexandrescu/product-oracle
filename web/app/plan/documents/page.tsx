@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useSearchParams } from '@/lib/nav';
 import { Suspense, useState } from 'react';
 
@@ -231,7 +232,7 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
  * opens in the document view, so brief / full, Present, review and the exports work as for a
  * PRD. Approved PRDs below can each build a roadmap.
  */
-export default function RoadmapDocumentsPage() {
+function RoadmapDocumentsPage() {
   return (
     <Suspense fallback={null}>
       <RoadmapDocuments />
@@ -525,3 +526,5 @@ function RoadmapDocuments() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/plan/documents/')({ component: RoadmapDocumentsPage });

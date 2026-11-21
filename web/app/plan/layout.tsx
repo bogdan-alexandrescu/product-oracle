@@ -1,4 +1,5 @@
-import { Suspense, type ReactNode } from 'react';
+import { Outlet, createFileRoute } from '@tanstack/react-router';
+import { Suspense } from 'react';
 
 import { PageTabsProvider } from '@/components/ds';
 
@@ -10,7 +11,7 @@ import { PlanNav } from './_nav';
  * the strip sits at the same height whether a tab's action is a primary button, a small
  * button or a segmented control, and switching tabs does not move the page.
  */
-export default function PlanLayout({ children }: { children: ReactNode }) {
+function PlanLayout() {
   return (
     <PageTabsProvider
       tabs={
@@ -20,8 +21,10 @@ export default function PlanLayout({ children }: { children: ReactNode }) {
       }
     >
       <div data-plan-tabs-page className="contents min-[601px]:[&_[data-page-header]>h1]:py-1">
-        {children}
+        <Outlet />
       </div>
     </PageTabsProvider>
   );
 }
+
+export const Route = createFileRoute('/plan')({ component: PlanLayout });
