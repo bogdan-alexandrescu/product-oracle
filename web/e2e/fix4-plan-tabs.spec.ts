@@ -211,9 +211,11 @@ test.describe('phone', () => {
     const filter = visible(page, 'dates-filter');
     const chips = filter.getByRole('button');
     await expect(chips).toHaveCount(4);
-    // The row is measured once the counts are in: the header's summary chips come with them and
-    // push the row down (82 px on a phone), so a row measured before that moves under the test.
+    // The row is measured once the page has loaded: the header's summary chips (with the counts)
+    // and its Add a date source button push the row down (34 + 48 px on a phone), so a row
+    // measured before that moves under the test.
     await expect(chips.last()).toHaveText(/^All\s*\d+$/);
+    await expect(header(page).getByRole('button', { name: 'Add a date source' })).toBeVisible();
     const first = (await chips.first().boundingBox())!;
     for (const chip of await chips.all()) {
       await chip.scrollIntoViewIfNeeded();
