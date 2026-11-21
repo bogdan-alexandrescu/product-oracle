@@ -211,6 +211,9 @@ test.describe('phone', () => {
     const filter = visible(page, 'dates-filter');
     const chips = filter.getByRole('button');
     await expect(chips).toHaveCount(4);
+    // The row is measured once the counts are in: the header's summary chips come with them and
+    // push the row down (82 px on a phone), so a row measured before that moves under the test.
+    await expect(chips.last()).toHaveText(/^All\s*\d+$/);
     const first = (await chips.first().boundingBox())!;
     for (const chip of await chips.all()) {
       await chip.scrollIntoViewIfNeeded();
