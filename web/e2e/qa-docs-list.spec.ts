@@ -66,7 +66,8 @@ test.describe('desktop', () => {
     await expect(row(page, 'Referral link PRD')).toContainText('Goal-traced PRD');
     await expect(table).not.toContainText('oracle-default');
     await expect(table.locator('.font-mono')).toHaveCount(0);
-    await row(page, 'Referral link PRD').click();
+    // Selected beside its links: the row's middle is its Latest link, which opens that version.
+    await pick(page, 'Referral link PRD');
     await expect(inspector(page).getByTestId('inspector-template')).toHaveText('Goal-traced PRD');
     await expect(inspector(page).getByTestId('inspector-theme')).toHaveText('Clean document');
     await expect(inspector(page)).not.toContainText('clean-document');
