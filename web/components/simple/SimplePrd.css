@@ -148,7 +148,9 @@
   column-gap: 8px;
   align-items: start;
 }
-.simple-calm li span.flex-1:has(> .simple-prd-code:first-child) > :not(.simple-prd-code) {
+/* The words after the code, by sibling, not :has(): a :has() whose subject is :not() restyles the
+   whole page whenever a node is added anywhere (a drag's live label, every frame). */
+.simple-calm li span.flex-1 > .simple-prd-code:first-child ~ :not(.simple-prd-code) {
   grid-column: 2;
   justify-self: start;
   margin-left: 0;
