@@ -72,7 +72,6 @@ Set under Settings, Secrets and variables, Actions, **Variables** (none of them 
 | `ORACLE_WIF_PROVIDER` | `projects/<project-number>/locations/global/workloadIdentityPools/oracle-github/providers/oracle-main` | the provider below |
 | `ORACLE_DEPLOY_SERVICE_ACCOUNT` | `oracle-deploy@<project-id>.iam.gserviceaccount.com` | the deploy identity |
 | `ORACLE_SQL_INSTANCE` | `<instance>` | the Cloud SQL instance to back up |
-| `ORACLE_API_INTERNAL_URL` | `https://oracle-api-<hash>-<region-code>.a.run.app` | the web image's `/v1` proxy target (as the manual deploy builds it today) |
 | `ORACLE_API_VERSION_URL` | `https://<host>/...` | the API's `/version`, reachable from GitHub's runners |
 | `ORACLE_WEB_VERSION_URL` | `https://<host>/version` | the web's `/version`, reachable from GitHub's runners |
 | `ORACLE_IAP_AUDIENCE_API` | `<api-iap-oauth-client-id>` | the audience of the ID token sent to the API's `/version` |

@@ -235,7 +235,7 @@ jobs:
       - run: npm run lint
       # #1584: the web is Prettier-formatted, and types are checked without a full build.
       - run: npm run format:check
-      - run: npx next typegen && npx tsc --noEmit -p .
+      - run: npx tsc --noEmit -p .
       # Logic and render tests beside their module (#1583); Playwright keeps the flows a person drives.
       - name: Unit tests (Vitest)
         run: npm run test:unit
@@ -378,8 +378,6 @@ jobs:
       API_SERVICE: ${{ vars.ORACLE_API_SERVICE || 'oracle-api' }}
       WEB_SERVICE: ${{ vars.ORACLE_WEB_SERVICE || 'oracle-web' }}
       MIGRATE_JOB: ${{ vars.ORACLE_MIGRATE_JOB || 'oracle-api-migrate' }}
-      # The web image's /v1 proxy target, fixed at build time (web/Dockerfile).
-      API_INTERNAL_URL: ${{ vars.ORACLE_API_INTERNAL_URL }}
       # Each service's /version, reachable from GitHub's runners.
       API_VERSION_URL: ${{ vars.ORACLE_API_VERSION_URL }}
       WEB_VERSION_URL: ${{ vars.ORACLE_WEB_VERSION_URL }}
@@ -397,7 +395,7 @@ jobs:
       - name: Every repository variable is set
         run: |
           missing=""
-          for v in PROJECT REGION REGISTRY WIF_PROVIDER DEPLOY_SA SQL_INSTANCE API_INTERNAL_URL API_VERSION_URL WEB_VERSION_URL IAP_AUDIENCE_API IAP_AUDIENCE_WEB; do
+          for v in PROJECT REGION REGISTRY WIF_PROVIDER DEPLOY_SA SQL_INSTANCE API_VERSION_URL WEB_VERSION_URL IAP_AUDIENCE_API IAP_AUDIENCE_WEB; do
             [ -n "${!v}" ] || missing="$missing $v"
           done
           [ -z "$missing" ] || { echo "Repository variables not set (docs/deploy/actions-deploy.md):$missing"; exit 1; }
@@ -457,7 +455,8 @@ jobs:
             [ "$s" = api ] && done_="$API_SERVED" || done_="$WEB_SERVED"
             [ "$done_" = true ] && continue
             args=(--build-arg GIT_SHA="$SHA")
-            [ "$s" = web ] && args+=(--build-arg API_INTERNAL_URL="$API_INTERNAL_URL")
+            # The web image gets no API_INTERNAL_URL: in production the load balancer sends /v1 to the API,
+            # and a set value would turn on nginx's local-only /v1 proxy (web/Dockerfile).
             docker build "${args[@]}" -t "$REGISTRY/oracle-$s:$SHA" "$s"
             docker push "$REGISTRY/oracle-$s:$SHA"
             # Deployed by digest: what was built here is what runs.
