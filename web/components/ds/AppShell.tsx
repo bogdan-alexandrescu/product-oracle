@@ -1118,7 +1118,7 @@ export function panelHidden(pathname: string): boolean {
  */
 function HopDock() {
   const pathname = usePathname();
-  const { me } = useMe();
+  const { me, loading } = useMe();
   const open = usePanelOpen();
   const shown = !!me && !panelHidden(pathname);
   const simple = modeOf(pathname) === 'simple';
@@ -1171,7 +1171,16 @@ function HopDock() {
       window.clearTimeout(stop);
     };
   }, [open]);
-  if (!shown) return null;
+  // While /v1/me loads, the strip's column is kept (as the rail is), so a signed-in page never
+  // narrows by 45 px once it arrives.
+  if (!shown) {
+    return loading && !simple && !panelHidden(pathname) && !bare(pathname) ? (
+      <div
+        aria-hidden
+        className="col-start-3 row-start-1 h-dvh w-[45px] border-l border-line bg-surface max-[600px]:hidden"
+      />
+    ) : null;
+  }
   if (simple && !open) return null;
   // Sticky, the dock is its own stacking layer: z-40 keeps it (and the drawer that overlays
   // the page below 1600 px) above anything in the page that sets its own z-index.
