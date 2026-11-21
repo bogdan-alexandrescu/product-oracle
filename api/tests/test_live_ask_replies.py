@@ -109,7 +109,11 @@ class Claude:
         raise AssertionError("the fake claude never started")
 
     def answer(self, text_: str) -> None:
-        self.go.write_text(text_)
+        # Whole or not at all: the fake reads go as soon as it exists, and a half-written
+        # one is an empty answer (a transient failure: the job is retried, its line pending).
+        part = self.go.with_name("go.part")
+        part.write_text(text_)
+        part.replace(self.go)
 
 
 @pytest.fixture
