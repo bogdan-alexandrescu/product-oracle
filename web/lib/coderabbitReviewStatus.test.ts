@@ -1,8 +1,7 @@
 // #1560: npm run test:unit (Vitest, #1583).
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { reviewStatus } from './coderabbitReviewStatus.ts';
-import type { PrView } from './coderabbitReviewStatus.ts';
+import { reviewStatus, type PrView } from './coderabbitReviewStatus.ts';
 
 const HEAD = '1111111111111111111111111111111111111111';
 const OLD = '2222222222222222222222222222222222222222';

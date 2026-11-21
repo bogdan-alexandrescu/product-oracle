@@ -26,7 +26,7 @@ import { FlowPanel, subjectOf } from '@/components/simple/FlowVisual';
 import { FlowDiagram } from '@/components/simple/FlowViews';
 import { usePanelOpen } from '@/components/hop/open-state';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
-import { sendCardChanged } from '@/lib/api/simple-chat';
+import { sendCardChanged, ITEM_CHANGED_EVENT } from '@/lib/api/simple-chat';
 import { calendarDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
 import {
@@ -43,7 +43,6 @@ import { LoadError, Loading } from '@/components/ui';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { FeaturePanel, useItemChanged } from '../roadmap/_panel';
-import { ITEM_CHANGED_EVENT } from '@/lib/api/simple-chat';
 import { FeatureMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { Named, NotInGt } from '@/components/simple/FeatureName';
 import {

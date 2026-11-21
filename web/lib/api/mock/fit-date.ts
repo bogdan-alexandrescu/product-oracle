@@ -18,11 +18,11 @@ import { reply } from './typed';
 import * as fd from './fit-date-engine';
 import { PLAN_HARD_TARGET, PLAN_TARGET } from './fit-date-engine';
 import plan from './fit-date-plan.json';
-
-export { round1 } from './fit-date-engine';
 import { stableUuid } from './ids';
 import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { fitDateApproved, roadmapId } from './simple-roadmap';
+
+export { round1 } from './fit-date-engine';
 
 type Goal = Schemas['FitGoalOut'];
 type Answer = Schemas['FitAnswerOut'];

@@ -127,7 +127,7 @@ import {
   estimateOnly,
   estimateWords,
   shownDates,
-  storedDates,
+  type storedDates,
   suggestion,
   undo,
   type Change,

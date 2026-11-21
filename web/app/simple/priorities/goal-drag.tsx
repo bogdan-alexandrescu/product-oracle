@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Schemas } from '@/lib/api/client';
 
 import { DragGhost, featureOf, type useBucketWrites } from './goal-buckets';
-import { planFeatures, weeksWords } from './plan-buckets';
+import { type planFeatures, weeksWords } from './plan-buckets';
 
 type Buckets = Schemas['GoalBucketsOut'];
 type Feature = ReturnType<typeof planFeatures>[number];

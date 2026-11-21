@@ -4,7 +4,7 @@ import { Link, useSearchParams } from '@/lib/nav';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
-  Basis,
+  type Basis,
   DateBasisDialog,
   KIND_LABEL,
   RejectBasisDialog,
