@@ -22,6 +22,18 @@ const router = createRouter({
   scrollRestoration: true,
 });
 
+// A link changes the URL once the code of the page it opens has loaded, as under Next, so the
+// address never names a page while the one before it is still on screen. Commits keep their order.
+const commitLocation = router.commitLocation;
+let committing: Promise<unknown> = Promise.resolve();
+router.commitLocation = (next) => {
+  const routes = next.external ? [] : router.getMatchedRoutes(next.pathname)[0];
+  const code = Promise.all(routes.map((r) => router.loadRouteChunk(r))).catch(() => undefined);
+  const done = Promise.all([code, committing]).then(() => commitLocation(next));
+  committing = done.catch(() => undefined);
+  return done;
+};
+
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
