@@ -22,7 +22,7 @@ import { useQuery } from '@/lib/use-query';
 
 import { NoReportYet } from './_empty';
 import { GenerateDialog } from './_generate';
-import { type ReportItem } from './_lib';
+import type { ReportItem } from './_lib';
 
 const SLACK_KIND = {
   posted: 'pass',
