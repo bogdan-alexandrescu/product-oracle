@@ -18,6 +18,10 @@ const PHONE = { width: 390, height: 844 };
 /** From the rail, as a person gets there. */
 async function openRequests(page: Page) {
   const nav = page.getByTestId('nav-requests').filter({ visible: true });
+  // The shell draws after sign-in in the single-page app: the rail or the phone's tab bar first.
+  await expect(
+    nav.or(page.getByTestId('tab-more').filter({ visible: true })).first(),
+  ).toBeVisible();
   if (await nav.count()) await nav.first().click();
   else {
     await page.getByTestId('tab-more').click();

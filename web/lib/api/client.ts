@@ -10,6 +10,10 @@ import type { components, paths } from './schema';
  */
 export const MOCK_MODE = process.env.VITE_API_MOCKS === '1';
 
+// Specs act as Oracle's ticker through this from the page's first frame (#1581: a page can
+// load with no mock call made yet); the production build drops it with the mock.
+if (MOCK_MODE) (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch = mockFetch;
+
 // Same-origin: nginx (vite.config.mts in dev) proxies /v1/* to the API, so the session cookie
 // set by POST /v1/auth/login is sent on every call. Reads of the same URL are shared
 // (./shared-reads, simple-call-budget).

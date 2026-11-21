@@ -3,7 +3,6 @@
 import { usePathname } from '@/lib/nav';
 import {
   createContext,
-  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -15,7 +14,6 @@ import {
 
 import { api, type Me, type Schemas } from '@/lib/api/client';
 import type { operations } from '@/lib/api/schema';
-import { streamed } from '@/lib/boundaries';
 import { DEFAULT_ZONE, setDisplayZone } from '@/lib/zone';
 
 export type Role = Me['role'];
@@ -78,29 +76,14 @@ export function MeProvider({ children }: { children: ReactNode }) {
     loading: true,
   });
   const seq = useRef(0);
-  // True once the first answer is drawn: the server's page is hydrated by then.
-  const hydrated = useRef(false);
-  useEffect(() => {
-    if (!state.loading) hydrated.current = true;
-  }, [state.loading]);
 
   const refresh = useCallback(async () => {
     const call = ++seq.current;
     const res = await api.GET('/v1/me').catch(() => undefined);
-    const next = { me: res?.response.ok ? (res.data ?? null) : null, loading: false };
-    if (hydrated.current) {
-      // Later pages are drawn on the client: the answer lands at once.
-      if (call === seq.current) setState(next);
-      return;
-    }
-    // trainag-mock-fixes-3: a change of the member reaching a streamed boundary whose content
-    // is not in place yet makes React draw it again on the client and leave the server's copy
-    // hidden under <body> (a second New PRD form; the shell drawn twice). On the first page,
-    // wait for its boundaries, then set it as a transition, so React hydrates them first.
-    await streamed();
-    if (call !== seq.current) return;
-    // Only the latest call wins, so a slow answer never overwrites a newer one.
-    startTransition(() => setState(next));
+    // Only the latest call wins, so a slow answer never overwrites a newer one. Every page is
+    // drawn in the browser (#1581): no server copy to hydrate first, the answer lands at once.
+    if (call === seq.current)
+      setState({ me: res?.response.ok ? (res.data ?? null) : null, loading: false });
   }, []);
 
   const clear = useCallback(() => {
