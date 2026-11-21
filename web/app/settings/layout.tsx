@@ -1,4 +1,5 @@
-import { Suspense, type ReactNode } from 'react';
+import { Outlet, createFileRoute } from '@tanstack/react-router';
+import { Suspense } from 'react';
 
 import { Page, PageTabsProvider } from '@/components/ds';
 
@@ -14,7 +15,7 @@ const ONE_TITLE_ROW =
   'min-[601px]:[&_[data-page-header]>[data-page-back]]:flex-none min-[601px]:[&_[data-page-header]>[data-page-back]]:basis-auto min-[601px]:[&_[data-page-header]>h1]:leading-10';
 
 /** Every settings page: the page (title, Settings tabs under it, table, inspector). */
-export default function SettingsLayout({ children }: { children: ReactNode }) {
+function SettingsLayout() {
   return (
     <Page className={ONE_TITLE_ROW}>
       {/* qa4-shell-13: the section's name above every Settings page's own title (a phone's page picker says it there). */}
@@ -32,9 +33,13 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         }
       >
         <Suspense fallback={<div className="h-12" />}>
-          <SettingsGate>{children}</SettingsGate>
+          <SettingsGate>
+            <Outlet />
+          </SettingsGate>
         </Suspense>
       </PageTabsProvider>
     </Page>
   );
 }
+
+export const Route = createFileRoute('/settings')({ component: SettingsLayout });

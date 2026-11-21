@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useMemo, useState } from 'react';
 
@@ -127,7 +128,7 @@ function pickNeeds(rows: StatedNeed[], max: number): { rows: Need[]; more: numbe
  * per hidden goal. An owner's Home also reads the Claude account pool, for the notice that
  * Oracle's AI is off (#403).
  */
-export default function HomePage() {
+function HomePage() {
   const { can, capsReady } = useMe();
   // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
   const canWrite = can('start_draft', true);
@@ -587,3 +588,5 @@ export default function HomePage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/home/')({ component: HomePage });

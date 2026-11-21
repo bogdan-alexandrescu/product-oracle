@@ -1,5 +1,5 @@
 /**
- * Mock of the intake routes (api/oracle/intake/router.py) for NEXT_PUBLIC_API_MOCKS=1:
+ * Mock of the intake routes (api/oracle/intake/router.py) for VITE_API_MOCKS=1:
  * New product idea, the Opportunity and Gaps summary, question batches, answers,
  * decisions and proposals. It works on the v2 mock tables (./v2.ts) and keeps the API's
  * shapes and role rules; its analysis is a fixed, simplified stand-in for the engine

@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link } from '@/lib/nav';
 import { useState } from 'react';
 
@@ -86,7 +87,7 @@ const COLUMNS: Column<ReportItem>[] = [
 ];
 
 /** Plan › Reports: every report, newest first; owners Generate now. */
-export default function ReportsPage() {
+function ReportsPage() {
   const q = useQuery('alignment-reports', () =>
     unwrap(api.GET('/v1/alignment-reports', { params: { query: { limit: 200 } } })),
   );
@@ -142,3 +143,5 @@ export default function ReportsPage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/plan/reports/')({ component: ReportsPage });

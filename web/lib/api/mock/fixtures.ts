@@ -1,5 +1,5 @@
 /**
- * Generic, fictional PRD drafts used by mock mode (NEXT_PUBLIC_API_MOCKS=1).
+ * Generic, fictional PRD drafts used by mock mode (VITE_API_MOCKS=1).
  * No real company, product or customer names: this repository is public.
  */
 

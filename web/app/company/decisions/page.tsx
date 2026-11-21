@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useSearchParams } from '@/lib/nav';
 import {
   Suspense,
@@ -80,7 +81,7 @@ function useIsPhone(): boolean {
   );
 }
 
-export default function DecisionsPage() {
+function DecisionsPage() {
   return (
     <Suspense fallback={<PageSkeleton bare />}>
       <Decisions />
@@ -674,3 +675,5 @@ function Decisions() {
     </>
   );
 }
+
+export const Route = createFileRoute('/company/decisions/')({ component: DecisionsPage });

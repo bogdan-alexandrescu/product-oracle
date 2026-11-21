@@ -1,6 +1,6 @@
 /**
  * Mock of the customer interview routes (api/oracle/interviews, C3 lane 1) for
- * NEXT_PUBLIC_API_MOCKS=1: members create an interview, Oracle drafts its guide (a queued job
+ * VITE_API_MOCKS=1: members create an interview, Oracle drafts its guide (a queued job
  * that finishes on its own a moment later), members edit it while it is a Draft, create the
  * one-time link and withdraw it; the customer answers through the public routes, served
  * without a member's session and keyed by the link's token.

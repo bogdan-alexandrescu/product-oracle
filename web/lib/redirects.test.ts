@@ -7,22 +7,22 @@ import { REDIRECTS, resolveRedirect } from './redirects';
 
 /*
  * #1580: the one redirect table (lib/redirects.ts) and the helper that applies it.
- * protects=an old link that lands on a missing page, or a table entry proxy.ts never sees;
+ * protects=an old link that lands on a missing page, or a table entry nginx never answers;
  * fails_when=an entry's `to` (or `bare`) names no page under app/, an entry does not resolve,
- * or proxy.ts's matcher is not the table's `from`s;
+ * or nginx/default.conf.template has no location for an entry;
  * no_claim=the redirect over HTTP (the specs that open an old address drive that).
  */
 
 const APP = join(__dirname, '..', 'app');
 
-/** Whether a path (no query) is served by a page under app/, taking any [param] folder. */
+/** Whether a path (no query) is served by a page under app/, taking any $param folder. */
 function hasPage(path: string, dir = APP): boolean {
   const [head, ...rest] = path.split('/').filter(Boolean);
   if (head === undefined) return existsSync(join(dir, 'page.tsx'));
   const names = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory());
   const groups = names.filter((d) => /^\(.*\)$/.test(d.name));
   const exact = names.filter((d) => d.name === head);
-  const params = names.filter((d) => /^\[[^.]/.test(d.name));
+  const params = names.filter((d) => /^\$\w/.test(d.name));
   return [...exact, ...params, ...groups].some((d) =>
     hasPage(/^\(.*\)$/.test(d.name) ? path : `/${rest.join('/')}`, join(dir, d.name)),
   );
@@ -62,9 +62,15 @@ test('the helper carries segments and the query, and sends a bare request to `ba
   expect(resolveRedirect('/baselines', '')).toBeNull();
 });
 
-test("proxy.ts's matcher is the table's `from`s", () => {
-  const src = readFileSync(join(__dirname, '..', 'proxy.ts'), 'utf8');
-  const matcher = src.match(/matcher:\s*\[([^\]]*)\]/)?.[1] ?? '';
-  const listed = [...matcher.matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  expect(listed).toEqual(REDIRECTS.map((r) => r.from));
+test('nginx answers each entry, as the router does', () => {
+  const conf = readFileSync(join(__dirname, '..', 'nginx', 'default.conf.template'), 'utf8');
+  // One location per entry, by its literal path (the dynamic part is nginx's own pattern).
+  for (const r of REDIRECTS) {
+    const head = r.from.replace(/\/:\w+\*?$/, '');
+    expect(conf, r.from).toContain(head);
+    const at = new RegExp(
+      `location [=~^ ]*\\^?${head.replace(/\//g, '\\/')}[^{]*\\{[^}]*return ${r.permanent ? 308 : 307} `,
+    );
+    expect(conf, r.from).toMatch(at);
+  }
 });

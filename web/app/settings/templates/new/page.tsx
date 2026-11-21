@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useRouter } from '@/lib/nav';
 import { useState, type FormEvent } from 'react';
 
@@ -50,7 +51,7 @@ function bodyOf(theme: string, when: string, secs: Sec[]) {
  * Markdown is one click away under Edit as Markdown. The details keep its name (its key is made
  * from the name), kind, theme and when to suggest it.
  */
-export default function NewTemplatePage() {
+function NewTemplatePage() {
   const router = useRouter();
   const themes = useQuery('new-template-themes', () => unwrap(api.GET('/v1/themes')));
   const [name, setName] = useState('');
@@ -267,3 +268,5 @@ export default function NewTemplatePage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/templates/new/')({ component: NewTemplatePage });

@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useSearchParams } from '@/lib/nav';
 import { Suspense, useRef, useState, type KeyboardEvent } from 'react';
 
@@ -28,7 +29,7 @@ const TABS: { value: Tab; label: string; testId: string }[] = [
   { value: 'win-loss', label: 'Win and loss', testId: 'market-tab-win-loss' },
 ];
 
-export default function MarketPage() {
+function MarketPage() {
   return (
     <Suspense fallback={<PageSkeleton bare />}>
       <Market />
@@ -202,3 +203,5 @@ function MarketTabs({
     </div>
   );
 }
+
+export const Route = createFileRoute('/company/market/')({ component: MarketPage });

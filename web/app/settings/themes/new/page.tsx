@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useRouter } from '@/lib/nav';
 import { useState, type FormEvent } from 'react';
 
@@ -18,7 +19,7 @@ import { errorMessage, useQuery } from '@/lib/use-query';
 type ThemeKind = Schemas['ThemeOut']['kind'];
 
 /** New theme: a name (its key made from it, F-76), starting from a copy of an existing theme; then the editor. */
-export default function NewThemePage() {
+function NewThemePage() {
   const router = useRouter();
   const themes = useQuery('themes|all', () =>
     unwrap(api.GET('/v1/themes', { params: { query: { include_archived: true } } })),
@@ -204,3 +205,5 @@ export default function NewThemePage() {
     </>
   );
 }
+
+export const Route = createFileRoute('/settings/themes/new/')({ component: NewThemePage });

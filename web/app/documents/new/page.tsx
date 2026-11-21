@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { NewDraft, NewPrd } from '@/components/NewDraft';
@@ -21,10 +22,12 @@ function Picker() {
   );
 }
 
-export default function NewDraftPage() {
+function NewDraftPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
       <Picker />
     </Suspense>
   );
 }
+
+export const Route = createFileRoute('/documents/new/')({ component: NewDraftPage });

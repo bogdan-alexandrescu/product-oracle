@@ -1,6 +1,6 @@
 /**
  * Mock of the blocker strategy routes (api/oracle/blockers/router.py) for
- * NEXT_PUBLIC_API_MOCKS=1. Blockers are baseline constraints with a strategy; their
+ * VITE_API_MOCKS=1. Blockers are baseline constraints with a strategy; their
  * options, experiments and resolution events are the v2 rows of ./v2.ts, so the
  * foundation's read routes (/v1/blocker-options ...) see every write made here.
  *

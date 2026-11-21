@@ -1,7 +1,10 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { MembersSettings } from '@/components/MembersSettings';
 
-export default function MembersPage() {
+function MembersPage() {
   return <MembersSettings />;
 }
+
+export const Route = createFileRoute('/settings/members/')({ component: MembersPage });

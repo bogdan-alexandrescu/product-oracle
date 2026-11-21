@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { InfoTip, Panel, Sheet, Split, ViewOnly } from '@/components/ds';
@@ -39,7 +40,7 @@ function useIsPhone(): boolean {
  * its inspector, and the drift findings. Owners start a vision or strategy here, or draft
  * its next version with Oracle; the documents themselves open from the cards.
  */
-export default function StrategyPage() {
+function StrategyPage() {
   const { can, capsReady } = useMe();
   // #370: a vision or a product strategy is an owner's to start: POST /v1/drafts lets an
   // approver in by kind, and its per-item role (owner) is the one these kinds need.
@@ -243,3 +244,5 @@ export default function StrategyPage() {
     </div>
   );
 }
+
+export const Route = createFileRoute('/company/strategy/')({ component: StrategyPage });

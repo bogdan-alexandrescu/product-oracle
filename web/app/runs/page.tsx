@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { Link, useRouter } from '@/lib/nav';
 import { useState } from 'react';
 
@@ -62,7 +63,7 @@ function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
   return d ? docLabel(d) : runName(r);
 }
 
-export default function RunsPage() {
+function RunsPage() {
   const q = useQuery('runs', () => unwrap(api.GET('/v1/runs')));
   // Document titles, to name each run by its document; the slug in words until they load.
   // #1586: titles that could not be read say so above the list; the runs stay.
@@ -448,3 +449,5 @@ function SentBackChip({ summary }: { summary: string }) {
     </Chip>
   );
 }
+
+export const Route = createFileRoute('/runs/')({ component: RunsPage });

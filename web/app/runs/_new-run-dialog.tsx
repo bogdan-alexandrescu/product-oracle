@@ -9,7 +9,7 @@ import { ErrorNote, INPUT, Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
 import { prdsFirst, usePrds } from '@/lib/prd-order';
-import { errorMessage, useQuery } from '@/lib/use-query';
+import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 
 import {
   EstimateSummary,
@@ -161,6 +161,9 @@ export function NewRunDialog({
       await unwrap(api.POST('/v1/runs/{run_id}/start', path));
       // #259: an owner approves their own run's cost here rather than on the run page.
       if (ownerApproves) await unwrap(api.POST('/v1/runs/{run_id}/approve', path));
+      // The page the run was started from reads again: until the run page has drawn, Back
+      // returns to that page as it was, and a live run changes what it shows (#1581).
+      dataChanged();
       router.push(`/runs/${draft.id}`);
     } catch (e) {
       setError(errorMessage(e));

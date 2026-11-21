@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useRouter } from '@/lib/nav';
 import { useEffect, useState } from 'react';
 
@@ -18,7 +19,7 @@ import { GenerateDialog } from '../_generate';
  * report. With no report yet it says so (qa-plan-24) and, for a member who may, offers
  * Generate now, instead of landing on the empty list without a word.
  */
-export default function LatestReportPage() {
+function LatestReportPage() {
   const router = useRouter();
   const { can, capsReady } = useMe();
   const [open, setOpen] = useState(false);
@@ -58,3 +59,5 @@ export default function LatestReportPage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/plan/reports/latest/')({ component: LatestReportPage });

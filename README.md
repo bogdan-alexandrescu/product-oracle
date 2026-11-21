@@ -33,8 +33,8 @@ hashes are stored. The admin's email is required, through `ARGS`
 `python -m oracle.seed --help`): there is no default admin, and reserved example domains
 (example.com, *.test, ...) are refused outside the test build.
 
-The browser only talks to the web app: Next.js proxies `/v1/*` and `/healthz` to the
-API (`next.config.ts`), so the session cookie is same-origin and needs no CORS.
+The browser only talks to the web app: nginx proxies `/v1/*` and `/healthz` to the
+API (`web/nginx/`; `vite.config.mts` in dev), so the session cookie is same-origin and needs no CORS.
 
 ### First run (about 5 minutes)
 

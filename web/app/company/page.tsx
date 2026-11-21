@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { useRouter } from '@/lib/nav';
 import { useEffect } from 'react';
 
@@ -12,7 +13,7 @@ import { visibleTabs } from './_nav';
  * /company opens the first tab the member may see (Strategy). It draws no title of its own
  * (qa-shell-26): the tab it opens has the one H1 "Company".
  */
-export default function CompanyPage() {
+function CompanyPage() {
   const router = useRouter();
   const { can, capsReady } = useMe();
   useEffect(() => {
@@ -22,3 +23,5 @@ export default function CompanyPage() {
   }, [can, capsReady, router]);
   return <Loading />;
 }
+
+export const Route = createFileRoute('/company/')({ component: CompanyPage });

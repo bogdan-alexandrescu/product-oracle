@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { notFound } from '@/lib/nav';
 import { Suspense } from 'react';
 
@@ -9,7 +10,7 @@ import { SimpleDecisions } from './_decisions';
 import { PageSkeleton } from '@/components/ds';
 
 /** Simple S8 (#723): Decisions, direction B "By meeting". */
-export default function SimpleDecisionsPage() {
+function SimpleDecisionsPage() {
   if (!SIMPLE_MODE) notFound();
   return (
     <Suspense fallback={<PageSkeleton />}>
@@ -17,3 +18,5 @@ export default function SimpleDecisionsPage() {
     </Suspense>
   );
 }
+
+export const Route = createFileRoute('/simple/decisions/')({ component: SimpleDecisionsPage });

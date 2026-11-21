@@ -19,10 +19,12 @@ function routes(dir: string): string[] {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) out.push(...routes(full));
-    else if (name === 'page.tsx') {
+    else if (name === 'page.tsx' || name === '$.tsx') {
       const parts = relative(APP, dir)
         .split(sep)
         .filter((p) => p && !/^\(.*\)$/.test(p));
+      // #1581: a `$.tsx` route is the rest of the path under its folder.
+      if (name === '$.tsx') parts.push('$');
       out.push(`/${parts.join('/')}`);
     }
   }
@@ -45,5 +47,5 @@ test('every route has a page-context provider', () => {
 });
 
 test('the run review page has its own provider', () => {
-  expect(PAGE_CONTEXT['/runs/[id]/review/[checkpoint]'].provider).toBe('own');
+  expect(PAGE_CONTEXT['/runs/$id/review/$checkpoint'].provider).toBe('own');
 });

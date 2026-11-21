@@ -1,5 +1,6 @@
 'use client';
 
+import { createFileRoute } from '@tanstack/react-router';
 import { RoleBadge } from '@/components/RoleBadge';
 import { Link, useRouter } from '@/lib/nav';
 import { useRef, useState, useSyncExternalStore } from 'react';
@@ -439,7 +440,7 @@ function DocInspector({
   );
 }
 
-export default function DocumentsPage() {
+function DocumentsPage() {
   // PRDs only: roadmaps have their own screen (Plan).
   const q = useQuery('documents|prd', () =>
     unwrap(api.GET('/v1/documents', { params: { query: { kind: 'prd' } } })),
@@ -681,3 +682,5 @@ export default function DocumentsPage() {
     </Page>
   );
 }
+
+export const Route = createFileRoute('/documents/')({ component: DocumentsPage });

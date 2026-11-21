@@ -122,7 +122,6 @@ function Preview({
       >
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
         {light && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={light} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />
         )}
         <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_LIGHT.color }}>
@@ -135,10 +134,7 @@ function Preview({
         style={{ ...PREVIEW_DARK, ...edge }}
       >
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
-        {dark && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={dark} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />
-        )}
+        {dark && <img src={dark} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />}
         <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_DARK.color }}>
           {name}
         </span>

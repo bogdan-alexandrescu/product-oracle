@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from './test';
 
 import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
-import { gateReason, openCriticalCount, type Summary } from '../app/intakes/[id]/_lib';
+import { gateReason, openCriticalCount, type Summary } from '../app/intakes/$id/_lib';
 import { login } from './helpers';
 
 /*

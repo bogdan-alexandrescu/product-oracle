@@ -1,5 +1,6 @@
 'use client';
 
+import { Outlet, createFileRoute } from '@tanstack/react-router';
 import { usePathname } from '@/lib/nav';
 import { Suspense, type ReactNode } from 'react';
 
@@ -16,11 +17,13 @@ import { SIMPLE_HOME } from '@/lib/experience';
  * on; nothing once Simple is known to be off. A discussion link (`?discussion=`, the Inbox's
  * Review changes) opens its thread on any Simple page (ask-phone QA row 3).
  */
-export default function SimpleLayout({ children }: { children: ReactNode }) {
+function SimpleLayout() {
   // The pathname is read on the client only (a prerender draws nothing, as before).
   return (
     <Suspense fallback={null}>
-      <Gate>{children}</Gate>
+      <Gate>
+        <Outlet />
+      </Gate>
     </Suspense>
   );
 }
@@ -40,3 +43,5 @@ function Gate({ children }: { children: ReactNode }) {
   // qa-shell-20: every other Simple page shows its frame too, never a blank page.
   return home ? <HomeSkeleton /> : <SimplePageSkeleton />;
 }
+
+export const Route = createFileRoute('/simple')({ component: SimpleLayout });

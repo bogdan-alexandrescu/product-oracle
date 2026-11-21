@@ -32,7 +32,7 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
   the workspace (5 GiB, checkpointed). Use `$TMPDIR`. Why: `docs/lessons/README.md`.
 - A migration, if one is needed, chains after the branch's own head, so
   `cd api && uv run alembic heads` shows one head (CLD renumbers when trains merge).
-- Web checks, from `web/`: `npx next typegen && npx tsc --noEmit -p .`, then `npm run lint`,
+- Web checks, from `web/`: `npx tsc --noEmit -p .`, then `npx vite build` (Vite does not type-check), then `npm run lint`,
   then `npm run format:check` (Prettier; `npm run format` writes it), then `npm run test:unit`
   (Vitest: logic and render tests beside their module).
 - Every user-facing change gets a mock-backed Playwright spec in `web/e2e` that drives the UI
@@ -59,7 +59,7 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
 
 - Look for new problems the fix brings.
 - Run ruff, the touched pytest files (at most `-n 2`, in groups, with the test database set
-  up as above), web tsc (after `npx next typegen`) and lint if the web changed, and the
+  up as above), web tsc and lint if the web changed, and the
   touched Playwright specs if Chromium starts; otherwise say which you could not run.
 - Same limits as building: 8 GiB, no literal /tmp, no pattern kills, no company or
   customer data.
@@ -89,7 +89,7 @@ E2E_PORT=3393 npx playwright test e2e/<spec>.spec.ts ... --workers=2 > "$TMPDIR/
 ```
 
 - `npx playwright test` builds and starts the mock app itself (playwright.config.ts's
-  webServer runs `npm run build:mock && npm run start:mock -- -p $E2E_PORT`), so a separate
+  webServer runs `npm run build:mock && npm run start:mock -- --port $E2E_PORT`: `vite build --mode mock`, then `vite preview`), so a separate
   `npm run build:mock` first only builds it twice.
 - The port comes from `E2E_PORT` (default 3100); `PORT` is not read.
 - Run it in the foreground; never background it with & or nohup.

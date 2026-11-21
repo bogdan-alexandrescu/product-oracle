@@ -1,6 +1,6 @@
 /**
  * #1580: every redirect of the web, in one table, applied by one helper (resolveRedirect),
- * which proxy.ts runs today and the router serves after the move off Next.
+ * which nginx serves to a full page load and the router (app/__root.tsx) to an in-app one.
  *
  * `from` and `to` are paths; `:name` matches one segment and `:name*` the rest of the path
  * (none or more segments), and the same names in `to` take what they matched. The query comes

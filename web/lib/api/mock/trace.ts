@@ -1,5 +1,5 @@
 /**
- * Mock of the trace lane's routes (api/oracle/trace/router.py) for NEXT_PUBLIC_API_MOCKS=1:
+ * Mock of the trace lane's routes (api/oracle/trace/router.py) for VITE_API_MOCKS=1:
  * version and baseline-node traces, the evidence inspector, impact reports with their
  * regeneration plan, the staleness list and actions, section links and dependencies.
  * Built from the v2 mock rows (./v2.ts); synthetic placeholders only. Reads need a

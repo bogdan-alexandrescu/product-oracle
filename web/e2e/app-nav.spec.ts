@@ -315,9 +315,9 @@ test("a roadmap document's pages highlight Plan; a PRD's highlight PRDs", async 
 
   // From the roadmap to a PRD inside the app: the highlight follows the document.
   await page.evaluate(() =>
-    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
-      '/documents/referral-link/v/2',
-    ),
+    (
+      window as unknown as { __poRouter: { navigate: (o: { href: string }) => void } }
+    ).__poRouter.navigate({ href: '/documents/referral-link/v/2' }),
   );
   await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
   await expect(prds).toHaveAttribute('aria-current', 'page');

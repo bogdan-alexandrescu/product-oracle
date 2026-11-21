@@ -56,6 +56,10 @@ test('qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   // The way to a goal: Build the Ground Truth.
   await needs.getByRole('link', { name: 'Build the Ground Truth' }).click();
   await expect(page).toHaveURL(/\/ground-truth\?build=1$/);
+  // The router moves the address as it starts loading the page (#1581): Escape once it is drawn.
+  await expect(
+    page.getByRole('dialog').filter({ hasText: 'Build the Ground Truth' }),
+  ).toBeVisible();
 
   // On to a first PRD, as a new owner would: PRDs > New PRD, a title and the problem, Continue to the brief.
   await page.keyboard.press('Escape');

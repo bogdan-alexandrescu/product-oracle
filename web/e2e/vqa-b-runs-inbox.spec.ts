@@ -266,8 +266,14 @@ test.describe('desktop', () => {
       await login(page, 'approver@example.com');
       await page.goto('/priorities');
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-      await page.waitForLoadState('networkidle');
-      check(await page.locator('tr[data-testid^="priority-row-"]').count());
+      // The mock answers in the page, so there is no network to go idle (#1581): a new company's
+      // list is counted once it has answered with nothing; a large one's count is retried.
+      const rows = page.locator('tr[data-testid^="priority-row-"]');
+      if (name === 'empty')
+        await expect(page.getByTestId('priority-table').getByTestId('table-empty')).toHaveText(
+          'No features ranked',
+        );
+      await expect(async () => check(await rows.count())).toPass();
       await page.close();
     }
   });

@@ -1,6 +1,6 @@
 /**
  * Mock of the Product Oracle v2 read routes (api/oracle/v2/router.py) for
- * NEXT_PUBLIC_API_MOCKS=1: a list and a get per entity, newest first, with the same
+ * VITE_API_MOCKS=1: a list and a get per entity, newest first, with the same
  * filters (any query parameter other than limit/offset matches a field of the row).
  * One linked row per entity, synthetic placeholders only. Lanes add their writes here.
  */

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from './test';
 
+import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
 import { login } from './helpers';
 
 /*
@@ -58,17 +59,24 @@ test.describe('a narrow window', () => {
 });
 
 /*
- * The first frame: the server's HTML, painted before the page's scripts run, shows the table's
- * loading lines. They span the columns drawn at that width (they used to span every column, so
- * a hidden one took the visible ones' room until the table had measured itself), each as one
+ * The first frame: while GET /v1/runs is still answering, the table shows its loading lines
+ * (under Next also the server's HTML, painted before the scripts ran; #1581 holds the answer
+ * instead of the scripts). They span the columns drawn at that width (they used to span every
+ * column, so a hidden one took the visible ones' room until the table had measured itself), each as one
  * cell (they used to be one cell per width band, four of them hidden, so a locator met five).
  * The Runs table drops a column under 1320 px and another under 760 px; at these windows it is
  * 635 px (601-760), 775 px (760-820), 815 px (also 760-820), 959 px (820-1000) and 1375 px wide.
  */
 async function openFirstFrame(page: Page) {
   await login(page);
-  // The page as first painted: its HTML and CSS, none of its scripts.
-  await page.route(/\/_next\/static\/chunks\/.*\.js(\?|$)/, (route) => route.abort());
+  // The page before its runs arrive: the mock holds GET /v1/runs for a minute.
+  await page.evaluate(
+    ([slow, ms]) => {
+      localStorage.setItem(slow, '/v1/runs');
+      localStorage.setItem(ms, '60000');
+    },
+    [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
+  );
   await page.goto('/runs');
   const table = page.getByTestId('runs-table').locator('table');
   const row = table.locator('tbody tr').first();
@@ -81,7 +89,7 @@ for (const width of [700, 840, 880, 1024, 1440]) {
   test.describe(`the first frame at ${width} px`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test("the Runs table's lines span only the columns drawn before its scripts run", async ({
+    test("the Runs table's lines span only the columns drawn before its runs arrive", async ({
       page,
     }) => {
       const { table, line } = await openFirstFrame(page);
@@ -111,7 +119,7 @@ for (const width of [700, 840, 880, 1024, 1440]) {
 test.describe('the first frame on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("the Runs table's lines are one block as wide as the table before its scripts run", async ({
+  test("the Runs table's lines are one block as wide as the table before its runs arrive", async ({
     page,
   }) => {
     const { table, line } = await openFirstFrame(page);
