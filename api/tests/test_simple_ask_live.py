@@ -222,7 +222,8 @@ async def test_a_refused_or_failed_live_read_is_oracles_answer(client, sources, 
             assert "Reconnect it in Settings > Connections." in sentence
         answer = expected = sentence if sentence.endswith(".") else f"{sentence}."
     claude.answer(said(answer))
-    await asyncio.wait_for(running, 30)
+    outcome = await asyncio.wait_for(running, 30)
+    assert outcome.status == "succeeded", outcome
 
     line = await the_line(client, ctx, out)
     assert line["author_kind"] == "oracle" and line["kind"] == "answer", line
