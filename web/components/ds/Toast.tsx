@@ -287,7 +287,7 @@ export function ToastHost() {
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeldId(null);
           }}
-          className="pointer-events-auto flex max-w-[min(560px,100%)] min-w-0 items-center gap-3 rounded-panel border border-line bg-hero px-4 py-2.5 text-[15px] text-hero-text shadow-tip"
+          className="pointer-events-auto flex max-w-[min(560px,100%)] min-w-0 items-center gap-3 rounded-panel border border-line bg-hero px-4 py-2.5 text-base text-hero-text shadow-tip"
         >
           <span className="min-w-0 break-words">{shown.message}</span>
           {shown.action && (

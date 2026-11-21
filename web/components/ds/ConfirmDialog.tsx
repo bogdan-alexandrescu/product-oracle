@@ -176,7 +176,7 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
         {/* BGD (Nov 10): a long ask scrolls under its title, its buttons in view. */}
         <div data-fit-body="" className="min-h-0 overflow-y-auto overscroll-contain">
           {ask.message && (
-            <p id={body} className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4">
+            <p id={body} className="px-5 py-3.5 text-base leading-6 max-[600px]:px-4">
               {ask.message}
             </p>
           )}
@@ -184,7 +184,7 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
             <dl
               id={ask.message ? undefined : body}
               data-testid="confirm-rows"
-              className="mx-5 my-3.5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 rounded-lg bg-surface2 px-3 py-2 text-[15px] leading-6 max-[600px]:mx-4"
+              className="mx-5 my-3.5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 rounded-lg bg-surface2 px-3 py-2 text-base leading-6 max-[600px]:mx-4"
             >
               {ask.rows.map((r) => (
                 <div key={r.label} className="contents" data-testid="confirm-row">

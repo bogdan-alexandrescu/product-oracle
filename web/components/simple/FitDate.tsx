@@ -126,7 +126,7 @@ function CostTag({ c }: { c: Change }) {
     none: ['Small cost', 'bg-surface2 text-text2'],
   } as const;
   const [l, cls] = map[c.cost_kind];
-  return <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${cls}`}>{l}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{l}</span>;
 }
 
 function Locked({ a, hard = false }: { a: Answer; hard?: boolean }) {
@@ -240,7 +240,7 @@ function RankedList({
                       )}
                       {i + 1}. {c.item}
                     </span>
-                    <span className="tnum text-[14px] font-semibold text-pass">
+                    <span className="tnum text-sm font-semibold text-pass">
                       {plural(c.days, 'day')} sooner
                     </span>
                   </span>
@@ -336,14 +336,14 @@ function targetInSentence(g: BaselineGoal, value = g.target): string {
 
 const CURRENCY: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' };
 const FIELD_LABEL =
-  'flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+  'flex min-w-0 flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
 
 /** The API's problems with one field, under it. */
 function Problems({ field, problems }: { field: string[]; problems: GoalProblem[] }) {
   const mine = problems.filter((p) => field.some((f) => p.where === `attrs.${f}`));
   if (mine.length === 0) return null;
   return (
-    <span role="alert" className="text-[13px] font-medium tracking-normal text-crit">
+    <span role="alert" className="text-sm font-medium tracking-normal text-crit">
       {mine.map((p) => p.message).join(' ')}
     </span>
   );
@@ -375,7 +375,7 @@ function TargetAndDue({
       <div className={FIELD_LABEL}>
         <label htmlFor="fit-goal-target">Target</label>
         <span
-          className="flex min-w-0 flex-wrap items-center gap-2 text-[17px] font-normal tracking-normal text-text"
+          className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-normal tracking-normal text-text"
           data-testid="fit-goal-target"
         >
           {cmp && <span>{cmp}</span>}
@@ -395,7 +395,7 @@ function TargetAndDue({
       <div className={FIELD_LABEL}>
         <span aria-hidden>Due</span>
         <span
-          className="relative flex min-h-10 w-48 items-center rounded-lg border border-line-strong bg-surface px-2.5 text-[17px] font-normal tracking-normal text-text"
+          className="relative flex min-h-10 w-48 items-center rounded-lg border border-line-strong bg-surface px-2.5 text-lg font-normal tracking-normal text-text"
           data-testid="fit-goal-due"
         >
           {draft.due
@@ -738,7 +738,7 @@ function LaneCard({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="simple-h2">{m.name}</h2>
         {m.date && (
-          <span className="tnum flex items-center gap-2 text-[15px]">
+          <span className="tnum flex items-center gap-2 text-base">
             {was && was !== m.date && <del className="text-text2">{day(was)}</del>}
             <span className="font-semibold">{day(m.date)}</span>
           </span>

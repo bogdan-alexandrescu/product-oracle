@@ -92,7 +92,7 @@ export function RunCost({ run }: { run: RunSummary }) {
       data-cost={prominent ? 'prominent' : 'small'}
       className={
         prominent
-          ? `tnum inline-flex min-h-7 items-center rounded-lg px-2 text-[15px] font-medium ${over ? 'bg-crit-bg text-crit' : 'bg-warn-bg text-warn'}`
+          ? `tnum inline-flex min-h-7 items-center rounded-lg px-2 text-base font-medium ${over ? 'bg-crit-bg text-crit' : 'bg-warn-bg text-warn'}`
           : 'tnum text-sm text-text2'
       }
     >
@@ -425,7 +425,7 @@ export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
       className="rounded-panel border border-line bg-surface2 px-3.5 py-2.5"
       data-testid="estimate"
     >
-      <table className="w-full text-[15px]">
+      <table className="w-full text-base">
         <tbody>
           {estimate.segments.map((s) => (
             <tr key={s.seq} data-testid={`estimate-row-${s.name}`}>

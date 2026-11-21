@@ -186,7 +186,7 @@ function Sheet({
       >
         <div className="bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+            <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
               {eyebrow}
             </span>
             <button
@@ -200,13 +200,13 @@ function Sheet({
           </div>
           <h2
             id={`${id}-title`}
-            className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-heading"
+            className="mt-1 font-display text-xl leading-[27px] font-bold tracking-heading"
           >
             {title}
           </h2>
           {chips && <div className="mt-2 flex flex-wrap items-center gap-2">{chips}</div>}
         </div>
-        <div className="space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">{children}</div>
+        <div className="space-y-4 px-5 py-4 text-base max-[600px]:px-4">{children}</div>
         {footer && (
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
             {footer}
@@ -242,7 +242,7 @@ function HeroChip({
 }) {
   return (
     <span
-      className={`tnum inline-flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-[13px] font-semibold ${
+      className={`tnum inline-flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-sm font-semibold ${
         tone === 'accent' ? 'bg-accent-soft text-accent-ink' : 'bg-hero-2 text-hero-text'
       }`}
     >
@@ -487,7 +487,7 @@ function Group({
 }) {
   return (
     <section aria-label={label} data-testid={testId}>
-      <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</h3>
+      <h3 className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">{label}</h3>
       <ul className="flex flex-col">{children}</ul>
     </section>
   );
@@ -679,7 +679,7 @@ function PickStep({
                       )}
                     </span>
                     <span
-                      className={`text-[15px] leading-[22px] ${reason ? 'text-text2' : 'text-text'}`}
+                      className={`text-base leading-[22px] ${reason ? 'text-text2' : 'text-text'}`}
                     >
                       {i.feedback_summary}
                     </span>
@@ -688,7 +688,7 @@ function PickStep({
                         {excerpt(i.text)}
                       </span>
                     )}
-                    <span className="tnum text-[13px] text-text2">
+                    <span className="tnum text-sm text-text2">
                       {i.accepted_by_name ?? 'Accepted'}
                       {i.accepted_at && ` · ${formatDateTime(i.accepted_at)}`}
                     </span>
@@ -726,10 +726,10 @@ function PickStep({
                       </Chip>
                     )}
                   </span>
-                  <span className="text-[15px] leading-[22px] text-text">{d.instruction}</span>
+                  <span className="text-base leading-[22px] text-text">{d.instruction}</span>
                   {d.reason && <span className="text-sm leading-5 text-text2">{d.reason}</span>}
                   <span
-                    className="flex items-center gap-1 text-[13px] text-text2"
+                    className="flex items-center gap-1 text-sm text-text2"
                     data-testid="discussion-origin"
                   >
                     <Icon name="comment" size={16} />
@@ -761,8 +761,8 @@ function PickStep({
                     <span className="flex flex-wrap items-center gap-2">
                       <Chip kind="line">{where}</Chip>
                     </span>
-                    <span className="text-[15px] leading-[22px] text-text">{a.summary}</span>
-                    <span className="tnum text-[13px] text-text2">
+                    <span className="text-base leading-[22px] text-text">{a.summary}</span>
+                    <span className="tnum text-sm text-text2">
                       {a.staged_by_name ?? 'Staged'}
                       {a.staged_at && ` · ${formatDateTime(a.staged_at)}`}
                     </span>
@@ -832,7 +832,7 @@ function InRun({ run }: { run: AgentsRun }) {
                   <Chip kind="acc">{label}</Chip>
                 </Link>
               </span>
-              <span className="text-[15px] leading-[22px] text-text2">{r.what}</span>
+              <span className="text-base leading-[22px] text-text2">{r.what}</span>
             </li>
           ))}
         </Group>
@@ -843,7 +843,7 @@ function InRun({ run }: { run: AgentsRun }) {
 
 function Words({ words }: { words: Schemas['WordOp'][] }) {
   return (
-    <p className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px] leading-6 whitespace-pre-wrap text-text">
+    <p className="rounded-lg border border-line bg-surface2 px-3 py-2 text-base leading-6 whitespace-pre-wrap text-text">
       {words.map((w, i) =>
         w.op === 'insert' ? (
           <ins key={i} className="diff-ins">
@@ -882,7 +882,7 @@ function PreviewSectionCard({
         <h3 className={`min-w-0 font-semibold ${keep ? 'text-text' : 'text-text2 line-through'}`}>
           {s.heading}
         </h3>
-        <span className="font-mono text-[13px] text-text2">#{s.section_key}</span>
+        <span className="font-mono text-sm text-text2">#{s.section_key}</span>
         <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
           <input
             type="checkbox"
@@ -998,7 +998,7 @@ function PreviewStep({
           {preview.skipped.map((s, i) => (
             <li key={i} className="flex items-center gap-2 text-sm text-text2">
               <Chip kind="na">Stays staged</Chip>
-              <span className="font-mono text-[13px]">#{s.section_key}</span>
+              <span className="font-mono text-sm">#{s.section_key}</span>
               <span>{s.reason}</span>
             </li>
           ))}

@@ -152,7 +152,7 @@ export function InfoTip({
         {trigger ?? (
           <span
             aria-hidden
-            className={`grid size-5 place-items-center rounded-full border-[1.5px] font-serif text-[13px] leading-none font-bold italic ${
+            className={`grid size-5 place-items-center rounded-full border-[1.5px] font-serif text-sm leading-none font-bold italic ${
               shown ? 'border-accent bg-accent text-on-accent' : ring
             }`}
           >

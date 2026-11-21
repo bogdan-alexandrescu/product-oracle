@@ -1424,12 +1424,12 @@ function SimpleHome() {
                               data-testid={`home-summary-${id}`}
                               className="flex h-full flex-col rounded-xl bg-surface2 px-4 py-3 hover:bg-accent-soft max-[600px]:px-2.5 max-[600px]:py-2"
                             >
-                              <span className="simple-number tnum max-[600px]:text-[22px]! max-[600px]:leading-7!">
+                              <span className="simple-number tnum max-[600px]:text-xl! max-[600px]:leading-7!">
                                 {n ?? '–'}
                               </span>
                               {/* qa-onboarding-20: on a phone the label is its short form, on one line. */}
                               <span className="simple-small max-[600px]:hidden">{label}</span>
-                              <span className="simple-small hidden max-[600px]:block max-[600px]:text-[13px]! max-[600px]:leading-4">
+                              <span className="simple-small hidden max-[600px]:block max-[600px]:text-sm! max-[600px]:leading-4">
                                 {short}
                               </span>
                             </a>
@@ -1774,7 +1774,7 @@ function SimpleHome() {
                                 </strong>
                                 {/* home-waiting-one-list: a meeting in another year says its year on the tile too. */}
                                 {!sameYear(next.due_at) && (
-                                  <span className="text-[11px] leading-3">
+                                  <span className="text-xs leading-3">
                                     {formatInZone(next.due_at, zone, { year: 'numeric' })}
                                   </span>
                                 )}
@@ -2435,7 +2435,7 @@ function HomeMenu({ onShowSetup }: { onShowSetup: () => void }) {
           <button
             type="button"
             role="menuitem"
-            className="block w-full rounded-md px-2 py-1.5 text-left text-[15px] hover:bg-surface2 max-[600px]:min-h-11"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-base hover:bg-surface2 max-[600px]:min-h-11"
             onClick={() => {
               setOpen(false);
               onShowSetup();

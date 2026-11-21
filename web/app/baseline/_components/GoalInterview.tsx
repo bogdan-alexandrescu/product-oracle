@@ -49,7 +49,7 @@ function MissingStrip({ asked, goal }: { asked: string[]; goal: EntityOut }) {
   const open = new Set(groups(goal.goal_check?.missing));
   return (
     <div
-      className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-text2"
+      className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2"
       data-testid="missing-strip"
     >
       <span className="font-semibold">Missing:</span>
@@ -241,7 +241,7 @@ function VersionCard({
       aria-label={label}
       className="flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <p className="min-w-0 text-[15px] leading-[22px] break-words" data-testid="version-heading">
+      <p className="min-w-0 text-base leading-[22px] break-words" data-testid="version-heading">
         <span className="font-semibold">{label}</span>
         {' · '}
         <span className="font-semibold">{statement(live)}</span>

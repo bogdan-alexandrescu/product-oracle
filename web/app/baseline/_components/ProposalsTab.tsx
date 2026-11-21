@@ -157,7 +157,7 @@ function FromSelect({
   const zone = useCompanyZone();
   return (
     <div className="ml-auto flex min-w-0 items-center gap-2 max-[600px]:ml-0 max-[600px]:w-full">
-      <label htmlFor={id} className="text-[13px] font-semibold text-text2">
+      <label htmlFor={id} className="text-sm font-semibold text-text2">
         From
       </label>
       <select
@@ -181,7 +181,7 @@ function FromSelect({
 /** Who made it and when: the run that made it, as a link; else the person (You), token or Oracle. */
 function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
   const zone = useCompanyZone();
-  const line = 'tnum truncate text-[13px] text-text2';
+  const line = 'tnum truncate text-sm text-text2';
   if (p.run)
     return (
       <p className={line} data-testid="proposal-by">
@@ -390,7 +390,7 @@ function AlsoProposed({
   return (
     <>
       {agree.length > 0 && (
-        <p data-testid="also-proposed" className="text-[13px] text-text2">
+        <p data-testid="also-proposed" className="text-sm text-text2">
           Also proposed by{' '}
           {names(agree.map((a: Also) => (titled(a) ? `${a.by} as “${titled(a)}”` : a.by)))}
         </p>
@@ -617,7 +617,7 @@ function ProposalList({
                       <button
                         type="button"
                         onClick={() => showSiblings(siblings)}
-                        className="w-fit text-left text-[13px] font-semibold text-accent-ink hover:underline"
+                        className="w-fit text-left text-sm font-semibold text-accent-ink hover:underline"
                       >
                         {siblings.length === 1
                           ? '1 other open proposal on this entry'
@@ -633,7 +633,7 @@ function ProposalList({
                       </p>
                     )}
                     <details className="text-sm">
-                      <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">
+                      <summary className="w-fit cursor-pointer text-sm font-semibold text-text2 hover:text-text">
                         Details
                       </summary>
                       <p className="mt-1 text-text2" data-testid="proposal-op">

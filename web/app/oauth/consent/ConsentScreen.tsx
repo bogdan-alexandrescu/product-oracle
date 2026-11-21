@@ -103,7 +103,7 @@ export function ConsentScreen() {
           {!detail && (
             <Link
               href="/"
-              className="mt-4 inline-block text-[15px] font-semibold text-accent-ink hover:underline"
+              className="mt-4 inline-block text-base font-semibold text-accent-ink hover:underline"
             >
               Go to Oracle
             </Link>
@@ -113,7 +113,7 @@ export function ConsentScreen() {
       {!error && !detail && <Loading />}
       {detail && (
         <div className="flex flex-col gap-5" data-testid="consent">
-          <p className="text-[15px]">
+          <p className="text-base">
             <strong className="font-semibold">{detail.client_name}</strong> wants to use Product
             Oracle as you.
           </p>
@@ -176,7 +176,7 @@ export function ConsentScreen() {
               {pending === 'approve' ? 'Approving…' : 'Approve'}
             </Button>
             <Button
-              className="h-10! rounded-button! text-[15px]!"
+              className="h-10! rounded-button! text-base!"
               disabled={pending !== null}
               onClick={() => decide(false)}
             >

@@ -113,7 +113,7 @@ export function JourneyTrack({
               }`}
             >
               <i
-                className={`grid size-[22px] place-items-center rounded-full font-mono text-[13px] leading-[22px] not-italic ${
+                className={`grid size-[22px] place-items-center rounded-full font-mono text-sm leading-[22px] not-italic ${
                   st === 'done'
                     ? 'bg-pass-bg text-pass'
                     : st === 'current'

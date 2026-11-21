@@ -41,7 +41,7 @@ const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 /** roadmap-edit-fixes round 1: a dependency's x, a 24 px target of its own (a bare 16 px icon on the line's baseline was missed). */
 const REMOVE =
   'relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11';
-const INPUT = 'w-full rounded-md border border-line bg-surface px-2 py-1 text-[15px]';
+const INPUT = 'w-full rounded-md border border-line bg-surface px-2 py-1 text-base';
 
 /** A feature's code chip, then its name: "F-12 Alert rules engine", as every page shows it. */
 export { Named };
@@ -1284,7 +1284,7 @@ function AddDependency({
                     type="button"
                     aria-pressed={far === o.id}
                     disabled={loops.has(o.id)}
-                    className={`w-full rounded-md border px-2 py-1 text-left text-[15px] disabled:opacity-50 ${far === o.id ? 'border-accent bg-accent-soft' : 'border-line'}`}
+                    className={`w-full rounded-md border px-2 py-1 text-left text-base disabled:opacity-50 ${far === o.id ? 'border-accent bg-accent-soft' : 'border-line'}`}
                     onClick={() => setFar(o.id)}
                   >
                     <Named item={o} />

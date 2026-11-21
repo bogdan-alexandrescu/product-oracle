@@ -132,7 +132,7 @@ export function EvidenceChip({
           className="fixed z-50 block overflow-y-auto py-1 text-left text-sm leading-5 font-normal text-text"
         >
           <span className="block rounded-button border border-line bg-surface p-3.5 shadow-tip">
-            <span className="tnum mb-1 block text-[13px] font-semibold text-text2">
+            <span className="tnum mb-1 block text-sm font-semibold text-text2">
               {label}
               {evidence.retrieved_at && ` · retrieved ${formatDate(evidence.retrieved_at)}`}
             </span>
@@ -144,9 +144,7 @@ export function EvidenceChip({
             {evidence.ref &&
               evidence.source_item?.title &&
               evidence.ref !== evidence.source_item.title && (
-                <span className="block truncate font-mono text-[13px] text-text2">
-                  {evidence.ref}
-                </span>
+                <span className="block truncate font-mono text-sm text-text2">{evidence.ref}</span>
               )}
             {evidence.excerpt && (
               <span className="mt-2 block border-l-2 border-accent pl-2.5 text-text2">
@@ -154,13 +152,13 @@ export function EvidenceChip({
               </span>
             )}
             {evidence.note && (
-              <span className="mt-2 block text-[13px]" data-testid="evidence-note">
+              <span className="mt-2 block text-sm" data-testid="evidence-note">
                 Note: {evidence.note}
               </span>
             )}
             {evidence.link && (
               <span
-                className="mt-2 block rounded-lg bg-surface2 px-2 py-1 text-[13px] text-text2"
+                className="mt-2 block rounded-lg bg-surface2 px-2 py-1 text-sm text-text2"
                 data-testid="public-link-note"
               >
                 Public link, visible to everyone · fetched {formatDate(evidence.link.fetched_at)}
@@ -170,7 +168,7 @@ export function EvidenceChip({
             )}
             {removed && (
               <span
-                className="mt-2 block rounded-lg bg-na-bg px-2 py-1 text-[13px] text-na"
+                className="mt-2 block rounded-lg bg-na-bg px-2 py-1 text-sm text-na"
                 data-testid="source-removed-note"
               >
                 Source removed: the item was taken out of its source or deleted where it came from.
@@ -179,7 +177,7 @@ export function EvidenceChip({
             )}
             {evidence.source_item_private && (
               <span
-                className="mt-2 block rounded-lg bg-warn-bg px-2 py-1 text-[13px] text-warn"
+                className="mt-2 block rounded-lg bg-warn-bg px-2 py-1 text-sm text-warn"
                 data-testid="private-note"
               >
                 From another person&apos;s private source: you see the excerpt, not the item.
@@ -187,7 +185,7 @@ export function EvidenceChip({
             )}
             {factors.length > 0 && (
               <span className="mt-2 block">
-                <table className="w-full text-[13px]" aria-label="Confidence factors">
+                <table className="w-full text-sm" aria-label="Confidence factors">
                   <thead className="text-text2">
                     <tr>
                       <th className="py-0.5 text-left font-semibold">Factor</th>
@@ -212,7 +210,7 @@ export function EvidenceChip({
                 href={evidence.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-block text-[13px] font-semibold text-accent-ink underline underline-offset-2"
+                className="mt-2 inline-block text-sm font-semibold text-accent-ink underline underline-offset-2"
               >
                 Open source ↗
               </a>

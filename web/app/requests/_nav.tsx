@@ -50,7 +50,7 @@ export function RequestsNav({ where }: { where: 'header' | 'top' }) {
               href={it.href}
               data-testid={it.testId}
               aria-current={on ? 'page' : undefined}
-              className={`flex h-8 flex-none items-center gap-1.5 rounded-lg px-3 text-[15px] font-medium whitespace-nowrap max-[600px]:h-11 ${
+              className={`flex h-8 flex-none items-center gap-1.5 rounded-lg px-3 text-base font-medium whitespace-nowrap max-[600px]:h-11 ${
                 on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
               }`}
             >

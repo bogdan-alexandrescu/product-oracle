@@ -88,7 +88,7 @@ export function SectionLink({
       className="inline-flex h-7 min-w-0 items-center gap-1 text-sm font-semibold text-accent-ink hover:underline"
     >
       <span className="min-w-0 truncate">
-        Go to {heading ?? <span className="font-mono text-[13px] font-medium">§{key}</span>}
+        Go to {heading ?? <span className="font-mono text-sm font-medium">§{key}</span>}
       </span>
       {n !== current && <span className="flex-none">(v{n})</span>}
     </Link>
@@ -361,9 +361,7 @@ function Row({
         ) : (
           <Chip kind="line">{item.kind === 'comment' ? 'Comment' : 'General'}</Chip>
         )}
-        <span className="tnum ml-auto text-[13px] text-text2">
-          raised on v{item.raised_on_version}
-        </span>
+        <span className="tnum ml-auto text-sm text-text2">raised on v{item.raised_on_version}</span>
       </div>
       {actions && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="feedback-actions">
@@ -371,7 +369,7 @@ function Row({
         </div>
       )}
       {form}
-      <p className="mt-1.5 text-[15px] leading-[22px] text-text">{item.summary}</p>
+      <p className="mt-1.5 text-base leading-[22px] text-text">{item.summary}</p>
       <FromQuestionLink item={item} />
       <AgentStagedNote item={item} />
       {item.anchor && <Quote>{item.anchor.exact}</Quote>}
@@ -511,9 +509,7 @@ export function SectionQuestions({
       data-testid="section-questions"
       className="mb-3 border-b border-line pb-2"
     >
-      <h3 className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-        Questions
-      </h3>
+      <h3 className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">Questions</h3>
       <ol className="flex flex-col">
         {q.data.rows.map(({ q: x, answer }) => (
           <li
@@ -522,7 +518,7 @@ export function SectionQuestions({
             data-status={x.status}
             className="border-b border-line py-2.5 last:border-b-0"
           >
-            <p className="text-[15px] leading-[22px] text-text">{x.prompt}</p>
+            <p className="text-base leading-[22px] text-text">{x.prompt}</p>
             {x.status === 'asked' || x.status === 'delegated' ? (
               <p className="mt-1">
                 <Chip kind="warn">Waiting on {name(x.asked_to)}</Chip>

@@ -28,7 +28,7 @@ const BTN =
 const PRIMARY =
   'inline-flex h-8 items-center gap-1 rounded-lg bg-accent px-3 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50';
 const FIELD =
-  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-[15px] outline-none focus:border-accent';
+  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-base outline-none focus:border-accent';
 const CHIP =
   'inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-px text-sm font-medium text-text';
 const LINK = 'text-sm font-medium text-accent-ink underline underline-offset-2';

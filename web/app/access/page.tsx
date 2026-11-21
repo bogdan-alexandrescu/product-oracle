@@ -152,7 +152,7 @@ function AccessPage() {
       <div
         data-testid="access-state"
         data-state={state}
-        className="flex flex-col gap-4 text-[15px] leading-[22px]"
+        className="flex flex-col gap-4 text-base leading-[22px]"
       >
         {error && <Notice tone="error">{error}</Notice>}
         {failed && (

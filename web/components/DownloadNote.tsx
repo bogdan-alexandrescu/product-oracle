@@ -28,7 +28,7 @@ export function DownloadNote({
   return (
     <p
       role="status"
-      className={`${className} fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md`.trim()}
+      className={`${className} fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-base font-semibold shadow-md`.trim()}
     >
       {note}
     </p>

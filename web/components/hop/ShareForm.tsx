@@ -90,7 +90,7 @@ export function ShareForm({
         void post();
       }}
     >
-      <h3 className="font-display text-[17px] font-bold">Share as discussion</h3>
+      <h3 className="font-display text-lg font-bold">Share as discussion</h3>
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Title
         <input

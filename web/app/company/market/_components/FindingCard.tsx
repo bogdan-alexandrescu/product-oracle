@@ -73,8 +73,8 @@ export function FindingCard({
           </>
         )}
       </div>
-      <h3 className="text-[15px] font-semibold">{finding.title}</h3>
-      <p className="text-[15px]">{finding.summary}</p>
+      <h3 className="text-base font-semibold">{finding.title}</h3>
+      <p className="text-base">{finding.summary}</p>
       {finding.excerpt && (
         <blockquote
           className="border-l-2 border-line-strong pl-3 text-sm text-text2"

@@ -42,7 +42,7 @@ export const ADD_DOMAIN_EVENT = 'po-add-sign-in-domain';
 const writeSetting = (key: string, value: unknown) =>
   unwrap(api.PUT('/v1/settings/{key}', { params: { path: { key } }, body: { value } }));
 
-const H3 = 'text-[15px] font-semibold';
+const H3 = 'text-base font-semibold';
 
 /** qa-settings-9: a choice here applies at once; this says it landed. */
 const Saved = () => (
@@ -253,7 +253,7 @@ export function SignInRules() {
               )}
             </section>
             {error && (
-              <p role="alert" className="text-[13px] font-medium text-crit">
+              <p role="alert" className="text-sm font-medium text-crit">
                 {error}
               </p>
             )}

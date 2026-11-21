@@ -645,7 +645,7 @@ function BaselinePage() {
     : undefined;
   // qa-shell-30: a count of nothing reads "No goals yet", never "0/0".
   const none = (text: string) => (
-    <span className="font-sans text-[15px] font-semibold tracking-normal text-text2">{text}</span>
+    <span className="font-sans text-base font-semibold tracking-normal text-text2">{text}</span>
   );
   const kpis: Kpi[] = [
     s?.goals === 0

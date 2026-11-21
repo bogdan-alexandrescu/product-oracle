@@ -170,7 +170,7 @@ export function RoadmapItemsPane({
     return (
       <Panel testId="roadmap-items-empty">
         <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-          <p className="flex items-center gap-1.5 text-[15px] font-semibold text-text2">
+          <p className="flex items-center gap-1.5 text-base font-semibold text-text2">
             No items for this version
             <InfoTip label="roadmap items" side="bottom">
               Items come from the roadmap run&apos;s items file. A version imported without one

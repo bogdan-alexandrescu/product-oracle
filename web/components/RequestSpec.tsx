@@ -181,9 +181,7 @@ export function RequestSpecDialog({
         <Notice>This PRD has no approved roadmap item yet. Approve its roadmap first.</Notice>
       )}
       <div>
-        <p className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-          Depth
-        </p>
+        <p className="mb-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">Depth</p>
         <SegmentedControl
           label="Depth"
           value={depth}
@@ -196,7 +194,7 @@ export function RequestSpecDialog({
       </div>
       {item && (
         <fieldset>
-          <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <legend className="mb-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             Requirements
           </legend>
           {requirements.length === 0 ? (
@@ -228,7 +226,7 @@ export function RequestSpecDialog({
         </fieldset>
       )}
       <fieldset>
-        <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        <legend className="mb-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
           Engineering approvers
         </legend>
         <div className="flex flex-col gap-1.5">

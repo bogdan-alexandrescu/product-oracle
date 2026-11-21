@@ -169,7 +169,7 @@ export function AddItemSheet({
     }
   }
 
-  const label = 'flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+  const label = 'flex flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
   return (
     <div
       data-backdrop=""
@@ -191,7 +191,7 @@ export function AddItemSheet({
           </h2>
           <Button variant="ghost" icon="x" onClick={close} aria-label="Close" />
         </div>
-        <div className="flex-1 space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">
+        <div className="flex-1 space-y-4 px-5 py-4 text-base max-[600px]:px-4">
           <div className={label}>
             <label htmlFor={`${id}-kind`}>Kind</label>
             <select
@@ -249,7 +249,7 @@ export function AddItemSheet({
               </div>
               {goalRows.length > 0 && (
                 <fieldset className="flex min-w-0 flex-col gap-2">
-                  <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+                  <legend className="mb-1 text-sm font-semibold tracking-[0.02em] text-text2">
                     Goals it serves
                   </legend>
                   {goalRows.map((g) => (

@@ -286,7 +286,7 @@ function UseRow({ use }: { use: UsedIn }) {
           <span className="min-w-0 truncate font-semibold">{title}</span>
           {extra}
         </span>
-        <span className="block truncate text-[13px] text-text2">
+        <span className="block truncate text-sm text-text2">
           {use.item.title ?? 'Item'} · {formatDate(use.at)}
         </span>
       </span>
@@ -444,7 +444,7 @@ export function CoverageInspector({
                     {NOT_READ_LABEL[status]}
                   </Chip>
                   {/* qa-work-51: why it was not read, on every width. */}
-                  <span data-testid="not-read-reason" className="basis-full text-[13px] text-text2">
+                  <span data-testid="not-read-reason" className="basis-full text-sm text-text2">
                     {whyNotRead(u.reason, NOT_READ_LABEL[status])}
                   </span>
                 </li>

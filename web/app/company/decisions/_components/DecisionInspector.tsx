@@ -169,7 +169,7 @@ export function DecisionInspector({
       )}
       {d.status === 'withdrawn' && (
         <InspectorSection label="Withdrawn">
-          <p data-testid="decision-withdrawn" className="text-[15px]">
+          <p data-testid="decision-withdrawn" className="text-base">
             Withdrawn by {named(d.withdrawn_by, d.withdrawn_by_email) ?? 'a member'},{' '}
             {shortDate(d.withdrawn_at)}
             {d.withdrawn_reason ? `: ${d.withdrawn_reason}` : ''}
@@ -181,7 +181,7 @@ export function DecisionInspector({
           <InspectorRow value={d.chosen_option === 'approve' ? 'Approved' : 'Sent back'}>
             {stopLabel(d)}
           </InspectorRow>
-          <p className="mt-1 text-[15px] whitespace-pre-line">{d.rationale}</p>
+          <p className="mt-1 text-base whitespace-pre-line">{d.rationale}</p>
           {d.context && <p className="mt-2 text-sm whitespace-pre-line text-text2">{d.context}</p>}
           {reviewFile(d) && (
             <p className="mt-2 text-sm">
@@ -203,7 +203,7 @@ export function DecisionInspector({
         <>
           {d.question && (
             <InspectorSection label="The question">
-              <p className="text-[15px]">{d.question}</p>
+              <p className="text-base">{d.question}</p>
               {d.context && (
                 <p className="mt-1.5 text-sm whitespace-pre-line text-text2">{d.context}</p>
               )}
@@ -243,7 +243,7 @@ export function DecisionInspector({
           {d.chosen_option && (
             <InspectorSection label="Chosen" testId="decision-chosen">
               <p className="font-semibold">{chosen?.label ?? d.chosen_option}</p>
-              <p className="mt-1 text-[15px]">
+              <p className="mt-1 text-base">
                 <span className="font-semibold text-text2">Why </span>
                 {d.rationale}
               </p>
@@ -251,7 +251,7 @@ export function DecisionInspector({
           )}
           {(d.expected_outcome || d.prediction || d.outcome_status) && (
             <InspectorSection label="Expected">
-              {d.expected_outcome && <p className="text-[15px]">{d.expected_outcome}</p>}
+              {d.expected_outcome && <p className="text-base">{d.expected_outcome}</p>}
               {d.prediction && (
                 <p className="mt-1 text-sm text-text2">
                   {String(d.prediction.metric ?? '')}: {String(d.prediction.baseline ?? '?')} →{' '}
@@ -925,7 +925,7 @@ function DecideForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCanc
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-sm font-semibold text-text2">Chosen option</legend>
         {d.options.map((o) => (
-          <label key={o.key} className="flex items-center gap-2 text-[15px]">
+          <label key={o.key} className="flex items-center gap-2 text-base">
             <input
               type="radio"
               name={`decide-${d.id}`}
@@ -1011,7 +1011,7 @@ function ReviewForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCanc
             ['reversed', 'Reverse'],
           ] as const
         ).map(([v, label]) => (
-          <label key={v} className="flex items-center gap-1.5 text-[15px]">
+          <label key={v} className="flex items-center gap-1.5 text-base">
             <input
               type="radio"
               name={`review-${d.id}`}

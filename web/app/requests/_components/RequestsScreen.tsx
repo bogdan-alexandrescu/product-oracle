@@ -357,7 +357,7 @@ function Requests({ view }: { view: RequestsView }) {
                       data-testid="requests-no-match"
                       className="flex flex-col items-center gap-3 px-4 py-8 text-center"
                     >
-                      <p className="text-[15px] text-text2">
+                      <p className="text-base text-text2">
                         {onlySearch
                           ? 'No requests match your search'
                           : 'No requests match your filters'}

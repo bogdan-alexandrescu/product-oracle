@@ -48,7 +48,7 @@ const NEXT = [
 ];
 const ROW =
   'grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 max-[600px]:grid-cols-1 max-[600px]:gap-1.5 max-[600px]:px-3';
-const ROW_LABEL = 'text-[15px] font-semibold';
+const ROW_LABEL = 'text-base font-semibold';
 /** A months field: INPUT at a fixed width. */
 const MONTHS = INPUT.replace('w-full', 'w-20');
 
@@ -246,8 +246,8 @@ function HorizonsPanel() {
             </div>
             <div className={`${ROW} border-t border-line`}>
               <span className={ROW_LABEL}>Later</span>
-              <div className="flex min-w-0 flex-wrap items-center gap-2 text-[15px]">
-                <label htmlFor="horizon-from" className="text-[13px] font-semibold text-text2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-base">
+                <label htmlFor="horizon-from" className="text-sm font-semibold text-text2">
                   From
                 </label>
                 <input
@@ -262,7 +262,7 @@ function HorizonsPanel() {
                   value={form.from}
                   onChange={(e) => set({ from: e.target.value })}
                 />
-                <label htmlFor="horizon-to" className="text-[13px] font-semibold text-text2">
+                <label htmlFor="horizon-to" className="text-sm font-semibold text-text2">
                   To
                 </label>
                 <input
@@ -282,7 +282,7 @@ function HorizonsPanel() {
                   <p
                     id="horizon-later-error"
                     role="alert"
-                    className="w-full text-[13px] font-semibold text-crit"
+                    className="w-full text-sm font-semibold text-crit"
                   >
                     {fieldError}
                   </p>
@@ -464,7 +464,7 @@ function ZonePicker({
       role="option"
       aria-selected={i === active}
       data-zone={o.zone}
-      className={`flex min-h-9 cursor-pointer items-center px-3 py-1.5 text-[15px] ${i === active ? 'bg-surface2' : 'hover:bg-surface2'} ${
+      className={`flex min-h-9 cursor-pointer items-center px-3 py-1.5 text-base ${i === active ? 'bg-surface2' : 'hover:bg-surface2'} ${
         o.zone === zone ? 'font-semibold text-accent-ink' : 'text-text'
       }`}
       onClick={() => pick(o)}
@@ -472,7 +472,7 @@ function ZonePicker({
       {o.label}
     </div>
   );
-  const heading = 'px-3 pt-2 pb-1 text-[13px] font-semibold text-text2';
+  const heading = 'px-3 pt-2 pb-1 text-sm font-semibold text-text2';
 
   return (
     <div className="relative min-w-0 max-w-96">
@@ -529,7 +529,7 @@ function ZonePicker({
             </div>
           )}
           {list.length === 0 && (
-            <p className="px-3 py-1.5 text-[15px] text-text2">No time zone matches.</p>
+            <p className="px-3 py-1.5 text-base text-text2">No time zone matches.</p>
           )}
         </div>
       )}
@@ -605,7 +605,7 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
         {zone !== null && !canChange && (
           <div className={ROW.replace('88px', '160px')} data-testid="timezone-value">
             <span className={ROW_LABEL}>Company time zone</span>
-            <span className="text-[15px]">{zone ? zoneName(zone) : ZONE_NOT_SET}</span>
+            <span className="text-base">{zone ? zoneName(zone) : ZONE_NOT_SET}</span>
           </div>
         )}
         {zone !== null && canChange && (
@@ -711,7 +711,7 @@ function IntakeReadPanel({ canChange }: { canChange: boolean }) {
         )}
         {on !== undefined && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
-            <label className="inline-flex min-w-0 items-center gap-2 text-[15px]">
+            <label className="inline-flex min-w-0 items-center gap-2 text-base">
               <input
                 type="checkbox"
                 role="switch"

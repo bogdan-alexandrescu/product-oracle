@@ -99,15 +99,15 @@ const capSection = (key: string): string => key.charAt(0).toUpperCase() + key.sl
 /** fix4 qa-simple-roadmap-48: a scrolling pane's scrollbar in the theme's colours (dark in dark mode). */
 const SCROLL = '[scrollbar-color:var(--line-strong)_var(--surface)]';
 const BTN =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-text hover:bg-surface2 disabled:opacity-60';
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-sm leading-none font-semibold whitespace-nowrap text-text hover:bg-surface2 disabled:opacity-60';
 // qa-simple-roadmap-32: disabled must look disabled too (Revise reads enabled otherwise).
 const BTN_SOLID =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink disabled:cursor-not-allowed disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:hover:bg-surface2';
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-sm leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink disabled:cursor-not-allowed disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:hover:bg-surface2';
 const BTN_GHOST =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg px-1.5 text-[14px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2';
-const SBTN = 'simple-button !min-h-[34px] gap-1.5 !px-3 !text-[14px]';
-const META = 'text-[13px] leading-[18px] text-text2';
-const SUB = 'mb-1.5 text-[15px] leading-[22px] font-semibold';
+  'inline-flex h-8 items-center gap-1.5 rounded-lg px-1.5 text-sm leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2';
+const SBTN = 'simple-button !min-h-[34px] gap-1.5 !px-3 !text-sm';
+const META = 'text-sm leading-[18px] text-text2';
+const SUB = 'mb-1.5 text-base leading-[22px] font-semibold';
 
 /** The drawing's row while there is none (A): none yet, Oracle drawing it (its stages, a bar,
  * when it started), or Oracle could not draw it. */
@@ -179,7 +179,7 @@ function NoDrawing({
         </div>
         <div className="mt-2.5 flex flex-col gap-1.5">
           <ol
-            className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] leading-[18px] font-medium text-text2"
+            className="flex flex-wrap gap-x-3 gap-y-1 text-sm leading-[18px] font-medium text-text2"
             aria-label="Stages"
           >
             {stages.map((s, i) => (
@@ -622,7 +622,7 @@ export function FlowPanel({
       }
     >
       <div className="flex items-center gap-2">
-        <h3 className="flex-1 text-[18px] leading-6 font-semibold">Comments</h3>
+        <h3 className="flex-1 text-lg leading-6 font-semibold">Comments</h3>
         {!inline && (
           <button
             type="button"
@@ -634,7 +634,7 @@ export function FlowPanel({
           </button>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[14px]">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <span data-testid="flow-version" className="font-semibold">
           Version {f.version} of {v.versions.length}
           {older}
@@ -666,7 +666,7 @@ export function FlowPanel({
         </p>
       )}
       {!v.pending && v.failed && shown === null && (
-        <p className="text-[14px] text-crit" data-testid="flow-failed">
+        <p className="text-sm text-crit" data-testid="flow-failed">
           Oracle could not draw the next version.{' '}
           {v.can_revise && (
             <button
@@ -682,13 +682,13 @@ export function FlowPanel({
       )}
       {(f.annotations?.length ?? 0) > 0 && (
         <ol
-          className="space-y-1 text-[14px] leading-5"
+          className="space-y-1 text-sm leading-5"
           aria-label="Notes"
           data-testid="flow-annotations"
         >
           {f.annotations!.map((a) => (
             <li key={a.n}>
-              <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-bold text-surface">
+              <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-xs font-bold text-surface">
                 {a.n}
               </span>
               {a.note}
@@ -716,7 +716,7 @@ export function FlowPanel({
       {v.comments.length === 0 ? (
         <p className={META}>No comments yet.</p>
       ) : (
-        <ul className="space-y-1 text-[14px] leading-5" data-testid="flow-comments">
+        <ul className="space-y-1 text-sm leading-5" data-testid="flow-comments">
           {v.comments.map((c) => (
             <li key={c.id}>
               <span className="font-semibold">{c.by_name}</span>
@@ -742,7 +742,7 @@ export function FlowPanel({
             rows={3}
             placeholder="What should change?"
             aria-label="Comment on the flow"
-            className="w-full rounded-[10px] border border-line-strong bg-surface px-3 py-2 text-[15px]"
+            className="w-full rounded-[10px] border border-line-strong bg-surface px-3 py-2 text-base"
           />
           <div className="flex flex-wrap items-center gap-2">
             {(f.annotations?.length ?? 0) > 0 && (
@@ -750,7 +750,7 @@ export function FlowPanel({
                 aria-label="On annotation"
                 value={on}
                 onChange={(e) => setOn(e.target.value)}
-                className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[14px]"
+                className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-sm"
               >
                 <option value="">The whole flow</option>
                 {f.annotations!.map((a) => (
@@ -784,7 +784,7 @@ export function FlowPanel({
           </span>
         </div>
       )}
-      {error && <p className="text-[14px] text-crit">{error}</p>}
+      {error && <p className="text-sm text-crit">{error}</p>}
     </section>
   );
 
@@ -848,14 +848,14 @@ export function FlowPanel({
       aria-modal="true"
       aria-label={`${f.title} · flow`}
       data-testid="flow-detail"
-      className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none"
+      className="fixed inset-0 z-[60] flex flex-col bg-surface text-base leading-[22px] text-text outline-none"
     >
       <div className="flex flex-none items-center gap-2.5 border-b border-line px-3 py-2.5">
         <button type="button" data-first className={BTN_GHOST} onClick={() => setView(null)}>
           {/* qa4-simple-prd-30: the flow's sheet closes with "Close", as the storyboard's does. */}
           Close
         </button>
-        <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">
+        <h2 className="min-w-0 flex-1 text-lg leading-6 font-[650] break-words">
           {f.title} · flow
         </h2>
         <button type="button" className={BTN} onClick={() => setFull(true)}>
@@ -899,10 +899,10 @@ export function FlowPanel({
       aria-label={`${name ?? f.title} · flow`}
       data-testid="flow-detail"
       style={{ left: box.left, right: box.right, top: 16, maxHeight: 'calc(100dvh - 32px)' }}
-      className="fixed z-50 overflow-y-auto rounded-[14px] border border-line bg-surface px-[22px] py-[18px] text-[15px] leading-[22px] text-text shadow-tip outline-none"
+      className="fixed z-50 overflow-y-auto rounded-[14px] border border-line bg-surface px-[22px] py-[18px] text-base leading-[22px] text-text shadow-tip outline-none"
     >
       <div className="flex items-center gap-2.5">
-        <h2 className="min-w-0 flex-1 text-[20px] leading-7 font-[650] break-words">
+        <h2 className="min-w-0 flex-1 text-xl leading-7 font-[650] break-words">
           {title(f, 'flow')}
         </h2>
         <span className={META} data-testid="flow-drawn">
@@ -952,11 +952,11 @@ export function FlowPanel({
         aria-modal="true"
         aria-label={`Full screen: ${f.title}`}
         data-testid="flow-fullscreen"
-        className="fixed inset-0 z-[70] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none"
+        className="fixed inset-0 z-[70] flex flex-col bg-surface text-base leading-[22px] text-text outline-none"
       >
         {phone ? (
           <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
-            <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">
+            <h2 className="min-w-0 flex-1 text-lg leading-6 font-[650] break-words">
               {f.title} · flow
             </h2>
             <button
@@ -994,7 +994,7 @@ export function FlowPanel({
                 {backLabel}
               </button>
             )}
-            <h2 className="min-w-0 flex-1 text-[21px] leading-7 font-[650] break-words">
+            <h2 className="min-w-0 flex-1 text-xl leading-7 font-[650] break-words">
               {title(f, 'flow')}
             </h2>
             <span className={META}>
@@ -1107,7 +1107,7 @@ export function FlowPanel({
       <section
         data-testid="flow-row"
         aria-label="Flow"
-        className="mt-1 flex items-center gap-2 text-[15px] leading-[22px]"
+        className="mt-1 flex items-center gap-2 text-base leading-[22px]"
       >
         {v.flow ? (
           <>
@@ -1171,7 +1171,7 @@ export function FlowPanel({
 
   if (row) {
     return (
-      <section data-testid="flow-row" aria-label="Flow" className="text-[15px] leading-[22px]">
+      <section data-testid="flow-row" aria-label="Flow" className="text-base leading-[22px]">
         {v.flow ? (
           <div data-testid="flow-row-drawn">
             <div className="mt-2 flex items-start gap-3 max-[600px]:flex-col max-[600px]:gap-2">
@@ -1189,13 +1189,13 @@ export function FlowPanel({
                 <b className="font-[650] break-words">{v.flow.title}</b>
                 {fresh && (
                   <span
-                    className="ml-1.5 inline-flex items-center rounded-full bg-pass-bg px-2 align-[1px] text-[12px] leading-5 font-semibold text-pass"
+                    className="ml-1.5 inline-flex items-center rounded-full bg-pass-bg px-2 align-[1px] text-xs leading-5 font-semibold text-pass"
                     data-testid="flow-new"
                   >
                     New
                   </span>
                 )}
-                <p className="text-[15px] leading-[22px] text-text2" data-testid="flow-meta">
+                <p className="text-base leading-[22px] text-text2" data-testid="flow-meta">
                   {flowSize(v.flow)}
                 </p>
                 <p className={META} data-testid="flow-drawn">
@@ -1207,7 +1207,7 @@ export function FlowPanel({
                   </p>
                 )}
                 {!v.pending && v.failed && (
-                  <p className="text-[13px] leading-[18px] text-crit" data-testid="flow-failed">
+                  <p className="text-sm leading-[18px] text-crit" data-testid="flow-failed">
                     Oracle could not draw the next version.{' '}
                     {v.can_revise && (
                       <button
@@ -1239,7 +1239,7 @@ export function FlowPanel({
         ) : (
           <NoDrawing v={v} busy={busy} onAsk={() => void ask()} showHint={showHint} />
         )}
-        {error && <p className="mt-2 text-[14px] text-crit">{error}</p>}
+        {error && <p className="mt-2 text-sm text-crit">{error}</p>}
         {layers}
       </section>
     );
@@ -1250,12 +1250,12 @@ export function FlowPanel({
   return (
     <section
       data-testid="flow-detail"
-      className="mt-3 rounded-[14px] border border-line bg-surface px-4 py-4 text-[15px] leading-[22px] text-text"
+      className="mt-3 rounded-[14px] border border-line bg-surface px-4 py-4 text-base leading-[22px] text-text"
     >
       {flow ? (
         <>
           <div className="flex flex-wrap items-center gap-2.5">
-            <h3 className="min-w-0 flex-1 text-[18px] leading-6 font-[650] break-words">
+            <h3 className="min-w-0 flex-1 text-lg leading-6 font-[650] break-words">
               User flow: {flow.title}
             </h3>
             <span className={META} data-testid="flow-drawn">
@@ -1302,7 +1302,7 @@ export function FlowPanel({
       ) : (
         <NoDrawing v={v} busy={busy} onAsk={() => void ask()} showHint={showHint} />
       )}
-      {error && !flow && <p className="mt-2 text-[14px] text-crit">{error}</p>}
+      {error && !flow && <p className="mt-2 text-sm text-crit">{error}</p>}
       {onClose && (
         <button type="button" className={`${BTN} mt-3`} onClick={onClose}>
           Close the flow
@@ -1352,11 +1352,11 @@ function Storyboard({
         aria-label={`${f.title} · storyboard`}
         data-testid="flow-storyboard"
         style={{ left: box.left, right: box.right, bottom: 16 }}
-        className="fixed z-50 rounded-[14px] border border-line bg-surface px-4 pt-4 pb-[18px] text-[15px] leading-[22px] text-text shadow-tip outline-none"
+        className="fixed z-50 rounded-[14px] border border-line bg-surface px-4 pt-4 pb-[18px] text-base leading-[22px] text-text shadow-tip outline-none"
       >
         <div className="flex items-center gap-2.5">
-          <h2 className="min-w-0 flex-1 text-[18px] leading-6 font-[650] break-words">{heading}</h2>
-          <span className="text-[13px] leading-[18px] text-text2">{meta}</span>
+          <h2 className="min-w-0 flex-1 text-lg leading-6 font-[650] break-words">{heading}</h2>
+          <span className="text-sm leading-[18px] text-text2">{meta}</span>
           <button type="button" data-first className={BTN} onClick={onClose}>
             Close
           </button>
@@ -1386,10 +1386,10 @@ function Storyboard({
       aria-modal="true"
       aria-label={`${f.title} · storyboard`}
       data-testid="flow-storyboard"
-      className="fixed inset-x-0 bottom-0 z-[60] flex max-h-dvh flex-col rounded-t-[14px] border-t border-line bg-surface shadow-tip text-[15px] leading-[22px] text-text outline-none"
+      className="fixed inset-x-0 bottom-0 z-[60] flex max-h-dvh flex-col rounded-t-[14px] border-t border-line bg-surface shadow-tip text-base leading-[22px] text-text outline-none"
     >
       <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
-        <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">
+        <h2 className="min-w-0 flex-1 text-lg leading-6 font-[650] break-words">
           {f.title} · storyboard
         </h2>
         <button type="button" data-first className={BTN} onClick={onClose}>
@@ -1397,9 +1397,9 @@ function Storyboard({
         </button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4">
-        <p className="text-[13px] leading-[18px] text-text2">{phoneMeta}</p>
+        <p className="text-sm leading-[18px] text-text2">{phoneMeta}</p>
         <p
-          className="text-[15px] leading-[22px] font-semibold"
+          className="text-base leading-[22px] font-semibold"
           data-testid="story-at"
           aria-live="polite"
         >

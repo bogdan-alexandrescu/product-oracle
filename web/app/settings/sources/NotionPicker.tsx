@@ -88,7 +88,7 @@ function PageIcon({ page }: { page: NotionPage }) {
   }
   if (page.icon && isEmoji(page.icon))
     return (
-      <span aria-hidden className={`${box} text-[16px] leading-none`}>
+      <span aria-hidden className={`${box} text-base leading-none`}>
         {page.icon}
       </span>
     );
@@ -389,13 +389,13 @@ export function NotionPicker({
           <div className="flex min-w-0 flex-1 flex-col py-1.5">
             <label
               htmlFor={boxId}
-              className={`truncate text-[15px] leading-[22px] font-medium ${included ? 'text-text2' : 'text-text'}`}
+              className={`truncate text-base leading-[22px] font-medium ${included ? 'text-text2' : 'text-text'}`}
               title={page.title}
             >
               {page.title}
             </label>
             {(parent || page.type === 'database' || count > 0 || included) && (
-              <span className="tnum flex min-w-0 flex-wrap items-center gap-x-2 text-[13px] leading-[18px] text-text2">
+              <span className="tnum flex min-w-0 flex-wrap items-center gap-x-2 text-sm leading-[18px] text-text2">
                 {parent && <span className="min-w-0 truncate">in {parent.title}</span>}
                 {page.type === 'database' && <span>Database</span>}
                 {count > 0 && (
@@ -450,7 +450,7 @@ export function NotionPicker({
           />
         </span>
         <span
-          className="tnum flex-none text-[13px] font-semibold text-accent-ink"
+          className="tnum flex-none text-sm font-semibold text-accent-ink"
           aria-live="polite"
           data-testid="notion-picked-count"
         >
@@ -460,7 +460,7 @@ export function NotionPicker({
       {absorbed && (
         <p
           role="status"
-          className="border-b border-line bg-accent-soft px-3 py-2 text-[13px] font-medium text-accent-ink"
+          className="border-b border-line bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
           data-testid="notion-absorbed"
         >
           {absorbed}
@@ -492,7 +492,7 @@ export function NotionPicker({
           </div>
         )}
         {!list.loading && !list.error && !shown.length && (
-          <p className="px-3 py-6 text-center text-[15px] text-text2">
+          <p className="px-3 py-6 text-center text-base text-text2">
             {search ? 'No shared page matches' : 'Nothing shared yet'}
           </p>
         )}
@@ -528,7 +528,7 @@ export function NotionPicker({
               <span
                 role="listitem"
                 key={id}
-                className="inline-flex h-[30px] max-w-full items-center gap-1 rounded-full bg-accent-soft pr-1 pl-2.5 text-[13px] font-semibold text-accent-ink"
+                className="inline-flex h-[30px] max-w-full items-center gap-1 rounded-full bg-accent-soft pr-1 pl-2.5 text-sm font-semibold text-accent-ink"
               >
                 <span className="min-w-0 truncate" title={p || labels[id] ? title : id}>
                   {title}
@@ -553,7 +553,7 @@ export function NotionPicker({
       <div className="flex flex-col gap-1.5 border-t border-line bg-surface2 px-3 py-2.5">
         <label
           htmlFor={`${searchId}-link`}
-          className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
         >
           Paste a link
         </label>
@@ -579,11 +579,11 @@ export function NotionPicker({
           </Button>
         </div>
         {linkError && (
-          <p role="alert" className="text-[13px] font-medium text-crit">
+          <p role="alert" className="text-sm font-medium text-crit">
             {linkError}
           </p>
         )}
-        <p className="flex items-center gap-1 text-[13px] text-text2">
+        <p className="flex items-center gap-1 text-sm text-text2">
           {/* Pass F F-56: which pages show, behind an (i). */}
           <InfoTip label="which pages show" align="start">
             Only pages you shared with Product Oracle in Notion appear here.

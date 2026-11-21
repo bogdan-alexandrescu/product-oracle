@@ -214,7 +214,7 @@ function Inbox() {
       {kind && (
         <p
           data-testid="inbox-kind"
-          className="mb-3 flex flex-wrap items-center gap-x-2.5 text-[15px] text-text2"
+          className="mb-3 flex flex-wrap items-center gap-x-2.5 text-base text-text2"
         >
           <span>
             Showing <b className="font-semibold text-text">{kind.label}</b>

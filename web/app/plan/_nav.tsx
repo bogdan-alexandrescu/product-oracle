@@ -77,7 +77,7 @@ export function PlanNav() {
                 aria-label={t.name}
                 title={t.name}
                 aria-current={on ? 'page' : undefined}
-                className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap max-[600px]:px-2 ${
+                className={`flex h-8 flex-none items-center rounded-lg px-3 text-base font-medium whitespace-nowrap max-[600px]:px-2 ${
                   on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
                 }`}
               >

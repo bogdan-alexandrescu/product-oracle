@@ -300,7 +300,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
       )}
       {!canEdit && t.description && (
         <InspectorSection label="Description">
-          <p className="text-[15px] text-text">{t.description}</p>
+          <p className="text-base text-text">{t.description}</p>
         </InspectorSection>
       )}
       <InspectorSection label="Facts">
@@ -506,7 +506,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             </summary>
             <pre
               data-testid="version-body"
-              className="mt-2 max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"
+              className="mt-2 max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-sm leading-5 whitespace-pre-wrap text-text"
             >
               {shown.body}
             </pre>

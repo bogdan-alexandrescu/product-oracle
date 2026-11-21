@@ -76,7 +76,7 @@ export function PeopleReadOnly() {
               <span
                 data-testid="person-email"
                 title={p.email}
-                className="block max-w-full text-[13px] break-words text-text2"
+                className="block max-w-full text-sm break-words text-text2"
               >
                 {p.email.slice(0, p.email.indexOf('@') + 1)}
                 <wbr />

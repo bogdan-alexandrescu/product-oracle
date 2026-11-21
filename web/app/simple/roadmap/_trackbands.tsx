@@ -72,7 +72,7 @@ export function TrackHead({
   if (!t)
     return (
       <span
-        className={`${cut} font-semibold ${stack ? (wrap ? 'text-sm leading-[16px]' : 'text-[15px] leading-[18px]') : ''}`}
+        className={`${cut} font-semibold ${stack ? (wrap ? 'text-sm leading-[16px]' : 'text-base leading-[18px]') : ''}`}
       >
         {title}
       </span>
@@ -120,7 +120,7 @@ export function TrackHead({
         <span
           data-testid="track-head"
           data-words={words}
-          className={`pointer-events-auto flex min-w-0 items-center gap-1.5 ${wrap ? 'text-sm leading-[16px]' : 'text-[15px] leading-[18px]'}`}
+          className={`pointer-events-auto flex min-w-0 items-center gap-1.5 ${wrap ? 'text-sm leading-[16px]' : 'text-base leading-[18px]'}`}
         >
           {nameTip}
           {health}

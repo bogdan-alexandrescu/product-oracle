@@ -70,7 +70,7 @@ function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => 
   if (isHidden(row))
     return (
       <li
-        className="flex min-h-10 items-center gap-2 px-2 text-[15px] text-text2"
+        className="flex min-h-10 items-center gap-2 px-2 text-base text-text2"
         data-testid="hop-hidden-row"
       >
         <Icon name="lock" size={16} />
@@ -83,11 +83,11 @@ function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => 
         type="button"
         onClick={() => onOpen(row.id)}
         data-testid="hop-chat-row"
-        className="flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-[15px] text-text hover:bg-surface2"
+        className="flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-base text-text hover:bg-surface2"
       >
         {row.visibility === 'private' && <Icon name="lock" size={16} />}
         <span className="min-w-0 flex-1 truncate font-medium">{row.title}</span>
-        <span className="flex-none text-[13px] text-text2 tnum">{row.message_count}</span>
+        <span className="flex-none text-sm text-text2 tnum">{row.message_count}</span>
       </button>
     </li>
   );
@@ -166,7 +166,7 @@ function NewChat({
               void send();
             }
           }}
-          className="max-h-40 min-h-10 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint"
+          className="max-h-40 min-h-10 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2 text-base leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint"
         />
         <Button
           type="submit"
@@ -353,9 +353,7 @@ function DetailedPanel({
               </p>
               {!!here?.length && (
                 <section aria-label="Here" className="flex flex-col gap-1">
-                  <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">
-                    Here
-                  </h3>
+                  <h3 className="text-sm font-semibold tracking-wide text-text2 uppercase">Here</h3>
                   <ul className="flex flex-col">
                     {here.map((row) => (
                       <ChatRow key={row.id} row={row} onOpen={open} />
@@ -365,10 +363,10 @@ function DetailedPanel({
               )}
               {here !== null && here.length === 0 && (
                 <p
-                  className="px-2 pt-7 pb-3 text-center text-[15px] text-text2"
+                  className="px-2 pt-7 pb-3 text-center text-base text-text2"
                   data-testid="hop-empty"
                 >
-                  <b className="mb-1 block text-[17px] font-semibold text-text">Nothing yet</b>
+                  <b className="mb-1 block text-lg font-semibold text-text">Nothing yet</b>
                   {writes
                     ? 'Ask why something is ranked, what to cut, or what is missing.'
                     : 'Chats here show for you to read.'}
@@ -489,7 +487,7 @@ function RecentMenu({
         Your recent chats
       </h3>
       {items !== null && items.length === 0 ? (
-        <p className="px-2 py-2 text-[13px] text-text2">No chats yet.</p>
+        <p className="px-2 py-2 text-sm text-text2">No chats yet.</p>
       ) : (
         <ul className="flex flex-col">
           {(items ?? []).map((c) => (
@@ -500,10 +498,10 @@ function RecentMenu({
                 onClick={() => onOpen(c.id)}
                 className="flex w-full flex-col rounded-lg p-2 text-left outline-none hover:bg-surface2 focus:bg-surface2 focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,var(--accent))]"
               >
-                <b className="text-[15px] font-semibold text-text [overflow-wrap:anywhere]">
+                <b className="text-base font-semibold text-text [overflow-wrap:anywhere]">
                   {c.title}
                 </b>
-                <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">
+                <span className="text-sm text-text2 [overflow-wrap:anywhere]">
                   {c.subject_label}
                 </span>
               </button>

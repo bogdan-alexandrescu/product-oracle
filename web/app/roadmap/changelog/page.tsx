@@ -52,7 +52,7 @@ const STATUS_KIND: Record<Entry['status'], ChipKind> = {
   withdrawn: 'line',
 };
 /** qa-plan-38: a secondary button in the header row is the primary's 40 px height. */
-const HEADER_BUTTON = 'h-10! rounded-button! px-4! text-[15px]!';
+const HEADER_BUTTON = 'h-10! rounded-button! px-4! text-base!';
 /**
  * qa-plan-37: a disabled export has no outline and no fill and is dimmed, so in dark it does
  * not read like an enabled bordered button.
@@ -284,7 +284,7 @@ function ChangelogPage() {
               data-testid="changelog-empty"
               className="flex flex-col items-center gap-3 px-4 py-8 text-center"
             >
-              <p data-testid="changelog-empty-text" className="text-[15px] text-text2">
+              <p data-testid="changelog-empty-text" className="text-base text-text2">
                 No entries yet. {/* #1590: how an entry gets added sits behind the (i). */}
                 <InfoTip label="how entries get added" align="start" testId="changelog-empty-tip">
                   {canCreate
@@ -321,7 +321,7 @@ function ChangelogPage() {
                   data-category={category}
                   className="mt-2"
                 >
-                  <h3 className="text-[13px] font-semibold tracking-[0.02em] text-text2">
+                  <h3 className="text-sm font-semibold tracking-[0.02em] text-text2">
                     {CATEGORY_LABEL[category]}
                   </h3>
                   <ul className="mt-1 flex flex-col divide-y divide-line">
@@ -379,7 +379,7 @@ function EntryRow({
           {STATUS_LABEL[entry.status]}
         </Chip>
       </div>
-      {entry.body && <p className="text-[15px] leading-6 text-text2">{entry.body}</p>}
+      {entry.body && <p className="text-base leading-6 text-text2">{entry.body}</p>}
       {/* #370: each action shows only for a role that may call it. */}
       <div className="flex flex-wrap gap-1.5 empty:hidden">
         {can('update_changelog_entry') && (
@@ -418,7 +418,7 @@ function EntryRow({
           <label className="flex flex-col gap-1 text-sm font-medium">
             Title
             <input
-              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]"
+              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-base"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
@@ -426,7 +426,7 @@ function EntryRow({
           <label className="flex flex-col gap-1 text-sm font-medium">
             What changed
             <textarea
-              className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-[15px]"
+              className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-base"
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />

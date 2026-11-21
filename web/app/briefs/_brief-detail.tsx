@@ -69,7 +69,7 @@ function Block({
   children: ReactNode;
 }) {
   return (
-    <Panel title={title} testId={testId} bodyClassName="px-4 py-3 text-[15px] leading-6">
+    <Panel title={title} testId={testId} bodyClassName="px-4 py-3 text-base leading-6">
       {children}
     </Panel>
   );
@@ -127,8 +127,8 @@ function Touches({ b }: { b: TechBrief }) {
           {/* qa-docs-85: a table from 601 px up; on a phone each touch is a short stack of
               label and value, so no cell wraps mid-phrase. */}
           <div className="overflow-x-auto max-[600px]:hidden">
-            <table aria-label="What it touches" className="w-full text-left text-[14px]">
-              <thead className="text-[13px] text-text2">
+            <table aria-label="What it touches" className="w-full text-left text-sm">
+              <thead className="text-sm text-text2">
                 <tr>
                   <th className="py-1 pr-3 font-semibold">Area</th>
                   <th className="py-1 pr-3 font-semibold">What changes</th>
@@ -159,7 +159,7 @@ function Touches({ b }: { b: TechBrief }) {
                 className="border-t border-line py-2 first:border-t-0 first:pt-0"
               >
                 <p className="font-semibold break-words">{t.area}</p>
-                <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[14px]">
+                <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm">
                   <dt className="whitespace-nowrap text-text2">What changes</dt>
                   <dd>{touchText(t.kind, t.change)}</dd>
                   <dt className="whitespace-nowrap text-text2">In the code map</dt>
@@ -238,7 +238,7 @@ function Verdict({ b }: { b: TechBrief }) {
             {v.value ? sentence(v.value) : 'Approved at the Engineering check'}
           </p>
           {v.note && <p data-user-content>{readerText(v.note, b.questions)}</p>}
-          {v.at && <p className="text-[13px] text-text2">{formatDateTime(v.at)}</p>}
+          {v.at && <p className="text-sm text-text2">{formatDateTime(v.at)}</p>}
         </>
       )}
     </Block>

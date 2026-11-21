@@ -67,11 +67,11 @@ export function ChangeDiff({ id, onClose }: { id: string; onClose: () => void })
                   <span className="min-w-0 [overflow-wrap:anywhere]">{ch.page_url}</span>
                 )}
               </p>
-              {ch.summary && <p className="text-[15px] [overflow-wrap:anywhere]">{ch.summary}</p>}
+              {ch.summary && <p className="text-base [overflow-wrap:anywhere]">{ch.summary}</p>}
               {ch.origin === 'page' ? (
                 <ol
                   aria-label="Lines removed and added"
-                  className="flex flex-col gap-0.5 rounded-lg border border-line p-2 font-mono text-[13px]"
+                  className="flex flex-col gap-0.5 rounded-lg border border-line p-2 font-mono text-sm"
                 >
                   {ch.diff.length === 0 && (
                     <li className="text-text2">No lines kept for this change</li>

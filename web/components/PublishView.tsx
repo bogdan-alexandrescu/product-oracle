@@ -296,7 +296,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
         void accept();
       }}
     >
-      <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
+      <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
         Reason
         <input
           className={INPUT}
@@ -306,7 +306,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
           maxLength={4000}
         />
       </label>
-      <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
+      <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
         Review by
         <input
           className={INPUT}
@@ -318,7 +318,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
           aria-describedby="risk-review-limit"
           required
         />
-        <span id="risk-review-limit" className="text-[13px] font-normal">
+        <span id="risk-review-limit" className="text-sm font-normal">
           Within {policy.maxDays} days
         </span>
       </label>
@@ -899,7 +899,7 @@ export function PublishView({ doc }: { doc: string }) {
           : `Ready to publish v${n}`;
   const action =
     n == null ? null : published ? (
-      <Chip kind="pass" className="h-10 px-4 text-[15px]" data-testid="published-chip">
+      <Chip kind="pass" className="h-10 px-4 text-base" data-testid="published-chip">
         <Icon name="check" size={16} />
         Published v{n}
       </Chip>

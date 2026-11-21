@@ -54,7 +54,7 @@ export function RawFileSheet({
       testId="sheet-raw-file"
     >
       <pre
-        className="mx-4 my-3 max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap break-words"
+        className="mx-4 my-3 max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-sm whitespace-pre-wrap break-words"
         data-testid="raw-file-content"
       >
         {loaded?.which === open ? loaded.text : 'Loading…'}

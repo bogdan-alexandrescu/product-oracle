@@ -13,7 +13,7 @@ type Status = Track['status'];
 
 const STATE: Record<Status, string> = { active: 'Active', paused: 'Paused', closed: 'Closed' };
 const FIELD =
-  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-[15px] outline-none focus:border-accent';
+  'h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-base outline-none focus:border-accent';
 /** A field's name over it (the new-track form). */
 const LABELLED = 'flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2';
 const PRIMARY =
@@ -433,7 +433,7 @@ function TrackFields({
     if (await onEdit({ title: v }, `Renamed ${t.title} to ${v}`)) setRenaming(false);
   };
   return (
-    <dl className="text-[15px]">
+    <dl className="text-base">
       <div className={ROW}>
         <dt className="text-sm text-text2">Name</dt>
         <dd>

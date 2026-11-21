@@ -196,7 +196,7 @@ export function PlanTimeline({
           }
         />
       ) : (
-        <p data-testid="plan-timeline-empty" className="px-1 text-[15px] text-text2">
+        <p data-testid="plan-timeline-empty" className="px-1 text-base text-text2">
           No dated items yet
         </p>
       )}

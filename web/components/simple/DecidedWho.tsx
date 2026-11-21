@@ -7,7 +7,7 @@ import { formatDateTime } from '@/lib/format';
 export function DecidedWho({ d }: { d: Schemas['SimpleDecidedRef'] }) {
   if (!d.decided_by && !d.decided_at && !d.minutes_url) return null;
   return (
-    <span className="block text-[13px] text-text2" data-testid="decided-who">
+    <span className="block text-sm text-text2" data-testid="decided-who">
       {d.decided_by ? `Decided by ${d.decided_by.name}` : 'Decided'}
       {d.decided_at ? ` · ${formatDateTime(d.decided_at)}` : ''}
       {d.minutes_url && (

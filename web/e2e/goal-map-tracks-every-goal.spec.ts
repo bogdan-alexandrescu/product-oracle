@@ -209,7 +209,7 @@ test.describe("Add a feature's toasts", () => {
 });
 
 test.describe('Badges as variant B draws them', () => {
-  test("a goal's Not measured has no dotted underline; a strip's No gate is 12px", async ({
+  test("a goal's Not measured has no dotted underline; a strip's No gate is 13px", async ({
     page,
   }) => {
     // protects: the owner's picked mock-up's badges. fails_when: the badge is underlined or 11.5px.
@@ -220,7 +220,7 @@ test.describe('Badges as variant B draws them', () => {
       .getByRole('button', { name: 'Not measured' });
     expect(await nm.evaluate((el) => getComputedStyle(el).textDecorationLine)).toBe('none');
     const ng = strip(page, 'Self-serve setup').getByRole('button', { name: 'No gate' });
-    expect(await ng.evaluate((el) => getComputedStyle(el).fontSize)).toBe('12px');
+    expect(await ng.evaluate((el) => getComputedStyle(el).fontSize)).toBe('13px');
   });
 });
 

@@ -253,9 +253,7 @@ function Dialog({
             <Icon name="x" size={20} />
           </button>
         </div>
-        <div className="space-y-3.5 px-5 py-4 text-[15px] leading-6 max-[600px]:px-4">
-          {children}
-        </div>
+        <div className="space-y-3.5 px-5 py-4 text-base leading-6 max-[600px]:px-4">{children}</div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
           {footer}
         </div>
@@ -264,7 +262,7 @@ function Dialog({
   );
 }
 
-const LABEL = 'mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
+const LABEL = 'mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2';
 
 /**
  * Delete… (owners): what goes to Trash with it, a published artifact's second yes (its
@@ -367,7 +365,7 @@ export function DeleteDialog({
                   .filter((i) => i.type !== 'run')
                   .map((i) => (
                     <li key={i.id} className="flex min-w-0 items-baseline gap-2">
-                      <span className="flex-none text-[13px] font-semibold text-text2">
+                      <span className="flex-none text-sm font-semibold text-text2">
                         {itemKind(i)}
                       </span>
                       <span className="min-w-0 break-words">{i.title}</span>
@@ -537,7 +535,7 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
           aria-label="Estimate"
           className="rounded-panel border border-line bg-surface2 px-3.5 py-2.5"
         >
-          <p className="text-[13px] font-semibold text-text2">It will use</p>
+          <p className="text-sm font-semibold text-text2">It will use</p>
           <ul data-testid="regenerate-inputs" className="mt-1 flex list-disc flex-col gap-0.5 pl-5">
             {estimate.inputs.map((i) => (
               <li key={i} className="break-words">

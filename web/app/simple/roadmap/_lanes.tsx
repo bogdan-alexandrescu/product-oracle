@@ -1440,14 +1440,14 @@ function DesktopLanes({
               className="flex min-w-0 flex-col justify-center border-t border-[var(--simple-rule)] pr-2.5 pl-4"
             >
               <b
-                className={`text-[15px] leading-5 font-bold ${l.kind === 'below' ? 'text-text2' : ''}`}
+                className={`text-base leading-5 font-bold ${l.kind === 'below' ? 'text-text2' : ''}`}
               >
                 {lane === 'goal' && l.kind === 'group' && (
                   <GoalNum n={numbers.get(l.key) ?? numbers.get(l.title)} />
                 )}
                 {l.title}
               </b>
-              <small className="text-[12.5px] leading-4 text-text-faint" data-testid="lane-count">
+              <small className="text-xs leading-4 text-text-faint" data-testid="lane-count">
                 {l.count} {l.count === 1 ? 'item' : 'items'}
                 {l.kind === 'pm' ? ' · no engineering' : ''}
               </small>
@@ -2203,7 +2203,7 @@ function LanesLegend({
   return (
     <div
       data-testid="legend"
-      className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-2 text-[13px] leading-[18px] text-text-faint"
+      className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-2 text-sm leading-[18px] text-text-faint"
     >
       {codes.map((c) =>
         item(
@@ -2652,9 +2652,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
           className="flex flex-col gap-0.5 rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3"
         >
           <div className="flex items-baseline gap-2">
-            <b className="text-[16px] leading-6 font-bold">{openLane.title}</b>
+            <b className="text-base leading-6 font-bold">{openLane.title}</b>
             {/* fix4 qa-simple-roadmap-45: "at once" counts the lane's bars as drawn (its rows of runs), not its pieces. */}
-            <span className="text-[14px] leading-5 text-text-faint" data-testid="lane-list-count">
+            <span className="text-sm leading-5 text-text-faint" data-testid="lane-list-count">
               {/* qa4-simple-roadmap-33: the count alone, no "up to 1 at once". */}
               {openLane.count} {openLane.count === 1 ? 'item' : 'items'}
             </span>
@@ -2673,7 +2673,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     data-code={p.code ?? undefined}
                     data-open={open === item.id ? 'true' : undefined}
                     onClick={() => onOpen(item, { x: 0, y: 0 })}
-                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-left text-[14px] leading-[19px] ${open === item.id ? 'bg-accent-soft' : ''}`}
+                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-left text-sm leading-[19px] ${open === item.id ? 'bg-accent-soft' : ''}`}
                   >
                     {/* qa4-simple-roadmap-32: the name only, no feature code. */}
                     <span
@@ -2690,7 +2690,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                       )}
                     </span>
                     <span
-                      className={`text-[12.5px] whitespace-nowrap ${red.length ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                      className={`text-xs whitespace-nowrap ${red.length ? 'font-[650] text-crit' : 'text-text-faint'}`}
                       title={
                         red[0] &&
                         codedFlag(item, red[0], data.goal_milestones, data.milestones).reason

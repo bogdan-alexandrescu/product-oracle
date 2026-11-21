@@ -137,7 +137,7 @@ export function ItemInspector({
 
           {(row.outcome || outcomeEdit) && (
             <InspectorSection label="Outcome" testId="item-outcome">
-              {outcomeEdit ?? <p className="text-[15px]">{row.outcome}</p>}
+              {outcomeEdit ?? <p className="text-base">{row.outcome}</p>}
             </InspectorSection>
           )}
 
@@ -220,7 +220,7 @@ export function ItemInspector({
           {rank && (str(priority?.explanation) || str(priority?.score)) && (
             <InspectorSection label={`Why rank ${rank}`} testId="item-rank">
               {str(priority?.explanation) && (
-                <p className="text-[15px]">{str(priority?.explanation)}</p>
+                <p className="text-base">{str(priority?.explanation)}</p>
               )}
               {str(priority?.score) && (
                 <p className="mt-1 text-sm text-text2">
@@ -248,7 +248,7 @@ export function ItemInspector({
 
           {deliver.length > 0 && (
             <InspectorSection label="Delivers" testId="item-delivers">
-              <ul className="flex flex-col gap-1 text-[15px]">
+              <ul className="flex flex-col gap-1 text-base">
                 {deliver.map((e) => (
                   <li key={e.id}>{e.title}</li>
                 ))}
@@ -272,7 +272,7 @@ export function ItemInspector({
 
           {gates.length > 0 && (
             <InspectorSection label="Validation gates" testId="item-gates">
-              <ul className="flex flex-col gap-1.5 text-[15px]">
+              <ul className="flex flex-col gap-1.5 text-base">
                 {gates.map((g, i) => (
                   <li key={i}>
                     <span className="font-medium">{str(g.name) ?? str(g.kind) ?? 'Gate'}</span>
@@ -312,7 +312,7 @@ export function ItemInspector({
           {stale && (
             <InspectorSection label="Freshness" testId="item-freshness">
               {(row.stale_reasons?.length ?? 0) > 0 && (
-                <ul className="list-disc pl-5 text-[15px]">
+                <ul className="list-disc pl-5 text-base">
                   {row.stale_reasons!.map((r) => (
                     <li key={r}>{r}</li>
                   ))}

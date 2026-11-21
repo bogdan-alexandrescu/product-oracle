@@ -32,7 +32,7 @@ export function AutonomyNote({
   onFollow?: () => void;
 }) {
   return (
-    <p data-testid={testId} className="text-[15px] text-text2">
+    <p data-testid={testId} className="text-base text-text2">
       {children}{' '}
       <Link
         href="/settings/autonomy"

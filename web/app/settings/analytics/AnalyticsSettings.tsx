@@ -125,7 +125,7 @@ export function AnalyticsSettings() {
         }
       >
         <div className="flex max-w-xl flex-col gap-3 px-4 py-3">
-          <p className="text-[15px] font-semibold" data-testid="analytics-state">
+          <p className="text-base font-semibold" data-testid="analytics-state">
             {connectionText(a)}
           </p>
           {connected && (

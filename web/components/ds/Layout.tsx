@@ -89,9 +89,9 @@ export function PageHeader({
       <h1
         data-phone-title={phoneTitle ? '' : undefined}
         data-phone-plain={phoneSuffix ? undefined : ''}
-        className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
+        className={`min-w-0 font-display text-2xl leading-8 font-bold tracking-heading ${
           phoneTitle
-            ? 'break-words max-[600px]:text-[22px] max-[600px]:leading-7'
+            ? 'break-words max-[600px]:text-xl max-[600px]:leading-7'
             : 'max-[600px]:sr-only'
         }`}
       >
@@ -268,7 +268,7 @@ export function NotFoundPanel({
         </span>
         <div
           data-testid="not-found-text"
-          className="flex max-w-prose flex-col gap-1 text-[15px] text-text2"
+          className="flex max-w-prose flex-col gap-1 text-base text-text2"
         >
           {children}
         </div>
@@ -330,7 +330,7 @@ export function Label({
   return (
     <span
       id={id}
-      className={`text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2 ${className}`}
+      className={`text-sm leading-4 font-semibold tracking-[0.02em] text-text2 ${className}`}
     >
       {children}
     </span>
@@ -356,12 +356,12 @@ export function Empty({
         >
           <Icon name={icon} size={24} />
         </span>
-        <p className="text-[15px] font-semibold text-text2">{children}</p>
+        <p className="text-base font-semibold text-text2">{children}</p>
       </div>
     );
   }
   return (
-    <p data-testid={testId} className="px-4 py-8 text-center text-[15px] text-text2">
+    <p data-testid={testId} className="px-4 py-8 text-center text-base text-text2">
       {children}
     </p>
   );

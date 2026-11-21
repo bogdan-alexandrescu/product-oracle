@@ -55,7 +55,7 @@ const STATE_LABEL: Record<Link_['state'], string> = {
   revoked: 'Revoked',
 };
 const SHOWN_ONCE = 'This passcode is shown once. Send it apart from the link.';
-const LABEL = 'mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
+const LABEL = 'mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2';
 /** A field's hint, under it (qa-docs-69). */
 const HINT = 'mt-1 text-sm text-text2';
 const SHARE_HINT =
@@ -110,9 +110,7 @@ function Modal({
             <Icon name="x" size={20} />
           </button>
         </div>
-        <div className="space-y-3.5 px-5 py-4 text-[15px] leading-6 max-[600px]:px-4">
-          {children}
-        </div>
+        <div className="space-y-3.5 px-5 py-4 text-base leading-6 max-[600px]:px-4">{children}</div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
           {footer}
         </div>
@@ -184,7 +182,7 @@ export function AudienceSwitch({
             role="radio"
             aria-checked={on}
             onClick={() => onChange(a.key)}
-            className={`flex h-9 items-center border-r border-line px-3.5 text-[15px] font-medium whitespace-nowrap last:border-r-0 ${
+            className={`flex h-9 items-center border-r border-line px-3.5 text-base font-medium whitespace-nowrap last:border-r-0 ${
               on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
             }`}
           >
@@ -254,7 +252,7 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
         <figure className="m-0">
           <figcaption
             data-testid="audience-preview-caption"
-            className="mb-1.5 text-[13px] font-semibold text-text2"
+            className="mb-1.5 text-sm font-semibold text-text2"
           >
             How the exported page looks
           </figcaption>
@@ -862,7 +860,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
           <span data-testid="share-state">{STATE_LABEL[l.state]}</span>
           {/* qa4-docs-share-30: when it was revoked, by whom and why, in the row. */}
           {l.state === 'revoked' && (
-            <span data-testid="share-revoked" className="block text-[13px] text-text2">
+            <span data-testid="share-revoked" className="block text-sm text-text2">
               {[
                 l.revoked_at ? formatDate(l.revoked_at) : null,
                 l.revoked_by_name ? `by ${l.revoked_by_name}` : null,

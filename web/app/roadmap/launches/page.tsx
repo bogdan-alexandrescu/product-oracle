@@ -329,7 +329,7 @@ function Launches() {
             {none ? (
               <div
                 data-testid="launches-empty"
-                className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2"
+                className="flex flex-col items-center gap-3 px-4 py-10 text-center text-base text-text2"
               >
                 <p className="font-display text-lg font-bold text-text">No launches yet</p>
                 <p data-testid="launches-empty-text">
@@ -546,7 +546,7 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
         </InspectorSection>
       )}
       <InspectorSection label="Tier">
-        <p className="text-[15px] leading-6" data-testid="launch-tier">
+        <p className="text-base leading-6" data-testid="launch-tier">
           {l.tier == null
             ? `Tier ${l.tier_suggestion.tier} suggested · ${l.tier_suggestion.reason}`
             : `Tier ${l.tier}`}
@@ -682,7 +682,7 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Why is it cancelled?
                 <input
-                  className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]"
+                  className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-base"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 />
@@ -722,7 +722,7 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
 
 type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
 
-const FIELD = 'h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
+const FIELD = 'h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-base';
 
 /** Add task: a task of the company's own at the end of the checklist (approvers). */
 function AddTask({ launchId, busy, act }: { launchId: string; busy: string | null; act: Act }) {
@@ -850,7 +850,7 @@ function AddNote({ launchId, busy, act }: { launchId: string; busy: string | nul
       <label className="flex flex-col gap-1 text-sm font-medium">
         What they asked
         <textarea
-          className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-[15px]"
+          className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-base"
           value={asked}
           maxLength={5000}
           onChange={(e) => setAsked(e.target.value)}
@@ -946,7 +946,7 @@ function TaskRow({
           {task.notice && <p className="text-sm font-medium text-warn">{task.notice}</p>}
           <textarea
             aria-label={`Draft of ${task.title}`}
-            className="min-h-32 rounded-lg border border-line-strong bg-surface p-2.5 text-[15px] leading-6"
+            className="min-h-32 rounded-lg border border-line-strong bg-surface p-2.5 text-base leading-6"
             value={text}
             readOnly={!canEdit}
             onChange={(e) => setText(e.target.value)}
@@ -967,7 +967,7 @@ function TaskRow({
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
             Why skip it?
             <input
-              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]"
+              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-base"
               value={why}
               onChange={(e) => setWhy(e.target.value)}
             />
@@ -1030,7 +1030,7 @@ function NoteRow({
         </blockquote>
       )}
       {note.body ? (
-        <p className="text-[15px] leading-6 whitespace-pre-line" data-testid="note-draft">
+        <p className="text-base leading-6 whitespace-pre-line" data-testid="note-draft">
           {note.body}
         </p>
       ) : (
@@ -1065,7 +1065,7 @@ function NoteRow({
           <label className="flex flex-col gap-1 text-sm font-medium">
             Sent by
             <select
-              className="h-9 rounded-lg border border-line-strong bg-surface px-2 text-[15px]"
+              className="h-9 rounded-lg border border-line-strong bg-surface px-2 text-base"
               value={channel}
               onChange={(e) => setChannel(e.target.value as Channel)}
             >
@@ -1080,7 +1080,7 @@ function NoteRow({
             On
             <input
               type="date"
-              className="h-9 rounded-lg border border-line-strong bg-surface px-2 text-[15px]"
+              className="h-9 rounded-lg border border-line-strong bg-surface px-2 text-base"
               value={on}
               onChange={(e) => setOn(e.target.value)}
             />
@@ -1100,7 +1100,7 @@ function NoteRow({
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
             Why skip it?
             <input
-              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]"
+              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-base"
               value={why}
               onChange={(e) => setWhy(e.target.value)}
             />

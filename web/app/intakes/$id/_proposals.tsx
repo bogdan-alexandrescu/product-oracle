@@ -41,7 +41,7 @@ function ProposalDiff({ p }: { p: Proposal }) {
         data-testid="proposal-diff"
         className="flex min-w-0 flex-col gap-1 rounded-button border border-line bg-surface2 p-2.5 text-sm"
       >
-        {where && <span className="font-mono text-[13px] break-all text-text2">{where}</span>}
+        {where && <span className="font-mono text-sm break-all text-text2">{where}</span>}
         <p className="break-words">
           <ins className="rounded-sm bg-pass-bg px-0.5 text-pass no-underline">
             {text(d.text) ?? '—'}
@@ -56,8 +56,8 @@ function ProposalDiff({ p }: { p: Proposal }) {
       className="flex min-w-0 flex-col gap-1 rounded-button border border-line bg-surface2 p-2.5 text-sm"
     >
       {text(d.question) && <p className="break-words">{text(d.question)}</p>}
-      <span className="text-[13px] text-text2">Depth: {text(d.depth) ?? 'quick'}</span>
-      {text(d.why) && <p className="text-[13px] break-words text-text2">{text(d.why)}</p>}
+      <span className="text-sm text-text2">Depth: {text(d.depth) ?? 'quick'}</span>
+      {text(d.why) && <p className="text-sm break-words text-text2">{text(d.why)}</p>}
     </div>
   );
 }
@@ -129,7 +129,7 @@ function ProposalCard({
       className="flex min-w-0 scroll-mt-16 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text"
     >
       <div className="flex min-w-0 flex-wrap items-start gap-2">
-        <p className="min-w-0 flex-1 basis-60 text-[15px] font-semibold break-words">{p.title}</p>
+        <p className="min-w-0 flex-1 basis-60 text-base font-semibold break-words">{p.title}</p>
         <span className="flex flex-wrap gap-1.5">
           <Chip kind="acc">{KIND[p.kind]}</Chip>
           <Chip kind={status.kind} dot data-testid="proposal-status">
@@ -137,7 +137,7 @@ function ProposalCard({
           </Chip>
         </span>
       </div>
-      <span className="text-[13px] text-text2" title={when(p.created_at)}>
+      <span className="text-sm text-text2" title={when(p.created_at)}>
         Proposed {dayMonth(p.created_at)}
       </span>
       <ProposalDiff p={p} />
@@ -199,7 +199,7 @@ export function ProposalsTab({
   return (
     <div data-testid="intake-proposals" className="flex min-w-0 flex-col gap-3 pt-3">
       {capsReady && !approver && (
-        <p data-testid="proposals-role-note" role="note" className="text-[13px] text-text2">
+        <p data-testid="proposals-role-note" role="note" className="text-sm text-text2">
           {DECIDE_REASON}; you can read them.
         </p>
       )}

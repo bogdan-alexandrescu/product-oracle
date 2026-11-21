@@ -22,7 +22,7 @@ export function SelectionButton({ rect, onOpen }: { rect: PageRect; onOpen: () =
         onClick={onOpen}
       >
         Comment{' '}
-        <kbd className="rounded border border-on-accent/40 px-1 font-mono text-[13px] leading-none">
+        <kbd className="rounded border border-on-accent/40 px-1 font-mono text-sm leading-none">
           c
         </kbd>
       </Button>
@@ -95,7 +95,7 @@ export function CommentPopover({
         />
         {error && <InlineError>{error}</InlineError>}
         <div className="mt-2 flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[13px] text-text2">
+          <span className="flex items-center gap-1 text-sm text-text2">
             <Kbd>⌘</Kbd>
             <Kbd>↵</Kbd>
           </span>

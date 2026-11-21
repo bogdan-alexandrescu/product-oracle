@@ -934,7 +934,7 @@ function CampaignForm({
           {saving ? 'Sending…' : 'Send'}
         </Button>
         {!title.trim() && (
-          <span id={hintId} data-testid="campaign-send-hint" className="text-[13px] text-text2">
+          <span id={hintId} data-testid="campaign-send-hint" className="text-sm text-text2">
             {NO_TITLE}
           </span>
         )}

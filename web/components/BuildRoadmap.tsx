@@ -41,7 +41,7 @@ export function BuildRoadmapButton({ prd, size }: { prd: ApprovedPrd; size?: 'sm
       <Button
         variant="secondary"
         icon="roadmap"
-        className={size === 'sm' ? '' : 'h-10 rounded-button px-4 text-[15px]'}
+        className={size === 'sm' ? '' : 'h-10 rounded-button px-4 text-base'}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
@@ -167,16 +167,16 @@ export function BuildRoadmapDialog({
       testId="build-roadmap-dialog"
       head={
         <p className="mt-1.5 flex flex-wrap items-center gap-2">
-          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             Approved PRD
           </span>
           <Link
             href={`/documents/${prd.slug}/v/${prd.approved_version}`}
-            className="inline-flex h-[26px] items-center rounded-full border border-line-strong px-2.5 text-[13px] font-semibold text-text underline-offset-2 hover:underline"
+            className="inline-flex h-[26px] items-center rounded-full border border-line-strong px-2.5 text-sm font-semibold text-text underline-offset-2 hover:underline"
           >
             {prd.title} v{prd.approved_version}
           </Link>
-          <span className="inline-flex h-[26px] items-center rounded-full bg-accent-soft px-2.5 text-[13px] font-semibold text-accent-ink">
+          <span className="inline-flex h-[26px] items-center rounded-full bg-accent-soft px-2.5 text-sm font-semibold text-accent-ink">
             Approved
           </span>
           <InfoTip label="Build roadmap" align="start" side="bottom">
@@ -208,7 +208,7 @@ export function BuildRoadmapDialog({
       <div>
         <label
           htmlFor={`${id}-target`}
-          className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          className="mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
         >
           Roadmap
         </label>
@@ -248,7 +248,7 @@ export function BuildRoadmapDialog({
           className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-accent-ink"
           data-testid="recommendation"
         >
-          <span className="text-[13px] font-semibold tracking-[0.02em]">Recommended</span>
+          <span className="text-sm font-semibold tracking-[0.02em]">Recommended</span>
           <span className="font-semibold">{rec.template.name}</span>
           {rec.theme && <span>· {rec.theme.name}</span>}
           <InfoTip label="Recommendation" align="start">
@@ -259,8 +259,8 @@ export function BuildRoadmapDialog({
       {ready && <TemplateThemePicker choice={choice} />}
 
       {hasDraftItems && (
-        <details className="text-[15px]" data-testid="build-roadmap-advanced">
-          <summary className="cursor-pointer text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        <details className="text-base" data-testid="build-roadmap-advanced">
+          <summary className="cursor-pointer text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             Advanced options
           </summary>
           <div className="mt-2 flex items-center gap-2">

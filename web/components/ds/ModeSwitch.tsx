@@ -28,7 +28,7 @@ const MODES: { value: Mode; label: string }[] = [
  */
 export const SEGMENTED = {
   track: 'gap-0.5 rounded-xl bg-surface2 p-1',
-  option: 'h-9 rounded-lg text-[15px]',
+  option: 'h-9 rounded-lg text-base',
   // qa-simple-home-20: in dark the chosen option is a lighter, outlined pill (a dark pill on its track read as unchosen).
   on: 'bg-surface font-semibold text-accent-ink shadow-sm [:root[data-theme=dark]_&]:bg-accent-mid [:root[data-theme=dark]_&]:shadow-[0_0_0_1px_var(--line-strong)] dark:[:root:not([data-theme=light])_&]:bg-accent-mid dark:[:root:not([data-theme=light])_&]:shadow-[0_0_0_1px_var(--line-strong)]',
   off: 'font-medium text-text2 hover:text-accent-ink',
@@ -164,7 +164,7 @@ export function ModeSwitch({
             onClick={() => choose(m.value)}
             className={
               narrow
-                ? `h-7 rounded-lg text-[13px] leading-4 ${on ? 'bg-rail-active font-semibold text-rail-active-text' : 'font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text'}`
+                ? `h-7 rounded-lg text-sm leading-4 ${on ? 'bg-rail-active font-semibold text-rail-active-text' : 'font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text'}`
                 : `${SEGMENTED.option} ${on ? SEGMENTED.on : SEGMENTED.off}`
             }
           >

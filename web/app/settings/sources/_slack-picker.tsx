@@ -10,7 +10,7 @@ import { zoneName } from '@/lib/format';
 import { INPUT } from '../_components/fields';
 import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from './_browse-list';
 
-const LABEL = 'text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
+const LABEL = 'text-sm leading-4 font-semibold tracking-[0.02em] text-text2';
 
 /** As oracle.sources.connectors.slack MAX_CHANNELS: a source allowlists at most this many. */
 export const MAX_CHANNELS = 100;
@@ -125,7 +125,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
               Until must be on or after Since.
             </p>
           ) : (
-            <p id={hintId} className="flex items-center gap-1 text-[13px] leading-5 text-text2">
+            <p id={hintId} className="flex items-center gap-1 text-sm leading-5 text-text2">
               Optional · {zoneName(zone)}
               {/* Pass F F-56: the range's rules behind an (i). */}
               <InfoTip label="the date range" align="start">

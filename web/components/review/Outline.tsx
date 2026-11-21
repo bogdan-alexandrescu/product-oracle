@@ -169,7 +169,7 @@ export function OutlineFilters({
           placeholder="Filter sections"
           aria-keyshortcuts="/"
           data-testid="outline-filter"
-          className="h-9 w-full rounded-lg border border-line-strong bg-surface pr-8 pl-8 text-sm text-text placeholder:text-text2 max-[639px]:h-11 max-[639px]:text-[15px]"
+          className="h-9 w-full rounded-lg border border-line-strong bg-surface pr-8 pl-8 text-sm text-text placeholder:text-text2 max-[639px]:h-11 max-[639px]:text-base"
         />
         <span aria-hidden className="pointer-events-none absolute right-2 max-[639px]:hidden">
           <Kbd>/</Kbd>
@@ -398,7 +398,7 @@ export function OutlineList({
                 onSelect(key);
               }}
               className={`flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-lg pr-2 ${mode === 'tree' ? 'pl-1' : 'pl-2.5'} text-sm ${
-                tall ? 'text-[15px]' : ''
+                tall ? 'text-base' : ''
               } ${chapter && mode === 'flat' ? 'font-bold' : chapter ? 'font-semibold' : 'font-medium'} ${
                 on ? 'text-text' : dimmed ? 'text-text2' : 'text-text'
               }`}
@@ -413,7 +413,7 @@ export function OutlineList({
               </span>
               {folded && (
                 <span
-                  className="tnum flex-none text-[13px] font-medium text-text2"
+                  className="tnum flex-none text-sm font-medium text-text2"
                   data-testid="outline-folded-count"
                 >
                   {reviewed}/{nd.subtree.length}
@@ -422,7 +422,7 @@ export function OutlineList({
               {count > 0 && (
                 <span
                   data-testid="outline-count"
-                  className="tnum grid h-5 min-w-5 flex-none place-items-center rounded-full bg-accent-soft px-1.5 text-[13px] leading-none font-bold text-accent-ink"
+                  className="tnum grid h-5 min-w-5 flex-none place-items-center rounded-full bg-accent-soft px-1.5 text-sm leading-none font-bold text-accent-ink"
                 >
                   {count}
                 </span>
@@ -458,7 +458,7 @@ export function ReviewProgress({
       title={compact ? `${reviewed} of ${total} ${what}` : undefined}
     >
       <span
-        className={`tnum text-[13px] leading-4 font-semibold text-text2 ${compact ? 'whitespace-nowrap' : ''}`}
+        className={`tnum text-sm leading-4 font-semibold text-text2 ${compact ? 'whitespace-nowrap' : ''}`}
       >
         <b className="font-bold text-text">{reviewed}</b> of {total} {compact ? 'reviewed' : what}
       </span>
@@ -745,7 +745,7 @@ export function SectionSwitcher({
             {current?.heading ?? 'Sections'}
           </span>
           <span
-            className="tnum flex-none text-[13px] font-semibold text-text2"
+            className="tnum flex-none text-sm font-semibold text-text2"
             data-testid="switcher-index"
           >
             {index} of {props.sections.length}
@@ -812,7 +812,7 @@ export function SectionSwitcher({
             />
           </div>
           <p
-            className="flex-none border-t border-line px-3 py-2 text-[13px] text-text2"
+            className="flex-none border-t border-line px-3 py-2 text-sm text-text2"
             data-testid="switcher-hints"
           >
             ↑↓ move · ↵ open · j k next/previous

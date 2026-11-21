@@ -1097,7 +1097,7 @@ export function Chart({
                 // painted over by the next row.
                 <>
                   <span
-                    className={`${compact ? 'min-w-0 break-words text-sm leading-[16px]' : 'truncate text-[15px] leading-[18px]'} font-semibold`}
+                    className={`${compact ? 'min-w-0 break-words text-sm leading-[16px]' : 'truncate text-base leading-[18px]'} font-semibold`}
                     title={r.title}
                   >
                     <GoalNum n={laneNum(r)} />
@@ -1105,7 +1105,7 @@ export function Chart({
                   </span>
                   {r.metric && (
                     <span
-                      className={`${compact ? 'break-words text-[11px] leading-[13px]' : 'truncate text-xs leading-[15px]'} text-text2`}
+                      className={`${compact ? 'break-words text-xs leading-[13px]' : 'truncate text-xs leading-[15px]'} text-text2`}
                       data-testid="group-metric"
                       title={r.metric}
                     >
@@ -1119,7 +1119,7 @@ export function Chart({
                     className={`flex min-w-0 items-baseline ${compact ? 'flex-wrap gap-x-2' : 'gap-2'}`}
                   >
                     <span
-                      className={`${compact ? 'min-w-0 break-words' : 'truncate'} font-semibold ${compact ? 'text-sm leading-[16px]' : 'text-[15px] leading-tight'}`}
+                      className={`${compact ? 'min-w-0 break-words' : 'truncate'} font-semibold ${compact ? 'text-sm leading-[16px]' : 'text-base leading-tight'}`}
                       title={r.title}
                     >
                       <GoalNum n={laneNum(r)} />
@@ -1133,7 +1133,7 @@ export function Chart({
                   </span>
                   {r.metric && (
                     <span
-                      className={`${compact ? 'break-words' : 'truncate'} text-text2 ${compact ? 'text-[11px] leading-[13px]' : 'text-xs'}`}
+                      className={`${compact ? 'break-words' : 'truncate'} text-text2 ${compact ? 'text-xs leading-[13px]' : 'text-xs'}`}
                       data-testid="group-metric"
                       title={r.metric}
                     >
@@ -1163,7 +1163,7 @@ export function Chart({
                     y: (l.y.get(r.item.id) ?? 0) + l.rowH,
                   })
                 }
-                className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? 'gap-1 px-2 text-[13px]' : 'gap-2 px-3 text-[15px]'} ${open === r.item.id ? 'bg-accent-soft' : ''}`}
+                className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? 'gap-1 px-2 text-sm' : 'gap-2 px-3 text-base'} ${open === r.item.id ? 'bg-accent-soft' : ''}`}
               >
                 {/* fix4 qa-simple-roadmap-3: no "#1" on a row: the place in the return queue in words
                   ("1st"). QA Nov 12 #1: the name reads with its code first ("F-06 Weekly alert
@@ -1195,7 +1195,7 @@ export function Chart({
                     data-testid="label-title"
                     title={itemName(r.item)}
                     // fix4 qa-simple-roadmap-6: a name wraps whole instead of being cut mid-word.
-                    className={`min-w-0 max-w-full break-words ${compact ? 'text-[12.5px] leading-[14px]' : 'leading-[18px]'} ${closedItem(r.item) ? 'text-text2 line-through' : ''}`}
+                    className={`min-w-0 max-w-full break-words ${compact ? 'text-xs leading-[14px]' : 'leading-[18px]'} ${closedItem(r.item) ? 'text-text2 line-through' : ''}`}
                   >
                     {itemName(r.item)}
                   </span>
@@ -1751,7 +1751,7 @@ function ItemMark({
       <span
         data-testid="cs-mark"
         data-mark={f.mark}
-        className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${MARK_TONE[f.mark]}`}
+        className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-xs font-semibold uppercase tracking-wide ${MARK_TONE[f.mark]}`}
       >
         {words}
       </span>

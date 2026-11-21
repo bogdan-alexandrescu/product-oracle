@@ -264,12 +264,12 @@ export function DriveFiles({
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span
-                  className="truncate text-[15px] font-medium"
+                  className="truncate text-base font-medium"
                   title={f.name === f.id ? f.id : `${f.name} (${f.id})`}
                 >
                   {f.name}
                 </span>
-                <span className="text-[13px] leading-4 text-text2">
+                <span className="text-sm leading-4 text-text2">
                   {f.kind === 'folder'
                     ? 'Folder · every doc in it'
                     : f.name === f.id
@@ -298,11 +298,11 @@ export function DriveFiles({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor={pasteId}
-            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+            className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
           >
             Drive links
           </label>
-          <span className="text-[13px] leading-4 text-text2">One per line.</span>
+          <span className="text-sm leading-4 text-text2">One per line.</span>
           <textarea
             id={pasteId}
             value={pasted}

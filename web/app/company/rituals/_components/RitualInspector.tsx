@@ -78,7 +78,7 @@ export function scheduleErrors(
 function FieldNote({ id, children }: { id: string; children?: string }) {
   if (!children) return null;
   return (
-    <span id={id} data-testid={id} className="text-[13px] font-medium text-crit">
+    <span id={id} data-testid={id} className="text-sm font-medium text-crit">
       {children}
     </span>
   );

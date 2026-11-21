@@ -267,7 +267,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
             />
             <div className="min-w-0 flex-1">
               <p
-                className="text-[13px] leading-4 font-semibold text-text2"
+                className="text-sm leading-4 font-semibold text-text2"
                 data-testid="feedback-author"
               >
                 {mine ? 'You' : author}
@@ -288,10 +288,10 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
                   )}
                 </button>
               )}
-              <p className="mt-1.5 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+              <p className="mt-1.5 text-base leading-[22px] break-words whitespace-pre-wrap text-text">
                 {comment.body}
               </p>
-              <p className="tnum mt-1 flex flex-wrap items-center gap-2 text-[13px] text-text2">
+              <p className="tnum mt-1 flex flex-wrap items-center gap-2 text-sm text-text2">
                 {formatDateTime(comment.created_at)}
                 {comment.resolved_at && <Chip kind="pass">Resolved</Chip>}
               </p>
@@ -299,10 +299,10 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
                 <ol className="mt-2 flex flex-col gap-2 border-l-2 border-line pl-3">
                   {comment.replies.map((r: CommentOut) => (
                     <li key={r.id}>
-                      <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+                      <p className="text-base leading-[22px] break-words whitespace-pre-wrap text-text">
                         {r.body}
                       </p>
-                      <p className="tnum text-[13px] text-text2">{formatDateTime(r.created_at)}</p>
+                      <p className="tnum text-sm text-text2">{formatDateTime(r.created_at)}</p>
                     </li>
                   ))}
                 </ol>
@@ -318,15 +318,15 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
             />
             <div className="min-w-0 flex-1">
               <p
-                className="text-[13px] leading-4 font-semibold text-text2"
+                className="text-sm leading-4 font-semibold text-text2"
                 data-testid="feedback-author"
               >
                 {generalMine ? 'You' : author}
               </p>
-              <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+              <p className="mt-1 text-base leading-[22px] break-words whitespace-pre-wrap text-text">
                 {item.summary}
               </p>
-              <p className="tnum mt-1 text-[13px] text-text2">{formatDateTime(item.created_at)}</p>
+              <p className="tnum mt-1 text-sm text-text2">{formatDateTime(item.created_at)}</p>
               {item.discussion_id && ctx.onOpenThread && (
                 <Button
                   variant="ghost"
@@ -341,9 +341,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
           </div>
         ) : (
           <>
-            <p className="mt-1.5 text-[15px] leading-[22px] break-words text-text">
-              {item.summary}
-            </p>
+            <p className="mt-1.5 text-base leading-[22px] break-words text-text">{item.summary}</p>
             {item.anchor && <Quote>{item.anchor.exact}</Quote>}
           </>
         )}
@@ -362,7 +360,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
             heading={ctx.headings.get(item.suggestion.section_key ?? item.section_key ?? '')}
           />
         )}
-        <p className="tnum mt-1.5 text-[13px] text-text2">
+        <p className="tnum mt-1.5 text-sm text-text2">
           raised on v{item.raised_on_version}
           {item.addressed_in_version != null && ` · addressed in v${item.addressed_in_version}`}
         </p>

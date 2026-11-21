@@ -89,6 +89,29 @@ const NAV_RULE = [
   },
 ];
 
+// #1589: text sizes are the type scale's steps (app/globals.css, @theme), never an arbitrary
+// text-[Npx]. A rule of its own, so no file's no-restricted-syntax override turns it off.
+const TEXT_SIZE = /(?:^|[\s"'`:!])text-\[\d+(?:\.\d+)?px\]/;
+const TEXT_SIZE_RULE = {
+  meta: {
+    type: 'problem',
+    messages: {
+      arbitrary:
+        'Use a type scale step (text-xs, text-sm, text-base, text-lg, text-xl, text-2xl, text-3xl, text-4xl), not an arbitrary text-[Npx].',
+    },
+  },
+  create(context) {
+    const check = (node, text) => {
+      if (typeof text === 'string' && TEXT_SIZE.test(text))
+        context.report({ node, messageId: 'arbitrary' });
+    };
+    return {
+      Literal: (node) => check(node, node.value),
+      TemplateElement: (node) => check(node, node.value.raw),
+    };
+  },
+};
+
 // #1581: what eslint-config-next's core-web-vitals and typescript sets gave, from their own
 // plugins (docs/vite-migration/dependencies.md, Lint after eslint-config-next).
 const eslintConfig = defineConfig([
@@ -202,6 +225,10 @@ const eslintConfig = defineConfig([
       'lib/api/mock/goal-ladder.ts',
     ],
     rules: { 'max-lines': 'off' },
+  },
+  {
+    plugins: { typography: { rules: { 'no-arbitrary-text-size': TEXT_SIZE_RULE } } },
+    rules: { 'typography/no-arbitrary-text-size': 'error' },
   },
   {
     rules: {

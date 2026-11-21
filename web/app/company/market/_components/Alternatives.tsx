@@ -321,7 +321,7 @@ function CompetitorInspector({
           )}
           {error && <ErrorNote>{error}</ErrorNote>}
           <dl className="flex flex-col gap-1.5 text-sm [overflow-wrap:anywhere]">
-            {detail.description && <dd className="text-[15px]">{detail.description}</dd>}
+            {detail.description && <dd className="text-base">{detail.description}</dd>}
             <div className="flex gap-2">
               <dt className="font-semibold text-text2">Website</dt>
               <dd>{detail.website ? hostOf(detail.website) : '—'}</dd>
@@ -708,7 +708,7 @@ function AlternativeDialog({
           onSubmit={submit}
           noValidate
         >
-          <p className="text-[13px] text-text2">Fields marked (required) must be filled in.</p>
+          <p className="text-sm text-text2">Fields marked (required) must be filled in.</p>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             <span>
               <span id="alternative-name-label">Name</span>
@@ -765,7 +765,7 @@ function AlternativeDialog({
               <span
                 id="alternative-website-error"
                 data-testid="website-error"
-                className="text-[13px] font-medium text-crit"
+                className="text-sm font-medium text-crit"
               >
                 {siteError}
               </span>

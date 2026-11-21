@@ -330,7 +330,7 @@ export function BlockerInspector({
 
 // --- form parts -----------------------------------------------------------------------------
 
-const FIELD = 'flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+const FIELD = 'flex min-w-0 flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
 
 /** A labelled input, textarea or select; the label sits beside a select so its options are not part of its name. */
 function Field({ name, children }: { name: string; children: (id: string) => ReactNode }) {
@@ -740,7 +740,7 @@ function ProposeOption({
       <Text name="Title" value={title} onChange={setTitle} />
       <Select name="Approach" value={approach} options={APPROACHES} onChange={setApproach} />
       <Text name="Description" value={description} onChange={setDescription} rows={3} />
-      <p className="text-[13px] text-text2">{s.prohibited}</p>
+      <p className="text-sm text-text2">{s.prohibited}</p>
       {error && <Notice tone="error">{error}</Notice>}
       <Actions>
         <Button type="submit" variant="solid" disabled={busy}>

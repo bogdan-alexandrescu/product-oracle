@@ -202,7 +202,7 @@ function SlackPanel({
         )
       }
     >
-      <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
+      <div className="space-y-3 px-4 py-3 text-base max-[600px]:px-3">
         {!slack ? (
           <>
             <Button variant="solid" disabled={busy !== null} onClick={connect}>
@@ -347,7 +347,7 @@ function SchedulePanel({
         </InfoTip>
       }
     >
-      <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
+      <div className="space-y-3 px-4 py-3 text-base max-[600px]:px-3">
         {/* qa-settings-42: on a phone the whole row is the tap target, at least 44 px high. */}
         <label
           className="flex items-center gap-2 font-medium max-[600px]:min-h-11 max-[600px]:min-w-11 max-[600px]:gap-3"

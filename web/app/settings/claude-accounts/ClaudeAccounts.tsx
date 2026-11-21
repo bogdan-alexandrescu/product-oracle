@@ -434,7 +434,7 @@ function Pool({
         )}
         {accounts.length > 0 && (
           <p
-            className="tnum flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line px-4 py-2 text-[13px] leading-4 text-text2"
+            className="tnum flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line px-4 py-2 text-sm leading-4 text-text2"
             data-testid="accounts-foot"
           >
             <span>
@@ -567,7 +567,7 @@ function AcctState({
         <Chip kind="warn" dot>
           Spent until
         </Chip>
-        <span className="tnum text-[13px] leading-4 text-text2">{when}</span>
+        <span className="tnum text-sm leading-4 text-text2">{when}</span>
       </span>
     ) : (
       <Chip kind="warn" dot title={title}>
@@ -675,11 +675,11 @@ function StatFig({
   return (
     <span className="block min-w-0" title={title}>
       <span
-        className={`tnum block truncate font-display text-[22px] leading-7 font-bold tracking-heading ${dim ? 'text-text2' : ''}`}
+        className={`tnum block truncate font-display text-xl leading-7 font-bold tracking-heading ${dim ? 'text-text2' : ''}`}
       >
         {children}
       </span>
-      {note && <span className="block text-[13px] leading-4 text-text2">{note}</span>}
+      {note && <span className="block text-sm leading-4 text-text2">{note}</span>}
     </span>
   );
 }
@@ -837,7 +837,7 @@ function Detail({
         {account.spent_by && (
           <div data-testid="fact-spent">
             <Fact label="Spent">{spentLabel(account)}</Fact>
-            <p className="pb-1 text-[13px] leading-4 text-text2">{spentWhy(account)}</p>
+            <p className="pb-1 text-sm leading-4 text-text2">{spentWhy(account)}</p>
           </div>
         )}
         {account.reason && <Fact label="Reason">{reasonLabel(account.reason)}</Fact>}

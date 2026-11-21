@@ -243,7 +243,7 @@ export function SharedRoadmap({ token }: { token: string }) {
             Someone shared a private roadmap with you. It opens with the passcode they gave you.
           </p>
           <div>
-            <label htmlFor={id} className="mb-1.5 block text-[13px] font-semibold text-text2">
+            <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-text2">
               Passcode
             </label>
             <input

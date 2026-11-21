@@ -107,7 +107,7 @@ export function StartRunDialog({
         </Button>
       }
     >
-      <div className="flex flex-col gap-3 text-[15px]">
+      <div className="flex flex-col gap-3 text-base">
         <p>
           {action.intro(prdTitle)} It runs on its own
           {ready

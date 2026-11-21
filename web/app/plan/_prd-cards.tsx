@@ -32,12 +32,12 @@ function PrdCard({ p, track }: { p: PlanPrd; track: TrackOverview | undefined })
     >
       <Link
         href={`/documents/${p.document.slug}`}
-        className="min-h-7 truncate font-display text-[17px] leading-7 font-bold tracking-heading hover:underline"
+        className="min-h-7 truncate font-display text-lg leading-7 font-bold tracking-heading hover:underline"
       >
         {p.document.title}
       </Link>
       <JourneyTrack current={p.journey_step} variant="bar" steps={PLAN_JOURNEY_STEPS} />
-      <div className="flex min-w-0 items-baseline justify-between gap-3 text-[15px]">
+      <div className="flex min-w-0 items-baseline justify-between gap-3 text-base">
         <span data-testid="plan-prd-stage" className="min-w-0 text-text2">
           {p.stage_label}
         </span>
@@ -77,7 +77,7 @@ export function PrdCards({
     return (
       <Panel testId="plan-prds-empty">
         <div className="flex flex-wrap items-center gap-3 px-4 py-4">
-          <span className="text-[15px] font-semibold text-text2">No PRDs in play</span>
+          <span className="text-base font-semibold text-text2">No PRDs in play</span>
           {canWrite && (
             <LinkButton
               href="/documents/new?kind=prd"

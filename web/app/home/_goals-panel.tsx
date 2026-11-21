@@ -94,7 +94,7 @@ function GoalCard({
         <span className="min-w-0 max-w-full" data-testid="goal-figure">
           {p.state === 'none' || (p.state === 'notarget' && !g.currentText) ? (
             <b
-              className="tnum font-display text-[34px] leading-9 font-bold text-text2"
+              className="tnum font-display text-3xl leading-9 font-bold text-text2"
               aria-label="No current value"
             >
               –
@@ -108,14 +108,14 @@ function GoalCard({
               {g.currentText}
             </b>
           ) : (
-            <b className="tnum font-display text-[34px] leading-9 font-bold tracking-[-0.03em]">
+            <b className="tnum font-display text-3xl leading-9 font-bold tracking-[-0.03em]">
               {formatFigure(g.current!)}
             </b>
           )}
           {g.targetText && (
             // qa-plan-34 (fix4): value and target on one line on a phone too ("38% / 45%").
             <span
-              className={`tnum ml-1 text-[15px] font-medium text-text2 ${p.state === 'raw' ? 'break-words' : 'whitespace-nowrap'}`}
+              className={`tnum ml-1 text-base font-medium text-text2 ${p.state === 'raw' ? 'break-words' : 'whitespace-nowrap'}`}
             >
               / {g.targetText}
             </span>
@@ -126,7 +126,7 @@ function GoalCard({
             // qa4-plan-24: no score yet says so and why, never an empty ring with a dash.
             <span
               data-testid="goal-confidence"
-              className="ml-auto max-w-28 flex-none text-right text-[13px] leading-4 font-medium text-text2"
+              className="ml-auto max-w-28 flex-none text-right text-sm leading-4 font-medium text-text2"
             >
               No confidence yet: add evidence
             </span>
@@ -137,7 +137,7 @@ function GoalCard({
               data-testid="goal-confidence"
             >
               <Ring value={g.confidence} size={44} label={`Confidence ${g.confidence}`} />
-              <span aria-hidden className="text-[12px] leading-4 font-medium text-text2">
+              <span aria-hidden className="text-xs leading-4 font-medium text-text2">
                 confidence
               </span>
             </span>
@@ -152,7 +152,7 @@ function GoalCard({
         <span
           data-testid="goal-trend-failed"
           role="status"
-          className="inline-flex items-center gap-1.5 text-[13px] text-text2"
+          className="inline-flex items-center gap-1.5 text-sm text-text2"
         >
           Could not load the trend.
           <InfoTip label="the error" align="start">
@@ -171,7 +171,7 @@ function GoalCard({
           />
         </div>
       )}
-      <div className="mt-auto flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 text-[15px]">
+      <div className="mt-auto flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 text-base">
         <span data-testid="goal-to-go">
           {p.state === 'togo' ? (
             <ToGo amount={p.amount!} unit={p.unit} />
@@ -358,7 +358,7 @@ export function GoalsPanel({
       {!goals && (loading || !error) && <GoalsSkeleton />}
       {goals && shown.length === 0 && (
         <div data-testid="home-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
-          <span className="text-[15px] font-semibold text-text2">No goals yet</span>
+          <span className="text-base font-semibold text-text2">No goals yet</span>
           {/* F-31: the (i) names no command or file format. */}
           <InfoTip label="building the Ground Truth" align="start">
             Oracle reads your sources and proposes your goals; they show here once confirmed. You
@@ -368,7 +368,7 @@ export function GoalsPanel({
               step, its row holds it (start, or open the build under way) and the card points there;
               with Set up hidden, the card opens the build under way, or starts one. */}
           {baseline?.inSetup ? (
-            <span className="ml-auto text-[15px] text-text2" data-testid="goals-build-in-setup">
+            <span className="ml-auto text-base text-text2" data-testid="goals-build-in-setup">
               {baseline.runId
                 ? 'The Ground Truth is building: open it from Set up, above'
                 : 'Build the Ground Truth from Set up, above'}

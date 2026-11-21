@@ -1004,7 +1004,7 @@ function AskReason({
           ? 'Reject this proposed item? It leaves the Ground Truth.'
           : 'Archive this item? It leaves the Ground Truth and the Ledger; its history keeps it.'}
       </p>
-      <label className="flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+      <label className="flex flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2">
         Reason{action === 'reject' && ' (optional)'}
         <textarea
           className={INPUT}
@@ -1613,7 +1613,7 @@ function EditForm({
     setDrafts((a) => ({ ...a, [key]: draftOf(undefined, key) }));
   }
 
-  const label = 'flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+  const label = 'flex flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
   return (
     <form onSubmit={submit} aria-label="Edit" noValidate className="flex flex-col gap-3">
       <label className={label}>
@@ -1752,7 +1752,7 @@ function DraftField({
 }) {
   const lines = useRef<HTMLTextAreaElement>(null);
   const box = useRef<HTMLFieldSetElement>(null);
-  const label = `flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2${attr ? '' : ' pl-3'}`;
+  const label = `flex flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2${attr ? '' : ' pl-3'}`;
   // Beside a group's name, or beside a field's input.
   const grouped = d.kind === 'object' || d.kind === 'entries';
   const remove = onRemove && (

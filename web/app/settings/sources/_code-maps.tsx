@@ -141,7 +141,7 @@ function CodeMapView({ id, repo, onClose }: { id: string; repo: string; onClose:
                   const about = g.about(it);
                   return (
                     <li key={text(it.id) || i} className="min-w-0 break-words text-text2">
-                      <span className="font-mono text-[13px] text-text">{g.name(it)}</span>
+                      <span className="font-mono text-sm text-text">{g.name(it)}</span>
                       {about && ` · ${about}`}
                     </li>
                   );
@@ -221,7 +221,7 @@ function CodeMapLine({
         {/* Visual QA ST-7: what a code map is, beside the repository it maps (whatever buttons the role has). */}
         <span className="flex min-w-0 max-w-full items-center gap-1">
           <span
-            className="min-w-0 truncate font-mono text-[13px] text-text"
+            className="min-w-0 truncate font-mono text-sm text-text"
             title={repo}
             data-testid="code-map-repo"
           >
