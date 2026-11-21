@@ -366,7 +366,8 @@ async def list_for_roadmaps(
         drafts.forget("milestones")
         rows = await _rows(db, list(docs), fresh=True)
     # Each PRD milestone's place in the plans, in the order the rows above are stored.
-    in_plan = {
+    # Keyed loosely: rows' origin ids may be None, and a None key simply is not in the plans.
+    in_plan: dict[tuple[object, object, object], int] = {
         key: n
         for n, key in enumerate(
             (doc_id, prd.id, m.code)
