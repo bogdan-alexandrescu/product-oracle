@@ -10,9 +10,7 @@
 // ORACLE_VERSION_TOKEN, when set, is sent to every URL as "Authorization: Bearer <token>" (a
 // Google ID token for the service's IAP audience).
 import { spawnSync } from 'node:child_process';
-import { containment } from '../lib/deployContainment.ts';
-import type { Answer } from '../lib/deployContainment.ts';
-import { servedSha } from '../lib/deployContainment.ts';
+import { containment, type Answer, servedSha } from '../lib/deployContainment.ts';
 
 const args = process.argv.slice(2);
 const at = args.indexOf('--wait');

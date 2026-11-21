@@ -1,10 +1,12 @@
 import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import { createNodeResolver, importX } from 'eslint-plugin-import-x';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
+import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
-import tseslint from 'typescript-eslint';
+import { configs as tseslintConfigs } from 'typescript-eslint';
 
 // #401: display dates and times are in the Company time zone, through lib/dates.ts;
 // only machine values sent to the API stay ISO/UTC.
@@ -91,7 +93,7 @@ const NAV_RULE = [
 // plugins (docs/vite-migration/dependencies.md, Lint after eslint-config-next).
 const eslintConfig = defineConfig([
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslintConfigs.recommendedTypeChecked,
   react.configs.flat.recommended,
   react.configs.flat['jsx-runtime'],
   reactHooks.configs.flat['recommended-latest'],
@@ -118,6 +120,84 @@ const eslintConfig = defineConfig([
       'no-useless-escape': 'off',
       'no-constant-binary-expression': 'off',
     },
+  },
+  // #1585 phase 1, core and imports, every rule at error. Findings from before it sit in
+  // eslint-suppressions.json (`npx eslint --suppress-all`) and only go down from there:
+  // `npx eslint --prune-suppressions` after a fix.
+  {
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+    plugins: { 'import-x': importX, 'unused-imports': unusedImports },
+    settings: {
+      'import-x/extensions': ['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs', '.cjs'],
+      'import-x/external-module-folders': ['node_modules', 'node_modules/@types'],
+      'import-x/parsers': { '@typescript-eslint/parser': ['.ts', '.tsx', '.mts'] },
+      // The `@/` alias, from tsconfig.json's paths.
+      'import-x/resolver-next': [
+        createNodeResolver({
+          extensions: ['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs', '.cjs', '.json', '.d.ts'],
+          conditionNames: ['types', 'import', 'module', 'browser', 'default'],
+          mainFields: ['types', 'module', 'main'],
+          tsconfig: { configFile: `${import.meta.dirname}/tsconfig.json` },
+        }),
+      ],
+    },
+    rules: {
+      eqeqeq: ['error', 'smart'],
+      'no-var': 'error',
+      'prefer-const': 'error',
+      'object-shorthand': 'error',
+      'no-useless-rename': 'error',
+      'no-param-reassign': 'error',
+      '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
+      '@typescript-eslint/no-import-type-side-effects': 'error',
+      // The router's redirect() and notFound() are thrown, by its design (lib/nav.ts).
+      '@typescript-eslint/only-throw-error': [
+        'error',
+        {
+          allow: [
+            {
+              from: 'package',
+              package: '@tanstack/router-core',
+              name: ['Redirect', 'NotFoundError'],
+            },
+          ],
+        },
+      ],
+      'import-x/no-unresolved': ['error', { ignore: ['^virtual:', '\\?(raw|url|inline)$'] }],
+      'import-x/named': 'off',
+      'import-x/namespace': 'error',
+      'import-x/default': 'error',
+      'import-x/export': 'error',
+      'import-x/no-named-as-default': 'error',
+      'import-x/no-named-as-default-member': 'error',
+      'import-x/no-duplicates': ['error', { 'prefer-inline': true }],
+      'import-x/first': 'error',
+      'import-x/newline-after-import': 'error',
+      'import-x/no-absolute-path': 'error',
+      'import-x/no-self-import': 'error',
+      'import-x/no-cycle': 'error',
+      'import-x/no-useless-path-segments': 'error',
+      'import-x/no-mutable-exports': 'error',
+      'import-x/order': [
+        'error',
+        {
+          groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index', 'type'],
+          pathGroups: [{ pattern: '@/**', group: 'internal' }],
+          'newlines-between': 'always',
+          alphabetize: { order: 'asc', caseInsensitive: true },
+        },
+      ],
+      '@typescript-eslint/no-unused-vars': 'off',
+      'unused-imports/no-unused-imports': 'error',
+      'unused-imports/no-unused-vars': 'error',
+    },
+  },
+  {
+    // Scripts and configs sit outside tsconfig.json: untyped rules only.
+    files: ['**/*.{js,mjs,cjs}'],
+    extends: [tseslintConfigs.disableTypeChecked],
   },
   {
     rules: {

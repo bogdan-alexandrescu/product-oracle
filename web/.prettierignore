@@ -8,6 +8,7 @@ index.html
 # Written by scripts: their own output is the format.
 package-lock.json
 e2e/prose-ceilings.json
+eslint-suppressions.json
 
 # Test inputs read byte for byte.
 e2e/real/fixtures/

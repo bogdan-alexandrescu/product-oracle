@@ -2,7 +2,7 @@
 
 import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
 import { Chip } from '@/components/ds';
-import { type Schemas } from '@/lib/api/client';
+import type { Schemas } from '@/lib/api/client';
 
 /**
  * qa-simple-prd-9: a PRD's status as its one-pager heads it: the approved version, and when a

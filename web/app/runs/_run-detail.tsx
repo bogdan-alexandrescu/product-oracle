@@ -4,7 +4,7 @@ import { Link, useRouter } from '@/lib/nav';
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { DeleteDialog, DeleteMenu } from '@/components/ArtifactMenu';
+import { DeleteDialog, type DeleteMenu } from '@/components/ArtifactMenu';
 import { decisionSentence, runLabel } from '@/lib/labels';
 import { SourceLink } from '@/components/BuildRoadmap';
 import { RoadmapRead } from './_roadmap-read';

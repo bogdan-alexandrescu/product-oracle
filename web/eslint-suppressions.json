@@ -1,0 +1,9252 @@
+{
+  "app/access/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/account/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/AddItem.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/BlockerInspector.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/BuildBaseline.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/baseline/_components/ConflictsTab.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/EntityDrawer.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 14
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 11
+    }
+  },
+  "app/baseline/_components/FromRunTab.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/baseline/_components/GoalInterview.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/GraphTab.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "app/baseline/_components/GroundTruthFlags.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/baseline/_components/ItemsTab.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/baseline/_components/LinkTools.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/PromoteBlocker.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/ProposalsTab.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/baseline/_components/Tabs.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/common.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/goal-fields.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/briefs/$id/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/briefs/_brief-detail.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/company/_empty.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/company/_nav.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/decisions/_components/DecisionInspector.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 7
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/decisions/_components/LinksPicker.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    }
+  },
+  "app/company/decisions/_components/ProposeDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/company/decisions/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "app/company/market/_components/Alternatives.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/company/market/_components/ChangeLog.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/company/market/_components/DealDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/company/market/_components/FindingCard.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/company/market/_components/NewPricingMemo.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/market/_components/Positioning.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/market/_components/Pricing.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/company/market/_components/WinLoss.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/company/market/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/company/metrics/_components/MetricForm.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    }
+  },
+  "app/company/metrics/_components/MetricInspector.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/company/metrics/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/company/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/company/rituals/$occurrence/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/company/rituals/_components/MetricBlocks.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/rituals/_components/OccurrenceDetail.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/company/rituals/_components/RitualInspector.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/rituals/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/company/strategy/_components/Cards.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/company/strategy/_components/DraftSheet.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/strategy/_components/DriftList.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/company/strategy/_components/StackTable.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/company/strategy/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/company/updates/_components/NewUpdateDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/company/updates/_components/VisibilityDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/company/updates/page.tsx": {
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "app/design/_gallery.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "app/documents/$doc/composition/_confirm.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/documents/$doc/composition/_lib.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    }
+  },
+  "app/documents/$doc/composition/_module-inspector.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/documents/$doc/composition/_policy.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/documents/$doc/composition/_view.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/documents/$doc/composition/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/documents/$doc/diff/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/documents/$doc/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/documents/$doc/public/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/$doc/publish/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/$doc/v/$n/evidence/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/$doc/v/$n/impact/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/documents/$doc/v/$n/items/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/$doc/v/$n/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/$doc/v/$n/present/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/documents/$doc/v/$n/quality/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/$doc/v/$n/roadmap/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/documents/new/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/documents/page.tsx": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "app/ground-truth/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 17
+    }
+  },
+  "app/home/_goals-panel.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/home/_goals.test.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/home/_goals.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/home/_in-flight.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/home/_use-goals.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "app/home/_welcome.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/home/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "app/i/$token/_chat.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    }
+  },
+  "app/impact/_explorer.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/impact/_steps.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/impact/changes/$id/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/impact/entities/$id/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/inbox/_access.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    }
+  },
+  "app/inbox/_actions.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/inbox/_inbox.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/inbox/_needs.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 23
+    },
+    "import-x/order": {
+      "count": 12
+    }
+  },
+  "app/inbox/_proposals.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/intakes/$id/_draft-sheet.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/intakes/$id/_findings.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/intakes/$id/_gaps.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/intakes/$id/_inspector.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/intakes/$id/_proposals.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/intakes/$id/_questions.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/intakes/$id/_read.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/intakes/$id/_shell.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/intakes/$id/page.tsx": {
+    "import-x/order": {
+      "count": 7
+    }
+  },
+  "app/login/_components/AuthCard.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/oauth/consent/ConsentScreen.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/plan/_dates.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/_edit-plan.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 11
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/_inspector.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 13
+    }
+  },
+  "app/plan/_lib.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/_missing-item.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/_nav.tsx": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/_prd-cards.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/_start-run.tsx": {
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "app/plan/_table.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/plan/_timeline.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/plan/_tracks.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/plan/documents/page.tsx": {
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "app/plan/outcomes/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 7
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "app/plan/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/plan/reports/$id/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/plan/reports/_generate.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/reports/_report.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/plan/reports/latest/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/plan/reports/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/priorities/_components/overrides.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    }
+  },
+  "app/priorities/_components/words.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 7
+    }
+  },
+  "app/priorities/page.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 15
+    }
+  },
+  "app/requests/_components/FoundInSources.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/requests/_components/InterviewDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/requests/_components/NewRequest.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/requests/_components/RequestInspector.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 4
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/requests/_components/RequestList.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/requests/_components/RequestsScreen.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/requests/_components/Themes.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    }
+  },
+  "app/requests/_components/Triage.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/requests/_components/WhyNot.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 8
+    }
+  },
+  "app/requests/_nav.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/requests/interviews/$id/_detail.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/requests/interviews/$id/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/requests/interviews/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/requests/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/requests/themes/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/requests/to-decide/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/roadmap/changelog/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/roadmap/launches/_new-launch.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/roadmap/launches/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 11
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/runs/$id/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_eng-dates.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_eng-review.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_items-lib.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_items-review.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_review.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_scope-inspector.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_scope-lib.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_scope-review.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "app/runs/$id/review/$checkpoint/_shell.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/runs/$id/review/$checkpoint/page.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/runs/_new-run-dialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/runs/_run-detail.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 14
+    },
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 11
+    }
+  },
+  "app/runs/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/settings/_gate.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/settings/_nav.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/analytics/AnalyticsSettings.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    }
+  },
+  "app/settings/analytics/page.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/autonomy/AutonomySettings.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    }
+  },
+  "app/settings/autonomy/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/claude-accounts/ClaudeAccounts.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/claude-accounts/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/company/RoadmapSetup.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/company/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/settings/connections/ConnectionsSettings.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/members/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/notifications/NotificationsSettings.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 6
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/notifications/page.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/settings/sources/CompanyDrive.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/settings/sources/DriveFiles.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/NotionPicker.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/_code-maps.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/sources/_slack-picker.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 10
+    },
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "app/settings/templates/$key/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/settings/templates/new/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/settings/templates/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/settings/themes/$key/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/settings/themes/new/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 7
+    }
+  },
+  "app/settings/themes/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/settings/trash/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/settings/webhooks/DeliveryLog.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/webhooks/EditWebhookSheet.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/webhooks/NewWebhookSheet.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/webhooks/WebhookInspector.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/webhooks/WebhooksSettings.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/webhooks/page.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/settings/webhooks/parts.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/_home/cards.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/_home/run-stops.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/_home/walk.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/simple/_home/welcome.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/decisions/_decisions.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 11
+    }
+  },
+  "app/simple/decisions/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/simple/goals/_editors.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/goals/_map.tsx": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/simple/goals/_panel.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/goals/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/simple/layout.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/simple/meetings/$id/_draft.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "app/simple/meetings/$id/_meeting.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 22
+    }
+  },
+  "app/simple/meetings/$id/chat/_chat.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/meetings/$id/chat/page.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/meetings/$id/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/simple/meetings/_flow.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/simple/meetings/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/simple/one-pagers/$doc/_one-pager.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/one-pagers/$doc/page.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/simple/one-pagers/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/simple/page.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 29
+    }
+  },
+  "app/simple/priorities/goal-buckets.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/priorities/mark-counts.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/priorities/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/simple/priorities/priorities.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 24
+    }
+  },
+  "app/simple/priorities/task-edit.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_add.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_board.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_card.tsx": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 11
+    }
+  },
+  "app/simple/roadmap/_drafts.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    }
+  },
+  "app/simple/roadmap/_export.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/roadmap/_fields.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "app/simple/roadmap/_keydates.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/simple/roadmap/_lanes.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "app/simple/roadmap/_lib.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "app/simple/roadmap/_milestones.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_mk.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_panel.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_removed.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/simple/roadmap/_roadmap.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 3
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 34
+    }
+  },
+  "app/simple/roadmap/_timeline.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 10
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_tracks.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    }
+  },
+  "app/simple/roadmap/_zoom.tsx": {
+    "import-x/order": {
+      "count": 10
+    }
+  },
+  "app/simple/roadmap/page.tsx": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "app/sources/_components/coverage.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/sources/page.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "app/specs/$id/design/$versionId/page.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/AddEvidenceLink.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    }
+  },
+  "components/AnswerQuestion.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    }
+  },
+  "components/ApiTokensSettings.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "components/ArtifactMenu.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/AskTeammate.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "components/BuildRoadmap.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/CitationChip.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/ClaudeOffNotice.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/CommentPopover.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    }
+  },
+  "components/DateBasisDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/DateMarker.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/DesignReview.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/DiffView.tsx": {
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "components/DocToolbar.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/DocumentOverview.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 17
+    }
+  },
+  "components/EditSection.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/FeedbackPanel.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "components/HeldRewrites.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/JobsPanel.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "components/LinkIssueDialog.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "components/LoginForm.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/MarkdownBody.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/MembersSettings.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 14
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 9
+    }
+  },
+  "components/MyAccount.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "components/NewDraft.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 11
+    }
+  },
+  "components/NextDraft.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/PersonPicker.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "components/PresentMode.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/PricingDecide.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/PublishView.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 8
+    }
+  },
+  "components/QualityView.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 6
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "components/RebuildSign.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/RefineSection.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "components/ReportsPanel.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/RequestSpec.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/ReviewSetup.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "components/SectionBackLink.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/SectionReviewBar.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "components/SectionView.tsx": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "components/SpecStaleness.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/SuggestionCard.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 7
+    }
+  },
+  "components/TemplateBodyEditor.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/TemplateDetail.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "components/ThemeDetail.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/VersionActions.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "components/VersionSwitcher.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/VersionView.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 32
+    }
+  },
+  "components/account/SlackPingsPanel.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/current-state/CurrentState.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/discuss/ChangeForm.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "components/discuss/ChangesCard.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/discuss/DiscussionList.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "components/discuss/DiscussionThread.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "components/discuss/LinkedDiscussion.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/discuss/StartDiscussion.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/discuss/VagueGoalsLine.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/discuss/cited.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "components/ds/AppShell.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 11
+    }
+  },
+  "components/ds/Button.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/ds/CodeChip.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/ds/ConfirmDialog.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/ds/DataTable.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/ds/Figures.tsx": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "components/ds/Inspector.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/ds/Layout.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/ds/ModeSwitch.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/ds/PageTabs.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/ds/SegmentedControl.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/ds/Sheet.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/ds/Toast.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "components/ds/index.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "components/evidence/EvidencePane.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/hop/HopPanel.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/hop/ShareForm.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "components/members/AccessRequests.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/members/ChangePreview.tsx": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/members/MemberApprovals.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/members/MemberInspector.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/members/SignInRules.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "components/review/FeedbackList.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/review/ItemInspector.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/review/ItemsTable.tsx": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/review/RawFileSheet.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  },
+  "components/review/ReviewPanel.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/review/RunReviewBar.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    }
+  },
+  "components/review/parts.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/roadmap/DraftRoadmapPane.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "components/roadmap/RoadmapItemsPane.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/roadmap/StalenessActions.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "components/roadmap/VersionTabs.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/roadmap/item-row.test.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/roadmap/item-row.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "components/roadmap/useItemsDiff.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "components/share/PublicCheck.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "components/share/RoadmapSharing.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 7
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "components/share/SharedRoadmap.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "components/simple/DecidedWho.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/DecisionNotes.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/FeatureDelete.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/simple/FitDate.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "components/simple/FlowViews.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "components/simple/FlowVisual.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "components/simple/GoalSuggestions.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/NewPrd.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/simple/OnePager.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 26
+    }
+  },
+  "components/simple/OnePagerSlides.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/simple/PlanByMonth.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/simple/PrdMenu.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/simple/SimplePage.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/SimpleShell.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "components/simple/WaitingItems.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "components/simple/chat/AskAnswer.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/chat/ChatCard.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  },
+  "components/simple/chat/ChatThread.tsx": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/simple/chat/MeetingChat.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/simple/chat/SimpleAsk.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "components/simple/meetings/AgendaSheet.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "components/simple/meetings/PreRead.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/meetings/SimpleSelect.tsx": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/simple/meetings/StartSheet.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "components/simple/questions/DecisionSheet.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "components/simple/questions/Questions.tsx": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "components/ui.tsx": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/access-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/account.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ad-fix-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/ad-fix-simple-clamp.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/ah-prd-milestones-once.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 12
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/alignment-report.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/app-nav.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/approve-with-edits.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 13
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/approved-prd-roadmap.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 11
+    }
+  },
+  "e2e/approved-prd-shown-once.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 14
+    }
+  },
+  "e2e/approved-roadmap-to-simple.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/artifact-lifecycle.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/ask-discussions-qa-nov17.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-length-limit.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-live-fireflies.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-oracle-actions.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/ask-oracle-request-decision.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-page-context-shown.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-page-context.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/ask-phone-nov14.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-qa-nov12.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ask-reply-rail-reads.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/autonomy-act.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/autonomy-goals.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/autonomy-launches.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/autonomy-next-drafts.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/autonomy-questions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/autonomy-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/autonomy-rituals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/autonomy-strategy-external.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/autonomy-wired.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/autonomy.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/backdrop-gutter.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/baseline-accept-locks.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-build.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-edit-attrs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-goals.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-ground-truth-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/baseline-ground-truth-flags.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-items.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-links.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-proposal-duplicates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-proposal-overlap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-rebuild.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/baseline-review-stop-qa.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/baseline.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/blocker-inspector.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/blocker-promote.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/blocker-status-rights.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/bm-lazy-goal-links.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/board-goal-tables.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/br-linked-discussion-panel.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/branding-dark-logo.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/branding.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/brief-answers.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/brief.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-agentqs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-detailed.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-engcheck.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-newprd.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-next-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-plan-picks.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/build-plan-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/build-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/build-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/build-runplan-meeting-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/build-runplan-scored.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/cancel-again-refusal.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/chat-latest-card.spec.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/checkpoint-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/checkpoint-gate.spec.ts": {
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/citation-confidence.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/claude-accounts-signin.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/claude-accounts-spent.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/claude-accounts.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/code-card-pinned-scroll.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/code-map-view.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/code-map.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/codes-and-chips.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-day-notes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-day-review-file.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-drive.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-timezone-dates.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-timezone-everywhere.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/company-timezone.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/composition-followups.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/composition.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/connections.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/contracts-published.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/cost-prominence.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/counts-failed-part.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/counts-wait-for-every-part.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/current-state-places.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/current-state.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/datatable-empty-colspan.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/date-bases.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/date-warnings-honest.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/day-can-today.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/decision-edit.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/decision-links.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/decision-notes-banner.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/decision-propose-withdraw.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/decisions-about-trash.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/decisions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/delete-prd-simple.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/design-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/design-system.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-mock-simple-story.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-plan-qa-nov14.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-a-ground-truth.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-a-home-plan.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-a-mock.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-a-prd.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-a-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-b-rituals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/detailed-qa-nov12-b-stops.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/detailed-qa-nov12-b.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/detailed-qa-nov12-br-connections.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-qa-nov12-br-gt-names.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/detailed-rail-labels.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/digest-summary-order.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discuss-whole-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-change-kinds.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-changes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-document-context.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-first-reply.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-record.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-replies.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-research.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-review-changes-empty.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-review-changes-intake.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussion-review-changes-lands.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/discussions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/document-diff-items.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/dod-data-stale-card.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/dod-meet-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/dod-meet-meeting.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/dod-meet-minutes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/dod-one-pager-mode.spec.ts": {
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/dod-priorities-actions.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/dod-roadmap-actions.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/draft-layer-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/draft-new-items.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/draft-roadmap-diff.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/draft-roadmap.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/drive-picker.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/e2e-minors-detailed-docs.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/e2e-minors-detailed-run.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/e2e-minors-detailed-stops.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/edit-goals-prds-fix.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/edit-goals-prds-goals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/edit-goals-prds-move.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/eng-briefs-maps.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/eng-check-stale-problems.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/eng-cross-prd-dependency.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/eng-cross-prd-followups.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/eng-dates.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/eng-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/engineering-lead.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/every-field-kr-goal-code.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/evidence-inspector.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/evidence-links.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/evidence-source-link.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/expired-token-remove.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/feature-code-on-join.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/feature-set-check.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/featureset-keep.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/fidelity-hard-scenarios.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fidelity-picks-nov4.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/fireflies-endpoint.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fireflies-picker.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/first-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix-plan-review-baseline.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix-plan-review-impact.spec.ts": {
+    "@typescript-eslint/no-implied-eval": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix-plan-review-plan.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix-plan-review-tables.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-account.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-company.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/fix2-members.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-misc.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-baseline.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-priorities.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-subtabs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-plan-tracks.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-simple-home-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-simple-home-onboarding.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-simple-home-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-simple-home-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-home-walk.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-simple-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-simple-plan-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-plan.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-roadmap-gantt.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-roadmap-lanes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-roadmap-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-roadmap-parts.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-simple-roadmap-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix2-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix2-templates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix3-lane-callouts.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix3-minors.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix3-rituals-wait-for-goal.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-account-login.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-api-tokens.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-claude-accounts.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-company.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-connections.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-docs-review.spec.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-intake.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/fix4-invite-reuse.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-members-onboarding.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-members.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-onboarding-build-baseline.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-baseline.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-impact.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-main.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-priorities.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-reports.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-plan-simple-roadmap.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-plan-tabs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-review-settings.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-roadmap-pages.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-run-detail.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-runs-list.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-settings-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-setup-onboarding.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-setup-roles.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-sheets.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-chrome.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-empty.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-members.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-not-found.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-requests-inbox.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-shell-simple-empty.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-shell-simple-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-shell-simple-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-simple-home-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-simple-home-walk.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-simple-home-welcome.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-simple-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-simple-plan-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-roadmap-card.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-roadmap-chart.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-roadmap-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-roadmap-parts.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-roadmap-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-roadmap-roles.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-simple-shell-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/fix4-sources-onboarding.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fix4-templates-themes.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/fix5-cut-dependents.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix5-idk-open.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/fix5-simple-leftovers.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/flakes-dates-quarter-tip.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/flatten-pages.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fs-stop-review-link.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fs-stop-review-waive.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/fs-stop-waive.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/general-feedback.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/goal-buckets-accept.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-delete-dated.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-delete-three-goals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-delete-two-goals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-editing.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-key-result-target.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-tasks.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-buckets-trash-undo.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-features-linked-draft.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-features-own-key.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-ladder-editing.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-ladder.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-card-header.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-code-once.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-editing-gaps.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-key-result-codes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-key-results-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-key-results.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-milestone-twins.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-scoreboard.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-tracks-editors.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-tracks-every-goal.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-map-tracks-grid.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-money-full.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-num-apart.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/goal-on-roadmap-switch.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goal-order-control.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/goal-order.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/goal-target-kept.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/goals-interview.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-confirm.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-attr-add-remove.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-attr-shapes.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-bracket-words.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-edit-form-minors-2.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-edit-form-minors-3.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-edit-form-minors-4.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-edit-form-minors-5.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-edit-form-minors.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-goal-rename.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-graph-legend.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-name.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-own-feature-items.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-own-feature.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-qa-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-refs.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 7
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-visual-qa.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ground-truth-words-source.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    }
+  },
+  "e2e/ground-truth-words.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/header-pills.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/helpers.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "e2e/home-deleted-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/home-draft-in-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/home-fixes.spec.ts": {
+    "@typescript-eslint/no-implied-eval": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/home-ground-truth-flags.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/home-honest-loading.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/home-milestone-labels.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/home-milestone-rename.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/home-waiting-one-list.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/hop-panel.spec.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/impact-explorer.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-access.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-act-in-place.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-all-proposals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/inbox-approval-open.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/inbox-checkpoint-counts.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-columns-1024.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/inbox-discussions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-feedback.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-meeting-proposals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/inbox-mock-matches-api.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/inbox-one.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-prd-approval-open.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/inbox-runs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-section-number-proposal.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/inbox-suggestions.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-track-alerts-walk.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox-undo-accept.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/inbox.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-archive-retires.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-gaps.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-goals-archive.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-late-answers.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-page.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-read-cap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-read.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/intake-unknown-work.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/interview-new-link.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/interviews-team.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/interviews.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/item-chat-understands.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/item-milestone.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/item-talk-reads.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/launches-create.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/launches.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/learnings-tune-recommendations.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/link-issue.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/llm-jobs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/markdown-export-shape.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/meet-chat-right-prd.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/meeting-agenda-edit.spec.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/meeting-changes-only-its-agenda.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/members-access.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/members-invite-delivery.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/members-invite-last-tried.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/members-invite-message.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/members-people.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/members.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/metrics.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "e2e/milestone-asks.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/milestone-rename.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/milestone-rights.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/milestone-routes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/mock-goal-restore-items.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/mock-one-connections.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/mock-order-inbox-toast.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/mock-route-coverage.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "e2e/mock-seed.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/named-codes-agents.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/named-codes-text.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/named-codes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/new-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/new-prd-door.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/new-prd-form.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/new-prd-replaces.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/new-run-escape.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/newprd-multigoal.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/next-draft-running-run.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/next-draft-section-changes.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 10
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/next-draft.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/notion-picker.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/null-run-cost.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/oauth-consent.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/one-goal-store.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/one-pager-milestone-rename.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/one-roadmap-goal-map.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/one-roadmap-many-prds.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/one-roadmap-setup.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/oracle-work.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/order-stale-goal-words.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/outcomes-code.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-confidence.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-filter-empty.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-goal-follow.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-goal.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-hold.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-long-titles.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-refusal.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-track-learnings.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-trash-toast.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes-trash.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/outcomes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/own-tree-only.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/page-header.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/panel-close.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/panel-menu-tree.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/panel-menu.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/pass-f-members-explanations.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/pass-f-members-failed-load.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/pass-f-members-round1.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/pass-f-members.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/pass-f-setup-errors.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/passf-settings-integrations.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/passf-settings-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/passf-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/pdf-export-feedback.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/phone-tables.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/plan-edit.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/plan-inspector-actions.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/plan-open-from-simple.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/plan-open-scope.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/plan-timeline-reload.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/plan-timeline.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/plan-tracks.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/plan.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/prd-look.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/prd-named-goals.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/prd-navigation.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/prd-nothing-written.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/prd-order-lists.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/prd-run-reads-working-draft.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/prd-sections.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/present-code.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/present-dates-goals.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/present-fit.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/present-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/pricing.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/print-detailed-version.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/prio-company.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/prio-line-once.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/prio-milestone-one-read.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/prio-milestone-rename.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/prio-twin-propose.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/prio-twins.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/prio-unranked.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/priorities-buckets-weeks.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/priorities-key-results.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/priorities-keydates.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/priorities-scrollbar-room.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/priorities-weeks-goal-ids.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/priorities-weeks-words.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/priorities-words.spec.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/priorities.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/priority-overrides.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/priority-run.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/prose-guard.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "e2e/prose-tips.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/public-check-ticks.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/public-roadmap-check.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/public-roadmap-draft.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/publish.spec.ts": {
+    "@typescript-eslint/no-implied-eval": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-company-decisions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-company-home-needs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-company-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-company-inbox.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-company-rituals.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/qa-company-runs-roles.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-company-tabs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-brief.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-composition.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-design.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-diff.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/qa-docs-evidence.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/qa-docs-impact.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-interview.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa-docs-list.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-new.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-overview.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-present.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-publish.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-quality.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-share.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-docs-version.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/qa-f-settings-analytics.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-f-settings-autonomy.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-f-settings-other.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-f-settings-templates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-home-decide.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-leftovers.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa-nov17-goals-priorities.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "e2e/qa-nov17-gt-codes.spec.ts": {
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "e2e/qa-nov17-plan-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-nov17-roadmap-data.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "e2e/qa-nov17-runs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-nov17-settings.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-baseline.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-impactroadmap-impact.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-impactroadmap-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-plandocs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-planreports.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-plantable.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-plantracks.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-plan-priorities.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/qa-shell-pass2-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-shell-pass2.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-visual-d-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-work-intake.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa-work-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa-work-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa-work-runs.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa-work-sources.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-company-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-company-inbox.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-company-records.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-company-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-company-rituals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-company-strategy-updates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-docs-design.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-docs-list.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-docs-quality.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-docs-share-new.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-docs-version.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-interview-link.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-onboarding-baseline-running.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-onboarding-checklist.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-simple-decisions.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-simple-meetings.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-work-intake.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-work-onboarding.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-work-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa2-work-runs.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-work-scope.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/qa2-work-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-company-decisions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-company-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-company-inbox.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-company-records.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-company-rituals.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa3-docs-list-overview.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-new.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-quality.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-share-briefs-interview.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-share-composition.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-share-link.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-share-publish-items.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/qa3-docs-share-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-share-techbrief-design.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-tabs.spec.ts": {
+    "@typescript-eslint/no-implied-eval": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-docs-version.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-onboarding-owner-welcome.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-onboarding-setup-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-onboarding-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa3-simple-plan.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa3-simple-prd-list-flows.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/qa3-simple-prd-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa3-simple-prd-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-company-market-reads.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-compare-composition-publish.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-evidence-impact-quality.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-docs-list-overview.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-share-design.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-share-links.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-share-public-interview.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-share-publish.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-share-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-docs-version.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-shell.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-simple-decide-meeting.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "e2e/qa4-simple-decide.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-simple-home-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-simple-home-walk.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-simple-home.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-simple-plan.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-simple-prd.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-simple-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-work-eng.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-work-inbox.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-work-intake.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4-work-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-work-runs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4-work-scope.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-company-decisions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-company-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-company-market.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-company-metrics.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-company-rituals-strategy.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4fix-plan-baseline-impact.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-plan-main.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-plan-priorities.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-plan-subtabs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-settings-account-autonomy.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-settings-members.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-settings-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-settings-setup-sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-settings-themes-templates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa4fix-settings-webhooks.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/qa4fix-simple-decide-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4r-card.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4r-export.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4r-gantt.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4r-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa4r-timeline.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/qa5-plan-at-risk.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/qa5-simple-decide-rest.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "e2e/quality.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/questions-inbox.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/read-states-asks.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/read-states-docs.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/read-states-home2.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/read-states-last.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/read-states-rest.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/read-states-simple.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/read-states-walk.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/read-states.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/real/discussion-stream.spec.ts": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/real/feedback-loop.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/real/publish.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 9
+    }
+  },
+  "e2e/real/slice.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    }
+  },
+  "e2e/real/stack.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "e2e/real/ui.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    }
+  },
+  "e2e/rebuild-sign.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 30
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 44
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/replaced-prd-history.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/replaced-prd-live-again.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/requests-mock.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 33
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/requests-new.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/requests-queue.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/requests-start-prd.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/requests-triage.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/requests-why-not.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/rerun-previous.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/resolutions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/review-chain-defaults.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 7
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/review-file.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/review-fix-work-review.spec.ts": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "e2e/review-live.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/review-me-stream.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/review-settings.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/review.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 7
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/ritual-skip-edit-undo.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/ritual-summaries.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/rituals.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/roadmap-build-draft.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-cross-prd-reasons.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-dates.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-decide.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-edit-fixes-2.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-edit-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-goal-groups.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-item-diff.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-items-deps-revert.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-items-first-load.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-items-phone.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-items-review.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 10
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-items-roles.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-items-tab.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-keydates.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-md-prds.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-milestone-codes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-milestone-panel-close.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-nov10-findings.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-panel-overlap.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-phone-today-quarters.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-reasons.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/roadmap-removed-list.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-sharing.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-track-bands-milestone-kinds.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-track-order.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap-tracks-sheet.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/role-capabilities.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/role-fixes-6.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/role-pages.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/role-train-h.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-agents-progress.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-decisions-answers.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-decisions.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/run-detail-gate-waive.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-discussions.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-goals.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-key-renewed.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-order-goal-words.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/run-page-items-summary.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-progress-heartbeat.spec.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-queue-waits.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-review-in-version.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/run-review-stops.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/run-segment-retry.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/runs-no-document.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/runs-qa-fixes.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/runs-sent-back.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/runs.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 21
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/scope-review-other-prd.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/scope-review.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/section-edit-trash-qa.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/section-edit.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/settings-company-qa-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/setup.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/share-allow-download.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/share-gate-error.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/share-links-table-width.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 2
+    }
+  },
+  "e2e/shell-buttons.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/shell-dialog.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/shell-errors.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/shell-hop.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/shell-nav.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/shell-not-found.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/shell-strip.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/shell-targets.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/simple-additions.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-ask-changes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-ask-fresh.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-ask-general-citations.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-ask-live.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-ask-one-box.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-ask-panel.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-ask-plan-first.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-ask-recent-reload.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-bet-flow-carry.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-changes-made-order.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-chat-actions.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-chat-followups.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-chat-join.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-chat-pool-clears.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-chat-pool-spent.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-chat-reader.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-chat.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-cross-prd-dates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-deciders.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-decisions-runs.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-draft-track-owner.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-draft-track-rows.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-flows.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-generation-quality-review.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-goal-map.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-goalmap-qa-nov12.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-gt-flag-one-look.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-home-prd-waiting.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-home-qa-nov12-inbox-open-dates.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-home-qa-nov12-meeting.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "e2e/simple-home-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-home.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-meeting-chat-kind.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-meeting-chat-own-key.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-meeting-delivery.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-meeting-end.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-meeting-flows.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-meeting-minors.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-meeting-minutes-record.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-meeting-phone-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-meetings-approve.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-meetings-draft-ask.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-meetings-start.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-meetings-walk.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-merged-into-own-roadmap.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    }
+  },
+  "e2e/simple-mode.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-nav-counts-wait.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-no-fit-date.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-clear.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-draft-kept-on-rebuild.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-follow-ups.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-heading-fix.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-one-pager-needs-look.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-number-fix.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-prd-order.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-run-prd.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pager-walkb.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-one-pagers-qa.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-onepager-qa-nov12-prd.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-onepager-qa-nov12.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-plan-charts.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 2
+    }
+  },
+  "e2e/simple-plan-dated-milestones.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-plan-dates-to-confirm.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-plan-strip.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-calm-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-qa2-flows.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-qa2-page.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-qa2-timeline.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-review-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-prd-run-approve.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-run-version.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-prd-timeline.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-priorities-codes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-priorities-qa-nov12-buckets.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-priorities-qa.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-priorities-suggest-one-way.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-replaced-prds.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-500-timing.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-count-waits.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-dated-move.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-drag-layer.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-drag-reads.spec.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-effort-start.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-export-cues.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-export-qa-e.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-formats.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-gantt-two.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-gantt.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-goal-milestones.spec.ts": {
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-home-qa.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-item-link.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-roadmap-key-results.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-roadmap-keys.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-lanes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-milestone-labels.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-milestones.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-opens-3m.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-phone-axis.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-qa-nov12-milestones.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-qa-nov12-panel.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-same-day-badge.spec.ts": {
+    "@typescript-eslint/await-thenable": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-stale-filters.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-talk.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-roadmap-track-open.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-tray-proposal-day.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap-zoom-3m.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-suggest.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-visuals-cards.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/simple-visuals-proposals.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-visuals.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-walk-fixes.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-walk-fixes3-cp.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-walk-fixes3-ph.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-walk-fixes3-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simple-walk-plan.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-walk-prio.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/simple-walk.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/simplewaits.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/slack-bridge.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/slack-pings.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/source-attention.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/source-github-include.spec.ts": {
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/source-pickers.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/source-relink.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/source-stale.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/sources-commenter-view.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/sources-coverage.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/sources-fix-work-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/sources-partial-sync.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/sources.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/spec-from-plan.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/spec-staleness.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/spec-states.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/staging.spec.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 18
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/stored-refusal.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/stored-refusals-everywhere.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/strategy-drift-items.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/strategy-pass-f.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/strategy.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/stuck-milestone-decline.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/subgoals.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/tech-brief.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/templates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/themes.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/track-alerts.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/track-prds.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/trash-agenda-requests.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/trash-feature-rows.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/trash-features-goals.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/updates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/value-effort-counts.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/value-effort-followups.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/value-effort-wording.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/verdict-keeps-section.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/version-importer.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/version-warnings.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/visual-qa-a-settings-company.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa-b-documents.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa-b-one-pager.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/vqa-b-plan.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa-b-runs-inbox.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 2
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "e2e/vqa-b-share-publish.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa-detailed.spec.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "e2e/vqa-one-pager-draft-refused.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/vqa-one-pager.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/vqa-requests.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa-run-review.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa-simple-roadmap.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/vqa/capture.vqa.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 7
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vqa/vqa.config.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/vxe-counts.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 3
+    }
+  },
+  "e2e/walk-1023.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walk-514.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/walk-brief.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walk-docs-inbox.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walk-docs-priorities.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/walk-docs-version.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walk-eng-check.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkb-priorities.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/walkb-review-5a.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/walkb-review-5b.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkb-review-5c.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/walkb-review-5d.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/walkb-review-5e.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkb-review-5g.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkb-roadmap-approve-dates.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkb-roadmap-honest-starts.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkb-roadmap-items-stop.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkc-meeting-mock.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkc-meeting-r2-cards.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkc-meeting.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/walkc-roadmap-tasks.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/webhooks-share-prose.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "e2e/webhooks-token-revoke.spec.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/webhooks.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "e2e/welcome.spec.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "e2e/win-loss-alternatives.spec.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/agentSetup.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/branding.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/client.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/discussion-changes.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    }
+  },
+  "lib/api/goal-interview.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    }
+  },
+  "lib/api/interviews.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/members-types.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/account.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/approved-roadmap.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/audience.test.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "lib/api/mock/audience.ts": {
+    "no-param-reassign": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/autonomy.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 7
+    }
+  },
+  "lib/api/mock/baseline.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/baseline.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 4
+    }
+  },
+  "lib/api/mock/blockers.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 6
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/branding.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/brief.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/checkpoint-review.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/claude-accounts.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/connections.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/currentstate.ts": {
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/days.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/decision-notes.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/decisions.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/describe.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/discussions.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/draft-roadmap.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/engineering.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/feature-codes.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/fireflies.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/fit-date-engine.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/fit-date.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/from-run.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/goal-buckets.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/goal-interview.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 8
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/goal-map-tracks.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/goal-map.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 32
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/goals.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/ground-truth.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/impact.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/intake.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 36
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/intake.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "lib/api/mock/interviews.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "lib/api/mock/lane-f.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/llm-jobs.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/market.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/meeting-draft.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/metrics.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/modules.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 12
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/modules.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/next-draft.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/one-pager-checks.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/one-roadmap.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/plan-edits.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/pricing.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/public-links.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/quality.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/rebuilds.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/refusal.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/replaced-prd.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/reports.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "lib/api/mock/requests.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/review-v2.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/rituals.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/roadmap-diff.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/roadmap-read.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/roadmap.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 30
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 5
+    }
+  },
+  "lib/api/mock/roadmap.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 16
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 7
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/runs.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    },
+    "import-x/no-cycle": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 14
+    }
+  },
+  "lib/api/mock/scope.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/server.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 6
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/no-duplicates": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 102
+    }
+  },
+  "lib/api/mock/shares.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "lib/api/mock/simple-change-words.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 11
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 4
+    }
+  },
+  "lib/api/mock/simple-changes.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-changes.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 51
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-chat.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 19
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "lib/api/mock/simple-meeting-agenda.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/simple-meetings.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 11
+    },
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 6
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 18
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-milestones.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-one-pager.test.ts": {
+    "import-x/order": {
+      "count": 4
+    }
+  },
+  "lib/api/mock/simple-one-pager.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 17
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 6
+    }
+  },
+  "lib/api/mock/simple-priorities.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-priorities.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "lib/api/mock/simple-questions.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-questions.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-removed.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-roadmap.goal-order.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-roadmap.many-plans.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-roadmap.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 1
+    },
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/first": {
+      "count": 5
+    },
+    "import-x/newline-after-import": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 2
+    },
+    "import-x/no-duplicates": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 19
+    },
+    "no-param-reassign": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-runs.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-suggestions.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-suggestions.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/simple-visuals.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/simple-visuals.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/slack.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/sources.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/specs.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/staging.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/strategy.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/trace.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/trash.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/updates.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/v2.ts": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/api/mock/waiting-list.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/api/mock/webhooks.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/api/schema.d.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 2
+    }
+  },
+  "lib/api/shared-reads.test.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 7
+    }
+  },
+  "lib/api/shared-reads.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 3
+    }
+  },
+  "lib/api/track-alerts.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/autonomy.tsx": {
+    "import-x/order": {
+      "count": 3
+    }
+  },
+  "lib/code-index.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 7
+    }
+  },
+  "lib/coderabbitCliReview.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/coderabbitCliReview.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "lib/coderabbitReviewStatus.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/codes.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/dates.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    }
+  },
+  "lib/deployContainment.test.ts": {
+    "import-x/order": {
+      "count": 5
+    }
+  },
+  "lib/diff.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "lib/format.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/goal-tree.ts": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "lib/google-picker-mock.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "lib/key-results.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "lib/markdown.ts": {
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/me.tsx": {
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/ownTreeOnly.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/prefer-promise-reject-errors": {
+      "count": 1
+    }
+  },
+  "lib/preferences.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "lib/risk-policy.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "lib/screen-subject.tsx": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/simple-home.test.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/simple-home.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 3
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 2
+    },
+    "import-x/no-cycle": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/stream.test.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "lib/stream.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "lib/use-query.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/use-set-params.ts": {
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "lib/version-href.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 2
+    }
+  },
+  "main.tsx": {
+    "@typescript-eslint/await-thenable": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 2
+    }
+  },
+  "scripts/agent-setup.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/restrict-template-expressions": {
+      "count": 1
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "scripts/check-timing-tags.mjs": {
+    "import-x/order": {
+      "count": 1
+    },
+    "no-param-reassign": {
+      "count": 13
+    }
+  },
+  "scripts/coderabbit-cli-review.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "scripts/coderabbit-review-status.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "scripts/deploy-serves.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "scripts/mutate.mjs": {
+    "import-x/order": {
+      "count": 1
+    }
+  },
+  "scripts/nav-codemod.test.ts": {
+    "import-x/order": {
+      "count": 1
+    }
+  }
+}

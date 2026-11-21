@@ -10,7 +10,7 @@ import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 
 import type { BaselineState } from './baseline';
-import { type ChangeRow, type DiscussionRow, type DiscussionsDb } from './discussions';
+import type { ChangeRow, DiscussionRow, DiscussionsDb } from './discussions';
 import { goalCheck, refusedProblems } from './goals';
 import { reply } from './typed';
 

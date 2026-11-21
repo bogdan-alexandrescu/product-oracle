@@ -10,8 +10,8 @@ import {
   missingItems,
   wantedVersions,
   withAttributesBlock,
+  type SetupState,
 } from './agentSetup.ts';
-import type { SetupState } from './agentSetup.ts';
 
 function ready(): SetupState {
   return {

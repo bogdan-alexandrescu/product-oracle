@@ -8,8 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { exitCodeFor } from '../lib/coderabbitCliReview.ts';
-import { reviewStatus } from '../lib/coderabbitReviewStatus.ts';
-import type { PrView } from '../lib/coderabbitReviewStatus.ts';
+import { reviewStatus, type PrView } from '../lib/coderabbitReviewStatus.ts';
 
 const args = process.argv.slice(2);
 const from = args.indexOf('--from');
