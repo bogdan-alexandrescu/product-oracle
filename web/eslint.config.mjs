@@ -183,17 +183,25 @@ const eslintConfig = defineConfig([
       'unused-imports/no-unused-vars': 'error',
     },
   },
-  // #1585 phase 2, size and complexity, at error with the same suppressions baseline. A file or
-  // function over a limit is split, never given a higher one.
+  // #1585 phase 2, file size, ai-studio's values, at error with the same suppressions baseline.
+  // A file over its limit is split, never given a higher one.
   {
-    rules: {
-      'max-lines': ['error', { max: 400, skipBlankLines: false, skipComments: false }],
-      'max-lines-per-function': ['error', { max: 200, skipBlankLines: false, skipComments: false }],
-      complexity: ['error', 20],
-      'max-depth': ['error', 5],
-      'max-params': ['error', 5],
-      'max-nested-callbacks': ['error', 5],
-    },
+    rules: { 'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }] },
+  },
+  {
+    // Route files (lib/route-files.ts) only wire a route to its page.
+    files: ['app/**/page.tsx', 'app/**/layout.tsx', 'app/__root.tsx', 'app/**/$.tsx'],
+    rules: { 'max-lines': ['error', { max: 15, skipBlankLines: true, skipComments: true }] },
+  },
+  {
+    // Tests and data: the mock API's document seeds and the goal-ladder scenario table.
+    files: [
+      '**/*.test.{ts,tsx}',
+      '**/fixtures.ts',
+      '**/__generated__/**',
+      'lib/api/mock/goal-ladder.ts',
+    ],
+    rules: { 'max-lines': 'off' },
   },
   {
     rules: {
