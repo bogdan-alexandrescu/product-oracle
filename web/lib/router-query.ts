@@ -12,9 +12,9 @@ export function parseQuery(search: string): Query {
   return out;
 }
 
-/** Only what would change the query's meaning is escaped (`:` and `/` stay as typed, as Next kept them). */
+/** Escaped: what would change the query's meaning, and `/` as links write it (`?from=%2Fdocuments`); `:` stays as typed, as Next kept it. */
 const encode = (text: string) =>
-  text.replace(/[%&=#+\s]/g, (c) => (c === ' ' ? '+' : encodeURIComponent(c)));
+  text.replace(/[%&=#+/\s]/g, (c) => (c === ' ' ? '+' : encodeURIComponent(c)));
 
 /** Back to text as it came: a key with no value stays bare (`?latest`, not `?latest=`). */
 export function stringifyQuery(search: Record<string, unknown>): string {

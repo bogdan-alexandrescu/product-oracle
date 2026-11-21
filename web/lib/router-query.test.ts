@@ -11,7 +11,7 @@ import { parseQuery, stringifyQuery } from './router-query';
 test.each([
   '?latest',
   '?item=usage-alerts:alert-quiet-hours',
-  '?next=/plan/x',
+  '?from=%2Fdocuments%2Fannual-billing',
   '?request=r-1',
   '?tab=proposals&x=1',
   '?a=1&a=2',
