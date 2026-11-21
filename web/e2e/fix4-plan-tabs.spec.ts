@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './test';
+import { expect, test, type Locator, type Page } from './test';
 
 import { DATE_BASES_SCENARIO } from '../lib/api/mock/roadmap';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
@@ -17,6 +17,13 @@ const visible = (page: Page, id: string) => page.getByTestId(id).filter({ visibl
 const strip = (page: Page) => visible(page, 'plan-tabs');
 const links = (page: Page) => visible(page, 'plan-links');
 const header = (page: Page) => page.locator('header[data-page-header]').filter({ visible: true });
+// How far apart, in px, the tops of these items sit, all read in one frame: a header that grows
+// as its data loads moves them alike, so only a real second row shows.
+const spread = (items: Locator) =>
+  items.evaluateAll((els) => {
+    const tops = els.map((el) => Math.round(el.getBoundingClientRect().top));
+    return Math.max(...tops) - Math.min(...tops);
+  });
 
 async function start(page: Page, opts: { scenario?: string; theme?: 'light' | 'dark' } = {}) {
   if (opts.scenario)
@@ -119,10 +126,12 @@ test.describe('phone', () => {
     await expect.poll(() => row('plan-tab-plan')).toEqual(ONE_ROW);
     const reports = strip(page).getByTestId('plan-tab-reports');
     await reports.scrollIntoViewIfNeeded();
-    // Both measured after the scroll, so a page that scrolled to bring Reports in moves both alike.
-    const plan = (await strip(page).getByTestId('plan-tab-plan').boundingBox())!;
-    const r = (await reports.boundingBox())!;
-    expect(Math.abs(r.y - plan.y)).toBeLessThanOrEqual(1);
+    // Both measured after the scroll, in one frame, so a page that scrolled or grew moves both alike.
+    expect(
+      await spread(
+        strip(page).locator('[data-testid="plan-tab-plan"], [data-testid="plan-tab-reports"]'),
+      ),
+    ).toBeLessThanOrEqual(1);
     await reports.click();
     await expect(page).toHaveURL(/\/plan\/reports$/);
     await expect(strip(page).getByTestId('plan-tab-reports')).toHaveAttribute(
@@ -194,8 +203,7 @@ test.describe('phone', () => {
           await page.waitForTimeout(400);
         }
         await expect(reports).toBeInViewport({ ratio: 1 });
-        const plan = (await tabs.first().boundingBox())!;
-        expect(Math.abs((await reports.boundingBox())!.y - plan.y)).toBeLessThanOrEqual(1);
+        expect(await spread(tabs)).toBeLessThanOrEqual(1);
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
           width,
         );
@@ -211,16 +219,10 @@ test.describe('phone', () => {
     const filter = visible(page, 'dates-filter');
     const chips = filter.getByRole('button');
     await expect(chips).toHaveCount(4);
-    // The row is measured once the page has loaded: the header's summary chips (with the counts)
-    // and its Add a date source button push the row down (34 + 48 px on a phone), so a row
-    // measured before that moves under the test.
+    // The header's summary chips and its Add a date source button push the row down as they
+    // load (34 + 48 px on a phone): the four chips are read in one frame, so that moves them alike.
     await expect(chips.last()).toHaveText(/^All\s*\d+$/);
-    await expect(header(page).getByRole('button', { name: 'Add a date source' })).toBeVisible();
-    const first = (await chips.first().boundingBox())!;
-    for (const chip of await chips.all()) {
-      await chip.scrollIntoViewIfNeeded();
-      expect(Math.abs((await chip.boundingBox())!.y - first.y)).toBeLessThanOrEqual(1);
-    }
+    expect(await spread(chips)).toBeLessThanOrEqual(1);
     const withdrawn = filter.getByRole('button', { name: /^Withdrawn/ });
     await expect(withdrawn).toHaveText(/^Withdrawn\s*0$/);
     await expect(withdrawn).toBeEnabled();
