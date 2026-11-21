@@ -6846,6 +6846,16 @@ function linkSeededFeatures(db: Db): void {
   }
 }
 
+/** The goals the roadmap's items name, known before a Simple route (and the goal buckets' seed) reads them. */
+function knowItemGoals(db: Db): void {
+  // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
+  knowGoalOrderGoals(db.baseline.entities);
+  // roadmap-milestones: its fourth goal names its work on every load.
+  if (db.simple_roadmap?.items.some((i) => i.key === 'pricing-faq'))
+    GOALS['win-teams'] = 'Win larger teams';
+  knowGoalParents(db.baseline.entities);
+}
+
 function load(): Db {
   const raw = localStorage.getItem(STORAGE_KEY);
   const hit = cached;
@@ -9133,6 +9143,21 @@ function load(): Db {
     db.simple_roadmap.map_goals = goalMapGoals(
       db.goal_map,
       db.baseline.entities.filter((e) => e.type === 'goal'),
+    );
+  // mock-buckets: as the API, whose goal buckets are stored from the start, they are seeded with the
+  // db (as GET /v1/simple/goal-buckets seeds them on a first read, its goal names known first), so
+  // Roadmap's goal milestones are there whichever page opens first.
+  knowItemGoals(db);
+  if (db.simple_roadmap)
+    goalBucketsDb(
+      db.simple_roadmap,
+      db.members.map((x) => ({
+        id: x.id,
+        name: displayName(x.email, x.name),
+        email: x.email,
+        role: x.role,
+        disabled: x.status === 'disabled',
+      })),
     );
   linkSeededFeatures(db);
   save(db);
@@ -14048,14 +14073,9 @@ async function route(db: Db, req: Request): Promise<Response> {
         ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key)))
         : []),
     ]);
-    // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
-    knowGoalOrderGoals(db.baseline.entities);
-    // roadmap-milestones: its fourth goal names its work on every load.
-    if (db.simple_roadmap?.items.some((i) => i.key === 'pricing-faq'))
-      GOALS['win-teams'] = 'Win larger teams';
-    knowGoalParents(db.baseline.entities);
-    // As the API, whose goals are all stored from the start: before the goal buckets are seeded (lazily, by whichever
-    // page reads them first), goals rank as the buckets will hold them, read off a copy that is not kept, so the first
+    knowItemGoals(db);
+    // As the API, whose goals are all stored from the start: a db stored without goal buckets (they are seeded with the
+    // db now) ranks goals as the buckets will hold them, read off a copy that is not kept, so the first
     // Roadmap read numbers milestones that share a day as every later one does.
     if (db.simple_roadmap && !db.simple_roadmap.goal_buckets) {
       const preview = { ...db.simple_roadmap, goal_buckets: undefined };
