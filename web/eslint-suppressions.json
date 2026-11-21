@@ -1,7 +1,15 @@
 {
+  "app/__root.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/access/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/account/page.tsx": {
@@ -11,6 +19,9 @@
   },
   "app/baseline/_components/BlockerInspector.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -22,21 +33,38 @@
   "app/baseline/_components/EntityDrawer.tsx": {
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/baseline/_components/FromRunTab.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/GoalInterview.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/baseline/_components/GraphTab.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/baseline/_components/GroundTruthFlags.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/baseline/_components/ItemsTab.tsx": {
@@ -47,16 +75,25 @@
   "app/baseline/_components/ProposalsTab.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/baseline/_components/goal-fields.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/briefs/$id/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/briefs/_brief-detail.tsx": {
@@ -77,15 +114,34 @@
   "app/company/decisions/_components/DecisionInspector.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/company/decisions/_components/ProposeDialog.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/decisions/page.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/company/layout.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/market/_components/Alternatives.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -117,6 +173,14 @@
   "app/company/market/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/company/metrics/_components/MetricForm.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/metrics/_components/MetricInspector.tsx": {
@@ -127,41 +191,65 @@
   "app/company/metrics/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/rituals/$occurrence/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/rituals/_components/MetricBlocks.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/rituals/_components/OccurrenceDetail.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/rituals/_components/RitualInspector.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/rituals/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/strategy/_components/Cards.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/strategy/_components/DraftSheet.tsx": {
@@ -182,6 +270,9 @@
   "app/company/strategy/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/company/updates/_components/NewUpdateDialog.tsx": {
@@ -192,11 +283,27 @@
   "app/company/updates/page.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/design/_gallery.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/design/page.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/composition/_confirm.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/composition/_module-inspector.tsx": {
@@ -207,81 +314,129 @@
   "app/documents/$doc/composition/_view.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/composition/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/diff/page.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
   "app/documents/$doc/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/public/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/publish/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/v/$n/evidence/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/v/$n/impact/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/v/$n/items/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/v/$n/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/v/$n/present/page.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
   "app/documents/$doc/v/$n/quality/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/$doc/v/$n/roadmap/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/documents/new/page.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
   "app/documents/page.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/ground-truth/page.tsx": {
     "import-x/order": {
       "count": 17
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/home/_goals-panel.tsx": {
@@ -300,6 +455,9 @@
   "app/home/_in-flight.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/home/_welcome.tsx": {
@@ -310,11 +468,22 @@
   "app/home/page.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/i/$token/page.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/impact/_explorer.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/impact/_steps.tsx": {
@@ -325,11 +494,17 @@
   "app/impact/changes/$id/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/impact/entities/$id/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/inbox/_actions.tsx": {
@@ -340,16 +515,25 @@
   "app/inbox/_inbox.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/inbox/_needs.tsx": {
     "import-x/order": {
       "count": 12
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/inbox/_proposals.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/intakes/$id/_draft-sheet.tsx": {
@@ -357,9 +541,17 @@
       "count": 5
     }
   },
+  "app/intakes/$id/_gaps.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/intakes/$id/_inspector.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/intakes/$id/_proposals.tsx": {
@@ -370,6 +562,9 @@
   "app/intakes/$id/_questions.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/intakes/$id/_read.tsx": {
@@ -380,11 +575,17 @@
   "app/intakes/$id/_shell.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/intakes/$id/page.tsx": {
     "import-x/order": {
       "count": 7
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/login/_components/AuthCard.tsx": {
@@ -400,6 +601,9 @@
   "app/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/_dates.tsx": {
@@ -410,11 +614,17 @@
   "app/plan/_edit-plan.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/_inspector.tsx": {
     "import-x/order": {
       "count": 13
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/_lib.test.ts": {
@@ -455,26 +665,46 @@
   "app/plan/_tracks.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/documents/page.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/plan/layout.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/outcomes/page.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/reports/$id/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/reports/_generate.tsx": {
@@ -485,21 +715,38 @@
   "app/plan/reports/_report.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/reports/latest/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/plan/reports/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/priorities/_components/overrides.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/priorities/page.tsx": {
     "import-x/order": {
       "count": 15
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/requests/_components/FoundInSources.tsx": {
@@ -510,6 +757,9 @@
   "app/requests/_components/InterviewDialog.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/requests/_components/NewRequest.tsx": {
@@ -520,6 +770,9 @@
   "app/requests/_components/RequestInspector.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/requests/_components/RequestList.tsx": {
@@ -540,16 +793,30 @@
   "app/requests/interviews/$id/_detail.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/requests/interviews/$id/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/requests/interviews/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/requests/layout.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/requests/page.tsx": {
@@ -570,6 +837,9 @@
   "app/roadmap/changelog/page.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/roadmap/launches/_new-launch.tsx": {
@@ -580,26 +850,46 @@
   "app/roadmap/launches/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/roadmap/layout.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/$id/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-dates.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-review.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_items-review.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_review.tsx": {
@@ -607,9 +897,17 @@
       "count": 1
     }
   },
+  "app/runs/$id/review/$checkpoint/_scope-inspector.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/runs/$id/review/$checkpoint/_scope-review.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_shell.tsx": {
@@ -620,21 +918,38 @@
   "app/runs/$id/review/$checkpoint/page.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/_new-run-dialog.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/_run-detail.tsx": {
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/runs/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/s/$token/page.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/_gate.tsx": {
@@ -652,6 +967,16 @@
       "count": 2
     }
   },
+  "app/settings/api-tokens/page.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/settings/autonomy/AutonomySettings.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "app/settings/autonomy/page.tsx": {
     "import-x/order": {
       "count": 1
@@ -660,10 +985,18 @@
   "app/settings/claude-accounts/ClaudeAccounts.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/claude-accounts/page.tsx": {
     "import-x/order": {
+      "count": 1
+    }
+  },
+  "app/settings/company/BrandingPanel.tsx": {
+    "max-lines": {
       "count": 1
     }
   },
@@ -675,11 +1008,22 @@
   "app/settings/company/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/connections/ConnectionsSettings.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/settings/layout.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/members/page.tsx": {
@@ -700,15 +1044,34 @@
   "app/settings/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/sources/CompanyDrive.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/DriveFiles.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/settings/sources/FirefliesPicker.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/sources/NotionPicker.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -725,41 +1088,65 @@
   "app/settings/sources/page.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/templates/$key/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/templates/new/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/templates/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/themes/$key/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/themes/new/page.tsx": {
     "import-x/order": {
       "count": 7
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/themes/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/trash/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/settings/webhooks/DeliveryLog.tsx": {
@@ -810,6 +1197,9 @@
   "app/simple/_home/walk.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/_home/welcome.tsx": {
@@ -820,21 +1210,33 @@
   "app/simple/decisions/_decisions.tsx": {
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/decisions/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/goals/_editors.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/goals/_map.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/goals/_panel.tsx": {
@@ -850,11 +1252,17 @@
   "app/simple/layout.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/meetings/$id/_meeting.tsx": {
     "import-x/order": {
       "count": 22
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/meetings/$id/chat/_chat.tsx": {
@@ -870,6 +1278,9 @@
   "app/simple/meetings/$id/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/meetings/_flow.tsx": {
@@ -880,6 +1291,9 @@
   "app/simple/meetings/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/one-pagers/$doc/_one-pager.tsx": {
@@ -890,20 +1304,32 @@
   "app/simple/one-pagers/$doc/page.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/one-pagers/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/page.tsx": {
     "import-x/order": {
       "count": 29
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/priorities/goal-buckets.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -920,15 +1346,24 @@
   "app/simple/priorities/priorities.tsx": {
     "import-x/order": {
       "count": 24
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/priorities/task-edit.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_board.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -938,16 +1373,25 @@
     },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_export.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_fields.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_keydates.tsx": {
@@ -958,10 +1402,21 @@
   "app/simple/roadmap/_lanes.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_lib.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_milestones.tsx": {
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -983,6 +1438,14 @@
   "app/simple/roadmap/_roadmap.tsx": {
     "import-x/order": {
       "count": 34
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_tasks.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/_timeline.tsx": {
@@ -992,43 +1455,77 @@
     "import-x/order": {
       "count": 10
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "app/simple/roadmap/_tracks.tsx": {
+    "max-lines": {
       "count": 1
     }
   },
   "app/simple/roadmap/_zoom.tsx": {
     "import-x/order": {
       "count": 10
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/simple/roadmap/page.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/sources/_components/coverage.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "app/sources/layout.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "app/sources/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "app/specs/$id/design/$versionId/page.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/ApiTokensSettings.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/ArtifactMenu.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/BuildRoadmap.tsx": {
@@ -1052,6 +1549,9 @@
   "components/DateBasisDialog.tsx": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/DateMarker.tsx": {
@@ -1062,11 +1562,17 @@
   "components/DesignReview.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/DiffView.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/DocToolbar.tsx": {
@@ -1077,6 +1583,9 @@
   "components/DocumentOverview.tsx": {
     "import-x/order": {
       "count": 17
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/EditSection.tsx": {
@@ -1087,6 +1596,9 @@
   "components/FeedbackPanel.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/HeldRewrites.tsx": {
@@ -1102,26 +1614,41 @@
   "components/MarkdownBody.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/MembersSettings.tsx": {
     "import-x/order": {
       "count": 9
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/MyAccount.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/NewDraft.tsx": {
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/NextDraft.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/PersonPicker.tsx": {
@@ -1132,6 +1659,9 @@
   "components/PresentMode.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/PricingDecide.tsx": {
@@ -1142,16 +1672,25 @@
   "components/PublishView.tsx": {
     "import-x/order": {
       "count": 8
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/QualityView.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/RebuildSign.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/RefineSection.tsx": {
@@ -1167,6 +1706,11 @@
   "components/RequestSpec.tsx": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "components/ReviewSetup.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "components/SectionBackLink.tsx": {
@@ -1187,16 +1731,25 @@
   "components/TemplateBodyEditor.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/TemplateDetail.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/ThemeDetail.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/VersionActions.tsx": {
@@ -1212,6 +1765,9 @@
   "components/VersionView.tsx": {
     "import-x/order": {
       "count": 32
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/account/SlackPingsPanel.tsx": {
@@ -1225,10 +1781,16 @@
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/discuss/ChangeForm.tsx": {
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -1238,6 +1800,9 @@
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/discuss/DiscussionList.tsx": {
@@ -1251,6 +1816,9 @@
     },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/discuss/LinkedDiscussion.tsx": {
@@ -1279,6 +1847,9 @@
     },
     "import-x/order": {
       "count": 11
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/ds/Button.tsx": {
@@ -1289,6 +1860,9 @@
   "components/ds/CodeChip.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/ds/ConfirmDialog.tsx": {
@@ -1339,6 +1913,9 @@
   "components/evidence/EvidencePane.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/hop/HopPanel.tsx": {
@@ -1347,6 +1924,9 @@
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/hop/ShareForm.tsx": {
@@ -1361,6 +1941,9 @@
   },
   "components/members/ChangePreview.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -1377,6 +1960,9 @@
   "components/review/FeedbackList.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/review/ItemInspector.tsx": {
@@ -1387,6 +1973,11 @@
   "components/review/ItemsTable.tsx": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "components/review/Outline.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "components/review/ReviewPanel.tsx": {
@@ -1405,6 +1996,9 @@
   "components/roadmap/DraftRoadmapPane.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/roadmap/RoadmapItemsPane.tsx": {
@@ -1425,11 +2019,17 @@
   "components/share/PublicCheck.tsx": {
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/share/RoadmapSharing.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/DecidedWho.tsx": {
@@ -1447,19 +2047,43 @@
       "count": 1
     }
   },
+  "components/simple/FitDate.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "components/simple/FlowViews.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "components/simple/FlowVisual.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "components/simple/GoalSuggestions.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/NewPrd.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/OnePager.tsx": {
     "import-x/order": {
       "count": 26
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/OnePagerSlides.tsx": {
@@ -1470,11 +2094,19 @@
   "components/simple/PlanByMonth.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/PrdMenu.tsx": {
     "import-x/order": {
       "count": 3
+    }
+  },
+  "components/simple/PrdTimeline.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/SimplePage.tsx": {
@@ -1485,11 +2117,17 @@
   "components/simple/SimpleShell.tsx": {
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/WaitingItems.tsx": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/chat/AskAnswer.tsx": {
@@ -1498,6 +2136,14 @@
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "components/simple/chat/ChatCard.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/chat/ChatThread.tsx": {
@@ -1506,6 +2152,9 @@
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/chat/MeetingChat.tsx": {
@@ -1519,11 +2168,17 @@
     },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/meetings/AgendaSheet.tsx": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/meetings/PreRead.tsx": {
@@ -1539,10 +2194,21 @@
   "components/simple/meetings/StartSheet.tsx": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "components/simple/questions/DecisionSheet.tsx": {
+    "max-lines": {
+      "count": 1
     }
   },
   "components/simple/questions/Questions.tsx": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -1773,6 +2439,9 @@
   },
   "e2e/baseline.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -2006,6 +2675,9 @@
   },
   "e2e/counts-failed-part.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -2407,6 +3079,9 @@
   "e2e/fireflies-picker.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/first-draft.spec.ts": {
@@ -3140,6 +3815,11 @@
       "count": 2
     }
   },
+  "e2e/ground-truth-words-source.spec.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "e2e/ground-truth-words.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -3148,6 +3828,11 @@
   "e2e/header-pills.spec.ts": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "e2e/helpers.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/home-deleted-roadmap.spec.ts": {
@@ -3178,6 +3863,9 @@
   "e2e/home-milestone-labels.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/home-milestone-rename.spec.ts": {
@@ -3187,6 +3875,9 @@
   },
   "e2e/home-waiting-one-list.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -3671,6 +4362,9 @@
   "e2e/panel-menu-tree.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/panel-menu.spec.ts": {
@@ -3781,6 +4475,9 @@
   "e2e/prd-navigation.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/prd-nothing-written.spec.ts": {
@@ -4407,6 +5104,9 @@
   "e2e/qa3-simple-plan.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/qa3-simple-prd-list-flows.spec.ts": {
@@ -4685,6 +5385,9 @@
   "e2e/read-states-home2.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/read-states-last.spec.ts": {
@@ -4695,6 +5398,9 @@
   "e2e/read-states-rest.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/read-states-simple.spec.ts": {
@@ -4764,6 +5470,9 @@
   },
   "e2e/requests-why-not.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -4848,6 +5557,9 @@
   "e2e/roadmap-decide.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/roadmap-edit-fixes-2.spec.ts": {
@@ -4888,6 +5600,9 @@
   "e2e/roadmap-items-review.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/roadmap-items-roles.spec.ts": {
@@ -4952,6 +5667,9 @@
   },
   "e2e/roadmap-track-bands-milestone-kinds.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5081,6 +5799,9 @@
   "e2e/runs.spec.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/scope-review-other-prd.spec.ts": {
@@ -5180,6 +5901,9 @@
   "e2e/simple-additions.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-ask-changes.spec.ts": {
@@ -5277,6 +6001,11 @@
       "count": 1
     }
   },
+  "e2e/simple-decision-sheet.spec.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "e2e/simple-decisions-runs.spec.ts": {
     "import-x/order": {
       "count": 1
@@ -5294,6 +6023,9 @@
   },
   "e2e/simple-flows.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5471,6 +6203,9 @@
     "import-x/order": {
       "count": 2
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 2
     }
@@ -5530,6 +6265,9 @@
   },
   "e2e/simple-prd-timeline.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5591,10 +6329,16 @@
   "e2e/simple-roadmap-export-qa-e.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-roadmap-formats.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5610,6 +6354,9 @@
   },
   "e2e/simple-roadmap-goal-milestones.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5701,6 +6448,9 @@
   "e2e/simple-roadmap.spec.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "e2e/simple-suggest.spec.ts": {
@@ -5750,6 +6500,9 @@
   },
   "e2e/simple-walk-prio.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -5915,6 +6668,9 @@
   },
   "e2e/trash-features-goals.spec.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6193,8 +6949,16 @@
     }
   },
   "lib/api/mock/audience.ts": {
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 2
+    }
+  },
+  "lib/api/mock/autonomy.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/baseline.ts": {
@@ -6204,6 +6968,9 @@
     "import-x/order": {
       "count": 1
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 4
     }
@@ -6211,6 +6978,9 @@
   "lib/api/mock/blockers.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/branding.ts": {
@@ -6220,6 +6990,9 @@
   },
   "lib/api/mock/brief.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6231,11 +7004,17 @@
   "lib/api/mock/claude-accounts.ts": {
     "import-x/no-cycle": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/connections.ts": {
     "import-x/no-cycle": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/currentstate.ts": {
@@ -6253,6 +7032,11 @@
       "count": 1
     }
   },
+  "lib/api/mock/decisions.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
   "lib/api/mock/describe.ts": {
     "import-x/order": {
       "count": 3
@@ -6261,15 +7045,24 @@
   "lib/api/mock/discussions.ts": {
     "import-x/no-cycle": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/draft-roadmap.ts": {
     "import-x/no-cycle": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/engineering.ts": {
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6297,6 +7090,9 @@
     },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/goal-interview.ts": {
@@ -6305,11 +7101,22 @@
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/goal-map-tracks.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/goal-map.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/goals.ts": {
@@ -6323,6 +7130,14 @@
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/home-milestones.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/impact.ts": {
@@ -6336,6 +7151,9 @@
     },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/interviews.ts": {
@@ -6344,6 +7162,9 @@
     },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/lane-f.ts": {
@@ -6352,6 +7173,14 @@
     },
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/launches.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/llm-jobs.ts": {
@@ -6360,11 +7189,17 @@
     },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/market.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/meeting-draft.ts": {
@@ -6378,11 +7213,19 @@
     },
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/modules.test.ts": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "lib/api/mock/modules.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/next-draft.ts": {
@@ -6391,6 +7234,14 @@
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/one-pager-checks.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/one-roadmap.ts": {
@@ -6401,11 +7252,17 @@
   "lib/api/mock/plan-edits.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/pricing.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/public-links.ts": {
@@ -6416,6 +7273,9 @@
   "lib/api/mock/quality.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/rebuilds.ts": {
@@ -6437,6 +7297,9 @@
     },
     "import-x/order": {
       "count": 4
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/requests.ts": {
@@ -6445,15 +7308,24 @@
     },
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/review-v2.ts": {
     "import-x/order": {
       "count": 1
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/rituals.ts": {
     "import-x/no-cycle": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6469,6 +7341,9 @@
     "import-x/order": {
       "count": 7
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 1
     }
@@ -6479,11 +7354,17 @@
     },
     "import-x/order": {
       "count": 14
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/scope.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/server.ts": {
@@ -6495,6 +7376,9 @@
     },
     "import-x/order": {
       "count": 102
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/shares.ts": {
@@ -6503,6 +7387,9 @@
     },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-changes.test.ts": {
@@ -6514,6 +7401,9 @@
     "import-x/order": {
       "count": 3
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 1
     }
@@ -6521,6 +7411,9 @@
   "lib/api/mock/simple-chat.ts": {
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-meetings.ts": {
@@ -6530,12 +7423,18 @@
     "import-x/order": {
       "count": 18
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 1
     }
   },
   "lib/api/mock/simple-milestones.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6550,6 +7449,14 @@
     },
     "import-x/order": {
       "count": 6
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/simple-plan.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-priorities.test.ts": {
@@ -6563,6 +7470,9 @@
     },
     "import-x/order": {
       "count": 5
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-questions.test.ts": {
@@ -6573,11 +7483,17 @@
   "lib/api/mock/simple-questions.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-removed.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-roadmap.goal-order.test.ts": {
@@ -6609,6 +7525,9 @@
     "import-x/order": {
       "count": 19
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 2
     }
@@ -6621,11 +7540,19 @@
   "lib/api/mock/simple-suggestions.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/simple-visuals.test.ts": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "lib/api/mock/simple-visuals.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/slack.ts": {
@@ -6640,7 +7567,15 @@
     "import-x/order": {
       "count": 3
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
+      "count": 1
+    }
+  },
+  "lib/api/mock/specs.ts": {
+    "max-lines": {
       "count": 1
     }
   },
@@ -6655,11 +7590,17 @@
   "lib/api/mock/strategy.ts": {
     "import-x/order": {
       "count": 2
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/trace.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/trash.ts": {
@@ -6667,6 +7608,9 @@
       "count": 1
     },
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     }
   },
@@ -6678,6 +7622,9 @@
   "lib/api/mock/v2.ts": {
     "import-x/order": {
       "count": 3
+    },
+    "max-lines": {
+      "count": 1
     }
   },
   "lib/api/mock/waiting-list.ts": {
@@ -6687,6 +7634,14 @@
   },
   "lib/api/mock/webhooks.ts": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "lib/api/schema.d.ts": {
+    "max-lines": {
       "count": 1
     }
   },
@@ -6768,6 +7723,9 @@
     "import-x/no-cycle": {
       "count": 1
     },
+    "max-lines": {
+      "count": 1
+    },
     "no-param-reassign": {
       "count": 1
     }
@@ -6794,6 +7752,9 @@
   },
   "scripts/check-timing-tags.mjs": {
     "import-x/order": {
+      "count": 1
+    },
+    "max-lines": {
       "count": 1
     },
     "no-param-reassign": {
