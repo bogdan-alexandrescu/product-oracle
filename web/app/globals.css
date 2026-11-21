@@ -4,7 +4,9 @@
  * I3 type (Open sky): Inter Tight (latin, variable) for the UI and headings, DM Mono (latin,
  * 400 and 500) for figures, ids and code. Self-hosted woff2 under public/fonts (SIL Open Font
  * Licence 1.1), with the metric-matched Arial fallbacks next/font made, so nothing reflows on
- * swap (#1580). DM Mono ships 300/400/500; the rail badge's 600 is synthesised from 500.
+ * swap (#1580). The files are the unhinted ones next/font fetched (Google's answer to a Mac
+ * browser): the hinted Windows files set text narrower on Linux and moved phone layouts.
+ * DM Mono ships 300/400/500; the rail badge's 600 is synthesised from 500.
  */
 @font-face {
   font-family: 'Inter Tight';
