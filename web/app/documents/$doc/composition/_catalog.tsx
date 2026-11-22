@@ -103,7 +103,7 @@ function CatalogDetail({ entryKey, bare }: { entryKey: string; bare: boolean }) 
     <>
       {e.description && (
         <InspectorSection label="Description">
-          <p className="text-[15px]">{e.description}</p>
+          <p className="text-base">{e.description}</p>
         </InspectorSection>
       )}
       <CatalogFacts e={e} />

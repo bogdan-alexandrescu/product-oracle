@@ -60,7 +60,7 @@ export function DiscussionList({
           >
             {isHidden(row) ? (
               <>
-                <span className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-text">
+                <span className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-text">
                   <Lock />
                   Private discussion
                 </span>
@@ -72,11 +72,11 @@ export function DiscussionList({
               <>
                 <span className="flex min-w-0 items-center gap-1.5">
                   {row.visibility === 'private' && <Lock />}
-                  <span className="min-w-0 text-[15px] leading-[22px] font-semibold break-words text-text">
+                  <span className="min-w-0 text-base leading-[22px] font-semibold break-words text-text">
                     {row.title}
                   </span>
                 </span>
-                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
                   <span className="min-w-0 truncate">{row.subject_label}</span>
                   {row.status === 'closed' && <Chip kind="na">Closed</Chip>}
                   {version != null &&
@@ -85,7 +85,7 @@ export function DiscussionList({
                       <Chip kind="line">Started on v{row.started_on_version}</Chip>
                     )}
                 </span>
-                <span className="tnum flex flex-wrap gap-x-2 text-[13px] text-text2">
+                <span className="tnum flex flex-wrap gap-x-2 text-sm text-text2">
                   <span>{row.started_by.name}</span>
                   <span>{plural(row.message_count, 'message', 'messages')}</span>
                   {row.last_message_at && <span>{formatDateTime(row.last_message_at)}</span>}

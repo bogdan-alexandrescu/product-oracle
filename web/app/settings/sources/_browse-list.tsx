@@ -105,7 +105,7 @@ function Row({
           onChange={(e) => onToggle(e.target.checked)}
           className="size-4 flex-none accent-accent"
         />
-        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text">
+        <span className="min-w-0 flex-1 truncate text-base font-medium text-text">
           {item.label}
         </span>
         {item.isPrivate && (
@@ -114,7 +114,7 @@ function Row({
           </span>
         )}
         {item.meta && (
-          <span className="tnum flex flex-none items-center gap-1 text-[13px] text-text2">
+          <span className="tnum flex flex-none items-center gap-1 text-sm text-text2">
             {item.meta}
           </span>
         )}
@@ -300,7 +300,7 @@ export function BrowseList({
         <div className="flex min-w-0 flex-col gap-1.5">
           <label
             htmlFor={pasteId}
-            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+            className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
           >
             {pasteLabel} (one per line)
           </label>
@@ -354,7 +354,7 @@ export function BrowseList({
               </li>
             )}
             {items !== null && items.length === 0 && extraPicks.length === 0 && (
-              <li className="flex h-10 items-center px-3 text-[15px] text-text2">No matches</li>
+              <li className="flex h-10 items-center px-3 text-base text-text2">No matches</li>
             )}
           </ul>
           {next && (

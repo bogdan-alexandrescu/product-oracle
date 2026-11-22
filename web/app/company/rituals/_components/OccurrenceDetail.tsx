@@ -177,7 +177,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
           Rituals
         </Link>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="min-w-0 font-display text-[22px] leading-7 font-bold tracking-heading break-words">
+          <h2 className="min-w-0 font-display text-xl leading-7 font-bold tracking-heading break-words">
             {occ.title}
           </h2>
           <Chip kind={STATE_KIND[occ.status]} dot data-testid="occurrence-state">
@@ -310,9 +310,9 @@ function BlockCard({
       className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${WIDE.has(block.key) ? 'col-span-2 max-[900px]:col-span-1' : ''}`}
     >
       <header className="border-b border-line px-4 py-2.5">
-        <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
+        <h2 className="font-display text-lg font-bold">{block.title}</h2>
         {showAsOf && block.as_of && (
-          <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>
+          <p className="text-sm text-text2">Data as of {localTime(block.as_of)}</p>
         )}
       </header>
       {block.rows.length === 0 ? (
@@ -371,7 +371,7 @@ function BlockCard({
           {error && <ErrorNote>{error}</ErrorNote>}
         </div>
       ) : (
-        <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]">
+        <ul className="flex flex-col gap-1 px-4 py-3 text-base">
           {block.rows.map((r, i) => (
             <li key={i} className="min-w-0 [overflow-wrap:anywhere]">
               {/* qa-company-36: a row that opens something (D-5 in Decisions) reads as a link. */}
@@ -428,9 +428,9 @@ function WebFindingsCard({
       className="min-w-0 rounded-panel border border-line bg-surface shadow-panel"
     >
       <header className="border-b border-line px-4 py-2.5">
-        <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
+        <h2 className="font-display text-lg font-bold">{block.title}</h2>
         {showAsOf && block.as_of && (
-          <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>
+          <p className="text-sm text-text2">Data as of {localTime(block.as_of)}</p>
         )}
       </header>
       <div className="flex flex-col divide-y divide-line px-4">
@@ -555,7 +555,7 @@ function SummaryCard({
       data-testid="occurrence-summary"
       className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
     >
-      <h2 className="mb-1 font-display text-[17px] font-bold">{words.title}</h2>
+      <h2 className="mb-1 font-display text-lg font-bold">{words.title}</h2>
       {occ.summary_state === 'ready' && occ.summary ? (
         <>
           <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
@@ -567,7 +567,7 @@ function SummaryCard({
               onHighlightClick={() => {}}
             />
           </div>
-          <p className="mt-1 text-[13px] text-text2">Written by Oracle</p>
+          <p className="mt-1 text-sm text-text2">Written by Oracle</p>
         </>
       ) : occ.summary_state === 'running' ? (
         <p className="text-sm text-text2">{words.running}</p>
@@ -616,7 +616,7 @@ function RebuildCard({
       data-testid="occurrence-rebuild"
       className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
     >
-      <h2 className="mb-1 font-display text-[17px] font-bold">Ground Truth build</h2>
+      <h2 className="mb-1 font-display text-lg font-bold">Ground Truth build</h2>
       {occ.summary_state === 'running' && run ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm">
@@ -687,7 +687,7 @@ function Recorded({
       data-testid="occurrence-notes"
       className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel"
     >
-      <h2 className="mb-1 font-display text-[17px] font-bold">
+      <h2 className="mb-1 font-display text-lg font-bold">
         {occ.status === 'held' ? 'Notes' : 'Skipped'}
       </h2>
       {skipped && canEdit && editing ? (
@@ -725,7 +725,7 @@ function Recorded({
         </div>
       ) : (
         <div className="flex flex-wrap items-start gap-2">
-          <p className="min-w-0 flex-1 text-[15px] whitespace-pre-wrap">
+          <p className="min-w-0 flex-1 text-base whitespace-pre-wrap">
             {text ? <span data-user-content>{text}</span> : 'No notes'}
           </p>
           {skipped && canEdit && (

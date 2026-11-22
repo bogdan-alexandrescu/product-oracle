@@ -252,7 +252,7 @@ export function useBucketDrag({
     <div
       aria-hidden
       data-testid="drag-edge"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-center border-t-2 border-dashed border-accent bg-accent-soft/90 text-[15px] font-[650] text-accent-ink max-sm:bottom-16 lg:left-[232px]"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-center border-t-2 border-dashed border-accent bg-accent-soft/90 text-base font-[650] text-accent-ink max-sm:bottom-16 lg:left-[232px]"
     >
       {edge.words}
     </div>

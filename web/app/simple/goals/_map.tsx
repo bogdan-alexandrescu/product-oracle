@@ -216,7 +216,7 @@ function Status({
   hint?: string;
 }) {
   const [w, cls] = STATUS[s] ?? STATUS.not_measured;
-  const look = `whitespace-nowrap rounded-full font-semibold ${small ? 'px-1.5 text-[12px]' : 'px-2 py-0.5 text-[13px]'} ${cls}`;
+  const look = `whitespace-nowrap rounded-full font-semibold ${small ? 'px-1.5 text-xs' : 'px-2 py-0.5 text-sm'} ${cls}`;
   if (!on) return <span className={look}>{w}</span>;
   return (
     <button
@@ -313,7 +313,7 @@ function Menu({
       {open && (
         <span
           role="menu"
-          className="absolute top-full right-0 z-30 mt-1 flex w-max min-w-[180px] flex-col rounded-xl border border-line bg-surface py-1 text-[14px] shadow-lg"
+          className="absolute top-full right-0 z-30 mt-1 flex w-max min-w-[180px] flex-col rounded-xl border border-line bg-surface py-1 text-sm shadow-lg"
         >
           {items.map((it) => (
             <button
@@ -446,7 +446,7 @@ function Slot({ f, c }: { f: Chip; c: Ctx }) {
   return (
     <span className="flex w-6 shrink-0 justify-center max-[600px]:w-auto max-[600px]:gap-1">
       <span
-        className={`${open ? 'hidden' : 'flex'} text-[12px] group-hover:hidden group-focus-within:hidden max-[600px]:flex! ${s.cls}`}
+        className={`${open ? 'hidden' : 'flex'} text-xs group-hover:hidden group-focus-within:hidden max-[600px]:flex! ${s.cls}`}
         title={s.w}
       >
         {s.mark || <span className="m-1 size-2 rounded-full border border-text-faint" />}
@@ -465,7 +465,7 @@ function Legend({ tracks, guardrail }: { tracks: Track[]; guardrail: GoalMap['gu
   return (
     <span className="flex flex-wrap items-center gap-1.5" data-testid="gm-legend">
       {tracks.map((t) => (
-        <span key={t.id ?? 'none'} className="flex items-center gap-1.5 px-1 text-[13px]">
+        <span key={t.id ?? 'none'} className="flex items-center gap-1.5 px-1 text-sm">
           <span className="size-2.5 rounded-full" style={{ background: t.color }} />
           {t.name}
         </span>
@@ -483,7 +483,7 @@ function Guardrail({ g }: { g: NonNullable<GoalMap['guardrail']> }) {
       testId="gm-legend-guardrail"
       side="bottom"
       trigger={
-        <span className="flex items-center gap-1 px-1 text-[13px]">
+        <span className="flex items-center gap-1 px-1 text-sm">
           <Icon name="lock" size={16} className={g.held ? 'text-pass' : 'text-crit'} />
           {g.held ? (
             'Guardrails: on track ✓'
@@ -831,8 +831,8 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
     void c.act.move(f, to);
   };
   const row =
-    'flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[14px] hover:bg-accent-soft disabled:opacity-60 disabled:hover:bg-transparent';
-  const head = 'px-2 pt-1 text-[12px] font-semibold tracking-wide text-text2 uppercase';
+    'flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent-soft disabled:opacity-60 disabled:hover:bg-transparent';
+  const head = 'px-2 pt-1 text-xs font-semibold tracking-wide text-text2 uppercase';
   return (
     <div
       className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 pt-[10vh] max-[600px]:items-end max-[600px]:pt-0"
@@ -846,7 +846,7 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
         className="simple-card w-[720px] max-w-full gap-2 max-[600px]:rounded-b-none"
       >
         <div className="flex items-center gap-2">
-          <h2 className="min-w-0 flex-1 truncate text-[17px] font-semibold">
+          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">
             Move{' '}
             {c.codes.get(f.id) && <span className="text-text-faint">{c.codes.get(f.id)} </span>}
             {f.name}
@@ -887,12 +887,12 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
                           <span className="flex-1 truncate" title={m.name}>
                             {m.name}
                           </span>
-                          <span className="text-[12px] text-text2">{day(m.due_on)}</span>
+                          <span className="text-xs text-text2">{day(m.due_on)}</span>
                         </>
                       ) : (
                         <span className="flex-1">No milestone</span>
                       )}
-                      {here && <span className="text-[12px] text-text2">✓ Here now</span>}
+                      {here && <span className="text-xs text-text2">✓ Here now</span>}
                     </button>
                   );
                 })}
@@ -920,7 +920,7 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
                     style={{ background: t.color }}
                   />
                   <span className="flex-1 truncate">{t.name}</span>
-                  {here && <span className="text-[12px] text-text2">✓ Here now</span>}
+                  {here && <span className="text-xs text-text2">✓ Here now</span>}
                 </button>
               );
             })}
@@ -973,7 +973,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                   c,
                 )}
               </span>
-              <span className="text-[24px] leading-[30px] font-bold">{num(g.target, g.unit)}</span>
+              <span className="text-xl leading-[30px] font-bold">{num(g.target, g.unit)}</span>
               <span className="float-right ml-2 flex h-[30px] items-center">
                 <Status
                   s={g.status}
@@ -986,10 +986,10 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
               </span>
             </div>
             {c.renaming === g.id ? (
-              <Rename id={g.id} was={g.name} c={c} className="text-[16px]" />
+              <Rename id={g.id} was={g.name} c={c} className="text-base" />
             ) : (
               <span
-                className="line-clamp-2 min-h-[2.5em] text-[16px] leading-[1.25] font-semibold"
+                className="line-clamp-2 min-h-[2.5em] text-base leading-[1.25] font-semibold"
                 title={g.name}
               >
                 {g.name}
@@ -998,7 +998,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
             <Bar g={g} />
           </div>
         ))}
-        <span className="pt-2 text-[12px] font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">
+        <span className="pt-2 text-xs font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">
           Milestones
         </span>
         {/* The milestone strip: by date across the goals, each under the goal it measures. */}
@@ -1019,11 +1019,11 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     key={m.id}
                     data-milestone={m.id}
                     data-testid="gm-strip-milestone"
-                    className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-[12px]"
+                    className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-xs"
                   >
                     <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
                     {c.renaming === m.id ? (
-                      <Rename id={m.id} was={m.name} c={c} className="text-[12px]" />
+                      <Rename id={m.id} was={m.name} c={c} className="text-xs" />
                     ) : (
                       <span
                         className="line-clamp-2 min-w-0 break-words"
@@ -1060,7 +1060,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
         {c.tracks.map((t) => (
           <div key={t.id ?? 'none'} className="contents">
             <span
-              className="flex items-start gap-1.5 border-t border-line pt-2 text-[14px] leading-[18px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg"
+              className="flex items-start gap-1.5 border-t border-line pt-2 text-sm leading-[18px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg"
               data-testid="gm-track"
               data-track={t.id ?? 'none'}
             >
@@ -1086,7 +1086,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                       <button
                         type="button"
                         data-testid="gm-cell-add"
-                        className="text-[13px] font-semibold text-accent-ink hover:underline"
+                        className="text-sm font-semibold text-accent-ink hover:underline"
                         onClick={() => c.onAttach(all.find((m) => m.goal === g.id)!.id, t.id)}
                       >
                         + Add a feature
@@ -1101,7 +1101,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     data-goal={g.id}
                     data-track={t.id ?? 'none'}
                     data-moved={c.moved === ringOf(f.id, g.id) ? '1' : undefined}
-                    className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-[13px] leading-[17px] ${c.moved === ringOf(f.id, g.id) ? 'border-accent bg-accent-soft ring-2 ring-accent' : 'border-line'}`}
+                    className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-sm leading-[17px] ${c.moved === ringOf(f.id, g.id) ? 'border-accent bg-accent-soft ring-2 ring-accent' : 'border-line'}`}
                     style={{ borderLeft: `3px solid ${t.color}` }}
                   >
                     <button
@@ -1120,7 +1120,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                       <span
                         data-user-content
                         data-testid="gm-chip-ms"
-                        className="line-clamp-2 text-[11.5px] text-text2 [overflow-wrap:anywhere]"
+                        className="line-clamp-2 text-xs text-text2 [overflow-wrap:anywhere]"
                         title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(' · ') : undefined}
                       >
                         {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(' · ') : 'No milestone'}
@@ -1169,7 +1169,7 @@ function AttachDrawer({
   const [feature, setFeature] = useState('');
   const [expected, setExpected] = useState('');
   const label = 'flex flex-col gap-1.5 font-semibold';
-  const field = 'w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[17px]';
+  const field = 'w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-lg';
   const on = new Map(map.features.map((f) => [f.id, f]));
   const term = search.toLowerCase();
   const goal = map.milestones.find((x) => x.id === m)?.goal;
@@ -1276,7 +1276,7 @@ function AttachDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line bg-surface px-4 py-1.5 text-[15px] font-semibold hover:bg-surface2"
+            className="rounded-full border border-line bg-surface px-4 py-1.5 text-base font-semibold hover:bg-surface2"
           >
             Cancel
           </button>
@@ -1285,7 +1285,7 @@ function AttachDrawer({
             data-testid="gm-save"
             disabled={!feature || !m}
             onClick={() => onSave(feature, m, expected, from?.id ?? null)}
-            className="rounded-full border border-accent bg-accent px-4 py-1.5 text-[15px] font-semibold text-on-accent disabled:opacity-40"
+            className="rounded-full border border-accent bg-accent px-4 py-1.5 text-base font-semibold text-on-accent disabled:opacity-40"
           >
             {from ? 'Move here' : 'Add'}
           </button>

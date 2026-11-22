@@ -87,7 +87,7 @@ export function AskTeammate({
           <div className={FIELD_LABEL}>
             Person
             {person ? (
-              <span className="flex items-center gap-2 text-[15px] font-medium tracking-normal text-text">
+              <span className="flex items-center gap-2 text-base font-medium tracking-normal text-text">
                 {person.name}
                 <span className="text-sm text-text2">{person.email}</span>
                 <Button variant="ghost" onClick={() => setPerson(null)}>

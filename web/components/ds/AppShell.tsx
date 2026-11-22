@@ -302,10 +302,10 @@ function Badge({ n, testId }: { n: number | null; testId?: string }) {
       // so "11" fits without an oval squeezed against the icon.
       className={`tnum absolute top-0 left-[calc(50%+14px)] h-[18px] min-w-[18px] rounded-full bg-rail-badge text-center font-mono leading-[18px] font-semibold whitespace-nowrap text-on-rail-badge ring-2 ring-rail ${
         text.length > 2
-          ? 'px-1 text-[11px] tracking-tighter'
+          ? 'px-1 text-xs tracking-tighter'
           : text.length > 1
-            ? 'px-1 text-[11px]'
-            : 'px-0.5 text-[12px]'
+            ? 'px-1 text-xs'
+            : 'px-0.5 text-xs'
       }`}
     >
       {text}
@@ -491,7 +491,7 @@ function UserMenu({
           }}
           className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
         >
-          <span className="rounded border border-dashed border-line-strong px-1.5 text-[13px] text-text2">
+          <span className="rounded border border-dashed border-line-strong px-1.5 text-sm text-text2">
             Mock data
           </span>
           Reset
@@ -521,7 +521,7 @@ function UserMenu({
         data-testid={rail ? 'user-menu' : 'phone-user-menu'}
         onClick={() => setOpen((o) => !o)}
         className={`grid place-items-center rounded-full bg-rail-avatar font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring aria-[current=page]:ring-[3px] aria-[current=page]:ring-rail-active-text ${
-          rail ? 'size-[38px] text-sm' : 'size-8 text-[13px]'
+          rail ? 'size-[38px] text-sm' : 'size-8 text-sm'
         }`}
       >
         {initials}
@@ -554,7 +554,7 @@ function RailLink({
       data-testid={d.testId}
       aria-current={active ? 'page' : undefined}
       aria-label={badgedName(d.label, badge)}
-      className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
+      className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-sm leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
       <Icon name={d.icon} stroke={1.7} />
       {/* A two-word label ("Ground Truth") wraps in the 70 px item: each line centered under the icon. */}
@@ -676,7 +676,7 @@ function Navs() {
               data-testid={`tab-${d.testId.slice(4)}`}
               aria-current={active ? 'page' : undefined}
               aria-label={d.label === 'Inbox' ? badgedName(d.label, inbox) : undefined}
-              className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+              className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-sm leading-4 ${
                 active
                   ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
                   : 'font-medium text-rail-text'
@@ -696,7 +696,7 @@ function Navs() {
           aria-current={moreActive && !more ? 'page' : undefined}
           data-testid="tab-more"
           onClick={() => setMore((m) => !m)}
-          className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+          className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-sm leading-4 ${
             more || moreActive
               ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
               : 'font-medium text-rail-text'
@@ -1015,7 +1015,7 @@ function PhoneHeader() {
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <p
             data-testid="phone-title"
-            className="min-w-0 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text"
+            className="min-w-0 truncate font-display text-lg leading-6 font-semibold text-rail-active-text"
           >
             {(hydrated && sectionOf(pathname)) || where || title}
           </p>
@@ -1091,7 +1091,7 @@ export function usePhoneAsk(meeting = false): [button: ReactNode, sheet: ReactNo
       aria-label="Ask Oracle"
       aria-expanded={ask}
       onClick={() => setAsk(true)}
-      className={`${meeting ? 'hidden max-[600px]:flex' : 'flex'} h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover`}
+      className={`${meeting ? 'hidden max-[600px]:flex' : 'flex'} h-9 flex-none items-center gap-1 rounded-lg px-2 text-base font-semibold text-rail-active-text hover:bg-rail-hover`}
     >
       <Icon name="ask" size={20} />
       Ask
@@ -1220,7 +1220,7 @@ function HopDock() {
           className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? 'invisible min-[1600px]:hidden' : ''}`}
         >
           <Mark size={24} tone="current" className="block flex-none text-accent" />
-          <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
+          <span className="text-base font-semibold [writing-mode:vertical-rl]">Ask</span>
         </button>
       )}
       {/* qa4-shell-9: in dark the navy scrim is the page's own colour; a black one (not `black`, which follows the theme) dims it there too. */}

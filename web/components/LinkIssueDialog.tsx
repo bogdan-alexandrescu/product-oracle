@@ -172,7 +172,7 @@ export function LinkIssueDialog({
             <Icon name="x" size={20} />
           </button>
         </div>
-        <div className="flex flex-col gap-3 px-5 py-4 text-[15px] max-[600px]:px-4">
+        <div className="flex flex-col gap-3 px-5 py-4 text-base max-[600px]:px-4">
           <input
             autoFocus
             type="search"

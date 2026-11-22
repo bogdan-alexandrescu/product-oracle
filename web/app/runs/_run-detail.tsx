@@ -697,7 +697,7 @@ export function RunDetail({ id }: { id: string }) {
         >
           <div
             aria-hidden
-            className="grid h-9 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 bg-surface2 px-4 text-[13px] font-semibold text-text2 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3"
+            className="grid h-9 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 bg-surface2 px-4 text-sm font-semibold text-text2 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3"
           >
             <span>#</span>
             <span>Segment</span>
@@ -1496,7 +1496,7 @@ function SegmentItem({
               // qa-work-21: a stop still to come is plain text, not a pill that looks like a button.
               <span
                 title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`}
-                className="min-w-0 text-[13px] text-text2 break-words"
+                className="min-w-0 text-sm text-text2 break-words"
                 data-testid="segment-checkpoint"
               >
                 {/* qa4-work-31: on a phone the column has no header, so the prefix shows. */}
@@ -1581,7 +1581,7 @@ function SegmentItem({
         </span>
       </div>
       {details && (
-        <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
+        <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-base max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && s.error !== run.error && (
             <p className="text-crit">
               {s.status === 'failed' && s.finished_at && (
@@ -2016,7 +2016,7 @@ function DraftRejected({
             <ul
               id={listId}
               data-testid="draft-problems"
-              className="max-h-80 w-full space-y-0.5 overflow-auto rounded-button border border-line bg-surface2 px-3 py-2 font-mono text-[13px] text-text"
+              className="max-h-80 w-full space-y-0.5 overflow-auto rounded-button border border-line bg-surface2 px-3 py-2 font-mono text-sm text-text"
             >
               {problems.map((p, i) => (
                 <li key={i} className="break-words">
@@ -2552,7 +2552,7 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut['feature
             <ul data-testid="feature-set-flags" className="mt-1.5 space-y-0.5 text-sm text-text2">
               {flagged.map(([key, flags]) => (
                 <li key={key} className="break-words">
-                  <span className="font-mono text-[13px] text-text">{key}</span>:{' '}
+                  <span className="font-mono text-sm text-text">{key}</span>:{' '}
                   {flags.map((f) => FEATURE_FLAG_LABEL[f] ?? f.replaceAll('_', ' ')).join(', ')}
                 </li>
               ))}
@@ -2688,7 +2688,7 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
       </p>
       {text != null && (
         <pre
-          className="mt-1.5 max-h-96 overflow-auto rounded-button border border-line bg-surface2 p-2.5 font-mono text-[13px] whitespace-pre-wrap"
+          className="mt-1.5 max-h-96 overflow-auto rounded-button border border-line bg-surface2 p-2.5 font-mono text-sm whitespace-pre-wrap"
           data-testid="sent-review-yaml"
         >
           {text}
@@ -2744,7 +2744,7 @@ function Artifacts({
         aria-expanded={on}
         // qa-work-8: the file in words ("Roadmap items"); its name on hover, said as a file name.
         title={`File: ${name}`}
-        className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
+        className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-sm ${
           on
             ? 'border-accent bg-accent-soft text-accent-ink'
             : 'border-line-strong bg-surface text-text hover:bg-surface2'
@@ -2766,7 +2766,7 @@ function Artifacts({
           className="flex flex-wrap items-center gap-1.5"
           data-testid="artifacts-current"
         >
-          <span className="text-[13px] text-text2" data-testid="artifacts-raw-label">
+          <span className="text-sm text-text2" data-testid="artifacts-raw-label">
             {rawLabel}:
           </span>
           {names.map((n) => file(n, null))}
@@ -2778,7 +2778,7 @@ function Artifacts({
               onClick={() => void show(n, null, true)}
               aria-expanded={isOpen(n, null, true)}
               title={`${fileLabel(n)} as the agents wrote it, before the approver's edits`}
-              className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
+              className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-sm ${
                 isOpen(n, null, true)
                   ? 'border-accent bg-accent-soft text-accent-ink'
                   : 'border-line-strong bg-surface text-text hover:bg-surface2'
@@ -2798,15 +2798,13 @@ function Artifacts({
           className="mt-2 flex flex-wrap items-center gap-1.5"
           data-testid="artifacts-previous"
         >
-          <span className="text-[13px] text-text2">
-            Previous attempt (attempt {previous.attempt}):
-          </span>
+          <span className="text-sm text-text2">Previous attempt (attempt {previous.attempt}):</span>
           {previous.artifacts.map((n) => file(n, previous.attempt))}
         </div>
       )}
       {open && (
         <pre
-          className="mt-2 max-h-80 overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap text-text"
+          className="mt-2 max-h-80 overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-sm whitespace-pre-wrap text-text"
           data-testid="artifact-content"
         >
           {content}
@@ -2977,7 +2975,7 @@ function CheckpointRow({
       {/* qa4-work-30: a visible label above the box, with whether the note is needed; it stays as I type. */}
       <label
         htmlFor={noteId}
-        className="mt-2.5 block text-[13px] leading-4 font-semibold text-text2"
+        className="mt-2.5 block text-sm leading-4 font-semibold text-text2"
         data-testid="note-label"
       >
         Note for the agents{' '}

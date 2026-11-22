@@ -101,7 +101,7 @@ function SortMenu({ sort, onSort }: { sort: Sort; onSort: (s: Sort) => void }) {
       Sort
       <select
         data-testid="sort-menu"
-        className="h-11 min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text"
+        className="h-11 min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-base text-text"
         value={`${sort.key}:${sort.desc ? 'desc' : 'asc'}`}
         onChange={(e) => {
           const [key, order] = e.target.value.split(':') as [SortKey, string];
@@ -529,11 +529,7 @@ function DocumentsPage() {
       {header}
       {q.error && <LoadError what="your PRDs" error={q.error} onRetry={() => void q.reload()} />}
       {names.failed && (
-        <p
-          data-testid="template-names-failed"
-          role="status"
-          className="mb-3 text-[13px] text-text2"
-        >
+        <p data-testid="template-names-failed" role="status" className="mb-3 text-sm text-text2">
           {NAMES_FAILED}
         </p>
       )}

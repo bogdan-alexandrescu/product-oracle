@@ -414,7 +414,7 @@ function InviteDetail({ invite }: { invite: Invite }) {
         : '';
   if (!access && !email) return null;
   return (
-    <p data-testid="invite-detail" className="basis-full text-[13px] break-words text-text2">
+    <p data-testid="invite-detail" className="basis-full text-sm break-words text-text2">
       {access && <span data-testid="invite-access-detail">{access}</span>}
       {access && email && ' · '}
       {email && (
@@ -534,7 +534,7 @@ function StatusChip({ m }: { m: Member }) {
         Removed
       </Chip>
       {m.disabled_at && (
-        <span className="tnum text-[12px] leading-4 text-text2">{shortDate(m.disabled_at)}</span>
+        <span className="tnum text-xs leading-4 text-text2">{shortDate(m.disabled_at)}</span>
       )}
     </span>
   );
@@ -1044,7 +1044,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 <span
                   data-testid="member-email"
                   title={m.email}
-                  className="block max-w-full text-[13px] font-normal break-words text-text2"
+                  className="block max-w-full text-sm font-normal break-words text-text2"
                 >
                   {/* At its @ only: "admin@" then "example.com", never a lone ".com". */}
                   {m.email.slice(0, m.email.indexOf('@') + 1)}
@@ -1094,7 +1094,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         ) : m.role === 'viewer' ? (
           <span className="flex flex-col items-start gap-0.5" title={VIEWER_NOT_LEAD}>
             {leadBox(m)}
-            <span className="text-[12px] leading-4 text-text2">Not for viewers</span>
+            <span className="text-xs leading-4 text-text2">Not for viewers</span>
           </span>
         ) : (
           leadBox(m)
@@ -1141,6 +1141,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       width: '64px',
       align: 'right',
       phoneLabel: 'Tokens ',
+      // qa4-settings-21: at text-sm Status, Signed in and Tokens still share one phone line.
+      className: 'max-[600px]:gap-0!',
       cell: (m) => (
         <Link
           href={`/settings/api-tokens?member=${m.id}`}
@@ -1325,7 +1327,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <span
               data-testid="invite-note"
               title={i.message}
-              className="truncate text-[13px] text-text2"
+              className="truncate text-sm text-text2"
             >
               Note: {i.message}
             </span>
@@ -1335,7 +1337,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <p
               role={resent.ok ? 'status' : 'alert'}
               data-testid="invite-resent"
-              className={`text-[13px] font-medium break-words ${resent.ok ? 'text-pass' : 'text-crit'}`}
+              className={`text-sm font-medium break-words ${resent.ok ? 'text-pass' : 'text-crit'}`}
             >
               {resent.text}
             </p>
@@ -1439,7 +1441,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <p
               data-testid="plus-address-warning"
               role="note"
-              className="-mt-1.5 text-[13px] font-medium text-warn"
+              className="-mt-1.5 text-sm font-medium text-warn"
             >
               {plusAddressWarning(email)}
             </p>
@@ -1448,7 +1450,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <p
               id="invite-error"
               role="alert"
-              className="-mt-1.5 flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-crit"
+              className="-mt-1.5 flex flex-wrap items-center gap-x-2 text-sm font-medium text-crit"
             >
               <span className="min-w-0 break-words">{inviteError}</span>
               {/* pass-f F-50: the refusal's own fix, where the owner adds sign-in domains. */}
@@ -1492,7 +1494,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           {manage && (
             <div className="flex flex-col gap-0.5">
               <label
-                className="inline-flex min-h-11 items-center gap-2 text-[15px]"
+                className="inline-flex min-h-11 items-center gap-2 text-base"
                 title={inviteRole === 'viewer' ? VIEWER_NOT_LEAD : undefined}
               >
                 <input
@@ -1505,7 +1507,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 Engineering lead
               </label>
               {inviteRole === 'viewer' && (
-                <p data-testid="invite-lead-reason" className="-mt-2 text-[13px] text-text2">
+                <p data-testid="invite-lead-reason" className="-mt-2 text-sm text-text2">
                   {VIEWER_NOT_LEAD}. Pick Commenter or above to name them.
                 </p>
               )}
@@ -1525,7 +1527,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <p
               data-testid="invite-message-count"
               aria-live="polite"
-              className="tnum -mt-1.5 text-right text-[13px] text-text2"
+              className="tnum -mt-1.5 text-right text-sm text-text2"
             >
               {inviteMessage.length}/{MESSAGE_MAX}
             </p>
@@ -1556,7 +1558,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         {!invites && !invitesQ.error && (
           <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
         )}
-        {openInvites?.length === 0 && <p className="text-[15px] text-text2">No open invites</p>}
+        {openInvites?.length === 0 && <p className="text-base text-text2">No open invites</p>}
         {!!openInvites?.length && (
           <ul aria-label="Open invites" className={`-my-1 flex flex-col ${SETTLING}`}>
             {openInvites.map(inviteRow)}
@@ -1772,7 +1774,7 @@ function InviteOutcome({
       {invite.email_status === 'queued'
         ? `Oracle hasn't emailed ${invite.email} yet. Send them this link yourself:`
         : "Oracle didn't email this invite. Send them this link:"}{' '}
-      <code data-testid="invite-link" className="break-all font-mono text-[13px]">
+      <code data-testid="invite-link" className="break-all font-mono text-sm">
         {invite.sign_in_url}
       </code>
     </Notice>

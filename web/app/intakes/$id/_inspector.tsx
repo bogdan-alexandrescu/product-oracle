@@ -185,7 +185,7 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
       }
     >
       <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} />
-      {note && <span className="block text-[12px] text-text2">{note}</span>}
+      {note && <span className="block text-xs text-text2">{note}</span>}
     </InspectorRow>
   );
   if (!chosen.length && !suggested.length && confirmed.loading) return null;
@@ -209,7 +209,7 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
       )}
       {suggested.length > 0 && (
         <div data-testid="intake-goals-suggested" className="mt-2">
-          <p className="text-[12px] font-medium text-text2">Oracle suggests</p>
+          <p className="text-xs font-medium text-text2">Oracle suggests</p>
           {suggested.map((g) => row(g, g.why))}
         </div>
       )}
@@ -324,7 +324,7 @@ export function IntakeInspector({
     >
       <InspectorSection testId="ready-to-draft">
         {note && (
-          <p data-testid="open-unknown" className="mb-2 text-[13px] text-text2">
+          <p data-testid="open-unknown" className="mb-2 text-sm text-text2">
             {note}
           </p>
         )}
@@ -333,7 +333,7 @@ export function IntakeInspector({
             <Chip kind="na" dot>
               Archived
             </Chip>
-            <p className="text-[13px] text-text2">
+            <p className="text-sm text-text2">
               Its questions are kept here, and no one is asked them any more.
             </p>
           </div>
@@ -342,7 +342,7 @@ export function IntakeInspector({
             <Chip kind="warn" dot>
               {criticalCount(missing.length)} open
             </Chip>
-            <p data-testid="missing-note" className="text-[13px] text-text2">
+            <p data-testid="missing-note" className="text-sm text-text2">
               {missing.length === 1 ? 'It does not stop the draft.' : 'They do not stop the draft.'}{' '}
               The PRD will mark {missing.length === 1 ? 'it' : 'them'} as still unknown.
             </p>
@@ -351,7 +351,7 @@ export function IntakeInspector({
                 <li key={g.id} className="flex min-w-0 flex-col gap-0.5" data-testid="missing-gap">
                   <span className="text-sm break-words text-text">{g.statement}</span>
                   {(categoryNote(g) || unknown.has(g.id)) && (
-                    <span className="text-[13px] text-text2">
+                    <span className="text-sm text-text2">
                       {[categoryNote(g), unknown.has(g.id) && "answered “I don't know”"]
                         .filter(Boolean)
                         .join(' · ')}
@@ -365,10 +365,7 @@ export function IntakeInspector({
                     return (
                       <>
                         {standing && (
-                          <span
-                            data-testid="missing-gap-standing"
-                            className="text-[13px] text-text2"
-                          >
+                          <span data-testid="missing-gap-standing" className="text-sm text-text2">
                             {standing}
                           </span>
                         )}
@@ -410,9 +407,7 @@ export function IntakeInspector({
                       {g.importance === 'critical' ? 'Critical' : g.importance}
                     </Chip>
                   </div>
-                  {categoryNote(g) && (
-                    <span className="text-[13px] text-text2">{categoryNote(g)}</span>
-                  )}
+                  {categoryNote(g) && <span className="text-sm text-text2">{categoryNote(g)}</span>}
                   {/* #370: an approver may still reject a critical gap; the form says what needs an owner. */}
                   {can('decide_knowledge_gap', true) && deciding !== g.id && (
                     <div>
@@ -438,7 +433,7 @@ export function IntakeInspector({
             work becomes a requirement and early discovery work, never a blocker. */}
         {!archived && (s.work ?? []).length > 0 && (
           <div data-testid="unknown-work" className="mt-3 flex flex-col gap-1.5">
-            <p className="text-[13px] text-text2">
+            <p className="text-sm text-text2">
               Not known yet. Finding out is part of this work, so the PRD makes{' '}
               {s.work!.length === 1 ? 'it a requirement' : 'them requirements'}, not{' '}
               {s.work!.length === 1 ? 'a blocker' : 'blockers'}:
@@ -451,7 +446,7 @@ export function IntakeInspector({
                   data-testid="work-item"
                 >
                   <span className="text-sm break-words text-text">{w.requirement}</span>
-                  <span className="text-[13px] break-words text-text2">
+                  <span className="text-sm break-words text-text2">
                     From the answer: “{w.answer}”
                   </span>
                 </li>
@@ -460,7 +455,7 @@ export function IntakeInspector({
           </div>
         )}
         {!archived && gate.private_blocking_gap_ids.length > 0 && (
-          <p className="mt-2 text-[13px] text-text2">
+          <p className="mt-2 text-sm text-text2">
             {criticalCount(gate.private_blocking_gap_ids.length)} from your own sources hold nothing
             until you share them.
           </p>

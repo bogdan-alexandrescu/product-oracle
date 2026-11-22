@@ -304,7 +304,7 @@ export function NewRequestDialog({
                 <label
                   key={g.id}
                   data-testid="new-request-goal"
-                  className={`flex min-h-8 items-center gap-2 text-[15px] ${ready ? '' : 'text-text2'}`}
+                  className={`flex min-h-8 items-center gap-2 text-base ${ready ? '' : 'text-text2'}`}
                   title={
                     ready
                       ? undefined

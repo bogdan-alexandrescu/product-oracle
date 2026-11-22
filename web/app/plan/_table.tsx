@@ -69,7 +69,7 @@ export function StateChip({
       className="inline-flex max-w-full min-w-0 flex-col items-start gap-0.5"
     >
       {chip(s.head, false)}
-      <span className="min-w-0 text-[13px] break-words text-text2">
+      <span className="min-w-0 text-sm break-words text-text2">
         <span className="sr-only">{s.sep}</span>
         {s.detail}
       </span>

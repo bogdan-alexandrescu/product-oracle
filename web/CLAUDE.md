@@ -22,6 +22,8 @@ still apply; the commands are in `docs/agents/lane-rules.md` (Building a lane, B
   mock app itself. Port from `E2E_PORT`.
 - No new visible prose: the prose guard (`e2e/prose-guard.spec.ts`) counts it against
   `e2e/prose-ceilings.json`, whose ceilings only go down and are never edited by hand.
+- Text sizes are the type scale's steps (`text-xs` to `text-4xl`, `app/globals.css` @theme); an arbitrary
+  `text-[Npx]` fails lint (#1589).
 - Roles go through `can()` or an item's own `can_*` field only; never compare role names.
 - Dates read month first ("Oct 31", "Oct 30, 2026, 2:49 PM PDT"), never ISO. A feature shows
   its code with its name.

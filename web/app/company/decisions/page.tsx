@@ -395,7 +395,7 @@ function Decisions() {
   // below the layout is one column, so the empty panel would sit under the list: it hides.
   const besideList = inspector ?? (
     <Panel testId="decision-inspector-empty" className="max-[1100px]:hidden">
-      <p className="px-4 py-8 text-center text-[15px] text-text2">
+      <p className="px-4 py-8 text-center text-base text-text2">
         {listQ.data && rows.length === 0
           ? 'No decision to show.'
           : 'Pick a decision to see it here.'}
@@ -570,7 +570,7 @@ function Decisions() {
           {listQ.data && rows.length === 0 ? (
             <div
               data-testid="decisions-empty"
-              className="flex flex-col items-center gap-2 px-4 py-8 text-center text-[15px] text-text2"
+              className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-text2"
             >
               {state === 'needs_me' && !from && !q ? (
                 <p data-testid="decisions-needs-me-empty">

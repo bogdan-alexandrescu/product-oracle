@@ -60,7 +60,7 @@ export function HistoryTab({ data }: { data: InspectorOut }) {
                   ? ' · pinned to a document version'
                   : ''}
               </span>
-              <span className="min-w-0 basis-full text-[15px]">
+              <span className="min-w-0 basis-full text-base">
                 {r.reason && <q>{r.reason}</q>}
                 {diffLine(r.diff, titleOf) && (
                   <span className="ml-2 text-sm text-text2">{diffLine(r.diff, titleOf)}</span>

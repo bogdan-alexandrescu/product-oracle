@@ -162,7 +162,7 @@ export function MetricInspector({
         {
           label: 'Last week',
           figure: (
-            <span className="tnum text-[22px] font-bold">
+            <span className="tnum text-xl font-bold">
               {valueText(metric.last_week?.value, metric.unit)}
             </span>
           ),
@@ -170,7 +170,7 @@ export function MetricInspector({
         {
           label: 'Change',
           figure: (
-            <span className="tnum text-[22px] font-bold">
+            <span className="tnum text-xl font-bold">
               {metric.change ? changeText(metric.change.value, metric.change.pct) : '—'}
             </span>
           ),
@@ -184,7 +184,7 @@ export function MetricInspector({
         />
         {/* pass F F-14: each week's number, newest first, with Edit for whoever records them. */}
         {recent.length > 0 && (
-          <ul data-testid="metric-weeks" className="mt-2 flex flex-col text-[15px]">
+          <ul data-testid="metric-weeks" className="mt-2 flex flex-col text-base">
             {recent.map((v) => (
               <li
                 key={v.week_start}
@@ -212,9 +212,9 @@ export function MetricInspector({
         )}
       </InspectorSection>
       <InspectorSection label="Definition">
-        <p className="text-[15px]">{metric.description}</p>
+        <p className="text-base">{metric.description}</p>
         {metric.query ? (
-          <pre className="mt-1 overflow-x-auto rounded-lg bg-surface2 px-2 py-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">
+          <pre className="mt-1 overflow-x-auto rounded-lg bg-surface2 px-2 py-1.5 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
             {metric.query}
           </pre>
         ) : (
@@ -263,7 +263,7 @@ export function MetricInspector({
         {metric.variances.length === 0 ? (
           <p className="text-sm text-text2">No unusual week yet</p>
         ) : (
-          <ul className="flex flex-col gap-1 text-[15px]" data-testid="metric-variances">
+          <ul className="flex flex-col gap-1 text-base" data-testid="metric-variances">
             {metric.variances.map((v) => (
               <li key={v.id} className="flex flex-wrap items-center gap-2">
                 <span className="tnum">Week of {weekText(v.week_start)}</span>
@@ -324,7 +324,7 @@ export function MetricInspector({
             </Button>
           </div>
           {notNumber && (
-            <p id="metric-value-error" className="mt-1 text-[13px] font-medium text-crit">
+            <p id="metric-value-error" className="mt-1 text-sm font-medium text-crit">
               Enter a number
             </p>
           )}

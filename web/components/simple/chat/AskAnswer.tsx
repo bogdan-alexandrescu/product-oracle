@@ -48,7 +48,7 @@ export function Who({
   mine: boolean;
 }) {
   return (
-    <span className="mb-0.5 block text-[13px] leading-[18px] font-semibold" data-testid="chat-who">
+    <span className="mb-0.5 block text-sm leading-[18px] font-semibold" data-testid="chat-who">
       {name}{' '}
       <i className={`font-normal not-italic ${mine ? 'opacity-80' : 'text-text2'}`}>
         · {chatTime(at, zone)}
@@ -228,7 +228,7 @@ function inline(nodes: Inline[], ctx: Ctx): ReactNode {
 const Cites = createContext<AnswerCite[]>([]);
 
 /** chat-citations: a footnote's own raised number, set off from the word and the number before it. */
-const SUP = 'ml-[3px] text-[11px] leading-none font-semibold';
+const SUP = 'ml-[3px] text-xs leading-none font-semibold';
 
 /**
  * qa4-simple-home-3: a marker is a link to its own source, named for a screen reader ("Source 1:
@@ -500,7 +500,7 @@ export function AnswerSources({ cites }: { cites: AnswerCite[] }) {
           </>
         );
         // A live read is no link: its words in the line's quieter colour.
-        const cls = `inline-flex items-center gap-1.5 text-[13px] leading-[18px] font-semibold ${s.icon ? 'text-accent-ink' : 'text-text2'}`;
+        const cls = `inline-flex items-center gap-1.5 text-sm leading-[18px] font-semibold ${s.icon ? 'text-accent-ink' : 'text-text2'}`;
         return s.url ? (
           <Link
             key={s.key}

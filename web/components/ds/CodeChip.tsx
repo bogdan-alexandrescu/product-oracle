@@ -304,7 +304,7 @@ export function HoverCard({
 /** The card's head line ("Goal · confirmed") and its rows. */
 export function CardEyebrow({ children }: { children: ReactNode }) {
   return (
-    <span className="mb-1 block text-[13px] font-semibold tracking-[0.02em] text-text2">
+    <span className="mb-1 block text-sm font-semibold tracking-[0.02em] text-text2">
       {children}
     </span>
   );
@@ -315,7 +315,7 @@ export function CodeTag({ code, proposed = false }: { code: string; proposed?: b
   return (
     <span
       data-testid="code-tag"
-      className={`tnum inline-grid h-6 flex-none place-items-center rounded-goal px-[7px] font-mono text-[13px] leading-none font-medium ${
+      className={`tnum inline-grid h-6 flex-none place-items-center rounded-goal px-[7px] font-mono text-sm leading-none font-medium ${
         proposed ? 'bg-warn-bg text-warn' : 'bg-accent-soft text-accent-ink'
       }`}
     >
@@ -521,7 +521,7 @@ export function NamedCode({ text, entry }: { text: string; entry: CodeEntry }) {
         >
           {entry.members.map((m) => (
             <li key={m.code}>
-              <span className="font-mono text-[13px]">{m.code}</span> {m.name}
+              <span className="font-mono text-sm">{m.code}</span> {m.name}
             </li>
           ))}
         </ul>

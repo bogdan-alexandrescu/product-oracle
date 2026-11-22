@@ -33,7 +33,7 @@ export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: A
   if (!rows) return <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />;
   const shown = kind ? rows.filter((a) => a.kind === kind) : rows;
   return (
-    <ul data-testid="member-approvals" aria-label="Approvals" className="flex flex-col text-[15px]">
+    <ul data-testid="member-approvals" aria-label="Approvals" className="flex flex-col text-base">
       {shown.map((a) => (
         <li
           key={`${a.kind}:${a.document}:${a.version}:${a.section_key ?? ''}`}
@@ -49,9 +49,7 @@ export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: A
             {a.document_title ?? a.document} v{a.version}
           </Link>
           {a.section_key && <span className="text-text2">{a.section_title ?? 'A section'}</span>}
-          {a.approved_at && (
-            <span className="text-[13px] text-text2">{formatDay(a.approved_at)}</span>
-          )}
+          {a.approved_at && <span className="text-sm text-text2">{formatDay(a.approved_at)}</span>}
         </li>
       ))}
       {shown.length === 0 && <li className="text-text2">None</li>}

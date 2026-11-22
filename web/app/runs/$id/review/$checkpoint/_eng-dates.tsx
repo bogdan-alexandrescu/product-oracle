@@ -270,7 +270,7 @@ export function EngDates({
         <div
           role="alert"
           data-testid="dates-problem"
-          className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]"
+          className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-base"
         >
           <p className="font-semibold">
             The dates file could not be read: send it back to the architect.
@@ -312,7 +312,7 @@ export function EngDates({
           className="min-w-0 rounded-panel border border-line bg-surface"
         >
           <div
-            className={`grid ${grid} gap-3 border-b border-line px-4 py-2 text-[13px] font-semibold tracking-[0.02em] text-text2 max-[900px]:hidden`}
+            className={`grid ${grid} gap-3 border-b border-line px-4 py-2 text-sm font-semibold tracking-[0.02em] text-text2 max-[900px]:hidden`}
           >
             <span>Item</span>
             <span>Size</span>

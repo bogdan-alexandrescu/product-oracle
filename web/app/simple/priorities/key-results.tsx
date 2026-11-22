@@ -247,7 +247,7 @@ export function KeyResultList({
     <ul
       data-testid="goal-krs"
       aria-label={`${goal}'s key results`}
-      className={`mt-1 text-[15px] leading-5 text-text2 ${className}`}
+      className={`mt-1 text-base leading-5 text-text2 ${className}`}
     >
       {list.map((k) => (
         <li key={k.id} data-testid="goal-kr" className="flex min-w-0 items-center gap-1">

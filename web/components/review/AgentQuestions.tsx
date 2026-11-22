@@ -102,7 +102,7 @@ export function AgentQuestions({
         <span className="tnum text-sm text-text2" data-testid="agent-questions-count">
           {open.length} open · {done.length} answered
         </span>
-        <span className="text-[13px] text-text2" data-testid="agent-questions-lede">
+        <span className="text-sm text-text2" data-testid="agent-questions-lede">
           {data.can_answer ? 'Answer here before you decide; each answer' : 'Each answer'} goes to{' '}
           {next ?? 'the next step'} with the decision.
         </span>
@@ -163,7 +163,7 @@ const when = (iso: string) => (formatAge(iso) === 'now' ? 'just now' : formatDat
 /** Where an answer goes, said once per answered card. */
 function Reaches({ next, mine }: { next: string | null; mine: boolean }) {
   return (
-    <p className="text-[13px] text-text2" data-testid="agent-question-reaches">
+    <p className="text-sm text-text2" data-testid="agent-question-reaches">
       Goes to {next ? <b className="font-semibold text-text">{next}</b> : 'the next step'}
       {next ? ', the next step,' : ''} with this stop&apos;s decision. Its agent reads it as
       settled.
@@ -192,7 +192,7 @@ function AnsweredCard({
       data-testid="agent-question"
       data-state="answered"
     >
-      <div className="flex flex-wrap items-center gap-2 text-[13px] text-text2">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-text2">
         <Chip kind="pass">Answered</Chip>
         <span>
           {roleWord(q)} asked · About {about}
@@ -208,13 +208,13 @@ function AnsweredCard({
         {a.note && <span className="text-text2"> · “{a.note}”</span>}
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-[13px] text-text2" data-testid="agent-question-who">
+        <span className="text-sm text-text2" data-testid="agent-question-who">
           Answered by {a.mine ? 'you' : (a.by?.name ?? 'someone')} · {when(a.at)}
         </span>
         {canChange && (
           <button
             type="button"
-            className="text-[13px] font-semibold text-accent-ink underline"
+            className="text-sm font-semibold text-accent-ink underline"
             onClick={onChange}
           >
             Change
@@ -263,7 +263,7 @@ function OpenCard({
       data-testid="agent-question"
       data-state={open ? 'open' : 'unanswered'}
     >
-      <div className="flex flex-wrap items-center gap-2 text-[13px] text-text2">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-text2">
         <Chip kind="warn" dot>
           Needs an answer
         </Chip>
@@ -271,7 +271,7 @@ function OpenCard({
           {roleWord(q)} asks · About {about}
         </span>
       </div>
-      <p className="text-[15px] font-semibold text-text">{q.question}</p>
+      <p className="text-base font-semibold text-text">{q.question}</p>
       {open && q.why && <p className="text-sm text-text2">Why: {q.why}</p>}
       <div
         role="radiogroup"
@@ -298,16 +298,14 @@ function OpenCard({
                 {o.label}
                 {o.key === q.recommended && <Chip kind="acc">Agent&apos;s pick</Chip>}
               </span>
-              {open && o.detail && (
-                <span className="pl-5.5 text-[13px] text-text2">{o.detail}</span>
-              )}
+              {open && o.detail && <span className="pl-5.5 text-sm text-text2">{o.detail}</span>}
             </button>
           );
         })}
       </div>
       {chosen ? (
         <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-[13px] text-text2">
+          <label className="flex flex-col gap-1 text-sm text-text2">
             Note for the next agent (optional)
             <input
               className="h-9 rounded-button border border-line-strong bg-surface px-2 text-sm text-text"
@@ -328,13 +326,13 @@ function OpenCard({
                 Cancel
               </Button>
             )}
-            <span className="text-[13px] text-text2">
+            <span className="text-sm text-text2">
               Goes to {next ?? 'the next step'} with this stop&apos;s decision.
             </span>
           </div>
         </div>
       ) : (
-        <p className="text-[13px] text-text2">
+        <p className="text-sm text-text2">
           Not answered by the time you decide: {nextWord} goes with the agent&apos;s pick.{' '}
           <button
             type="button"

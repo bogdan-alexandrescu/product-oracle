@@ -120,7 +120,7 @@ export function WhyCard({ row, fixes }: { row: Row; fixes: ReactNode }) {
     <InspectorSection label="Why it needs you">
       <ul className="flex flex-col gap-1.5" data-testid="why-card">
         {row.reasons.map((r) => (
-          <li key={r.code} className="text-[15px]">
+          <li key={r.code} className="text-base">
             <ReasonChip r={r} /> <span className="text-text2">{r.text}</span>
             {r.detail && <span className="block text-sm text-text2">{r.detail}</span>}
           </li>

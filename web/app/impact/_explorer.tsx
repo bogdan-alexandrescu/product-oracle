@@ -513,10 +513,7 @@ function Lineage({
               All categories
             </button>
           )}
-          <span
-            className="flex items-center gap-3 text-[13px] text-text2"
-            data-testid="lineage-legend"
-          >
+          <span className="flex items-center gap-3 text-sm text-text2" data-testid="lineage-legend">
             <span className="flex items-center gap-1.5">
               <i aria-hidden className="h-0.5 w-4 bg-line-strong" />
               depends on
@@ -536,7 +533,7 @@ function Lineage({
         </>
       }
     >
-      <div className="grid grid-cols-[22fr_8fr_32fr_8fr_30fr] px-4 pt-3 text-[13px] font-semibold text-text2">
+      <div className="grid grid-cols-[22fr_8fr_32fr_8fr_30fr] px-4 pt-3 text-sm font-semibold text-text2">
         <span>Subject</span>
         <span />
         <span>
@@ -624,7 +621,7 @@ function Lineage({
                 {u.label}
               </span>
               {/* qa-plan-46: the kind ("Feature · locked") has its own line; the what-if link the next. */}
-              <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-4 text-text2">
+              <span className="flex min-w-0 items-center gap-1.5 text-sm leading-4 text-text2">
                 {u.deleted && <Chip kind="crit">Deleted</Chip>}
                 {(() => {
                   // A deleted item: its kind and when it went, never its baseline key (qa-plan-10).
@@ -648,7 +645,7 @@ function Lineage({
                 <Link
                   href={`/impact/entities/${u.entityId}`}
                   title={`What if ${u.label} changed?`}
-                  className="truncate text-[13px] leading-4 font-medium text-accent-ink hover:underline"
+                  className="truncate text-sm leading-4 font-medium text-accent-ink hover:underline"
                 >
                   What if {u.label} changed?
                 </Link>
@@ -673,7 +670,7 @@ function Lineage({
                   <span className="truncate text-sm font-semibold" title={n.label}>
                     {n.label}
                   </span>
-                  <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-text2">
+                  <span className="flex min-w-0 items-center gap-1.5 text-sm text-text2">
                     <Chip kind={FRESH[n.freshness].kind}>{FRESH[n.freshness].label}</Chip>
                     <span className="truncate" title={n.sub}>
                       {n.sub}
@@ -757,7 +754,7 @@ function SubjectNode({
       <span className="text-sm leading-5 font-semibold [overflow-wrap:break-word]">
         {subject.title}
       </span>
-      {sub && <span className="text-[13px] leading-4">{sub}</span>}
+      {sub && <span className="text-sm leading-4">{sub}</span>}
     </div>
   );
 }
@@ -795,9 +792,7 @@ function AffectedList({
       </p>
       {[...groups.entries()].map(([label, os]) => (
         <div key={label} className="border-b border-line last:border-b-0">
-          <div className="bg-surface2 px-4 py-1.5 text-[13px] font-semibold text-text2">
-            {label}
-          </div>
+          <div className="bg-surface2 px-4 py-1.5 text-sm font-semibold text-text2">{label}</div>
           {os.map((o) => {
             const on = selected != null && keyOf(o) === keyOf(selected);
             return (
@@ -916,7 +911,7 @@ function PlanSidebar({
                 onClick={() => o && onPick(o)}
                 className="flex w-full items-start gap-2.5 text-left"
               >
-                <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">
+                <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent-ink">
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
@@ -1049,7 +1044,7 @@ function OutputTable({
                 ? `${statusLabel(o.status)} · no proposal`
                 : names.words(o.reasons?.[0] ?? '');
             return (
-              <span className="truncate text-[13px] text-text2" title={why}>
+              <span className="truncate text-sm text-text2" title={why}>
                 {why}
               </span>
             );
@@ -1144,7 +1139,7 @@ function PlanList({ report }: { report: Report }) {
           const o = byKey.get(keyOf(p));
           return (
             <li key={keyOf(p)} className="flex gap-3 border-b border-line px-4 py-3">
-              <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">
+              <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent-ink">
                 {i + 1}
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -1159,7 +1154,7 @@ function PlanList({ report }: { report: Report }) {
                     </Chip>
                   ))}
                   {p.entity_ids.length > 0 && (
-                    <span className="text-[13px] text-text2">
+                    <span className="text-sm text-text2">
                       {p.entity_ids.length} Ground Truth item{p.entity_ids.length === 1 ? '' : 's'}
                     </span>
                   )}
@@ -1283,7 +1278,7 @@ function OutputSections({
                   <span className="min-w-0 [overflow-wrap:anywhere]">{upstreamLine(d, names)}</span>
                   {u.deleted && <Chip kind="crit">Deleted</Chip>}
                 </span>
-                <span className="flex flex-wrap gap-x-2 text-[13px] text-text2">
+                <span className="flex flex-wrap gap-x-2 text-sm text-text2">
                   {u.deleted && u.deletedAt && <span>Removed {formatDate(u.deletedAt)}</span>}
                   {d.stale_since && <span>Stale since {formatDate(d.stale_since)}</span>}
                   {d.reconciled_at && <span>Reconciled {formatDate(d.reconciled_at)}</span>}
@@ -1307,7 +1302,7 @@ function OutputSections({
                     </Link>
                   )}
                 </span>
-                {d.note && <span className="text-[13px] text-text2">Note: {d.note}</span>}
+                {d.note && <span className="text-sm text-text2">Note: {d.note}</span>}
               </li>
             );
           })}

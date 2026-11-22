@@ -73,7 +73,7 @@ function HoldsLine({ d }: { d: MemberDetail }) {
   ].filter((x) => x !== null);
   return (
     <>
-      <p className="text-[15px]">
+      <p className="text-base">
         {parts.length === 0
           ? 'Nothing'
           : parts.map((x, i) => (
@@ -111,7 +111,7 @@ function ResponsibilityRow({
       data-testid="responsibility-row"
       className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-line py-2 first:border-t-0"
     >
-      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[15px]">
+      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-base">
         {r.label} <span className="tnum text-text2">· {r.count}</span>
         {r.items.length > 0 && (
           <InfoTip label={r.label.toLowerCase()} align="start">
@@ -282,7 +282,7 @@ export function MemberInspector({
           <Button type="submit" disabled={saving || name.trim() === (member.name ?? '')}>
             {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
           </Button>
-          <span className="basis-full text-[13px] text-text2">Up to {NAME_MAX} characters</span>
+          <span className="basis-full text-sm text-text2">Up to {NAME_MAX} characters</span>
         </form>
         <InspectorRow value={<span className="break-all">{member.email}</span>}>Email</InspectorRow>
         <InspectorRow value={ROLE_WORD[member.role]}>Role</InspectorRow>
@@ -322,14 +322,14 @@ export function MemberInspector({
       </InspectorSection>
       {holdsNothing ? (
         <InspectorSection label={removed ? 'Still assigned' : 'Holds'} testId="member-holds">
-          <p data-testid="member-holds-nothing" className="text-[15px] text-text2">
+          <p data-testid="member-holds-nothing" className="text-base text-text2">
             {personName(member)} holds nothing: no approvals and no responsibilities.
           </p>
         </InspectorSection>
       ) : (
         <>
           <InspectorSection label="Holds" testId="member-holds">
-            {detail ? <HoldsLine d={detail} /> : <p className="text-[15px]">—</p>}
+            {detail ? <HoldsLine d={detail} /> : <p className="text-base">—</p>}
           </InspectorSection>
           <InspectorSection
             label={removed ? 'Still assigned' : 'Responsibilities'}
@@ -338,7 +338,7 @@ export function MemberInspector({
             {!detail ? (
               <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
             ) : rows.length === 0 ? (
-              <p className="text-[15px] text-text2">Nothing assigned</p>
+              <p className="text-base text-text2">Nothing assigned</p>
             ) : (
               <ul className="flex flex-col">
                 {rows.map((r) => (

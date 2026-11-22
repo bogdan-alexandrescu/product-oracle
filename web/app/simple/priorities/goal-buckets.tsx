@@ -34,20 +34,20 @@ type Goal = Schemas['GoalBucketGoal'];
 type Undo = Schemas['GoalBucketsUndo'];
 
 const BTN =
-  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2';
+  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-sm font-[650] text-text hover:bg-surface2';
 const PRIMARY =
-  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
+  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-sm font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
 // EG1 a (eg1-a-delete): Delete goal is drawn in the warning colour, as the frames do.
 const DANGER =
-  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-warn px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
+  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-warn px-3 text-sm font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
 const ICON =
-  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2';
+  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-base text-text hover:border-line-strong hover:bg-surface2';
 const INPUT =
-  'h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text';
+  'h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-base text-text';
 const BAD =
-  'h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-[15px] text-text';
+  'h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-base text-text';
 const MENU =
-  'absolute right-0 top-9 z-30 w-64 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg';
+  'absolute right-0 top-9 z-30 w-64 rounded-lg border border-line bg-surface p-1 text-base shadow-lg';
 const ITEM = 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-surface2';
 
 export const bucketsKey = 'simple-goal-buckets';
@@ -160,7 +160,7 @@ export function OrderBadge({ n }: { n: number }) {
     <span
       data-testid="goal-order"
       title={`Goal ${n} in the owner's order`}
-      className="inline-flex h-6 min-w-6 flex-none items-center justify-center self-center rounded-full bg-surface2 px-1.5 text-[13px] font-[650] tabular-nums text-text2"
+      className="inline-flex h-6 min-w-6 flex-none items-center justify-center self-center rounded-full bg-surface2 px-1.5 text-sm font-[650] tabular-nums text-text2"
     >
       {n}
     </span>
@@ -180,11 +180,11 @@ function Field({
 }) {
   return (
     <label className="block min-w-0">
-      <span className="text-[13px] font-[650] text-text2">{label}</span>
+      <span className="text-sm font-[650] text-text2">{label}</span>
       {children}
-      {error && <span className="mt-0.5 block text-[13px] text-warn">{error}</span>}
+      {error && <span className="mt-0.5 block text-sm text-warn">{error}</span>}
       {now && (
-        <span data-testid="goal-form-now" className="mt-0.5 block text-[13px] text-text2">
+        <span data-testid="goal-form-now" className="mt-0.5 block text-sm text-text2">
           Saved now: {now}
         </span>
       )}
@@ -319,8 +319,8 @@ export function GoalForm({
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <OrderBadge n={order} />
-        <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
-        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">
+        <h3 className="whitespace-nowrap text-lg font-[650]">{title}</h3>
+        <span className="text-sm text-text2 max-sm:basis-full sm:ml-auto">
           Goal {order} in the order; change it in the Ground Truth
         </span>
       </div>
@@ -379,7 +379,7 @@ export function GoalForm({
       <OwnerField value={f.owner ?? null} onChange={(owner) => setF((x) => ({ ...x, owner }))} />
       {/* tb-mk: a goal with no target date has no milestone to put on the roadmap. */}
       {goal?.can_edit && f.on_roadmap !== undefined && !!day && (
-        <label className="flex items-center gap-2 text-[13px] font-[650] text-text2">
+        <label className="flex items-center gap-2 text-sm font-[650] text-text2">
           <input
             type="checkbox"
             role="switch"
@@ -399,13 +399,13 @@ export function GoalForm({
           Cancel
         </button>
         {!done && (
-          <span className="min-w-0 text-[13px] text-text2">
+          <span className="min-w-0 text-sm text-text2">
             A goal needs a measure, a target and a date.
           </span>
         )}
       </div>
       {refusal && (
-        <p role="alert" className="text-[14px] text-warn">
+        <p role="alert" className="text-sm text-warn">
           {refusal}
         </p>
       )}
@@ -498,7 +498,7 @@ export function UndoNote({
       ref={el}
       role="status"
       data-testid="bucket-note"
-      className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(76px+env(safe-area-inset-bottom))] items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text"
+      className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(76px+env(safe-area-inset-bottom))] items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-base text-text"
     >
       <span className="min-w-0 flex-1">{children}</span>
       {onUndo && (
@@ -532,13 +532,13 @@ export function DragGhost({
     <div
       aria-hidden
       data-testid="drag-ghost"
-      className={`pointer-events-none fixed z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl ${className}`}
+      className={`pointer-events-none fixed z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-base shadow-2xl ${className}`}
       style={style}
     >
-      <span className="text-[15px]">⠿</span>
+      <span className="text-base">⠿</span>
       {gtCode(code) && <CodeTag code={code!} />}
       <span className="flex-1">{name}</span>
-      <span className="text-[15px] text-text2">{weeks}</span>
+      <span className="text-base text-text2">{weeks}</span>
     </div>
   );
 }
@@ -667,12 +667,12 @@ export function FeatureRows({
     .filter((f) => !task?.cut(f))
     .map((f) => (task ? { ...f, name: task.name(f) } : f));
   if (!features.length && !tail)
-    return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
+    return <p className="mt-2 text-base text-text2">Nothing in the plan yet</p>;
   const titleOf = (id: string) => gb?.goals.find((g) => g.id === id)?.title;
   return (
     <ul className="mt-2">
       {!features.length && (
-        <li className="py-[5px] text-[15px] text-text2">Nothing in the plan yet</li>
+        <li className="py-[5px] text-base text-text2">Nothing in the plan yet</li>
       )}
       {features.map((f) => {
         const form = task?.form(f);
@@ -711,7 +711,7 @@ export function FeatureRows({
             data-testid="plan-feature"
             data-code={f.code}
             data-lifted={up ? '' : undefined}
-            className={`relative flex flex-wrap items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] max-sm:gap-y-1 ${up ? '[&>*]:opacity-30' : ''}`}
+            className={`relative flex flex-wrap items-center gap-2 border-b border-line py-[5px] text-base leading-[22px] max-sm:gap-y-1 ${up ? '[&>*]:opacity-30' : ''}`}
           >
             {movable && (
               <button
@@ -720,7 +720,7 @@ export function FeatureRows({
                 title="Drag to another goal"
                 aria-label={`Move ${f.name} to another goal`}
                 aria-describedby="bucket-move-help"
-                className={`-mx-1 flex-none cursor-grab touch-none select-none rounded px-1 text-[15px] ${up ? 'text-accent-ink' : 'text-text2'}`}
+                className={`-mx-1 flex-none cursor-grab touch-none select-none rounded px-1 text-base ${up ? 'text-accent-ink' : 'text-text2'}`}
                 onPointerDown={(e) => onGrip(f, e)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -761,7 +761,7 @@ export function FeatureRows({
                 <span
                   data-testid="also-goals"
                   title={`Also serves ${others.join(', ')}`}
-                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2"
+                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full border border-line-strong px-1.5 align-[1px] text-xs font-[650] text-text2"
                 >
                   +{others.length} {others.length === 1 ? 'goal' : 'goals'}
                 </span>
@@ -770,7 +770,7 @@ export function FeatureRows({
                 <span
                   data-testid="contribution-assumed"
                   title={`How much it moves ${goal} is assumed until someone sets it`}
-                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full bg-warn-bg px-1.5 align-[1px] text-[12px] font-[650] text-warn"
+                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full bg-warn-bg px-1.5 align-[1px] text-xs font-[650] text-warn"
                 >
                   Contribution assumed
                 </span>
@@ -792,7 +792,7 @@ export function FeatureRows({
                     key={code}
                     data-testid="plan-chip"
                     title={`${code} ${name}: ${weeks}`}
-                    className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[12px] font-[650]"
+                    className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-[650]"
                     style={{ background: c.tag, color: c.ink }}
                   >
                     <span>{code}</span> <span>{name}</span>
@@ -803,7 +803,7 @@ export function FeatureRows({
                 <span
                   data-testid="task-milestone"
                   title={`Its own milestone: ${own}`}
-                  className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2"
+                  className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-xs font-[650] text-text2"
                 >
                   {coded(own)}
                 </span>
@@ -811,7 +811,7 @@ export function FeatureRows({
             </span>
             <span
               data-testid="plan-feature-total"
-              className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2"
+              className="min-w-[56px] flex-none text-right text-base tabular-nums text-text2"
             >
               {f.weeks == null ? 'PM-owned' : weeksWords(f.weeks)}
             </span>
@@ -919,9 +919,9 @@ export function ArchiveDialog({
           {heading} {goal.title}?
         </h2>
         {kind === 'delete' && (
-          <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>
+          <p className="mt-1 text-base text-text">It goes to Settings &gt; Trash for 30 days.</p>
         )}
-        <p className="mt-1 text-[15px] text-text2">
+        <p className="mt-1 text-base text-text2">
           {!list.length
             ? 'It holds no features.'
             : !plan || !ms.length
@@ -931,7 +931,7 @@ export function ArchiveDialog({
         {list.length > 0 && (
           <ul
             data-testid="goal-features"
-            className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-line px-3 py-1 text-[15px]"
+            className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-line px-3 py-1 text-base"
           >
             {list.map((f) => (
               <li
@@ -946,7 +946,7 @@ export function ArchiveDialog({
           </ul>
         )}
         {list.length > 0 && (
-          <div className="mt-3 grid gap-2 text-[15px]">
+          <div className="mt-3 grid gap-2 text-base">
             {multi.length > 0 && (
               <p>
                 {/* Each one left on a key result keeps that goal: none goes anywhere. */}
@@ -988,7 +988,7 @@ export function ArchiveDialog({
                       setTo(e.target.value);
                       setMode('move');
                     }}
-                    className={`h-8 min-w-0 max-w-full rounded-lg border px-2 text-[14px] max-sm:basis-full ${to ? 'border-2 border-accent' : 'border-warn'} bg-surface`}
+                    className={`h-8 min-w-0 max-w-full rounded-lg border px-2 text-sm max-sm:basis-full ${to ? 'border-2 border-accent' : 'border-warn'} bg-surface`}
                   >
                     {!to && <option value="">Pick a goal</option>}
                     {others.map((g) => (
@@ -1037,7 +1037,7 @@ export function ArchiveDialog({
           <button type="button" className={BTN} onClick={onClose}>
             Cancel
           </button>
-          {!picked && <span className="text-[13px] text-text2">Pick where they go.</span>}
+          {!picked && <span className="text-sm text-text2">Pick where they go.</span>}
         </div>
       </div>
     </div>
@@ -1159,7 +1159,7 @@ export function ArchivedGoals({
       className="rounded-[var(--simple-card-radius)] border border-line bg-surface col-span-full"
     >
       <details open={open} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
-        <summary className="cursor-pointer px-4 py-3 text-[17px] font-[650]">
+        <summary className="cursor-pointer px-4 py-3 text-lg font-[650]">
           Archived goals <span className="font-normal text-text2">· {list.length}</span>
         </summary>
         <ul className="border-t border-line px-4">
@@ -1171,7 +1171,7 @@ export function ArchivedGoals({
               className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2.5 last:border-b-0"
             >
               <span className="min-w-0 font-[650]">{g.title}</span>
-              <span className="text-[14px] text-text2">
+              <span className="text-sm text-text2">
                 {[
                   g.owner_name,
                   g.archived_at && `archived ${dayOf(g.archived_at.slice(0, 10), year)}`,
@@ -1233,7 +1233,7 @@ export function DeleteArchivedDialog({
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
           Delete {goal.title}?
         </h2>
-        <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>
+        <p className="mt-1 text-base text-text">It goes to Settings &gt; Trash for 30 days.</p>
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"

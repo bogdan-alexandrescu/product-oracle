@@ -192,7 +192,7 @@ export function RefineSection({
       )}
       {preview && (
         <div className="mt-2 flex flex-col gap-2" data-testid="refine-preview">
-          <p className="font-mono text-[13px] font-medium text-text2">
+          <p className="font-mono text-sm font-medium text-text2">
             Preview · #{preview.section_key}
           </p>
           <p className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm leading-6 whitespace-pre-wrap text-text">

@@ -51,7 +51,7 @@ import { RebuildSign } from '@/components/RebuildSign';
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
 const META =
-  'inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2';
+  'inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-sm text-text2';
 
 /** The one empty marker on this page (qa-docs-42). */
 const NONE = '–';
@@ -659,7 +659,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               <p
                 data-testid="template-names-failed"
                 role="status"
-                className="mb-3 text-[13px] text-text2"
+                className="mb-3 text-sm text-text2"
               >
                 {NAMES_FAILED}
               </p>

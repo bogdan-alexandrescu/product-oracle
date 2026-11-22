@@ -121,16 +121,14 @@ function JobRow({
           {JOB_KIND_LABEL[job.kind]}
         </span>
         {job.version_number != null && (
-          <span className="font-mono text-[13px] text-text2">v{job.version_number}</span>
+          <span className="font-mono text-sm text-text2">v{job.version_number}</span>
         )}
         {job.section_key && (
-          <span className="truncate text-[13px] text-text2">{name(job.section_key)}</span>
+          <span className="truncate text-sm text-text2">{name(job.section_key)}</span>
         )}
-        <span className="tnum ml-auto text-[13px] text-text2">
-          {formatDateTime(job.created_at)}
-        </span>
+        <span className="tnum ml-auto text-sm text-text2">{formatDateTime(job.created_at)}</span>
       </div>
-      {note && <p className="mt-1 text-[15px] leading-[22px] text-text">{note}</p>}
+      {note && <p className="mt-1 text-base leading-[22px] text-text">{note}</p>}
       {/* qa-docs-4: a failure in plain words; why (the Claude accounts) is under Details. */}
       {job.status === 'failed' && (
         <p
@@ -144,13 +142,13 @@ function JobRow({
         <p className="mt-1 text-sm font-medium text-warn">{job.error}</p>
       )}
       {job.attempts > 1 && (
-        <p className="tnum mt-1 text-[13px] text-text2">
+        <p className="tnum mt-1 text-sm text-text2">
           <span className="font-semibold">Attempts</span>{' '}
           <span className="text-text">{job.attempts}</span>
         </p>
       )}
       {/* P3d Cost prominence: the account, tokens and cost sit behind Details. */}
-      <details className="mt-1.5 text-[13px] text-text2">
+      <details className="mt-1.5 text-sm text-text2">
         <summary className="w-fit cursor-pointer font-semibold text-text2 hover:text-text">
           Details
         </summary>
@@ -244,7 +242,7 @@ function SettingsForm({ doc }: { doc: string }) {
       className="rounded-button border border-line px-3 pt-1 pb-2.5"
       data-testid="llm-job-settings"
     >
-      <legend className="flex items-center gap-1.5 px-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+      <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold tracking-[0.02em] text-text2">
         Oracle does on its own
         <InfoTip label="Oracle does on its own" align="start">
           Oracle reads new feedback and writes reports by itself. Turn each off here.

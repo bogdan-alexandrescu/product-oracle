@@ -113,7 +113,7 @@ export function AnswerQuestion({
     <div className="flex min-w-0 flex-col gap-2.5 whitespace-normal" data-testid="answer-question">
       {showPrompt && (
         <p
-          className="text-[15px] leading-[22px] font-semibold break-words text-text"
+          className="text-base leading-[22px] font-semibold break-words text-text"
           data-testid="answer-prompt"
         >
           {prompt}

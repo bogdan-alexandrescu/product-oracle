@@ -453,7 +453,7 @@ function Outcomes() {
             {none ? (
               <div
                 data-testid="outcomes-empty"
-                className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2"
+                className="flex flex-col items-center gap-3 px-4 py-10 text-center text-base text-text2"
               >
                 <p className="font-display text-lg font-bold text-text">No outcomes yet</p>
                 {canApprove && !tracking && (
@@ -534,7 +534,7 @@ function PredictionForm({
   const [confidence, setConfidence] = useState<Confidence | ''>(p.confidence ?? '');
   const [why, setWhy] = useState(p.why ?? '');
   const [direction, setDirection] = useState<Direction>(p.direction ?? 'increase');
-  const field = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
+  const field = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-base';
   const input = (label: string, value: string, set: (v: string) => void, type = 'text') => (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-text2">{label}</span>
@@ -662,7 +662,7 @@ function AssessmentForm({
   const [value, setValue] = useState(from.actual_value?.toString() ?? '');
   const [on, setOn] = useState(from.measured_at ?? '');
   const [note, setNote] = useState(from.note ?? '');
-  const field = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
+  const field = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-base';
   function save() {
     const v = num(value);
     if (!verdict) return;
@@ -720,7 +720,7 @@ function AssessmentForm({
       <label className="col-span-2 flex flex-col gap-1 text-sm">
         <span className="text-text2">Note</span>
         <textarea
-          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px]"
+          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-base"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -1126,7 +1126,7 @@ function OutcomeInspector({
   );
 }
 
-const FIELD = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
+const FIELD = 'h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-base';
 
 /** Track outcome: an approved roadmap item, its goal, the expected effect, a metric and a check date. */
 function TrackOutcomeForm({
@@ -1477,7 +1477,7 @@ function LearningForm({
       <label className="col-span-full flex flex-col gap-1 text-sm">
         <span className="text-text2">Learning</span>
         <textarea
-          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px]"
+          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-base"
           value={statement}
           maxLength={2000}
           onChange={(e) => setStatement(e.target.value)}

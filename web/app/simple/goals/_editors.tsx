@@ -55,7 +55,7 @@ function Btn({
       data-testid={testId}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-1.5 text-[15px] font-semibold ${primary ? 'border-accent bg-accent text-on-accent disabled:opacity-40' : 'border-line bg-surface text-text hover:bg-surface2'}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-1.5 text-base font-semibold ${primary ? 'border-accent bg-accent text-on-accent disabled:opacity-40' : 'border-line bg-surface text-text hover:bg-surface2'}`}
     >
       {children}
     </button>
@@ -96,7 +96,7 @@ function Drawer({
   );
 }
 
-const field = 'w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[17px]';
+const field = 'w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-lg';
 const label = 'flex flex-col gap-1.5 font-semibold';
 
 function AreaPicks({
@@ -113,7 +113,7 @@ function AreaPicks({
       {areas.map((a, i) => (
         <label
           key={a.id}
-          className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[15px] ${picked.includes(a.id) ? 'border-accent bg-accent font-semibold text-on-accent' : 'border-line-strong'}`}
+          className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-base ${picked.includes(a.id) ? 'border-accent bg-accent font-semibold text-on-accent' : 'border-line-strong'}`}
         >
           <input
             type="checkbox"
@@ -403,7 +403,7 @@ function MetricDrawer({
                 className={`w-full rounded-xl border px-3 py-2 text-left ${metric === c.id ? 'border-accent bg-accent-soft' : 'border-line'}`}
               >
                 <span className="font-semibold">{c.title}</span>
-                <span className="simple-small block text-[14px]! leading-5">
+                <span className="simple-small block text-sm! leading-5">
                   {c.last === null ? 'No value yet' : `Last week: ${num(c.last, goal.unit)}`}
                 </span>
               </button>
@@ -420,7 +420,7 @@ function MetricDrawer({
           <Link
             href="/company/metrics"
             data-testid="gm-add-metric"
-            className="mr-auto text-[15px] font-semibold text-accent-ink hover:underline"
+            className="mr-auto text-base font-semibold text-accent-ink hover:underline"
           >
             Add a metric
           </Link>

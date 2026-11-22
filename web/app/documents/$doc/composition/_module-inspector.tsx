@@ -154,7 +154,7 @@ export function ModuleDetail({
   const body = (
     <>
       <InspectorSection label="Why it is here">
-        <p className="text-[15px]">{reasonInWords(m)}</p>
+        <p className="text-base">{reasonInWords(m)}</p>
         <ul className="mt-2 space-y-1 text-sm text-text2">
           <li>{decidedByInWords(m)}</li>
           {m.explanation.map((e) => (
@@ -274,7 +274,7 @@ export function ModuleDetail({
       </InspectorSection>
       {m.score != null && (
         <InspectorSection label="Advisory score">
-          <p className="tnum text-[15px] font-semibold">{m.score.toFixed(2)}</p>
+          <p className="tnum text-base font-semibold">{m.score.toFixed(2)}</p>
           <p className="text-sm text-text2">The score is shown for context and never decides.</p>
         </InspectorSection>
       )}

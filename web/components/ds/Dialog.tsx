@@ -150,7 +150,7 @@ export function Dialog({
   const body = (
     <div
       data-dialog-body
-      className={`space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4 ${scrollBody ? 'min-h-0 flex-1 overflow-y-auto' : ''}`}
+      className={`space-y-4 px-5 py-4 text-base max-[600px]:px-4 ${scrollBody ? 'min-h-0 flex-1 overflow-y-auto' : ''}`}
     >
       {children}
     </div>

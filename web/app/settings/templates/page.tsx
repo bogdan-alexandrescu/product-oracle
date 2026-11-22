@@ -133,12 +133,12 @@ function TemplateInspector({
       </InspectorSection>
       {t.description && (
         <InspectorSection label="Description">
-          <p className="text-[15px] text-text">{t.description}</p>
+          <p className="text-base text-text">{t.description}</p>
         </InspectorSection>
       )}
       {t.suggest_when && (
         <InspectorSection label="Suggested when">
-          <p className="text-[15px] text-text">{t.suggest_when}</p>
+          <p className="text-base text-text">{t.suggest_when}</p>
         </InspectorSection>
       )}
     </Inspector>

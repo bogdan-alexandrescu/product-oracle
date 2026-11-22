@@ -304,7 +304,7 @@ export function EngReview({
         <div
           role="alert"
           data-testid="briefs-problem"
-          className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]"
+          className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-base"
         >
           <p className="font-semibold">
             The briefs could not be read: send them back to the architect.
@@ -322,13 +322,13 @@ export function EngReview({
       )}
       {noPrd.length > 0 && <NoPrd problems={noPrd} />}
       {!!check.unmapped_repos?.length && (
-        <p data-testid="briefs-unmapped" className="mb-4 text-[15px] text-text2">
+        <p data-testid="briefs-unmapped" className="mb-4 text-base text-text2">
           No code map covers {check.unmapped_repos.join(', ')}:{' '}
           {check.unmapped_repos.length > 1 ? 'their' : 'its'} work is described as assumptions.
         </p>
       )}
       {check.unnamed_repo && (
-        <p data-testid="briefs-unnamed" className="mb-4 text-[15px] text-text2">
+        <p data-testid="briefs-unnamed" className="mb-4 text-base text-text2">
           No code map of this run holds some cited ids, and the briefs do not say which repository
           they come from.
         </p>
@@ -346,7 +346,7 @@ export function EngReview({
             reading ? 'max-[900px]:hidden' : ''
           }`}
         >
-          <div className="border-b border-line px-4 py-2 text-[13px] font-semibold text-text2">
+          <div className="border-b border-line px-4 py-2 text-sm font-semibold text-text2">
             {plural(check.features.length, 'feature')}
           </div>
           <ul>
@@ -529,7 +529,7 @@ function NoPrd({ problems }: { problems: BriefsCheck['problems'] }) {
     <div
       role="status"
       data-testid="briefs-no-prd"
-      className="mb-4 rounded-panel border border-warn bg-warn-bg px-4 py-3 text-[15px]"
+      className="mb-4 rounded-panel border border-warn bg-warn-bg px-4 py-3 text-base"
     >
       <p className="font-semibold">Features in no PRD yet</p>
       <ul className="mt-1 space-y-1">
@@ -656,7 +656,7 @@ function Reasons({ reasons, confirm }: { reasons: Reason[]; confirm: string | nu
 function PaneSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="border-b border-line px-6 py-3.5 last:border-b-0 max-[600px]:px-4">
-      <h3 className="mb-2 text-[13px] font-semibold tracking-[0.02em] text-text2">{label}</h3>
+      <h3 className="mb-2 text-sm font-semibold tracking-[0.02em] text-text2">{label}</h3>
       {children}
     </section>
   );
@@ -765,13 +765,13 @@ function BriefPane({
           >
             ‹ All features
           </button>
-          <div className="text-[13px] font-semibold text-text2" data-testid="brief-position">
+          <div className="text-sm font-semibold text-text2" data-testid="brief-position">
             Feature {at + 1} of {count}
             {n.code && (
               <span className="ml-2 font-mono font-normal [overflow-wrap:anywhere]">{n.code}</span>
             )}
           </div>
-          <h2 className="font-display text-[22px] leading-7 font-bold">{n.name}</h2>
+          <h2 className="font-display text-xl leading-7 font-bold">{n.name}</h2>
         </div>
         <div className="flex flex-none gap-1.5">
           <Button
@@ -799,7 +799,7 @@ function BriefPane({
       >
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
           <div>
-            <div className="mb-1.5 text-[13px] font-semibold text-text2">Verdict</div>
+            <div className="mb-1.5 text-sm font-semibold text-text2">Verdict</div>
             {writes ? (
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Verdict">
                 {VERDICTS.map((v) => (
@@ -819,7 +819,7 @@ function BriefPane({
             )}
           </div>
           <div>
-            <div className="mb-1.5 text-[13px] font-semibold text-text2">Size</div>
+            <div className="mb-1.5 text-sm font-semibold text-text2">Size</div>
             {writes ? (
               <SegmentedControl
                 label="Size"
@@ -833,9 +833,7 @@ function BriefPane({
             ) : (
               <span className="tnum font-semibold">{size.toUpperCase()}</span>
             )}
-            <div className="mt-1 text-[12px] text-text2">
-              Architect proposed {f.size.toUpperCase()}
-            </div>
+            <div className="mt-1 text-xs text-text2">Architect proposed {f.size.toUpperCase()}</div>
           </div>
         </div>
         {current && (verdict?.state === 'suggested' || !writes) && (
@@ -897,7 +895,7 @@ function BriefPane({
         )}
         {suggestions.length > 0 && (
           <div className="mt-3">
-            <div className="mb-1 text-[13px] font-semibold text-text2">Suggested</div>
+            <div className="mb-1 text-sm font-semibold text-text2">Suggested</div>
             <ul className="space-y-1.5">
               {suggestions.map((a) => (
                 <li key={a.id} className="flex items-center gap-2" data-testid="suggestion">
@@ -964,7 +962,7 @@ function BriefPane({
                     )}
                   </p>
                   {done && (
-                    <p className="mt-1 ml-5 text-[15px]" data-testid="answer">
+                    <p className="mt-1 ml-5 text-base" data-testid="answer">
                       {String(answer.value)}{' '}
                       <span className="text-sm text-text2">
                         · {answer.state === 'suggested' ? 'Suggested by ' : ''}
@@ -1029,7 +1027,7 @@ function BriefPane({
       </PaneSection>
 
       <PaneSection label="Approach">
-        <div className="max-w-[72ch] space-y-1.5 text-[15px] leading-6">
+        <div className="max-w-[72ch] space-y-1.5 text-base leading-6">
           {f.approach
             .split('\n')
             .filter((t) => t.trim())

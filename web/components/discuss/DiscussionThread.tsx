@@ -90,7 +90,7 @@ function LiveReadsNotice({ alone }: { alone: boolean }) {
   const labels = (sources.data ?? []).map((s) => s.label);
   if (labels.length === 0) return null;
   return (
-    <p className="flex items-center gap-1.5 text-[13px] text-text2" data-testid="live-reads-notice">
+    <p className="flex items-center gap-1.5 text-sm text-text2" data-testid="live-reads-notice">
       <Icon name={alone ? 'sources' : 'lock'} size={16} />
       {alone ? `Oracle may read live: ${labels.join(', ')}` : LIVE_OFF}
     </p>
@@ -170,7 +170,7 @@ function MakeOpenWarning({
             Make open
           </h2>
         </div>
-        <p className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4">{text}</p>
+        <p className="px-5 py-3.5 text-base leading-6 max-[600px]:px-4">{text}</p>
         {error && (
           <div className="px-5 pb-2 max-[600px]:px-4">
             <InlineError>{error}</InlineError>
@@ -296,7 +296,7 @@ function OracleReply({
         </span>
       )}
       <p
-        className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text"
+        className="text-base leading-[22px] break-words whitespace-pre-wrap text-text"
         data-testid="oracle-reply-text"
       >
         {thinking ? (
@@ -437,20 +437,20 @@ function MirrorDialog({
                     >
                       <span className="min-w-0 truncate font-semibold text-text">#{c.name}</span>
                       {c.is_private && (
-                        <span className="flex-none text-[13px] text-text2">private</span>
+                        <span className="flex-none text-sm text-text2">private</span>
                       )}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-            <p className="text-[13px] text-text2">
+            <p className="text-sm text-text2">
               Invite @Product Oracle to a channel to see it here.
             </p>
           </div>
         ) : (
           <p
-            className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4"
+            className="px-5 py-3.5 text-base leading-6 max-[600px]:px-4"
             data-testid="mirror-confirm"
           >
             {mirrorConfirm(picked.name)}
@@ -655,7 +655,7 @@ function Composer({
               >
                 <span className="flex-none font-semibold text-text">{p.name}</span>
                 <span className="min-w-0 truncate text-text2">{p.email}</span>
-                {!p.can_write && <span className="flex-none text-[13px] text-text2">can read</span>}
+                {!p.can_write && <span className="flex-none text-sm text-text2">can read</span>}
               </button>
             </li>
           ))}
@@ -720,7 +720,7 @@ function Composer({
             Ask Oracle
           </label>
         )}
-        <span className="text-[13px] text-text2" data-testid="oracle-rule">
+        <span className="text-sm text-text2" data-testid="oracle-rule">
           {solo || askOracle ? 'Oracle will reply' : 'Oracle replies when you @mention it'}
         </span>
       </div>
@@ -1178,7 +1178,7 @@ export function DiscussionThread({
       {back && <div>{back}</div>}
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <h3 className="min-w-0 flex-1 font-display text-[17px] leading-6 font-bold tracking-heading break-words">
+          <h3 className="min-w-0 flex-1 font-display text-lg leading-6 font-bold tracking-heading break-words">
             {d.title}
           </h3>
           {(items.length > 0 || slackTip) && (
@@ -1231,7 +1231,7 @@ export function DiscussionThread({
             </Menu>
           )}
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-text2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
           {/* qa-nov17 ask 4: a closed discussion shows one state, Closed, not "Open" beside it. */}
           {open && (
             <span
@@ -1247,7 +1247,7 @@ export function DiscussionThread({
             data-testid="discussion-people"
             aria-expanded={showPeople}
             onClick={() => setShowPeople((s) => !s)}
-            className="group inline-flex items-center rounded-full text-[13px] font-medium text-text"
+            className="group inline-flex items-center rounded-full text-sm font-medium text-text"
           >
             {/* The sheet's 44 px touch target is the button; the pill stays chip height (ask-phone QA row 6). */}
             <span
@@ -1392,7 +1392,7 @@ export function DiscussionThread({
             <li
               key={m.id}
               data-testid="discussion-system-line"
-              className="text-center text-[13px] text-text2"
+              className="text-center text-sm text-text2"
             >
               {m.body}
             </li>
@@ -1403,12 +1403,12 @@ export function DiscussionThread({
               data-author-kind={m.author_kind}
               className="min-w-0"
             >
-              <p className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-text2">
+              <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-text2">
                 <span className="font-semibold text-text">{m.author?.name ?? 'Oracle'}</span>
                 <span className="tnum">{formatDateTime(m.created_at)}</span>
                 {m.edited_at && !m.deleted && <span>edited</span>}
                 {m.via === 'slack' && (
-                  <span data-testid="via-slack" className="text-[12px]">
+                  <span data-testid="via-slack" className="text-xs">
                     via Slack
                   </span>
                 )}
@@ -1429,7 +1429,7 @@ export function DiscussionThread({
                   onEnded={() => setChangesKey((k) => k + 1)}
                 />
               ) : (
-                <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+                <p className="text-base leading-[22px] break-words whitespace-pre-wrap text-text">
                   {m.deleted ? (
                     <span className="text-text2 italic">Message deleted</span>
                   ) : (
@@ -1618,7 +1618,7 @@ function ResearchLine({ m }: { m: Message }) {
     <li
       data-testid="research-line"
       data-status={r.status}
-      className="text-center text-[13px] text-text2"
+      className="text-center text-sm text-text2"
     >
       {m.body} · {where} ·{' '}
       <a className="font-semibold text-accent-ink hover:underline" href={`/runs/${r.run_id}`}>

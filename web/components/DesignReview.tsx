@@ -98,7 +98,7 @@ const EVENT: Record<ReviewEvent['kind'], { label: string; kind: ChipKind }> = {
 };
 const NOTE_LABEL = 'Note (required to request changes or reject)';
 const TEXTAREA =
-  'min-h-14 w-full rounded-button border border-line-strong bg-surface px-2.5 py-2 text-[15px] text-text placeholder:text-text-faint';
+  'min-h-14 w-full rounded-button border border-line-strong bg-surface px-2.5 py-2 text-base text-text placeholder:text-text-faint';
 
 /** The spec's tech brief: its latest version page. */
 export function briefHref(spec: Spec): string | null {
@@ -343,7 +343,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
               href={designHref(specId, a.version.id)}
               aria-current={current ? 'page' : undefined}
               title={`${a.title} · v${a.version.number}`}
-              className={`flex-none border-b-2 px-3 py-2 text-[15px] font-semibold whitespace-nowrap max-[600px]:min-w-0 max-[600px]:flex-auto max-[600px]:whitespace-normal max-[600px]:break-words ${
+              className={`flex-none border-b-2 px-3 py-2 text-base font-semibold whitespace-nowrap max-[600px]:min-w-0 max-[600px]:flex-auto max-[600px]:whitespace-normal max-[600px]:break-words ${
                 current
                   ? 'border-accent text-text'
                   : 'border-transparent text-text2 hover:text-text'
@@ -415,9 +415,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
           }
         >
           {d.outputs.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[15px] text-text2">
-              This version has no files.
-            </p>
+            <p className="px-4 py-8 text-center text-base text-text2">This version has no files.</p>
           ) : (
             <div
               data-testid="design-canvas"
@@ -442,7 +440,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
                   {requirementName(spec, id)}
                 </Chip>
               ))}
-              <span className="ml-auto text-[13px] text-text2">
+              <span className="ml-auto text-sm text-text2">
                 A preview: its links and buttons do nothing.
               </span>
             </div>
@@ -513,7 +511,7 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
   return (
     <figure className="m-0 min-w-0 overflow-hidden rounded-button border border-line-strong bg-surface">
       {/* qa-docs-35/79: the file by its title; its name and type in a closed Details (no sizes or fingerprints). */}
-      <figcaption className="flex flex-wrap items-start gap-x-2.5 gap-y-1 border-b border-line bg-surface2 px-2.5 py-1.5 text-[13px] text-text2">
+      <figcaption className="flex flex-wrap items-start gap-x-2.5 gap-y-1 border-b border-line bg-surface2 px-2.5 py-1.5 text-sm text-text2">
         <b className="min-w-0 font-semibold break-words text-text">{output.title ?? output.name}</b>
         {/* qa4-docs-share-40: the file by its title only; Details keeps its type. */}
         <details data-testid="file-details" className="ml-auto min-w-0">
@@ -704,7 +702,7 @@ function VerdictSection({
     return (
       <>
         {approvedLine}
-        <p className="text-[13px] text-text2">
+        <p className="text-sm text-text2">
           Verdicts are for the spec&apos;s engineering approvers.
         </p>
       </>
@@ -756,13 +754,13 @@ function VerdictSection({
       </div>
       {approveOff && (
         // qa-docs-83: the way to the tech brief is the stale notice's button, not a second link here.
-        <p data-testid="approve-off" className="text-[13px] text-text2">
+        <p data-testid="approve-off" className="text-sm text-text2">
           {approveOff}
         </p>
       )}
       {roles.decide && (
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-semibold text-text2">{NOTE_LABEL}</span>
+          <span className="text-sm font-semibold text-text2">{NOTE_LABEL}</span>
           <textarea
             className={TEXTAREA}
             placeholder="Say why"
@@ -780,14 +778,14 @@ function VerdictSection({
           <Notice tone="info">
             Only the spec&apos;s engineering approvers (or an owner) decide on it.
           </Notice>
-          <p className="text-[13px] text-text2">
+          <p className="text-sm text-text2">
             {named.length > 0
               ? `Engineering approver${named.length === 1 ? '' : 's'} named on this spec: ${named.map((x) => x.name).join(', ')}`
               : 'No engineering approvers are named on this spec.'}
           </p>
         </>
       ) : (
-        <p className="text-[13px] text-text2">
+        <p className="text-sm text-text2">
           {roles.owner
             ? 'Owners always decide. Approving supersedes the previously approved version.'
             : named.length > 0
@@ -833,7 +831,7 @@ function AnnotationsSection({
             type="button"
             aria-pressed={on}
             onClick={() => setQuiet(label === 'Without comments')}
-            className={`rounded-full px-2.5 py-0.5 text-[13px] whitespace-nowrap font-semibold ${on ? 'bg-accent text-on-accent' : 'bg-surface2 text-text2 hover:text-text'}`}
+            className={`rounded-full px-2.5 py-0.5 text-sm whitespace-nowrap font-semibold ${on ? 'bg-accent text-on-accent' : 'bg-surface2 text-text2 hover:text-text'}`}
           >
             {label} <span className="tnum">{counts[label]}</span>
           </button>
@@ -862,7 +860,7 @@ function AnnotationsSection({
             return (
               <div key={o.name} className="flex flex-col gap-3">
                 {outputs.length > 1 && (
-                  <p className="text-[13px] font-semibold text-text2">{o.title ?? o.name}</p>
+                  <p className="text-sm font-semibold text-text2">{o.title ?? o.name}</p>
                 )}
                 {rows.length === 0 ? (
                   <p className="text-sm text-text2">
@@ -923,7 +921,7 @@ function AnnotationRow({
     <li data-testid="annotation" className="flex min-w-0 items-start gap-2.5">
       <span
         aria-hidden
-        className="grid size-[26px] flex-none place-items-center rounded-full bg-accent-soft font-mono text-[13px] font-bold text-accent-ink"
+        className="grid size-[26px] flex-none place-items-center rounded-full bg-accent-soft font-mono text-sm font-bold text-accent-ink"
       >
         {n}
       </span>
@@ -942,7 +940,7 @@ function AnnotationRow({
         </div>
         <div className="mt-2 flex flex-col gap-2 border-l-2 border-line pl-2.5">
           {a.reviews.length === 0 ? (
-            <p className="text-[13px] text-text2">No comments on this annotation yet.</p>
+            <p className="text-sm text-text2">No comments on this annotation yet.</p>
           ) : (
             a.reviews.map((e) => <EventRow key={e.id} e={e} meId={meId} />)
           )}
@@ -1021,7 +1019,7 @@ function Composer({ label, send }: { label: string; send: (body: string) => Prom
         <Button variant="solid" disabled={busy || empty} onClick={() => void submit()}>
           Comment
         </Button>
-        {empty && <span className="text-[13px] text-text2">Write a comment first</span>}
+        {empty && <span className="text-sm text-text2">Write a comment first</span>}
       </div>
     </div>
   );
@@ -1148,7 +1146,7 @@ export function SpecDesignLinks({ doc }: { doc: string }) {
       data-testid="spec-design"
       className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button border border-line bg-surface px-4 py-3"
     >
-      <span className="text-[13px] font-semibold text-text2">Flows and wireframes</span>
+      <span className="text-sm font-semibold text-text2">Flows and wireframes</span>
       {spec.design.map((a) => (
         <span key={a.version.id} className="inline-flex flex-wrap items-center gap-1.5">
           <Link

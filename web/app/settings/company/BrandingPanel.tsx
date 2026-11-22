@@ -69,13 +69,10 @@ function ContrastResult({ accent, alert }: { accent: string; alert: boolean }) {
   const hex = normalHex(accent);
   const role = alert ? 'alert' : undefined;
   if (!accent.trim())
-    return <span className="text-[13px] text-text2">No accent: Oracle&apos;s own</span>;
+    return <span className="text-sm text-text2">No accent: Oracle&apos;s own</span>;
   if (!hex)
     return (
-      <span
-        role={role}
-        className={`text-[13px] ${alert ? 'font-semibold text-crit' : 'text-text2'}`}
-      >
+      <span role={role} className={`text-sm ${alert ? 'font-semibold text-crit' : 'text-text2'}`}>
         Not a hex colour like #0369a1
       </span>
     );
@@ -84,7 +81,7 @@ function ContrastResult({ accent, alert }: { accent: string; alert: boolean }) {
   return (
     <span
       role={ok ? undefined : role}
-      className={`text-[13px] font-semibold ${ok ? 'text-pass' : 'text-crit'}`}
+      className={`text-sm font-semibold ${ok ? 'text-pass' : 'text-crit'}`}
     >
       {ratio.toFixed(2)}:1 ·{' '}
       {ok ? 'Passes AA' : alert ? 'Too light to read on white. Pick a darker one.' : 'Too light'}
@@ -124,7 +121,7 @@ function Preview({
         {light && (
           <img src={light} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />
         )}
-        <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_LIGHT.color }}>
+        <span className="truncate text-base font-semibold" style={{ color: PREVIEW_LIGHT.color }}>
           {name}
         </span>
       </div>
@@ -135,7 +132,7 @@ function Preview({
       >
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
         {dark && <img src={dark} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />}
-        <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_DARK.color }}>
+        <span className="truncate text-base font-semibold" style={{ color: PREVIEW_DARK.color }}>
           {name}
         </span>
       </div>
@@ -168,9 +165,7 @@ function LogoUpload({
   const now = fileName ?? (logo ? `${logo.width} × ${logo.height} px` : 'None yet');
   return (
     <div className="flex min-w-56 flex-col gap-1.5">
-      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-        {label}
-      </span>
+      <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">{label}</span>
       <span className="flex min-w-0 items-center gap-2">
         <label className={UPLOAD}>
           <input
@@ -186,7 +181,7 @@ function LogoUpload({
           />
           {logo ? `Replace ${action}` : `Upload ${action}`}
         </label>
-        <span className="min-w-0 truncate text-[13px] text-text2" title={now}>
+        <span className="min-w-0 truncate text-sm text-text2" title={now}>
           {now}
         </span>
       </span>
@@ -325,7 +320,7 @@ export function BrandingPanel() {
               dark={dark}
             />
             {brand.logo && (
-              <p className="text-[13px] text-text2">
+              <p className="text-sm text-text2">
                 Logo{' '}
                 <span data-testid="brand-logo-size">{`${brand.logo.width} × ${brand.logo.height} px`}</span>
               </p>
@@ -402,7 +397,7 @@ export function BrandingPanel() {
                         aria-hidden
                         data-testid="accent-swatch"
                         // qa-settings-15: "None" in the form's own 13 px, the swatch widening to hold it.
-                        className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong px-1.5 text-[13px] font-semibold text-text2"
+                        className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong px-1.5 text-sm font-semibold text-text2"
                         style={previewAccent ? { background: previewAccent } : undefined}
                       >
                         {previewAccent ? '' : 'None'}
@@ -431,7 +426,7 @@ export function BrandingPanel() {
                     onChange={(e) => set({ disclaimer: e.target.value })}
                   />
                 </Field>
-                <label className="flex items-center gap-2 text-[15px]">
+                <label className="flex items-center gap-2 text-base">
                   <input
                     type="checkbox"
                     checked={form.mark}
@@ -452,7 +447,7 @@ export function BrandingPanel() {
                 </div>
               </form>
             ) : (
-              <dl className="grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[15px] max-[600px]:grid-cols-1">
+              <dl className="grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-2 text-base max-[600px]:grid-cols-1">
                 <dt className="font-semibold">Display name</dt>
                 <dd>{brand.display_name || 'None yet'}</dd>
                 <dt className="font-semibold">Accent</dt>

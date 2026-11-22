@@ -110,7 +110,7 @@ export function GithubPicker({ connectionId, config, onChange }: PickerProps) {
             return (
               <label
                 key={k.value}
-                className="inline-flex min-h-8 cursor-pointer items-center gap-2 text-[15px]"
+                className="inline-flex min-h-8 cursor-pointer items-center gap-2 text-base"
               >
                 <input
                   type="checkbox"

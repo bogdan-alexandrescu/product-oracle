@@ -210,7 +210,7 @@ export function ChatComposer({
               setError(null);
             }}
             onKeyDown={keys}
-            className={`max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint ${BOX_FOCUS}`}
+            className={`max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-base leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint ${BOX_FOCUS}`}
           />
           <button type="submit" className={`${SEND} flex-none`} disabled={busy || !text.trim()}>
             Send
@@ -438,7 +438,7 @@ export function ChatLine({
       <div
         className={
           ask
-            ? `min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? 'bg-accent-soft text-text' : 'bg-surface2 text-text'}`
+            ? `min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 text-base leading-[22px] ${mine ? 'bg-accent-soft text-text' : 'bg-surface2 text-text'}`
             : `min-w-0 max-w-[95%] rounded-xl px-3 py-2 ${mine ? 'bg-accent-soft text-text' : 'bg-surface2 text-text'}`
         }
       >

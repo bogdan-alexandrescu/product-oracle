@@ -113,7 +113,7 @@ export function ExportButtons({
                   aria-label={`Export ${g.label.toLowerCase()}`}
                   className="contents"
                 >
-                  <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">
+                  <span className="col-start-1 pr-2.5 text-sm font-semibold tracking-[0.02em] text-text2">
                     {g.label}
                   </span>
                   {g.formats.map((f) => (
@@ -173,7 +173,7 @@ export function ApproveButton({
       <Chip
         kind="pass"
         title={`Approved ${formatDate(approvedAt)}`}
-        className="h-10 px-4 text-[15px]"
+        className="h-10 px-4 text-base"
       >
         ✓ Approved {formatDate(approvedAt)}
       </Chip>

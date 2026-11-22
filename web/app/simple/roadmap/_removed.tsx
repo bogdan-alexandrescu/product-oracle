@@ -178,7 +178,7 @@ export function RemovedButton({
           style={{ maxHeight: fit.maxHeight }}
           className="absolute top-10 left-0 z-30 flex w-[min(560px,calc(100vw-32px))] flex-col rounded-xl border border-line bg-surface shadow-xl"
         >
-          <p className="flex-none border-b border-line px-3 py-2 text-[13px] font-semibold text-text2">
+          <p className="flex-none border-b border-line px-3 py-2 text-sm font-semibold text-text2">
             Removed from your plans
           </p>
           <ul
@@ -204,7 +204,7 @@ export function RemovedButton({
                   ) : (
                     <span className="font-semibold [overflow-wrap:anywhere]">{r.title}</span>
                   )}
-                  <span className="block text-[13px] text-text2">
+                  <span className="block text-sm text-text2">
                     {KIND[r.kind]} · {whereOf(r) && `${whereOf(r)} · `}
                     <span className="inline-block">{byline(r)}</span>
                   </span>

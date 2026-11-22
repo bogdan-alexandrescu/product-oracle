@@ -14,7 +14,7 @@ type Payload = Record<string, unknown>;
 type Horizon = 'now' | 'next' | 'later';
 
 const INPUT =
-  'h-8 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] font-normal tracking-normal text-text';
+  'h-8 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-base font-normal tracking-normal text-text';
 /** F3's basis kinds (ScheduleBasisCreate.kind). */
 const BASIS_KINDS = [
   { value: 'estimate', label: 'Estimate' },
@@ -638,7 +638,7 @@ export function ChangeForm({
           <textarea
             aria-label="Change (JSON)"
             rows={5}
-            className={`${TEXTAREA} font-mono text-[13px]`}
+            className={`${TEXTAREA} font-mono text-sm`}
             value={json}
             onChange={(e) => setJson(e.target.value)}
           />

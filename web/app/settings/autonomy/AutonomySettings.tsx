@@ -159,7 +159,7 @@ export function AutonomySettings() {
           })}
         {q.data && (
           <Panel title="Stays with people" testId="autonomy-stays">
-            <div className="px-4 py-3 text-[15px] max-[600px]:px-3">
+            <div className="px-4 py-3 text-base max-[600px]:px-3">
               <p className="text-text2">Oracle never decides these, at any setting.</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {q.data.stays_with_people.map((s) => (
@@ -239,7 +239,7 @@ function Row({
         </Chip>
       )}
       {(showLimits || (owner && item.level === 'act' && limitsEditable(item))) && (
-        <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-[15px] text-text2">
+        <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-base text-text2">
           {showLimits && (
             <Chip kind="acc" data-testid="autonomy-limits" title={item.limits_summary ?? undefined}>
               <span className="truncate">{item.limits_summary}</span>
@@ -362,7 +362,7 @@ function ChangeSheet({
 
   return (
     <Sheet open dialog title={`Change ${item.title}`} onClose={onClose} testId="autonomy-sheet">
-      <div className="flex w-full flex-col gap-3 px-4 py-3 text-[15px] sm:max-w-[640px]">
+      <div className="flex w-full flex-col gap-3 px-4 py-3 text-base sm:max-w-[640px]">
         <p data-testid="autonomy-from">
           <span className="font-semibold">Now, {TITLE[item.level]}:</span> {item.levels[item.level]}
         </p>
@@ -374,7 +374,7 @@ function ChangeSheet({
         </p>
         {editLimits && (
           <fieldset className="flex flex-col gap-3 rounded-button border border-line px-3 py-3">
-            <legend className="px-1 text-[13px] font-semibold text-text2">Limits</legend>
+            <legend className="px-1 text-sm font-semibold text-text2">Limits</legend>
             {Object.entries(props).map(([name, p]) =>
               p.fixed ? (
                 <p key={name} className="text-text2">
@@ -387,7 +387,7 @@ function ChangeSheet({
                   aria-label={p.title}
                   className="flex flex-wrap items-center gap-3"
                 >
-                  <span className="text-[13px] font-semibold text-text2">{p.title}</span>
+                  <span className="text-sm font-semibold text-text2">{p.title}</span>
                   {(p.items?.enum ?? []).map((opt) => {
                     const list = (limits[name] as string[] | undefined) ?? [];
                     return (
@@ -442,7 +442,7 @@ function ChangeSheet({
                     <span
                       role="alert"
                       data-testid="autonomy-limit-error"
-                      className="text-[13px] font-medium text-crit"
+                      className="text-sm font-medium text-crit"
                     >
                       {problems[name]}
                     </span>
@@ -465,7 +465,7 @@ function ChangeSheet({
           />
         </Field>
         {!why.trim() && (
-          <p data-testid="autonomy-why-hint" className="-mt-1 text-[13px] text-text2">
+          <p data-testid="autonomy-why-hint" className="-mt-1 text-sm text-text2">
             Say why to save: it is kept with the change.
           </p>
         )}

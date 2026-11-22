@@ -814,7 +814,7 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
             </Chip>
           </span>
         )}
-        {it.position == null && <span className="text-[13px] text-text2">Not in this file</span>}
+        {it.position == null && <span className="text-sm text-text2">Not in this file</span>}
       </span>
       {showDiff && it.diff.length > 0 && (
         <ul className="text-sm text-text2" data-testid="row-diff">
@@ -1643,7 +1643,7 @@ function ReviewInspector({
             }}
           />
         ) : (
-          <p className="flex flex-wrap items-start gap-2 text-[15px] break-words">
+          <p className="flex flex-wrap items-start gap-2 text-base break-words">
             <span className="min-w-0 flex-1">{outcome || '—'}</span>
             {edit && (
               <Button

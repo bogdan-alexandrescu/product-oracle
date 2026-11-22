@@ -118,7 +118,7 @@ function OnePagers() {
           <div
             role="status"
             data-testid="one-pagers-note"
-            className="mb-2 flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text"
+            className="mb-2 flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-base text-text"
           >
             <span className="min-w-0 flex-1">{note.text}</span>
             {note.entry && (

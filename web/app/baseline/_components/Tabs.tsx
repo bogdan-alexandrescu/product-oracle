@@ -95,7 +95,7 @@ export function Tabs<V extends string>({
               aria-controls={`panel-${t.id}`}
               tabIndex={on ? 0 : -1}
               onClick={() => onChange(t.id)}
-              className={`flex h-9 flex-none items-center justify-center gap-2 px-3.5 text-[15px] font-medium whitespace-nowrap max-[600px]:gap-1.5 max-[600px]:px-3 max-[600px]:text-sm ${
+              className={`flex h-9 flex-none items-center justify-center gap-2 px-3.5 text-base font-medium whitespace-nowrap max-[600px]:gap-1.5 max-[600px]:px-3 max-[600px]:text-sm ${
                 phone
                   ? `rounded-button border ${on ? 'border-accent' : 'border-line-strong bg-surface'}`
                   : 'border-r border-line last:border-r-0'
@@ -105,7 +105,7 @@ export function Tabs<V extends string>({
               {t.count != null && (
                 <b
                   data-testid={`tab-count-${t.id}`}
-                  className={`tnum inline-grid h-[22px] min-w-[22px] place-items-center rounded-full px-1.5 text-[13px] leading-none font-semibold ${pill}`}
+                  className={`tnum inline-grid h-[22px] min-w-[22px] place-items-center rounded-full px-1.5 text-sm leading-none font-semibold ${pill}`}
                 >
                   {t.count}
                 </b>

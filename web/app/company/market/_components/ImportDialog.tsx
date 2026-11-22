@@ -165,7 +165,7 @@ export function ImportDialog({
         {busy && !check && <p className="text-sm text-text2">Checking {name}…</p>}
         {check && (
           <div className="flex flex-col gap-2" data-testid="import-check">
-            <p className="text-[15px] font-semibold" data-testid="import-create">
+            <p className="text-base font-semibold" data-testid="import-create">
               {rows(check.created)} to create
             </p>
             {check.unmatched_alternatives.length > 0 && (
@@ -176,7 +176,7 @@ export function ImportDialog({
             )}
             {check.skipped.length > 0 && (
               <div>
-                <p className="text-[15px] font-semibold" data-testid="import-refused-count">
+                <p className="text-base font-semibold" data-testid="import-refused-count">
                   {rows(check.skipped.length)} refused
                 </p>
                 <ul className="mt-1 flex flex-col gap-1 text-sm" data-testid="import-refused">

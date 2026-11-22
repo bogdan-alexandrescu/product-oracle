@@ -83,7 +83,7 @@ function History({ item }: { item: PlanItem }) {
   return (
     <div className="flex flex-col gap-2">
       {versions.length > 0 && (
-        <ol className="flex flex-col gap-1 text-[15px]">
+        <ol className="flex flex-col gap-1 text-base">
           {versions.map((v, n) => (
             <li key={v.version} data-testid="plan-history-version" className="tnum">
               {versionLine(v, versions[n - 1])}
@@ -92,12 +92,12 @@ function History({ item }: { item: PlanItem }) {
         </ol>
       )}
       {older > 0 && (
-        <p data-testid="plan-tracker-older" className="text-[15px] text-text2">
+        <p data-testid="plan-tracker-older" className="text-base text-text2">
           {older} earlier tracker {older === 1 ? "update isn't" : "updates aren't"} shown.
         </p>
       )}
       {events.length > 0 && (
-        <ol aria-label="Tracker history" className="flex flex-col gap-1 text-[15px]">
+        <ol aria-label="Tracker history" className="flex flex-col gap-1 text-base">
           {events.map((e) => (
             <li
               key={`${e.record_id}|${e.observed_at}|${e.changes.map((c) => c.field).join()}`}
@@ -182,7 +182,7 @@ function DateLine({ item, onChanged }: { item: PlanItem; onChanged?: () => void 
         : null;
   return (
     <InspectorSection label="Date" testId="plan-date">
-      <div className="flex flex-col gap-2 text-[15px]">
+      <div className="flex flex-col gap-2 text-base">
         {date_status === 'withdrawn' ? (
           <p>
             <s className="tnum">{day}</s>{' '}
@@ -260,14 +260,14 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
   }
   return (
     <div className="flex flex-col gap-2">
-      {records.length === 0 && <span className="text-[15px] text-text2">No tracker issue</span>}
+      {records.length === 0 && <span className="text-base text-text2">No tracker issue</span>}
       {records.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {records.map((r) => (
             <li
               key={`${r.tracker}|${r.external_ref}`}
               data-testid="plan-record"
-              className="flex min-w-0 items-center gap-2 text-[15px]"
+              className="flex min-w-0 items-center gap-2 text-base"
             >
               <span className="tnum min-w-0 flex-1 break-words">
                 {r.url ? (
@@ -431,7 +431,7 @@ function AlertCard({
       data-testid="plan-alert"
       data-kind={a.kind}
       data-state={a.state}
-      className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]"
+      className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-base"
     >
       <span data-testid="plan-alert-detail">{alertSentence(a)}</span>
       {a.state === 'kept' && (
@@ -448,7 +448,7 @@ function AlertCard({
             void run(() => keepTrackAlert(a.id, note.trim() || null));
           }}
         >
-          <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+          <label htmlFor={fieldId} className="text-sm leading-4 font-semibold text-text2">
             Note (optional)
           </label>
           <input
@@ -623,7 +623,7 @@ function RecordDecision({ item }: { item: PlanItem }) {
   return (
     <InspectorSection label="Decisions" testId="plan-decisions">
       {decided.length > 0 && (
-        <ul className="mb-2 space-y-1.5 text-[15px]" data-testid="plan-decided">
+        <ul className="mb-2 space-y-1.5 text-base" data-testid="plan-decided">
           {decided.map((d) => (
             <li key={d.id}>
               {d.title}
@@ -633,7 +633,7 @@ function RecordDecision({ item }: { item: PlanItem }) {
         </ul>
       )}
       {can('create_decision') && (
-        <p className="flex flex-wrap gap-3 text-[15px]">
+        <p className="flex flex-wrap gap-3 text-base">
           <Link
             href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`}
             className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline"
@@ -666,11 +666,11 @@ function SpecLine({ item }: { item: PlanItem }) {
   return (
     <InspectorSection label="Engineering spec" testId="plan-spec">
       {q.error ? (
-        <span className="text-[15px] text-text2">{q.error}</span>
+        <span className="text-base text-text2">{q.error}</span>
       ) : !q.data ? (
         <span className="text-text2">…</span>
       ) : spec && state ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[15px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-base">
           <Chip kind={state.kind} dot>
             {state.label}
           </Chip>
@@ -678,7 +678,7 @@ function SpecLine({ item }: { item: PlanItem }) {
           <LinkButton href={specHref(spec)}>Open</LinkButton>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2 text-[15px]">
+        <div className="flex flex-wrap items-center gap-2 text-base">
           <span className="flex-1 text-text2">No engineering spec yet</span>
           {can('create_spec_request') && (
             <Button onClick={() => setOpen(true)}>Request spec</Button>
@@ -716,7 +716,7 @@ function DriftCard({ d, onChanged }: { d: PlanDrift; onChanged?: () => Promise<v
       data-testid="plan-drift-card"
       data-kind={d.kind}
       data-state={d.status}
-      className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]"
+      className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-base"
     >
       <span>
         <Chip kind={d.status === 'waived' ? 'na' : d.severity === 'high' ? 'crit' : 'warn'} wrap>
@@ -805,20 +805,17 @@ export function PlanInspector({
         <div className="flex flex-col gap-2">
           <AlertCards item={item} onChanged={onChanged} links={links} />
           {item.reasons.map((r, n) => (
-            <div
-              key={n}
-              className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]"
-            >
+            <div key={n} className="rounded-lg border border-line bg-surface2 px-3 py-2 text-base">
               {r.detail}
             </div>
           ))}
           {item.next.action ? (
             // qa-plan-29: who takes the decision, in one sentence ("Owners decide on the slip").
-            <p data-testid="plan-why-next" className="text-[15px] font-semibold">
+            <p data-testid="plan-why-next" className="text-base font-semibold">
               {nextSentence(item.next, me)}
             </p>
           ) : (
-            item.reasons.length === 0 && <p className="text-[15px] text-text2">Nothing to decide</p>
+            item.reasons.length === 0 && <p className="text-base text-text2">Nothing to decide</p>
           )}
         </div>
       </InspectorSection>
@@ -842,7 +839,7 @@ export function PlanInspector({
             {served.map((g) => {
               const p = assess(g, history.get(g.id));
               return (
-                <li key={g.id} className="flex min-w-0 items-center gap-2 text-[15px]">
+                <li key={g.id} className="flex min-w-0 items-center gap-2 text-base">
                   <span className="flex min-w-0 flex-1">
                     <CodeChip kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} />
                   </span>
@@ -865,7 +862,7 @@ export function PlanInspector({
               href={record.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-10 items-center rounded-button border border-line-strong px-3.5 text-[15px] font-semibold hover:bg-surface2"
+              className="inline-flex h-10 items-center rounded-button border border-line-strong px-3.5 text-base font-semibold hover:bg-surface2"
             >
               Tracker ↗
             </a>

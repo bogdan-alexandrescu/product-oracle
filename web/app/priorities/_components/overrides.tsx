@@ -93,7 +93,7 @@ export function RadioSwitch<V extends string>({
             data-value={m.value}
             data-testid={testIdPrefix ? `${testIdPrefix}-${m.value}` : undefined}
             onClick={() => onChange(m.value)}
-            className={`flex h-9 items-center border-r border-line px-3.5 text-[15px] font-medium whitespace-nowrap last:border-r-0 max-[600px]:px-2.5 max-[600px]:text-sm ${
+            className={`flex h-9 items-center border-r border-line px-3.5 text-base font-medium whitespace-nowrap last:border-r-0 max-[600px]:px-2.5 max-[600px]:text-sm ${
               on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
             }`}
           >
@@ -116,7 +116,7 @@ export function EvidenceChip({ e }: { e: Schemas['EvidenceChip'] }) {
     <span
       data-testid="evidence-chip"
       title={[title, kind, date].filter(Boolean).join(' · ')}
-      className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-goal border border-line px-2 py-0.5 text-[13px]"
+      className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-goal border border-line px-2 py-0.5 text-sm"
     >
       <span className="min-w-0 truncate font-medium">{title}</span>
       {kind && <span className="flex-none text-text2">{kind}</span>}
@@ -360,7 +360,7 @@ function MenuItem({ children, onClick }: { children: ReactNode; onClick: () => v
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="min-h-10 px-3 text-left text-[15px] hover:bg-surface2"
+      className="min-h-10 px-3 text-left text-base hover:bg-surface2"
     >
       {children}
     </button>
@@ -392,7 +392,7 @@ function PushbackView({ p, name }: { p: PushbackOut; name: NameOf }) {
           data-testid="pushback-reason"
           className="rounded-button border border-line px-3 py-2"
         >
-          <h4 className="text-[13px] font-semibold text-text2">About your reason</h4>
+          <h4 className="text-sm font-semibold text-text2">About your reason</h4>
           <p className="mt-1">{reason.message}</p>
           {reason.evidence && reason.evidence.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -486,7 +486,7 @@ export function OverrideSheet({
 
   const body = (
     <div
-      className={`flex flex-col gap-3 text-[15px] ${phone ? 'mx-auto w-full max-w-[640px] px-4 py-3' : ''}`}
+      className={`flex flex-col gap-3 text-base ${phone ? 'mx-auto w-full max-w-[640px] px-4 py-3' : ''}`}
     >
       {pushback ? (
         <>
@@ -521,7 +521,7 @@ export function OverrideSheet({
               {!draft.above && (
                 <>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[13px] font-semibold text-text2">Find a feature</span>
+                    <span className="text-sm font-semibold text-text2">Find a feature</span>
                     <input
                       className={INPUT}
                       value={find}
@@ -551,7 +551,7 @@ export function OverrideSheet({
             </div>
           ) : (
             <label className="flex flex-col gap-1">
-              <span className="text-[13px] font-semibold text-text2">Rank</span>
+              <span className="text-sm font-semibold text-text2">Rank</span>
               <input
                 type="number"
                 min={1}
@@ -563,7 +563,7 @@ export function OverrideSheet({
             </label>
           )}
           <label className="flex flex-col gap-1">
-            <span className="text-[13px] font-semibold text-text2">Why?</span>
+            <span className="text-sm font-semibold text-text2">Why?</span>
             <textarea
               className={INPUT}
               rows={3}
@@ -576,11 +576,11 @@ export function OverrideSheet({
           </label>
           {evidence.length > 0 && (
             <fieldset className="flex flex-col gap-1.5 rounded-button border border-line px-3 py-2">
-              <legend className="px-1 text-[13px] font-semibold text-text2">
+              <legend className="px-1 text-sm font-semibold text-text2">
                 Cite evidence (optional)
               </legend>
               {/* Never "0 of 5" over one item: how many may be picked, then how many are (qa-plan-16). */}
-              <p className="tnum text-[13px] text-text2" data-testid="cited-count">
+              <p className="tnum text-sm text-text2" data-testid="cited-count">
                 {cited.length === 0
                   ? `Pick up to ${MAX_CITED}`
                   : `${cited.length} picked, up to ${MAX_CITED}`}

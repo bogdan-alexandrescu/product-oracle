@@ -60,8 +60,8 @@ export function SheetHandle({ sheetRef }: { sheetRef: { current: SheetApi | null
 const MAX_OPTIONS = 6;
 /** ec1-b-mid: the frames' field and label. */
 const FIELD =
-  'w-full rounded-xl border border-line bg-surface px-3 py-2 text-[16px] leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30';
-const LABEL = 'text-[14px] font-semibold text-text2';
+  'w-full rounded-xl border border-line bg-surface px-3 py-2 text-base leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30';
+const LABEL = 'text-sm font-semibold text-text2';
 const REASSIGNED = 'Reassigned in Simple';
 
 /** "Dec 7, 2026". */
@@ -790,7 +790,7 @@ function EditFields({
         {rows.length < MAX_OPTIONS && (
           <button
             type="button"
-            className="self-start text-[15px] font-[650] text-accent-ink hover:underline"
+            className="self-start text-base font-[650] text-accent-ink hover:underline"
             onClick={() => set({ options: [...rows, ''] })}
           >
             + Add an {one}

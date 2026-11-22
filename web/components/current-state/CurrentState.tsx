@@ -88,7 +88,7 @@ export function FeaturePill({
       data-testid="cs-mark"
       data-mark={mark}
       title={words ?? MARK_WORD[mark]}
-      className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${TONE[mark]}`}
+      className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-xs font-semibold uppercase tracking-wide ${TONE[mark]}`}
     >
       {words ?? pillWord(mark, compact)}
     </span>
@@ -153,7 +153,7 @@ function MarkCard({ f }: { f: FeatureState }) {
       role="dialog"
       aria-label={`${f.title}: ${MARK_WORD[f.mark]}`}
       onClick={(e) => e.stopPropagation()}
-      className="absolute left-0 top-full z-30 mt-2 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-4 text-left text-[14px] font-normal normal-case tracking-normal text-text shadow-xl"
+      className="absolute left-0 top-full z-30 mt-2 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-4 text-left text-sm font-normal normal-case tracking-normal text-text shadow-xl"
       data-testid="cs-mark-card"
     >
       <div className="mb-2 flex items-center gap-2">
@@ -175,7 +175,7 @@ function MarkCard({ f }: { f: FeatureState }) {
         </ul>
       )}
       {!exists && (
-        <p className="mt-3 text-[13px] text-text2">
+        <p className="mt-3 text-sm text-text2">
           It moves to Running today once it ships and its proof is in.
         </p>
       )}
@@ -269,7 +269,7 @@ export function StateTabs({
           role="tab"
           aria-selected={view === t.k}
           title={t.tip}
-          className={`-mb-px border-b-2 px-3 py-2 text-[14px] ${view === t.k ? 'border-accent font-semibold text-text' : 'border-transparent text-text2'}`}
+          className={`-mb-px border-b-2 px-3 py-2 text-sm ${view === t.k ? 'border-accent font-semibold text-text' : 'border-transparent text-text2'}`}
         >
           {t.label} {t.n !== null && <span className="tabular-nums text-text2">{t.n}</span>}
         </Link>
@@ -321,10 +321,10 @@ function Glyph({ old }: { old?: boolean }) {
 }
 
 function ProofWords({ f, wide = true }: { f: FeatureState; wide?: boolean }) {
-  if (f.no_proof_yet) return <span className="text-[13px] text-text2">No proof yet</span>;
+  if (f.no_proof_yet) return <span className="text-sm text-text2">No proof yet</span>;
   const tasks = proof(f, 'tasks');
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-text2">
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
       <span title="Code map">{proof(f, 'code_map')?.count ?? 0} files</span>
       <span title="Merged pull requests">
         {proof(f, 'pull_requests')?.count ?? 0} pull requests
@@ -345,7 +345,7 @@ function Line({ ok, children }: { ok: boolean | null; children: ReactNode }) {
   return (
     <li className="flex items-start gap-2" data-ok={ok === null ? '' : String(ok)}>
       <span
-        className={`mt-0.5 inline-flex h-4 w-4 flex-none items-center justify-center rounded-full text-[11px] font-bold ${ok === true ? 'bg-pass text-surface' : ok === false ? 'bg-warn text-surface' : 'border border-line-strong'}`}
+        className={`mt-0.5 inline-flex h-4 w-4 flex-none items-center justify-center rounded-full text-xs font-bold ${ok === true ? 'bg-pass text-surface' : ok === false ? 'bg-warn text-surface' : 'border border-line-strong'}`}
       >
         {ok === true ? '✓' : ok === false ? '!' : ''}
       </span>
@@ -431,7 +431,7 @@ export function ProofTable({
     >
       {!phone && (
         <div
-          className={`${grid} border-b border-line bg-surface2 px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-text2`}
+          className={`${grid} border-b border-line bg-surface2 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-text2`}
         >
           <span>Feature</span>
           <span>Shipped</span>
@@ -440,7 +440,7 @@ export function ProofTable({
         </div>
       )}
       {rows.length === 0 && (
-        <p className="px-4 py-3 text-[14px] text-text2">
+        <p className="px-4 py-3 text-sm text-text2">
           Nothing runs today yet: a feature lands here once its proof is in and you say yes.
         </p>
       )}
@@ -466,32 +466,29 @@ export function ProofTable({
                 <Glyph old={old} />
                 {featureName(f)}
               </span>
-              <span className="text-[13px] text-text2">
+              <span className="text-sm text-text2">
                 {f.shipped_at ? day(f.shipped_at, true) : '—'}
               </span>
               <ProofWords f={f} wide={!phone} />
               <span className="flex flex-wrap items-center gap-2">
                 {movedNow(f) && !confirmed ? (
-                  <span className="text-[13px] font-semibold text-pass" data-testid="cs-moved-note">
+                  <span className="text-sm font-semibold text-pass" data-testid="cs-moved-note">
                     {movedNote(f, (iso) => day(iso))}
                   </span>
                 ) : isOpen && checking ? (
-                  <span className="text-[13px] text-accent-ink">Checking now…</span>
+                  <span className="text-sm text-accent-ink">Checking now…</span>
                 ) : confirmed && f.checked_at ? (
-                  <span
-                    className="text-[13px] font-semibold text-pass"
-                    data-testid="cs-confirmed-note"
-                  >
+                  <span className="text-sm font-semibold text-pass" data-testid="cs-confirmed-note">
                     Checked {day(f.checked_at)} · you confirmed
                   </span>
                 ) : old ? (
-                  <span className="whitespace-nowrap rounded-full bg-warn-bg px-2 py-0.5 text-[13px] font-semibold text-warn">
+                  <span className="whitespace-nowrap rounded-full bg-warn-bg px-2 py-0.5 text-sm font-semibold text-warn">
                     Proof is {f.proof_days} days old
                   </span>
                 ) : f.no_proof_yet ? (
-                  <span className="whitespace-nowrap text-[13px] text-text2">No proof yet</span>
+                  <span className="whitespace-nowrap text-sm text-text2">No proof yet</span>
                 ) : (
-                  <span className="whitespace-nowrap text-[13px] text-text2">
+                  <span className="whitespace-nowrap text-sm text-text2">
                     {f.checked_at ? `Checked ${day(f.checked_at)}` : 'Not checked yet'}
                   </span>
                 )}
@@ -504,7 +501,7 @@ export function ProofTable({
             </div>
             {isOpen && (
               <div
-                className="mx-4 mb-3 rounded-lg border border-line bg-surface p-3 text-[14px]"
+                className="mx-4 mb-3 rounded-lg border border-line bg-surface p-3 text-sm"
                 data-testid="cs1-check"
               >
                 <p className="mb-2 font-semibold">Is {featureName(f)} still true today?</p>
@@ -522,7 +519,7 @@ export function ProofTable({
                       : ''}
                   </Line>
                 </ul>
-                {error && <p className="mb-2 text-[13px] text-fail">{error}</p>}
+                {error && <p className="mb-2 text-sm text-fail">{error}</p>}
                 <div className="flex flex-wrap gap-2">
                   {ANSWERS.map((a) => (
                     <Button
@@ -629,7 +626,7 @@ export function DesiredList({ data }: { data: FeatureStates }) {
               data-testid="cs-mark"
               data-mark={f.mark}
               title={MARK_WORD[f.mark]}
-              className={`inline-flex flex-none items-center gap-1 whitespace-nowrap text-[12px] font-semibold ${f.mark === 'new' ? 'text-accent-ink' : f.mark === 'exists' ? 'text-pass' : 'text-warn'}`}
+              className={`inline-flex flex-none items-center gap-1 whitespace-nowrap text-xs font-semibold ${f.mark === 'new' ? 'text-accent-ink' : f.mark === 'exists' ? 'text-pass' : 'text-warn'}`}
             >
               <MarkGlyph mark={f.mark} />
               <span className={phone ? 'sr-only' : ''}>{MARK_WORD[f.mark]}</span>
@@ -637,20 +634,18 @@ export function DesiredList({ data }: { data: FeatureStates }) {
             <span className="min-w-[10rem] flex-1 font-medium">{featureName(f)}</span>
             {!phone && (
               <span
-                className="w-[200px] flex-none text-[13px] text-text2"
+                className="w-[200px] flex-none text-sm text-text2"
                 data-testid="cs-desired-area"
               >
                 {f.area ?? ''}
               </span>
             )}
             {!phone && (
-              <span className="w-[140px] flex-none text-[13px] text-text2">
-                {f.milestone ?? ''}
-              </span>
+              <span className="w-[140px] flex-none text-sm text-text2">{f.milestone ?? ''}</span>
             )}
             {/* A fixed width off a phone, so every row's columns line up (D-5). */}
             <span
-              className={`text-[13px] ${phone ? '' : 'w-[130px] flex-none'} ${f.ready ? 'font-semibold text-pass' : 'text-text2'}`}
+              className={`text-sm ${phone ? '' : 'w-[130px] flex-none'} ${f.ready ? 'font-semibold text-pass' : 'text-text2'}`}
               data-testid="cs-desired-progress"
             >
               {f.ready
@@ -666,7 +661,7 @@ export function DesiredList({ data }: { data: FeatureStates }) {
         <button
           type="button"
           onClick={() => setAll(true)}
-          className="block w-full px-4 py-2 text-left text-[13px] text-text2 hover:text-text"
+          className="block w-full px-4 py-2 text-left text-sm text-text2 hover:text-text"
         >
           and {rows.length - shown.length} more
         </button>
@@ -684,7 +679,7 @@ export function StillDesired({ data }: { data: FeatureStates }) {
       className="mt-4 rounded-xl border border-line bg-surface p-3"
       data-testid="cs-still-desired"
     >
-      <p className="mb-2 text-[13px] font-semibold text-text2">
+      <p className="mb-2 text-sm font-semibold text-text2">
         Still to build: {data.in_progress} in progress, {data.new} new
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -693,7 +688,7 @@ export function StillDesired({ data }: { data: FeatureStates }) {
             key={f.feature_id}
             data-mark={f.mark}
             title={MARK_WORD[f.mark]}
-            className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[12px]"
+            className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs"
             data-testid="cs-still-chip"
           >
             <MarkGlyph mark={f.mark} size={11} />
@@ -709,7 +704,7 @@ export function StillDesired({ data }: { data: FeatureStates }) {
 /** The top of Running today: how many run, how many have old proof, how many are being built. */
 export function CurrentSummary({ data }: { data: FeatureStates }) {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 text-[14px]" data-testid="cs-summary">
+    <div className="mb-3 flex flex-wrap items-center gap-3 text-sm" data-testid="cs-summary">
       <span>
         <b>{data.running}</b> running
       </span>
@@ -768,7 +763,7 @@ export function ReadyBand({
     <>
       <div
         data-testid="cs3-ready"
-        className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-pass-bg px-4 py-2.5 text-[14px]"
+        className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-pass-bg px-4 py-2.5 text-sm"
       >
         {/* One inline run, so it never breaks between the count and its words (P-2). */}
         <span
@@ -790,7 +785,7 @@ export function ReadyBand({
               type="button"
               data-testid="cs3-ready-chip"
               onClick={() => setOpen(f)}
-              className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${open?.feature_id === f.feature_id ? 'ring-2 ring-accent' : ''}`}
+              className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-sm ${open?.feature_id === f.feature_id ? 'ring-2 ring-accent' : ''}`}
             >
               {featureName(f)}
             </button>
@@ -810,11 +805,11 @@ export function ReadyBand({
             onClick={(e) => e.stopPropagation()}
             className="w-[520px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl"
           >
-            <h2 className="mb-1 text-[18px] font-semibold">
+            <h2 className="mb-1 text-lg font-semibold">
               Move {featureName(open)} to Running today?
             </h2>
-            <p className="mb-3 text-[14px] text-text2">Oracle found proof that it runs today:</p>
-            <ul className="mb-4 space-y-1.5 text-[14px]">
+            <p className="mb-3 text-sm text-text2">Oracle found proof that it runs today:</p>
+            <ul className="mb-4 space-y-1.5 text-sm">
               <Line ok>Code map: {proof(open, 'code_map')?.count ?? 0} files</Line>
               <Line ok>{proof(open, 'pull_requests')?.count ?? 0} pull requests merged</Line>
               <Line ok>
@@ -823,7 +818,7 @@ export function ReadyBand({
               </Line>
               <Line ok>{proof(open, 'measured')?.value}</Line>
             </ul>
-            {error && <p className="mb-2 text-[13px] text-fail">{error}</p>}
+            {error && <p className="mb-2 text-sm text-fail">{error}</p>}
             {data.can_move ? (
               <div className="flex flex-wrap justify-end gap-2">
                 <Button
@@ -842,7 +837,7 @@ export function ReadyBand({
                 </Button>
               </div>
             ) : (
-              <p className="text-[13px] text-text2">An approver or owner says yes to each move.</p>
+              <p className="text-sm text-text2">An approver or owner says yes to each move.</p>
             )}
           </div>
         </div>
@@ -883,7 +878,7 @@ export function CurrentStateView({
         all={q.data?.features.length ?? null}
         running={q.data?.running ?? null}
       />
-      {q.error && <p className="text-[14px] text-fail">{q.error}</p>}
+      {q.error && <p className="text-sm text-fail">{q.error}</p>}
       {q.data && (
         <>
           <CurrentSummary data={q.data} />

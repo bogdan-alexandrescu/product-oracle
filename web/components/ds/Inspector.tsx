@@ -82,7 +82,7 @@ export function Inspector({
         className={`flex-none bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4 ${tone === 'card' ? CARD_HEAD : ''}`}
       >
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+          <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
             {eyebrow}
           </span>
           <span className="flex items-center gap-3">
@@ -91,7 +91,7 @@ export function Inspector({
           </span>
         </div>
         {title && (
-          <h2 className="mt-1.5 mb-2.5 font-display text-[22px] leading-[27px] font-bold tracking-heading break-words">
+          <h2 className="mt-1.5 mb-2.5 font-display text-xl leading-[27px] font-bold tracking-heading break-words">
             {title}
           </h2>
         )}
@@ -108,7 +108,7 @@ export function Inspector({
                 data-testid={s.testId}
                 className="flex flex-auto flex-col-reverse justify-end border-r border-b border-line pt-3.5 pr-3 pb-3 pl-5 max-[600px]:pl-4"
               >
-                <dt className="mt-0.5 flex items-center gap-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
+                <dt className="mt-0.5 flex items-center gap-1.5 text-sm leading-4 font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
                   <span>{s.label}</span>
                   {s.extra}
                 </dt>
@@ -133,7 +133,7 @@ export function Inspector({
                 (i + 1) % cols !== 0 && i !== stats.length - 1 ? 'border-r border-line' : ''
               } ${i >= cols ? 'border-t border-line' : ''}`}
             >
-              <dt className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+              <dt className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
                 {/* qa-shell-17: a stat's label wraps, never cut short. */}
                 <span className="min-w-0 break-words">{s.label}</span>
                 {s.extra}
@@ -166,7 +166,7 @@ export function InspectorSection({
       className="border-b border-line px-5 py-3.5 last:border-b-0 max-[600px]:px-4 max-[600px]:py-3"
     >
       {label && (
-        <div className="mb-2.5 flex items-center gap-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        <div className="mb-2.5 flex items-center gap-2 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
           {label}
           {tools && <span className="ml-auto flex items-center gap-2">{tools}</span>}
         </div>

@@ -452,7 +452,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                           />
                           <label className="flex min-w-0 flex-1 flex-col gap-1.5">
                             <span
-                              className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                              className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
                               title={c.hint}
                             >
                               {c.label}
@@ -473,7 +473,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                           <p
                             id={`colour-${c.name}-problem`}
                             data-testid={`colour-${c.name}-problem`}
-                            className="text-[13px] leading-[18px] text-crit"
+                            className="text-sm leading-[18px] text-crit"
                           >
                             {malformed}
                           </p>
@@ -495,7 +495,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                         <span className="flex items-center gap-1.5">
                           <label
                             htmlFor={`font-${f.name}`}
-                            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                            className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
                           >
                             {f.label}
                           </label>
@@ -543,7 +543,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                           <p
                             id={`font-${f.name}-hint`}
                             data-testid={`font-${f.name}-hint`}
-                            className="text-[13px] leading-[18px] text-crit"
+                            className="text-sm leading-[18px] text-crit"
                           >
                             {malformed}
                           </p>
@@ -555,7 +555,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                           <div className="mt-2 flex flex-col gap-1.5">
                             <label
                               htmlFor={`font-${f.name}-stack`}
-                              className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                              className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
                             >
                               {`${f.label} fallbacks (CSS)`}
                             </label>
@@ -631,7 +631,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               </Group>
 
               <Group title="Features">
-                <div className="grid gap-2 text-[15px] sm:grid-cols-2">
+                <div className="grid gap-2 text-base sm:grid-cols-2">
                   {FEATURES.map((f) => (
                     <label key={f.name} className="inline-flex items-center gap-2">
                       <input
@@ -692,7 +692,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                 {t.builtin ? (
                   <p
                     data-testid="slide-css-builtin"
-                    className="flex items-center gap-2 text-[15px] text-text2"
+                    className="flex items-center gap-2 text-base text-text2"
                   >
                     Built-in themes keep their own slide design.
                     <InfoTip label="built-in theme design" align="start">

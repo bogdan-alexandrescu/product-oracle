@@ -55,7 +55,7 @@ export function RequestsBehind({
   if (requests.data && items.length === 0) return null;
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-2 text-[15px] font-semibold text-text">
+      <legend className="mb-2 text-base font-semibold text-text">
         Requests behind it <span className="font-normal text-text2">Optional</span>
       </legend>
       {requests.error && <ErrorNote>{requests.error}</ErrorNote>}

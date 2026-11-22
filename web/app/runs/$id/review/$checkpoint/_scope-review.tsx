@@ -573,7 +573,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           >
             <div
               role="row"
-              className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-[13px] font-semibold text-text2 max-[600px]:hidden`}
+              className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-sm font-semibold text-text2 max-[600px]:hidden`}
             >
               <span role="columnheader" aria-label="Requirements" />
               <span role="columnheader">#</span>
@@ -1079,7 +1079,7 @@ function RawFile({
           ]}
         />
         <pre
-          className="max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap break-words"
+          className="max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-sm whitespace-pre-wrap break-words"
           data-testid="raw-file-content"
         >
           {content}

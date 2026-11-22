@@ -157,7 +157,7 @@ function ThemeInspector({ t }: { t: Theme }) {
       </InspectorSection>
       {t.description && (
         <InspectorSection label="Description">
-          <p className="text-[15px] text-text">{t.description}</p>
+          <p className="text-base text-text">{t.description}</p>
         </InspectorSection>
       )}
     </Inspector>

@@ -17,7 +17,7 @@ export function NoReportYet({
     <div
       data-testid={testId}
       data-report-empty
-      className="flex flex-col items-center gap-3 px-4 py-8 text-center text-[15px] text-text2"
+      className="flex flex-col items-center gap-3 px-4 py-8 text-center text-base text-text2"
     >
       <p>
         No report yet.

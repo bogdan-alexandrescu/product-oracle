@@ -2646,7 +2646,7 @@ function ValueEffort({
             </svg>
             <span
               aria-hidden
-              className="pointer-events-none absolute top-1/2 whitespace-nowrap text-[14px] leading-5 text-text2"
+              className="pointer-events-none absolute top-1/2 whitespace-nowrap text-sm leading-5 text-text2"
               style={{ left: -32, transform: 'translate(-50%, -50%) rotate(-90deg)' }}
             >
               Goal value ↑
@@ -2656,7 +2656,7 @@ function ValueEffort({
                 key={v}
                 data-testid="vxe-value-tick"
                 aria-hidden
-                className="pointer-events-none absolute right-[calc(100%+6px)] -translate-y-1/2 text-[12px] leading-4 tabular-nums text-text2"
+                className="pointer-events-none absolute right-[calc(100%+6px)] -translate-y-1/2 text-xs leading-4 tabular-nums text-text2"
                 style={{ top: `${yPct(v)}%` }}
               >
                 {v}
@@ -2678,7 +2678,7 @@ function ValueEffort({
               <span
                 data-testid="vxe-middle-effort"
                 aria-hidden
-                className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink"
+                className="pointer-events-none absolute whitespace-nowrap text-xs font-semibold leading-4 text-accent-ink"
                 style={effortLabel.style}
               >
                 middle effort
@@ -2688,7 +2688,7 @@ function ValueEffort({
               <span
                 data-testid="vxe-middle-value"
                 aria-hidden
-                className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink"
+                className="pointer-events-none absolute whitespace-nowrap text-xs font-semibold leading-4 text-accent-ink"
                 style={valueLabel.style}
               >
                 middle value
@@ -2704,7 +2704,7 @@ function ValueEffort({
                   e.stopPropagation();
                   setQuad(quad === k ? null : k);
                 }}
-                className={`absolute z-10 whitespace-nowrap rounded px-1 text-[15px] font-[650] leading-5 hover:underline ${quad === k ? 'bg-accent-soft text-accent-ink' : 'bg-surface text-text-faint'} ${q.at}`}
+                className={`absolute z-10 whitespace-nowrap rounded px-1 text-base font-[650] leading-5 hover:underline ${quad === k ? 'bg-accent-soft text-accent-ink' : 'bg-surface text-text-faint'} ${q.at}`}
               >
                 {q.name} · {counts[k]}
               </button>
@@ -2781,7 +2781,7 @@ function ValueEffort({
                   <span
                     data-testid="vxe-name"
                     aria-hidden
-                    className={`pointer-events-none absolute ${onRight ? 'right-0' : 'left-0'} ${tagAbove ? 'bottom-full mb-1' : 'top-full mt-1'} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? 'block' : 'hidden'}`}
+                    className={`pointer-events-none absolute ${onRight ? 'right-0' : 'left-0'} ${tagAbove ? 'bottom-full mb-1' : 'top-full mt-1'} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-sm font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? 'block' : 'hidden'}`}
                     style={{ maxWidth: tagRoom }}
                   >
                     #{r.rank} {r.own_key ? `${r.own_key} · ${r.title}` : r.title}
@@ -2810,7 +2810,7 @@ function ValueEffort({
               <span
                 data-testid="vxe-drag-readout"
                 role="status"
-                className="pointer-events-none absolute z-30 -translate-x-1/2 whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold text-bg"
+                className="pointer-events-none absolute z-30 -translate-x-1/2 whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-sm font-semibold text-bg"
                 style={{
                   left: (spots.get(dragRow.feature_id)?.[0] ?? 0) + drag.dx,
                   top: (spots.get(dragRow.feature_id)?.[1] ?? 0) + drag.dy - 44,
@@ -2831,14 +2831,14 @@ function ValueEffort({
               <span
                 key={t}
                 data-testid="vxe-tick"
-                className="absolute top-[4px] -translate-x-1/2 whitespace-nowrap text-[12px] leading-4 tabular-nums text-text2"
+                className="absolute top-[4px] -translate-x-1/2 whitespace-nowrap text-xs leading-4 tabular-nums text-text2"
                 style={{ left: `${xPct(t)}%` }}
               >
                 {t}
               </span>
             ))}
           </div>
-          <p className="text-center text-[14px] leading-[18px] text-text2">
+          <p className="text-center text-sm leading-[18px] text-text2">
             Effort (engineer-weeks, log scale) →
           </p>
         </div>
@@ -2855,7 +2855,7 @@ function ValueEffort({
           }}
         />
         <ul
-          className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2"
+          className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-base leading-[22px] text-text2"
           aria-label="Legend"
         >
           {[...shapes.entries()].map(([k, s]) => (
@@ -2888,7 +2888,7 @@ function ValueEffort({
         </ul>
       </section>
       <section aria-label="Ranked side list" className="min-w-0">
-        <h2 className="mb-2 text-[21px] font-[650] leading-7">Ranked</h2>
+        <h2 className="mb-2 text-xl font-[650] leading-7">Ranked</h2>
         <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
           {listed.flatMap((r, i) => {
@@ -2908,7 +2908,7 @@ function ValueEffort({
                 data-misses={r.above_line ? undefined : 'true'}
                 data-moved={words ? 'true' : undefined}
                 data-selected={isSelected ? 'true' : undefined}
-                className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? 'border-accent bg-accent-soft ring-2 ring-accent' : words ? 'border-accent ring-2 ring-accent' : 'border-line'} ${isSelected ? '' : r.above_line ? 'bg-surface' : 'bg-surface2 text-text2'}`}
+                className={`scroll-my-4 rounded-lg border text-base leading-[22px] ${isSelected ? 'border-accent bg-accent-soft ring-2 ring-accent' : words ? 'border-accent ring-2 ring-accent' : 'border-line'} ${isSelected ? '' : r.above_line ? 'bg-surface' : 'bg-surface2 text-text2'}`}
               >
                 <button
                   type="button"
@@ -2929,7 +2929,7 @@ function ValueEffort({
                   {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
                   {r.own_key && (
                     <span
-                      className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text"
+                      className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-sm font-semibold tabular-nums text-text"
                       data-testid="side-code"
                       title={`${r.own_key} ${r.title}`}
                     >
@@ -2950,7 +2950,7 @@ function ValueEffort({
                     <span
                       data-testid="side-held"
                       title={`After ${heldKey(r) ? `${heldKey(r)} ` : ''}${r.after.title}, which it needs`}
-                      className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2"
+                      className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-xs leading-[18px] text-text2"
                     >
                       after
                       <span className="sr-only">
@@ -2964,7 +2964,7 @@ function ValueEffort({
                       <span
                         data-testid="side-ghost"
                         title="Oracle's rank"
-                        className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-1.5 text-[12px] leading-[18px] text-text2"
+                        className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-1.5 text-xs leading-[18px] text-text2"
                       >
                         Oracle #{r.oracle_rank}
                       </span>
@@ -2978,7 +2978,7 @@ function ValueEffort({
                 {isSelected && r.after && (
                   <span
                     data-testid="side-after"
-                    className="block truncate px-2 pl-[34px] text-[13px] text-text2"
+                    className="block truncate px-2 pl-[34px] text-sm text-text2"
                   >
                     after <Named item={{ code: heldKey(r), title: r.after.title }} />
                   </span>
@@ -2986,7 +2986,7 @@ function ValueEffort({
                 {isSelected && (
                   <span
                     data-testid="side-numbers"
-                    className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text"
+                    className="block px-2 pb-1 pl-[34px] text-sm tabular-nums text-text"
                   >
                     {r.effort == null
                       ? `goal value ${fmt(r.goal_value)} · PM-owned, no score`
@@ -3056,9 +3056,9 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   const offered = data.lines ?? [];
   const value = current.kind === 'date' ? 'picked' : current.key;
   // B's box: 32 px high, as wide as the line it shows (not its longest option), a chevron of its own.
-  const field = 'h-8 rounded-lg border border-line-strong bg-surface px-2 text-[15px] text-text';
+  const field = 'h-8 rounded-lg border border-line-strong bg-surface px-2 text-base text-text';
   return (
-    <div className="flex flex-wrap items-center gap-2 text-[15px]" data-testid="line-picker">
+    <div className="flex flex-wrap items-center gap-2 text-base" data-testid="line-picker">
       <label htmlFor="prio-line" className="font-semibold">
         Line
       </label>
@@ -3353,7 +3353,7 @@ function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compa
       <span
         data-testid="prio-misses"
         title={`Misses ${lineWordsOf(data)}`}
-        className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2"
+        className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-xs leading-[18px] text-text2"
       >
         Misses
       </span>
@@ -3743,7 +3743,7 @@ function UndatedBuckets({
         </UndoNote>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-[15px] text-warn">
+        <p role="alert" className="mt-3 text-base text-warn">
           {error}
         </p>
       )}
@@ -3824,7 +3824,7 @@ function UndatedBuckets({
                   {/* eg1-a-rest: each goal names its owner under its heading. */}
                   {rec?.owner_name && (
                     <p className="mt-0.5">
-                      <span data-testid="goal-owner" className="text-[14px] text-text2">
+                      <span data-testid="goal-owner" className="text-sm text-text2">
                         Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
                       </span>
                     </p>
@@ -3936,7 +3936,7 @@ function UndatedBuckets({
               {over && (
                 <p
                   data-testid="drop-note"
-                  className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink"
+                  className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-base text-accent-ink"
                 >
                   Drop here: {b.title} becomes the goal it moves most
                 </p>
@@ -4242,7 +4242,7 @@ function PlanBuckets({
         </UndoNote>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-[15px] text-warn">
+        <p role="alert" className="mt-3 text-base text-warn">
           {error}
         </p>
       )}
@@ -4296,13 +4296,13 @@ function PlanBuckets({
                   {/* On a phone the count takes its own line under the heading, so the name keeps its room. */}
                   <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
-                    <h3 className="min-w-0 flex-1 text-[21px] font-[650] leading-7">
+                    <h3 className="min-w-0 flex-1 text-xl font-[650] leading-7">
                       {goalLabel(g).name}
                     </h3>
                     {code && <CodeTag code={code} />}
                     <span
                       data-testid="plan-goal-count"
-                      className={`mt-1 flex-none text-[15px] text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? 'max-sm:pl-8' : ''}`}
+                      className={`mt-1 flex-none text-base text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? 'max-sm:pl-8' : ''}`}
                     >
                       {count(n)}
                     </span>
@@ -4324,7 +4324,7 @@ function PlanBuckets({
                   {rec && (
                     <p
                       data-testid="goal-measure"
-                      className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? 'pl-8' : ''}`}
+                      className={`mt-0.5 text-base leading-5 text-text2 ${rec ? 'pl-8' : ''}`}
                     >
                       {incomplete ? (
                         <span className="text-warn">
@@ -4347,7 +4347,7 @@ function PlanBuckets({
                   )}
                   {rec?.owner_name && (
                     <p className="mt-0.5 pl-8">
-                      <span data-testid="goal-owner" className="text-[14px] text-text2">
+                      <span data-testid="goal-owner" className="text-sm text-text2">
                         Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
                       </span>
                     </p>
@@ -4372,7 +4372,7 @@ function PlanBuckets({
               {over && (
                 <p
                   data-testid="drop-note"
-                  className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink"
+                  className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-base text-accent-ink"
                 >
                   Drop here: {g} becomes the goal it moves most
                 </p>
@@ -4383,7 +4383,7 @@ function PlanBuckets({
                     type="button"
                     data-testid="goal-suggest-feature"
                     onClick={() => setPanel({ goal: state.goal, start: 'form' })}
-                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-sm font-[650] text-text hover:bg-surface2"
                   >
                     + Suggest a feature
                   </button>
@@ -4395,7 +4395,7 @@ function PlanBuckets({
                       setPanel({ goal: state.goal, start: 'oracle' });
                       void suggestions.suggest(state.goal);
                     }}
-                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default disabled:opacity-70"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-sm font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default disabled:opacity-70"
                   >
                     {state.pending ? '✦ Oracle is suggesting…' : '✦ Ask Oracle to suggest'}
                   </button>
@@ -4454,12 +4454,12 @@ function PlanBuckets({
             className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4"
           >
             <div className="flex flex-wrap items-baseline gap-x-2">
-              <h3 className="text-[21px] font-[650] leading-7">No goal</h3>
-              <span data-testid="plan-goal-count" className="ml-auto text-[15px] text-text2">
+              <h3 className="text-xl font-[650] leading-7">No goal</h3>
+              <span data-testid="plan-goal-count" className="ml-auto text-base text-text2">
                 {featureCount(plan, null)}
               </span>
             </div>
-            <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
+            <p className="mt-1 text-base text-warn">⚠ Serves no goal in the plan</p>
             <FeatureRows
               plan={plan}
               goal={null}
@@ -4477,16 +4477,14 @@ function PlanBuckets({
             data-testid="plan-outside"
             className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 col-span-full"
           >
-            <h3 className="text-[21px] font-[650] leading-7">
-              Also this quarter, outside the plan
-            </h3>
+            <h3 className="text-xl font-[650] leading-7">Also this quarter, outside the plan</h3>
             <ul className="mt-2">
               {outside.map(({ b, rows }) => (
                 <li
                   key={b.key}
                   data-testid="plan-outside-goal"
                   data-key={b.key}
-                  className="border-b border-line py-[5px] text-[16px] leading-[22px]"
+                  className="border-b border-line py-[5px] text-base leading-[22px]"
                 >
                   <span className={`font-[650] ${b.no_goal ? 'text-warn' : ''}`}>
                     {b.no_goal ? '⚠ Serves no confirmed goal' : b.title}
@@ -4805,7 +4803,7 @@ function useGoalActs({
 }
 
 const ICON_BTN =
-  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40';
+  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-base text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40';
 
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
 function archiveWords(

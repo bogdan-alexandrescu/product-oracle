@@ -222,16 +222,14 @@ export function FeaturePanel({
       onClose={onClose}
     />
   ) : !data ? (
-    <p className="p-4 text-[15px] text-text2">{roadmap.error ?? 'Loading…'}</p>
+    <p className="p-4 text-base text-text2">{roadmap.error ?? 'Loading…'}</p>
   ) : !item ? (
     <div className="p-4">
-      <h2 className="text-[18px] font-[650]">{feature.name}</h2>
-      <p className="mt-1 text-[15px] text-text2">
-        This feature is not on a roadmap you can see yet.
-      </p>
+      <h2 className="text-lg font-[650]">{feature.name}</h2>
+      <p className="mt-1 text-base text-text2">This feature is not on a roadmap you can see yet.</p>
       <button
         type="button"
-        className="mt-3 text-[15px] font-[650] text-accent-ink underline"
+        className="mt-3 text-base font-[650] text-accent-ink underline"
         onClick={onClose}
       >
         Close

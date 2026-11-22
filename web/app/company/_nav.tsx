@@ -59,7 +59,7 @@ export function CompanyNav({ action }: { action?: ReactNode }) {
               href={t.href}
               data-testid={t.testId}
               aria-current={on ? 'page' : undefined}
-              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap max-[600px]:px-2.5 ${
+              className={`flex h-8 flex-none items-center rounded-lg px-3 text-base font-medium whitespace-nowrap max-[600px]:px-2.5 ${
                 on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
               }`}
             >

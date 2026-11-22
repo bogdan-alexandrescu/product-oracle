@@ -104,7 +104,7 @@ export function ConflictsTab({
     (a, b) => order[a.status] - order[b.status] || b.created_at.localeCompare(a.created_at),
   );
   const th =
-    'h-9 bg-surface2 px-2 text-left text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4';
+    'h-9 bg-surface2 px-2 text-left text-sm leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4';
   const td = 'px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3';
 
   return (
@@ -156,7 +156,7 @@ export function ConflictsTab({
                 {formatDateTime(c.created_at)}
               </span>
             </div>
-            <table className="w-full table-fixed border-collapse text-[15px] leading-[22px]">
+            <table className="w-full table-fixed border-collapse text-base leading-[22px]">
               <colgroup>
                 <col />
                 <col className="w-[34%] max-[600px]:hidden" />

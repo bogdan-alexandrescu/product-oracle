@@ -41,7 +41,7 @@ export function WhatChanged({
 }) {
   return (
     <InspectorSection label={`What changed since ${since}`} testId="item-what-changed">
-      <ul className="flex flex-col gap-1 text-[15px]">
+      <ul className="flex flex-col gap-1 text-base">
         {change.change === 'added' && <li>New since {since}</li>}
         {change.change === 'dropped' && <li>Dropped since {since}</li>}
         {change.change === 'unchanged' && !change.notes.length && <li>No change</li>}
@@ -71,7 +71,7 @@ export function ItemHistory({ q }: { q: Query<Schemas['RoadmapItemHistoryOut'] |
   if (!history?.entries.length) return null;
   return (
     <InspectorSection label="History" testId="item-history">
-      <ol className="flex flex-col gap-1 text-[15px]">
+      <ol className="flex flex-col gap-1 text-base">
         {history.entries.map((e) => (
           <li key={e.ref}>
             {e.present

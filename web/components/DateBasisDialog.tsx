@@ -66,7 +66,7 @@ export function Field({
     <div>
       <label
         htmlFor={htmlFor}
-        className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+        className="mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
       >
         {label}
         {required && (

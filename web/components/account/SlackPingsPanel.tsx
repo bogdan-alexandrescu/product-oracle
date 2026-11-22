@@ -82,7 +82,7 @@ export function SlackPingsPanel() {
         </InfoTip>
       }
     >
-      <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
+      <div className="space-y-3 px-4 py-3 text-base max-[600px]:px-3">
         {slack.data && !slack.data.connected && (
           <Notice testId="slack-pings-off">
             {canConnect ? (
