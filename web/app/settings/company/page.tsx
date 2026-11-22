@@ -803,8 +803,8 @@ function PricingOwnerPanel() {
       ? [`${earliest} is the only owner`, 'Make another member an owner to choose someone else.']
       : stored === null
         ? [
-            'Not chosen yet',
-            `The earliest owner, ${earliest}, decides until you pick someone else.`,
+            `Not chosen yet: ${earliest} decides`,
+            'The earliest owner decides until you pick someone else.',
           ]
         : ['Pick another owner to save it.'];
   return (
