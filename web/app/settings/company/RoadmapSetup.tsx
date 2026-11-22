@@ -12,7 +12,7 @@ import { INPUT } from '../_components/fields';
 
 const ROW =
   'grid grid-cols-[160px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 max-[600px]:grid-cols-1 max-[600px]:gap-1.5 max-[600px]:px-3';
-const ROW_LABEL = 'text-[15px] font-semibold';
+const ROW_LABEL = 'text-base font-semibold';
 const SMALL = INPUT.replace('w-full', 'w-24');
 
 /** null while the company has none (the API's 404). */
@@ -59,7 +59,7 @@ export function ProductRoadmapPanel() {
         <div className="flex flex-col gap-3 px-4 py-3 max-[600px]:px-3">
           {q.error && <Notice tone="error">{q.error}</Notice>}
           {found && (
-            <p className="text-[15px]" data-testid="product-roadmap-state">
+            <p className="text-base" data-testid="product-roadmap-state">
               Created:{' '}
               <Link
                 href={`/documents/${found.slug}`}
@@ -71,7 +71,7 @@ export function ProductRoadmapPanel() {
           )}
           {found === null && (
             <>
-              <p className="text-[15px]" data-testid="product-roadmap-state">
+              <p className="text-base" data-testid="product-roadmap-state">
                 No product roadmap yet.
               </p>
               {can('create_company_roadmap') ? (
@@ -184,7 +184,7 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
               <label htmlFor="team-size" className={ROW_LABEL}>
                 Team size
               </label>
-              <div className="flex items-center gap-2 text-[15px]">
+              <div className="flex items-center gap-2 text-base">
                 <input
                   id="team-size"
                   type="number"
@@ -204,7 +204,7 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
               <label htmlFor="team-focus" className={ROW_LABEL}>
                 Focus
               </label>
-              <div className="flex items-center gap-2 text-[15px]">
+              <div className="flex items-center gap-2 text-base">
                 <input
                   id="team-focus"
                   type="number"

@@ -207,7 +207,7 @@ export function QuickAdd({
           onChange={(e) => setRm(e.target.value)}
           aria-invalid={noRoadmap || undefined}
           aria-describedby={noRoadmap ? 'quick-add-roadmap-error' : undefined}
-          className={`h-9 rounded-lg border bg-surface px-2 text-[15px] text-text ${noRoadmap ? 'border-crit' : title.trim() && !chosen ? 'border-accent' : 'border-line-strong'}`}
+          className={`h-9 rounded-lg border bg-surface px-2 text-base text-text ${noRoadmap ? 'border-crit' : title.trim() && !chosen ? 'border-accent' : 'border-line-strong'}`}
         >
           <option value="">Which roadmap?</option>
           {roadmaps.map((r) => (
@@ -232,7 +232,7 @@ export function QuickAdd({
         }}
         aria-invalid={noTitle || undefined}
         aria-describedby={noTitle ? 'quick-add-title-error' : undefined}
-        className={`h-9 min-w-[16rem] flex-1 rounded-lg border bg-surface px-3 text-[15px] text-text ${noTitle ? 'border-crit' : 'border-line-strong'}`}
+        className={`h-9 min-w-[16rem] flex-1 rounded-lg border bg-surface px-3 text-base text-text ${noTitle ? 'border-crit' : 'border-line-strong'}`}
       />
       <span
         role="button"
@@ -341,7 +341,7 @@ function AddForm({
           maxLength={200}
           onChange={(e) => setTitle(e.target.value)}
           aria-invalid={noTitle || undefined}
-          className={`h-11 rounded-lg border bg-surface px-3 text-[16px] font-normal text-text ${noTitle ? 'border-crit' : 'border-line-strong'}`}
+          className={`h-11 rounded-lg border bg-surface px-3 text-base font-normal text-text ${noTitle ? 'border-crit' : 'border-line-strong'}`}
         />
         {noTitle && (
           <span
@@ -365,7 +365,7 @@ function AddForm({
             value={rm}
             onChange={(e) => setRm(e.target.value)}
             aria-invalid={noRoadmap || undefined}
-            className={`h-11 rounded-lg border bg-surface px-2 text-[16px] font-normal text-text ${noRoadmap ? 'border-crit' : 'border-line-strong'}`}
+            className={`h-11 rounded-lg border bg-surface px-2 text-base font-normal text-text ${noRoadmap ? 'border-crit' : 'border-line-strong'}`}
           >
             <option value="">Which roadmap?</option>
             {roadmaps.map((r) => (
@@ -390,7 +390,7 @@ function AddForm({
         <select
           value={where}
           onChange={(e) => setWhere(e.target.value)}
-          className="h-11 rounded-lg border border-line-strong bg-surface px-2 text-[16px] font-normal text-text"
+          className="h-11 rounded-lg border border-line-strong bg-surface px-2 text-base font-normal text-text"
         >
           {groups.map(([label, kind]) => (
             <optgroup key={kind} label={label}>

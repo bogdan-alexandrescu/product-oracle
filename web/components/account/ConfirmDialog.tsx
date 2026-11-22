@@ -91,7 +91,7 @@ export function ConfirmDialog({
                 {subject && (
                   <p
                     data-testid="confirm-subject"
-                    className="mt-0.5 break-words text-[15px] font-medium text-text2"
+                    className="mt-0.5 break-words text-base font-medium text-text2"
                   >
                     {subject}
                   </p>
@@ -101,7 +101,7 @@ export function ConfirmDialog({
             {consequences.length > 0 && (
               <ul
                 aria-label="What happens"
-                className="flex flex-col gap-2 text-[15px] leading-[22px]"
+                className="flex flex-col gap-2 text-base leading-[22px]"
               >
                 {consequences.map((c, i) => (
                   <li key={i} className="flex items-start gap-2.5">
@@ -114,7 +114,7 @@ export function ConfirmDialog({
               </ul>
             )}
             {children}
-            {note && <p className="text-[13px] leading-[18px] text-text2">{note}</p>}
+            {note && <p className="text-sm leading-[18px] text-text2">{note}</p>}
             {error && <Notice tone="error">{error}</Notice>}
           </div>
           <div className="flex flex-none flex-wrap justify-end gap-2 p-5 pt-4">

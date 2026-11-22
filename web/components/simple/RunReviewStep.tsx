@@ -226,7 +226,7 @@ export function RunReviewStep({
           </label>
           <textarea
             id="run-review-note"
-            className="mt-1 w-full rounded-lg border border-line-strong bg-surface p-2 text-[15px]"
+            className="mt-1 w-full rounded-lg border border-line-strong bg-surface p-2 text-base"
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}

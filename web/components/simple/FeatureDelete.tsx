@@ -144,7 +144,7 @@ function Menu({
       aria-label={`More for ${title}`}
       data-testid="feature-menu"
       style={style}
-      className={`z-40 w-56 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg ${className}`}
+      className={`z-40 w-56 rounded-lg border border-line bg-surface p-1 text-base shadow-lg ${className}`}
     >
       <button
         type="button"
@@ -209,7 +209,7 @@ export function FeatureMenu({
         aria-label={`More for ${title}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 ${open ? 'border-line-strong bg-surface2' : ''}`}
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-base text-text hover:border-line-strong hover:bg-surface2 ${open ? 'border-line-strong bg-surface2' : ''}`}
         onClick={() => setOpen((o) => !o)}
       >
         ⋯

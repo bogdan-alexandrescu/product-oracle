@@ -140,7 +140,7 @@ export function ReportDetail({ id }: { id: string }) {
             <SlackPanel report={report} onChange={q.reload} />
             {/* qa-plan-44: "Oct 26 – Oct 29, 4:09 AM", the time zone said once under it. */}
             <Panel title="Covers">
-              <div className="space-y-1 px-4 py-3 text-[15px]">
+              <div className="space-y-1 px-4 py-3 text-base">
                 <p className="tnum" data-testid="report-covers">
                   <span className="whitespace-nowrap">{periodStart(report)}</span> –{' '}
                   <span className="whitespace-nowrap">{periodEnd(report)}</span>
@@ -203,10 +203,10 @@ function Figures({ report }: { report: Report }) {
             key={label}
             className="flex min-w-0 flex-col-reverse justify-end border-r border-b border-line px-4 pt-3 pb-2.5 max-[600px]:px-3"
           >
-            <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+            <dt className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
               {label}
             </dt>
-            <dd className="tnum font-display text-[26px] leading-8 font-bold tracking-heading">
+            <dd className="tnum font-display text-2xl leading-8 font-bold tracking-heading">
               {value}
             </dd>
           </div>
@@ -242,7 +242,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-1 max-[600px]:grid-cols-1">
       <Label className="pt-0.5">{label}</Label>
-      <div className="min-w-0 text-[15px]">{children}</div>
+      <div className="min-w-0 text-base">{children}</div>
     </div>
   );
 }
@@ -253,7 +253,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
   return (
     <Panel title={t.prd.title} tools={<HealthChip track={t} />} testId="report-track">
       <div className="space-y-3 px-4 py-3 break-words max-[600px]:px-3">
-        <p className="text-[15px]">{t.headline}</p>
+        <p className="text-base">{t.headline}</p>
         <Row label="Next milestone">
           {nxt ? (
             <>
@@ -302,7 +302,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
         )}
         {t.needs_attention.length > 0 && (
           <section data-testid="needs-attention" aria-label="Needs attention">
-            <h3 className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2">
+            <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold tracking-[0.02em] text-text2">
               Needs attention {asOfNow ? '(as of now)' : '(this week)'}
               {asOfNow && (
                 <InfoTip label="needs attention" align="start">
@@ -314,7 +314,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             {/* An item is listed once, with all its reasons (slipping first), as the markdown does. */}
             <ul className="space-y-1.5">
               {needsByItem(t.needs_attention).map(([n, reasons]) => (
-                <li key={n.item_key} data-testid="needs-attention-item" className="text-[15px]">
+                <li key={n.item_key} data-testid="needs-attention-item" className="text-base">
                   <Link
                     href={n.link}
                     prefetch={false}
@@ -336,7 +336,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
         )}
         {t.drift.length > 0 && (
           <section aria-label="Drift">
-            <h3 className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+            <h3 className="mb-1 text-sm font-semibold tracking-[0.02em] text-text2">
               Drift both ways
             </h3>
             <ul className="space-y-1.5">
@@ -345,7 +345,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
                 <li
                   key={`${d.kind}-${i}`}
                   data-testid="report-drift"
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px]"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base"
                 >
                   <Chip kind="line" className="shrink-0">
                     {d.kind === 'ahead' ? 'Started early' : 'Not on the roadmap'}
@@ -371,10 +371,10 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
         )}
         {(t.dates.verified.length > 0 || t.dates.withdrawn.length > 0) && (
           <section aria-label="Dates">
-            <h3 className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+            <h3 className="mb-1 text-sm font-semibold tracking-[0.02em] text-text2">
               Dates this week
             </h3>
-            <ul className="space-y-1.5 text-[15px]">
+            <ul className="space-y-1.5 text-base">
               {t.dates.verified.map((d) => (
                 <li key={`v-${d.reference}-${d.supports_date}`}>
                   Verified: {d.reference} supports {formatDay(d.supports_date)}
@@ -426,7 +426,7 @@ function SlackPanel({ report, onChange }: { report: Report; onChange: () => Prom
   }
   return (
     <Panel title="Slack">
-      <div className="space-y-2 px-4 py-3 text-[15px]">
+      <div className="space-y-2 px-4 py-3 text-base">
         <p
           data-testid="report-slack"
           className={

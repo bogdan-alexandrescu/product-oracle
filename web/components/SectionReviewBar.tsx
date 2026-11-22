@@ -107,7 +107,7 @@ export function SectionReviewBar({
         </span>
       )}
       <span
-        className="tnum flex-none text-[13px] whitespace-nowrap text-text2 max-[600px]:hidden"
+        className="tnum flex-none text-sm whitespace-nowrap text-text2 max-[600px]:hidden"
         data-testid="verdict-date"
       >
         {formatDateTime(verdict.created_at)}
@@ -132,7 +132,7 @@ export function SectionReviewBar({
           {state}
         </div>
         {readOnlyNote && (
-          <span className="text-[13px] text-text2" data-testid="review-bar-note">
+          <span className="text-sm text-text2" data-testid="review-bar-note">
             {readOnlyNote}
           </span>
         )}
@@ -153,7 +153,7 @@ export function SectionReviewBar({
               <Chip kind={VERDICT_KIND[pending]} data-testid="verdict-pending">
                 {VERDICT_LABEL[pending]}
               </Chip>
-              <span className="text-[13px] whitespace-nowrap text-text2">Not saved yet</span>
+              <span className="text-sm whitespace-nowrap text-text2">Not saved yet</span>
             </>
           ) : (
             state
@@ -223,13 +223,11 @@ export function SectionReviewBar({
             </Button>
             {/* qa-docs-5, qa-docs-74: one hint, saying what the disabled button waits for and why. */}
             {needsNote && !saving && (
-              <span id={hintId} data-testid="verdict-save-hint" className="text-[13px] text-text2">
+              <span id={hintId} data-testid="verdict-save-hint" className="text-sm text-text2">
                 Write a note first: the writer sees it
               </span>
             )}
-            <span className="ml-auto text-[13px] text-text2 max-[600px]:hidden">
-              Ctrl/⌘ + Enter
-            </span>
+            <span className="ml-auto text-sm text-text2 max-[600px]:hidden">Ctrl/⌘ + Enter</span>
           </div>
         </form>
       )}

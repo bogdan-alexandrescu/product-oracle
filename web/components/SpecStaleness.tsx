@@ -14,7 +14,7 @@ type Spec = Schemas['SpecOut'];
 type Output = Schemas['TraceOutput'];
 
 const INPUT =
-  'rounded-button border border-line-strong bg-surface px-2.5 py-2 text-[15px] font-normal text-text';
+  'rounded-button border border-line-strong bg-surface px-2.5 py-2 text-base font-normal text-text';
 
 /**
  * #481 A spec version that may be stale, on its tech brief page: the Potentially stale label

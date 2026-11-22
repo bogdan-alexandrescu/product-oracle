@@ -101,7 +101,7 @@ function Heading({
   return (
     <div className="flex flex-col gap-0.5">
       <span className="flex items-center gap-1.5">
-        <h3 id={id} className="text-[15px] font-semibold">
+        <h3 id={id} className="text-base font-semibold">
           {title}
         </h3>
         {/* Pass F F-36: what the list does, behind the (i), not paragraphs on the page. */}
@@ -347,7 +347,7 @@ function ChooseSharedDrives({
               className="flex min-h-11 items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0"
             >
               <Icon name="folder" size={16} className="flex-none text-text2" />
-              <span className="min-w-0 flex-1 truncate text-[15px] font-medium" title={d.name}>
+              <span className="min-w-0 flex-1 truncate text-base font-medium" title={d.name}>
                 {d.name}
               </span>
               {onList.has(d.id) ? (
@@ -418,7 +418,7 @@ function CompanySharedDrives() {
                 <Icon name="folder" size={16} />
               </span>
               <span
-                className="min-w-0 flex-1 truncate text-[15px] font-medium"
+                className="min-w-0 flex-1 truncate text-base font-medium"
                 title={`${d.name} (${d.id})`}
               >
                 {d.name}

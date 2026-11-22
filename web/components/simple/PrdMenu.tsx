@@ -16,13 +16,13 @@ type Entry = Schemas['TrashEntryOut'];
 type Item = Schemas['TrashItem'];
 
 const ICON =
-  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2';
+  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-base text-text hover:border-line-strong hover:bg-surface2';
 const BTN =
-  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2';
+  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-sm font-[650] text-text hover:bg-surface2';
 const DANGER =
-  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-warn px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
+  'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-warn px-3 text-sm font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2';
 const MENU =
-  'absolute right-0 top-full z-30 mt-1 w-48 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg';
+  'absolute right-0 top-full z-30 mt-1 w-48 rounded-lg border border-line bg-surface p-1 text-base shadow-lg';
 const ITEM = 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-surface2';
 
 /**
@@ -155,7 +155,7 @@ export const deletedText = (title: string) =>
 function Row({ i, root }: { i: Item; root: string }) {
   return (
     <li className="flex min-w-0 items-baseline gap-2">
-      <span className="flex-none text-[13px] font-semibold text-text2">{itemKind(i)}</span>
+      <span className="flex-none text-sm font-semibold text-text2">{itemKind(i)}</span>
       <span className="min-w-0 break-words">{itemTitle(i, root)}</span>
     </li>
   );
@@ -239,12 +239,10 @@ function DeletePrdDialog({
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
           Delete {doc.title}?
         </h2>
-        <p className="mt-1 text-[15px] text-text2">It goes to Settings &gt; Trash for 30 days.</p>
-        {!deps && !error && (
-          <p className="mt-2 text-[15px] text-text2">Finding what goes with it…</p>
-        )}
+        <p className="mt-1 text-base text-text2">It goes to Settings &gt; Trash for 30 days.</p>
+        {!deps && !error && <p className="mt-2 text-base text-text2">Finding what goes with it…</p>}
         {withIt.length > 0 && (
-          <div data-testid="delete-prd-with" className="mt-3 text-[15px]">
+          <div data-testid="delete-prd-with" className="mt-3 text-base">
             <p className="font-semibold">These go with it:</p>
             <ul className="mt-1 flex flex-col gap-0.5">
               {withIt.map((i) => (
@@ -254,7 +252,7 @@ function DeletePrdDialog({
           </div>
         )}
         {feeds.length > 0 && (
-          <div data-testid="delete-prd-feeds" className="mt-3 text-[15px]">
+          <div data-testid="delete-prd-feeds" className="mt-3 text-base">
             <p className="font-semibold">These stay, without it:</p>
             <ul className="mt-1 flex flex-col gap-0.5">
               {feeds.map((i) => (
@@ -264,7 +262,7 @@ function DeletePrdDialog({
           </div>
         )}
         {deps?.published && (
-          <label className="mt-3 flex items-start gap-2 text-[15px]">
+          <label className="mt-3 flex items-start gap-2 text-base">
             <input
               type="checkbox"
               className="mt-1"
@@ -275,12 +273,12 @@ function DeletePrdDialog({
           </label>
         )}
         {working && (
-          <p className="mt-3 text-[15px] text-warn">
+          <p className="mt-3 text-base text-warn">
             A run is working on it. Delete it when the run ends.
           </p>
         )}
         {error && (
-          <p role="alert" className="mt-3 text-[15px] text-warn">
+          <p role="alert" className="mt-3 text-base text-warn">
             {error}
           </p>
         )}

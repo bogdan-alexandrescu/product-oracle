@@ -103,7 +103,7 @@ export function ConfidenceBadge({ confidence }: { confidence: Confidence }) {
       </summary>
       <div className="absolute right-0 z-20 mt-1.5 w-72 rounded-button border border-line bg-surface p-3 text-sm shadow-tip">
         <table className="tnum w-full" aria-label="Confidence factors">
-          <thead className="text-left text-[13px] text-text2">
+          <thead className="text-left text-sm text-text2">
             <tr>
               <th className="pb-1.5 font-semibold">Factor</th>
               <th className="pb-1.5 text-right font-semibold">Level</th>

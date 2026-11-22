@@ -241,7 +241,7 @@ function RunsPage() {
         const who = rowWaitsOn(r);
         return who ? (
           <span
-            className="block text-[13px] leading-4 whitespace-normal text-text2"
+            className="block text-sm leading-4 whitespace-normal text-text2"
             data-testid="run-waits-on"
           >
             {who}
@@ -396,12 +396,12 @@ function RunInspector({ run, name }: { run: RunSummary; name: string }) {
     >
       {run.draft_rejected && (
         <InspectorSection label="Draft rejected">
-          <p className="text-[15px] text-crit">{run.draft_rejected}</p>
+          <p className="text-base text-crit">{run.draft_rejected}</p>
         </InspectorSection>
       )}
       {run.sent_back && (
         <InspectorSection label={SENT_BACK_STATE}>
-          <p className="text-[15px] text-text">{run.sent_back}</p>
+          <p className="text-base text-text">{run.sent_back}</p>
         </InspectorSection>
       )}
       {run.waiting_on && (

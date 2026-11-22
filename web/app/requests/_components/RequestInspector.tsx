@@ -188,7 +188,7 @@ export function RequestInspector({
       </InspectorSection>
       {offered && (
         <InspectorSection label="Oracle's suggestion">
-          <div data-testid="request-suggestion" className="flex flex-col gap-2 text-[15px]">
+          <div data-testid="request-suggestion" className="flex flex-col gap-2 text-base">
             {s.rationale && <p>{s.rationale}</p>}
             <ul className="flex flex-col gap-1 text-sm text-text2">
               {(s.theme_title || s.theme_id) && (
@@ -260,7 +260,7 @@ export function RequestInspector({
       )}
       {decline && (
         <InspectorSection label="Oracle's suggestion">
-          <div className="flex flex-col gap-2 text-[15px]">
+          <div className="flex flex-col gap-2 text-base">
             <p data-testid="decline-suggestion">
               Oracle suggests saying no: {REASON_LABEL[decline.reason]}
               {decline.why ? ` · ${decline.why}` : ''}
@@ -460,7 +460,7 @@ function Words({
     );
   }
   return (
-    <div className="flex flex-col gap-2 text-[15px]">
+    <div className="flex flex-col gap-2 text-base">
       <p className="whitespace-pre-wrap">{request.body ?? 'No description'}</p>
       {/* qa4-work-19: the queue's and the form's word for the person who asked. */}
       {request.requester_name && (
@@ -573,7 +573,7 @@ function Links({
           )
         )}
         {(goals.data ?? []).map((g) => (
-          <label key={g.id} className="flex items-center gap-2 text-[15px]">
+          <label key={g.id} className="flex items-center gap-2 text-base">
             <input
               type="checkbox"
               checked={goalIds.includes(g.id)}
@@ -753,7 +753,7 @@ function Decision({
   };
 
   return (
-    <div className="flex flex-col gap-2 text-[15px]">
+    <div className="flex flex-col gap-2 text-base">
       {request.state === 'merged' && <p>Merged into {mergedInto?.title ?? 'another request'}</p>}
       {request.decision_number != null && (
         <Link

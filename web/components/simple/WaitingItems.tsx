@@ -134,7 +134,7 @@ export function ItemRefFailed({ read }: { read: ItemRefRead }) {
     <span
       data-testid="item-ref-failed"
       role="status"
-      className="ml-1.5 inline-flex items-center gap-1 text-[13px] text-text2"
+      className="ml-1.5 inline-flex items-center gap-1 text-sm text-text2"
     >
       Could not check its code.
       <InfoTip label="the error" align="start">

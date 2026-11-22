@@ -224,7 +224,7 @@ function ExpandOverlay({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex min-h-14 items-center gap-3 bg-hero px-5 py-2 text-hero-text">
-          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+          <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
             Detail
           </span>
           <span className="min-w-0 truncate font-display tracking-heading text-lg font-bold">
@@ -271,7 +271,7 @@ const BAR_BTN =
 /** A key cap on the dark presentation bar. */
 function Key({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-hero-line px-1 font-sans text-[13px] font-semibold text-hero-text">
+    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-hero-line px-1 font-sans text-sm font-semibold text-hero-text">
       {children}
     </kbd>
   );
@@ -449,7 +449,7 @@ export function PresentMode({
                 data-testid="presenter-view"
               >
                 <section aria-label="Current slide" className="flex min-h-0 flex-col">
-                  <h2 className="tnum mb-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                  <h2 className="tnum mb-2 text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                     Current · {counter}
                   </h2>
                   <div className="min-h-0 flex-1" onClick={() => go(index + 1)}>
@@ -464,7 +464,7 @@ export function PresentMode({
                 </section>
                 <div className="flex min-h-0 flex-col gap-4">
                   <section aria-label="Next slide" className="flex h-1/3 min-h-0 flex-col">
-                    <h2 className="mb-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                    <h2 className="mb-2 text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                       Next
                     </h2>
                     <div className="min-h-0 flex-1">
@@ -476,10 +476,10 @@ export function PresentMode({
                     </div>
                   </section>
                   <section aria-label="Notes" className="flex min-h-0 flex-1 flex-col">
-                    <h2 className="mb-2 flex items-center text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                    <h2 className="mb-2 flex items-center text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                       Notes{' '}
                       <span
-                        className="tnum ml-auto font-mono text-[15px] tracking-normal text-hero-text"
+                        className="tnum ml-auto font-mono text-base tracking-normal text-hero-text"
                         aria-label="Elapsed time"
                       >
                         {elapsed}
@@ -487,7 +487,7 @@ export function PresentMode({
                     </h2>
                     <div
                       data-testid="presenter-notes"
-                      className="min-h-0 flex-1 overflow-y-auto rounded-button border border-hero-line bg-hero-2 p-3.5 text-[17px] leading-relaxed whitespace-pre-wrap text-hero-text"
+                      className="min-h-0 flex-1 overflow-y-auto rounded-button border border-hero-line bg-hero-2 p-3.5 text-lg leading-relaxed whitespace-pre-wrap text-hero-text"
                     >
                       {current.notes ?? (
                         <span className="text-hero-text2">No notes for this slide.</span>
@@ -532,7 +532,7 @@ export function PresentMode({
             </button>
             {/* qa-docs-63: the one counter, in the app's font. */}
             <span
-              className="tnum px-2 text-[15px] font-medium text-hero-text"
+              className="tnum px-2 text-base font-medium text-hero-text"
               data-testid="slide-counter"
             >
               {counter}
@@ -590,7 +590,7 @@ export function PresentMode({
               </Link>
               {/* qa-docs-24: each key says what it does. */}
               <span
-                className="hidden items-center gap-1 pl-2 text-[13px] whitespace-nowrap text-hero-text2 xl:flex"
+                className="hidden items-center gap-1 pl-2 text-sm whitespace-nowrap text-hero-text2 xl:flex"
                 data-testid="present-keys"
               >
                 <Key>←</Key>

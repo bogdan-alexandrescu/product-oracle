@@ -240,7 +240,7 @@ export function DataTable<T>({
         role={selectable ? 'grid' : 'table'}
         aria-label={label}
         aria-busy={loading || undefined}
-        className="w-full table-fixed border-collapse text-[15px] leading-[22px] max-[600px]:block"
+        className="w-full table-fixed border-collapse text-base leading-[22px] max-[600px]:block"
       >
         <colgroup>
           {columns.map((c) => (
@@ -278,7 +278,7 @@ export function DataTable<T>({
                   scope="col"
                   role="columnheader"
                   aria-sort={c.ariaSort}
-                  className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
+                  className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-sm leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
                 >
                   {c.header}
                 </th>
@@ -329,7 +329,7 @@ export function DataTable<T>({
                       role="rowheader"
                       colSpan={columns.length}
                       scope="colgroup"
-                      className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-[15px] font-bold"
+                      className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-base font-bold"
                     >
                       {groupHeader ? groupHeader(row) : groupLabel ? groupLabel(g) : g}
                     </th>

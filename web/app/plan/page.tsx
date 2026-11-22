@@ -49,7 +49,7 @@ function GoalsBand({ canImport }: { canImport: boolean }) {
     return (
       <Panel title="Goals" testId="plan-goals">
         <div data-testid="plan-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
-          <span className="text-[15px] font-semibold text-text2">No confirmed goals</span>
+          <span className="text-base font-semibold text-text2">No confirmed goals</span>
           <Link
             href="/ground-truth"
             className="ml-auto inline-flex min-h-6 items-center font-semibold text-accent-ink underline-offset-2 hover:underline"

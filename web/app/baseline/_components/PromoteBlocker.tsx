@@ -115,7 +115,7 @@ export function PromoteForm({
     });
   }
 
-  const label = 'flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
+  const label = 'flex flex-col gap-1 text-sm font-semibold tracking-[0.02em] text-text2';
   // A label beside its select (not around it), so the options are not part of its name.
   const select = <T extends string>(
     name: string,
@@ -172,7 +172,7 @@ export function PromoteForm({
         />
       </label>
       <div className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">Evidence</span>
+        <span className="text-sm font-semibold tracking-[0.02em] text-text2">Evidence</span>
         {entity.evidence.length === 0 ? (
           <p className="text-sm text-text2">None yet</p>
         ) : (
@@ -190,7 +190,7 @@ export function PromoteForm({
             ))}
           </ul>
         )}
-        <p className="text-[13px] text-text2">
+        <p className="text-sm text-text2">
           The item&apos;s evidence becomes the blocker&apos;s. Add or refresh it in the Evidence
           section.
         </p>

@@ -330,7 +330,7 @@ export function SimpleAskPanel({
       ref={root}
       // qa-simple-home-24: the docked panel (with its header and mark) is what the rail's Ask Oracle controls.
       id={showHeader && mark ? SIMPLE_ASK_PANEL_ID : undefined}
-      className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-[15px] leading-[22px] text-text"
+      className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-base leading-[22px] text-text"
       data-testid="hop-panel"
     >
       {showHeader && (
@@ -554,7 +554,7 @@ function RecentMenu({
         Your recent chats
       </h3>
       {items.length === 0 ? (
-        <p className="px-2 py-2 text-[13px] leading-[18px] text-text2">No chats yet.</p>
+        <p className="px-2 py-2 text-sm leading-[18px] text-text2">No chats yet.</p>
       ) : (
         <ul className="flex flex-col">
           {items.map((c) => (
@@ -567,16 +567,13 @@ function RecentMenu({
               >
                 {/* qa4-simple-home-32: a long first question shows two lines at most, with an ellipsis. */}
                 <b
-                  className="line-clamp-2 text-[15px] leading-[21px] font-semibold text-text [overflow-wrap:anywhere]"
+                  className="line-clamp-2 text-base leading-[21px] font-semibold text-text [overflow-wrap:anywhere]"
                   title={c.question ? tidyTitle(c.question) : undefined}
                   data-testid="ask-recent-question"
                 >
                   {(c.question && tidyTitle(c.question)) || `Chat about ${c.page_name}`}
                 </b>
-                <span
-                  className="text-[13px] leading-[18px] text-text2"
-                  data-testid="ask-recent-when"
-                >
+                <span className="text-sm leading-[18px] text-text2" data-testid="ask-recent-when">
                   {c.page_name} · {chatWhen(c.last_at, zone)}
                 </span>
               </button>
@@ -585,7 +582,7 @@ function RecentMenu({
         </ul>
       )}
       <p
-        className="mt-1 border-t border-line p-2 text-[13px] leading-[18px] text-text2"
+        className="mt-1 border-t border-line p-2 text-sm leading-[18px] text-text2"
         data-testid="ask-recent-meetings"
       >
         Meeting chats stay in their meeting.
@@ -815,7 +812,7 @@ function ChatView({
           {lines.length > 0 && below}
           {lines.length === 0 && (
             <p className="px-2 pt-7 pb-3 text-center text-text2" data-testid="hop-empty">
-              <b className="mb-1 block text-[17px] leading-6 font-[650] text-text">Nothing yet</b>
+              <b className="mb-1 block text-lg leading-6 font-[650] text-text">Nothing yet</b>
               {changes ? `Ask about ${about}, or ask for a change.` : `Ask about ${about}.`}
             </p>
           )}

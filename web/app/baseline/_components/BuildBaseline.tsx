@@ -199,7 +199,7 @@ export function BuildBaselineSheet({
   }
 
   const first = error ? underWay(error) : null;
-  const legendCls = 'mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
+  const legendCls = 'mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2';
 
   return (
     <div
@@ -227,7 +227,7 @@ export function BuildBaselineSheet({
           <span className="flex-1" />
           <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
         </div>
-        <div className="flex-1 space-y-5 px-5 py-4 text-[15px] max-[600px]:px-4">
+        <div className="flex-1 space-y-5 px-5 py-4 text-base max-[600px]:px-4">
           <div>
             <span id={`${id}-depth`} className={legendCls}>
               Depth

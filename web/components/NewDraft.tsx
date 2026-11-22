@@ -153,7 +153,7 @@ function Question<V extends string | boolean>({
   const choices: Option<V | null>[] = [{ value: null, label: 'Not sure' }, ...options];
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-2 text-[15px] font-semibold text-text">{question}</legend>
+      <legend className="mb-2 text-base font-semibold text-text">{question}</legend>
       <div className="flex flex-wrap gap-1.5">
         {choices.map((o) => {
           const checked = (value ?? null) === o.value;
@@ -213,7 +213,7 @@ function MultiQuestion({
     }`;
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-2 text-[15px] font-semibold text-text">{question}</legend>
+      <legend className="mb-2 text-base font-semibold text-text">{question}</legend>
       <p className="-mt-1 mb-2 text-sm text-text2">Pick all that apply.</p>
       <div className="flex flex-wrap gap-1.5">
         <label className={chip(picked.length === 0, true)}>
@@ -302,7 +302,7 @@ function NumberQuestion({
   return (
     <div className="flex items-end gap-2">
       <label className="block">
-        <span className="mb-1.5 block text-[15px] font-semibold text-text">{label}</span>
+        <span className="mb-1.5 block text-base font-semibold text-text">{label}</span>
         <input
           type="number"
           min={0}
@@ -748,7 +748,7 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
         {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
         {themes.loading && <Loading />}
         {onlyTheme ? (
-          <p data-testid="theme-only" className="text-[15px] font-semibold text-text">
+          <p data-testid="theme-only" className="text-base font-semibold text-text">
             {onlyTheme.name}
           </p>
         ) : (
@@ -1175,7 +1175,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
           {error && <ErrorNote>{error}</ErrorNote>}
           <Panel bodyClassName="p-4">
             <label className="block">
-              <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
+              <span className="mb-1.5 block text-base font-semibold text-text">Title</span>
               <input
                 ref={titleRef}
                 className={INPUT}
@@ -1223,10 +1223,10 @@ export function NewDraft({ kind }: { kind: Kind }) {
                       />
                       {/* qa-docs-39: the count is the baseline's, read here, not typed. */}
                       <div data-testid="confirmed-goals">
-                        <span className="mb-1.5 block text-[15px] font-semibold text-text">
+                        <span className="mb-1.5 block text-base font-semibold text-text">
                           Confirmed goals
                         </span>
-                        <span className="flex h-9 items-center gap-1.5 text-[15px] text-text">
+                        <span className="flex h-9 items-center gap-1.5 text-base text-text">
                           <span className="tnum" data-testid="confirmed-goals-count">
                             {rec?.confirmed_goals == null
                               ? '–'
@@ -1273,7 +1273,7 @@ function NotAllowed({ testId, title, reason }: { testId: string; title: string; 
       <h2 className="font-display text-lg leading-6 font-bold tracking-heading text-text">
         {title}
       </h2>
-      <p className="max-w-md text-[15px] text-text2">{reason}</p>
+      <p className="max-w-md text-base text-text2">{reason}</p>
     </div>
   );
 }
@@ -1334,7 +1334,7 @@ export function GoalPicker({
     });
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-2 text-[15px] font-semibold text-text">
+      <legend className="mb-2 text-base font-semibold text-text">
         {legend} <span className="font-normal text-text2">Optional</span>
       </legend>
       {goals.error && <ErrorNote>{goals.error}</ErrorNote>}
@@ -1663,7 +1663,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
             )}
             <Panel bodyClassName="flex flex-col gap-4 p-4">
               <label className="block">
-                <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
+                <span className="mb-1.5 block text-base font-semibold text-text">Title</span>
                 <input
                   ref={titleRef}
                   className={INPUT}
@@ -1683,7 +1683,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
               </label>
               <div className="block">
                 {/* #1590: how much to write sits behind the (i), outside the label so the label still names the text box. */}
-                <span className="mb-1.5 flex items-center gap-1 text-[15px] font-semibold text-text">
+                <span className="mb-1.5 flex items-center gap-1 text-base font-semibold text-text">
                   <label htmlFor={`${id}-problem`}>What problem does it solve?</label>
                   <InfoTip
                     label="the brief"
@@ -1719,7 +1719,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
               <GoalPicker value={goalIds} onChange={setGoalIds} />
               <RequestsBehind value={requests} onChange={setRequests} />
               <fieldset className="min-w-0">
-                <legend className="mb-2 text-[15px] font-semibold text-text">
+                <legend className="mb-2 text-base font-semibold text-text">
                   What is out of scope? <span className="font-normal text-text2">Optional</span>
                 </legend>
                 <div className="flex flex-col gap-1.5">

@@ -430,7 +430,7 @@ export function OnePager({
         <h1 className="simple-h1">{missing ? 'One-pager not found' : 'One-pager'}</h1>
         {missing ? (
           <div data-testid="one-pager-missing" className="flex flex-col items-start gap-3">
-            <p className="text-[15px] text-text2">
+            <p className="text-base text-text2">
               This one-pager doesn&apos;t exist or was deleted.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -753,8 +753,8 @@ export function OnePager({
       data-testid="start-review-why"
       className={
         phone
-          ? 'basis-full text-[13px] leading-[17px] text-text2'
-          : 'absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2'
+          ? 'basis-full text-sm leading-[17px] text-text2'
+          : 'absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-sm leading-[17px] text-text2'
       }
     >
       {startWhy}
@@ -854,7 +854,7 @@ export function OnePager({
                 // build-review (QV3 a): a line over the presented slides says which it is.
                 <p
                   data-testid="presenting-what"
-                  className="rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px] font-semibold text-text2"
+                  className="rounded-full border border-line-strong bg-surface px-3 py-1 text-base font-semibold text-text2"
                 >
                   {showing === 'published'
                     ? `Showing published v${v.draft?.base_version ?? v.version}`
@@ -963,7 +963,7 @@ export function OnePager({
                 {/* decisions-reversed-or-trashed: a decision this draft cited was reversed since. */}
                 <DecisionNotes
                   notes={v.draft.decision_notes ?? []}
-                  className="basis-full text-[15px]"
+                  className="basis-full text-base"
                 />
               </div>
             )}
@@ -971,7 +971,7 @@ export function OnePager({
             {
               <LeftOutLine
                 leftOut={v.left_out}
-                className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-[15px] text-text-faint"
+                className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint"
               />
             }
             {sending && v.draft?.can_submit && (
@@ -1065,7 +1065,7 @@ export function OnePager({
                     key={fixHref(f)}
                     href={fixHref(f)}
                     data-testid="draft-fix"
-                    className="text-[14px] text-accent underline"
+                    className="text-sm text-accent underline"
                   >
                     Add a date source
                   </Link>
@@ -1082,12 +1082,12 @@ export function OnePager({
                 />
               )}
               {planShown && updating && (
-                <p role="status" data-testid="plan-updating" className="text-[14px] text-text2">
+                <p role="status" data-testid="plan-updating" className="text-sm text-text2">
                   Oracle is reading the plan again. This is the last plan until it is done.
                 </p>
               )}
               {planShown && !updating && planNote && (
-                <p role="status" data-testid="plan-note" className="text-[14px] text-text2">
+                <p role="status" data-testid="plan-note" className="text-sm text-text2">
                   {planNote}
                 </p>
               )}
@@ -1110,7 +1110,7 @@ export function OnePager({
                 // qa-simple-prd-p3-4: the plan's words come from the PRD's lines; they are changed there.
                 <p
                   data-testid="plan-lines-door"
-                  className="simple-noprint flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] text-text2"
+                  className="simple-noprint flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-text2"
                 >
                   The words above come from the PRD&apos;s lines.
                   <button
@@ -1767,7 +1767,7 @@ function isSource(row: string, l: Line): boolean {
 }
 
 const btn = (phone: boolean) =>
-  `simple-noprint inline-flex items-center gap-[7px] border border-line-strong bg-surface font-semibold whitespace-nowrap text-text ${phone ? 'min-h-[34px] rounded-[9px] px-2.5 text-[14px]' : 'min-h-10 rounded-[10px] px-3.5 text-[15px]'}`;
+  `simple-noprint inline-flex items-center gap-[7px] border border-line-strong bg-surface font-semibold whitespace-nowrap text-text ${phone ? 'min-h-[34px] rounded-[9px] px-2.5 text-sm' : 'min-h-10 rounded-[10px] px-3.5 text-base'}`;
 const PRESENT = 'M3 4h18v12H3zM12 16v4M8 20h8';
 const PDF = 'M12 4v11M7 10l5 5 5-5M5 20h14';
 const REVIEW = 'M4 5h16v11h-9l-5 4v-4H4z';
@@ -1900,21 +1900,19 @@ function PrdHeader({
         <div
           role="heading"
           aria-level={1}
-          className="text-[25px] leading-[31px] font-[750] tracking-[-.01em]"
+          className="text-2xl leading-[31px] font-[750] tracking-[-.01em]"
         >
           {v.document.title}
         </div>
       ) : (
-        <h1 className="text-[34px] leading-[42px] font-bold tracking-[-.01em]">
-          {v.document.title}
-        </h1>
+        <h1 className="text-3xl leading-[42px] font-bold tracking-[-.01em]">{v.document.title}</h1>
       )}
       <div
         data-testid="one-pager-meta"
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[15px] leading-[22px] text-text2"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-base leading-[22px] text-text2"
       >
         {approved && (
-          <span className="inline-flex h-6 items-center gap-[5px] rounded-xl bg-pass-bg px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap text-pass">
+          <span className="inline-flex h-6 items-center gap-[5px] rounded-xl bg-pass-bg px-[9px] text-sm leading-[18px] font-semibold whitespace-nowrap text-pass">
             <svg
               viewBox="0 0 24 24"
               width={16}
@@ -1933,7 +1931,7 @@ function PrdHeader({
         )}
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
         {approved && draft && (
-          <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">
+          <span data-testid="one-pager-draft-chip" className="text-sm font-semibold text-text">
             draft in progress
           </span>
         )}
@@ -2019,7 +2017,7 @@ function BackLink() {
   return (
     <Link
       href="/simple/one-pagers"
-      className="inline-flex items-center gap-1 text-[15px] font-semibold text-accent"
+      className="inline-flex items-center gap-1 text-base font-semibold text-accent"
     >
       <svg
         viewBox="0 0 24 24"
@@ -2111,7 +2109,7 @@ function MarginNote({
       </p>
       {/* qa-simple-prd-35: a proposal shows its words at once. */}
       {n.kind === 'proposal' && (
-        <p className="mt-1 text-[15px]" data-testid="proposal-words">
+        <p className="mt-1 text-base" data-testid="proposal-words">
           “{n.after}”
         </p>
       )}

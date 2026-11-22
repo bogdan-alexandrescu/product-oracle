@@ -14,7 +14,7 @@ export type Goal = Schemas['EntityOut'];
 export type Person = Schemas['PersonOut'];
 
 const LABEL = 'flex flex-col gap-1 text-sm font-semibold text-text2';
-const FIELD_ERROR = 'text-[13px] font-medium text-crit';
+const FIELD_ERROR = 'text-sm font-medium text-crit';
 const COUNT = 'count';
 
 type Field = 'title' | 'description' | 'unit' | 'drives' | 'owner' | 'query' | 'threshold';
@@ -212,7 +212,7 @@ export function MetricForm({
           onSubmit={submit}
           noValidate
         >
-          <p className="text-[13px] text-text2">Fields marked (required) must be filled in.</p>
+          <p className="text-sm text-text2">Fields marked (required) must be filled in.</p>
           <label className={LABEL}>
             <span>
               <span id="metric-title-label">Title</span>
@@ -386,7 +386,7 @@ export function MetricForm({
               <span
                 id="metric-goal-help"
                 data-testid="metric-goal-help"
-                className="text-[13px] font-normal"
+                className="text-sm font-normal"
               >
                 {goalChoices.length
                   ? 'Confirmed goals measured in the same unit. The latest weekly value becomes the goal’s current value.'
@@ -486,7 +486,7 @@ export function MetricForm({
                   <span
                     id="metric-test-hint"
                     data-testid="metric-test-hint"
-                    className="text-[13px] text-text2"
+                    className="text-sm text-text2"
                   >
                     Write a query to test it.
                   </span>

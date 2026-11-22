@@ -331,7 +331,7 @@ function GapRow({
       className="flex min-w-0 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text"
     >
       <div className="flex min-w-0 flex-wrap items-start gap-2">
-        <p className="min-w-0 flex-1 basis-60 text-[15px] break-words">{gap.statement}</p>
+        <p className="min-w-0 flex-1 basis-60 text-base break-words">{gap.statement}</p>
         <span className="flex flex-wrap gap-1.5">
           <Chip kind={importance.kind}>{importance.label}</Chip>
           <Chip kind={status.kind} dot data-testid="gap-status">
@@ -339,7 +339,7 @@ function GapRow({
           </Chip>
         </span>
       </div>
-      <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[13px] text-text2">
+      <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-sm text-text2">
         {categoryNote(gap) && <span>{categoryNote(gap)}</span>}
         {/* qa-work-30: the PRD sections it touches in words ("Metrics"), not raw keys. */}
         {gap.section_keys.length > 0 && (
@@ -352,7 +352,7 @@ function GapRow({
         {researching && <span className="font-semibold text-accent-ink">Research proposed</span>}
       </div>
       {gap.stop_condition && (
-        <p className="text-[13px] break-words text-text2">Closed when: {gap.stop_condition}</p>
+        <p className="text-sm break-words text-text2">Closed when: {gap.stop_condition}</p>
       )}
       {error && <InlineError>{error}</InlineError>}
       {triaging ? (
@@ -440,7 +440,7 @@ export function GapsTab({ summary: s, onChanged }: { summary: Summary; onChanged
           <p
             data-testid="gaps-role-note"
             role="note"
-            className="min-w-0 flex-1 basis-60 text-[13px] text-text2"
+            className="min-w-0 flex-1 basis-60 text-sm text-text2"
           >
             {note}
           </p>

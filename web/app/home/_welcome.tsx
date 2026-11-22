@@ -133,15 +133,15 @@ export function WelcomePanel({
       }
     >
       <div className="flex min-w-0 flex-col gap-3 px-4 py-3 max-[600px]:px-3">
-        <p className="text-[15px] text-text">
+        <p className="text-base text-text">
           Oracle keeps the company&apos;s goals, PRDs and plan in one place, each tied to the
           evidence behind it.
         </p>
-        <p data-testid="welcome-role" className="text-[15px] text-text">
+        <p data-testid="welcome-role" className="text-base text-text">
           {copy.role}
         </p>
         {pointsToSetup && (
-          <p data-testid="welcome-setup" className="text-[15px] text-text">
+          <p data-testid="welcome-setup" className="text-base text-text">
             Begin with Set up, below. Each step opens the page where you do it.
           </p>
         )}
@@ -153,7 +153,7 @@ export function WelcomePanel({
                 data-testid="welcome-step"
                 className="flex min-w-0 items-center gap-2.5"
               >
-                <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">
+                <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent-ink">
                   {i + 1}
                 </span>
                 <Link

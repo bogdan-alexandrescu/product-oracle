@@ -471,8 +471,8 @@ export function GroundTruthFlags({
     >
       {/* Named apart from the Flagged items tab, which counts features, not checks (detailed-a 9). */}
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-[15px] font-semibold text-text">Ground Truth checks</h2>
-        <span className="text-[13px] text-text2" data-testid="gt-total">
+        <h2 className="text-base font-semibold text-text">Ground Truth checks</h2>
+        <span className="text-sm text-text2" data-testid="gt-total">
           {check.total}
         </span>
         <InfoTip label="Ground Truth checks">
@@ -489,7 +489,7 @@ export function GroundTruthFlags({
               aria-expanded={shownKind === k.kind}
               aria-controls={`gt-list-${k.kind}`}
               onClick={() => setOpen((o) => (o === k.kind ? null : k.kind))}
-              className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[13px] ${
+              className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm ${
                 shownKind === k.kind
                   ? 'border-accent bg-accent-soft text-accent-ink'
                   : 'border-line-strong text-text hover:bg-surface2'
@@ -562,7 +562,7 @@ export function GroundTruthFlags({
                   className="flex flex-wrap items-center justify-between gap-2 py-2"
                 >
                   <span className="min-w-0" data-testid={same ? 'gt-unconfirmed' : undefined}>
-                    <span className="flex items-center gap-1 text-[14px] text-text">
+                    <span className="flex items-center gap-1 text-sm text-text">
                       {sn.code ? (
                         <CodeChip
                           kind="feature"
@@ -581,7 +581,7 @@ export function GroundTruthFlags({
                       <Link
                         href={asks(f) ? '/ground-truth?tab=proposals' : '/simple/roadmap'}
                         data-testid="gt-pending"
-                        className="block text-[13px] text-accent-ink underline"
+                        className="block text-sm text-accent-ink underline"
                       >
                         Waiting for an approver
                       </Link>
@@ -611,10 +611,10 @@ export function GroundTruthFlags({
                           entityKey={keyed.code!}
                           title={keyed.name}
                         />
-                        {line && <span className="text-[13px] text-text2">{line}</span>}
+                        {line && <span className="text-sm text-text2">{line}</span>}
                       </span>
                     ) : (
-                      line && <span className="block text-[13px] text-text2">{line}</span>
+                      line && <span className="block text-sm text-text2">{line}</span>
                     )}
                   </span>
                   {row.length > 0 && (
@@ -726,7 +726,7 @@ function Picker({
         onChange={(e) => setQ(e.target.value)}
         placeholder={picking.what === 'goal' ? 'Find a goal' : 'Find a feature by code or name'}
         aria-label={picking.what === 'goal' ? 'Find a goal' : 'Find a feature'}
-        className="mb-2 h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-[14px] text-text"
+        className="mb-2 h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-text"
       />
       <ul className="flex flex-col gap-1">
         {onOwn && (
@@ -736,7 +736,7 @@ function Picker({
               disabled={busy}
               onClick={onOwn}
               data-testid="gt-own-feature"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[14px] text-accent-ink hover:bg-surface2"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-accent-ink hover:bg-surface2"
             >
               + Its own feature
             </button>
@@ -752,14 +752,14 @@ function Picker({
                   ? onGoal({ id: o.id, name: o.name })
                   : onFeature({ id: o.id, title: namedText(o) })
               }
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[14px] text-text hover:bg-surface2"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-text hover:bg-surface2"
             >
-              {o.code && <span className="font-mono text-[13px] text-text2">{o.code}</span>}
+              {o.code && <span className="font-mono text-sm text-text2">{o.code}</span>}
               {o.name}
             </button>
           </li>
         ))}
-        {found.length === 0 && <li className="px-2 py-2 text-[14px] text-text2">None found.</li>}
+        {found.length === 0 && <li className="px-2 py-2 text-sm text-text2">None found.</li>}
       </ul>
     </Dialog>
   );

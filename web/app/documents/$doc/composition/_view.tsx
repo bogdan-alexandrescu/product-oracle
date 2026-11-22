@@ -58,7 +58,7 @@ import { PolicyTab } from './_policy';
 
 const PHONE = '(max-width: 600px)';
 const META =
-  'inline-flex min-h-[26px] items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2';
+  'inline-flex min-h-[26px] items-center rounded-full border border-line-strong px-2.5 text-sm text-text2';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
@@ -437,7 +437,7 @@ export function CompositionView({ doc }: { doc: string }) {
         </Panel>
         {staged && (
           <Panel testId="draft-changes" title="Draft changes" bodyClassName="px-4 py-3">
-            <ul className="space-y-1.5 text-[15px]">
+            <ul className="space-y-1.5 text-base">
               {changes.add.map((k) => (
                 <li key={k} className="flex items-center gap-2">
                   <span>+ {titleOf(k)}</span>
@@ -485,7 +485,7 @@ export function CompositionView({ doc }: { doc: string }) {
             testId="working-draft"
             title={`Working draft, revision ${data.working.number}`}
             tools={<Chip kind="warn">Replaces nothing until confirmed</Chip>}
-            bodyClassName="space-y-1.5 px-4 py-3 text-[15px]"
+            bodyClassName="space-y-1.5 px-4 py-3 text-base"
           >
             <p className="text-sm text-text2">
               {data.working.parent_number != null

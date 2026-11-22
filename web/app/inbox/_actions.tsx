@@ -210,7 +210,7 @@ export function InboxActions({
         className="flex w-full flex-col items-stretch gap-1.5 py-1 text-left whitespace-normal"
         data-testid="inbox-action-field"
       >
-        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+        <label htmlFor={fieldId} className="text-sm leading-4 font-semibold text-text2">
           {label}
         </label>
         <input
@@ -420,7 +420,7 @@ export function useActed(reload: () => Promise<unknown>) {
       <div
         role="status"
         data-testid="inbox-acted"
-        className="mx-4 mt-3 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface2 px-3 py-1.5 text-[15px] max-[600px]:mx-3"
+        className="mx-4 mt-3 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface2 px-3 py-1.5 text-base max-[600px]:mx-3"
       >
         {acted && (
           <span className="min-w-0 flex-1 truncate font-medium max-[600px]:whitespace-normal">

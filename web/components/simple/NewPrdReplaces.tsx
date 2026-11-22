@@ -53,7 +53,7 @@ export function CarriedList({ carried }: { carried: Carried }) {
       className="flex flex-col gap-2 rounded-xl border border-line bg-surface2 p-3"
       data-testid="np-carried"
     >
-      <p className="text-[15px] font-semibold text-text">Carried from {carried.title}</p>
+      <p className="text-base font-semibold text-text">Carried from {carried.title}</p>
       <p className="simple-small">The draft keeps these and does not argue them again.</p>
       <div className="flex flex-col gap-1">
         <span className="simple-small font-semibold">Decisions</span>
@@ -62,7 +62,7 @@ export function CarriedList({ carried }: { carried: Carried }) {
         ) : (
           <ul className="flex flex-col gap-1" data-testid="np-carried-decisions">
             {carried.decisions.map((d) => (
-              <li key={d.id} className="flex items-start gap-1.5 text-[15px] text-text">
+              <li key={d.id} className="flex items-start gap-1.5 text-base text-text">
                 <Icon name="check" size={16} />
                 <span>
                   D-{d.number} {d.title}
@@ -88,7 +88,7 @@ export function CarriedList({ carried }: { carried: Carried }) {
         ) : (
           <ul className="flex flex-col gap-1" data-testid="np-carried-estimates">
             {carried.bases.map((b) => (
-              <li key={b.id} className="text-[15px] text-text">
+              <li key={b.id} className="text-base text-text">
                 {KIND[b.kind] ?? b.kind} {b.reference} for {titles.get(b.item_key) ?? b.item_key}:{' '}
                 {dmy(b.supports_date)}
                 {b.detail ? <span className="simple-small"> · {b.detail}</span> : null}

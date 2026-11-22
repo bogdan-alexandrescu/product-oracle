@@ -11,7 +11,7 @@ import { useAuthRedirect } from '@/lib/use-query';
 
 type Target = { entity_id: string } | { edge_id: string };
 
-const LABEL = 'block text-[13px] font-semibold tracking-[0.02em] text-text2';
+const LABEL = 'block text-sm font-semibold tracking-[0.02em] text-text2';
 
 const FACTOR_LABEL: Record<string, string> = {
   source: 'Source',
@@ -184,7 +184,7 @@ export function AddEvidenceLink({
     <form
       onSubmit={fetchPreview}
       aria-label="Add evidence link"
-      className="flex flex-col gap-3 rounded-button border border-line bg-surface2 p-3 text-[15px]"
+      className="flex flex-col gap-3 rounded-button border border-line bg-surface2 p-3 text-base"
       data-testid="add-evidence-link"
     >
       {!target && (
@@ -259,7 +259,7 @@ export function AddEvidenceLink({
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="tnum text-[13px] font-semibold text-text2">
+              <p className="tnum text-sm font-semibold text-text2">
                 {sourceKindLabel(preview.kind)} · fetched {formatDate(preview.fetched_at)}
                 {preview.last_modified ? ` · updated ${formatDate(preview.last_modified)}` : ''}
               </p>
@@ -276,7 +276,7 @@ export function AddEvidenceLink({
             “{preview.excerpt}”
           </p>
           {breakdown && (
-            <p className="tnum mt-2 text-[13px] text-text2" data-testid="link-preview-factors">
+            <p className="tnum mt-2 text-sm text-text2" data-testid="link-preview-factors">
               {Object.entries(breakdown)
                 .map(
                   ([k, f]) =>
@@ -286,7 +286,7 @@ export function AddEvidenceLink({
             </p>
           )}
           {preview.already_cited && (
-            <p className="mt-2 rounded-lg bg-warn-bg px-2 py-1 text-[13px] font-medium text-warn">
+            <p className="mt-2 rounded-lg bg-warn-bg px-2 py-1 text-sm font-medium text-warn">
               This item already cites this link; refresh it from its evidence instead.
             </p>
           )}

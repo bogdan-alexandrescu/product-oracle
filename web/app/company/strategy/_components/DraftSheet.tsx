@@ -177,7 +177,7 @@ export function DraftSheet({
     >
       <label className="block">
         {/* qa-company-12: a first vision or strategy has no last one to compare with. */}
-        <span className="mb-1.5 block text-[15px] font-semibold text-text">
+        <span className="mb-1.5 block text-base font-semibold text-text">
           {approvedVersion != null
             ? 'What changed since the last one'
             : 'Anything Oracle should know'}
@@ -198,7 +198,7 @@ export function DraftSheet({
       </label>
       {vision ? (
         <label className="block">
-          <span className="mb-1.5 block text-[15px] font-semibold text-text">Horizon in years</span>
+          <span className="mb-1.5 block text-base font-semibold text-text">Horizon in years</span>
           <input
             type="number"
             min={1}
@@ -210,7 +210,7 @@ export function DraftSheet({
         </label>
       ) : (
         <fieldset className="min-w-0">
-          <legend className="mb-1.5 text-[15px] font-semibold text-text">Horizon</legend>
+          <legend className="mb-1.5 text-base font-semibold text-text">Horizon</legend>
           <div className="flex flex-wrap gap-3">
             <label className="flex items-center gap-2 text-sm font-semibold text-text2">
               From
@@ -237,7 +237,7 @@ export function DraftSheet({
         </fieldset>
       )}
       {approvedVersion != null && (
-        <label className="flex items-center gap-2 text-[15px]">
+        <label className="flex items-center gap-2 text-base">
           <input
             id={`${id}-from`}
             type="checkbox"

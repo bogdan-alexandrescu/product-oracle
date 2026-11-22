@@ -197,7 +197,7 @@ function DiffTable({ rows }: { rows: Line[][] }) {
 
 function Words({ words }: { words: NonNullable<SectionDiff['words']> }) {
   return (
-    <div className="text-[15px] leading-7 text-text" data-testid="word-diff">
+    <div className="text-base leading-7 text-text" data-testid="word-diff">
       {blocksOf(readableWords(words)).map((b, i) =>
         b.kind === 'table' ? (
           <DiffTable key={i} rows={b.rows} />
@@ -395,9 +395,9 @@ function DiffItems({
       <div className="flex min-w-0 flex-col gap-2 px-4 py-3 max-[600px]:px-3">
         {!q.data && <Loading label="Comparing items…" />}
         {q.data && 'notReady' in q.data && (
-          <p className="text-[15px] text-text2">{q.data.notReady}</p>
+          <p className="text-base text-text2">{q.data.notReady}</p>
         )}
-        {diff && !diff.base && <p className="text-[15px] text-text2">No items to compare with</p>}
+        {diff && !diff.base && <p className="text-base text-text2">No items to compare with</p>}
         {diff?.base && diff.summary && (
           <p data-testid="diff-items-summary" className="tnum text-sm text-text2">
             Since {baseName(diff, 'previous')}: {changeSummary(diff.summary)}
@@ -445,7 +445,7 @@ function DiffItems({
           </ul>
         )}
         {diff?.base && shown.length === 0 && (
-          <p className="text-[15px] text-text2">No item changed</p>
+          <p className="text-base text-text2">No item changed</p>
         )}
       </div>
     </Panel>

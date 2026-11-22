@@ -36,7 +36,7 @@ export function MetricChart({
   // qa4-company-41: one value is no line; say it in words until there is a second week.
   if (values.length === 1)
     return (
-      <p className="flex items-center gap-1.5 text-[15px]" data-testid="metric-chart-one">
+      <p className="flex items-center gap-1.5 text-base" data-testid="metric-chart-one">
         <span>
           Week of {weekText(values[0].week_start)}:{' '}
           <span className="tnum font-semibold">{valueText(values[0].value, metric.unit)}</span>
@@ -252,7 +252,7 @@ export function MetricChart({
           </g>
         )}
       </svg>
-      <figcaption className="flex items-center gap-1.5 text-[13px] text-text2">
+      <figcaption className="flex items-center gap-1.5 text-sm text-text2">
         <span>
           {weekText(first.week_start)} to {weekText(last.week_start)}
         </span>

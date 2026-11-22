@@ -216,7 +216,7 @@ export function EvidencePane({
     return notFound ? (
       <Panel testId="evidence-not-found">
         <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-          <p className="text-[15px] font-semibold text-text2">
+          <p className="text-base font-semibold text-text2">
             Version {n} of {title} was not found.
           </p>
           {latest !== n && (
@@ -262,7 +262,7 @@ export function EvidencePane({
     return (
       <Panel testId="evidence-no-section">
         <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-          <p className="text-[15px] font-semibold text-text2">
+          <p className="text-base font-semibold text-text2">
             v{n} has no section {only}.
           </p>
           <Button onClick={() => setParams({ section: null, sel: null })}>Show all sections</Button>
@@ -323,7 +323,7 @@ export function EvidencePane({
       )}
       {/* The coverage view's footnote says it already. */}
       {(view !== 'coverage' || nothing) && (
-        <span className="ml-auto text-[13px] text-text2 max-[1100px]:hidden">
+        <span className="ml-auto text-sm text-text2 max-[1100px]:hidden">
           Rendered pages never show these links; exports list them under &ldquo;Sources and data
           points&rdquo;.
         </span>
@@ -338,7 +338,7 @@ export function EvidencePane({
         {roleNote && <div className="mb-3">{roleNote}</div>}
         <Panel testId="evidence-empty">
           <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-            <p className="text-[15px] font-semibold text-text2">
+            <p className="text-base font-semibold text-text2">
               No section of v{n} is linked to evidence yet, and the draft cites nothing.
             </p>
             {canAdd && sections[0] && (
@@ -580,7 +580,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           })}
           {toggle('Stale only', stale, staleOnly, () => setStaleOnly(!staleOnly))}
           <span
-            className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text2 max-[1100px]:hidden"
+            className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2 max-[1100px]:hidden"
             aria-label="Legend"
           >
             {/* qa-docs-53: words, not scores. */}
@@ -602,7 +602,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           <ul data-testid="evidence-list" className="flex flex-col">
             {groups.map((g) => (
               <li key={g}>
-                <p className="bg-surface2 px-3 py-1.5 text-[13px] font-semibold text-text2">
+                <p className="bg-surface2 px-3 py-1.5 text-sm font-semibold text-text2">
                   {GROUP_LABEL[g]}{' '}
                   <span className="tnum">{shown.filter((r) => r.group === g).length}</span>
                 </p>
@@ -621,7 +621,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                           >
                             {r.title}
                           </span>
-                          <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">
+                          <span className="text-sm text-text2 [overflow-wrap:anywhere]">
                             {r.sub}
                           </span>
                           <span className="flex flex-wrap gap-1.5">
@@ -649,14 +649,14 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           <SideScroll>
             <table
               data-testid="evidence-matrix"
-              className="w-max min-w-full border-collapse text-[15px]"
+              className="w-max min-w-full border-collapse text-base"
               aria-label="Coverage"
             >
               <thead>
                 <tr className="border-b border-line">
                   <th
                     scope="col"
-                    className="sticky left-0 z-10 min-w-[240px] bg-surface px-4 py-2 text-left text-[13px] font-semibold text-text2"
+                    className="sticky left-0 z-10 min-w-[240px] bg-surface px-4 py-2 text-left text-sm font-semibold text-text2"
                   >
                     Linked to
                   </th>
@@ -668,7 +668,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                         scope="col"
                         data-section={s.section_key}
                         data-gap={gap ? 'true' : undefined}
-                        className={`relative w-[96px] min-w-[96px] px-1 py-2 text-center align-bottom text-[13px] leading-4 font-semibold ${gap ? 'bg-crit-bg text-crit' : 'text-text2'}`}
+                        className={`relative w-[96px] min-w-[96px] px-1 py-2 text-center align-bottom text-sm leading-4 font-semibold ${gap ? 'bg-crit-bg text-crit' : 'text-text2'}`}
                       >
                         {/* qa-docs-7: a red column needs no repeated word under its name; the
                             note under the table says what red means (screen readers hear it). */}
@@ -721,7 +721,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
         )}
         <p
           data-testid="evidence-footnote"
-          className="border-t border-line px-4 py-2 text-[13px] text-text2"
+          className="border-t border-line px-4 py-2 text-sm text-text2"
         >
           {/* qa-docs-7: one or two plain sentences. qa-docs-21: the rule the red follows (unsupportedKeys).
               qa-docs-53: the phone's list has no columns, so its note says what a row shows. */}
@@ -772,7 +772,7 @@ function MatrixGroupRows({
         <th
           colSpan={sections.length + 1}
           scope="colgroup"
-          className="sticky left-0 px-4 py-1.5 text-left text-[13px] font-semibold text-text2"
+          className="sticky left-0 px-4 py-1.5 text-left text-sm font-semibold text-text2"
         >
           {GROUP_LABEL[group]} <span className="tnum ml-1 text-text-faint">{rows.length}</span>
         </th>
@@ -791,7 +791,7 @@ function MatrixGroupRows({
             <span className={`block truncate font-medium ${r.muted ? 'text-text2' : ''}`}>
               {r.title}
             </span>
-            <span className="block truncate text-[13px] text-text2" title={r.sub}>
+            <span className="block truncate text-sm text-text2" title={r.sub}>
               {r.sub}
             </span>
           </td>
@@ -840,7 +840,7 @@ function Cell({
 }) {
   return (
     <span
-      className={`inline-flex h-7 min-w-16 items-center justify-center gap-1 rounded-md px-1.5 text-[13px] font-semibold whitespace-nowrap max-[600px]:min-w-0 ${CELL[t]} ${
+      className={`inline-flex h-7 min-w-16 items-center justify-center gap-1 rounded-md px-1.5 text-sm font-semibold whitespace-nowrap max-[600px]:min-w-0 ${CELL[t]} ${
         stale ? 'outline-2 -outline-offset-2 outline-warn outline-dashed' : ''
       } ${on ? 'ring-2 ring-accent' : ''}`}
     >
@@ -935,13 +935,13 @@ function TargetInspector(props: Shared & { row: MatrixRow }) {
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">{s.heading}</span>
-                <span className="ml-auto text-[13px] font-semibold text-text2">
+                <span className="ml-auto text-sm font-semibold text-text2">
                   {kindLabel(l.kind)} · {l.precision}
                 </span>
               </div>
               {l.claim && <p className="text-sm italic">&ldquo;{l.claim}&rdquo;</p>}
               {!l.current && (
-                <p className="flex flex-wrap items-center gap-2 text-[13px] text-text2">
+                <p className="flex flex-wrap items-center gap-2 text-sm text-text2">
                   <Chip kind="warn">Stale link</Chip> The section changed since this link was made.
                 </p>
               )}
@@ -1055,7 +1055,7 @@ function LinkMeta({
   ].filter(Boolean);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 flex-1 text-[13px] text-text2">{meta.join(' · ')}</span>
+      <span className="min-w-0 flex-1 text-sm text-text2">{meta.join(' · ')}</span>
       {canRemove && (
         <Button
           variant="ghost"
@@ -1157,7 +1157,7 @@ function LinkElsewhereForm({
           <Button type="submit" variant="primary" disabled={!ready || busy}>
             Add link
           </Button>
-          <span className="text-[13px] text-text2">
+          <span className="text-sm text-text2">
             Approvers and owners, unapproved versions only.
           </span>
         </div>
@@ -1169,7 +1169,7 @@ function LinkElsewhereForm({
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-[13px] leading-4 font-semibold text-text2">
+      <span className="text-sm leading-4 font-semibold text-text2">
         {label}
         {hint && <span className="font-normal"> {hint}</span>}
       </span>
@@ -1299,17 +1299,17 @@ function CitationBody({ c }: { c: EvidenceCitation }) {
       className="flex flex-col gap-1 rounded-lg border border-line px-3 py-2.5 text-sm"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-semibold text-text2">{sourceLabel(c.source)}</span>
+        <span className="text-sm font-semibold text-text2">{sourceLabel(c.source)}</span>
       </div>
       <span className="font-semibold">{c.title || citationRefText(c.ref)}</span>
       {c.title && c.ref !== c.title && (
-        <span className="text-[13px] break-all text-text2">{citationRefText(c.ref)}</span>
+        <span className="text-sm break-all text-text2">{citationRefText(c.ref)}</span>
       )}
       {c.excerpt && (
         <blockquote className="border-l-2 border-line-strong pl-2.5">{c.excerpt}</blockquote>
       )}
       {(!c.excerpt || !c.retrieved_at) && (
-        <span className="text-[13px] text-text2">
+        <span className="text-sm text-text2">
           {[
             !c.excerpt ? 'No excerpt' : null,
             c.retrieved_at
@@ -1321,7 +1321,7 @@ function CitationBody({ c }: { c: EvidenceCitation }) {
         </span>
       )}
       {c.excerpt && c.retrieved_at && (
-        <span className="text-[13px] text-text2">Retrieved {formatDate(c.retrieved_at)}</span>
+        <span className="text-sm text-text2">Retrieved {formatDate(c.retrieved_at)}</span>
       )}
     </div>
   );
@@ -1447,7 +1447,7 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
         count={sections.length}
         tools={
           props.data.snapshot ? (
-            <span className="text-[13px] font-semibold text-text2">
+            <span className="text-sm font-semibold text-text2">
               {sourcesAsOf(props.data.snapshot).replace(/\.$/, '')}
             </span>
           ) : undefined
@@ -1467,7 +1467,7 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
           empty="No sections match"
           rowProps={(s) => ({ 'data-section': s.section_key })}
         />
-        <p className="border-t border-line px-4 py-2 text-[13px] text-text2">
+        <p className="border-t border-line px-4 py-2 text-sm text-text2">
           Links are listed strongest first (confidence high to low, unscored last). Citations are
           the sources the draft itself cites.
         </p>
@@ -1602,12 +1602,12 @@ function SectionLinkCard({
       {!l.current && (
         <div className="flex flex-wrap items-center gap-2">
           <Chip kind="warn">Stale link</Chip>
-          <span className="text-[13px] text-text2">section changed since linking</span>
+          <span className="text-sm text-text2">section changed since linking</span>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-semibold text-text2">{kindLabel(l.kind)}</span>
-        <span className="text-[13px] text-text2">· {l.precision}</span>
+        <span className="text-sm font-semibold text-text2">{kindLabel(l.kind)}</span>
+        <span className="text-sm text-text2">· {l.precision}</span>
         <span className="ml-auto" data-confidence={c == null ? '' : String(c)}>
           <Chip kind={tone(c)}>{c == null ? 'no score' : score(c)}</Chip>
         </span>
@@ -1625,10 +1625,10 @@ function SectionLinkCard({
       )}
       <div className="flex flex-wrap items-center gap-1.5">
         {t.type === 'entity' && t.entity_type && (
-          <span className="text-[13px] text-text2">{cap(t.entity_type)}</span>
+          <span className="text-sm text-text2">{cap(t.entity_type)}</span>
         )}
         {t.type !== 'entity' && (
-          <span className="text-[13px] text-text2">{sourceLabel(t.source_kind)}</span>
+          <span className="text-sm text-text2">{sourceLabel(t.source_kind)}</span>
         )}
         {t.status && (
           <Chip kind={t.status === 'confirmed' ? 'pass' : leftOut(t) ? 'na' : 'warn'}>
@@ -1642,21 +1642,21 @@ function SectionLinkCard({
             href={t.url}
             target="_blank"
             rel="noreferrer"
-            className="text-[13px] font-semibold text-accent-ink hover:underline"
+            className="text-sm font-semibold text-accent-ink hover:underline"
           >
             Open source ↗
           </a>
         )}
       </div>
       {t.restricted && (
-        <p className="text-[13px] text-text2">
+        <p className="text-sm text-text2">
           Restricted: someone else&rsquo;s source. Only its kind is shown.
         </p>
       )}
       {t.source_removed && (
-        <p className="text-[13px] text-text2">Exports label it &ldquo;(source removed)&rdquo;.</p>
+        <p className="text-sm text-text2">Exports label it &ldquo;(source removed)&rdquo;.</p>
       )}
-      {leftOut(t) && <p className="text-[13px] text-text2">Left out of exports ({t.status}).</p>}
+      {leftOut(t) && <p className="text-sm text-text2">Left out of exports ({t.status}).</p>}
       <LinkMeta link={l} nameOf={nameOf} canRemove={canRemove} remove={remove} />
     </div>
   );
@@ -1761,9 +1761,7 @@ function AddSectionLinkForm({
           <Button type="button" variant="ghost" disabled={busy} onClick={reset}>
             Cancel
           </Button>
-          <span className="text-[13px] text-text2">
-            Pinned to this section&rsquo;s current text.
-          </span>
+          <span className="text-sm text-text2">Pinned to this section&rsquo;s current text.</span>
         </div>
       </form>
     </InspectorSection>
@@ -1796,7 +1794,7 @@ function SideScroll({ children }: { children: ReactNode }) {
       {more && (
         <p
           data-testid="evidence-scroll-hint"
-          className="border-b border-line px-4 py-1.5 text-right text-[13px] text-text2"
+          className="border-b border-line px-4 py-1.5 text-right text-sm text-text2"
         >
           Scroll sideways for more →
         </p>

@@ -123,7 +123,7 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
               <li key={i.id} className="flex min-w-0 items-baseline gap-2">
                 {/* A run's title says it is a run ("The run of Oct 17 that wrote …"). */}
                 {i.type !== 'run' && (
-                  <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>
+                  <span className="flex-none text-sm text-text2">{itemKind(i)}</span>
                 )}
                 {/* F-69: a run by the same title the delete dialog gave it. */}
                 <span className="min-w-0 break-words">{itemTitle(i, e.root.title)}</span>
@@ -137,7 +137,7 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
         </p>
         {error && <Notice tone="error">{error}</Notice>}
       </div>
-      <div className="flex flex-none items-center gap-2">
+      <div className="flex max-w-full flex-none flex-wrap items-center gap-2 max-[600px]:gap-1.5">
         <Chip kind={e.days_left <= 3 ? 'warn' : 'line'}>
           {e.days_left} {e.days_left === 1 ? 'day' : 'days'} left
         </Chip>

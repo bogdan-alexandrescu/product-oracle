@@ -110,13 +110,13 @@ export function LoginForm() {
         <p
           role="status"
           data-testid="login-checking"
-          className="py-6 text-center text-[15px] text-text2"
+          className="py-6 text-center text-base text-text2"
         >
           Checking your session…
         </p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Email
             <input
               type="email"
@@ -129,7 +129,7 @@ export function LoginForm() {
               className={`${field} font-normal`}
             />
           </label>
-          <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Password
             <input
               type="password"
@@ -153,7 +153,7 @@ export function LoginForm() {
           className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4 text-sm"
         >
           <Chip kind="warn">Mock</Chip>
-          <span className="min-w-0 font-mono text-[13px] break-all">
+          <span className="min-w-0 font-mono text-sm break-all">
             {MOCK_LOGIN.email} / {MOCK_LOGIN.password}
           </span>
           <InfoTip label="Mock mode" side="top">

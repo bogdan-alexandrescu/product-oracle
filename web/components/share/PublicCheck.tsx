@@ -189,7 +189,7 @@ function Field({
       </label>
       {children(id, hintId)}
       {hint && (
-        <p id={hintId} className="text-[13px] text-text2">
+        <p id={hintId} className="text-sm text-text2">
           {hint}
         </p>
       )}
@@ -367,7 +367,7 @@ function TextEditor({
         </Button>
       </div>
       {unticked && (
-        <p id={approveWhyId} data-testid="public-approve-why" className="text-[13px] text-text2">
+        <p id={approveWhyId} data-testid="public-approve-why" className="text-sm text-text2">
           {UNTICKED}
         </p>
       )}
@@ -420,7 +420,7 @@ function ReviewRow({
     <li data-testid="public-row" className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="min-w-0 font-semibold break-words">{row.internal_title}</span>
-        <span className="text-[13px] text-text2 capitalize">{row.horizon}</span>
+        <span className="text-sm text-text2 capitalize">{row.horizon}</span>
         <span className="flex-1" />
         <Chip kind={state.kind} dot data-testid="public-state">
           {state.label}
@@ -430,7 +430,7 @@ function ReviewRow({
         <div className="mt-1.5 text-sm">
           <p className="font-medium">{t.title}</p>
           {t.description && <p className="text-text2">{t.description}</p>}
-          <p className="mt-0.5 text-[13px] text-text2">
+          <p className="mt-0.5 text-sm text-text2">
             {STAGES.find(([s]) => s === t.stage)?.[1]}
             {t.announced_quarter && ` · Announced for ${t.announced_quarter}`}
           </p>
@@ -439,7 +439,7 @@ function ReviewRow({
         <p className="mt-1.5 text-sm text-text2">No public text yet.</p>
       )}
       {row.left_out_reason === 'no_goal' && (
-        <p className="mt-1 text-[13px] text-text2">
+        <p className="mt-1 text-sm text-text2">
           Left out: serves no confirmed goal.{' '}
           <Link href={GOALS_HREF} className="font-medium text-accent-ink hover:underline">
             Link it to a goal
@@ -909,7 +909,7 @@ function PageText({ doc, data, onSaved }: { doc: string; data: Texts; onSaved: (
           </ul>
         )}
         {data.page_findings.some((f) => f.severity === 'blocking') && (
-          <p className="text-[13px] text-text2">
+          <p className="text-sm text-text2">
             The page leaves its title or intro out until this is fixed.
           </p>
         )}
@@ -1033,7 +1033,7 @@ export function PublicCheck({ doc }: { doc: string }) {
               A public version is the page anyone with a roadmap&apos;s public link reads.
             </InfoTip>
           </p>
-          <p className="max-w-prose text-[15px] text-text2">
+          <p className="max-w-prose text-base text-text2">
             {docQ.data.title} is a {what}, so it has none.
           </p>
           <LinkButton href={`/documents/${doc}`} icon="back">
@@ -1070,7 +1070,7 @@ export function PublicCheck({ doc }: { doc: string }) {
           <p className="font-display text-lg font-bold tracking-heading text-text">
             Only an approver or owner can check the Public version
           </p>
-          <p className="max-w-prose text-[15px] text-text2">
+          <p className="max-w-prose text-base text-text2">
             The Public version is the page anyone with the roadmap&apos;s public link sees. You can
             still read the roadmap and its other views.
           </p>
@@ -1156,7 +1156,7 @@ export function PublicCheck({ doc }: { doc: string }) {
               }
             >
               {rows.length === 0 ? (
-                <p className="px-4 py-8 text-center text-[15px] text-text2">Nothing here.</p>
+                <p className="px-4 py-8 text-center text-base text-text2">Nothing here.</p>
               ) : (
                 <ul className="divide-y divide-line">
                   {rows.map((r) => (
@@ -1172,7 +1172,7 @@ export function PublicCheck({ doc }: { doc: string }) {
               )}
             </Panel>
             <Panel title="What is removed" bodyClassName="px-4 py-3">
-              <p className="mb-2 text-[13px] text-text2">
+              <p className="mb-2 text-sm text-text2">
                 Left out of the public page, wherever the roadmap names them:
               </p>
               <ul

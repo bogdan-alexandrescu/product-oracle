@@ -130,9 +130,7 @@ export function PlanSteps({
 function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <li className="flex flex-col gap-1.5 border-l-2 border-line pl-3">
-      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-        {title}
-      </span>
+      <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">{title}</span>
       {children}
     </li>
   );

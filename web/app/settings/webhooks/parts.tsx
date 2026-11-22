@@ -180,7 +180,7 @@ export function SecretOnce({ secret }: { secret: string }) {
     <div className="flex flex-col gap-2" data-testid="secret-once">
       <label
         htmlFor="webhook-secret"
-        className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+        className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
       >
         Signing secret
       </label>
@@ -191,7 +191,7 @@ export function SecretOnce({ secret }: { secret: string }) {
           readOnly
           rows={2}
           value={secret}
-          className={`${TEXTAREA} resize-none font-mono text-[13px] break-all`}
+          className={`${TEXTAREA} resize-none font-mono text-sm break-all`}
           onFocus={(e) => e.currentTarget.select()}
         />
         <Button

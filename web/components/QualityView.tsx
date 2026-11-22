@@ -656,7 +656,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
                 {plural(Number(done.output?.criteria ?? 0), 'criterion', 'criteria')} judged
                 {countsLine(done.output?.counts) && ` · ${countsLine(done.output?.counts)}`}.
                 {admin && (
-                  <details className="mt-1 text-[13px] text-text2" data-testid="job-details">
+                  <details className="mt-1 text-sm text-text2" data-testid="job-details">
                     <summary className="cursor-pointer">Details</summary>
                     {[
                       done.model && `Model ${done.model}`,
@@ -676,7 +676,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
                 <>
                   Oracle reviewed this at {when(readiness.model_review.created_at, zone)}.
                   {admin && readiness.model_review.model && (
-                    <details className="mt-1 text-[13px] text-text2" data-testid="model-details">
+                    <details className="mt-1 text-sm text-text2" data-testid="model-details">
                       <summary className="cursor-pointer">Details</summary>
                       Model {readiness.model_review.model}
                     </details>
@@ -769,7 +769,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           />
           {readiness && (
             <p
-              className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-[13px] text-text2 max-[600px]:px-3"
+              className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-sm text-text2 max-[600px]:px-3"
               data-testid="latest-report"
             >
               {/* The rules run each time the page opens (evaluated_at is the request's clock): the time shown is the last saved check's. */}
@@ -919,13 +919,13 @@ function CriterionInspector({
           <span
             key={k}
             data-testid="section-tag"
-            className="rounded-goal bg-surface2 px-1.5 text-[13px] text-text2"
+            className="rounded-goal bg-surface2 px-1.5 text-sm text-text2"
           >
             {sectionName(k, sections)}
           </span>
         ))}
         {evidence > 0 && (
-          <span className="rounded-goal bg-surface2 px-1.5 text-[13px] text-text2">
+          <span className="rounded-goal bg-surface2 px-1.5 text-sm text-text2">
             {plural(evidence, 'piece of evidence', 'pieces of evidence')}
           </span>
         )}
@@ -959,7 +959,7 @@ function CriterionInspector({
       stats={stats}
     >
       <InspectorSection label="Question">
-        <p className="text-[15px]">{item.question}</p>
+        <p className="text-base">{item.question}</p>
       </InspectorSection>
 
       <InspectorSection label="What each evaluator said">
@@ -968,7 +968,7 @@ function CriterionInspector({
             Rules, model and other people&apos;s ratings are hidden until you pick a status.
           </p>
         ) : (
-          <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-3 text-[15px]">
+          <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-3 text-base">
             <Said who="Rules">
               {item.error ? (
                 <>
@@ -1008,7 +1008,7 @@ function CriterionInspector({
               <Said key={`${h.rater_id}-${h.report_id}`} who={nameOf(h.rater_id)}>
                 <span className="flex items-center gap-2">
                   <StatusChip status={h.status} />
-                  <span className="text-[13px] text-text2">{zoneDay(h.created_at, zone)}</span>
+                  <span className="text-sm text-text2">{zoneDay(h.created_at, zone)}</span>
                 </span>
                 <p>{h.rationale}</p>
                 {tags(h.section_keys ?? [])}
@@ -1020,7 +1020,7 @@ function CriterionInspector({
 
       {owner && (
         <InspectorSection label="Owner">
-          <p className="text-[15px] font-medium" data-testid="criterion-owner">
+          <p className="text-base font-medium" data-testid="criterion-owner">
             {owner}
           </p>
         </InspectorSection>
@@ -1033,18 +1033,16 @@ function CriterionInspector({
           </Notice>
         )}
         {!item.hard && mine && (
-          <div data-testid="my-rating" className="flex flex-col gap-1.5 text-[15px]">
+          <div data-testid="my-rating" className="flex flex-col gap-1.5 text-base">
             <span className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-text2">You rated this</span>
               <StatusChip status={mine.status} />
-              <span className="text-[13px] text-text2">{zoneDay(mine.created_at, zone)}</span>
+              <span className="text-sm text-text2">{zoneDay(mine.created_at, zone)}</span>
             </span>
             <p className="break-words">{mine.rationale}</p>
             {/* qa4-docs-42: the sections picked with the rating. */}
             {tags(mine.section_keys ?? [])}
-            {mayRate && (
-              <p className="text-[13px] text-text2">Submit again to change your rating.</p>
-            )}
+            {mayRate && <p className="text-sm text-text2">Submit again to change your rating.</p>}
           </div>
         )}
         {item.hard ? (
@@ -1071,7 +1069,7 @@ function CriterionInspector({
 function Said({ who, children }: { who: string; children: ReactNode }) {
   return (
     <div data-testid="evaluator" className="contents">
-      <dt className="pt-0.5 text-[13px] font-semibold text-text2">{who}</dt>
+      <dt className="pt-0.5 text-sm font-semibold text-text2">{who}</dt>
       <dd className="flex min-w-0 flex-col gap-1.5 break-words">{children}</dd>
     </div>
   );
@@ -1135,7 +1133,7 @@ function RatingForm({
         })}
       </div>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-text2">Reason</span>
+        <span className="text-sm font-semibold text-text2">Reason</span>
         <textarea
           className={`${INPUT} min-h-20`}
           value={draft.rationale}
@@ -1144,7 +1142,7 @@ function RatingForm({
         />
       </label>
       <div className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-text2">Sections</span>
+        <span className="text-sm font-semibold text-text2">Sections</span>
         <div className="flex flex-wrap items-center gap-1.5">
           {draft.sections.map((k) => (
             <button
@@ -1152,7 +1150,7 @@ function RatingForm({
               type="button"
               aria-label={`Remove section ${sectionName(k, sections)}`}
               onClick={() => onDraft({ ...draft, sections: draft.sections.filter((x) => x !== k) })}
-              className="inline-flex h-7 items-center gap-1 rounded-goal bg-surface2 px-2 text-[13px] text-text2 hover:text-text"
+              className="inline-flex h-7 items-center gap-1 rounded-goal bg-surface2 px-2 text-sm text-text2 hover:text-text"
             >
               <span data-testid="picked-section">{sectionName(k, sections)}</span>
               <span aria-hidden>×</span>
@@ -1180,7 +1178,7 @@ function RatingForm({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span data-testid="rating-hint" className="min-w-0 flex-1 text-[13px] text-text2">
+        <span data-testid="rating-hint" className="min-w-0 flex-1 text-sm text-text2">
           {hint}
         </span>
         <Button variant="primary" disabled={!ready || busy} onClick={onSubmit}>

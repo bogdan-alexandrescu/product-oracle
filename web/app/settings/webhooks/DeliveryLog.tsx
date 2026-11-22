@@ -194,11 +194,11 @@ function DeliverySheet({
     }
   }
   const pre =
-    'max-h-60 overflow-auto rounded-lg bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap break-all';
+    'max-h-60 overflow-auto rounded-lg bg-surface2 p-3 font-mono text-sm leading-5 whitespace-pre-wrap break-all';
   return (
     <Sheet open title="Delivery" onClose={onClose} testId="delivery-sheet">
       <div className="flex flex-col gap-3 p-4">
-        <div className="flex flex-wrap items-center gap-2 text-[15px]">
+        <div className="flex flex-wrap items-center gap-2 text-base">
           <span className="font-semibold">{eventLabel(d.event_type, eventTypes)}</span>
           <Outcome d={d} />
           <span className="text-text2">
@@ -206,19 +206,19 @@ function DeliverySheet({
           </span>
         </div>
         <section>
-          <h3 className="mb-1 text-[13px] font-semibold text-text2">Headers</h3>
+          <h3 className="mb-1 text-sm font-semibold text-text2">Headers</h3>
           <pre className={pre} data-testid="delivery-headers">
             {headers.join('\n')}
           </pre>
         </section>
         <section>
-          <h3 className="mb-1 text-[13px] font-semibold text-text2">Body sent</h3>
+          <h3 className="mb-1 text-sm font-semibold text-text2">Body sent</h3>
           <pre className={pre} data-testid="delivery-body">
             {d.body ? JSON.stringify(d.body, null, 2) : 'Not sent yet'}
           </pre>
         </section>
         <section>
-          <h3 className="mb-1 text-[13px] font-semibold text-text2">
+          <h3 className="mb-1 text-sm font-semibold text-text2">
             Response
             {d.http_status != null
               ? ` · ${answerText(d.http_status)}`

@@ -30,7 +30,7 @@ const PILL: Record<Status, string> = {
   dropped: 'bg-surface2 text-text2',
 };
 const BIT = 'rounded px-0.5 text-left hover:bg-surface2 hover:underline';
-const INPUT = 'rounded-md border border-line bg-surface px-2 py-1 text-[15px]';
+const INPUT = 'rounded-md border border-line bg-surface px-2 py-1 text-base';
 
 /** A small menu under its control; a click away or Escape closes it. */
 function Pop({
@@ -90,7 +90,7 @@ function Choice({
     <button
       type="button"
       role="menuitem"
-      className={`block w-full rounded-md px-2 py-1.5 text-left text-[15px] hover:bg-surface2 ${warn ? 'text-warn' : ''} ${current ? 'font-semibold' : ''}`}
+      className={`block w-full rounded-md px-2 py-1.5 text-left text-base hover:bg-surface2 ${warn ? 'text-warn' : ''} ${current ? 'font-semibold' : ''}`}
       onClick={onPick}
     >
       {label}
@@ -158,7 +158,7 @@ function TaskRow({
     return (
       <li data-testid="card-task" className="border-b border-line py-1.5 last:border-b-0">
         <div className="[overflow-wrap:anywhere]">{task.title}</div>
-        <div className="flex items-center gap-2 text-[14px] text-text2">
+        <div className="flex items-center gap-2 text-sm text-text2">
           <span className="min-w-0 flex-1">
             {owner} · {due}
           </span>
@@ -211,7 +211,7 @@ function TaskRow({
           {task.title}
         </button>
       )}
-      <div className="relative flex items-center gap-1 text-[14px] text-text2">
+      <div className="relative flex items-center gap-1 text-sm text-text2">
         <span className="relative min-w-0 flex-1">
           <button
             type="button"
@@ -271,7 +271,7 @@ function TaskRow({
             aria-haspopup="menu"
             aria-expanded={open === 'status'}
             data-testid="task-status"
-            className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${PILL[task.status]}`}
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PILL[task.status]}`}
             onClick={() => setOpen(open === 'status' ? null : 'status')}
           >
             {STATUS_WORDS[task.status]} ▾

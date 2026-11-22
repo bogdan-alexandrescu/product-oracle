@@ -435,7 +435,7 @@ function SourcesSearchPage() {
           role="search"
           className="flex flex-wrap items-end gap-2.5 rounded-panel border border-line bg-surface p-3 shadow-panel"
         >
-          <label className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1 text-[13px] font-semibold text-text2">
+          <label className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1 text-sm font-semibold text-text2">
             Search
             <input
               type="search"
@@ -445,7 +445,7 @@ function SourcesSearchPage() {
               className={`${field} font-normal placeholder:text-text2`}
             />
           </label>
-          <label className="flex min-w-0 flex-[1_1_9rem] flex-col gap-1 text-[13px] font-semibold text-text2">
+          <label className="flex min-w-0 flex-[1_1_9rem] flex-col gap-1 text-sm font-semibold text-text2">
             Kind
             <select
               value={kind}
@@ -460,7 +460,7 @@ function SourcesSearchPage() {
               ))}
             </select>
           </label>
-          <label className="flex min-w-0 flex-[1_1_9rem] flex-col gap-1 text-[13px] font-semibold text-text2">
+          <label className="flex min-w-0 flex-[1_1_9rem] flex-col gap-1 text-sm font-semibold text-text2">
             Source
             <select
               value={source}

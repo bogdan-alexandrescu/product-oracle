@@ -564,7 +564,7 @@ function MethodSwitch({
             disabled={locked && !on}
             title={locked && !on ? "The run's order is ranked by its own method" : undefined}
             onClick={() => onChange(m.method)}
-            className={`flex h-9 items-center border-r border-line px-3.5 text-[15px] font-medium max-[600px]:px-2.5 max-[600px]:text-sm whitespace-nowrap last:border-r-0 disabled:cursor-not-allowed disabled:text-text2 ${
+            className={`flex h-9 items-center border-r border-line px-3.5 text-base font-medium max-[600px]:px-2.5 max-[600px]:text-sm whitespace-nowrap last:border-r-0 disabled:cursor-not-allowed disabled:text-text2 ${
               on
                 ? 'bg-accent text-on-accent'
                 : 'text-text hover:bg-surface2 disabled:hover:bg-transparent'
@@ -752,7 +752,7 @@ function FeatureInspector({
 
             {inputs.length > 0 && (
               <InspectorSection label="Inputs">
-                <table className="w-full table-fixed text-[13px] leading-5">
+                <table className="w-full table-fixed text-sm leading-5">
                   <thead className="text-left text-text2">
                     <tr>
                       <th className="py-1 pr-2 font-semibold">Input</th>
@@ -855,15 +855,12 @@ function FeatureInspector({
                         )}
                       </div>
                       {g.parent && (
-                        <div
-                          className="mt-0.5 text-[13px] text-text2"
-                          data-testid="goal-via-parent"
-                        >
+                        <div className="mt-0.5 text-sm text-text2" data-testid="goal-via-parent">
                           Subgoal of {g.parent_title ?? g.parent}: its weight is its share of the
                           parent&apos;s
                         </div>
                       )}
-                      <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 text-[13px] text-text2">
+                      <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 text-sm text-text2">
                         Weight {formatScore(g.weight)}
                         {g.weight_assumed && <AssumedMark />} × contribution{' '}
                         {formatScore(g.contribution)}
@@ -888,9 +885,9 @@ function FeatureInspector({
 function TileFigure({ text }: { text: string }) {
   const size =
     text.length <= 4
-      ? 'text-[34px] leading-9'
+      ? 'text-3xl leading-9'
       : text.length <= 6
-        ? 'text-[26px] leading-9'
+        ? 'text-2xl leading-9'
         : 'text-xl leading-9';
   return (
     <span
@@ -908,7 +905,7 @@ function PlainCount({ n }: { n: number }) {
 
 function AssumedMark() {
   return (
-    <span className="rounded-goal bg-warn-bg px-1.5 font-sans text-[13px] leading-5 font-semibold text-warn">
+    <span className="rounded-goal bg-warn-bg px-1.5 font-sans text-sm leading-5 font-semibold text-warn">
       assumed
     </span>
   );
@@ -1623,12 +1620,12 @@ function Priorities() {
         return (
           <span
             data-testid="row-deps"
-            className="block text-[13px] leading-[18px] text-text2"
+            className="block text-sm leading-[18px] text-text2"
             title={text || undefined}
           >
             {/* Between words; a word wider than the column hyphenated, never cut bare
                 ("instrumentatio / n", priorities-words). */}
-            {(fonts ? fitWords(text, depsRoom, 400, 13) : text) || '—'}
+            {(fonts ? fitWords(text, depsRoom, 400, 14) : text) || '—'}
           </span>
         );
       },
@@ -1651,10 +1648,11 @@ function Priorities() {
         const rest = flags.slice(shown);
         return (
           // A blue chip is the card surface with an accent edge, never the selected row's blue
-          // (qa-plan-48), and the same on every row: one look per flag (qa4-plan-9).
+          // (qa-plan-48), and the same on every row: one look per flag (qa4-plan-9). Its chips are
+          // text-xs: at text-sm a flag no longer fits the 144 px column (qa-plan-49).
           <span
             data-testid="row-flags"
-            className="flex flex-wrap items-center gap-1.5 py-0.5 [&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]"
+            className="flex flex-wrap items-center gap-1.5 py-0.5 [&_[data-kind]]:text-xs [&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]"
           >
             {byKey.get(f.key)?.problems.map((p) => (
               <ProblemChip key={p.code} p={p} />
@@ -1739,7 +1737,7 @@ function Priorities() {
     <div className="flex flex-col gap-2">
       <div className="flex max-w-full flex-wrap items-end gap-2" data-testid="snapshot-save">
         <label className="flex min-w-0 flex-col gap-1 max-[600px]:w-full">
-          <span className="text-[13px] font-semibold text-text2">Snapshot note (optional)</span>
+          <span className="text-sm font-semibold text-text2">Snapshot note (optional)</span>
           <input
             id="snapshot-note"
             value={note}

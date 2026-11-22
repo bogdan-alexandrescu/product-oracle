@@ -31,10 +31,7 @@ export function KeyField({
   const flagged = bad || !!error;
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
-      >
+      <label htmlFor={id} className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
         Key
       </label>
       <input
@@ -52,7 +49,7 @@ export function KeyField({
       <p
         id={`${id}-hint`}
         data-testid={`${id}-hint`}
-        className={`text-[13px] leading-[18px] ${flagged ? 'text-crit' : 'text-text2'}`}
+        className={`text-sm leading-[18px] ${flagged ? 'text-crit' : 'text-text2'}`}
       >
         {error && !bad
           ? error

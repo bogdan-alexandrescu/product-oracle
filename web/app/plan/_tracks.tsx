@@ -265,7 +265,7 @@ export function TrackPanel({
         </>
       }
     >
-      <div className="flex flex-col gap-3 px-4 py-3 text-[15px] max-[600px]:px-3">
+      <div className="flex flex-col gap-3 px-4 py-3 text-base max-[600px]:px-3">
         {renaming && may.edit && (
           <form
             ref={renameForm}
@@ -302,7 +302,7 @@ export function TrackPanel({
         <p className="text-text2">{track.headline}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="text-[13px] font-semibold text-text2">Owner:</span>
+            <span className="text-sm font-semibold text-text2">Owner:</span>
             {/* qa-plan-30: no owner reads "not set" in plain grey, and the action is Set owner. */}
             <span
               data-testid="track-owner"
@@ -360,7 +360,7 @@ export function TrackPanel({
       </div>
       <div className="border-t border-line">
         <div className="flex items-center gap-2 px-4 pt-3 pb-1 max-[600px]:px-3">
-          <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">Milestones</span>
+          <span className="text-sm font-semibold tracking-[0.02em] text-text2">Milestones</span>
           {may.addMilestone && (
             <Button
               variant="ghost"
@@ -540,7 +540,7 @@ function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
       chips={<Chip hero>{track.title}</Chip>}
     >
       <InspectorSection>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[15px]">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-base">
           <dt className="text-text2">Name</dt>
           <dd data-testid="milestone-name">{m.name}</dd>
           <dt className="text-text2">Horizon</dt>
@@ -715,9 +715,9 @@ function MilestoneForm({
                 <Loading />
               ) : supporting.length ? (
                 <fieldset className="flex flex-col gap-1">
-                  <legend className="text-[13px] font-semibold text-text2">Verified by</legend>
+                  <legend className="text-sm font-semibold text-text2">Verified by</legend>
                   {supporting.map((b) => (
-                    <label key={b.id} className="flex items-center gap-2 text-[15px]">
+                    <label key={b.id} className="flex items-center gap-2 text-base">
                       <input
                         type="checkbox"
                         checked={basisIds.includes(b.id)}
@@ -763,7 +763,7 @@ function MilestoneForm({
             {items.error && <span className="text-text2">{items.error}</span>}
             {items.data?.length === 0 && <span className="text-text2">No roadmap items yet</span>}
             {items.data?.map((i) => (
-              <label key={i.item_key} className="flex min-w-0 items-center gap-2 text-[15px]">
+              <label key={i.item_key} className="flex min-w-0 items-center gap-2 text-base">
                 <input
                   type="checkbox"
                   checked={itemKeys.includes(i.item_key)}

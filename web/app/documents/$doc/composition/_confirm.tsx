@@ -73,7 +73,7 @@ export function Modal({
       >
         <div className="bg-hero px-5 pt-4 pb-[18px] text-hero-text">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+            <span className="text-sm leading-4 font-semibold tracking-[0.02em] text-hero-text2">
               {eyebrow}
             </span>
             <button
@@ -87,7 +87,7 @@ export function Modal({
           </div>
           <h2
             id={`${id}-title`}
-            className="mt-1 font-display text-[22px] leading-[27px] font-bold tracking-heading"
+            className="mt-1 font-display text-xl leading-[27px] font-bold tracking-heading"
           >
             {title}
           </h2>
@@ -276,7 +276,7 @@ export function ConfirmStep({
       phone={phone}
       onClose={onClose}
     >
-      <div className="grid gap-5 px-5 py-4 text-[15px] min-[901px]:grid-cols-[minmax(0,1fr)_320px] max-[600px]:px-4">
+      <div className="grid gap-5 px-5 py-4 text-base min-[901px]:grid-cols-[minmax(0,1fr)_320px] max-[600px]:px-4">
         <div className="min-w-0 space-y-4">
           {!preview && !previewError && (
             <p role="status" className="text-sm text-text2">
@@ -397,7 +397,7 @@ export function ConfirmStep({
           <div>
             <label
               htmlFor="composition-reason"
-              className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+              className="mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
             >
               Reason (required)
             </label>
@@ -409,7 +409,7 @@ export function ConfirmStep({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
-            <p className="tnum mt-1 text-right text-[13px] text-text2">{reason.length} / 2000</p>
+            <p className="tnum mt-1 text-right text-sm text-text2">{reason.length} / 2000</p>
           </div>
           <p className="text-sm text-text2">
             {data.head_revision != null
@@ -494,14 +494,14 @@ export function PublishStep({
       phone={phone}
       onClose={onClose}
     >
-      <div className="space-y-3 px-5 py-4 text-[15px] max-[600px]:px-4">
+      <div className="space-y-3 px-5 py-4 text-base max-[600px]:px-4">
         <p className="text-sm text-text2">
           The published composition is pinned to the version and never changed afterwards.
         </p>
         <div>
           <label
             htmlFor="publish-version"
-            className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+            className="mb-1.5 block text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
           >
             Approved document version
           </label>

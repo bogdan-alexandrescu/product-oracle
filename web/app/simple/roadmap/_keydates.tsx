@@ -107,7 +107,7 @@ export function KeyDatesEditor({
     ...(!adding.name.trim() ? ['a name'] : []),
     ...(!adding.date ? ['a date'] : []),
   ];
-  const field = 'h-8 rounded-lg border border-line bg-bg px-2 text-[15px]';
+  const field = 'h-8 rounded-lg border border-line bg-bg px-2 text-base';
   // fix4 qa-simple-roadmap-36: each field has its label in view (the date field's own format
   // is the browser's: a native date input writes the day its own way).
   const labelled = 'flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2';

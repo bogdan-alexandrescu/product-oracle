@@ -877,7 +877,7 @@ function Part({
 }) {
   return (
     <section className="mt-3" data-testid={testId}>
-      <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
+      <h3 className="text-xs leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
         {title}
       </h3>
       {children}
@@ -1150,7 +1150,7 @@ export function FloatingCard({
     <button
       type="button"
       role="menuitem"
-      className={`block w-full rounded-md px-2 py-1 text-left text-[15px] hover:bg-surface2 ${warn ? 'text-warn' : ''}`}
+      className={`block w-full rounded-md px-2 py-1 text-left text-base hover:bg-surface2 ${warn ? 'text-warn' : ''}`}
       onClick={() => {
         setMenu(false);
         run();
@@ -1163,7 +1163,7 @@ export function FloatingCard({
     <div className="flex items-start gap-2">
       {/* BGD (Nov 4): the code chip before the name; the heading itself is the name. */}
       <div
-        className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words"
+        className="min-w-0 flex-1 text-lg leading-6 font-semibold break-words"
         data-testid="card-name"
       >
         {renaming ? (
@@ -1193,7 +1193,7 @@ export function FloatingCard({
         <button
           type="button"
           onClick={() => setTalk(false)}
-          className="inline-flex h-8 flex-none items-center rounded-lg px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2"
+          className="inline-flex h-8 flex-none items-center rounded-lg px-3 text-sm leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2"
         >
           Hide the talk
         </button>
@@ -1564,7 +1564,7 @@ export function FloatingCard({
                 act={act}
                 canChange={canChange}
                 title={(words) => (
-                  <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
+                  <h3 className="text-xs leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
                     {words}
                   </h3>
                 )}
@@ -1662,7 +1662,7 @@ export function FloatingCard({
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
         <Link
           href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ''}&roadmap=${encodeURIComponent(item.roadmap.slug)}`}
-          className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap hover:bg-surface2"
+          className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-sm leading-none font-semibold whitespace-nowrap hover:bg-surface2"
         >
           Open the detailed view
         </Link>
@@ -1670,7 +1670,7 @@ export function FloatingCard({
           <button
             type="button"
             onClick={() => setTalk(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-sm leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink"
           >
             <Icon d={ICONS.ask} size={16} />
             Talk to Oracle
@@ -1725,7 +1725,7 @@ export function FloatingCard({
         data-flow-open={flowOpen ? 'true' : 'false'}
         style={placeStyle}
         data-backdrop={phone && wide ? '' : undefined}
-        className={`${place} ${phone ? 'max-w-none overflow-hidden' : 'max-w-[calc(100vw-16px)]'} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${float ? 'overflow-hidden' : ''} ${flowOpen && !phone ? 'pointer-events-none opacity-0' : ''}`}
+        className={`${place} ${phone ? 'max-w-none overflow-hidden' : 'max-w-[calc(100vw-16px)]'} border-line bg-surface text-base leading-[22px] text-text shadow-tip outline-none ${float ? 'overflow-hidden' : ''} ${flowOpen && !phone ? 'pointer-events-none opacity-0' : ''}`}
       >
         {phone ? (
           <>

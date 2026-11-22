@@ -379,7 +379,7 @@ function Dot({ state }: { state: State }) {
 
 function Steps({ r }: { r: Rebuild }) {
   return (
-    <ol className="flex flex-col gap-1 text-[13px] leading-[18px]" data-testid="rb-steps">
+    <ol className="flex flex-col gap-1 text-sm leading-[18px]" data-testid="rb-steps">
       {r.steps.map((s, i) => {
         const n = i + 1;
         const done = r.state === 'done' || n < r.step || (n === r.step && r.state === 'waiting');
@@ -391,7 +391,7 @@ function Steps({ r }: { r: Rebuild }) {
           >
             <span
               aria-hidden
-              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${done ? 'bg-pass-bg text-pass' : now ? (r.state === 'failed' ? 'bg-crit-bg text-crit' : 'bg-accent-soft text-accent-ink') : 'border border-line'}`}
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-xs ${done ? 'bg-pass-bg text-pass' : now ? (r.state === 'failed' ? 'bg-crit-bg text-crit' : 'bg-accent-soft text-accent-ink') : 'border border-line'}`}
             >
               {done ? '✓' : n}
             </span>
@@ -403,7 +403,7 @@ function Steps({ r }: { r: Rebuild }) {
         <li className="flex items-center gap-2 font-semibold text-text">
           <span
             aria-hidden
-            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-warn-bg text-[10px] text-warn"
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-warn-bg text-xs text-warn"
           >
             …
           </span>
@@ -470,10 +470,10 @@ function RunCard({ r, zone }: { r: Rebuild; zone: string }) {
         : r.flow_title;
   return (
     <div className="flex flex-col gap-2" data-testid="rb-run">
-      <p className="text-[14px] leading-[20px] font-semibold text-text">
+      <p className="text-sm leading-[20px] font-semibold text-text">
         {kind} · {titleOf(r)}
       </p>
-      <p className="text-[13px] leading-[18px] text-text2">
+      <p className="text-sm leading-[18px] text-text2">
         {r.state === 'scheduled'
           ? `Set up by ${r.started_by ?? 'someone'}${r.scheduled_for ? ` · starts ${zoneWeekday(r.scheduled_for, zone)}, ${zoneTime(r.scheduled_for, zone)}` : ' · not started yet'}`
           : `Started by ${r.started_by ?? 'someone'}${r.started_at ? ` · ${zoneDateTime(r.started_at, zone)}` : ''}`}
@@ -482,17 +482,17 @@ function RunCard({ r, zone }: { r: Rebuild; zone: string }) {
       {(r.state === 'running' || r.state === 'scheduled') &&
         r.next_stop_who &&
         r.next_stop_action && (
-          <p className="text-[13px] leading-[18px] text-text2">
+          <p className="text-sm leading-[18px] text-text2">
             Next stop: <b className="font-semibold text-text">{r.next_stop_who}</b> will{' '}
             {r.next_stop_action}.
           </p>
         )}
       {r.state === 'waiting' && r.waits_on && (
-        <p className="text-[13px] leading-[18px] text-text2">
+        <p className="text-sm leading-[18px] text-text2">
           Waiting on <b className="font-semibold text-text">{r.waits_on}</b> to {r.waits_on_action}.
         </p>
       )}
-      <p className="text-[13px] leading-[18px] text-text2">{outcome(r)}</p>
+      <p className="text-sm leading-[18px] text-text2">{outcome(r)}</p>
       <div>
         <RunAction r={r} />
       </div>
@@ -554,15 +554,15 @@ function Chip({
         data-testid="rb-chip"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className={`relative z-[1] inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-xl px-[9px] py-0.5 text-left text-[13px] leading-[18px] font-semibold ${TONE[r.state]} ${justMoved ? 'ring-2 ring-accent/40' : ''}`}
+        className={`relative z-[1] inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-xl px-[9px] py-0.5 text-left text-sm leading-[18px] font-semibold ${TONE[r.state]} ${justMoved ? 'ring-2 ring-accent/40' : ''}`}
       >
         <Dot state={r.state} />
         <span className="min-w-0 break-words">{text}</span>
         {justMoved && !compact && (
-          <span className="rounded bg-surface/70 px-1 text-[11px] whitespace-nowrap">just now</span>
+          <span className="rounded bg-surface/70 px-1 text-xs whitespace-nowrap">just now</span>
         )}
         {more > 0 && !summary && (
-          <span className="rounded-lg bg-surface/70 px-1.5 text-[12px] whitespace-nowrap">
+          <span className="rounded-lg bg-surface/70 px-1.5 text-xs whitespace-nowrap">
             +{more} {more === 1 ? 'run' : 'runs'}
           </span>
         )}
@@ -579,7 +579,7 @@ function Chip({
               <RunCard r={x} zone={zone} />
             </div>
           ))}
-          <p className="text-[12px] leading-[16px] text-text-faint">
+          <p className="text-xs leading-[16px] text-text-faint">
             Updates by itself while the run moves.
           </p>
         </div>

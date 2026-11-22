@@ -71,7 +71,7 @@ function ActiveOfTotal({ rows }: { rows?: Pick<ApiToken, 'revoked_at' | 'expires
   const active = rows.filter((r) => tokenState(r) === 'active').length;
   if (active === rows.length) return <>{active}</>;
   return (
-    <span className="text-[15px] font-semibold whitespace-nowrap">
+    <span className="text-base font-semibold whitespace-nowrap">
       {active} active · {rows.length} total
     </span>
   );
@@ -262,13 +262,13 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
           id="name-read-only"
           data-testid="name-read-only"
           role="note"
-          className="basis-full text-[13px] font-medium text-warn"
+          className="basis-full text-sm font-medium text-warn"
         >
           {READ_ONLY}
         </span>
       )}
       {error && (
-        <span role="alert" className="basis-full text-[13px] font-medium text-crit">
+        <span role="alert" className="basis-full text-sm font-medium text-crit">
           {error}
         </span>
       )}
@@ -596,7 +596,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           />
         </Field>
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 inline-flex items-center gap-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <legend className="mb-1.5 inline-flex items-center gap-1 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             What it can do
             {writeIsNarrow && (
               // Pass F, F-51: why Write is narrow for this role is behind an (i).
@@ -610,7 +610,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           </legend>
           <div className="flex h-9 items-center gap-4">
             {(['oracle:read', 'oracle:write'] as const).map((s) => (
-              <label key={s} className="inline-flex items-center gap-2 text-[15px]">
+              <label key={s} className="inline-flex items-center gap-2 text-base">
                 <input
                   type="checkbox"
                   checked={scopes.includes(s)}
@@ -623,7 +623,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           </div>
         </fieldset>
         <fieldset className="flex min-w-0 flex-col">
-          <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <legend className="mb-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
             Expires after
           </legend>
           <SegmentedControl
@@ -664,7 +664,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           <div className="flex flex-wrap items-center gap-2">
             <code
               data-testid="new-token-secret"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 font-mono text-[13px] break-all text-text"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 font-mono text-sm break-all text-text"
             >
               {created.secret}
             </code>

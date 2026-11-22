@@ -75,9 +75,9 @@ function FindingRow({
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Chip kind="acc">{KIND[f.kind]}</Chip>
-        {category && <span className="text-[13px] text-text2">{category}</span>}
+        {category && <span className="text-sm text-text2">{category}</span>}
       </div>
-      <p className="text-[15px] break-words">
+      <p className="text-base break-words">
         {line ?? <span className="text-text2">Shared as a count only</span>}
       </p>
       <SegmentedControl<Sharing>
@@ -118,7 +118,7 @@ export function FindingsTab({
   return (
     <div data-testid="intake-findings" className="flex min-w-0 flex-col gap-3 pt-3">
       {!author && (
-        <p data-testid="findings-role-note" role="note" className="text-[13px] text-text2">
+        <p data-testid="findings-role-note" role="note" className="text-sm text-text2">
           {AUTHOR_REASON}
         </p>
       )}

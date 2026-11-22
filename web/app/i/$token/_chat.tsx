@@ -29,7 +29,7 @@ type Phase =
   | { at: 'refused'; why: Refusal };
 
 const BUTTON =
-  'inline-flex h-11 items-center justify-center rounded-button px-4 text-[15px] font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center rounded-button px-4 text-base font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60';
 const PRIMARY = `${BUTTON} bg-accent text-on-accent hover:brightness-110`;
 const QUIET = `${BUTTON} border border-line-strong bg-surface text-text hover:bg-surface2`;
 /** qa4-docs-share-61: this browser finished the link; the API answers a finished link 410 "used" to anyone. */
@@ -193,7 +193,7 @@ export function InterviewChat({ token }: { token: string }) {
   if (phase.at === 'loading') {
     return (
       <Frame company={null}>
-        <p role="status" className="py-8 text-center text-[15px] text-text2">
+        <p role="status" className="py-8 text-center text-base text-text2">
           Loading…
         </p>
       </Frame>
@@ -235,7 +235,7 @@ export function InterviewChat({ token }: { token: string }) {
   const disclosure = (
     <p
       data-testid="interview-disclosure"
-      className="rounded-panel bg-accent-soft px-4 py-3 text-[15px] text-accent-ink"
+      className="rounded-panel bg-accent-soft px-4 py-3 text-base text-accent-ink"
     >
       {`You're talking with an AI assistant working for ${company}'s product team. What you write goes to that team.`}
     </p>
@@ -249,7 +249,7 @@ export function InterviewChat({ token }: { token: string }) {
           <h2 className="font-display text-2xl font-bold tracking-heading">
             Hi {info?.interviewee_name}
           </h2>
-          {info?.intro && <p className="text-[17px] leading-7">{info.intro}</p>}
+          {info?.intro && <p className="text-lg leading-7">{info.intro}</p>}
           <div>
             <button type="button" className={PRIMARY} onClick={() => setPhase({ at: 'chat' })}>
               Start
@@ -287,14 +287,14 @@ export function InterviewChat({ token }: { token: string }) {
                 onKeyDown={onKey}
                 aria-describedby={hintId}
                 placeholder="Type your answer"
-                className="block max-h-40 min-h-11 w-full resize-y rounded-lg border border-line-strong bg-surface px-3 py-2 text-[16px] text-text"
+                className="block max-h-40 min-h-11 w-full resize-y rounded-lg border border-line-strong bg-surface px-3 py-2 text-base text-text"
               />
             </label>
             <button type="submit" className={PRIMARY} disabled={waiting || !text.trim()}>
               Send
             </button>
           </div>
-          <p id={hintId} data-testid="interview-hint" className="text-[13px] text-text2">
+          <p id={hintId} data-testid="interview-hint" className="text-sm text-text2">
             {sendHint()}
           </p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -333,13 +333,13 @@ export function InterviewChat({ token }: { token: string }) {
                   className={`flex max-w-[85%] min-w-0 flex-col gap-0.5 ${m.role === 'customer' ? 'self-end items-end' : 'self-start'} ${run ? '-mt-2' : ''}`}
                 >
                   {!run && (
-                    <span data-testid="msg-sender" className="text-[13px] font-semibold text-text2">
+                    <span data-testid="msg-sender" className="text-sm font-semibold text-text2">
                       {m.role === 'oracle' ? 'Assistant' : 'You'}
                     </span>
                   )}
                   <p
                     data-testid="msg-body"
-                    className={`rounded-panel px-3.5 py-2.5 text-[16px] leading-6 break-words whitespace-pre-wrap ${
+                    className={`rounded-panel px-3.5 py-2.5 text-base leading-6 break-words whitespace-pre-wrap ${
                       m.role === 'customer'
                         ? 'bg-accent text-on-accent'
                         : 'border border-line bg-surface text-text'
@@ -351,7 +351,7 @@ export function InterviewChat({ token }: { token: string }) {
                 {skipped.has(i) && (
                   <li
                     data-testid="msg-skipped"
-                    className="self-end text-[13px] font-semibold text-text2 italic"
+                    className="self-end text-sm font-semibold text-text2 italic"
                   >
                     Skipped
                   </li>

@@ -198,7 +198,7 @@ function ProviderCard({
     >
       {provider.key === 'slack' && <CompanySlack />}
       {connections.length === 0 ? (
-        <p className="px-4 py-3 text-[15px] text-text2">Not connected</p>
+        <p className="px-4 py-3 text-base text-text2">Not connected</p>
       ) : (
         <ul aria-label={`${provider.name} accounts`} className="flex flex-col">
           {connections.map((c) => (
@@ -510,7 +510,7 @@ function TokenForm({
         <div className="flex min-w-0 flex-col gap-1.5">
           <label
             htmlFor={`${id}-token`}
-            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+            className="text-sm leading-4 font-semibold tracking-[0.02em] text-text2"
           >
             Token
           </label>

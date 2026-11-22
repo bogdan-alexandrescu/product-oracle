@@ -395,7 +395,8 @@
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
   --tracking-heading: -0.015em;
 
-  /* Type scale (tokens.json): nothing under 13 px; body 15/22. */
+  /* Type scale (tokens.json): nothing under 13 px; body 15/22. #1589: every text size is one of
+     these steps; an arbitrary text-[Npx] fails lint (eslint.config.mjs, TEXT_SIZE_RULE). */
   --text-xs: 13px;
   --text-xs--line-height: 18px;
   --text-sm: 14px;
@@ -408,6 +409,10 @@
   --text-xl--line-height: 27px;
   --text-2xl: 28px;
   --text-2xl--line-height: 32px;
+  --text-3xl: 34px;
+  --text-3xl--line-height: 40px;
+  --text-4xl: 44px;
+  --text-4xl--line-height: 46px;
 
   --radius-panel: 12px;
   --radius-inspector: 16px;

@@ -223,10 +223,10 @@ function NewTemplatePage() {
             </p>
           )}
           <fieldset className="flex flex-col gap-1.5">
-            <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+            <legend className="mb-1.5 text-sm leading-4 font-semibold tracking-[0.02em] text-text2">
               Kind
             </legend>
-            <div className="flex gap-4 text-[15px]">
+            <div className="flex gap-4 text-base">
               {(['prd', 'roadmap'] as const).map((k) => (
                 <label key={k} className="inline-flex items-center gap-1.5">
                   <input

@@ -612,11 +612,9 @@ function PhoneReadiness({
       data-testid="intake-readiness"
       className="mb-3 flex flex-col gap-2 rounded-panel border border-line bg-surface p-3 shadow-panel"
     >
-      <p className="text-[12px] font-semibold tracking-wide text-text2 uppercase">
-        Before drafting
-      </p>
+      <p className="text-xs font-semibold tracking-wide text-text2 uppercase">Before drafting</p>
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-[15px] font-semibold text-text">{readinessTitle(s)}</h2>
+        <h2 className="text-base font-semibold text-text">{readinessTitle(s)}</h2>
         <Chip kind={state.kind} dot>
           {state.label}
         </Chip>
@@ -624,7 +622,7 @@ function PhoneReadiness({
       <p className="text-sm text-text2" data-testid="intake-readiness-counts">
         {counts.open} open · {counts.answered} answered · {openCriticalCount(s)} critical open
       </p>
-      {note && <p className="text-[13px] text-text2">{note}</p>}
+      {note && <p className="text-sm text-text2">{note}</p>}
       <Button className="w-full" onClick={onOpen}>
         Show details
       </Button>

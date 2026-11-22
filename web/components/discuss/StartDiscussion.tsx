@@ -91,7 +91,7 @@ export function StartDiscussion({
         onCancel();
       }}
     >
-      <h3 className="font-display text-[15px] font-bold tracking-heading">Start a discussion</h3>
+      <h3 className="font-display text-base font-bold tracking-heading">Start a discussion</h3>
       <label
         className="flex flex-col gap-1 text-sm font-semibold text-text2"
         htmlFor={`${id}-title`}
@@ -176,7 +176,7 @@ export function StartDiscussion({
           never the line cut off at the panel's foot. Alone in it, Oracle answers the first
           message anyway (#402): said in words, not as a greyed-out ticked box. */}
       {solo ? (
-        <p className="-mt-1 text-[13px] leading-5 text-text2" data-testid="oracle-rule">
+        <p className="-mt-1 text-sm leading-5 text-text2" data-testid="oracle-rule">
           Oracle will reply
         </p>
       ) : (
@@ -189,7 +189,7 @@ export function StartDiscussion({
             />
             Ask Oracle
           </label>
-          <span className="text-[13px] text-text2" data-testid="oracle-rule">
+          <span className="text-sm text-text2" data-testid="oracle-rule">
             {askOracle ? 'Oracle will reply' : 'Oracle replies when you @mention it'}
           </span>
         </div>

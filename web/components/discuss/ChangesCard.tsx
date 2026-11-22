@@ -281,7 +281,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       data-status={c.status}
       data-kind={c.kind}
     >
-      <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[15px] leading-[22px] font-semibold break-words text-text">
+      <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-base leading-[22px] font-semibold break-words text-text">
         <span data-testid="change-label">{c.label}</span>
         {!isOpen(c) && <Chip kind={status.kind}>{status.label}</Chip>}
       </p>
@@ -290,10 +290,10 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
           <ReplyBody text={c.rationale} citations={[]} loose />
         </p>
       )}
-      <p className="text-[13px] text-text2" data-testid="change-by">
+      <p className="text-sm text-text2" data-testid="change-by">
         {byWhom(c)}
       </p>
-      {c.decision_note && !isOpen(c) && <p className="text-[13px] text-text2">{c.decision_note}</p>}
+      {c.decision_note && !isOpen(c) && <p className="text-sm text-text2">{c.decision_note}</p>}
       {opened && (
         <Link
           href={opened.href}
@@ -563,7 +563,7 @@ function SummaryBlock({ d, onChanged }: { d: Discussion; onChanged: () => void }
       data-testid="discussion-summary"
       data-summary-status={d.summary_status}
     >
-      <p className="text-[13px] font-semibold text-text2">
+      <p className="text-sm font-semibold text-text2">
         {draft ? 'Summary · draft by Oracle' : 'Summary'}
       </p>
       {editing ? (
@@ -705,7 +705,7 @@ export function ChangesCard({
     >
       {rows.length > 0 && (
         <h4
-          className="font-display text-[15px] font-bold tracking-heading"
+          className="font-display text-base font-bold tracking-heading"
           data-testid="changes-header"
         >
           From this discussion · {plural(open.length, 'change', 'changes')}

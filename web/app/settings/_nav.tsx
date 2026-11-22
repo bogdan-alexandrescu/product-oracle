@@ -52,7 +52,7 @@ export function SettingsNav() {
         <div className="flex w-full min-w-0 items-center gap-2">
           <label
             htmlFor="settings-nav-select"
-            className="flex-none text-[13px] font-semibold text-text2"
+            className="flex-none text-sm font-semibold text-text2"
           >
             Settings page
           </label>
@@ -97,7 +97,7 @@ export function SettingsNav() {
               href={it.href}
               data-testid={it.testId}
               aria-current={on ? 'page' : undefined}
-              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap lg:px-2 lg:text-[14px] ${
+              className={`flex h-8 flex-none items-center rounded-lg px-3 text-base font-medium whitespace-nowrap lg:px-2 lg:text-sm ${
                 on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
               }`}
             >

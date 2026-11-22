@@ -327,7 +327,7 @@ function RoadmapDocuments() {
           {/* An earlier version may be approved while a later one is in review. */}
           {r.d.approved_version != null && r.d.status !== 'approved' && (
             <span
-              className="tnum text-[13px] leading-4 text-text2"
+              className="tnum text-sm leading-4 text-text2"
               data-testid="roadmap-approved-version"
             >
               v{r.d.approved_version} approved

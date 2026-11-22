@@ -122,10 +122,10 @@ function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }
               <Avatar name={r.email} />
               <div className="min-w-0 flex-1 basis-56">
                 <div className="truncate font-medium">{r.email}</div>
-                <div className="text-[13px] text-text2">
+                <div className="text-sm text-text2">
                   Asked {formatDateTime(r.created_at)} · last seen {formatDateTime(r.last_seen_at)}
                 </div>
-                {r.note && <div className="text-[13px] text-text2">&ldquo;{r.note}&rdquo;</div>}
+                {r.note && <div className="text-sm text-text2">&ldquo;{r.note}&rdquo;</div>}
               </div>
               {acts.acted?.key === r.id ? (
                 <ActedCell acted={acts.acted} onUndo={acts.undo} />

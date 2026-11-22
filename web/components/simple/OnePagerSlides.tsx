@@ -82,11 +82,11 @@ export function OnePagerSlides({
   const b = isTimeline ? null : blocks[at];
   const title = b?.title ?? timeline?.title ?? 'Timeline';
   const nav =
-    'inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-line-strong bg-surface px-3.5 text-[15px] font-semibold text-text disabled:opacity-40';
+    'inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-line-strong bg-surface px-3.5 text-base font-semibold text-text disabled:opacity-40';
   return (
     <div className="flex h-dvh flex-col" data-testid="slides">
       <div className="flex flex-wrap items-center gap-3 px-6 pt-4 max-[767px]:px-4">
-        <span className="min-w-0 truncate text-[15px] font-semibold text-text2">
+        <span className="min-w-0 truncate text-base font-semibold text-text2">
           {v.document.title}
         </span>
         {top}
@@ -122,7 +122,7 @@ export function OnePagerSlides({
             onPlan={onPlan}
           />
         ) : v.plan ? (
-          <div aria-label="Timeline strip" className="text-[18px]">
+          <div aria-label="Timeline strip" className="text-lg">
             <WithFeatureMarks>
               <PlanByMonth
                 plan={v.plan}
@@ -151,7 +151,7 @@ export function OnePagerSlides({
           role="status"
           data-testid="slide-count"
           aria-label={`Slide ${at + 1} of ${count}`}
-          className="min-w-16 text-center text-[17px] font-semibold tabular-nums text-text2"
+          className="min-w-16 text-center text-lg font-semibold tabular-nums text-text2"
         >
           {at + 1} / {count}
         </span>
