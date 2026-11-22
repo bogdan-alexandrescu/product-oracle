@@ -139,3 +139,14 @@ test('A viewer: what they may do sits behind tips on composition, New PRD, a run
     'Your role cannot edit sources; an approver or owner can.',
   );
 });
+
+test('Impact: that an earlier change marked an output stale sits behind the tip', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto('/documents/annual-billing/v/2/impact');
+  await expect(
+    page.getByText('Preview: v2 marks nothing stale. 1 output is already stale.'),
+  ).toBeVisible();
+  await behindTip(page, 'impact-intro-tip', 'It was marked stale by an earlier change.');
+});
