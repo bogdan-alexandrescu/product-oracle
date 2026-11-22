@@ -248,8 +248,11 @@ test('qa-company-31: the Summary card says what Summarize with Oracle makes and 
   await ritualRow(page, 'Monthly roadmap refresh').getByTestId('next-pre-read').click();
   const card = page.getByTestId('occurrence-summary');
   await expect(card.getByRole('button', { name: 'Summarize with Oracle' })).toBeVisible();
-  await expect(card.getByTestId('summary-what')).toHaveText(
-    'Oracle reads this pre-read and writes a short summary of it for the attendees · one Oracle run, about $3.00.',
+  // #1678: the cost stays as one short line; what Oracle makes sits behind the (i).
+  await expect(card.getByTestId('summary-what')).toContainText('One Oracle run, about $3.00');
+  await card.getByTestId('summary-what-tip').click();
+  await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveText(
+    'Oracle reads this pre-read and writes a short summary of it for the attendees.',
   );
 });
 

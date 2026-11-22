@@ -62,7 +62,7 @@ test('without Slack connected a viewer still chooses and is told who connects it
   await login(page);
   await page.goto('/account');
   await expect(panel(page).getByTestId('slack-pings-off')).toContainText(
-    'an owner connects it in Settings › Notifications',
+    'An owner connects it in Settings › Notifications',
   );
   await ping(page, 'published').click();
   await expect(ping(page, 'published')).toBeChecked();

@@ -496,8 +496,15 @@ export function CoverageInspector({
               )}
             </div>
           ) : (
-            <p className="text-sm text-text2" data-testid="sync-viewer-note">
-              You can read coverage, but not sync or edit sources. Ask an owner if you need to.
+            // #1678: one short line; what a reader can do sits behind the (i).
+            <p
+              className="flex items-center gap-1.5 text-sm text-text2"
+              data-testid="sync-viewer-note"
+            >
+              Read only
+              <InfoTip label="read only" align="start" testId="sync-viewer-tip">
+                You can read coverage, but not sync or edit sources. Ask an owner if you need to.
+              </InfoTip>
             </p>
           )}
         </InspectorSection>

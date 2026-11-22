@@ -119,10 +119,24 @@ function SavedNote({ testId }: { testId?: string }) {
 }
 
 /** qa-settings-13: why Save waits, beside it, while nothing has changed. */
-function SaveHint({ testId, children }: { testId: string; children: string }) {
+function SaveHint({
+  testId,
+  children,
+  tip,
+}: {
+  testId: string;
+  children: string;
+  /** #1678: the longer why, behind an (i) beside the hint. */
+  tip?: string;
+}) {
   return (
-    <span data-testid={testId} className="text-sm text-text2">
-      {children}
+    <span className="inline-flex items-center gap-1.5 text-sm text-text2">
+      <span data-testid={testId}>{children}</span>
+      {tip && (
+        <InfoTip label="choosing an owner" align="start" testId={`${testId}-tip`}>
+          {tip}
+        </InfoTip>
+      )}
     </span>
   );
 }
@@ -784,12 +798,15 @@ function PricingOwnerPanel() {
   const loadError = settingQ.error ?? membersQ.error;
   // Why Save waits: one owner has no one to pick; with none chosen yet, the earliest decides.
   const earliest = owners[0] ? displayName(owners[0].email, owners[0].name) : '';
-  const pricingHint =
+  const [pricingHint, pricingTip] =
     owners.length === 1
-      ? `${earliest} is the only owner: make another member an owner to choose someone else.`
+      ? [`${earliest} is the only owner`, 'Make another member an owner to choose someone else.']
       : stored === null
-        ? `Not chosen yet: the earliest owner, ${earliest}, decides until you pick someone else.`
-        : 'Pick another owner to save it.';
+        ? [
+            'Not chosen yet',
+            `The earliest owner, ${earliest}, decides until you pick someone else.`,
+          ]
+        : ['Pick another owner to save it.'];
   return (
     <div id="pricing-owner" className="scroll-mt-4" data-testid="pricing-owner-panel">
       <Panel
@@ -845,7 +862,9 @@ function PricingOwnerPanel() {
                 Save
               </Button>
               {!saved && !changed && (
-                <SaveHint testId="pricing-owner-save-reason">{pricingHint}</SaveHint>
+                <SaveHint testId="pricing-owner-save-reason" tip={pricingTip}>
+                  {pricingHint}
+                </SaveHint>
               )}
               {saved && <SavedNote />}
             </div>

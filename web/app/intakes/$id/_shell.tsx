@@ -33,6 +33,8 @@ import { IntakeInspector, readiness, readinessTitle } from './_inspector';
 import {
   OPEN_GAP,
   dayMonth,
+  gateHow,
+  gateLead,
   gateReason,
   openCriticalCount,
   statusChip,
@@ -398,9 +400,15 @@ export function BeforeDrafting({ id }: { id: string }) {
           </>
         }
       />
+      {/* #1678: the status stays; what lifts the gate sits behind the (i). */}
       {reason && !converted && (
-        <p data-testid="draft-reason" className="-mt-1 mb-3 text-sm font-medium text-crit">
-          {reason}
+        <p className="-mt-1 mb-3 flex items-center gap-1.5 text-sm font-medium text-crit">
+          <span data-testid="draft-reason">
+            {gateLead(gate.blocking_gap_ids.length, openCriticalCount(s))}
+          </span>
+          <InfoTip label="the draft gate" align="start" testId="draft-reason-tip">
+            {gateHow(gate.blocking_gap_ids.length)}.
+          </InfoTip>
         </p>
       )}
       {s.ai_read && (

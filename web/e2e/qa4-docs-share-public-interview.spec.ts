@@ -168,8 +168,11 @@ test('qa4-docs-share-63: an unopened interview tells the owner to make a new lin
   await page.goto('/requests/interviews');
   await page.getByTestId('interview-row').filter({ hasText: 'Ana Lima' }).click();
   const empty = page.getByTestId('interview-transcript-empty');
-  await expect(empty).toHaveText(
-    "Ana Lima hasn't opened the link yet. If you didn't send it, make a new link.",
+  await expect(empty).toContainText("Ana Lima hasn't opened the link yet.");
+  // #1678: what to do sits behind the (i).
+  await empty.getByTestId('interview-transcript-tip').click();
+  await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveText(
+    "If you didn't send it, make a new link.",
   );
   await expect(empty).not.toContainText('Send it to them');
 });

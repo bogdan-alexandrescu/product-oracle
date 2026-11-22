@@ -1,4 +1,3 @@
-
 import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
 

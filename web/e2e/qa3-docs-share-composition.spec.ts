@@ -158,7 +158,10 @@ test.describe('desktop', () => {
 
   test("qa-docs-49: on a PRD with a composition the viewer's banner is plain", async ({ page }) => {
     await open(page, VIEWER, 'annual-billing');
-    await expect(page.getByTestId('read-only')).toHaveText(
+    // #1678: one short line; what a reader can do sits behind the (i).
+    await expect(page.getByTestId('read-only')).toContainText('Read only');
+    await page.getByTestId('read-only-tip').click();
+    await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveText(
       'You can look at this composition and preview a recommendation. Only an approver can change or publish it.',
     );
     await expect(page.getByTestId('legacy-notice')).toHaveCount(0);

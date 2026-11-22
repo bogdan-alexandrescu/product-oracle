@@ -35,7 +35,12 @@ import { api, ApiError, type Schemas, unwrap } from '@/lib/api/client';
 import { LoadError } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
-import { attentionMessage, needingAttention, shownStatus } from '@/lib/source-attention';
+import {
+  attentionMessage,
+  attentionTip,
+  needingAttention,
+  shownStatus,
+} from '@/lib/source-attention';
 import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
 
 import { Field, INPUT, SELECT_FIELD } from '../_components/fields';
@@ -1026,6 +1031,11 @@ function SourceRow({
                 <span className="min-w-0 break-words" data-testid="last-error">
                   {attentionMessage(source, mayEdit)}
                 </span>
+                {attentionTip(source, mayEdit) && (
+                  <InfoTip label="who can fix it" align="start" testId="last-error-tip">
+                    {attentionTip(source, mayEdit)}
+                  </InfoTip>
+                )}
               </span>
               {allowlist && !editing && mayEdit && (
                 <Button onClick={() => setEditing(true)} aria-label={`Edit ${source.name}`}>
