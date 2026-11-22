@@ -5,10 +5,17 @@ which the weekly alignment report also runs in.
 Times a person reads are worded, "Sun Oct 25, 2:59 PM PDT", never ISO; days, "Oct 25"
 (#463). Text the API writes for a person names its days and times through these
 helpers; machine fields (ISO timestamps, ids) stay UTC.
+
+The read is three-state (#1677): fetched (the company's zone), unavailable (its settings
+could not be read; the default zone is used) or not_applicable (no company context). A
+request records the state its dates used (:func:`zone_state_used`), and the API answers it
+in the ``X-Company-Time-Zone-State`` header (:class:`ZoneStateMiddleware`) and on GET /v1/me.
 """
 
 import logging
+from contextvars import ContextVar
 from datetime import UTC, date, datetime, time
+from typing import Literal, NamedTuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,24 +24,89 @@ log = logging.getLogger(__name__)
 
 DEFAULT_ZONE = "America/Los_Angeles"
 
+ZoneState = Literal["fetched", "unavailable", "not_applicable"]
+STATE_HEADER = "X-Company-Time-Zone-State"
 
-async def company_time_zone(db: AsyncSession) -> str:
+
+class ZoneRead(NamedTuple):
+    """The zone dates are shown in, and how it was read."""
+
+    zone: str
+    state: ZoneState
+
+
+NOT_APPLICABLE = ZoneRead(DEFAULT_ZONE, "not_applicable")
+
+# The states the request's reads gave; the middleware sets a fresh list per request, so
+# reads in tasks the request starts land in the same one.
+_used: ContextVar[list[ZoneState] | None] = ContextVar("company_zone_used", default=None)
+# The state a response names when several reads disagree: the worst wins.
+_RANK: dict[ZoneState, int] = {"not_applicable": 0, "fetched": 1, "unavailable": 2}
+
+
+def zone_state_used() -> ZoneState | None:
+    """The state the dates of this request were formatted with; None when none was read."""
+    used = _used.get()
+    return max(used, key=_RANK.__getitem__) if used else None
+
+
+async def company_time_zone_read(db: AsyncSession | None) -> ZoneRead:
     """The Company time zone (read through the alignment report's settings, which carry
-    it); the default when it cannot be read."""
+    it) and its state: the default, unavailable, when it cannot be read; not_applicable
+    without a session."""
     from oracle.runs import batch
 
     # Read once per Inbox call (oracle.runs.batch), however many rows tell the day.
-    return await batch.once("company_time_zone", lambda: _time_zone(db))
+    read = NOT_APPLICABLE if db is None else await batch.once(
+        "company_time_zone", lambda: _time_zone(db)
+    )  # fmt: skip
+    used = _used.get()
+    if used is not None:
+        used.append(read.state)
+    return read
 
 
-async def _time_zone(db: AsyncSession) -> str:
-    from oracle.reports.alignment import load_settings
+async def company_time_zone(db: AsyncSession | None) -> str:
+    """The Company time zone; its state is recorded for the response
+    (:func:`company_time_zone_read` returns it)."""
+    return (await company_time_zone_read(db)).zone
+
+
+async def _time_zone(db: AsyncSession) -> ZoneRead:
+    from oracle.reports import alignment
 
     try:
-        return (await load_settings(db)).timezone
+        return ZoneRead((await alignment.load_settings(db)).timezone, "fetched")
     except Exception:
         log.exception("could not read the company's time zone; using the default")
-        return DEFAULT_ZONE
+        return ZoneRead(DEFAULT_ZONE, "unavailable")
+
+
+class ZoneStateMiddleware:
+    """Names the state a response's dates used in :data:`STATE_HEADER` (pure ASGI, so
+    the endpoint's reads land before the response starts)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        token = _used.set([])
+
+        async def named(message):
+            if message["type"] == "http.response.start":
+                state = zone_state_used()
+                if state is not None:
+                    headers = list(message.get("headers", []))
+                    headers.append((STATE_HEADER.lower().encode(), state.encode()))
+                    message = {**message, "headers": headers}
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send=named)
+        finally:
+            _used.reset(token)
 
 
 def _local(moment: datetime | str, zone: str) -> datetime:
