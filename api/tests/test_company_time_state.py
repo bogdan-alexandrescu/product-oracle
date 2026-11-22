@@ -62,3 +62,18 @@ async def test_me_says_unavailable_when_the_settings_cannot_be_read(client, ctx,
     assert body["company_timezone"] == company_time.DEFAULT_ZONE
     assert body["company_timezone_state"] == "unavailable"
     assert resp.headers[STATE] == "unavailable"
+
+
+async def test_a_dated_page_names_the_state_its_times_used(client, ctx, monkeypatch):
+    """protects=a page whose times are in the Company time zone (the account pool) names
+    the state beside its zone and in the header; fails_when=its times fall back to the
+    default zone with nothing saying so; no_claim=every dated route has a field."""
+    page = await client.get("/v1/claude-accounts", headers=ctx.as_("owner"))
+    assert page.status_code == 200, page.text
+    assert page.json()["time_zone_state"] == "fetched"
+    monkeypatch.setattr(alignment, "load_settings", _unreadable)
+    page = await client.get("/v1/claude-accounts", headers=ctx.as_("owner"))
+    assert page.status_code == 200, page.text
+    assert page.json()["time_zone"] == company_time.DEFAULT_ZONE
+    assert page.json()["time_zone_state"] == "unavailable"
+    assert page.headers[STATE] == "unavailable"
