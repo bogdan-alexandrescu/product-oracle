@@ -98,7 +98,13 @@ test('A viewer turned away from a Settings tab: who to ask sits behind the tip',
   page,
 }) => {
   await login(page, VIEWER);
-  for (const path of ['/settings/analytics', '/settings/trash']) {
+  for (const path of [
+    '/settings/analytics',
+    '/settings/notifications',
+    '/settings/templates/new',
+    '/settings/themes/new',
+    '/settings/trash',
+  ]) {
     await page.goto(path);
     await expect(page.getByTestId('not-for-role')).toContainText('Not available for your role');
     await behindTip(page, 'not-for-role-tip', 'Ask an owner (Avery Stone) if you need it.');
