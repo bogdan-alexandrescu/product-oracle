@@ -24,8 +24,9 @@ test('pricing owner: with none chosen, the hint names who decides instead of ask
   await page.goto('/settings/company');
   const pricing = page.getByTestId('pricing-owner-panel');
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText('Not chosen yet');
-  await expect(pricing.getByTestId('pricing-owner-save-reason-tip')).toBeVisible();
+  await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText(
+    'Not chosen yet: Avery Stone decides',
+  );
   // Once chosen, the hint asks for another owner.
   await pricing
     .getByRole('combobox', { name: 'Decides prices' })

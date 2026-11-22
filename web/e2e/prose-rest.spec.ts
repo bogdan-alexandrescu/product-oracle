@@ -58,6 +58,53 @@ test('Company settings: how to choose another pricing owner sits behind a tip', 
   );
 });
 
+test('Company settings: with no one chosen, who decides prices stays; until when sits behind a tip', async ({
+  page,
+}) => {
+  await scenario(page, 'pricing');
+  await login(page);
+  await page.goto('/settings/company');
+  await expect(page.getByTestId('pricing-owner-save-reason')).toHaveText(
+    'Not chosen yet: Avery Stone decides',
+  );
+  await behindTip(page, 'pricing-owner-save-reason-tip', 'until you pick someone else');
+});
+
+test('Publish: that sections are not checks sits behind the Section review tip', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto('/documents/referral-link/publish');
+  const review = page.getByRole('region', { name: 'Section review' });
+  await expect(review.getByRole('heading', { name: 'Section review' })).toBeVisible();
+  await behindTip(
+    page,
+    'section-review-tip',
+    'Sections, not checks: publishing does not wait for them',
+  );
+});
+
+test("Public version of a PRD: why it has none sits behind the heading's tip", async ({ page }) => {
+  await scenario(page, 'sharing');
+  await login(page);
+  await page.goto('/documents/referral-link/public');
+  await expect(page.getByTestId('public-check-not-roadmap')).toContainText(
+    'Only a roadmap has a public version',
+  );
+  await behindTip(page, 'public-version-tip', 'Referral link PRD is a PRD, so it has none.');
+});
+
+test('A viewer turned away from a Settings tab: who to ask sits behind the tip', async ({
+  page,
+}) => {
+  await login(page, VIEWER);
+  for (const path of ['/settings/analytics', '/settings/trash']) {
+    await page.goto(path);
+    await expect(page.getByTestId('not-for-role')).toContainText('Not available for your role');
+    await behindTip(page, 'not-for-role-tip', 'Ask an owner (Avery Stone) if you need it.');
+  }
+});
+
 test('Interview: what to do with an unopened link sits behind a tip', async ({ page }) => {
   await login(page);
   await page.goto('/requests/interviews/66952c66-1c80-4e84-84a4-838e1243af88');

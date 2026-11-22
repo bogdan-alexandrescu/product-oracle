@@ -140,8 +140,9 @@ test("qa-settings-13: the pricing owner's Save waits for another owner", async (
   const field = pricing.getByRole('combobox', { name: 'Decides prices' });
   await expect(field.locator('option:checked')).toHaveText('Avery Stone');
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText('Not chosen yet');
-  await expect(pricing.getByTestId('pricing-owner-save-reason-tip')).toBeVisible();
+  await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText(
+    'Not chosen yet: Avery Stone decides',
+  );
   await field.selectOption({ label: 'Riley Park' });
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeEnabled();
   await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveCount(0);
