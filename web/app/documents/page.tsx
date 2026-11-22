@@ -8,6 +8,7 @@ import { useRef, useState, useSyncExternalStore } from 'react';
 import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
 import { ArtifactMenu } from '@/components/ArtifactMenu';
 import { SourceLink } from '@/components/BuildRoadmap';
+import { CompanyDate } from '@/components/CompanyDate';
 import {
   Button,
   Chip,
@@ -29,7 +30,6 @@ import {
 import { peopleByIds } from '@/components/PersonPicker';
 import { LoadError } from '@/components/ui';
 import { api, unwrap, type DocumentSummary, type Schemas } from '@/lib/api/client';
-import { CompanyDate } from '@/components/CompanyDate';
 import { formatDate, formatDateTime, plural } from '@/lib/format';
 import { docLabel } from '@/lib/labels';
 import { useArtifactsChanged } from '@/lib/artifacts';

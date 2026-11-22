@@ -1,7 +1,7 @@
-import { expect, test, type Page } from './test';
-
 import { MOCK_ZONE_STATE_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 // #1677: when the Company time zone cannot be read, a date says the default zone is used
 // (a tip beside it), never silently; read as fetched, the date shows alone. Driven on the
