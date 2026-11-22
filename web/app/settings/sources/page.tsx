@@ -1032,7 +1032,11 @@ function SourceRow({
                   {attentionMessage(source, mayEdit)}
                 </span>
                 {attentionTip(source, mayEdit) && (
-                  <InfoTip label="who can fix it" align="start" testId="last-error-tip">
+                  <InfoTip
+                    label={`who can fix ${source.name}`}
+                    align="start"
+                    testId="last-error-tip"
+                  >
                     {attentionTip(source, mayEdit)}
                   </InfoTip>
                 )}

@@ -126,15 +126,15 @@ function SaveHint({
 }: {
   testId: string;
   children: string;
-  /** #1678: the longer why, behind an (i) beside the hint. */
-  tip?: string;
+  /** #1678: the longer why, behind an (i) beside the hint, and what the (i) is about. */
+  tip?: { label: string; text: string };
 }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm text-text2">
       <span data-testid={testId}>{children}</span>
       {tip && (
-        <InfoTip label="choosing an owner" align="start" testId={`${testId}-tip`}>
-          {tip}
+        <InfoTip label={tip.label} align="start" testId={`${testId}-tip`}>
+          {tip.text}
         </InfoTip>
       )}
     </span>
@@ -862,7 +862,10 @@ function PricingOwnerPanel() {
                 Save
               </Button>
               {!saved && !changed && (
-                <SaveHint testId="pricing-owner-save-reason" tip={pricingTip}>
+                <SaveHint
+                  testId="pricing-owner-save-reason"
+                  tip={pricingTip ? { label: 'choosing an owner', text: pricingTip } : undefined}
+                >
                   {pricingHint}
                 </SaveHint>
               )}
