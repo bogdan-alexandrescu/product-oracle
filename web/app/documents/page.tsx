@@ -29,6 +29,7 @@ import {
 import { peopleByIds } from '@/components/PersonPicker';
 import { LoadError } from '@/components/ui';
 import { api, unwrap, type DocumentSummary, type Schemas } from '@/lib/api/client';
+import { CompanyDate } from '@/components/CompanyDate';
 import { formatDate, formatDateTime, plural } from '@/lib/format';
 import { docLabel } from '@/lib/labels';
 import { useArtifactsChanged } from '@/lib/artifacts';
@@ -389,23 +390,11 @@ function DocInspector({
         >
           Theme
         </InspectorRow>
-        <InspectorRow
-          value={
-            <span data-testid="inspector-created" title={formatDateTime(d.created_at)}>
-              {formatDate(d.created_at)}
-            </span>
-          }
-        >
+        <InspectorRow value={<CompanyDate iso={d.created_at} testId="inspector-created" />}>
           Created
         </InspectorRow>
         {/* qa-docs-34: the table's one date format (the time on hover), in the Company time zone. */}
-        <InspectorRow
-          value={
-            <span data-testid="inspector-updated" title={formatDateTime(d.updated_at)}>
-              {formatDate(d.updated_at)}
-            </span>
-          }
-        >
+        <InspectorRow value={<CompanyDate iso={d.updated_at} testId="inspector-updated" />}>
           Updated
         </InspectorRow>
       </InspectorSection>

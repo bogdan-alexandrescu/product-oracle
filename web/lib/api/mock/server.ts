@@ -86,7 +86,7 @@ import {
   poolRefusal,
   poolSpentUntil,
 } from './claude-accounts';
-import { connectionsRoute, mockSettingValue, setupFacts } from './connections';
+import { connectionsRoute, mockSettingValue, mockZone, setupFacts } from './connections';
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from './replaced-prd';
 import {
   decidePricing,
@@ -1258,6 +1258,7 @@ export const DRIVE_PICKER_UNSET_SCENARIO = 'drive-picker-unset';
 export const SOURCES_UNREADABLE_SCENARIO = 'sources-unreadable';
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = 'po-mock-fail';
+export { MOCK_ZONE_STATE_KEY } from './connections';
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
 export const MOCK_FAIL_ONCE_KEY = 'po-mock-fail-once';
 /** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). A path ending in "*" slows every GET under it. */
@@ -10950,7 +10951,7 @@ function meOut(db: Db, m: MemberRow): Schemas['Me'] {
     engineering_lead: !!m.engineering_lead,
     name: m.name ?? null,
     invite_roles,
-    company_timezone: String(mockSettingValue('company_timezone') ?? 'America/Los_Angeles'),
+    ...mockZone(),
   };
 }
 

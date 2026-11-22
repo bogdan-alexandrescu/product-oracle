@@ -957,3 +957,18 @@ async function handle(
   }
   return json(404, { detail: 'Route not found' });
 }
+
+/** #1677: tests set this localStorage key to "unavailable" to have the Company time zone unreadable. */
+export const MOCK_ZONE_STATE_KEY = 'po-mock-zone-state';
+/** #1677, as oracle.company_time: the zone and how it was read (the default when unreadable). */
+export function mockZone(): Pick<Schemas['Me'], 'company_timezone' | 'company_timezone_state'> {
+  const unreadable =
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem(MOCK_ZONE_STATE_KEY) === 'unavailable';
+  return unreadable
+    ? { company_timezone: 'America/Los_Angeles', company_timezone_state: 'unavailable' }
+    : {
+        company_timezone: String(mockSettingValue('company_timezone') ?? 'America/Los_Angeles'),
+        company_timezone_state: 'fetched',
+      };
+}
