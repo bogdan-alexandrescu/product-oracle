@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from oracle import company_time
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session, unscoped_session
 from tests.conftest import API_DIR
 from tests.migration_db import upgrade
@@ -154,7 +155,7 @@ async def test_the_migration_gives_every_item_its_own_code(client):
         await item(rv2, "a", "Routing rules", 1, feature_id=f51.id, start_date=date(2026, 12, 1))
         await item(rv2, "b", "Routing by team", 2, feature_id=f51.id, start_date=date(2026, 11, 2))
         await item(rv2, "c", "Routing digest", 3, feature_id=f51.id)
-        # The same item on the version before: every row of it is renumbered alike.
+        # The same item on the version before: its approved row is left as it was.
         await item(rv, "a", "Routing rules", 1, feature_id=f51.id, start_date=date(2026, 12, 1))
         # An item dropped before the latest version shares no plan with h: neither changes.
         await item(rv, "z", "F-29a Old saved views", 1)
@@ -201,7 +202,10 @@ async def test_the_migration_gives_every_item_its_own_code(client):
                 )
             )
         )
-    assert titles[(rv.id, "a")] == titles[(rv2.id, "a")] == "F-65 Routing rules"
+    # Current plan only: the latest version is renumbered; the version before keeps what was
+    # approved (the old shared code).
+    assert titles[(rv2.id, "a")] == "F-65 Routing rules"
+    assert titles[(rv.id, "a")] == "Routing rules"
     assert titles[(rv2.id, "b")] == "Routing by team"  # keeps F-51, from its feature
     assert titles[(rv2.id, "e")] == "Search filters"  # keeps F-62
     assert titles[(rv2.id, "g")] == "F-37a Exports"
@@ -217,6 +221,135 @@ async def test_the_migration_gives_every_item_its_own_code(client):
         again = await s.run_sync(renumber)
         await s.commit()
     assert again == []
+
+
+async def _plans(ctx):
+    """Feature F-51 with two items sharing its code, on an older approved version (v1), the
+    latest (v2) and a working draft; a row in Trash on v2; an older row leading with another
+    code than its feature's. Returns the ids and the roadmap document id."""
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, rv = await seed.roadmap("alerts")
+        rv2 = await seed.version(rm, 2)
+        f51 = await seed.entity("feature", "F-51")
+        f31 = await seed.entity("feature", "F-31")
+        draft = await seed.add(SimpleDraft(document_id=rm.id, base_version_id=rv2.id, status="working",
+                                                overlay={}, created_by=ctx.users["owner"].id))
+        ids: dict[str, uuid.UUID] = {}
+
+        async def add(name, v, key, title, created, **kw):
+            row = await seed.item(v, pv, key, title=title, created_at=_at(created), **kw)
+            ids[name] = row.id
+
+        b = {"feature_id": f51.id}
+        await add("b2", rv2, "b", "Routing by team", 2, start_date=date(2026, 11, 2), **b)
+        await add("a2", rv2, "a", "Routing rules", 1, start_date=date(2026, 12, 1), **b)
+        await add("a1", rv, "a", "Routing rules", 1, start_date=date(2026, 12, 1), **b)
+        await add("lead1", rv, "q", "F-99 Quiet hours", 1, feature_id=f31.id)
+        await add("trash2", rv2, "t", "F-99 Gone item", 3, feature_id=f31.id,
+                  deleted_at=_at(20))  # fmt: skip
+        await add("trash_dup", rv2, "u", "Gone slice", 3, deleted_at=_at(20), **b)
+        draft_row = RoadmapItem(
+            roadmap_document_id=rm.id, simple_draft_id=draft.id, item_key="a",
+            title="Routing rules", horizon="now", position=0, start_date=date(2026, 12, 1),
+            created_at=_at(4), feature_id=f51.id)  # fmt: skip
+        await seed.add(draft_row)
+        ids["a_draft"] = draft_row.id
+        await s.commit()
+    return ids, rm.id
+
+
+async def _rows(ids):
+    """Every stored column of each row, by name."""
+    t = RoadmapItem.__table__
+    async with unscoped_session() as s:
+        got = (await s.execute(select(t).where(t.c.id.in_(list(ids.values()))))).mappings().all()
+    by_id = {r["id"]: dict(r) for r in got}
+    return {name: by_id[i] for name, i in ids.items()}
+
+
+async def _renumber():
+    mig = migration()
+    async with unscoped_session() as s:
+        made = await s.run_sync(lambda session: mig.renumber(session.connection()))
+        await s.commit()
+    return made
+
+
+async def test_an_older_approved_versions_row_is_left_exactly_as_approved(client):
+    """The item of the latest version is renumbered; its row on the older approved version
+    keeps its title and every other column."""
+    # protects=Current plan only (the owner, Nov 23): approved rows are never rewritten;
+    # fails_when=the second pass renumbers every live row of the item across versions.
+    ctx = await make_people()
+    ids, _ = await _plans(ctx)
+    before = await _rows(ids)
+    made = await _renumber()
+    after = await _rows(ids)
+    assert [(m["item_key"], m["old"], m["new"]) for m in made] == [("a", "F-51", "F-52")]
+    assert after["a1"] == before["a1"]
+    assert after["a1"]["title"] == "Routing rules"
+
+
+async def test_neither_pass_rewrites_a_row_in_trash(client):
+    """A row in Trash is left as it was: one sharing a code (second pass) and one leading
+    with another code than its feature's (first pass)."""
+    ctx = await make_people()
+    ids, _ = await _plans(ctx)
+    before = await _rows(ids)
+    await _renumber()
+    after = await _rows(ids)
+    assert after["trash2"] == before["trash2"]
+    assert after["trash_dup"] == before["trash_dup"]
+
+
+async def test_the_first_pass_leaves_an_older_versions_row_leading_with_another_code(client):
+    """An older version's row leading with F-99 under feature F-31 keeps its title: the first
+    pass only rewrites rows on the current plan."""
+    ctx = await make_people()
+    ids, _ = await _plans(ctx)
+    await _renumber()
+    assert (await _rows(ids))["lead1"]["title"] == "F-99 Quiet hours"
+
+
+async def test_a_second_run_changes_nothing_with_older_rows_present(client):
+    """The older row keeps the old shared code after the first run; the second run does not
+    read it as a new duplicate: no changes, no new audit rows, every row as it was."""
+    ctx = await make_people()
+    ids, _ = await _plans(ctx)
+    await _renumber()
+    stored = await _rows(ids)
+
+    async def audits():
+        async with unscoped_session() as s:
+            return len(
+                list(
+                    await s.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.action == migration().ACTION,
+                            AuditEvent.tenant_id == ctx.tenant_id,
+                        )
+                    )
+                )
+            )
+
+    count = await audits()
+    assert count == 1
+    assert await _renumber() == []
+    assert await audits() == count
+    assert await _rows(ids) == stored
+
+
+async def test_the_latest_version_and_a_working_draft_are_renumbered(client):
+    """The latest version's and the working draft's rows of the item take the new code; the
+    keeper (earliest start) stays."""
+    ctx = await make_people()
+    ids, _ = await _plans(ctx)
+    await _renumber()
+    after = await _rows(ids)
+    assert after["a2"]["title"] == "F-52 Routing rules"
+    assert after["a_draft"]["title"] == "F-52 Routing rules"
+    assert after["b2"]["title"] == "Routing by team"
 
 
 def test_the_alembic_step_gives_every_item_its_own_code(scratch_db):  # noqa: F811
