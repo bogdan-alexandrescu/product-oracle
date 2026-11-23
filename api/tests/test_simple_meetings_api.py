@@ -326,7 +326,9 @@ async def test_approve_absent_reviewer_then_publish(client):
     assert r.status_code == 200, r.text
     [d] = r.json()["drafts"]
     assert d["status"] == "submitted" and d["waiting_on"] == [uid(w, "reviewer2")]
-    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") != "Ledger v2"
+    # de-inst (owner, Nov 23): the submitted draft's change is live for every reader now,
+    # not only those who see the draft itself; the published row still waits on reviewer2.
+    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == "Ledger v2"
     assert (await inbox(client, w, "approver"))["simple_approvals"] == []
     [row] = (await inbox(client, w, "reviewer2"))["simple_approvals"]
     assert row["draft_id"] == d["id"] and row["decider_approved"]

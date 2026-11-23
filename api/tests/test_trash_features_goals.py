@@ -753,11 +753,12 @@ async def _on_versions(w, key: str) -> dict[int, int]:
 @pytest.mark.parametrize("then", ["draft_open", "draft_in_review", "draft_approved"])
 async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client, then):
     """protects=(review round 5) a feature added in the open Simple draft (never approved),
-    deleted, then restored, is back in that draft and on no version: a viewer, who sees the
-    published roadmap, does not see it; (round 6) its draft approved while it was in Trash
-    keeps its row (Trash lists it) and Restore puts it in the roadmap's working draft,
-    opened for it; fails_when=Restore copies it onto the published version (or an approved
-    one), or approving the draft hard-deletes the row in Trash; no_claim=the web."""
+    deleted, then restored, is back in that draft and on no version: every reader sees it as
+    the draft's live overlay (de-inst, owner, Nov 23), though no version carries it yet;
+    (round 6) its draft approved while it was in Trash keeps its row (Trash lists it, named
+    with its code) and Restore puts it in the roadmap's working draft, opened for it;
+    fails_when=Restore copies it onto the published version (or an approved one), or approving
+    the draft hard-deletes the row in Trash; no_claim=the web."""
     from tests.test_simple_additions_api import World as Additions
 
     w = await Additions().build()
@@ -782,16 +783,18 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
             assert r.status_code == 200, r.text
         assert r.json()["status"] == "approved", r.text
         listed = (await client.get("/v1/trash", headers=w.as_("owner"))).json()
-        assert [e["root"]["title"] for e in listed] == ["Guided setup"]
+        # de-inst (owner, Nov 23): an owner's added item gets its feature code at creation,
+        # so its stored (and Trash-shown) title carries it.
+        assert [e["root"]["title"] for e in listed] == ["F-1 Guided setup"]
 
     r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("owner"))
     assert r.status_code == 200, r.text
     if then == "draft_in_review":
         # On the version in review only, so approving it keeps the feature.
         assert await _on_versions(w, "guided-setup") == {2: 1}
-        assert "Guided setup" not in {
-            i["title"] for i in (await w.items(client, "viewer")).values()
-        }
+        # de-inst (owner, Nov 23): the open (submitted) draft's restore is live for every
+        # reader at once, so a viewer already sees it, though no version carries it yet.
+        assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
         for who in ("decider", "approver"):
             r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
             assert r.status_code == 200, r.text
@@ -799,11 +802,14 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
         assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
         return
     assert iid in await w.items(client, "decider")
-    assert iid not in await w.items(client, "viewer")
-    assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}
+    # de-inst (owner, Nov 23): the open working draft's restore is live for every reader.
+    assert iid in await w.items(client, "viewer")
+    assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
     assert await _on_versions(w, "guided-setup") == {}
     async with tenant_session(w.ctx.tenant_id) as s:
-        rows = list(await s.scalars(select(RoadmapItem).where(RoadmapItem.title == "Guided setup")))
+        rows = list(
+            await s.scalars(select(RoadmapItem).where(RoadmapItem.title == "F-1 Guided setup"))
+        )
         drafts = [await s.get(SimpleDraft, r.simple_draft_id) for r in rows]
     assert [(str(r.id), r.roadmap_version_id) for r in rows] == [(iid, None)]
     # Back in the roadmap's working draft (when its own was approved, a new one).
@@ -868,9 +874,10 @@ async def test_approved_meanwhile_restore_lands_in_the_open_draft_only(client, t
     """protects=(owner's rule, Nov 5) a feature only ever in a Simple draft, that draft
     approved while it was in Trash, then another draft opened on the roadmap (working, or
     sent for review and waiting): Restore puts it in that draft only, and only its version
-    in review; a viewer does not see it; approving that draft publishes exactly one row of
-    it; fails_when=it lands on the published version, opens a second draft, or approving
-    leaves none or two; no_claim=the web."""
+    in review; every reader sees it as that draft's live overlay (de-inst, owner, Nov 23),
+    though no published version carries it yet; approving that draft publishes exactly one
+    row of it; fails_when=it lands on the published version, opens a second draft, or
+    approving leaves none or two; no_claim=the web."""
     from tests.test_simple_additions_api import World as Additions
 
     w = await Additions().build()
@@ -903,7 +910,8 @@ async def test_approved_meanwhile_restore_lands_in_the_open_draft_only(client, t
     assert [str(d.id) for d in open_] == [nxt["id"]]
     assert str(row.simple_draft_id) == nxt["id"] and row.roadmap_version_id is None
     assert await _on_versions(w, "guided-setup") == ({3: 1} if then == "in_review" else {})
-    assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}
+    # de-inst (owner, Nov 23): the open draft's restore is live for every reader at once.
+    assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
     if then == "working":
         r = await client.post(f"{url}/submit", headers=w.as_("decider"))
         assert r.status_code == 200 and r.json()["status"] == "submitted", r.text

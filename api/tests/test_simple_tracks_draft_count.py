@@ -5,10 +5,10 @@ Test cards (protects / fails_when / no_claim):
 
 - test_a_tracks_count_reads_the_working_draft: protects=``GET /v1/simple/tracks`` counts the
   features the reader's roadmap puts on each track: features moved onto a new track in the
-  working draft (op ``set_track``) count on it for the decider, who reads the draft, and
-  ``moves_count`` asks about them too, while a viewer, who reads the published version, keeps
-  the published counts; fails_when=the new track reads 0 features to the decider after the
-  move, or the viewer's counts change; no_claim=the web
+  working draft (op ``set_track``) count on it, and ``moves_count`` asks about them too, for
+  every reader alike (de-inst, owner, Nov 23: the open draft's change is live for every
+  reader at once, not only the decider who made it); fails_when=the new track reads 0
+  features after the move, or a reader's counts differ from another's; no_claim=the web
   (web/e2e/roadmap-nov10-findings.spec.ts).
 """
 
@@ -34,7 +34,8 @@ async def counts(client, w: World, who: str) -> dict[str, tuple[int, int]]:
 
 
 async def test_a_tracks_count_reads_the_working_draft(client):
-    """A track's feature count reflects the decider's own draft, not what viewers see."""
+    """A track's feature count reflects the roadmap's open working draft, for every reader
+    alike (de-inst, owner, Nov 23)."""
     w = await World(await make_people()).build(decider=True, ops=OPS)
     async with tenant_session(w.ctx.tenant_id) as s:
         first = await s.scalar(select(ProductTrack))
@@ -56,8 +57,9 @@ async def test_a_tracks_count_reads_the_working_draft(client):
     # The decider reads the draft: the five are on Gift boxes now.
     # Move to Trash on Track also clears the five still on it in the published version.
     assert await counts(client, w, "decider") == {"Track": (4, 9), "Gift boxes": (5, 5)}
-    # A viewer reads the published version, its counts unchanged.
-    assert await counts(client, w, "viewer") == published
+    # de-inst (owner, Nov 23): the open draft's change is live for every reader at once, so
+    # a viewer reads the same counts the decider does, not the still-unchanged published rows.
+    assert await counts(client, w, "viewer") == {"Track": (4, 9), "Gift boxes": (5, 5)}
 
 
 async def drafts_on(w: World, track_id: str) -> set[str]:
@@ -119,9 +121,11 @@ async def test_move_to_trash_counts_the_published_features_moved_off_in_the_draf
     r = await client.get(TRACKS, headers=w.ctx.as_("owner"))
     off = {t["title"]: t.get("draft_off_count") for t in r.json()["tracks"]}
     assert off == {"Track": 5, "Gift boxes": 0}
+    # de-inst (owner, Nov 23): the open draft's change is live for every reader, so a viewer
+    # reads the same draft_off_count the owner and decider do, not the published-only 0.
     r = await client.get(TRACKS, headers=w.ctx.as_("viewer"))
     assert {t["title"]: t.get("draft_off_count") for t in r.json()["tracks"]} == {
-        "Track": 0,
+        "Track": 5,
         "Gift boxes": 0,
     }
     gone = await delete(client, w, old)
