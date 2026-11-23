@@ -270,7 +270,7 @@ MEANING = {
     "goal_renamed": (edit("goal", title="Raise it"), 'The goal "Raise it" changed'),
     "goal_measure_edited": (edit("goal", attrs={"metric": "paid accounts"}), f"{GOAL} changed"),
     "goal_target_edited": (
-        edit("goal", attrs={"target": 55, "unit": "%", "direction": "up"}),
+        edit("goal", attrs={"target": 55, "unit": "%", "comparison": "at_least"}),
         f"{GOAL} changed",
     ),
     "goal_date_edited": (edit("goal", attrs={"due": "2027-03-31"}), f"{GOAL} changed"),

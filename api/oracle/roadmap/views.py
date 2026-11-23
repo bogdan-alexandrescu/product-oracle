@@ -323,11 +323,13 @@ def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> Roadmap
         outcome=item.outcome,
         horizon=item.horizon,  # type: ignore[arg-type]
         milestone=ctx.milestone_of(item),
-        freshness=item.freshness,  # type: ignore[arg-type]
+        freshness=staleness.freshness_of(item),  # type: ignore[arg-type]
         # In words, each said once: the section by its heading, a lone Ground Truth item by
         # its name (the stale-marks walk); what the reader may not see is hidden first.
         stale_reasons=staleness.say(
-            ctx.readable(item, staleness.for_reader(item.stale_reasons, ctx.hidden)),
+            ctx.readable(
+                item, staleness.for_reader(staleness.meant(item.stale_reasons), ctx.hidden)
+            ),
             ctx.ref_names,
         ),
         stale_since=item.stale_since,
