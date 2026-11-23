@@ -217,6 +217,22 @@ traffic to the new revision (an Actions deploy leaves it on one revision, by tag
 serving revision has `ORACLE_MIGRATE_AT_START=0` (Turn it on), a laptop deploy keeps `0` and
 does not migrate, so set it only in the sitting that sets `ORACLE_DEPLOY_ENABLED=true`.
 
+The variables are given as `NAME=value,...`, or, when a value holds a comma (a JSON list), in
+gcloud's alternate-delimiter form `^<delim>^NAME=value<delim>...`, exactly as
+`gcloud run deploy --set-env-vars` reads it. The string passes through unchanged, the kept
+`ORACLE_MIGRATE_AT_START` appended with the same delimiter; other flags (`--set-secrets`, ...)
+pass through too:
+
+```sh
+ORACLE_GCP_PROJECT=<project-id> ORACLE_GCP_REGION=<region> ops/deploy/deploy-api.sh <image> \
+  '^##^ORACLE_ENV=prod##ORACLE_IAP_BACKENDS=["<backend-a>","<backend-b>"]##ORACLE_IAP_AUDIENCES=["/projects/<project-number>/global/backendServices/<backend-id>"]' \
+  --set-secrets=<NAME>=<secret>:latest
+# runs: gcloud run deploy oracle-api ... --set-env-vars='^##^...##ORACLE_MIGRATE_AT_START=<kept>' --set-secrets=...
+```
+
+`ORACLE_MIGRATE_AT_START` among the given variables is refused in either form, as is a `^`
+with no closing `^` or an empty delimiter.
+
 Once Actions deploys are on (`ORACLE_DEPLOY_ENABLED` is `true`, read with `gh`), or when `gh`
 can not tell, laptop deploys are traffic-only: the script deploys no new revision and prints
 the rollback, moving the traffic to an earlier revision.
