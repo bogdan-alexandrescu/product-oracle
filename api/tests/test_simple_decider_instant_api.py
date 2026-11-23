@@ -166,3 +166,16 @@ async def test_the_approved_version_line_follows_a_deciders_change(client):
         assert by_key(out)["trip-reports"]["end"]["date"] == "2027-01-29", who
         [line] = out["applied_versions"]
         assert line["matches"] is True and line["differences"] == [], (who, line)
+
+
+async def test_a_deciders_key_date_is_live_for_every_reader(client):
+    """de-inst: a key date the decider adds is on every reader's roadmap at once."""
+    w = await world()
+    r = await client.post(CHANGES, headers=w.ctx.as_("decider"), json={
+        "op": "add_key_date", "target": {"roadmap_id": w.roadmap_id},
+        "before": {"key_date": None},
+        "after": {"name": "Spring launch", "date": "2026-12-01", "note": "Press day"}})  # fmt: skip
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    for who in ("decider", "commenter", "viewer"):
+        names = [k["name"] for k in (await view(client, w, who))["key_dates"]]
+        assert names == ["Spring launch"], who
