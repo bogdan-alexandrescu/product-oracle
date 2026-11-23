@@ -45,6 +45,16 @@ export function useMcpMock() {
 }
 
 type Tab = 'code' | 'app' | 'other'; // MOCK-HOOK
+
+/** MOCK-HOOK: reload when a client is revoked elsewhere on the page. */
+export function useMcpChanged(reload: () => unknown) {
+  useEffect(() => {
+    const on = () => void reload(); // MOCK-HOOK
+    window.addEventListener('mk-mcp-changed', on); // MOCK-HOOK
+    return () => window.removeEventListener('mk-mcp-changed', on); // MOCK-HOOK
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
 const TABS: { value: Tab; label: string }[] = [
   { value: 'code', label: 'Claude Code' }, // MOCK-HOOK
   { value: 'app', label: 'Claude app' }, // MOCK-HOOK
@@ -233,6 +243,7 @@ export function ConnectGuide({ bare = false }: { bare?: boolean }) {
   const [step, setStep] = useState(m.step); // MOCK-HOOK
   const clientsQ = useQuery('my-oauth-clients', () => unwrap(api.GET('/v1/me/oauth-clients'))); // MOCK-HOOK
   useEffect(() => setTab(m.tab), [m.tab]); // MOCK-HOOK
+  useMcpChanged(clientsQ.reload); // MOCK-HOOK
 
   const address = (
     <div className="flex flex-col gap-1.5">
@@ -356,7 +367,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
     scopes: t.scopes ?? [], // MOCK-HOOK
     authorized_at: t.created_at, // MOCK-HOOK
     last_used_at: t.last_used_at ?? t.created_at, // MOCK-HOOK
-    expires_at: t.expires_at ?? t.created_at, // MOCK-HOOK
+    expires_at: t.expires_at ?? '2099-01-01T00:00:00Z', // MOCK-HOOK
     revoked_at: tokenState(t) === 'active' ? null : (t.revoked_at ?? t.created_at), // MOCK-HOOK
   }));
   const rows = q.data && [...q.data, ...asRows].filter((c) => tokenState(c) === 'active' || c.id === pending?.id); // MOCK-HOOK
@@ -372,6 +383,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
       q.setData((prev) => prev?.map((x) => (x.id === c.id ? { ...x, revoked_at: new Date().toISOString() } : x))); // MOCK-HOOK
       setConfirming(null);
       setInline(null);
+      window.dispatchEvent(new Event('mk-mcp-changed')); // MOCK-HOOK: the check strip and the stat follow
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -400,7 +412,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
               </span>
               <span className="flex flex-wrap items-center gap-x-3 text-sm text-text2">
                 <span>Connected {when(c.authorized_at)}</span>
-                <span className="inline-flex gap-1">Used {usedCell(c.last_used_at)}</span>
+                <span className="inline-flex gap-1">Last used {ago(c.last_used_at)?.toLowerCase() ?? when(c.last_used_at)}</span>
               </span>
               {inline === c.id ? (
                 <span className="flex flex-wrap items-center gap-2 rounded-lg bg-crit-bg p-2">
@@ -431,14 +443,14 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
         </span>
       ),
     },
-    { key: 'where', header: 'Where it runs', width: '140px', hideOnPhone: true, cell: (c) => <span className="text-text2">{where(c)}</span> },
-    { key: 'scopes', header: 'Access', width: '116px', hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
-    { key: 'at', header: 'Connected', width: '104px', hideOnPhone: true, cell: (c) => when(c.authorized_at) },
-    { key: 'used', header: 'Last used', width: '124px', phoneLabel: 'Used ', cell: (c) => usedCell(c.last_used_at) },
+    { key: 'where', header: 'Where it runs', width: '132px', hideOnPhone: true, cell: (c) => <span className="text-text2">{where(c)}</span> },
+    { key: 'scopes', header: 'Access', width: '112px', hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
+    { key: 'at', header: 'Connected', width: '120px', hideOnPhone: true, cell: (c) => when(c.authorized_at) },
+    { key: 'used', header: 'Last used', width: '116px', phoneLabel: 'Used ', cell: (c) => usedCell(c.last_used_at) },
     {
       key: 'action',
       header: <span className="sr-only">Actions</span>,
-      width: '120px',
+      width: m.mc3 === 'b' ? '180px' : '104px', // MOCK-HOOK
       align: 'right',
       phone: 'action',
       wrap: true,

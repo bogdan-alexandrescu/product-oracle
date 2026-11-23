@@ -15,7 +15,7 @@ import {
   tokenState,
   when,
 } from '@/components/ApiTokensSettings';
-import { ConnectedClients, ConnectGuide, useMcpMock } from '@/components/mcp/McpConnect'; // MOCK-HOOK
+import { ConnectedClients, ConnectGuide, useMcpChanged, useMcpMock } from '@/components/mcp/McpConnect'; // MOCK-HOOK
 import { ROLE_LABEL } from '@/components/MembersSettings';
 import { Field, INPUT } from '@/app/settings/_components/fields';
 import {
@@ -93,6 +93,7 @@ export function MyAccount() {
   const account = accountQ.data;
   const liveClients = clientsQ.data?.filter((c) => tokenState(c) === 'active').length;
   const liveTokens = tokensQ.data?.filter((t) => tokenState(t) === 'active').length;
+  useMcpChanged(() => clientsQ.reload()); // MOCK-HOOK
   const refreshCredentials = () => Promise.all([tokensQ.reload(), clientsQ.reload()]);
 
   async function signOutEverywhere() {

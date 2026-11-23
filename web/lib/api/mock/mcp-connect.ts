@@ -28,7 +28,13 @@ export const MOCK_WHERE: Record<string, string> = {
 };
 
 /** MOCK-HOOK: `?clients=none|fresh|five` picks the person's connected clients; null keeps the seed. */
+const revoked = new Set<string>(); // MOCK-HOOK: revokes made on this page load
+export const mockRevoke = (id: string) => revoked.add(id); // MOCK-HOOK
 export function mockClients(search: string): Client[] | null {
+  const list = pick(search); // MOCK-HOOK
+  return list && list.map((c) => (revoked.has(c.id) ? { ...c, revoked_at: new Date().toISOString() } : c)); // MOCK-HOOK
+}
+function pick(search: string): Client[] | null {
   const k = new URLSearchParams(search).get('clients'); // MOCK-HOOK
   if (k === 'none') return []; // MOCK-HOOK
   if (k === 'fresh') return [row('01', "Claude Code on Avery's laptop", true, ago(1), ago(0))]; // MOCK-HOOK
