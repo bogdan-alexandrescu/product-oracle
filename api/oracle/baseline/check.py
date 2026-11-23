@@ -433,10 +433,9 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             )
             continue
         # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
+        ask = to_confirm(own, i)
         first = (
-            ("confirm_feature", str(own.id))
-            if to_confirm(own, i) is not None
-            else ("add_to_ground_truth", target)
+            ("confirm_feature", str(ask.id)) if ask is not None else ("add_to_ground_truth", target)
         )
         flag(
             "unlinked_item",
