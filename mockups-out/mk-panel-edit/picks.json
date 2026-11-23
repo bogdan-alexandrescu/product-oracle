@@ -43,15 +43,15 @@
             },
             {
               "file": "frames/pe1-a-milestone-added.html",
-              "caption": "Enter: the new milestone is set on the feature and marked as changed. 2 clicks. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
+              "caption": "Enter: the new milestone is set on the feature and marked as changed. 2 clicks. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18. Its chip has a flag mark: a milestone met when features ship, where the diamonds beside it are the goal’s number checkpoints."
             },
             {
               "file": "frames/pe1-a-add.html",
-              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sound picker typed in its field."
+              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sounds typed in its field."
             },
             {
               "file": "frames/pe1-a-added.html",
-              "caption": "Enter: it joins Needed by, placed after this feature by its link, with no drag. 1 click, against 2 and a drag today. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
+              "caption": "Enter: it joins Needed by, placed after this feature by its link, with no drag. 1 click, against 2 and a drag today. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sounds, a draft from Dec 5, 2026 to Jan 15, 2027, starting the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-a-hard-1512.html",
@@ -113,15 +113,15 @@
             },
             {
               "file": "frames/pe1-b-milestone-added.html",
-              "caption": "Enter: the milestone is set and marked. 2 clicks. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
+              "caption": "Enter: the milestone is set and marked. 2 clicks. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18. Its chip has a flag mark: a milestone met when features ship, where the diamonds beside it are the goal’s number checkpoints."
             },
             {
               "file": "frames/pe1-b-add.html",
-              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sound picker typed in its field."
+              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sounds typed in its field."
             },
             {
               "file": "frames/pe1-b-added.html",
-              "caption": "Enter: it joins Needed by, placed after this feature, no drag. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
+              "caption": "Enter: it joins Needed by, placed after this feature, no drag. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sounds, a draft from Dec 5, 2026 to Jan 15, 2027, starting the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-b-hard-1512.html",
@@ -183,15 +183,15 @@
             },
             {
               "file": "frames/pe1-c-milestone-added.html",
-              "caption": "Enter, then Done: the milestone is set and marked. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
+              "caption": "Enter, then Done: the milestone is set and marked. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18. Its chip has a flag mark: a milestone met when features ship, where the diamonds beside it are the goal’s number checkpoints."
             },
             {
               "file": "frames/pe1-c-add.html",
-              "caption": "The earlier toast gone: Edit again, the panel scrolled to Needed by, + Add opened and Alert sound picker typed."
+              "caption": "The earlier toast gone: Edit again, the panel scrolled to Needed by, + Add opened and Alert sounds typed."
             },
             {
               "file": "frames/pe1-c-added.html",
-              "caption": "Enter, then Done: it joins Needed by, placed after this feature; one Saved toast. 3 clicks. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
+              "caption": "Enter, then Done: it joins Needed by, placed after this feature; one Saved toast. 3 clicks. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sounds, a draft from Nov 25, 2026 to Jan 5, 2027 (Oracle’s dates were taken, so this feature ends Nov 24), starting the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-c-hard-1512.html",
@@ -253,15 +253,15 @@
             },
             {
               "file": "frames/pe1-d-milestone-added.html",
-              "caption": "Enter: the milestone is set and marked. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
+              "caption": "Enter: the milestone is set and marked. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18. Its chip has a flag mark: a milestone met when features ship, where the diamonds beside it are the goal’s number checkpoints."
             },
             {
               "file": "frames/pe1-d-add.html",
-              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sound picker typed in its field."
+              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sounds typed in its field."
             },
             {
               "file": "frames/pe1-d-added.html",
-              "caption": "Enter: it joins Needed by, placed after this feature. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
+              "caption": "Enter: it joins Needed by, placed after this feature. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sounds, a draft from Dec 5, 2026 to Jan 15, 2027, starting the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-d-hard-1512.html",
@@ -491,7 +491,7 @@
             },
             {
               "file": "frames/pe3-a-all-fixed.html",
-              "caption": "Then Use these and Move it after: every flag and the count gone."
+              "caption": "Then Use these (the bar now ends Nov 24) and Move it after: on the Roadmap F-79 Weekly alert digest moves to Nov 25 to Jan 4, after it, and loses its red mark. Every flag and the count gone."
             },
             {
               "file": "frames/pe3-a-hard-1512.html",
@@ -541,7 +541,7 @@
             },
             {
               "file": "frames/pe3-b-all-fixed.html",
-              "caption": "Then Use these and Move it after: every flag and the count gone."
+              "caption": "Then Use these (the bar now ends Nov 24) and Move it after: on the Roadmap F-79 Weekly alert digest moves to Nov 25 to Jan 4, after it, and loses its red mark. Every flag and the count gone."
             },
             {
               "file": "frames/pe3-b-hard-1512.html",
@@ -595,7 +595,7 @@
             },
             {
               "file": "frames/pe3-c-all-fixed.html",
-              "caption": "Then Use these and Move it after: every flag and the count gone."
+              "caption": "Then Use these (the bar now ends Nov 24) and Move it after: on the Roadmap F-79 Weekly alert digest moves to Nov 25 to Jan 4, after it, and loses its red mark. Every flag and the count gone."
             },
             {
               "file": "frames/pe3-c-hard-1512.html",
@@ -611,7 +611,7 @@
             },
             {
               "file": "frames/pe3-c-rest-390.html",
-              "caption": "On a phone at rest."
+              "caption": "On a phone at rest: only the 3 to fix count shows, its flags closed, as on the desktop."
             },
             {
               "file": "frames/pe3-c-rest-390-dark.html",

@@ -49,3 +49,18 @@ owner 3 clicks with Save; add a milestone 4 clicks with Save.
 - Every frame of a story keeps the open Roadmap row where it was at rest (banners added after a change no longer move it).
 - `&hard=1` also gives the open Roadmap row the panel's long name (MOCK-HOOK in `web/lib/api/mock/simple-roadmap.ts`).
 - Viewer frames are signed in as Lena Ortiz, a viewer (`viewer@example.com`).
+
+## Round 2, second fix pass
+
+- Move it after moves F-79 Weekly alert digest for real (`move_dates`, MOCK-HOOK in `_pe.tsx`): it starts the day after
+  this feature ends and keeps its length, so on the Roadmap its bar moves to Nov 25 to Jan 4 and loses its red mark.
+- C's phone frames at rest show the count alone, flags closed, as on the desktop.
+- The scrolled panel shows a whole field under its header (the capture scrolls back to the start of a cut field).
+- pe2-a-changed and pe3-a-owner-fixed scroll the panel just enough that the F-79 flag and its buttons sit above the toast.
+- The added feature is typed as "Alert sounds" (the row label fits) and lasts six weeks, so its bar shows both dates.
+- The new milestone's flag mark is the product's mark for a milestone met when features ship (kind delivery); the
+  diamonds are the goal's number checkpoints. The captions now say so.
+- Hard and viewer frames at 1512 start the timeline 80 px earlier, so the open row's end dot sits in the grid, not on
+  its "Not in GT" chip. Still a true 1512x900 viewport (`setViewportSize`).
+- Known trade: in the add-result frames the panel shows its Ends field whole, so the F-79 flag under Needed by sits
+  under the "Added ..." toast there.
