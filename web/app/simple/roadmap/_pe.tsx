@@ -63,7 +63,7 @@ const LABEL: Record<K, string> = {
   decider: 'Decider',
 };
 const OPTIONS: Partial<Record<K, string[]>> = {
-  status: ['Planned', 'In progress', 'Done'],
+  status: ['Draft', 'Planned', 'In progress', 'Done'],
   confidence: ['High', 'Medium', 'Low'],
   owner: PE_PEOPLE.map((p) => p.name),
   decider: PE_PEOPLE.map((p) => p.name),
@@ -122,7 +122,7 @@ export function PePanel({
     title: hard ? PE_HARD.title : item.title,
     start: day(item.start.date),
     end: day(item.end.date),
-    status: item.status === 'in_progress' ? 'In progress' : item.status === 'done' ? 'Done' : 'Planned',
+    status: 'Draft',
     confidence: item.confidence ? item.confidence[0].toUpperCase() + item.confidence.slice(1) : 'High',
     milestone: item.milestone?.name ?? '',
     goal: item.goal?.title ?? 'Grow retention',
@@ -176,8 +176,8 @@ export function PePanel({
     const before = vals;
     if (JSON.stringify(v[k]) === JSON.stringify(val)) return;
     if (draftVals) return setDraftVals({ ...draftVals, [k]: val });
-    setVals({ ...vals, [k]: val });
-    setChanged(new Set(changed).add(k));
+    setVals({ ...vals, [k]: val, ...(k === 'owner' && vals.status === 'Draft' ? { status: 'Planned' } : {}) });
+    setChanged((c) => new Set(c).add(k));
     if (k === 'owner' && flags.owner) setFlags({ ...flags, owner: false });
     if ((k === 'start' || k === 'end') && typeof val === 'string') {
       // The dates are saved for real, so the roadmap's bar moves at once (the change's own toast and Undo).
@@ -208,7 +208,7 @@ export function PePanel({
     const before = vals;
     setVals(draftVals);
     setDraftVals(null);
-    setChanged(new Set([...changed, ...ks]));
+    setChanged((c) => new Set([...c, ...ks]));
     if (draftVals.owner && flags.owner) setFlags({ ...flags, owner: false });
     toast(`Saved ${ks.length} change${ks.length === 1 ? '' : 's'}`, () => setVals(before));
     const s0 = iso(draftVals.start, item.start.date);
@@ -220,8 +220,8 @@ export function PePanel({
   const suggested = PE_PEOPLE.slice(0, 2).map((p) => p.name);
   const fixOwner = (who: string) => {
     const before = { vals, flags };
-    setVals({ ...vals, owner: who });
-    setChanged(new Set(changed).add('owner'));
+    setVals({ ...vals, owner: who, status: vals.status === 'Draft' ? 'Planned' : vals.status });
+    setChanged((c) => new Set(c).add('owner'));
     setFlags({ ...flags, owner: false });
     toast(`${who} owns it now, so the draft is confirmed`, () => {
       setVals(before.vals);
@@ -232,7 +232,7 @@ export function PePanel({
     const before = { vals, flags };
     if (use) {
       setVals({ ...vals, start: 'Oct 6', end: 'Nov 24' });
-      setChanged(new Set(changed).add('start').add('end'));
+      setChanged((c) => new Set(c).add('start').add('end'));
       setFlags({ ...flags, dates: false });
       return moveDates(iso('Oct 6', item.start.date)!, iso('Nov 24', item.end.date)!);
     }
@@ -245,7 +245,7 @@ export function PePanel({
   const fixLink = (how: 'move' | 'remove') => {
     const before = { vals, flags };
     if (how === 'remove') setVals({ ...vals, needed: vals.needed.slice(1) });
-    setChanged(new Set(changed).add('needed'));
+    setChanged((c) => new Set(c).add('needed'));
     setFlags({ ...flags, link: false });
     toast(
       how === 'move' ? 'F-79 Weekly alert digest now starts Nov 11, after this ends' : 'Link removed',
@@ -432,7 +432,7 @@ export function PePanel({
   const tile = (k: K, children?: ReactNode) => (
     <div
       data-testid={`pe-field-${k}`}
-      className={`min-w-0 rounded-lg border border-line px-2.5 py-1.5 ${markRow(k)}`}
+      className={`min-w-0 rounded-lg border px-2.5 py-1.5 ${changed.has(k) ? 'border-accent' : 'border-line'}`}
     >
       <span className="flex items-center gap-1 text-sm text-text2">
         {LABEL[k]}
@@ -522,7 +522,7 @@ export function PePanel({
           </h2>
         )}
       </div>
-      {(fix !== 'a' || order !== 'c') && flagChip}
+      {flagChip}
       {model === 'c' && !ro && (
         <button
           type="button"

@@ -17,6 +17,7 @@ fs.mkdirSync(AS, { recursive: true });
 const fonts = new Map<string, string>();
 
 let itemId = '';
+let seed = '';
 async function login(page: Page) {
   await page.goto('/login?next=%2Fhome');
   await page.getByLabel('Email').fill('admin@example.com');
@@ -27,7 +28,14 @@ async function login(page: Page) {
 
 async function open(page: Page, qs: string, w: number, h: number, theme = 'light') {
   await page.setViewportSize({ width: w, height: h });
-  await page.evaluate((t) => localStorage.setItem('oracle-theme', t), theme);
+  // Each frame starts from the same seeded data (the mock keeps its data in localStorage).
+  await page.evaluate(
+    ([t, db]) => {
+      localStorage.setItem('oracle-theme', t);
+      if (db) localStorage.setItem('po-mock-db-v2', db);
+    },
+    [theme, seed],
+  );
   await page.goto(`/simple/roadmap?${qs}&item=${itemId}`);
   await page.locator('[data-testid="floating-card"][data-pe]').waitFor({ timeout: 15000 });
   await page.waitForTimeout(500);
@@ -112,6 +120,9 @@ async function saveEnds(page: Page, m: string) {
 test('frames', async ({ page }) => {
   await login(page);
   itemId = stableUuid('simple-item/alert-rules');
+  await page.goto('/simple/roadmap');
+  await page.waitForTimeout(1500);
+  seed = await page.evaluate(() => localStorage.getItem('po-mock-db-v2') ?? '');
 
   for (const m of ['a', 'b', 'c', 'd']) {
     const k = `pe1-${m}`;
@@ -210,7 +221,7 @@ test('frames', async ({ page }) => {
   // Today, for the hand-off: the Change link opens a field with Save and Cancel.
   if (want('today')) {
     await page.setViewportSize({ width: D.w, height: D.h });
-    await page.evaluate(() => localStorage.setItem('oracle-theme', 'light'));
+    await page.evaluate((db) => { localStorage.setItem('oracle-theme', 'light'); localStorage.setItem('po-mock-db-v2', db); }, seed);
     await page.goto(`/simple/roadmap?item=${itemId}`);
     await page.getByTestId('floating-card').waitFor();
     await page.waitForTimeout(600);
