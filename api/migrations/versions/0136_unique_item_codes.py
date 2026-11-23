@@ -8,6 +8,14 @@ item whose code is unique is never renumbered. Each change is audited (old code 
 the logic below is a frozen copy of what the app did when this was written (a migration
 imports no live app code). Safe to run twice: a second run changes nothing.
 
+Current plan only (the owner, Nov 23): this changes rows only on the current plan, a working
+draft (rows with ``draft_roadmap_id`` or ``simple_draft_id``) and the roadmap's latest
+version. A row of an older approved version stays exactly as approved (approved-version rows
+are never rewritten: oracle.roadmap.models.RoadmapItem), and a row in Trash is never
+rewritten; an older version keeps showing the old shared code, as intended. Both title
+rewrites (a lead that differs from the code shown, and a renumbering) apply this rule; the
+older and Trash rows still count as codes in use, so a new number never repeats one.
+
 The downgrade does nothing (the codes given stay, as a person's set_code would).
 
 Revision ID: 0136_unique_item_codes
@@ -258,6 +266,8 @@ def renumber(conn: Connection) -> list[dict[str, Any]]:
     # lead: the item shows the code and name it showed, under the own-code-first read.
     titles = {r.id: r.title for r in rows}
     for r in rows:
+        if r.deleted_at is not None or plan(r) is None:
+            continue  # Trash and an older approved version are never rewritten
         code, lead = before(r), title_code(r.title)
         if code and lead and lead.upper() != code.upper():
             titles[r.id] = f"{code} {r.title[: TITLE_MAX - len(code) - 1]}"
@@ -269,19 +279,20 @@ def renumber(conn: Connection) -> list[dict[str, Any]]:
         used = [before(r) for r in mine]
         used += [k for tid, k in features if tid == tenant]
         used += [by_feature.get(r.feature_id) for r in mine if r.feature_id is not None]
-        # One item, every live row of it (its versions and drafts), read as its latest row;
-        # only an item on a plan read now (a draft, a roadmap's latest version) is renumbered.
+        # One item, every live row of it (its versions and drafts), read as its latest row on
+        # a plan read now (a draft, a roadmap's latest version): only that item is renumbered,
+        # and only its rows on those plans are written; a row of an older version is not.
         items: dict[tuple[uuid.UUID, str], list[Any]] = {}
         for r in mine:
             if r.deleted_at is None:
                 items.setdefault((r.roadmap_document_id, r.item_key), []).append(r)
         plans = {k: {p for r in v if (p := plan(r)) is not None} for k, v in items.items()}
-        items = {k: v for k, v in items.items() if plans[k]}
+        first = {k: min(r.created_at or datetime.max for r in v) for k, v in items.items()}
+        items = {k: [r for r in v if plan(r) is not None] for k, v in items.items() if plans[k]}
         latest = {
             k: max(v, key=lambda r: (r.created_at or datetime.min, str(r.id)))
             for k, v in items.items()
         }
-        first = {k: min(r.created_at or datetime.max for r in v) for k, v in items.items()}
 
         def order(k: tuple[uuid.UUID, str]) -> tuple[date, datetime, str]:
             return (latest[k].start_date or date.max, first[k], k[1])  # noqa: B023

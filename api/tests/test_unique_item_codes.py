@@ -233,8 +233,15 @@ async def _plans(ctx):
         rv2 = await seed.version(rm, 2)
         f51 = await seed.entity("feature", "F-51")
         f31 = await seed.entity("feature", "F-31")
-        draft = await seed.add(SimpleDraft(document_id=rm.id, base_version_id=rv2.id, status="working",
-                                                overlay={}, created_by=ctx.users["owner"].id))
+        draft = await seed.add(
+            SimpleDraft(
+                document_id=rm.id,
+                base_version_id=rv2.id,
+                status="working",
+                overlay={},
+                created_by=ctx.users["owner"].id,
+            )
+        )
         ids: dict[str, uuid.UUID] = {}
 
         async def add(name, v, key, title, created, **kw):
