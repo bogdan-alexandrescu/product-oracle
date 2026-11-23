@@ -3292,6 +3292,8 @@ export function roadmapOut(
     // track has no PRD and its milestones keep their target day and counts only, no plan.
     ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
       const inPlay = items.some((i) => i.prd?.slug === slug);
+      const horizonOf = (d: string): Horizon =>
+        d <= w.now[1] ? 'now' : d <= w.next[1] ? 'next' : 'later';
       return planMilestones().map((m) => ({
         id: stableUuid(
           slug === PLAN_PRD_SLUG
@@ -3303,11 +3305,7 @@ export function roadmapOut(
         ),
         name: `${m.code} · ${m.name}`,
         date: m.end_date,
-        horizon: (m.end_date <= w.now[1]
-          ? 'now'
-          : m.end_date <= w.next[1]
-            ? 'next'
-            : 'later') as Horizon,
+        horizon: horizonOf(m.end_date),
         status: 'planned' as const,
         item_ids: items
           .filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code))
@@ -3374,6 +3372,7 @@ export function roadmapOut(
         g.id,
         comparison ? comparison === 'at_most' || comparison === 'below' : undefined,
       );
+      const progress: Schemas['SimpleGoalMilestone']['progress'] = 'not_started';
       return [
         {
           id: g.id,
@@ -3384,7 +3383,7 @@ export function roadmapOut(
           goal_id: g.id,
           item_ids: mine.map((i) => i.id),
           counts_when: '',
-          progress: 'not_started' as Schemas['SimpleGoalMilestone']['progress'],
+          progress,
           prd: null,
           prd_owner: null,
           pending: null,
