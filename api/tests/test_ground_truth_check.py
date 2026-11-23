@@ -735,7 +735,8 @@ async def test_an_unlinked_item_still_saves(client):
         await s.commit()
     out = await _check(client, w.ctx)
     names = [f["item"]["name"] for f in _of(out, "unlinked_item")]
-    assert "Guided setup" in names
+    # de-inst: the check reads the live roadmap, the item with the code it was given.
+    assert any(n.endswith("Guided setup") for n in names), names
 
 
 async def test_entity_create_keeps_codes_and_links_to_features(client):

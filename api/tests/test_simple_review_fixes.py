@@ -98,7 +98,6 @@ from tests.test_simple_changes_api import CHANGES, SESSIONS, World, make_people
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_drafts_api import (
     DRAFTS,
-    TITLE,
     edit_title,
     inbox,
     published,
@@ -217,7 +216,8 @@ async def test_a_blocking_verdict_returns_the_draft(client, verdict):
         f"{DOCS}/{await slug(w)}/versions/2/approve", headers=w.ctx.as_("decider")
     )
     assert r.status_code == 409, r.text
-    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == TITLE
+    # de-inst (owner, Nov 23): the returned draft's change is still live for every reader.
+    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == "Ledger v2"
     assert title_in(await roadmap(client, w, "decider"), "edit_title-a") == "Ledger v2"
     await unlocked(client, w)
     r = await client.post(f"{CHANGES}/{change['id']}/undo", headers=w.ctx.as_("decider"))
@@ -323,8 +323,10 @@ async def test_track_owner_decides_only_as_approver(client, owner_role):
     else:
         assert r.status_code == 201, r.text
         assert r.json()["change"]["status"] == ("applied" if decides else "proposed")
-    # The commenter reads the published title (the track owner's draft is not theirs).
-    r = await w.post(client, "commenter", "edit_title", after={"title": "Ledger v3"})
+    # de-inst (owner, Nov 23): the commenter reads the track owner's applied title at once.
+    before = {"title": "Ledger v2"} if decides else None
+    over = {"before": before} if before else {}
+    r = await w.post(client, "commenter", "edit_title", after={"title": "Ledger v3"}, **over)
     assert r.status_code == 201, r.text
     routed = [str(ctx.users["trackowner" if decides else "owner"].id)]
     assert r.json()["change"]["routed_to"] == routed
@@ -387,7 +389,9 @@ async def test_suggestions_go_through_the_change_engine(client):
     items = by_key(await roadmap(client, w, "owner"))
     assert items["edit_title-u"]["start"]["date"] == "2026-11-02"
     assert items["edit_title-u"]["start"]["source"] == "accepted"
-    assert by_key(await roadmap(client, w, "viewer"))["edit_title-u"]["estimated"] is True
+    # de-inst (owner, Nov 23): a viewer reads the accepted dates at once.
+    seen = by_key(await roadmap(client, w, "viewer"))["edit_title-u"]
+    assert seen["start"] == items["edit_title-u"]["start"]
     # Undo reopens the suggestion.
     r = await client.post(f"{CHANGES}/{edited['id']}/undo", headers=owner)
     assert r.status_code == 201, r.text
@@ -405,11 +409,11 @@ async def test_dates_accepted_into_a_draft_stay_a_viewer_s_suggested_estimate(cl
     sid = w.suggestion["move_dates-u"]
     r = await client.post(f"{SUGGESTIONS}/{sid}/accept", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
-    # The viewer reads the published, undated item: the draft's dates, with no open
-    # suggestion, are still Oracle's suggested estimate, not its window.
+    # de-inst (owner, Nov 23): the viewer reads the accepted dates at once, as the decider.
     item = by_key(await roadmap(client, w, "viewer"))["move_dates-u"]
-    assert item["estimated"] is True and item["suggestion"] is None
-    assert item["estimate_basis"] == "suggestion"
+    mine = by_key(await roadmap(client, w, "decider"))["move_dates-u"]
+    assert item["suggestion"] is None
+    assert (item["start"], item["end"]) == (mine["start"], mine["end"])
 
 
 async def test_stale_suggestion_is_409_outdated(client):

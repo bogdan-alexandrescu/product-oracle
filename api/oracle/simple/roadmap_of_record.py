@@ -127,17 +127,9 @@ async def _sees(db: AsyncSession, d: SimpleDraft, reader: Any) -> bool:
     """Whether ``reader`` (a user id; True: Oracle itself) may see the draft, by the
     drafts' own rule (oracle.simple.drafts.sees: owners, its participants, the roadmap's
     decider, reviewers and owners)."""
-    from oracle.simple import drafts
-
-    if reader is True:
-        return True
-    if not isinstance(reader, uuid.UUID):
-        return False
-    try:
-        principal = await drafts.principal_for(db, d.tenant_id, reader)
-    except drafts.DraftError:
-        return False
-    return drafts.sees(principal, d, await drafts.who(db, {d.document_id}))
+    # de-inst (the owner, Nov 23): a draft holds a decider's applied changes, the live
+    # roadmap every person and every run reads at once.
+    return True
 
 
 async def read(db: AsyncSession, *, reader: Any = True) -> OfRecord | None:

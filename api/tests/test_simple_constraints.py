@@ -112,15 +112,14 @@ def test_cut_with_dependents():
 
 
 def test_draft_without_owner():
-    """A draft item with no owner is flagged; an owned or published item is not."""
+    """de-inst (the owner, Nov 23): a draft item is a decider's own addition, confirmed by
+    them: nothing waits on someone to confirm it, owned or not."""
     draft = node("idea", d(2026, 10, 1, True), d(2026, 12, 31, True), draft=True)
     owned = node("owned", d(2026, 10, 1, True), d(2026, 12, 31, True), draft=True,
                  owner_id="u1")  # fmt: skip
     plain = node("plain", d(2026, 10, 1, True), d(2026, 12, 31, True))
     out = constraints.check([draft, owned, plain])
-    (flag,) = out["idea"]
-    assert (flag.kind, flag.fixes) == ("draft_without_owner", [])
-    assert out["owned"] == [] and out["plain"] == []
+    assert out["idea"] == [] and out["owned"] == [] and out["plain"] == []
 
 
 def test_accepted_risk_turns_amber_not_gone():
@@ -143,6 +142,6 @@ def test_every_reason_is_one_line():
                 milestone=("Beta", date(2026, 11, 15)), draft=True,
                 blockers=[Blocker("b", "x" * 200, date(2026, 12, 1), True)])  # fmt: skip
     flags = constraints.check([dep, item])["import"]
-    assert len(flags) == 4
+    assert len(flags) == 3  # de-inst: a draft no longer waits on a confirm
     for f in flags:
         assert "\n" not in f.reason and len(f.reason) <= 160

@@ -174,10 +174,9 @@ async def test_draft_item_ops_roles_record_and_undo(client):
         seen = await rows(w.ctx, touched)
         r = await client.post(CHANGES, json=body, headers=w.as_("viewer"))
         assert r.status_code == 403, (op, r.text)
-        # A commenter does not see the working draft's new item (it is not theirs to see).
-        r = await client.post(CHANGES, json=body, headers=w.as_("commenter"))
-        assert r.status_code == 404, (op, r.text)
-        for who in ("approver",):
+        # de-inst (owner, Nov 23): the owner's new item is live for every reader, so a
+        # commenter's op on it is a proposal, as an approver's.
+        for who in ("commenter", "approver"):
             r = await client.post(CHANGES, json=body, headers=w.as_(who))
             assert r.status_code == 201, (op, who, r.text)
             assert r.json()["change"]["status"] == "proposed", (op, who)

@@ -14,9 +14,10 @@ Test cards (protects / fails_when / no_claim):
   owner, decider, cut, draft), and reopens an accepted date suggestion; fails_when=an undo
   leaves any column changed; no_claim=undo of an accepted proposal.
 - test_every_op_waits_in_the_working_draft: protects=an applied op is in the roadmap's
-  working draft only: the published rows and a viewer's roadmap keep the old values until
-  the decider submits and approves the draft, then show the new ones; fails_when=an op
-  writes the published version; no_claim=required reviewers (test_simple_drafts_api).
+  working draft: the published rows keep the old values until the draft is published, while
+  every reader (a viewer too) reads the new ones at once and nothing counts as in review
+  (de-inst, owner Nov 23); fails_when=an op writes the published version or a viewer
+  waits for the review; no_claim=required reviewers (test_simple_drafts_api).
 - test_new_ops_role_matrix: protects=set_milestone, set_owner and set_decider follow the
   review policy: owner and decider apply, approver and commenter propose, viewer refused;
   fails_when=a role applies that may only propose or a viewer is let in;
@@ -185,12 +186,11 @@ async def test_every_op_waits_in_the_working_draft(client, op):
     assert len(r.json()["change"]["draft_ids"]) == 1
     working = await snapshot(w, op)
     assert working != published
-    # Nothing published moved, and a viewer reads the roadmap as before.
+    # Nothing published moved, and a viewer reads the change at once (de-inst).
     assert await snapshot(w, op, published=True) == published
-    # (An accepted date suggestion is decided at once: it is no longer offered.)
-    assert unoffered(await client.get(ROADMAP, headers=w.ctx.as_("viewer")), op) == unoffered(
-        seen, op
-    )
+    now = await client.get(ROADMAP, headers=w.ctx.as_("viewer"))
+    assert unoffered(now, op) != unoffered(seen, op)
+    assert now.json()["changes_in_review"] == 0
     # The review policy publishes it: submitted and approved by the decider.
     d = await the_draft(client, w)
     r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))

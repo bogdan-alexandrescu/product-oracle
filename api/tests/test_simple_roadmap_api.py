@@ -739,7 +739,7 @@ async def test_published_estimate_is_the_open_drafts_accepted_dates(client):
     )
     assert r.status_code == 200, r.text
     a = by_key(await get(client, ctx, "viewer"))["a"]
-    assert a["estimated"] is True
+    # de-inst (owner, Nov 23): the viewer reads the accepted dates at once.
     assert (a["start"]["date"], a["end"]["date"]) == ("2026-11-02", "2026-11-30")
     undo = await client.post(f"/v1/simple/changes/{r.json()['change']['id']}/undo", headers=owner)
     assert undo.status_code == 201, undo.text
