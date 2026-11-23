@@ -988,7 +988,13 @@ export function prioritiesOut(
     };
   });
   const short = featureShortCodes(db, ranked);
-  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKeyOf(db, i.key))!));
+  // unique-codes (priorities._build): an item's own code (its title's) before its feature's.
+  yours.forEach(
+    (i, n) =>
+      (rows[n].short_code =
+        (rows[n].item_id && i.code && !i.code_from ? i.code : null) ??
+        short.get(featureKeyOf(db, i.key))!),
+  );
   // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
   rows.forEach((r) => (r.own_key = FEATURE_CODE.test(r.short_code) ? r.short_code : null));
   // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
