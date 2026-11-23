@@ -20,12 +20,21 @@ Test cards (protects / fails_when / no_claim):
   PRD section F-06 reads that code yet still names its proposed feature to confirm, the one the
   check's Confirm it targets (so Simple flags it and offers Confirm); fails_when=a code from a
   proposed feature hides the feature to confirm.
+- test_a_feature_not_on_the_roadmap_yet_carries_no_mark: protects=the rule read for a feature
+  about to become an item (a move in Priorities adds it to the company roadmap: no roadmap and
+  no key yet): no mark is its own, a proposed feature is still to confirm, one in the Ground
+  Truth is not; fails_when=the rule needs an item's roadmap and key to answer (the move
+  crashed: AttributeError); no_claim=the move itself
+  (tests/test_simple_priorities_company_roadmap_api.py).
 """
 
 import uuid
+from types import SimpleNamespace
 
 from sqlalchemy import update
 
+from oracle.baseline.fixes import DECLINED, UNCONFIRMED, marked, to_confirm
+from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.test_ground_truth_check import (
@@ -96,3 +105,16 @@ async def test_a_proposed_feature_with_a_code_is_still_to_confirm(client):
     assert item["confirm_feature_id"] == w["features"]["proposed"]
     out = await _check(client, w["ctx"])
     assert _fixes(_flag(out, d))[0] == ("confirm_feature", item["confirm_feature_id"])
+
+
+def test_a_feature_not_on_the_roadmap_yet_carries_no_mark():
+    """A feature about to be added to the roadmap is read by the rule like any other."""
+    fid = uuid.uuid4()
+    # What a move in Priorities reads the feature's code with, before its item exists.
+    new = SimpleNamespace(id=None, feature_id=fid, prd_section_key=None)
+    marks = {DECLINED: ["None/None"], UNCONFIRMED: ["None/None"]}
+    proposed = Entity(id=fid, type="feature", status="proposed", attrs=marks)
+    confirmed = Entity(id=fid, type="feature", status="confirmed", attrs=marks)
+    assert not marked(proposed, DECLINED, new) and not marked(confirmed, UNCONFIRMED, new)
+    assert to_confirm(proposed, new) is proposed
+    assert to_confirm(confirmed, new) is None
