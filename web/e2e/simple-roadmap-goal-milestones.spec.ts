@@ -51,6 +51,10 @@ const card = (page: Page) => page.getByTestId('ms-card');
 const toast = (page: Page) => page.getByTestId('ms-toast');
 // tb-mk: + Milestone asks for the kind first (a picker headed like the card), then opens the card.
 async function pickKind(page: Page, kind = 'Sub-goal', head = 'New milestone') {
+  // de-r2: a click on the band opens its name first; ⋯ opens the kind picker.
+  const more = page.getByTestId('ms-quick-more');
+  await expect(more.or(page.getByTestId('ms-kind-picker'))).toBeVisible();
+  if (await more.isVisible()) await more.click();
   const picker = page.getByTestId('ms-kind-picker');
   await expect(picker.getByRole('heading', { name: head })).toBeVisible();
   await picker.getByRole('option', { name: kind }).click();
@@ -478,6 +482,8 @@ test.describe('on a phone', () => {
     await axis.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
     const box = (await axis.boundingBox())!;
     await page.touchscreen.tap(Math.max(box.x, 0) + 200, box.y + box.height / 2);
+    // de-r2: the tap opens its name first; ⋯ opens the kind picker.
+    await page.getByTestId('ms-quick-more').tap();
     // The kind picker opens as the sheet first; the card after it is the sheet measured below.
     const picker = (await page.getByTestId('ms-kind-picker').boundingBox())!;
     expect(picker.x).toBe(0);

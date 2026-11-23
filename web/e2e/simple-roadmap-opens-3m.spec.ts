@@ -160,6 +160,8 @@ test.describe('desktop', () => {
     await page.mouse.move(v.left + (v.right - v.left) * 0.4, a.y + a.height / 2);
     await page.mouse.click(v.left + (v.right - v.left) * 0.4, a.y + a.height / 2);
     // tb-mk: + Milestone asks for the kind first (Delivery, what a new one was before kinds), then opens the card.
+    // de-r2: a click on the band opens its name first; ⋯ opens the kind picker.
+    await page.getByTestId('ms-quick-more').click();
     const picker = page.getByTestId('ms-kind-picker');
     await expect(picker.getByRole('heading', { name: 'New milestone' })).toBeVisible();
     await picker.getByRole('option', { name: 'Delivery' }).click();
