@@ -102,6 +102,23 @@ async def _signed_in(session: AsyncSession, user: User) -> None:
         await session.commit()
 
 
+async def _recent_member(email: str) -> User | None:
+    """simple-speed: the default company's member with this email, when there is nothing to
+    write or decide for them: not disabled, and their sign-in recorded within
+    :data:`SIGN_IN_RESOLUTION`. One statement on one connection; every request through IAP
+    passes here, and it used to read the company in one session and the member in a
+    second. Anyone else (a first visit, a sign-in to record, a disabled member, no company)
+    is ``None`` and takes :func:`sign_in`'s full path, as before."""
+    oldest = select(Tenant.id).order_by(Tenant.created_at).limit(1).scalar_subquery()
+    async with unscoped_session() as s:
+        user = await s.scalar(select(User).where(User.tenant_id == oldest, User.email == email))
+    if user is None or user.disabled_at is not None or user.last_sign_in_at is None:
+        return None
+    if datetime.now(UTC) - user.last_sign_in_at >= SIGN_IN_RESOLUTION:
+        return None
+    return user
+
+
 async def user_for_claims(claims: dict[str, Any]) -> User | None:
     """The default-tenant user for verified IAP claims, provisioned if allowed."""
     result = await sign_in(claims)
@@ -116,6 +133,8 @@ async def sign_in(claims: dict[str, Any]) -> "User | access.Refused":
     (the default role), ``refuse`` (``invite_only``) or ``request`` (a pending access
     request, ``pending``; a declined one stays ``declined``)."""
     email = claims["email"].strip().lower()
+    if (member := await _recent_member(email)) is not None:
+        return member
     tenant_id = await _default_tenant_id()
     if tenant_id is None:
         log.warning("IAP sign-in for %s refused: no tenant yet (run the seed)", email)
