@@ -148,7 +148,7 @@ import {
 } from './_lib';
 import { itemName, NotInGt } from './_gtflag';
 import { Chart, PHASES, type Layout } from './_timeline';
-import { keepPlanPrds, takePlan, takeRoadmap, warmRoadmapPage } from './_warm';
+import { keepPlanPrds, takePlan, takeProposals, takeRoadmap, warmRoadmapPage } from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -1715,7 +1715,9 @@ export function SimpleRoadmap() {
   // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery('simple-proposals', () =>
-    unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+    takeProposals(() =>
+      unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+    ),
   );
   // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
   const drafts = useQuery(`simple-drafts:${f.roadmap ?? ''}`, () =>
