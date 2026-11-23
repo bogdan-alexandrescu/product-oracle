@@ -3211,6 +3211,8 @@ export function roadmapOut(
   const track = q.get('track');
   const from = q.get('from');
   const to = q.get('to');
+  // owner-filter (service._shown_owner): a person's id, or "none" for no owner.
+  const owner = q.get('owner');
   const onDraft = new Set(db.items.filter((s) => s.draft_roadmap).map((s) => db.ids[s.key]));
   // kr-in-goal-card (service._lane_goal): a key result's items sit under its parent goal.
   const laneGoal = (i: Item): Item['goal'] => {
@@ -3232,6 +3234,7 @@ export function roadmapOut(
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || [i.goal, laneGoal(i)].some((g) => g?.key === goal || g?.id === goal)) &&
       (!track || i.track?.id === track) &&
+      (!owner || (i.owner?.id ?? 'none') === owner) &&
       (!from || i.end.date >= from) &&
       (!to || i.start.date <= to),
   );

@@ -12680,10 +12680,10 @@ async function route(db: Db, req: Request): Promise<Response> {
         mine.simple_roadmap = patch.simple_roadmap;
       }
       if (patch.simple_filters != null) {
-        // Its PRD, Goal and Track picks (preferences.SimpleFilters).
+        // Its PRD, Goal, Track and Owner picks (preferences.SimpleFilters).
         const picks = patch.simple_filters as Record<string, unknown>;
         if (
-          Object.keys(picks).some((k) => !['prd', 'goal', 'track'].includes(k)) ||
+          Object.keys(picks).some((k) => !['prd', 'goal', 'track', 'owner'].includes(k)) ||
           Object.values(picks).some(
             (v) => typeof v !== 'string' || !/^[A-Za-z0-9_.-]{0,200}$/.test(v),
           )
@@ -12693,6 +12693,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           prd: picks.prd ?? '',
           goal: picks.goal ?? '',
           track: picks.track ?? '',
+          owner: picks.owner ?? '',
         } as Schemas['SimpleFilters'];
       }
       if (patch.simple_decisions_view != null) {

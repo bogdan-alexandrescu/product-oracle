@@ -12528,7 +12528,8 @@ export interface paths {
          *     tracks' milestones, the horizon windows, the company's today and the shown roadmaps' key
          *     dates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``
          *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping),
-         *     ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it).
+         *     ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it),
+         *     ``owner`` (a person's id: the items they own, their own or their track's; "none": no owner).
          *     ``roadmaps``: every roadmap the caller may read, for the Roadmap filter.
          */
         get: operations["get_simple_roadmap"];
@@ -42248,7 +42249,8 @@ export interface components {
         };
         /**
          * SimpleFilters
-         * @description The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter.
+         * @description The Simple roadmap's PRD, Goal, Track and Owner picks, remembered like its Roadmap filter
+         *     (owner: a person's id, or "none" for No owner).
          */
         SimpleFilters: {
             /**
@@ -42266,6 +42268,11 @@ export interface components {
              * @default
              */
             track: string;
+            /**
+             * Owner
+             * @default
+             */
+            owner: string;
         };
         /** SimpleFlag */
         SimpleFlag: {
@@ -75268,6 +75275,7 @@ export interface operations {
                 from?: string | null;
                 to?: string | null;
                 roadmap?: string | null;
+                owner?: string | null;
             };
             header?: never;
             path?: never;
