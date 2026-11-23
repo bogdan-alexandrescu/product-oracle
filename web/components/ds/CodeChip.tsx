@@ -417,10 +417,13 @@ export function CodeChip({
   );
 }
 
-/** A CodeTag's own width beside its name: 13 px DM Mono, 7 px each side, the chip's 6 px gap. */
+/**
+ * A CodeTag's own width beside its name: DM Mono at the tag's text-sm (14 px), 7 px each side,
+ * the chip's 6 px gap. Measured smaller, a name set beside its code is cut ("Conversio / n").
+ */
 export const codeTagRoom = (code: string | null) => {
   if (!code) return 0;
-  const w = textWidth(code, 500, 13, 'font-mono');
+  const w = textWidth(code, 500, 14, 'font-mono');
   return w == null ? 0 : w + 14 + 6;
 };
 
