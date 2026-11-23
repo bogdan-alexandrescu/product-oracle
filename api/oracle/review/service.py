@@ -1234,9 +1234,19 @@ async def approve_version(
         await approved_roadmap.apply(session, principal, document, version)
         if not already or previous_approver != who:
             # The owner, Nov 23: approving a version settles every stale item it keeps.
-            from oracle.roadmap import staleness
+            from oracle.roadmap import staleness, views
+            from oracle.roadmap.models import RoadmapItem
 
-            await staleness.settle_on_approval(session, principal, version)
+            changed = await staleness.settle_on_approval(session, principal, version)
+            # The tracks that own the settled items are re-checked now, as the
+            # item-staleness route does, so their stale alerts leave the Inbox at once.
+            settled = {uuid.UUID(str(c["id"])) for c in changed}
+            rows = (
+                list(await session.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(settled))))
+                if settled
+                else []
+            )
+            await views.monitor_owners(session, document.id, rows, principal)
         # H6: approving a roadmap version plans a launch per item in Now, owned by the
         # approver (none for items that already have one).
         from oracle.launches import service as launches_service
