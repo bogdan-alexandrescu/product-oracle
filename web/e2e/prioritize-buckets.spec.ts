@@ -99,7 +99,9 @@ test.describe('Goal buckets: prioritize in place', () => {
     await rows(page).nth(0).getByTestId('plan-feature-open').focus();
     await page.keyboard.press('Alt+ArrowDown');
     // Nothing is sent: no move note and no pending mark, the order as it was.
-    await expect(page.getByTestId('bucket-note').filter({ hasText: /Moved|Proposed moving/ })).toHaveCount(0);
+    await expect(
+      page.getByTestId('bucket-note').filter({ hasText: /Moved|Proposed moving/ }),
+    ).toHaveCount(0);
     await expect(bucket(page).getByTestId('order-pending')).toHaveCount(0);
     expect(await order(page)).toEqual(before);
   });

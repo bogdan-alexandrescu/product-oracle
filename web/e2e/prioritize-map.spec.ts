@@ -71,7 +71,9 @@ test.describe('Goal map: prioritize chips in their cell', () => {
     await cell.getByTestId('gm-chip').nth(0).getByRole('button').first().focus();
     await page.keyboard.press('Alt+ArrowDown');
     // Nothing is sent: no move status and no pending mark, the order as it was.
-    await expect(page.getByRole('status').filter({ hasText: /Moved|Proposed moving/ })).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: /Moved|Proposed moving/ })).toHaveCount(
+      0,
+    );
     await expect(cell.getByTestId('order-pending')).toHaveCount(0);
     expect(await chips(cell)).toEqual(before);
   });
