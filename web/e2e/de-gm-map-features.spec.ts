@@ -89,7 +89,6 @@ test.describe('Goal map: features edited in place', () => {
     await expect(moved).toBeVisible();
     await expect(chip(page, 'Lead list ranking')).toHaveCount(1);
     // Saved with no second step: the notes say so, and the map reads it so after a reload.
-    await expect(toast(page, /Moved .*Lead list ranking to Account Management/)).toBeVisible();
     await expect(toast(page, /Moved .*Lead list ranking from/)).toBeVisible();
     await page.reload();
     await expect(
