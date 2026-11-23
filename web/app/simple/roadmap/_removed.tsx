@@ -12,6 +12,7 @@ import { useQuery } from '@/lib/use-query';
 import { ChangeFailed, propose, undo, type Item } from './_lib';
 import { itemName } from './_gtflag';
 import { withdraw } from './_tracks';
+import { takeRemoved } from './_warm';
 
 type Removed = Schemas['SimpleRemovedItem'];
 
@@ -40,7 +41,7 @@ function byline(r: Removed): string {
 
 /** The read every Removed list and cut feature's panel shares (one request per change). */
 export const removedKey = (stamp: string) => `simple-removed:${stamp}`;
-export const readRemoved = () => unwrap(api.GET('/v1/simple/removed'));
+export const readRemoved = () => takeRemoved(() => unwrap(api.GET('/v1/simple/removed')));
 
 /**
  * The change that puts one removed thing back: a cut feature through the engine's own

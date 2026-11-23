@@ -148,6 +148,14 @@ import {
 } from './_lib';
 import { itemName, NotInGt } from './_gtflag';
 import { Chart, PHASES, type Layout } from './_timeline';
+import {
+  keepPlanPrds,
+  takeGoals,
+  takePlan,
+  takeProposals,
+  takeRoadmap,
+  warmRoadmapPage,
+} from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -1613,6 +1621,8 @@ function DecisionTray({
 
 export function SimpleRoadmap() {
   const { me, can } = useMe();
+  // simple-speed: the parts' reads start now, beside the roadmap's own (./_warm).
+  useEffect(() => warmRoadmapPage(), []);
   const phone = usePhone();
   // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
   // or to one roadmap (?roadmap=<id or slug>).
@@ -1694,7 +1704,10 @@ export function SimpleRoadmap() {
   const roadmap = useQuery(
     `simple-roadmap:${JSON.stringify(qs)}`,
     () =>
-      unwrap(api.GET('/v1/simple/roadmap', { params: { query: qs as never } })).then((d) => {
+      // simple-speed: a cold load's first read was begun beside GET /v1/me (./_warm), taken once.
+      takeRoadmap(JSON.stringify(qs), () =>
+        unwrap(api.GET('/v1/simple/roadmap', { params: { query: qs as never } })),
+      ).then((d) => {
         fetched.current = new Map(d.items.map((i) => [i.id, i]));
         setRoadmapToday(d.today);
         return d;
@@ -1703,13 +1716,17 @@ export function SimpleRoadmap() {
   );
   // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
   const goalList = useQuery('simple-roadmap-goal-order', () =>
-    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+    takeGoals(() =>
+      unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+    ),
   );
   const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
   // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery('simple-proposals', () =>
-    unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+    takeProposals(() =>
+      unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+    ),
   );
   // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
   const drafts = useQuery(`simple-drafts:${f.roadmap ?? ''}`, () =>
@@ -2020,12 +2037,19 @@ export function SimpleRoadmap() {
       ].sort(),
     [data],
   );
+  // simple-speed: kept for the next load, whose plans then start with the roadmap's own read.
+  const roadmapRead = !!data;
+  useEffect(() => {
+    if (roadmapRead) keepPlanPrds(planPrds);
+  }, [roadmapRead, planPrds]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(',')}`, async () =>
     (
       await Promise.allSettled(
         planPrds.map((prd) =>
-          unwrap(api.GET('/v1/simple/prds/{prd}/plan', { params: { path: { prd } } })),
+          takePlan(prd, () =>
+            unwrap(api.GET('/v1/simple/prds/{prd}/plan', { params: { path: { prd } } })),
+          ),
         ),
       )
     ).flatMap((r) => (r.status === 'fulfilled' ? [r.value] : [])),

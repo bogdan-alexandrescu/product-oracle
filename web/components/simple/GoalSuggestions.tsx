@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button, Sheet, toast } from '@/components/ds';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { takeWarm } from '@/lib/api/warm';
 import { useCompanyZone, zoneDateTime } from '@/lib/dates';
 import { servedName } from '@/lib/key-results';
 import { useMe } from '@/lib/me';
@@ -63,7 +64,11 @@ export interface GoalSuggestionsApi {
 export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsApi {
   const q = useQuery(
     'simple-goal-suggestions',
-    () => unwrap(api.GET('/v1/simple/goal-suggestions', { params: { query: { status: 'open' } } })),
+    // simple-speed: the Roadmap begins this read with its own (app/simple/roadmap/_warm).
+    () =>
+      takeWarm('simple-goal-suggestions', () =>
+        unwrap(api.GET('/v1/simple/goal-suggestions', { params: { query: { status: 'open' } } })),
+      ),
     { keepPrevious: true },
   );
   const pending = !!q.data?.goals.some((g) => g.pending);

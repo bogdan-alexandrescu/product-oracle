@@ -1006,8 +1006,21 @@ async def list_tracks(
     query = select(ProductTrack).order_by(ProductTrack.created_at.desc(), ProductTrack.id)
     if status_ is not None:
         query = query.where(ProductTrack.status == status_)
-    rows = await db.scalars(query.limit(limit).offset(offset))
-    return [await views.summary(db, t) for t in list(rows)]
+    found = list(await db.scalars(query.limit(limit).offset(offset)))
+    # simple-speed: what every track of one roadmap reads alike (the company's day, the
+    # roadmap's version and its items, the tracks sharing it, a version's number) is read
+    # once for the list, and the tracks' documents in one read, kept until the list is
+    # built, so each track's own read of them finds them loaded.
+    from oracle.runs import batch
+
+    doc_ids = {i for t in found for i in (*t.prd_ids, t.roadmap_document_id) if i is not None}
+    documents = (
+        list(await db.scalars(select(Document).where(Document.id.in_(doc_ids)))) if doc_ids else []
+    )
+    with batch.batched():
+        out = [await views.summary(db, t) for t in found]
+    del documents
+    return out
 
 
 @router.post("/tracks", response_model=TrackOverview, status_code=201, responses={200: {}})

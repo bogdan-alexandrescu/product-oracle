@@ -35,6 +35,7 @@ or writes a company's rows opens ``tenant_session`` for that company. Its users 
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,9 +91,22 @@ def _add_tenant_criteria(state: ORMExecuteState) -> None:
     if tenant_id is None:
         return
     if state.is_select or state.is_update or state.is_delete:
+        state.statement = state.statement.options(*_tenant_options(tenant_id))
+
+
+# simple-speed: a company's two scope options, built once per company (each holds that
+# company's id as its bound value): building them on every statement cost about as much as
+# a small query's own work. Bounded, so a process that sees many companies keeps few.
+_TENANT_OPTIONS: dict[uuid.UUID, tuple[Any, ...]] = {}
+_TENANT_OPTIONS_MAX = 256
+
+
+def _tenant_options(tenant_id: uuid.UUID) -> tuple[Any, ...]:
+    options = _TENANT_OPTIONS.get(tenant_id)
+    if options is None:
         from oracle.models import Tenant
 
-        state.statement = state.statement.options(
+        options = (
             with_loader_criteria(
                 TenantScoped,
                 lambda cls: cls.tenant_id == tenant_id,
@@ -100,6 +114,10 @@ def _add_tenant_criteria(state: ORMExecuteState) -> None:
             ),
             with_loader_criteria(Tenant, lambda cls: cls.id == tenant_id),
         )
+        if len(_TENANT_OPTIONS) >= _TENANT_OPTIONS_MAX:
+            _TENANT_OPTIONS.clear()
+        _TENANT_OPTIONS[tenant_id] = options
+    return options
 
 
 @event.listens_for(TenantSession, "before_flush")

@@ -83,7 +83,19 @@ async def items_version(
     db: AsyncSession, document: Document, number: int | None = None, *, approved_first: bool = False
 ) -> DocumentVersion | None:
     """The roadmap version to show: ``number``, else the latest with items (the latest
-    approved one first, for monitoring), else the latest."""
+    approved one first, for monitoring), else the latest. Read once per list of tracks
+    (oracle.runs.batch): every track of one roadmap asks for the same version."""
+    from oracle.runs import batch
+
+    return await batch.once(
+        ("roadmap_items_version", document.id, number, approved_first),
+        lambda: _items_version(db, document, number, approved_first=approved_first),
+    )
+
+
+async def _items_version(
+    db: AsyncSession, document: Document, number: int | None = None, *, approved_first: bool = False
+) -> DocumentVersion | None:
     if number is not None:
         return await db.scalar(
             select(DocumentVersion).where(
@@ -117,14 +129,21 @@ async def items_version(
 
 
 async def version_items(db: AsyncSession, version: DocumentVersion | None) -> list[RoadmapItem]:
+    """The version's items, in order. Read once per list of tracks (oracle.runs.batch); each
+    caller gets its own list."""
     if version is None:
         return []
-    rows = await db.scalars(
-        select(RoadmapItem)
-        .where(RoadmapItem.roadmap_version_id == version.id)
-        .order_by(RoadmapItem.position)
-    )
-    return list(rows)
+    from oracle.runs import batch
+
+    async def load() -> list[RoadmapItem]:
+        rows = await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == version.id)
+            .order_by(RoadmapItem.position)
+        )
+        return list(rows)
+
+    return list(await batch.once(("roadmap_version_items", version.id), load))
 
 
 # --- items -------------------------------------------------------------------------------
@@ -513,7 +532,12 @@ async def alignment(
 async def _number(db: AsyncSession, version_id: uuid.UUID | None) -> int | None:
     if version_id is None:
         return None
-    return await db.scalar(select(DocumentVersion.number).where(DocumentVersion.id == version_id))
+    from oracle.runs import batch
+
+    return await batch.once(
+        ("document_version_number", version_id),
+        lambda: db.scalar(select(DocumentVersion.number).where(DocumentVersion.id == version_id)),
+    )
 
 
 def track_out_of(
@@ -881,14 +905,20 @@ def assess(
 
 
 async def sharing_tracks(db: AsyncSession, roadmap_document_id: uuid.UUID) -> list[ProductTrack]:
-    """Every track that follows the roadmap, in the order :func:`owner_of` breaks ties by."""
-    return list(
-        await db.scalars(
-            select(ProductTrack)
-            .where(ProductTrack.roadmap_document_id == roadmap_document_id)
-            .order_by(ProductTrack.created_at, ProductTrack.id)
+    """Every track that follows the roadmap, in the order :func:`owner_of` breaks ties by.
+    Read once per list of tracks (oracle.runs.batch); each caller gets its own list."""
+    from oracle.runs import batch
+
+    async def load() -> list[ProductTrack]:
+        return list(
+            await db.scalars(
+                select(ProductTrack)
+                .where(ProductTrack.roadmap_document_id == roadmap_document_id)
+                .order_by(ProductTrack.created_at, ProductTrack.id)
+            )
         )
-    )
+
+    return list(await batch.once(("roadmap_sharing_tracks", roadmap_document_id), load))
 
 
 def owner_of(item: RoadmapItem, sharing: list[ProductTrack]) -> uuid.UUID | None:

@@ -7,6 +7,7 @@ import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { useQuery } from '@/lib/use-query';
 
 import { ChangeFailed, propose, undo, type Item } from './_lib';
+import { takeTracks } from './_warm';
 
 type Track = Schemas['SimpleTrackRow'];
 type Status = Track['status'];
@@ -95,9 +96,11 @@ export function TracksButton({
   const [n, setN] = useState(0);
   // A track's count is the API's, over the whole roadmap: never the filtered items on screen.
   const stamp = useMemo(() => stampOf(items), [items]);
-  const q = useQuery(`simple-tracks:${n}:${stamp}`, () => unwrap(api.GET('/v1/simple/tracks')), {
-    keepPrevious: true,
-  });
+  const q = useQuery(
+    `simple-tracks:${n}:${stamp}`,
+    () => takeTracks(() => unwrap(api.GET('/v1/simple/tracks'))),
+    { keepPrevious: true },
+  );
   const [opened, setOpened] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
