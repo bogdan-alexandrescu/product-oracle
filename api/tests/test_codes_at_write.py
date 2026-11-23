@@ -21,6 +21,9 @@ Test cards (protects / fails_when / no_claim):
 - test_trash_and_older_versions_are_not_the_plan: protects=a row in Trash or on an older
   version neither counts nor is rewritten: the first live item of the feature keeps its code;
   fails_when=it is numbered for a Trash row, or the Trash row is renamed.
+- test_a_version_row_is_numbered_against_its_working_draft: protects=a row written to the
+  version a working Simple draft was opened on is numbered when the draft holds a row (a PRD
+  slice) that shows the feature's code; fails_when=both read F-51 in the Roadmap read.
 - test_a_typed_taken_code_is_still_refused: protects=a title leading with a code another item
   shows is refused (409) as before; fails_when=it is written or numbered.
 """
@@ -213,3 +216,19 @@ async def test_a_typed_taken_code_is_still_refused():
         assert e.value.status_code == 409
         assert e.value.detail == "F-51 is already the code of F-51 Alert routing a"
     assert await titles(w) == {"a": "Alert routing a"}
+
+
+async def test_a_version_row_is_numbered_against_its_working_draft():
+    """A version row is numbered when the working draft opened on it shows the code."""
+    w = await world()
+    async with tenant_session(w.t) as s:
+        d = SimpleDraft(document_id=w.rm, base_version_id=w.rv, created_by=uuid.uuid4())
+        s.add(d)
+        await s.flush()
+        s.add(item(w, "a", roadmap_version_id=None, simple_draft_id=d.id))
+        await s.commit()
+    async with tenant_session(w.t) as s:
+        s.add(item(w, "b", 1))
+        await s.commit()
+    got = {k.split("@")[0]: t for k, t in (await titles(w)).items()}
+    assert got == {"a": "Alert routing a", "b": "F-52 Alert routing b"}

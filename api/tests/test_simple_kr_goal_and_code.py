@@ -303,10 +303,11 @@ async def test_a_rename_never_takes_a_code_another_item_or_feature_has(client):
 
 
 async def test_merging_into_a_feature_never_gives_its_code_to_two_items(client):
-    """Merging into a feature is refused if another item already shows its code."""
-    # protects=merge_item into a Ground Truth feature whose code another item shows as its own
-    # is refused in set_code's words; fails_when=two items read the feature's code;
-    # no_claim=items linked to the same feature (its slices).
+    """Linking a draft item to a feature whose code another item shows numbers it at once."""
+    # protects=codes-at-write (Nov 23): merge_item into a Ground Truth feature whose code
+    # another item shows as its own is not refused: the item gets the next free number, and
+    # the response says it; fails_when=two items read the feature's code, or the link is
+    # refused; no_claim=items linked to the same feature (its slices).
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -318,9 +319,35 @@ async def test_merging_into_a_feature_never_gives_its_code_to_two_items(client):
     body = {"op": "merge_item", "target": {"item_id": str(c.id), "feature_id": str(feature.id)},
             "before": {}, "after": {}}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
-    assert r.status_code == 422, r.text
-    assert r.json()["detail"] == "F-34 is already the code of F-34 Billing"
-    assert by_key(await get(client, ctx, "owner"))["c"]["code"] is None
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["numbered"] == {str(c.id): "F-35"}
+    shown = {i["title"]: i["code"] for i in (await get(client, ctx, "owner"))["items"]}
+    assert shown == {"Alerts": "F-35", "Billing": "F-34"}
+
+
+async def test_restoring_an_item_whose_feature_code_was_taken_since_numbers_it(client):
+    """Restoring an item whose feature's code another item took since numbers it at once."""
+    # protects=codes-at-write: Restore of an item that takes its code from its feature is not
+    # refused when another item shows that code as its own: it comes back with the next free
+    # number; fails_when=a 409 "rename it first", or two items read F-34.
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("payments")
+        feature = await seed.entity("feature", "F-34")
+        a = await seed.item(rv, pv, "a", position=0, title="Alerts", feature_id=feature.id)
+        await s.commit()
+    r = await client.delete(f"{ITEMS}/{a.id}", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        # An item written meanwhile with the feature's code typed as its own (as an import
+        # writes one); a rename to it would be refused as a Ground Truth feature's.
+        await Seed(s).item(rv, pv, "b", position=1, title="F-34 Billing")
+        await s.commit()
+    r = await client.post(f"{ITEMS}/{a.id}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    shown = {i["title"]: i["code"] for i in (await get(client, ctx, "owner"))["items"]}
+    assert shown == {"Alerts": "F-35", "Billing": "F-34"}
 
 
 def add(client, ctx: Ctx, roadmap: str, title: str, who: str = "owner"):

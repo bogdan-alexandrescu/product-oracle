@@ -34,6 +34,9 @@ Test cards (protects / fails_when / no_claim):
   (Nov 23): adding a feature from Priorities when another item shows the feature's code gives
   the new item the next free number at once, in the response and on the row; fails_when=two
   items read F-40, or the add is refused.
+- test_a_move_numbers_the_item_beside_a_draft_slice: protects=codes-at-write: a slice of the
+  feature in the company roadmap's working draft (a PRD import's) shows its code, so the item
+  a move adds reads its own number; fails_when=both read F-40 in the Roadmap read.
 - test_a_move_numbers_a_second_item_of_the_feature: protects=a feature already on the company
   roadmap by a cut item: the added item reads its own number; fails_when=both read F-40.
 """
@@ -216,6 +219,37 @@ async def test_a_move_numbers_the_item_when_another_shows_the_features_code(clie
     assert r.json()["change"]["numbered"] == {str(added.id): "F-41"}
     row = by_feature(await w.read(client), w)["insights"]
     assert (row["own_key"], row["item_id"]) == ("F-41", str(added.id))
+
+
+async def test_a_move_numbers_the_item_beside_a_draft_slice(client):
+    """codes-at-write: the company roadmap's working draft holds a slice of the feature; the
+    item the move adds to the version gets the next free number."""
+    from oracle.simple.models import SimpleDraft
+
+    w = await company_world()
+    fid = uuid.UUID(w.ids["insights"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(Entity, fid)).key = "F-40"
+        pay = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-6"]))
+        doc, base = pay.roadmap_document_id, pay.roadmap_version_id
+        d = SimpleDraft(document_id=doc, base_version_id=base, created_by=uuid.uuid4())
+        s.add(d)
+        await s.flush()
+        s.add(RoadmapItem(roadmap_document_id=pay.roadmap_document_id, simple_draft_id=d.id,
+                          item_key="ins-slice", position=9, title="Insights slice",
+                          horizon="later", feature_id=fid))  # fmt: skip
+        await s.commit()
+    body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
+            "before": {"override": None},
+            "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        found = {t.item_key: t.title for t in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.feature_id == fid))}  # fmt: skip
+    assert found.pop("ins-slice") == "Insights slice"
+    assert list(found.values()) == ["F-41 Insights"], found
+    assert list(r.json()["change"]["numbered"].values()) == ["F-41"]
 
 
 async def test_a_move_numbers_a_second_item_of_the_feature(client):
