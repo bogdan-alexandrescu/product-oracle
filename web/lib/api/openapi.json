@@ -125121,6 +125121,14 @@
               }
             ],
             "title": "Off Agenda"
+          },
+          "numbered": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Numbered",
+            "default": {}
           }
         },
         "type": "object",

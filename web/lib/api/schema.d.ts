@@ -41801,6 +41801,13 @@ export interface components {
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
             /** Off Agenda */
             off_agenda?: boolean | null;
+            /**
+             * Numbered
+             * @default {}
+             */
+            numbered: {
+                [key: string]: string;
+            };
         };
         /** SimpleChangeResult */
         SimpleChangeResult: {
