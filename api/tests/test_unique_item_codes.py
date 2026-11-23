@@ -95,6 +95,18 @@ async def test_the_next_free_number_is_one_rule():
     assert codes.next_number([]) == "F-1"
 
 
+def test_the_migration_chains_on_the_single_head():
+    """Migration 0136 chains on 0135 (feature comments) and is the one head."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from tests.conftest import API_DIR
+
+    script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
+    assert script.get_revision("0136_unique_item_codes").down_revision == "0135_feature_comments"
+    assert script.get_heads() == ["0136_unique_item_codes"]
+
+
 def _at(day: int) -> datetime:
     return datetime(2026, 10, day, 9, 0, tzinfo=UTC)
 
