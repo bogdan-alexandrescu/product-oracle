@@ -39,7 +39,7 @@ from datetime import timedelta
 from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -731,8 +731,10 @@ async def _onto_current(
 
 async def before_purge(db: AsyncSession, entry: TrashEntry) -> None:
     """A purged feature leaves nothing pointing at it: its id out of the milestones, its key
-    out of the depends_on of the roadmap's other items (every version and draft); a purged
-    goal's id leaves the items' goal_ids."""
+    out of the depends_on of the roadmap's other items (every version and draft), its
+    comments gone (a new feature given its key starts with none); a purged goal's id leaves
+    the items' goal_ids."""
+    from oracle.comments.models import FeatureComment
     from oracle.roadmap.models import TrackMilestone
 
     if entry.root_type == "goal":
@@ -765,6 +767,11 @@ async def before_purge(db: AsyncSession, entry: TrashEntry) -> None:
             .execution_options(**ALL)
         ):  # fmt: skip
             row.depends_on = [k for k in row.depends_on if k != key]
+        await db.execute(
+            delete(FeatureComment).where(
+                FeatureComment.roadmap_document_id == doc, FeatureComment.item_key == key
+            )
+        )
     await db.flush()
 
 
