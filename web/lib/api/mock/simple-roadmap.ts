@@ -2851,9 +2851,9 @@ function readerView(
   hiddenBy: Record<string, number>;
 } {
   const hiddenBy: Record<string, number> = {};
-  let items = db.items;
-  let own = db.own;
-  let keyDates = db.key_dates ?? {};
+  const items = db.items;
+  const own = db.own;
+  const keyDates = db.key_dates ?? {};
   let hidden = 0;
   const visible: Schemas['SimpleDraftBrief'][] = [];
   // replaced-prd-history (drafts.reader): a replaced PRD's roadmap is history: no draft, no count.
@@ -2868,17 +2868,9 @@ function readerView(
         status: d.out.status,
         changes: draftChanges(db, d.out.id),
       });
-      continue;
     }
-    hidden += draftChanges(db, d.out.id);
-    hiddenBy[d.out.document.id] = (hiddenBy[d.out.document.id] ?? 0) + draftChanges(db, d.out.id);
-    const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
-    items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
-    keyDates = { ...keyDates, [d.roadmap]: d.published.key_dates ?? [] };
-    own = {
-      ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))),
-      ...d.published.own,
-    };
+    // de-inst (drafts.reader, the owner Nov 23): a decider's applied change is the live
+    // roadmap every reader reads at once, never counted as in review.
   }
   const shownDocs = new Set(visible.map((v) => v.document_id));
   const proposed = (db.changes ?? []).filter(

@@ -1944,11 +1944,8 @@ function keyDateNow(
   rm: string,
   id: string,
 ): MockKeyDate | null {
-  const d = (db.drafts ?? []).find(
-    (x) => x.roadmap === rm && ['working', 'submitted'].includes(x.out.status),
-  );
-  const list =
-    d && !seesDraft(d, ctx, db) ? (d.published.key_dates ?? []) : (db.key_dates?.[rm] ?? []);
+  // de-inst (drafts.overlays_for): every reader reads the open draft's key dates.
+  const list = db.key_dates?.[rm] ?? [];
   return list.find((k) => k.id === id) ?? null;
 }
 
