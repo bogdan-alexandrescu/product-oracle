@@ -398,6 +398,7 @@ import {
   sectionItems,
   seedRoadmap,
   seededPlanItems,
+  PLAN_APPROVE_STALE_SCENARIO,
   trackRunBody,
   type RoadmapContext,
   type RoadmapDb,
@@ -8818,6 +8819,7 @@ function load(): Db {
   const approvedPlan = [
     'launches',
     'plan-decider',
+    PLAN_APPROVE_STALE_SCENARIO,
     'strategy-plan',
     'outcomes',
     'outcomes-long',
@@ -15641,6 +15643,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         : undefined;
     if (changeSet && db.simple_roadmap)
       applyPlanChanges(db.simple_roadmap, doc.slug, changeSet.changes);
+    // The owner, Nov 23 (staleness.settle_on_approval): the stale items the version keeps are settled.
+    if (doc.kind === 'roadmap') settleKept(db, doc, v, me.id);
     // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
     if (doc.kind === 'prd') {
       const row = draftDb(db).rows.find(
@@ -15717,6 +15721,63 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
     audience,
   );
+}
+
+/**
+ * staleness.settle_on_approval: each potentially stale or under-review item the approved version
+ * keeps (same key, title, outcome and horizon as the version before) is reconciled with "Kept in
+ * version N, approved <Mon D> by <name>", and its open stale alert on the roadmap's tracks resolves.
+ */
+function settleKept(db: Db, doc: DocumentRow, v: VersionRow, approverId: string) {
+  const rdb = db.roadmap;
+  const prev = docVersions(db, doc)
+    .filter((x) => x.number < v.number)
+    .at(-1);
+  if (!rdb || !prev || !v.approved_at) return;
+  const flagged = (f: unknown) => f === 'potentially_stale' || f === 'under_review';
+  const same = (
+    a: { title: string; horizon: string; outcome?: string | null },
+    b: { title: string; horizon: string; outcome?: string | null },
+  ) =>
+    a.title === b.title && a.horizon === b.horizon && (a.outcome ?? null) === (b.outcome ?? null);
+  const reason = `Kept in version ${v.number}, approved ${formatDay(v.approved_at)} by ${memberName(
+    db.members.find((m) => m.id === approverId),
+  )}`;
+  const done = new Set<string>();
+  // The version's stored items.
+  const before = new Map((rdb.items[prev.id] ?? []).map((i) => [i.item_key, i]));
+  for (const i of rdb.items[v.id] ?? []) {
+    const b = before.get(i.item_key);
+    if (!b || !flagged(i.freshness) || !same(b, i)) continue;
+    i.freshness = 'reconciled';
+    i.note = reason;
+    done.add(i.item_key);
+  }
+  // The Plan's items of a version proposed from plan changes (./plan-edits.ts), flagged by key.
+  const proposed = db.plan_edits?.versions[doc.slug]?.[v.number];
+  const base = new Map(
+    (
+      db.plan_edits?.versions[doc.slug]?.[prev.number] ??
+      seededPlanItems(doc.slug, prev.number, rdb.section_code) ??
+      []
+    ).map((i) => [i.key, i]),
+  );
+  for (const i of proposed ?? []) {
+    const b = base.get(i.key);
+    if (!b || !flagged(rdb.freshness?.[i.key]) || !same(b, i)) continue;
+    rdb.freshness[i.key] = 'reconciled';
+    done.add(i.key);
+  }
+  const ours = new Set(rdb.tracks.filter((t) => t.roadmap_id === doc.id).map((t) => t.id));
+  for (const a of rdb.alerts ?? [])
+    if (
+      a.kind === 'stale' &&
+      a.state !== 'resolved' &&
+      a.item_key &&
+      done.has(a.item_key) &&
+      ours.has(a.track_id)
+    )
+      Object.assign(a, { state: 'resolved', resolved_at: now() });
 }
 
 /** approved-roadmap-to-simple: applies a roadmap version's plan and milestones to its Simple items. */

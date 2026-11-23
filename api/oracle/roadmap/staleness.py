@@ -35,7 +35,7 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.models import AuditEvent
@@ -62,6 +62,9 @@ VERBS = {
     "edge_deleted": "lost a link",
     "edge_updated": "had a link changed",
 }
+# What confirming an entity writes besides nothing of its content (proposed -> confirmed; a
+# feature's code is its key, given when it joins the Ground Truth): never a change.
+CONFIRM_FIELDS = frozenset({"status", "key"})
 FROM_STATES = {
     "review": ("potentially_stale",),
     "reconcile": ("potentially_stale", "under_review"),
@@ -458,8 +461,32 @@ async def _by_section(db: AsyncSession, event: ChangeEvent, found: dict) -> None
         found[item.id] = (item, f"PRD section {key} changed ({event.cause})")
 
 
+def _confirmed_only(cause: Any, fields: Any) -> bool:
+    """A person confirmed it (proposed -> confirmed), with no content change (the owner,
+    Nov 23: "The feature ... was confirmed" flagged every item tracing to it)."""
+    return (
+        cause == "entity_confirmed"
+        and isinstance(fields, list)
+        and bool(fields)
+        and set(fields) <= CONFIRM_FIELDS
+    )
+
+
 async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> None:
-    ids = _entity_ids(event)
+    data = event.data or {}
+    roots = [r for r in data.get("roots") or [] if isinstance(r, dict)]
+    confirmed: set[uuid.UUID] = set()
+    if roots:
+        confirmed = {
+            u
+            for r in roots
+            if _confirmed_only(r.get("cause"), r.get("fields")) and (u := _uuid(r.get("id")))
+        }
+        if len(confirmed) == len(roots):
+            return
+    elif _confirmed_only(event.cause, data.get("fields")):
+        return
+    ids = _entity_ids(event) - confirmed
     if not ids:
         return
     verb = VERBS.get(event.cause, "changed")
@@ -735,3 +762,79 @@ async def act(
     )
     await db.flush()
     return changed
+
+
+# --- an approved roadmap version settles what it keeps (the owner, Nov 23) -----------------
+
+# What the version must keep of an item for it to be kept, not changed: the version's own
+# proposal counts these (oracle.roadmap.changeset).
+KEPT_FIELDS = ("title", "outcome", "horizon")
+
+
+def kept_reason(number: int, approved_at: datetime, name: str) -> str:
+    """ "Kept in version 19, approved Nov 23 by Jo Doe"."""
+    return f"Kept in version {number}, approved {company_time.day_in_words(approved_at)} by {name}"
+
+
+async def approver_name(db: AsyncSession, approver_id: uuid.UUID | None) -> str:
+    """The approver by name: a member's, else the API token's."""
+    from oracle.auth.models import ApiToken, User
+    from oracle.members.names import display_name
+
+    if approver_id is not None:
+        if user := await db.get(User, approver_id):
+            return display_name(user.email, user.name)
+        if token := await db.get(ApiToken, approver_id):
+            return token.name
+    return "an approver"
+
+
+async def kept_items(db: AsyncSession, version: DocumentVersion) -> list[RoadmapItem]:
+    """The version's items that are potentially stale or under review and that it keeps as
+    the version before it had them (same key, title, outcome and horizon)."""
+    previous = await db.scalar(
+        select(DocumentVersion.id)
+        .where(
+            DocumentVersion.document_id == version.document_id,
+            DocumentVersion.number < version.number,
+        )
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    if previous is None:
+        return []
+    before = {
+        i.item_key: i
+        for i in await db.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == previous)
+        )
+    }
+    rows = await db.scalars(
+        select(RoadmapItem)
+        .where(
+            RoadmapItem.roadmap_version_id == version.id,
+            RoadmapItem.freshness.in_(FROM_STATES["reconcile"]),
+        )
+        .order_by(RoadmapItem.position)
+    )
+    return [
+        i
+        for i in rows
+        if (b := before.get(i.item_key)) is not None
+        and all(getattr(b, f) == getattr(i, f) for f in KEPT_FIELDS)
+    ]
+
+
+async def settle_on_approval(
+    db: AsyncSession, principal: Principal, version: DocumentVersion
+) -> list[dict[str, Any]]:
+    """Approving a roadmap version settles every item it keeps: each is reconciled as
+    :func:`act` does, with "Kept in version N, approved <Mon D> by <name>", the approver
+    acting. Items it changes or drops are left as they are; a later change flags again."""
+    targets = await kept_items(db, version)
+    if not targets or version.approved_at is None:
+        return []
+    name = await approver_name(db, version.approved_by)
+    return await act(
+        db, principal, "reconcile", targets, kept_reason(version.number, version.approved_at, name)
+    )
