@@ -36,6 +36,7 @@ import { errorMessage } from '@/lib/use-query';
 
 import { HORIZONS, type Horizon } from './_board';
 import { NameEdit, PanelFields } from './_fields';
+import { PePanel, peOn } from './_pe'; // MOCK-HOOK
 import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
@@ -1685,6 +1686,8 @@ export function FloatingCard({
     <ItemTalk itemId={item.id} about={about} phone={phone} onCards={onTalkCards} known={known} />
   );
 
+  if (peOn()) // MOCK-HOOK
+    return <PePanel item={item} items={items} phone={phone} canChange={canChange} onClose={onClose} className={place} style={placeStyle} act={act} />; // MOCK-HOOK
   return (
     <>
       {/* #47: the card floats over the chart with nothing to say it has the page's
