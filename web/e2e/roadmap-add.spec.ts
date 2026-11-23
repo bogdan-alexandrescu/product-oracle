@@ -15,8 +15,9 @@ import { expect, test, type Locator, type Page } from './test';
  *   (F-n, no other row has it) and its panel open; fails_when=it lands on the roadmap's first
  *   track, has no code, or is added with no track picked; no_claim=Oracle's drafting.
  * - change track and goal: protects=choosing a value in the panel's Track or Goal saves it at
- *   once (no Save button) and the row moves to that track's or goal's band; fails_when=a Save
- *   step is needed or the row stays; no_claim=the API's refusal (pytest).
+ *   once (no Save button) and the row moves to that track's or goal's band, also a goal no
+ *   item serves yet; fails_when=a Save step is needed, the row stays, or only goals with items
+ *   are offered; no_claim=the API's refusal (pytest).
  * - delete and undo: protects=Move to Trash from the panel's menu asks nothing, the row leaves
  *   at once, and the note's Undo brings it back; fails_when=a dialog asks or the row stays;
  *   no_claim=Settings > Trash.
@@ -113,6 +114,21 @@ test.describe('roadmap-add', () => {
     await goal.selectOption(option ?? '');
     await expect(panel(page).getByTestId('card-goal')).toHaveText('Faster activation');
     await expect.poll(() => groupOf(page, 'Ledger export')).toBe('Faster activation');
+
+    // Any goal, also one no item serves yet (Growth): the row moves to its band.
+    const newBand = page.locator('[data-testid="chart-group"][data-add-label="Growth"]');
+    await expect(newBand).toHaveCount(0);
+    await panel(page).getByRole('button', { name: 'Change the goal' }).click();
+    const unserved = await panel(page)
+      .getByLabel('Goal')
+      .locator('option', { hasText: /^Growth$/ })
+      .first()
+      .getAttribute('value');
+    await panel(page)
+      .getByLabel('Goal')
+      .selectOption(unserved ?? '');
+    await expect(panel(page).getByTestId('card-goal')).toHaveText('Growth');
+    await expect.poll(() => groupOf(page, 'Ledger export')).toBe('Growth');
   });
 
   test("the panel's Move to Trash is one step, with Undo", async ({ page }) => {
