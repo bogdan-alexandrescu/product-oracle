@@ -427,6 +427,13 @@ export function PanelFields({
                 </>
               )}
             </span>
+          ) : item.code && item.confirm_feature_id ? (
+            // gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either.
+            <span className="inline-flex items-center gap-1">
+              {item.code}
+              <NotInGt className="h-5! px-2! text-xs!" />
+              <ConfirmIntoGt item={item} />
+            </span>
           ) : (
             (item.code ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
