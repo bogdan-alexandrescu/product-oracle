@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     # Origins allowed to call the API with credentials (the web app in dev).
     cors_origins: list[str] = ["http://localhost:3000"]
     sql_echo: bool = False
+    # simple-speed: the API's connection pool. A page load is a burst of some 28 requests:
+    # with SQLAlchemy's default (5 kept, 10 more opened and closed again per burst) ten
+    # connections were made anew on every page load, each with nothing prepared. The ceiling
+    # per process is unchanged (15); they are now kept. Max instances x (pool size + overflow)
+    # must stay under the database's max_connections.
+    db_pool_size: int = 15
+    db_max_overflow: int = 0
+    # A connection handed out again within this many seconds of its last use is not pinged
+    # first (the ping is three round trips: BEGIN, an empty statement, ROLLBACK); one idle
+    # for longer is, and is replaced when the ping fails. 0: ping on every checkout, as
+    # before (pool_pre_ping).
+    db_ping_after_idle_seconds: float = 30.0
     # E1: the tick starts queued derivations of PRD drafts' roadmap items. Off: they stay
     # queued (the test suite, whose scripted runtimes are for the runs a test starts).
     draft_roadmaps_start: bool = True
