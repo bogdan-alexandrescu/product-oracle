@@ -86,7 +86,7 @@ test.describe('Roadmap timeline: prioritize rows in their track', () => {
       await rows(page, lane).evaluateAll((els) =>
         els.map((e) => [
           (e as HTMLElement).dataset.item!,
-          e.querySelector('[data-testid=timeline-row-name]')!.textContent!.split(' ')[0],
+          e.querySelector('[data-testid=timeline-row-name]')!.textContent.split(' ')[0],
         ]),
       ),
     );
