@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "vite preview",
-    "lint": "node --max-old-space-size=4096 ./node_modules/eslint/bin/eslint.js",
+    "lint": "node scripts/lint.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:unit": "vitest run --project logic --project render",
