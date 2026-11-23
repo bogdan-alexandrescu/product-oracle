@@ -100,6 +100,8 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   onRestore?: (released: unknown) => void;
   /** trash-features-goals: Restore of a roadmap feature or a goal (kept in place, marked `trashed`). */
   simple?: () => TrashedSimple | undefined;
+  /** #1553: an entry purged for good (a feature's comments go with it, as trash_items.before_purge). */
+  onPurge?: (entry: TrashEntryRow) => void;
   /** delete-prd-simple: the roadmap items and tracks these PRDs feed, as what stays and what goes with the
    * documents of the delete (`gone`, their slugs): the dependents' `feeds` and `feeds_going`. */
   feeds?: (prdSlugs: string[], gone: string[]) => { stays: TrashItem[]; goes: TrashItem[] };
@@ -425,7 +427,11 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const now = ctx.now();
   // The purge the ticker does, on every request routed here (Home's included), not only Trash's:
   // entries past their 30 days are gone.
-  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now, ctx.simple?.());
+  for (const e of ctx.db.entries) {
+    if (daysLeft(e, now) > 0) continue;
+    purge(ctx.db, e, now, ctx.simple?.());
+    ctx.onPurge?.(e);
+  }
 
   if (p[1] === 'trash') {
     // Trash's list and Restore: commenters and up, each entry checked (mayRestore); purge: owners.
@@ -454,6 +460,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!owner) return ownerOnly;
     if (m === 'DELETE' && !p[3]) {
       purge(ctx.db, entry, now, ctx.simple?.());
+      ctx.onPurge?.(entry);
       return reply('/v1/trash/{entry_id}', 'delete', undefined, 204);
     }
     return null;

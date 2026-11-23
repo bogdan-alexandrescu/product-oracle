@@ -622,7 +622,7 @@ import {
   seedStuckPrdAsk,
 } from './simple-milestones';
 import { knowPrdOrder } from './prd-rank';
-import { codedTitle, openDraft, targetRead } from './simple-roadmap';
+import { codedTitle, openDraft, roadmapId, targetRead } from './simple-roadmap';
 import {
   appliedVersionOf,
   approvedPrdToDraft,
@@ -12561,6 +12561,15 @@ async function route(db: Db, req: Request): Promise<Response> {
           ],
           goal_map: db.goal_map,
         },
+      // #1553: a purged feature takes its comments (trash_items.before_purge).
+      onPurge: (entry) => {
+        const { type, slug } = entry.out.root;
+        if (type !== 'feature' || !db.feature_comments) return;
+        const doc = entry.roadmap ? roadmapId(entry.roadmap) : null;
+        db.feature_comments = db.feature_comments.filter(
+          (c) => c.key !== slug || (doc !== null && c.roadmap_id !== doc),
+        );
+      },
       // delete-prd-simple: the roadmap items and tracks a PRD feeds, named by Delete PRD.
       // Read from the seed when Simple has not been opened yet, never storing it (the dependents only read).
       feeds: (slugs, gone) => prdFeeds(db.simple_roadmap ?? seedSimpleRoadmap(), slugs, gone),
