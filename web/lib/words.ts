@@ -119,8 +119,11 @@ export function useFontsReady(): number {
   return ready;
 }
 
-/** An element's content width in px, kept as it resizes; null until it is laid out. Pass the ref to the element. */
-export function useWidth(): [(el: HTMLElement | null) => void, number | null] {
+/**
+ * An element's content width in px, kept as it resizes; null until it is laid out. Pass the ref
+ * to the element, and as `layout` what the owner renders that moves it (read again before paint).
+ */
+export function useWidth(layout?: unknown): [(el: HTMLElement | null) => void, number | null] {
   const [el, setEl] = useState<HTMLElement | null>(null);
   const [width, setWidth] = useState<number | null>(null);
   useEffect(() => {
@@ -133,15 +136,17 @@ export function useWidth(): [(el: HTMLElement | null) => void, number | null] {
     ro.observe(el);
     return () => ro.disconnect();
   }, [el]);
-  // And read again after each of the owner's renders, before it paints: a render that moves the
-  // columns (the fonts loaded, a wider Goal column) fits the words to the width it leaves in the
-  // same task, not in the frame after.
+  // And read again when the owner renders a new `layout`, before it paints: a render that moves
+  // the columns (the fonts loaded, a wider Goal column) fits the words to the width it leaves in
+  // the same task, not in the frame after.
   useLayoutEffect(() => {
     if (!el) return;
     const cs = getComputedStyle(el);
     const edges = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'] as const;
     const box = edges.reduce((n, k) => n + (parseFloat(cs[k]) || 0), 0);
+    // A measurement of the laid-out element, the same value the observer sets.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWidth(Math.floor(el.getBoundingClientRect().width - box));
-  });
+  }, [el, layout]);
   return [setEl, width];
 }
