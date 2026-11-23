@@ -11,6 +11,7 @@ import { calendarDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
+import { PendingMark } from './feature-order';
 import { useCodedMilestone } from './milestone-codes';
 import {
   CodeTag,
@@ -641,6 +642,7 @@ export function FeatureRows({
   onOpen,
   task,
   tail,
+  ranked,
 }: {
   plan: Plan;
   goal: string | null;
@@ -660,12 +662,22 @@ export function FeatureRows({
   };
   /** Rows after the plan's: tasks added since, and "+ Add a task". */
   tail?: ReactNode;
+  /** prioritize: the features in rank order, moved by Alt+Arrow, a proposer's move marked. */
+  ranked?: {
+    sort: (codes: string[]) => string[];
+    keys: (codes: string[], code: string) => (e: React.KeyboardEvent) => void;
+    pending: (code: string) => boolean;
+  };
 }) {
   // qa-nov17 G8: a task's own milestone by its code and name as the roadmap reads it ("M6 Beta").
   const coded = useCodedMilestone();
-  const features = planFeatures(plan, goal)
+  const planned = planFeatures(plan, goal)
     .filter((f) => !task?.cut(f))
     .map((f) => (task ? { ...f, name: task.name(f) } : f));
+  const codes = planned.map((f) => f.code);
+  const features = ranked
+    ? ranked.sort(codes).map((c) => planned.find((f) => f.code === c)!)
+    : planned;
   if (!features.length && !tail)
     return <p className="mt-2 text-base text-text2">Nothing in the plan yet</p>;
   const titleOf = (id: string) => gb?.goals.find((g) => g.id === id)?.title;
@@ -711,6 +723,7 @@ export function FeatureRows({
             data-testid="plan-feature"
             data-code={f.code}
             data-lifted={up ? '' : undefined}
+            onKeyDown={ranked?.keys(codes, f.code)}
             className={`relative flex flex-wrap items-center gap-2 border-b border-line py-[5px] text-base leading-[22px] max-sm:gap-y-1 ${up ? '[&>*]:opacity-30' : ''}`}
           >
             {movable && (
@@ -757,6 +770,7 @@ export function FeatureRows({
                 f.name
               )}
               {!gtCode(f.code) && <NotInGt />}
+              {ranked?.pending(f.code) && <PendingMark />}
               {others.length > 0 && (
                 <span
                   data-testid="also-goals"
@@ -1514,6 +1528,9 @@ export function useBucketWrites(
 }
 
 export { BTN, andList, dayOf, featureOf, count };
+// prioritize: the in-place order of features and of goals, for the buckets' pages.
+export { PendingMark, useFeatureOrder } from './feature-order';
+export { useGoalDrag } from '@/components/simple/GoalDrag';
 
 /** Who may do what (can(), never a role name). */
 export function useBucketRights(gb: Buckets | undefined) {

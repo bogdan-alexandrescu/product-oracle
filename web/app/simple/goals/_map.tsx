@@ -20,14 +20,18 @@ import {
   type ItemGoingDetail,
 } from '@/components/simple/FeatureDelete';
 import { FeatureName } from '@/components/simple/FeatureName';
+import { useGoalDrag } from '@/components/simple/GoalDrag';
+import { storeGoalOrder } from '@/components/simple/GoalOrder';
 import { NewPrdSheet, useCanStartPrd } from '@/components/simple/NewPrd';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from '@/lib/api/mock/goal-map';
 import { CURRENCY_SIGNS, goalFigure } from '@/lib/format';
 import { joinTwins } from '@/lib/goal-map-twins';
 import { keyResults, type KeyResults } from '@/lib/key-results';
+import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
+import { PendingMark, useFeatureOrder } from '../priorities/feature-order';
 import { ChangeFailed, propose, resultWords, undo, type ChangeResult } from '../roadmap/_lib';
 import { Editor, type Edit, type EditSave } from './_editors';
 import { FeaturePanel, type Placement } from './_panel';
@@ -213,6 +217,10 @@ interface Ctx {
   /** de-gm: chips dragged to another cell, shown there before the API answers (by ringOf). */
   shifted: Map<string, { goal: string; track: string | null }>;
   dropOn: (key: string, goal: string, track: string | null) => void;
+  /** prioritize: the goals in the order shown, reordered by their header. */
+  goalDrag: ReturnType<typeof useGoalDrag>;
+  /** prioritize: a cell's chips in the one feature order (Priorities' rank), moved in place. */
+  order: ReturnType<typeof useFeatureOrder>;
 }
 
 interface Ghost {
@@ -1098,7 +1106,9 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
 /* ---------- The grid ---------- */
 
 function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrLine[]>; c: Ctx }) {
-  const goals = c.map.goals;
+  const goals = c.goalDrag.shown
+    .map((id) => c.map.goals.find((g) => g.id === id))
+    .filter((g): g is GmGoal => !!g);
   const all = [...c.map.milestones].sort(byDate);
   const order = new Map(all.map((m, i) => [m.id, i]));
   // A cell's chips in milestone order (No milestone last), so a moved chip lands in its place.
@@ -1110,6 +1120,13 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
   // de-gm: a chip dragged to another cell sits there at once, before the API answers.
   const at = (f: Chip) => c.shifted.get(ringOf(f.id, f.goal)) ?? f;
   const clickAt = useRef<number | undefined>(undefined);
+  // prioritize: a cell's chips in rank order (unranked after, in milestone order), a move in flight first.
+  const cellIds = (goal: string, track: string | null) =>
+    c.order.sorted(inOrder(inCell(goal, track)).map((f) => f.id));
+  const cellOrder = (goal: string, track: string | null) =>
+    c.order
+      .arrange(`${goal}:${track}`, cellIds(goal, track))
+      .map((id) => inCell(goal, track).find((f) => f.id === id)!);
   const inCell = (goal: string, track: string | null) =>
     chips.filter((f) => at(f).goal === goal && at(f).track === track);
   return (
@@ -1128,6 +1145,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
             key={g.id}
             data-goal={g.id}
             data-testid="gm-goal"
+            {...c.goalDrag.target(g.id)}
             className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3"
           >
             {/* One row when it fits; else the target wraps beside the (i) and ⋯ (floated top right, so never pushed
@@ -1158,6 +1176,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
               <Rename id={g.id} was={g.name} c={c} className="text-base" />
             ) : (
               <span
+                {...c.goalDrag.handle(g.id, g.name)}
                 className="line-clamp-2 min-h-[2.5em] text-base leading-[1.25] font-semibold"
                 title={g.name}
               >
@@ -1273,7 +1292,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                       </button>
                     </li>
                   )}
-                {inOrder(inCell(g.id, t.id)).map((f) => (
+                {cellOrder(g.id, t.id).map((f) => (
                   <li
                     key={f.id}
                     data-testid="gm-chip"
@@ -1285,6 +1304,16 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/x-gm-chip', ringOf(f.id, f.goal));
                       e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDrop={(e) => {
+                      // prioritize: dropped on another chip of its own cell, it takes that chip's place.
+                      const from = cellIds(g.id, t.id).find(
+                        (id) => ringOf(id, g.id) === e.dataTransfer.getData('text/x-gm-chip'),
+                      );
+                      if (!from || from === f.id) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void c.order.move(`${g.id}:${t.id}`, cellIds(g.id, t.id), from, f.id);
                     }}
                     className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-sm leading-[17px] ${c.moved === ringOf(f.id, g.id) ? 'border-accent bg-accent-soft ring-2 ring-accent' : 'border-line'}`}
                     style={{ borderLeft: `3px solid ${t.color}` }}
@@ -1307,6 +1336,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                         if (c.canChange) c.setRenaming(ringOf(f.id, f.goal));
                       }}
                       onKeyDown={(e) => {
+                        c.order.keys(`${g.id}:${t.id}`, cellIds(g.id, t.id), f.id)(e);
                         if (e.key === 'F2' && c.canChange) {
                           e.preventDefault();
                           c.setRenaming(ringOf(f.id, f.goal));
@@ -1332,6 +1362,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                             confirm_feature_id: c.confirm.get(f.id),
                           }}
                         />
+                        {c.order.pending(f.id) && <PendingMark />}
                       </span>
                       {/* The milestones' codes and names, as people named them (a list, not prose). */}
                       <span
@@ -1579,6 +1610,7 @@ function AttachDrawer({
 /* ---------- The page ---------- */
 
 export function GoalMapPage() {
+  const { can } = useMe();
   const q = useQuery('simple-goal-map', () => unwrap(api.GET('/v1/simple/goal-map')));
   // kr-in-goal-map: the goals' parents, read before the map is drawn so no key result shows as a goal.
   const goalList = useQuery('simple-goal-map-goal-tree', () =>
@@ -1775,6 +1807,55 @@ export function GoalMapPage() {
     setMoved,
     folded?.top ?? ((id) => id),
   );
+  // prioritize: a chip moved within its cell takes its neighbour's rank (the Priorities order).
+  const prio = useQuery('simple-goal-map-priorities', () =>
+    unwrap(api.GET('/v1/simple/priorities', { params: { query: {} } })),
+  );
+  const order = useFeatureOrder({
+    data: prio.data,
+    reload: () => refresh().then(() => prio.reload()),
+    setNote: (n) =>
+      n &&
+      toast({
+        message: String(n.text),
+        action: n.changes?.length
+          ? {
+              label: 'Undo',
+              onClick: () =>
+                void undo(n.changes![0])
+                  .then(() => Promise.all([refresh(), prio.reload()]))
+                  .catch((e: unknown) => toast({ message: errorMessage(e) })),
+            }
+          : undefined,
+      }),
+    setError: (e) => e && toast({ message: e }),
+    noteId: () => Date.now(),
+  });
+  // prioritize: a goal's header dragged onto another goal (or Alt+Arrow) moves it in the goal order.
+  const goalDrag = useGoalDrag({
+    ids: map?.goals.map((g) => g.id) ?? [],
+    all: [
+      ...(map?.goals.map((g) => g.id) ?? []),
+      ...(goalList.data ?? [])
+        .map((g) => g.id)
+        .filter((id) => !map?.goals.some((g) => g.id === id)),
+    ],
+    may: () => !!map?.can_edit && can('update_entity'),
+    saved: async ({ before, after }) => {
+      await refresh();
+      toast({
+        message: 'Goal order saved. Every page shows the new order.',
+        action: {
+          label: 'Undo',
+          onClick: () =>
+            void storeGoalOrder(before, new Map(after.map((id, i) => [id, i + 1])))
+              .then(refresh)
+              .catch((e: unknown) => toast({ message: errorMessage(e) })),
+        },
+      });
+    },
+    failed: (e) => toast({ message: errorMessage(e) }),
+  });
 
   if (!map || !roadmap.data)
     return (
@@ -1833,6 +1914,8 @@ export function GoalMapPage() {
         );
     },
     shifted,
+    goalDrag,
+    order,
     // de-gm: a chip dropped on another cell takes that cell's track, then (on its next open milestone) its goal.
     dropOn: (key, goal, track) => {
       const f = chips.find((x) => ringOf(x.id, x.goal) === key);

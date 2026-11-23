@@ -167,12 +167,13 @@ test.describe('Goal map: goals by tracks grid', () => {
     const mover = page.getByRole('dialog', { name: /Move .*Lead list ranking/ });
     await mover.getByRole('button', { name: /40 demos per rep/ }).click();
     await expect(chip(page, 'Lead list ranking')).toContainText('40 demos per rep');
-    // In its cell, it sits after the chips of earlier milestones.
+    // In its cell, with the cell's other chips; the owner's Nov 23 order (prioritize): a cell's chips
+    // follow the feature rank, not their milestones (prioritize-map.spec.ts).
     const scale = await track(page, 'Scale').getAttribute('data-track');
     const cell = page.locator(`[data-testid="gm-cell"][data-track="${scale}"]`).first();
     const names = await cell.getByTestId('gm-chip').allTextContents();
-    const at = names.findIndex((n) => n.includes('Lead list ranking'));
-    expect(names.findIndex((n) => n.includes('Rep calendar sync'))).toBeLessThan(at);
+    expect(names.findIndex((n) => n.includes('Lead list ranking'))).toBeGreaterThan(-1);
+    expect(names.findIndex((n) => n.includes('Rep calendar sync'))).toBeGreaterThan(-1);
     expect(names.findIndex((n) => n.includes('Demo room in the browser'))).toBeGreaterThan(-1);
     await toast(page, /Moved .*Lead list ranking/)
       .getByRole('button', { name: 'Undo' })
