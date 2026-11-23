@@ -35,7 +35,7 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.models import AuditEvent
@@ -773,7 +773,7 @@ KEPT_FIELDS = ("title", "outcome", "horizon")
 
 def kept_reason(number: int, approved_at: datetime, name: str) -> str:
     """ "Kept in version 19, approved Nov 23 by Jo Doe"."""
-    return f"Kept in version {number}, approved {approved_at:%b} {approved_at.day} by {name}"
+    return f"Kept in version {number}, approved {company_time.day_in_words(approved_at)} by {name}"
 
 
 async def approver_name(db: AsyncSession, approver_id: uuid.UUID | None) -> str:
