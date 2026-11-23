@@ -211,8 +211,16 @@ def _forget(session: Session, *_: Any) -> None:
 
 @event.listens_for(Session, "do_orm_execute")
 def _forget_on_write(state: ORMExecuteState) -> None:
-    if not state.is_select:
+    """A write, or a lock taken with a SELECT (FOR UPDATE, pg_advisory_*lock), forgets the
+    settings: what others committed before the lock is read again."""
+    stmt = state.statement
+    if not state.is_select or getattr(stmt, "_for_update_arg", None) is not None:
         state.session.info.pop(_CACHE, None)
+        return
+    for column in getattr(stmt, "selected_columns", ()):
+        if str(getattr(column, "name", "")).startswith("pg_advisory"):
+            state.session.info.pop(_CACHE, None)
+            return
 
 
 async def _stored(session: AsyncSession) -> dict[str, Any]:
@@ -221,11 +229,17 @@ async def _stored(session: AsyncSession) -> dict[str, Any]:
     sync = session.sync_session
     tenant = sync.info.get(TENANT_KEY)
     cached = sync.info.get(_CACHE)
-    if cached is not None and cached[0] == tenant and not (sync.new or sync.dirty or sync.deleted):
+    unscoped = bool(sync.info.get(UNSCOPED_KEY))
+    if (
+        cached is not None
+        and not unscoped
+        and cached[0] == tenant
+        and not (sync.new or sync.dirty or sync.deleted)
+    ):
         return cached[1]
     rows = (await session.execute(select(TenantSetting.key, TenantSetting.value))).all()
     stored = {key: value for key, value in rows}
-    if not sync.info.get(UNSCOPED_KEY):
+    if not unscoped:
         sync.info[_CACHE] = (tenant, stored)
     return stored
 
