@@ -6,9 +6,9 @@ Branch commits (on top of 7f932ba):
   Escape cancels) and Now / Next / Later (every column ends with "+ Add", a card with the title field). Top add bar
   untouched. NOT built: the Gantt's per-goal "+ Add" rows.
 - 6e887e210 part 2 GRAB THE BAR, partly: drag a Timeline bar up/down onto another track's band moves it there
-  (set_track; the band under the pointer is marked); click the open row's name renames in place (edit_title; Enter
+  (set_track; the band under the pointer is marked); the open bar shows its owner's initials, a click picks a person (set_owner, saved at once); click the open row's name renames in place (edit_title; Enter
   saves, Escape keeps). Move and stretch by drag already existed (roadmap-r2). NOT built: week snap for the move drag
-  (it stays day-by-day as built), owner-initials picker on the bar, re-track on the Gantt.
+  (it stays day-by-day as built), initials on bars at rest (only the open bar shows them), re-track on the Gantt.
 - f08c77ffc part 4 DELETE: with a bar or card selected (panel open), Delete/Backspace moves it to Trash at once with
   Undo (the panel's Move to Trash, via useFeatureDelete with now=can_decide; who may only propose proposes); never
   while focus is in a field.
@@ -16,7 +16,7 @@ Branch commits (on top of 7f932ba):
   track's rows by start date, and positions are plain integers (one row's move needs its neighbours renumbered).
   Owner question in questions.json.
 
-Specs (mock-backed, --retries=0, all pass): web/e2e/de-r1-add.spec.ts (5, incl. a commenter proposing), de-r1-grab.spec.ts (2),
+Specs (mock-backed, --retries=0, all pass): web/e2e/de-r1-add.spec.ts (5, incl. a commenter proposing), de-r1-grab.spec.ts (3),
 de-r1-delete.spec.ts (2). A commenter's add in place files a proposal (toast names Needs a decision); NOT built: a pending mark on the Timeline (re-track/rename of a proposer go through
 the same propose/act calls, which file proposals; no new pending mark was built on the Timeline).
 

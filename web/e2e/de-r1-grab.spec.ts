@@ -12,6 +12,8 @@ import { expect, test, type Locator, type Page } from './test';
  * - move and stretch: no_claim here (they were built before; roadmap-r2-timeline-drag.spec.ts).
  * - re-track: protects=a bar dropped on another track's band sits under that track;
  *   fails_when=it stays on its own track.
+ * - owner: protects=the open bar's initials pick a person, saved at once (the panel shows them);
+ *   fails_when=no pick on the bar, or the owner stays.
  * - rename: protects=a click on the open row's name gives a field; Enter saves the new name,
  *   kept with its code; Escape leaves the old name; fails_when=no field, or the name stays.
  */
@@ -99,5 +101,22 @@ test.describe('de-r1 grab the bar', () => {
     await page.getByTestId('timeline-row-rename').press('Enter');
     await expect(rowOf(page, 'Gutter flow sensor')).toHaveCount(1);
     await expect(rowOf(page, 'Gutter sensor')).toHaveCount(0);
+  });
+
+  test("the open bar's owner initials pick a person, saved at once", async ({ page }) => {
+    await open(page);
+    // Added, its panel opens: the bar is the open (selected) one.
+    await page.getByRole('button', { name: 'Add to Guided setup track' }).click();
+    await page.getByTestId('add-row-title').fill('Fence post light');
+    await page.getByTestId('add-row-title').press('Enter');
+    const row = rowOf(page, 'Fence post light');
+    await expect(row).toHaveAttribute('data-open', 'true');
+    await expect(page.getByTestId('item-panel')).toBeVisible();
+    const pick = row.getByTestId('bar-owner-pick');
+    await expect(pick.locator('option')).not.toHaveCount(1);
+    const name = (await pick.locator('option').nth(1).textContent())!;
+    await pick.selectOption({ label: name });
+    await expect(page.getByTestId('card-owner')).toContainText(name);
+    await expect(row.getByTestId('bar-owner')).toHaveAttribute('title', name);
   });
 });

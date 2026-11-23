@@ -25,6 +25,7 @@ import { useMe } from '@/lib/me';
 import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
 import { AddRow } from './_addrow';
+import { OwnerPick, useOwners, type Person } from './_owner';
 import { PM_LANE } from './_board';
 import { FixButtons, fixCount, type Act } from './_card';
 import { itemName, NotInGt } from './_gtflag';
@@ -481,6 +482,7 @@ function DayChart(props: TimelineProps) {
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
+  const owners = useOwners(props.canChange);
   // de-r1 (RE1 A): the lanes a feature may be added to in place (a goal's, or a track's), the
   // index of each one's last row, under which its "+ Add" row sits.
   const addable = (key: string) =>
@@ -970,6 +972,13 @@ function DayChart(props: TimelineProps) {
       keyMove: (i, dir, month) => latest.current.keyMove(i, dir, month),
       keyCancel: (i) => latest.current.onKeyCancel(i),
       keyEnd: (i) => latest.current.onKeyEnd(i),
+      owner: (i, ownerId) =>
+        void latest.current.act('Owner changed', {
+          op: 'set_owner',
+          target: { item_id: i.id },
+          before: { owner_id: i.own_owner_id ?? null },
+          after: { owner_id: ownerId },
+        }),
       rename: (i, title) =>
         void latest.current.act('Renamed', {
           op: 'edit_title',
@@ -1461,6 +1470,7 @@ function DayChart(props: TimelineProps) {
                   on={on}
                   depth={r.depth ?? 0}
                   lane={laneOf.get(i.id) ?? ''}
+                  people={openKey === i.key ? owners : undefined}
                   renamable={i.can_decide || canChange}
                 />
                 {addRow}
@@ -1596,6 +1606,8 @@ type RowMoves = {
   keyEnd: (i: Item) => void;
   /** de-r1: a new title typed in place (the panel's Name change). */
   rename: (i: Item, title: string) => void;
+  /** de-r1: a person picked on the bar (the panel's Owner change). */
+  owner: (i: Item, ownerId: string | null) => void;
 };
 
 /** de-r1 (RE2 A): the row's name as a field: Enter saves, Escape cancels, a blur saves a change. */
@@ -1664,6 +1676,7 @@ const TimelineRow = memo(function TimelineRow({
   depth,
   lane,
   renamable,
+  people,
 }: {
   item: Item;
   ds: string;
@@ -1687,6 +1700,8 @@ const TimelineRow = memo(function TimelineRow({
   lane: string;
   /** de-r1 (RE2 A): a click on the open row's name renames it in place. */
   renamable: boolean;
+  /** de-r1: who may own it (the open bar's owner pick); undefined while read. */
+  people?: Person[];
 }) {
   const lk = lookOf(i);
   const [renaming, setRenaming] = useState(false);
@@ -1869,6 +1884,14 @@ const TimelineRow = memo(function TimelineRow({
             >
               {words}
             </span>
+          )}
+          {sel && renamable && !still && people && (
+            <OwnerPick
+              item={i}
+              people={people}
+              left={Math.min(bx + bw + 6, trackW - 26)}
+              onPick={(v) => on.owner(i, v)}
+            />
           )}
           {live && (
             // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
