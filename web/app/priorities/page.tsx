@@ -1401,7 +1401,7 @@ function Priorities() {
   );
   // The Feature column takes the room left, so its text's room is read from its header; a
   // phone's card is a whole line wide (its header is for screen readers only).
-  const [featureHead, featureHeadWidth] = useWidth(`${fonts} ${goalCol}`);
+  const [featureHead, featureHeadWidth] = useWidth();
   const featureRoom = phone ? null : featureHeadWidth;
   const runColumns: Column<RankedFeature>[] = cmp
     ? [
