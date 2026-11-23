@@ -797,8 +797,6 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     version (made when it has none) when it has none there, its draft there confirmed rather
     than a second item added; None while there is no company roadmap (a move then ranks the
     feature alone). The caller commits."""
-    from oracle.roadmap import codes
-    from oracle.simple import drafts
     from oracle.simple.additions import _shown_version
     from oracle.simple.priorities import link
 
@@ -835,22 +833,10 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
         db.add(v)
         await db.flush()
         base = v.id
-    # codes-at-write (Nov 23): when another item shows the feature's code (in the read the
-    # owner sees, drafts too), the item gets the next free number as it is written; nothing is
-    # refused. Rows alone are numbered by oracle.roadmap.codes.check_flush too.
-    title, given = f.title or f.key, None
-    new = SimpleNamespace(row=SimpleNamespace(id=None, feature_id=fid, prd_section_key=None),
-                          code=None)  # fmt: skip
-    await service.item_codes(db, [new])  # type: ignore[list-item]
-    if (old := changes._code_of(new)) is not None:
-        seen = await service.load(db, await drafts.overlays_for(db, principal))
-        try:
-            await changes._not_taken(db, new, old, seen.by_id(), own_only=True)
-        except ChangeError:
-            from oracle.simple.additions import _next_code
-
-            given = await _next_code(db, seen)
-            title = f"{given} {title[: changes.TITLE_MAX - len(given) - 1]}"
+    # codes-at-write (Nov 23): when another item of its plan (the version, the working draft
+    # opened on it) shows the feature's code, oracle.roadmap.codes.check_flush gives the item
+    # the next free number as it is written; nothing is refused.
+    title = f.title or f.key
     taken = set(
         await db.scalars(select(RoadmapItem.item_key).where(RoadmapItem.roadmap_version_id == base))
     )
@@ -881,8 +867,6 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     )
     db.add(row)
     await db.flush()
-    if given is not None:
-        codes.numbered(db.sync_session, row, old, given, title.split(" ", 1)[1])
     data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
     await audit.record(db, principal, "roadmap.item_added", "roadmap_item", row.id, data)
     return (await service.load(db)).by_id().get(row.id)

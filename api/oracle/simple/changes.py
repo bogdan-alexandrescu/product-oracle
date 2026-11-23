@@ -1395,7 +1395,6 @@ async def _merge_plan(
     db: AsyncSession, entry: service.Entry, target: dict[str, Any], by_id: dict
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
-    from oracle.simple.priorities import FEATURE_CODE, _short_codes
 
     row = entry.row
     if entry.status in ("merged", "cut"):
@@ -1409,12 +1408,13 @@ async def _merge_plan(
         if feature is None or feature.type != "feature":
             raise ChangeError(422, "target.feature_id: a Ground Truth feature")
         target["feature_id"], target["code"], target["title"] = str(fid), feature.key, feature.title
-        # every-field: the item reads the feature's code; no other item may show it as its own.
-        short = (await _short_codes(db, names=False)).get(feature.key) or ""
-        for code in dict.fromkeys(k.split(".")[0] for k in (feature.key, short) if k):
-            if FEATURE_CODE.fullmatch(code):
-                await _not_taken(db, entry, code, by_id, own_only=True)
         after[str(row.id)] = {"feature_id": str(fid), "kept_both": True}
+        # codes-at-write (Nov 23): when another item of its roadmap shows the feature's code,
+        # the item gets the next free number as it is written; nothing is refused.
+        if (given := await _number_linked(db, entry, fid, by_id)) is not None:
+            target["numbered"], target["code_was"] = given
+            name = " ".join((row.title or "").split())
+            after[str(row.id)]["title"] = f"{given[0]} {name[: TITLE_MAX - len(given[0]) - 1]}"
     else:
         into = _uuid(target.get("into_id"), "into_id")
         kept = by_id.get(into)
@@ -1461,6 +1461,33 @@ async def _merge_plan(
     return entry, target, before, after
 
 
+async def _number_linked(
+    db: AsyncSession, entry: Any, fid: uuid.UUID, by_id: dict
+) -> tuple[str, str] | None:
+    """codes-at-write: the next free number and the feature's code, when linking ``entry`` to
+    feature ``fid`` would show a code another item of its roadmap (in the read ``by_id``, its
+    draft too) shows; None when the item may keep the feature's code."""
+    from oracle.roadmap import codes
+    from oracle.simple.additions import _next_code
+
+    if codes.title_code(entry.row.title):
+        return None  # its own code stays its code
+    probe = SimpleNamespace(row=SimpleNamespace(id=None, feature_id=fid, prd_section_key=None),
+                            code=None)  # fmt: skip
+    await service.item_codes(db, [probe, *by_id.values()])
+    code = _code_of(probe)
+    if code is None:
+        return None
+    for d in by_id.values():
+        if d is entry or d.row.id == entry.row.id or d.roadmap.id != entry.roadmap.id:
+            continue
+        if d.status == "merged":
+            continue
+        if (codes.shown_code(d.row.title, _code_of(d)) or "").upper() == code.upper():
+            return await _next_code(db, SimpleNamespace(by_id=lambda: by_id)), code  # type: ignore[arg-type]
+    return None
+
+
 async def _apply(
     db: AsyncSession,
     c: SimpleChange,
@@ -1472,6 +1499,15 @@ async def _apply(
     """Write ``values`` (a change's after, or its before for an undo) into the working
     drafts of the items' roadmaps (S3b), and the change's own side effects."""
     c.draft_ids = await drafts.write_items(db, c, values, session, KEYED, write, undo=undo)
+    if c.op == "merge_item" and not undo and (n := c.target.get("numbered")):
+        # codes-at-write: the link gave the item its own number (_merge_plan); audited and
+        # carried in the write's response.
+        from oracle.roadmap import codes
+
+        row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
+        if row is not None:
+            name = values[str(row.id)]["title"].split(" ", 1)[1]
+            codes.numbered(db.sync_session, row, c.target.get("code_was"), n, name)
     if c.op == "set_goals":
         await _move_feature(db, c, values)
     if c.op == "set_feature" and values.get("feature_id"):

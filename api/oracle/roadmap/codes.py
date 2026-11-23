@@ -1,16 +1,16 @@
 """every-field: one code, one item. The code an item shows (:func:`shown_code`) is its
 feature's, else its PRD section's, else the one its title leads with ("F-31 Launch flow").
 The one check every write of a roadmap item passes through: before each flush, a roadmap item
-added, renamed, given another feature or brought back from Trash that would newly show a code
-another live item of the same plan (its version, its draft) shows as its own (its title's) is refused with
-409, in set_code's words ("F-31 is already the code of F-31 Alert routing by team"); one that
-takes it from its feature or PRD section gets the next free number at once instead
-(codes-at-write, Nov 23: the first item of a feature on a plan keeps its code). A copy of an
-item that showed the code already on the version or draft it is copied from (its source,
-:func:`copied_from`) is no new claim and keeps it, and a row with no source claims every code.
-The paths that can say more check first in their
-own words (oracle.simple.changes._not_taken, oracle.roadmap.changeset, Apply approved roadmap
-in oracle.simple.approved_roadmap, Restore in oracle.simple.trash_items)."""
+added, renamed, given another feature or brought back from Trash that would newly show, as its
+own (its title's), a code another live item of the same plan shows (its version, its draft, the
+working draft opened on its version) is refused with 409, in set_code's words ("F-31 is already
+the code of F-31 Alert routing by team"); one that takes it from its feature or PRD section
+gets the next free number at once instead (codes-at-write, Nov 23: the first item of a feature
+on a plan keeps its code). A copy of an item that showed the code already on the version or
+draft it is copied from (its source, :func:`copied_from`) is no new claim and keeps it, and a
+row with no source claims every code. The paths that can say more check a typed code first in
+their own words (oracle.simple.changes._not_taken, oracle.roadmap.changeset, Apply approved
+roadmap in oracle.simple.approved_roadmap, Restore in oracle.simple.trash_items)."""
 
 import re
 import uuid
@@ -340,6 +340,49 @@ def check_flush(session: Session) -> None:
             continue
         # Its draft's plan: the rows of the version it was opened on count too.
         others += _base_rows(session, row, owner, by_owner)  # type: ignore[arg-type]
+        # A version's plan: the rows of the working draft opened on it count too.
+        others += _draft_rows(session, row, owner, by_owner, pending, gone)  # type: ignore[arg-type]
+        if any(
+            o.item_key != row.item_key and (shown(o, by_feature) or "").upper() == code.upper()
+            for o in others
+        ):
+            numbering.give(row, code)
+
+
+def claim(session: Session, ids: list[Any]) -> None:
+    """codes-at-write for rows written past the flush (Restore's UPDATE in
+    oracle.trash.service.restore_entry): each live row of ``ids`` that shows a code it takes
+    from its feature or PRD section, which another item of its plan shows, gets the next free
+    number now, as :func:`check_flush` gives it."""
+    from oracle.roadmap.models import RoadmapItem
+
+    if not ids:
+        return
+    with session.no_autoflush:
+        rows = list(
+            session.scalars(
+                select(RoadmapItem)
+                .where(RoadmapItem.id.in_(ids), RoadmapItem.deleted_at.is_(None))
+                .execution_options(populate_existing=True)
+            )
+        )
+    rows = [o for o in rows if _owner(o) is not None and not title_code(o.title)]
+    if not rows:
+        return
+    by_feature = _feature_codes_sync(session)
+    claims = [(o, c) for o in rows if (c := inherited(o, by_feature)) is not None]
+    if not claims:
+        return
+    lock(session)
+    by_owner: dict[tuple[str, Any], list[Any]] = {}
+    numbering = _Numbering(session, by_feature)
+    for row, code in claims:
+        owner = _owner(row)
+        if owner not in by_owner:
+            by_owner[owner] = _plan(session, owner, [], set())  # type: ignore[arg-type]
+        others = [o for o in by_owner[owner] if o is not row]
+        others += _base_rows(session, row, owner, by_owner)  # type: ignore[arg-type]
+        others += _draft_rows(session, row, owner, by_owner, [], set())  # type: ignore[arg-type]
         if any(
             o.item_key != row.item_key and (shown(o, by_feature) or "").upper() == code.upper()
             for o in others
@@ -402,6 +445,37 @@ def _base_rows(
             )
     mine = {o.item_key for o in by_owner[owner]}
     return [o for o in by_owner[base] if o.item_key not in mine and o is not row]
+
+
+def _draft_rows(
+    session: Session,
+    row: Any,
+    owner: tuple[str, Any],
+    by_owner: dict[tuple[str, Any], list],
+    pending: list[Any],
+    gone: set,
+) -> list[Any]:
+    """A version's row: the live rows of the working Simple drafts opened on that version (a
+    PRD import's slices, as the Roadmap read shows them beside it); [] for any other row."""
+    from oracle.simple.models import SimpleDraft
+
+    if owner[0] != "roadmap_version_id":
+        return []
+    with session.no_autoflush:
+        drafts = list(
+            session.scalars(
+                select(SimpleDraft.id).where(
+                    SimpleDraft.base_version_id == owner[1], SimpleDraft.status == "working"
+                )
+            )
+        )
+    out: list[Any] = []
+    for d in drafts:
+        key = ("simple_draft_id", d)
+        if key not in by_owner:
+            by_owner[key] = _plan(session, key, pending, gone)
+        out += [o for o in by_owner[key] if o is not row]
+    return out
 
 
 # The audit action of a numbering, the migration's (0136_unique_item_codes).
