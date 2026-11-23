@@ -25,12 +25,25 @@
       "count": 1
     }
   },
+  "app/baseline/_components/BlockersTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "app/baseline/_components/BuildBaseline.tsx": {
     "import-x/order": {
       "count": 2
     }
   },
+  "app/baseline/_components/ConflictsTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "app/baseline/_components/EntityDrawer.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 11
     },
@@ -38,7 +51,20 @@
       "count": 1
     }
   },
+  "app/baseline/_components/EvidenceChip.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/FlaggedTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    }
+  },
   "app/baseline/_components/FromRunTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
     },
@@ -47,11 +73,17 @@
     }
   },
   "app/baseline/_components/GoalInterview.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "max-lines": {
       "count": 1
     }
   },
   "app/baseline/_components/GraphTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 6
     },
@@ -60,6 +92,9 @@
     }
   },
   "app/baseline/_components/GroundTruthFlags.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
     },
@@ -68,15 +103,26 @@
     }
   },
   "app/baseline/_components/ItemsTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/baseline/_components/ProposalsTab.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 2
     },
     "max-lines": {
+      "count": 1
+    }
+  },
+  "app/baseline/_components/Tabs.tsx": {
+    "design-system/no-raw-button": {
       "count": 1
     }
   },
@@ -119,6 +165,11 @@
       "count": 1
     }
   },
+  "app/company/decisions/_components/LinksPicker.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "app/company/decisions/_components/ProposeDialog.tsx": {
     "max-lines": {
       "count": 1
@@ -138,6 +189,9 @@
     }
   },
   "app/company/market/_components/Alternatives.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     },
@@ -171,6 +225,9 @@
     }
   },
   "app/company/market/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     },
@@ -245,6 +302,9 @@
     }
   },
   "app/company/strategy/_components/Cards.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 4
     },
@@ -280,6 +340,11 @@
       "count": 2
     }
   },
+  "app/company/updates/_components/RowMenu.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "app/company/updates/page.tsx": {
     "import-x/order": {
       "count": 6
@@ -299,6 +364,9 @@
     }
   },
   "app/documents/$doc/composition/_confirm.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -309,6 +377,11 @@
   "app/documents/$doc/composition/_module-inspector.tsx": {
     "import-x/order": {
       "count": 1
+    }
+  },
+  "app/documents/$doc/composition/_policy.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
     }
   },
   "app/documents/$doc/composition/_view.tsx": {
@@ -424,6 +497,9 @@
     }
   },
   "app/documents/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 6
     },
@@ -460,6 +536,11 @@
       "count": 1
     }
   },
+  "app/home/_setup.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "app/home/_welcome.tsx": {
     "import-x/order": {
       "count": 2
@@ -473,12 +554,20 @@
       "count": 1
     }
   },
+  "app/i/$token/_chat.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    }
+  },
   "app/i/$token/page.tsx": {
     "max-lines": {
       "count": 1
     }
   },
   "app/impact/_explorer.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "import-x/order": {
       "count": 3
     },
@@ -513,6 +602,9 @@
     }
   },
   "app/inbox/_inbox.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     },
@@ -521,6 +613,9 @@
     }
   },
   "app/inbox/_needs.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 12
     },
@@ -658,11 +753,17 @@
     }
   },
   "app/plan/_timeline.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     }
   },
   "app/plan/_tracks.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     },
@@ -737,11 +838,17 @@
     }
   },
   "app/priorities/_components/overrides.tsx": {
+    "design-system/no-raw-button": {
+      "count": 6
+    },
     "max-lines": {
       "count": 1
     }
   },
   "app/priorities/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 15
     },
@@ -776,6 +883,9 @@
     }
   },
   "app/requests/_components/RequestList.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
@@ -869,6 +979,9 @@
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-dates.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -877,6 +990,9 @@
     }
   },
   "app/runs/$id/review/$checkpoint/_eng-review.tsx": {
+    "design-system/no-raw-button": {
+      "count": 7
+    },
     "import-x/order": {
       "count": 4
     },
@@ -885,6 +1001,9 @@
     }
   },
   "app/runs/$id/review/$checkpoint/_items-review.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     },
@@ -898,11 +1017,17 @@
     }
   },
   "app/runs/$id/review/$checkpoint/_scope-inspector.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "max-lines": {
       "count": 1
     }
   },
   "app/runs/$id/review/$checkpoint/_scope-review.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 8
     },
@@ -924,6 +1049,9 @@
     }
   },
   "app/runs/_new-run-dialog.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -932,6 +1060,9 @@
     }
   },
   "app/runs/_run-detail.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "import-x/order": {
       "count": 11
     },
@@ -940,6 +1071,9 @@
     }
   },
   "app/runs/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 3
     },
@@ -973,6 +1107,9 @@
     }
   },
   "app/settings/autonomy/AutonomySettings.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "max-lines": {
       "count": 1
     }
@@ -983,6 +1120,9 @@
     }
   },
   "app/settings/claude-accounts/ClaudeAccounts.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "import-x/order": {
       "count": 1
     },
@@ -1050,6 +1190,9 @@
     }
   },
   "app/settings/sources/CompanyDrive.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1058,6 +1201,9 @@
     }
   },
   "app/settings/sources/DriveFiles.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "max-lines": {
       "count": 1
     }
@@ -1068,6 +1214,9 @@
     }
   },
   "app/settings/sources/NotionPicker.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 1
     },
@@ -1086,6 +1235,9 @@
     }
   },
   "app/settings/sources/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 8
     },
@@ -1150,6 +1302,9 @@
     }
   },
   "app/settings/webhooks/DeliveryLog.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
@@ -1185,8 +1340,16 @@
     }
   },
   "app/simple/_home/cards.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 2
+    }
+  },
+  "app/simple/_home/gt-flags.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
     }
   },
   "app/simple/_home/run-stops.tsx": {
@@ -1195,6 +1358,9 @@
     }
   },
   "app/simple/_home/walk.tsx": {
+    "design-system/no-raw-button": {
+      "count": 9
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1203,11 +1369,17 @@
     }
   },
   "app/simple/_home/welcome.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
   "app/simple/decisions/_decisions.tsx": {
+    "design-system/no-raw-button": {
+      "count": 9
+    },
     "import-x/order": {
       "count": 11
     },
@@ -1224,6 +1396,9 @@
     }
   },
   "app/simple/goals/_editors.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1232,6 +1407,9 @@
     }
   },
   "app/simple/goals/_map.tsx": {
+    "design-system/no-raw-button": {
+      "count": 12
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1240,6 +1418,9 @@
     }
   },
   "app/simple/goals/_panel.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 1
     }
@@ -1258,6 +1439,9 @@
     }
   },
   "app/simple/meetings/$id/_meeting.tsx": {
+    "design-system/no-raw-button": {
+      "count": 7
+    },
     "import-x/order": {
       "count": 22
     },
@@ -1280,6 +1464,11 @@
       "count": 5
     },
     "max-lines": {
+      "count": 1
+    }
+  },
+  "app/simple/meetings/_delivery.tsx": {
+    "design-system/no-raw-button": {
       "count": 1
     }
   },
@@ -1310,6 +1499,9 @@
     }
   },
   "app/simple/one-pagers/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1318,6 +1510,9 @@
     }
   },
   "app/simple/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 21
+    },
     "import-x/order": {
       "count": 29
     },
@@ -1326,6 +1521,9 @@
     }
   },
   "app/simple/priorities/goal-buckets.tsx": {
+    "design-system/no-raw-button": {
+      "count": 17
+    },
     "import-x/order": {
       "count": 1
     },
@@ -1334,6 +1532,9 @@
     }
   },
   "app/simple/priorities/mark-counts.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 1
     }
@@ -1343,7 +1544,15 @@
       "count": 3
     }
   },
+  "app/simple/priorities/plan-buckets.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "app/simple/priorities/priorities.tsx": {
+    "design-system/no-raw-button": {
+      "count": 24
+    },
     "import-x/order": {
       "count": 24
     },
@@ -1352,6 +1561,9 @@
     }
   },
   "app/simple/priorities/task-edit.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "import-x/order": {
       "count": 1
     },
@@ -1360,6 +1572,9 @@
     }
   },
   "app/simple/roadmap/_board.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     },
@@ -1371,11 +1586,19 @@
     "@typescript-eslint/consistent-type-imports": {
       "count": 2
     },
+    "design-system/no-raw-button": {
+      "count": 11
+    },
     "import-x/order": {
       "count": 11
     },
     "max-lines": {
       "count": 1
+    }
+  },
+  "app/simple/roadmap/_drafts.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
     }
   },
   "app/simple/roadmap/_export.ts": {
@@ -1387,6 +1610,9 @@
     }
   },
   "app/simple/roadmap/_fields.tsx": {
+    "design-system/no-raw-button": {
+      "count": 11
+    },
     "import-x/order": {
       "count": 5
     },
@@ -1395,11 +1621,17 @@
     }
   },
   "app/simple/roadmap/_keydates.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     }
   },
   "app/simple/roadmap/_lanes.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1413,6 +1645,12 @@
     }
   },
   "app/simple/roadmap/_milestones.tsx": {
+    "design-system/no-internal-anchor": {
+      "count": 1
+    },
+    "design-system/no-raw-button": {
+      "count": 15
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -1426,16 +1664,25 @@
     }
   },
   "app/simple/roadmap/_panel.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "app/simple/roadmap/_removed.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 3
     }
   },
   "app/simple/roadmap/_roadmap.tsx": {
+    "design-system/no-raw-button": {
+      "count": 7
+    },
     "import-x/order": {
       "count": 34
     },
@@ -1444,11 +1691,17 @@
     }
   },
   "app/simple/roadmap/_tasks.tsx": {
+    "design-system/no-raw-button": {
+      "count": 9
+    },
     "max-lines": {
       "count": 1
     }
   },
   "app/simple/roadmap/_timeline.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -1463,11 +1716,17 @@
     }
   },
   "app/simple/roadmap/_tracks.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "max-lines": {
       "count": 1
     }
   },
   "app/simple/roadmap/_zoom.tsx": {
+    "design-system/no-raw-button": {
+      "count": 15
+    },
     "import-x/order": {
       "count": 10
     },
@@ -1483,7 +1742,15 @@
       "count": 1
     }
   },
+  "app/sources/_components/company-coverage.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    }
+  },
   "app/sources/_components/coverage.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1497,6 +1764,9 @@
     }
   },
   "app/sources/page.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1513,6 +1783,9 @@
     }
   },
   "components/ApiTokensSettings.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
     },
@@ -1521,6 +1794,9 @@
     }
   },
   "components/ArtifactMenu.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1555,11 +1831,17 @@
     }
   },
   "components/DateMarker.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "components/DesignReview.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1606,12 +1888,20 @@
       "count": 2
     }
   },
+  "components/LinkIssueDialog.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    }
+  },
   "components/LoginForm.tsx": {
     "import-x/order": {
       "count": 2
     }
   },
   "components/MarkdownBody.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1620,6 +1910,9 @@
     }
   },
   "components/MembersSettings.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 9
     },
@@ -1636,6 +1929,9 @@
     }
   },
   "components/NewDraft.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 11
     },
@@ -1644,6 +1940,9 @@
     }
   },
   "components/NextDraft.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 3
     },
@@ -1652,11 +1951,22 @@
     }
   },
   "components/PersonPicker.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
+  "components/PrdLook.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "components/PresentMode.tsx": {
+    "design-system/no-raw-button": {
+      "count": 6
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1670,6 +1980,9 @@
     }
   },
   "components/PublishView.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 8
     },
@@ -1678,6 +1991,9 @@
     }
   },
   "components/QualityView.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 4
     },
@@ -1686,6 +2002,9 @@
     }
   },
   "components/RebuildSign.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1704,11 +2023,17 @@
     }
   },
   "components/RequestSpec.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/ReviewSetup.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "max-lines": {
       "count": 1
     }
@@ -1719,6 +2044,9 @@
     }
   },
   "components/SectionView.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 5
     }
@@ -1726,6 +2054,11 @@
   "components/SpecStaleness.tsx": {
     "import-x/order": {
       "count": 2
+    }
+  },
+  "components/SuggestionCard.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
     }
   },
   "components/TemplateBodyEditor.tsx": {
@@ -1763,10 +2096,18 @@
     }
   },
   "components/VersionView.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 32
     },
     "max-lines": {
+      "count": 1
+    }
+  },
+  "components/account/ConfirmDialog.tsx": {
+    "design-system/no-raw-dialog": {
       "count": 1
     }
   },
@@ -1776,6 +2117,9 @@
     }
   },
   "components/current-state/CurrentState.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -1806,11 +2150,20 @@
     }
   },
   "components/discuss/DiscussionList.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     }
   },
   "components/discuss/DiscussionThread.tsx": {
+    "design-system/no-internal-anchor": {
+      "count": 2
+    },
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -1827,11 +2180,17 @@
     }
   },
   "components/discuss/StartDiscussion.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "components/discuss/VagueGoalsLine.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
@@ -1911,6 +2270,9 @@
     }
   },
   "components/evidence/EvidencePane.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1919,6 +2281,9 @@
     }
   },
   "components/hop/HopPanel.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -1940,6 +2305,9 @@
     }
   },
   "components/members/ChangePreview.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 1
     },
@@ -1953,11 +2321,37 @@
     }
   },
   "components/members/MemberInspector.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
+  "components/members/RevokeFailures.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
+  "components/members/SignInRules.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
+  "components/review/AgentQuestions.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    }
+  },
+  "components/review/DecisionBar.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "components/review/FeedbackList.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
     },
@@ -1976,16 +2370,25 @@
     }
   },
   "components/review/Outline.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "max-lines": {
       "count": 1
     }
   },
   "components/review/ReviewPanel.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
   },
   "components/review/parts.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2017,6 +2420,9 @@
     }
   },
   "components/share/PublicCheck.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 4
     },
@@ -2025,10 +2431,18 @@
     }
   },
   "components/share/RoadmapSharing.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 5
     },
     "max-lines": {
+      "count": 1
+    }
+  },
+  "components/share/SharedRoadmap.tsx": {
+    "design-system/no-raw-button": {
       "count": 1
     }
   },
@@ -2043,26 +2457,46 @@
     }
   },
   "components/simple/FeatureDelete.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "components/simple/FitDate.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "max-lines": {
       "count": 1
     }
   },
   "components/simple/FlowViews.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "max-lines": {
       "count": 1
     }
   },
   "components/simple/FlowVisual.tsx": {
+    "design-system/no-raw-button": {
+      "count": 29
+    },
     "max-lines": {
       "count": 1
     }
   },
+  "components/simple/GoalOrder.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    }
+  },
   "components/simple/GoalSuggestions.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 2
     },
@@ -2071,6 +2505,9 @@
     }
   },
   "components/simple/NewPrd.tsx": {
+    "design-system/no-raw-button": {
+      "count": 10
+    },
     "import-x/order": {
       "count": 3
     },
@@ -2078,7 +2515,15 @@
       "count": 1
     }
   },
+  "components/simple/NewPrdReplaces.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "components/simple/OnePager.tsx": {
+    "design-system/no-raw-button": {
+      "count": 19
+    },
     "import-x/order": {
       "count": 26
     },
@@ -2087,11 +2532,17 @@
     }
   },
   "components/simple/OnePagerSlides.tsx": {
+    "design-system/no-raw-button": {
+      "count": 3
+    },
     "import-x/order": {
       "count": 1
     }
   },
   "components/simple/PlanByMonth.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 3
     },
@@ -2100,13 +2551,29 @@
     }
   },
   "components/simple/PrdMenu.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    },
     "import-x/order": {
       "count": 3
     }
   },
   "components/simple/PrdTimeline.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "max-lines": {
       "count": 1
+    }
+  },
+  "components/simple/ReviewFlow.tsx": {
+    "design-system/no-raw-button": {
+      "count": 4
+    }
+  },
+  "components/simple/RunReviewStep.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
     }
   },
   "components/simple/SimplePage.tsx": {
@@ -2114,7 +2581,15 @@
       "count": 2
     }
   },
+  "components/simple/SimplePrd.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "components/simple/SimpleShell.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    },
     "import-x/order": {
       "count": 5
     },
@@ -2123,6 +2598,9 @@
     }
   },
   "components/simple/WaitingItems.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "import-x/order": {
       "count": 6
     },
@@ -2142,11 +2620,17 @@
     }
   },
   "components/simple/chat/ChatCard.tsx": {
+    "design-system/no-raw-button": {
+      "count": 8
+    },
     "max-lines": {
       "count": 1
     }
   },
   "components/simple/chat/ChatThread.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2157,12 +2641,20 @@
       "count": 1
     }
   },
+  "components/simple/chat/ItemTalk.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    }
+  },
   "components/simple/chat/MeetingChat.tsx": {
     "import-x/order": {
       "count": 1
     }
   },
   "components/simple/chat/SimpleAsk.tsx": {
+    "design-system/no-raw-button": {
+      "count": 5
+    },
     "import-x/no-cycle": {
       "count": 1
     },
@@ -2174,6 +2666,9 @@
     }
   },
   "components/simple/meetings/AgendaSheet.tsx": {
+    "design-system/no-raw-button": {
+      "count": 12
+    },
     "import-x/order": {
       "count": 3
     },
@@ -2192,6 +2687,9 @@
     }
   },
   "components/simple/meetings/StartSheet.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     },
@@ -2200,11 +2698,17 @@
     }
   },
   "components/simple/questions/DecisionSheet.tsx": {
+    "design-system/no-raw-button": {
+      "count": 10
+    },
     "max-lines": {
       "count": 1
     }
   },
   "components/simple/questions/Questions.tsx": {
+    "design-system/no-raw-button": {
+      "count": 17
+    },
     "import-x/order": {
       "count": 1
     },
@@ -2212,7 +2716,15 @@
       "count": 1
     }
   },
+  "components/staging/StagingBar.tsx": {
+    "design-system/no-raw-button": {
+      "count": 2
+    }
+  },
   "components/ui.tsx": {
+    "design-system/no-raw-button": {
+      "count": 1
+    },
     "import-x/order": {
       "count": 2
     }
