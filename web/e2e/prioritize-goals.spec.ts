@@ -110,9 +110,8 @@ test.describe('Goals: prioritize by their header', () => {
     await expect.poll(() => mapGoals(page)).toEqual(once);
   });
 
-  // The check the earlier review asked for. Not met yet: in this mock scenario the Goal map and Goal buckets read the
-  // goal order from two stores (they differ before any move), so it is marked to fix (handoff.md, timeline-order).
-  test.fixme('Goal buckets reads the goal order the Goal map sets', async ({ page }) => {
+  // Every page follows: moved on the Goal map, Goal buckets reads the two goals in the same order.
+  test('Goal buckets reads the goal order the Goal map sets', async ({ page }) => {
     await goalMap(page);
     const before = await mapGoals(page);
     const handle = (id: string | null) =>
