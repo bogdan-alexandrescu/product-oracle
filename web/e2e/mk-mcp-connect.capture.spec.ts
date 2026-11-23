@@ -70,7 +70,7 @@ const frames: Frame[] = [
   { file: 'mc3-a-five-1512', url: `/account?${A}&clients=five`, w: 1512, h: 982 },
   { file: 'mc3-a-company-1512', url: `/settings/connections?${A}`, w: 1512, h: 982 },
   { file: 'mc3-a-consent', url: `/oauth/consent?request=mock-handle&client=Claude%20Code` },
-  { file: 'mc3-a-five-390', url: `/account?${A, act: async (p) => { await p.getByTestId('mcp-clients').scrollIntoViewIfNeeded(); } }&clients=five`, w: 390, h: 844 },
+  { file: 'mc3-a-five-390', url: `/account?${A}&clients=five`, w: 390, h: 844, act: async (p) => { await p.getByTestId('mcp-clients').scrollIntoViewIfNeeded(); } },
   { file: 'mc3-a-five-dark', url: `/account?${A}&clients=five`, dark: true },
   { file: 'mc3-b-rest', url: `/account?mc1=a&mc2=a&mc3=b&clients=fresh` },
   { file: 'mc3-b-revoke', url: `/account?mc1=a&mc2=a&mc3=b&clients=fresh&revoke=1` },
