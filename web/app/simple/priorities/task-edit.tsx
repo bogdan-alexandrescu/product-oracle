@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { Button } from '@/components/ds';
 import { LoadError } from '@/components/ui';
+import { useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { NotInGt } from '@/components/simple/FeatureName';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { errorMessage, useQuery } from '@/lib/use-query';
@@ -467,6 +469,8 @@ export function TaskRow({
   feature,
   actions,
   partOf,
+  onRename,
+  onDelete,
 }: {
   code: string;
   name: string;
@@ -485,9 +489,19 @@ export function TaskRow({
   actions?: ReactNode;
   /** panel-menu: the feature it is part of ("part of Alert rules engine"), beside its name. */
   partOf?: ReactNode;
+  /** de-gm: who may change it renames it in place (a double-click or F2 on its name). */
+  onRename?: (name: string) => void;
+  /** de-gm: Delete on its name moves it to Trash, with Undo. */
+  onDelete?: () => void;
 }) {
   // qa-nov17 G8: the milestone by its code and name as the roadmap reads it ("M6 Beta").
   const coded = useCodedMilestone();
+  const [renaming, setRenaming] = useState(false);
+  // The new name shows at once, till the row reads it back (or a refusal brings the old one).
+  const [typed, setTyped] = useState<{ was: string; to: string } | null>(null);
+  const shown = typed?.was === name ? typed.to : name;
+  // A double-click renames, so the panel waits a beat for a second click.
+  const clickAt = useRef<number | undefined>(undefined);
   return (
     <li
       data-testid="plan-feature"
@@ -528,16 +542,54 @@ export function TaskRow({
         data-testid="plan-feature-name"
         className="min-w-[10rem] flex-1 max-sm:min-w-0 max-sm:basis-0"
       >
-        {onOpen || feature ? (
+        {renaming && onRename ? (
+          <input
+            autoFocus
+            aria-label={`Rename ${name}`}
+            data-testid="plan-feature-rename"
+            defaultValue={shown}
+            onKeyDown={(e) => {
+              const v = e.currentTarget.value.trim();
+              if (e.key === 'Escape') setRenaming(false);
+              else if (e.key === 'Enter') {
+                setRenaming(false);
+                if (v && v !== shown) {
+                  setTyped({ was: name, to: v });
+                  onRename(v);
+                }
+              }
+            }}
+            onBlur={() => setRenaming(false)}
+            className="w-full min-w-0 rounded-md border border-accent bg-surface px-1.5 outline-none ring-2 ring-accent/30"
+          />
+        ) : onOpen || feature ? (
           <button
             type="button"
             data-testid="plan-feature-open"
             data-feature={feature}
             title={`Open ${name}`}
             className="text-left hover:underline"
-            onClick={onOpen}
+            onClick={() => {
+              if (!onRename) return onOpen?.();
+              window.clearTimeout(clickAt.current);
+              clickAt.current = window.setTimeout(() => onOpen?.(), 220);
+            }}
+            onDoubleClick={() => {
+              if (!onRename) return;
+              window.clearTimeout(clickAt.current);
+              setRenaming(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'F2' && onRename) {
+                e.preventDefault();
+                setRenaming(true);
+              } else if ((e.key === 'Delete' || e.key === 'Backspace') && onDelete) {
+                e.preventDefault();
+                onDelete();
+              }
+            }}
           >
-            {name}
+            {shown}
           </button>
         ) : (
           name
@@ -714,6 +766,22 @@ export function useBucketTasks({
   };
   /** A task carried to another goal's bucket (a draft: the goal buckets do not list it yet). */
   const move = (t: Task, to: { id: string; title: string }) => writes.move(t, itemOf(t), to);
+  /** de-gm: a name typed in place: its outcome and milestone stay as they are. */
+  const rename = (t: Task, name: string) =>
+    void writes.edit(t, itemOf(t), { ...startOf(t), name }, options);
+  const trash = useFeatureDelete(async () => {
+    await Promise.all([reload(), items.reload()]);
+  });
+  /** de-gm: Delete moves it to Trash at once, with Undo in the note. */
+  const remove = (t: Task) => void trash({ id: t.itemId, title: t.name, now: true });
+  /** de-gm: a bucket's faint + Add: type, Enter adds a feature serving that goal; the field stays for the next. */
+  const quick = (goal: { id: string; title: string } | undefined): ReactNode =>
+    may && goal ? (
+      <QuickAdd
+        key={goal.id}
+        onAdd={(name) => writes.add(goal, { name, outcome: '', milestone: '' }, options)}
+      />
+    ) : null;
   return {
     taskOf,
     isCut,
@@ -727,5 +795,74 @@ export function useBucketTasks({
     ownMilestone,
     move,
     editing,
+    rename,
+    remove,
+    quick,
   };
+}
+
+function QuickAdd({ onAdd }: { onAdd: (name: string) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState('');
+  // Names typed and not yet back from the API, shown at once.
+  const [pending, setPending] = useState<string[]>([]);
+  return (
+    <>
+      {pending.map((n, i) => (
+        <li
+          key={`${n}-${i}`}
+          data-testid="plan-feature-pending"
+          aria-busy="true"
+          className="border-b border-line py-[5px] text-base leading-[22px] opacity-60"
+        >
+          {n}
+        </li>
+      ))}
+      <li
+        data-testid="quick-add"
+        className={
+          open
+            ? 'pt-1'
+            : 'sr-only group-hover/bucket:not-sr-only group-focus-within/bucket:not-sr-only max-sm:not-sr-only'
+        }
+      >
+        {open ? (
+          <input
+            autoFocus
+            aria-label="Add a feature"
+            data-testid="quick-add-input"
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            onBlur={() => !v.trim() && setOpen(false)}
+            onKeyDown={(e) => {
+              const name = v.trim();
+              if (e.key === 'Escape') {
+                setV('');
+                setOpen(false);
+              } else if (e.key === 'Enter' && name) {
+                setV('');
+                setPending((xs) => [...xs, name]);
+                void onAdd(name).finally(() =>
+                  setPending((xs) => {
+                    const i = xs.indexOf(name);
+                    return i < 0 ? xs : [...xs.slice(0, i), ...xs.slice(i + 1)];
+                  }),
+                );
+              }
+            }}
+            className="w-full min-w-0 rounded-md border border-accent bg-surface px-1.5 py-0.5 text-base outline-none ring-2 ring-accent/30"
+          />
+        ) : (
+          <Button
+            variant="ghost"
+            data-testid="quick-add-open"
+            className="h-7 justify-start px-1"
+            onClick={() => setOpen(true)}
+          >
+            + Add
+          </Button>
+        )}
+      </li>
+    </>
+  );
 }
