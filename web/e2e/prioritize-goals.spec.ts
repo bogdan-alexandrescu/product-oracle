@@ -117,19 +117,19 @@ test.describe('Goals: prioritize by their header', () => {
     const handle = (id: string | null) =>
       page.locator(`[data-testid=gm-goal][data-goal="${id}"]`).getByTestId('goal-handle');
     const two = (gs: (string | null)[]) => gs.filter((g) => g === before[0] || g === before[1]);
-    const inBuckets = async () => {
+    const inBuckets = async (want: (string | null)[]) => {
       await page.goto('/simple/priorities?tab=buckets');
       await expect(page.getByTestId('goal-bucket').first()).toBeVisible();
-      return two(await bucketGoals(page));
+      await expect.poll(async () => two(await bucketGoals(page))).toEqual(want);
     };
-    expect(await inBuckets()).toEqual([before[0], before[1]]);
+    await inBuckets([before[0], before[1]]);
     await page.goto('/simple/goals');
     await expect(page.getByTestId('gm-grid')).toBeVisible();
     await handle(before[0]).focus();
     await page.keyboard.press('Alt+ArrowRight');
     await expect.poll(() => mapGoals(page)).toEqual(swap(before, 0));
     await expect(page.getByRole('status').filter({ hasText: 'Goal order saved' })).toBeVisible();
-    expect(await inBuckets()).toEqual([before[1], before[0]]);
+    await inBuckets([before[1], before[0]]);
   });
 
   // Goal-order proposals are not built: a commenter gets no goal handle (handoff.md).
