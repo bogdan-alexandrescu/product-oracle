@@ -131704,6 +131704,18 @@
             ],
             "title": "Code From"
           },
+          "confirm_feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Feature Id"
+          },
           "title": {
             "type": "string",
             "title": "Title"

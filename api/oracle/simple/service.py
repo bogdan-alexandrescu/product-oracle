@@ -137,6 +137,9 @@ class Entry:
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
+    # gt-proposed: its feature still to confirm for it (oracle.baseline.fixes.to_confirm), the
+    # one Confirm into the Ground Truth confirms; None when it is in the Ground Truth or has none.
+    confirm: uuid.UUID | None = None
     # trash-features-goals: the item's goal_ids less a goal in Trash (None: row.goal_ids).
     goal_ids: list[uuid.UUID] | None = None
     # one-feature-panel: who the owner shown is (the item's own, else its track's).
@@ -1177,12 +1180,30 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
     key, F-12, or its PRD section's, F-06; the same as Priorities reads), else the PRD
     code of its own section; None for an item with neither (no initials outside
     Priorities)."""
+    from oracle.baseline.fixes import to_confirm
     from oracle.roadmap import codes
 
     fids = {e.row.feature_id for e in entries if e.row.feature_id}
     by_feature = await codes.feature_codes(db) if fids else {}
+    # gt-proposed: the features not yet confirmed (or confirmed while an item waits), by id.
+    open_ = (
+        {
+            f.id: f
+            for f in await db.scalars(
+                select(Entity).where(
+                    Entity.id.in_(fids),
+                    Entity.type == "feature",
+                    Entity.status.in_(("proposed", "confirmed")),
+                )
+            )
+        }
+        if fids
+        else {}
+    )
     for e in entries:
         e.code = codes.code_of(e.row, by_feature)
+        f = to_confirm(open_.get(e.row.feature_id), e.row) if e.row.feature_id else None  # type: ignore[arg-type]
+        e.confirm = f.id if f is not None else None
 
 
 async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:
@@ -1453,6 +1474,7 @@ def item_out(
         key=row.item_key,
         code=code,
         code_from=("feature" if e.code and e.code != prd else "prd") if e.code or prd else None,
+        confirm_feature_id=e.confirm,
         title=title,
         outcome=row.outcome,
         note=row.note,

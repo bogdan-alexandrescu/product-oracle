@@ -567,6 +567,18 @@ def marked(feature: Entity, kind: str, row: Any) -> bool:
     return item_mark(row) in ((feature.attrs or {}).get(kind) or [])
 
 
+def to_confirm(feature: Entity | None, row: Any) -> Entity | None:
+    """In the Ground Truth, one rule (the owner, Nov 23): roadmap item ``row``'s feature still
+    to confirm for it, the one Confirm it (the check) and Confirm into the Ground Truth (Simple's
+    feature panel) confirm: one a run only proposed, or one confirmed while ``row`` waits for its
+    own Confirm it; None for none, a match the item declined, or one in the Ground Truth."""
+    if feature is None or feature.type != "feature" or marked(feature, DECLINED, row):
+        return None
+    if feature.status == "proposed":
+        return feature
+    return feature if feature.status == "confirmed" and marked(feature, UNCONFIRMED, row) else None
+
+
 def _mark(feature: Entity, kind: str, mark: str, on: bool) -> None:
     attrs = dict(feature.attrs or {})
     marks = [m for m in attrs.pop(kind, None) or [] if m != mark] + ([mark] if on else [])
