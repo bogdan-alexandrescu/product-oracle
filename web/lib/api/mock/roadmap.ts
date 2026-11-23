@@ -84,6 +84,10 @@ export interface RoadmapDb {
   alerts?: StoredAlert[];
   /** The freshness of a Plan item the roadmap version has no row for (the alerts scenarios' stale item), by key. */
   freshness?: Record<string, Item['freshness']>;
+  /** "stale-rule": the Ground Truth features a Plan item is traced to, by the item's key (their ids). */
+  traces?: Record<string, string[]>;
+  /** The stale reasons a change of meaning gave a Plan item (markTraced), by key; names: the refs in them. */
+  stale?: Record<string, { reasons: string[]; names: Record<string, string> }>;
   /** plan-open-from-simple "plan-same-key": the Annual billing roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
   /**
@@ -302,7 +306,7 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
 export function seedRoadmap(
   ctx: RoadmapContext,
   scenario?: string | null,
-  opts: { plan?: boolean } = {},
+  opts: { plan?: boolean; proposed?: string } = {},
 ): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
@@ -381,6 +385,17 @@ export function seedRoadmap(
     // The owner's report (Nov 23): the Plan's Weekly alert digest is flagged (its reasons say it
     // may be out of date) with no stale alert on its track: its panel settles it all the same.
     (db.freshness ??= {})['alert-digest'] = 'potentially_stale';
+    if (scenario === STALE_RULE_SCENARIO) {
+      db.traces = { 'team-budgets': opts.proposed ? [opts.proposed] : [] };
+      db.alerts = [
+        staleAlert(
+          track.id,
+          'alert-digest',
+          'Weekly alert digest',
+          'PRD section Digest changed in version 2',
+        ),
+      ];
+    }
     if (scenario === PLAN_APPROVE_STALE_SCENARIO)
       (db.alerts ??= []).push({
         id: stableUuid('track-alert/alert-digest/stale'),
@@ -1137,10 +1152,15 @@ function inWords(reasons: readonly string[]): string[] {
   return lines;
 }
 
-/** As oracle.roadmap.staleness.own_reasons: without "the PRD has a new version (N)" (P11). */
+/**
+ * As oracle.roadmap.staleness.own_reasons: without "the PRD has a new version (N)" (P11), and
+ * without a confirmation's (meant: the stale rule, a confirmation alone never marks).
+ */
 const WHOLE_PRD = /^the PRD has a new version \(\d+\)$/;
+const CONFIRMED =
+  /^(?:[a-z][a-z_]*:\S+|\d+ (?:Ground Truth|baseline) items?) (?:was|were) confirmed$/;
 const ownReasons = (i: { stale_reasons?: readonly string[] | null }) =>
-  (i.stale_reasons ?? []).filter((r) => !WHOLE_PRD.test(r));
+  (i.stale_reasons ?? []).filter((r) => !WHOLE_PRD.test(r) && !CONFIRMED.test(r));
 
 /**
  * As oracle.roadmap.staleness.is_stale, the per-item rule every read counts (P11): potentially
@@ -1153,6 +1173,139 @@ function isStale(i: {
 }): boolean {
   if (i.freshness !== 'potentially_stale' && i.freshness !== 'under_review') return false;
   return !(i.stale_reasons ?? []).length || ownReasons(i).length > 0;
+}
+
+/** oracle.roadmap.staleness.name_refs: the only ref with its verb, said with its name. */
+function nameRefs(reasons: readonly string[], names: Record<string, string>): string[] {
+  const ref = /^([a-z][a-z_]*):\S+ (.+)$/;
+  const verbs = reasons.map((r) => ref.exec(r)?.[2]);
+  return reasons.map((r, n) => {
+    const verb = verbs[n];
+    if (!verb || verbs.filter((v) => v === verb).length !== 1) return r;
+    const name = names[r.slice(0, -(verb.length + 1))];
+    return name ? `The ${r.split(':')[0]!.replace(/_/g, ' ')} "${name}" ${verb}` : r;
+  });
+}
+
+/** What the stale rule compares: the Ground Truth's content and its links. */
+export interface TracedGraph {
+  entities: { id: string; type: string; key: string; title: string; [field: string]: unknown }[];
+  edges: { id: string; type: string; src_id: string; dst_id: string; [field: string]: unknown }[];
+}
+type Snapshot = Record<string, unknown>;
+const ENTITY_FIELDS = ['key', 'title', 'body', 'attrs', 'status', 'parent_id'];
+const EDGE_FIELDS = ['type', 'src_id', 'dst_id', 'attrs', 'status'];
+/** oracle.baseline.service.DST_DOWNSTREAM_EDGES: the links whose changed end is the one they lead to. */
+const DST_DOWNSTREAM = new Set(['affects', 'blocks', 'mitigates']);
+
+/** A copy of what the rule compares, taken before a write. */
+export function tracedGraph(g: { entities: readonly object[]; edges: readonly object[] }) {
+  return JSON.parse(JSON.stringify({ entities: g.entities, edges: g.edges })) as TracedGraph;
+}
+
+function changedFields(before: Snapshot, after: Snapshot, fields: string[]): string[] {
+  return fields.filter((f) => JSON.stringify(before[f]) !== JSON.stringify(after[f]));
+}
+
+/** oracle.baseline.standing: only the standing of the same content rose (proposed to confirmed; a feature's code is its key). */
+function raised(before: Snapshot, after: Snapshot, changed: string[], join: string[]): boolean {
+  if (!changed.length || changed.some((f) => !join.includes(f))) return false;
+  return (
+    !changed.includes('status') || (before.status === 'proposed' && after.status === 'confirmed')
+  );
+}
+
+/**
+ * The stale rule, as the API marks (oracle.roadmap.staleness._by_entities): a write that changed
+ * what a traced feature means marks the Plan items on it, with its reason, and opens their stale
+ * alert; one that only raised its standing (or its link's) marks nothing.
+ */
+export function markTraced(db: RoadmapDb, before: TracedGraph, after: TracedGraph): void {
+  const found: { id: string; verb: string }[] = [];
+  const had = new Map(before.entities.map((e) => [e.id, e]));
+  const left = new Map(after.entities.map((e) => [e.id, e]));
+  for (const e of after.entities) {
+    const b = had.get(e.id);
+    if (!b) continue;
+    const changed = changedFields(b, e, ENTITY_FIELDS);
+    if (!changed.length || raised(b, e, changed, ['status', 'key'])) continue;
+    const moved = changed.includes('status');
+    const verb =
+      moved && e.status === 'rejected'
+        ? 'was rejected'
+        : moved && e.status === 'confirmed' && b.status === 'rejected'
+          ? 'was restored'
+          : 'changed';
+    found.push({ id: e.id, verb });
+  }
+  for (const e of before.entities)
+    if (!left.has(e.id)) found.push({ id: e.id, verb: 'was deleted' });
+  const linked = new Map(before.edges.map((e) => [e.id, e]));
+  const still = new Map(after.edges.map((e) => [e.id, e]));
+  for (const id of new Set([...linked.keys(), ...still.keys()])) {
+    const [b, e] = [linked.get(id), still.get(id)];
+    // A link that was never confirmed is not in the trace: nothing was built on it.
+    if (b?.status !== 'confirmed' && e?.status !== 'confirmed') continue;
+    const now = (e ?? b)!;
+    if (now.type === 'owned_by') continue;
+    const changed = b && e ? changedFields(b, e, EDGE_FIELDS) : [];
+    if (b && e && (!changed.length || raised(b, e, changed, ['status']))) continue;
+    found.push({
+      id: DST_DOWNSTREAM.has(now.type) ? now.dst_id : now.src_id,
+      verb: !b ? 'gained a link' : !e ? 'lost a link' : 'had a link changed',
+    });
+  }
+  for (const [key, ids] of Object.entries(db.traces ?? {}))
+    for (const f of found) {
+      const entity = left.get(f.id) ?? had.get(f.id);
+      if (!ids.includes(f.id) || !entity) continue;
+      const open = isStale({ freshness: db.freshness?.[key] });
+      const stale = (open && db.stale?.[key]) || { reasons: [], names: {} };
+      const ref = `${entity.type}:${entity.key}`;
+      const reason = `${ref} ${f.verb}`;
+      if (!stale.reasons.includes(reason)) stale.reasons.push(reason);
+      stale.names[ref] = entity.title;
+      (db.stale ??= {})[key] = stale;
+      (db.freshness ??= {})[key] = 'potentially_stale';
+      const detail = markedReason(db, key)!.detail;
+      const alert = db.alerts?.find(
+        (a) => a.item_key === key && a.kind === 'stale' && a.state !== 'resolved',
+      );
+      const title = ALERTS_APPROVED.find((i) => i.key === key)?.title ?? key;
+      if (alert) Object.assign(alert, { detail, state: 'open' });
+      else (db.alerts ??= []).push(staleAlert(db.tracks[0]!.id, key, title, detail));
+    }
+}
+
+/** The stale reason a change of meaning gave a Plan item, in words, while the item is stale. */
+function markedReason(db: RoadmapDb, key: string): { kind: 'stale'; detail: string } | null {
+  const stale = db.stale?.[key];
+  const i = { freshness: db.freshness?.[key], stale_reasons: stale?.reasons };
+  if (!stale || !isStale(i)) return null;
+  return {
+    kind: 'stale',
+    detail: staleWhy(nameRefs(ownReasons(i), stale.names), 'its PRD trace changed'),
+  };
+}
+
+/** An open stale alert on a track's item. */
+function staleAlert(track: string, key: string, title: string, detail: string): StoredAlert {
+  return {
+    id: stableUuid(`track-alert/${key}/stale/${detail}`),
+    track_id: track,
+    item_key: key,
+    item_title: title,
+    kind: 'stale',
+    detail,
+    data: { freshness: 'potentially_stale' },
+    state: 'open',
+    opened_at: '2026-10-20T15:06:00Z',
+    kept_by: null,
+    kept_by_name: null,
+    kept_at: null,
+    note: null,
+    resolved_at: null,
+  };
 }
 
 /** As oracle.roadmap.views._headline: one plain sentence, naming only what means something. */
@@ -2480,14 +2633,17 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
       {
         kind: 'stale',
         detail: staleWhy(
-          [
-            'feature:alert-digest changed',
-            'goal:g-paid-conversion changed',
-            'goal:g-activation changed',
-            'product:usage was confirmed',
-            '42 Ground Truth items changed',
-            '11 Ground Truth items changed',
-          ],
+          ownReasons({
+            stale_reasons: [
+              'feature:alert-digest changed',
+              'goal:g-paid-conversion changed',
+              'goal:g-activation changed',
+              // Stored before the stale rule: no read says it.
+              'product:usage was confirmed',
+              '42 Ground Truth items changed',
+              '11 Ground Truth items changed',
+            ],
+          }),
           'its PRD trace changed',
         ),
       },
@@ -2605,6 +2761,7 @@ function planTrackItems(db: RoadmapDb): Schemas['AtRiskItem'][] {
     reasons: [
       ...(db.critical?.[s.key] ? [{ kind: 'blocked', detail: db.critical[s.key] }] : []),
       ...(db.accepted?.[s.key] ? [] : (s.reasons ?? []).map((r) => ({ ...r }))),
+      ...[markedReason(db, s.key) ?? []].flat(),
     ],
   }));
 }
@@ -3306,9 +3463,12 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas['PlanO
       reasons:
         origin === 'draft'
           ? []
-          : (s.reasons ?? []).filter(
-              (r) => r.kind !== 'stale' || db.freshness?.[s.key] !== 'reconciled',
-            ),
+          : [
+              ...(s.reasons ?? []).filter(
+                (r) => r.kind !== 'stale' || db.freshness?.[s.key] !== 'reconciled',
+              ),
+              ...[markedReason(db, s.key) ?? []].flat(),
+            ],
       drift: ctx.drift?.(s.key, origin) ?? [],
       decisions: ctx.decided?.(s.key) ?? [],
       engineering: {
@@ -3742,6 +3902,12 @@ export const TRACK_ALERTS_HISTORY_SCENARIO = 'track-alerts-history';
  * changed): Review in the Inbox opens the Plan's Still valid…, and reconciling resolves it.
  */
 export const TRACK_ALERTS_STALE_SCENARIO = 'track-alerts-stale';
+/**
+ * The stale rule (the owner, Nov 23): the approved item Budgets per team is on the Ground Truth's
+ * proposed feature Usage export (confirming it marks nothing; renaming it does), and the track has
+ * one stale alert already, on the Weekly alert digest.
+ */
+export const STALE_RULE_SCENARIO = 'stale-rule';
 /** As "track-alerts-stale", the PRD section Behaviour removed in version 2 (not changed). */
 export const TRACK_ALERTS_STALE_REMOVED_SCENARIO = 'track-alerts-stale-removed';
 /**
