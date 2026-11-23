@@ -8,10 +8,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { toast as dsToast } from '@/components/ds';
 import { InfoTip } from '@/components/ds/InfoTip';
+import { api, unwrap } from '@/lib/api/client';
 import { PE_FLAGS, PE_HARD, PE_MILESTONES, PE_PEOPLE } from '@/lib/api/mock/mk-panel-edit';
 
 import type { Act } from './_card';
-import type { Item } from './_lib';
+import { propose, type Item } from './_lib';
 
 const q = () => new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
 export const peOn = () => ['pe1', 'pe2', 'pe3'].some((k) => q().has(k));
@@ -154,8 +155,8 @@ export function PePanel({
     track: 'Usage alerts track',
     owner: item.owner?.name ?? '',
     decider: 'Avery Stone',
-    deps: hard ? PE_HARD.deps : item.depends_on.map(name),
-    needed: hard ? [] : item.needed_by.map(name),
+    deps: hard ? [...item.depends_on.map(name), ...PE_HARD.deps].slice(0, 8) : item.depends_on.map(name),
+    needed: item.needed_by.map(name),
   };
   const [vals, setVals] = useState<Vals>(init);
   const [draftVals, setDraftVals] = useState<Vals | null>(null); // pe1=c: the Edit mode's values
@@ -195,7 +196,7 @@ export function PePanel({
     dsToast({ place: 'corner', message, action: undo ? { label: 'Undo', onClick: undo } : undefined });
 
   /** Saves one field at once (every model but the Edit mode, which saves on Done). */
-  const commit = (k: K | 'deps' | 'needed', val: string | string[], said?: string) => {
+  const commit = (k: K | 'deps' | 'needed', val: string | string[], said?: string, quiet = false) => {
     setOpen(null);
     const before = vals;
     if (JSON.stringify(v[k]) === JSON.stringify(val)) return;
@@ -209,10 +210,79 @@ export function PePanel({
       const e0 = k === 'end' ? iso(val, item.end.date) : item.end.date;
       if (s0 && e0) return moveDates(s0, e0);
     }
+    if (quiet) return; // MOCK-HOOK: the real change's own toast says it
     toast(said ?? `Saved: ${k in LABEL ? LABEL[k as K] : 'links'} ${Array.isArray(val) ? '' : val}`.trim(), () => {
       setVals(before);
       setChanged(new Set([...changed].filter((x) => x !== k)));
     });
+  };
+  /** A feature typed under Needed by: added for real, depending on this one, dated after it (its own Roadmap row). */
+  const addAfter = async (t: string) => {
+    try {
+      const r = await propose({
+        op: 'add_item',
+        target: { roadmap_id: item.roadmap.id, where: { kind: 'horizon', value: 'next' } },
+        before: {},
+        after: { title: t, ...(item.track ? { track_id: item.track.id } : {}) },
+      });
+      const id = r.change.target.item_id as string;
+      await propose({ op: 'set_depends', target: { item_id: id }, before: { depends_on: [] }, after: { depends_on: [item.key] } });
+      const s0 = new Date(`${item.end.date}T12:00:00Z`);
+      s0.setUTCDate(s0.getUTCDate() + 1);
+      const e0 = new Date(s0);
+      e0.setUTCDate(e0.getUTCDate() + 27);
+      const f = (d: Date) => d.toISOString().slice(0, 10);
+      await act(
+        { applied: `Added ${t}, placed after this feature`, proposed: `add ${t}` },
+        { op: 'move_dates', target: { item_id: id }, before: { start_date: null, end_date: null }, after: { start_date: f(s0), end_date: f(e0) } },
+      );
+    } catch {
+      /* the panel keeps it in Needed by */
+    }
+  };
+  /** A milestone typed in the Milestone list: made on the Roadmap's Milestones strip, then picked. */
+  const addMilestone = async (typed: string) => {
+    const [nm, when] = typed.split('·').map((x) => x.trim());
+    const date = when ? iso(when, item.end.date) : null;
+    if (!date) return;
+    try {
+      const made = await unwrap(
+        api.POST('/v1/simple/roadmap/milestones', {
+          body: {
+            roadmap_id: item.roadmap.id,
+            name: nm,
+            date,
+            goal_id: item.goal?.id ?? null,
+            item_ids: [item.id],
+            counts_when: 'Holds 7 days in a row',
+            kind: 'delivery',
+            status_set: null,
+            status_reason: null,
+            done_when_line: '',
+            measure: null,
+            baseline: null,
+            target: null,
+            current: null,
+            sub_goal_of_id: null,
+            home_track_id: null,
+            from_track_id: null,
+            to_track_id: null,
+          } as never,
+        }),
+      );
+      const m = item.milestone;
+      await act(
+        { applied: `Added the milestone ${typed}`, proposed: `add the milestone ${typed}` },
+        {
+          op: 'set_milestone',
+          target: { item_id: item.id },
+          before: { milestone: m && m.source === 'item' ? { id: m.id ?? null, name: m.name ?? null, date: m.date ?? null } : null },
+          after: { milestone: { id: (made as { id: string }).id } },
+        },
+      );
+    } catch {
+      /* the panel keeps it */
+    }
   };
   const moveDates = (s0: string, e0: string) =>
     void act(
@@ -238,6 +308,9 @@ export function PePanel({
     const s0 = iso(draftVals.start, item.start.date);
     const e0 = iso(draftVals.end, item.end.date);
     if (s0 && e0 && (s0 !== item.start.date || e0 !== item.end.date)) moveDates(s0, e0);
+    // MOCK-HOOK: a new milestone or a new feature typed in Edit mode is made for real on Done.
+    if (draftVals.milestone !== vals.milestone && !PE_MILESTONES.includes(draftVals.milestone)) void addMilestone(draftVals.milestone);
+    draftVals.needed.filter((n) => !vals.needed.includes(n)).forEach((n) => void addAfter(n));
   };
 
   // ---- flags (PE3) ----
@@ -441,7 +514,10 @@ export function PePanel({
                 placeholder="+ New milestone: name and date"
                 className="mt-1 rounded-md border border-line px-2 py-1 text-base outline-none focus:border-accent"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') commit('milestone', (e.target as HTMLInputElement).value, `Added the milestone ${(e.target as HTMLInputElement).value}`);
+                  if (e.key !== 'Enter') return;
+                  const typed = (e.target as HTMLInputElement).value;
+                  commit('milestone', typed, `Added the milestone ${typed}`, !draftVals);
+                  if (!draftVals) void addMilestone(typed);
                 }}
               />
             )}
@@ -478,12 +554,15 @@ export function PePanel({
   const links = (which: 'deps' | 'needed') => {
     const list = v[which];
     return (
-      <div data-testid={`pe-field-${which}`} className={`rounded-md ${markRow(which)}`}>
+      <div data-testid={`pe-field-${which}`} className={`rounded-md pl-2 -ml-2 ${markRow(which)}`}>
         <ul className="flex flex-col gap-0.5">
           {list.length === 0 && <li className="text-text2">Nothing</li>}
           {list.map((n, i) => (
             <li key={n} className="flex min-w-0 items-start gap-1.5">
-              <span className="min-w-0 flex-1 break-words text-accent-ink">{n}</span>
+              <span className="min-w-0 flex-1 break-words text-accent-ink">
+                {n}
+                {!/^[A-Z]+-\d+ /.test(n) && <span className="text-sm text-warn"> · Not in the Ground Truth</span>}
+              </span>
               {live && (
                 <button
                   type="button"
@@ -510,7 +589,9 @@ export function PePanel({
                 const t = (e.target as HTMLInputElement).value.trim();
                 if (e.key === 'Enter' && t) {
                   setAdding(null);
-                  commit(which, [...list, t], `Added ${t}, placed ${which === 'deps' ? 'before' : 'after'} this feature`);
+                  const real = which === 'needed' && !draftVals;
+                  commit(which, [...list, t], `Added ${t}, placed ${which === 'deps' ? 'before' : 'after'} this feature`, real);
+                  if (real) void addAfter(t);
                 }
                 if (e.key === 'Escape') setAdding(null);
               }}
@@ -758,7 +839,7 @@ export function PePanel({
       data-testid="floating-card"
       data-pe={`${model}${order}${fix}`}
       style={style}
-      className={`${className} ${phone ? 'max-w-none overflow-hidden' : 'max-w-[calc(100vw-16px)]'} border-line bg-surface text-base leading-[22px] text-text shadow-tip outline-none`}
+      className={`${className} ${phone ? 'max-w-none overflow-hidden' : 'max-h-[calc(100dvh-24px)] max-w-[calc(100vw-16px)]'} border-line bg-surface text-base leading-[22px] text-text shadow-tip outline-none`}
     >
       {phone && <span aria-hidden className="mx-auto mt-2 mb-1 block h-1 w-10 flex-none rounded-sm bg-line-strong opacity-60" />}
       <div className={`flex-none px-4 ${phone ? 'pt-1.5' : 'pt-4'}`}>

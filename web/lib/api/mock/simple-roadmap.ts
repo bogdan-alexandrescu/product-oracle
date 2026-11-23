@@ -9,6 +9,7 @@
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
 import { byPrdRank, prdRanker } from './prd-rank';
+import { PE_HARD } from './mk-panel-edit'; // MOCK-HOOK
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
@@ -4065,6 +4066,9 @@ export async function routeSimpleRoadmap(
     if (q.get('roadmap') && !readableRoadmap(q.get('roadmap'), me.role))
       return json(404, { detail: 'No such roadmap' });
     const out = readRoadmap(db, me.role, q, me);
+    // MOCK-HOOK: mk-panel-edit's hard case (?hard=1): the open row carries the panel's long name.
+    if (out && typeof location !== 'undefined' && new URLSearchParams(location.search).get('hard') === '1') // MOCK-HOOK
+      for (const it of out.items) if (it.id === stableUuid('simple-item/alert-rules')) it.title = PE_HARD.title; // MOCK-HOOK
     return out
       ? reply('/v1/simple/roadmap', 'get', out)
       : json(422, { detail: 'group: goal, track or prd' });

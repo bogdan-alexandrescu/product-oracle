@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { test, type Page } from '@playwright/test';
+import { test, type Browser, type Page } from '@playwright/test';
 
 import { stableUuid } from '../../lib/api/mock/ids';
 
@@ -18,9 +18,9 @@ const fonts = new Map<string, string>();
 
 let itemId = '';
 let seed = '';
-async function login(page: Page) {
+async function login(page: Page, email = 'admin@example.com') {
   await page.goto('/login?next=%2Fhome');
-  await page.getByLabel('Email').fill('admin@example.com');
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(['de', 'mo'].join(''));
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL(/\/home$/);
@@ -40,13 +40,42 @@ async function open(page: Page, qs: string, w: number, h: number, theme = 'light
   await page.locator('[data-testid="floating-card"][data-pe]').waitFor({ timeout: 15000 });
   await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
   await page.waitForTimeout(500);
+  await markRow(page);
   // The page's place at rest, kept for the rest of the story (see snap).
   await page.evaluate(() => {
     document.querySelectorAll('*').forEach((el) => {
       if (el.scrollTop) (el as HTMLElement).dataset.mkS = String(el.scrollTop);
     });
     (window as unknown as { mkY: number }).mkY = window.scrollY;
+    const row = document.querySelector('[data-mk-row]');
+    (window as unknown as { mkRow: number }).mkRow = row ? row.getBoundingClientRect().top : NaN;
   });
+}
+/** The page's open row, by the item's id (its bar or its label). */
+async function markRow(page: Page) {
+  await page.evaluate((id) => {
+    const el = document.querySelector(`[data-bar-id="${id}"]`) ?? document.querySelector(`[data-item-id="${id}"]`);
+    el?.setAttribute('data-mk-row', '');
+  }, itemId);
+}
+/** Scrolls the panel's own body (not the page) so the field sits in its middle. */
+async function scrollCard(page: Page, id: string) {
+  await page.getByTestId(id).evaluate((el) => {
+    let body = el.parentElement;
+    while (body && !(body.scrollHeight > body.clientHeight + 1 && /auto|scroll|hidden/.test(getComputedStyle(body).overflowY))) body = body.parentElement;
+    if (!body) return;
+    const d = el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    body.scrollTop += d - body.clientHeight * 0.4 + el.getBoundingClientRect().height / 2;
+  });
+}
+/** Lets the earlier toasts go before a frame that must show what they covered. */
+async function clearToasts(page: Page) {
+  for (let i = 0; i < 6; i++) {
+    const b = page.locator('[aria-label="Dismiss"]');
+    if (!(await b.count())) break;
+    await b.first().click();
+    await page.waitForTimeout(250);
+  }
 }
 
 async function snap(page: Page, file: string, w: number, h: number, free = false) {
@@ -60,6 +89,18 @@ async function snap(page: Page, file: string, w: number, h: number, free = false
       if (at != null || el.scrollTop) el.scrollTop = Number(at ?? 0);
     });
     window.scrollTo(0, (window as unknown as { mkY: number }).mkY ?? 0);
+    // Banners added above (after a change) push the Roadmap down: keep the open row where it was at rest.
+    const row = document.querySelector('[data-mk-row]');
+    const at = (window as unknown as { mkRow: number }).mkRow;
+    if (row && !Number.isNaN(at)) {
+      const d = row.getBoundingClientRect().top - at;
+      if (Math.abs(d) > 1) {
+        let sc: Element | null = row.parentElement;
+        while (sc && !(sc.scrollHeight > sc.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+        if (sc && !card?.contains(sc)) sc.scrollTop += d;
+        else window.scrollBy(0, d);
+      }
+    }
   });
   await page.screenshot({ path: path.join(FR, `${file}.png`) });
   const { html, urls } = await page.evaluate(
@@ -112,7 +153,7 @@ async function snap(page: Page, file: string, w: number, h: number, free = false
 }
 
 const D = { w: 1440, h: 900 };
-const W = { w: 1512, h: 982 };
+const W = { w: 1512, h: 900 };
 const P = { w: 390, h: 844 };
 const want = (k: string) => !process.env.ONLY || k.startsWith(process.env.ONLY);
 
@@ -135,7 +176,7 @@ async function saveEnds(page: Page, m: string) {
   }
 }
 
-test('frames', async ({ page }) => {
+test('frames', async ({ page, browser }) => {
   await login(page);
   itemId = stableUuid('simple-item/alert-rules');
   await page.goto('/simple/roadmap');
@@ -164,26 +205,37 @@ test('frames', async ({ page }) => {
       await snap(page, `${k}-flag`, D.w, D.h);
     }
     // A milestone added from the panel.
-    if (m === 'a' || m === 'b') {
+    {
+      await clearToasts(page);
+      if (m === 'c') await page.getByTestId('pe-edit').click();
       await page.getByTestId('pe-input-milestone').click();
       await page.getByTestId('pe-new-milestone').fill('Pilot with 3 teams · Dec 18');
       await snap(page, `${k}-milestone`, D.w, D.h);
       await page.getByTestId('pe-new-milestone').press('Enter');
+      if (m === 'c') await page.getByTestId('pe-done').click();
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(1200);
       await snap(page, `${k}-milestone-added`, D.w, D.h);
     }
     // A feature added: typed under Needed by, placed after this one by its link (no drag).
+    await clearToasts(page);
     if (m === 'c') await page.getByTestId('pe-edit').click();
     await page.getByTestId('pe-plus-needed').click();
     await page.getByTestId('pe-add-needed').fill('Alert sound picker');
+    await scrollCard(page, 'pe-add-needed');
     await snap(page, `${k}-add`, D.w, D.h);
     await page.getByTestId('pe-add-needed').press('Enter');
     if (m === 'c') await page.getByTestId('pe-done').click();
-    await page.getByTestId('pe-field-needed').getByText('Alert sound picker').scrollIntoViewIfNeeded();
-    await page.getByTestId('pe-field-needed').evaluate((el) => el.scrollIntoView({ block: 'center' }));
-    await snap(page, `${k}-added`, D.w, D.h, true);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(1500);
+    await scrollCard(page, 'pe-field-needed');
+    await snap(page, `${k}-added`, D.w, D.h);
     await open(page, `${qs}&hard=1`, W.w, W.h);
     if (m === 'c') await page.getByTestId('pe-edit').click();
     await snap(page, `${k}-hard-1512`, W.w, W.h);
+    await open(page, `${qs}&hard=1`, W.w, W.h, 'dark');
+    if (m === 'c') await page.getByTestId('pe-edit').click();
+    await snap(page, `${k}-hard-1512-dark`, W.w, W.h);
     for (const t of ['light', 'dark']) {
       await open(page, qs, P.w, P.h, t);
       const sfx = t === 'dark' ? '-dark' : '';
@@ -200,8 +252,6 @@ test('frames', async ({ page }) => {
     await typeEnds(page);
     await saveEnds(page, m);
     await snap(page, `${k}-saved-dark`, D.w, D.h);
-    await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
-    await snap(page, `${k}-viewer-1512`, W.w, W.h);
   }
 
   for (const o of ['a', 'b', 'c']) {
@@ -230,8 +280,8 @@ test('frames', async ({ page }) => {
     await snap(page, `${k}-more`, D.w, D.h, true);
     await open(page, `${qs}&hard=1`, W.w, W.h);
     await snap(page, `${k}-hard-1512`, W.w, W.h);
-    await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
-    await snap(page, `${k}-viewer-1512`, W.w, W.h);
+    await open(page, `${qs}&hard=1`, W.w, W.h, 'dark');
+    await snap(page, `${k}-hard-1512-dark`, W.w, W.h);
     await open(page, qs, P.w, P.h);
     await snap(page, `${k}-rest-390`, P.w, P.h);
     await open(page, qs, P.w, P.h, 'dark');
@@ -265,8 +315,9 @@ test('frames', async ({ page }) => {
     await open(page, `${qs}&hard=1`, W.w, W.h);
     await strip();
     await snap(page, `${k}-hard-1512`, W.w, W.h);
-    await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
-    await snap(page, `${k}-viewer-1512`, W.w, W.h);
+    await open(page, `${qs}&hard=1`, W.w, W.h, 'dark');
+    await strip();
+    await snap(page, `${k}-hard-1512-dark`, W.w, W.h);
     for (const t of ['light', 'dark']) {
       await open(page, qs, P.w, P.h, t);
       await strip();
@@ -276,6 +327,9 @@ test('frames', async ({ page }) => {
     await strip();
     await snap(page, `${k}-rest-dark`, D.w, D.h);
   }
+
+  // The read-only look, signed in as a viewer (the sidebar names the viewer).
+  await viewers(browser);
 
   // Today, for the hand-off: the Change link opens a field with Save and Cancel.
   if (want('today')) {
@@ -289,3 +343,20 @@ test('frames', async ({ page }) => {
     await snap(page, 'today-change', D.w, D.h);
   }
 });
+
+async function viewers(browser: Browser) {
+  const ctx = await browser.newContext({ baseURL: 'http://localhost:4173' });
+  const page = await ctx.newPage();
+  await login(page, 'viewer@example.com');
+  const runs: [string, string][] = [
+    ...['a', 'b', 'c', 'd'].map((m) => [`pe1-${m}`, `pe1=${m}&pe2=a&pe3=a`] as [string, string]),
+    ...['a', 'b', 'c'].map((o) => [`pe2-${o}`, `pe1=a&pe2=${o}&pe3=a`] as [string, string]),
+    ...['a', 'b', 'c'].map((f) => [`pe3-${f}`, `pe1=a&pe2=a&pe3=${f}`] as [string, string]),
+  ];
+  for (const [k, qs] of runs) {
+    if (!want(k)) continue;
+    await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
+    await snap(page, `${k}-viewer-1512`, W.w, W.h);
+  }
+  await ctx.close();
+}
