@@ -12650,7 +12650,12 @@ async function route(db: Db, req: Request): Promise<Response> {
       localStorage.getItem(MOCK_SCENARIO_KEY) === STALE_SIMPLE_FILTERS_SCENARIO &&
       mine.simple_filters === undefined
     )
-      mine.simple_filters = { prd: 'retired-example-prd', goal: 'retired-example-goal', track: '' };
+      mine.simple_filters = {
+        prd: 'retired-example-prd',
+        goal: 'retired-example-goal',
+        track: '',
+        owner: '',
+      };
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === 'PATCH') {
       const patch = await body<Schemas['PreferencesUpdate']>();

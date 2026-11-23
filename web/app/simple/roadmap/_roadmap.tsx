@@ -150,6 +150,9 @@ import {
   codedFlag,
   type Flag,
   type Scale as ChartScale,
+  ownerOptions,
+  ownerPick,
+  ownersSeen,
 } from './_lib';
 import { itemName, NotInGt } from './_gtflag';
 import { Chart, PHASES, type Layout } from './_timeline';
@@ -193,6 +196,7 @@ type Filters = {
   prd: string;
   goal: string;
   track: string;
+  owner: string;
   from: string;
   to: string;
 };
@@ -202,11 +206,12 @@ const NO_FILTERS: Filters = {
   prd: '',
   goal: '',
   track: '',
+  owner: '',
   from: '',
   to: '',
 };
-type Picks = Record<'prd' | 'goal' | 'track', Set<string>>;
-const PICKS = ['prd', 'goal', 'track'] as const;
+type Picks = Record<'prd' | 'goal' | 'track' | 'owner', Set<string>>;
+const PICKS = ['prd', 'goal', 'track', 'owner'] as const;
 /** roadmap-stale-filters: the PRDs, goals and tracks a roadmap's items are on (what its filters may pick). */
 /** RP2: no draft PRDs, one shared empty list (memoised reads keep their identity). */
 const NO_DRAFTS: DraftPrd[] = [];
@@ -215,6 +220,7 @@ const picksOf = (items: Roadmap['items'], krs: KeyResults): Picks => ({
   // kr-in-goal-card: a key result's items are on its parent goal's pick.
   goal: new Set(items.flatMap((i) => (i.goal ? [krs.parentOf(i.goal.id)?.key ?? i.goal.key] : []))),
   track: new Set(items.flatMap((i) => (i.track ? [i.track.id] : []))),
+  owner: new Set(items.map(ownerPick)),
 });
 /** Saved picks with those `gone` says left blank. */
 const without = (
@@ -1689,7 +1695,7 @@ export function SimpleRoadmap() {
     const q: Record<string, string> = {
       group: f.group === 'milestone' || f.group === 'track' ? 'goal' : f.group,
     };
-    for (const k of ['roadmap', 'prd', 'goal', 'track', 'from', 'to'] as const)
+    for (const k of ['roadmap', 'prd', 'goal', 'track', 'owner', 'from', 'to'] as const)
       if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
@@ -1846,7 +1852,9 @@ export function SimpleRoadmap() {
   const savedPicks =
     !restored && known && (prefs.data || prefs.error) ? prefs.data?.simple_filters : undefined;
   const onRoadmap =
-    savedPicks && !f.prd && !f.goal && !f.track ? picksOf(roadmap.data!.items, krs) : null;
+    savedPicks && !f.prd && !f.goal && !f.track && !f.owner
+      ? picksOf(roadmap.data!.items, krs)
+      : null;
   // RP2: only a saved PRD pick the roadmap does not hold waits for the draft layer's read (it may be a draft PRD's).
   if (
     !restored &&
@@ -1874,6 +1882,7 @@ export function SimpleRoadmap() {
       ...f,
       goal: params.get('goal') || kept?.goal || f.goal,
       track: kept?.track || f.track,
+      owner: kept?.owner || f.owner,
     };
     if (!params.get('prd')) next.prd = kept?.prd || f.prd;
     if (
@@ -1887,7 +1896,8 @@ export function SimpleRoadmap() {
       next.roadmap !== f.roadmap ||
       next.prd !== f.prd ||
       next.goal !== f.goal ||
-      next.track !== f.track
+      next.track !== f.track ||
+      next.owner !== f.owner
     )
       setF(next);
   }
@@ -1913,7 +1923,7 @@ export function SimpleRoadmap() {
   // no longer has; a saved one is dropped (and saved back), a link's one is said so.
   const emptied =
     restored &&
-    !!(f.prd || f.goal || f.track) &&
+    !!(f.prd || f.goal || f.track || f.owner) &&
     !!roadmap.data &&
     !roadmap.loading &&
     !roadmap.data.items.length;
@@ -1965,12 +1975,12 @@ export function SimpleRoadmap() {
     setF({ ...f, roadmap: id });
     void remember({ simple_roadmap: id || 'all' }, 'Could not remember this roadmap for next time');
   };
-  const pickFilter = (k: 'prd' | 'goal' | 'track', v: string) => {
+  const pickFilter = (k: 'prd' | 'goal' | 'track' | 'owner', v: string) => {
     setRestored(true);
     const next = { ...f, [k]: v };
     setF(next);
     void remember(
-      { simple_filters: { prd: next.prd, goal: next.goal, track: next.track } },
+      { simple_filters: { prd: next.prd, goal: next.goal, track: next.track, owner: next.owner } },
       'Could not remember these filters for next time',
     );
   };
@@ -2073,7 +2083,8 @@ export function SimpleRoadmap() {
     prd: [string, string][];
     goal: [string, string][];
     track: [string, string][];
-  }>({ of: null, prd: [], goal: [], track: [] });
+    owner: [string, string][];
+  }>({ of: null, prd: [], goal: [], track: [], owner: [] });
   if (data && seen.of !== data) {
     const add = (list: [string, string][], pairs: [string, string][]) => [
       ...new Map([...list, ...pairs]),
@@ -2094,6 +2105,7 @@ export function SimpleRoadmap() {
           i.track ? [[i.track.id, i.track.title] as [string, string]] : [],
         ),
       ),
+      owner: add(seen.owner, ownersSeen(data.items)),
     });
   }
   // kr-in-goal-card: the Goal filter lists a key result's goal, never the key result.
@@ -2118,12 +2130,12 @@ export function SimpleRoadmap() {
   const pickedDraft = f.prd ? (draftOnly.find((d) => d.prd.slug === f.prd) ?? null) : null;
   const shownDrafts = useMemo(
     () =>
-      f.goal || f.track
+      f.goal || f.track || f.owner
         ? NO_DRAFTS
         : f.prd
           ? draftList.filter((d) => d.prd.slug === f.prd)
           : draftList,
-    [draftList, f.prd, f.goal, f.track],
+    [draftList, f.prd, f.goal, f.track, f.owner],
   );
   const [draftOpen, setDraftOpen] = useState<string | null>(null);
   const openDraft = useMemo(
@@ -2185,7 +2197,7 @@ export function SimpleRoadmap() {
   const canChange = can('create_simple_change');
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
   // A milestone's joined name and its "Also:" read every milestone, so a PRD, goal or track filter never changes them.
-  const picked = !!(f.prd || f.goal || f.track);
+  const picked = !!(f.prd || f.goal || f.track || f.owner);
   const unfiltered = useQuery(`simple-roadmap-names:${picked ? JSON.stringify(wideQs) : ''}`, () =>
     picked
       ? unwrap(api.GET('/v1/simple/roadmap', { params: { query: wideQs as never } }))
@@ -2532,10 +2544,12 @@ export function SimpleRoadmap() {
     if (f.prd) parts.push(`PRD: ${named(seen.prd, f.prd)}`);
     if (f.goal) parts.push(`Goal: ${named(goalOptions, f.goal)}`);
     if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
+    if (f.owner) parts.push(`Owner: ${named(ownerOptions(seen.owner), f.owner)}`);
     if (f.from) parts.push(`From ${qName(f.from)}`);
     if (f.to) parts.push(`To ${qName(f.to)}`);
     if (data?.roadmap) parts.push(`Roadmap: ${data.roadmap.title}`);
-    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push('All roadmaps'); // qa4-simple-roadmap-48
+    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.owner && !f.from && !f.to)
+      parts.push('All roadmaps'); // qa4-simple-roadmap-48
     return parts.join(' · ');
   };
 
@@ -2612,7 +2626,7 @@ export function SimpleRoadmap() {
   // Review: under a filter, Needs a decision counts the whole roadmap's broken links and dates to
   // confirm, as the side menu does.
   const counted = decisionCounts(data.items, allProposals);
-  const anyFilter = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
+  const anyFilter = !!(f.prd || f.goal || f.track || f.owner || f.from || f.to || f.roadmap);
   const allLinks = anyFilter ? wholeLinks.data?.broken_links : undefined;
   const allDates = anyFilter ? wholeLinks.data?.dates_to_confirm : undefined;
   // pre-demo QA S-6: the suggested features the tray lists for a decision count on its button too.
@@ -2646,6 +2660,7 @@ export function SimpleRoadmap() {
     !f.prd &&
     !f.goal &&
     !f.track &&
+    !f.owner &&
     !f.from &&
     !f.to &&
     !data.roadmap;
@@ -2930,12 +2945,12 @@ export function SimpleRoadmap() {
       setF({ ...f, from, to });
     }
   };
-  const filtered = !!(f.prd || f.goal || f.track || f.from || f.to);
+  const filtered = !!(f.prd || f.goal || f.track || f.owner || f.from || f.to);
   const clearFilters = () => {
     setRestored(true);
     setF({ ...NO_FILTERS, group: f.group, roadmap: f.roadmap });
     void remember(
-      { simple_filters: { prd: '', goal: '', track: '' } },
+      { simple_filters: { prd: '', goal: '', track: '', owner: '' } },
       'Could not remember these filters for next time',
     );
   };
@@ -2981,6 +2996,12 @@ export function SimpleRoadmap() {
         onChange={(track) => pickFilter('track', track)}
       />
       <Select
+        label="Owner"
+        value={f.owner}
+        options={ownerOptions(seen.owner)}
+        onChange={(owner) => pickFilter('owner', owner)}
+      />
+      <Select
         label="From"
         value={f.from}
         options={qList.map((q) => [q.start, q.label])}
@@ -2997,9 +3018,15 @@ export function SimpleRoadmap() {
     </>
   );
   // How many pickers narrow the view, on a phone's Filters button.
-  const narrowed = [data.roadmap ? 'roadmap' : '', f.prd, f.goal, f.track, f.from, f.to].filter(
-    Boolean,
-  ).length;
+  const narrowed = [
+    data.roadmap ? 'roadmap' : '',
+    f.prd,
+    f.goal,
+    f.track,
+    f.owner,
+    f.from,
+    f.to,
+  ].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
       <RemovedButton
