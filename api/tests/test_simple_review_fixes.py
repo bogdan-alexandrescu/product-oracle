@@ -98,7 +98,6 @@ from tests.test_simple_changes_api import CHANGES, SESSIONS, World, make_people
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_drafts_api import (
     DRAFTS,
-    TITLE,
     edit_title,
     inbox,
     published,
