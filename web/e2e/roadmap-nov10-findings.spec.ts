@@ -132,10 +132,6 @@ test.describe('Roadmap findings, Nov 10', () => {
         .getByTestId('card-track-edit')
         .getByLabel('Track')
         .selectOption({ label: 'Partner care track' });
-      await panel(page)
-        .getByTestId('card-track-edit')
-        .getByRole('button', { name: 'Save' })
-        .click();
       await expect(panel(page).getByTestId('card-track')).toHaveText('Partner care track');
       await page.keyboard.press('Escape');
       await expect(panel(page)).toHaveCount(0);
@@ -173,10 +169,6 @@ test.describe('Roadmap findings, Nov 10', () => {
         .getByTestId('card-track-edit')
         .getByLabel('Track')
         .selectOption({ label: 'Partner care track' });
-      await panel(page)
-        .getByTestId('card-track-edit')
-        .getByRole('button', { name: 'Save' })
-        .click();
       await expect(panel(page).getByTestId('card-track')).toHaveText('Partner care track');
       await page.keyboard.press('Escape');
       await expect(panel(page)).toHaveCount(0);

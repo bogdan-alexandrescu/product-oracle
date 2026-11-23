@@ -257,7 +257,8 @@ test('Cut and Restore live in the ⋯ menu; Move to Trash is one step with Undo'
   await expect(toasts(page)).toContainText('Moved Alert history export to Trash.');
   await tap(toasts(page).getByRole('button', { name: 'Undo' }));
   await expect(toasts(page)).toContainText('Undone: Alert history export and its links are back.');
-  await open(page, undefined, 'alert-export');
+  await openRoadmapItem(page, 'alert-export');
+  await expect(panel(page)).toBeVisible();
 
   // Cut asks first, naming what needs it; then Restore sits in its place.
   await menu(page, 'Cut from the roadmap');

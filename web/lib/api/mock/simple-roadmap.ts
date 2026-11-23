@@ -3916,16 +3916,18 @@ export function settleDrafting(db: SimpleDb): void {
       s.drafted_at = new Date(now).toISOString();
       s.drafted = filled;
     }
+    // roadmap-add: drawn from its name (additions._place asks the visual for the name, not its code).
+    const named = codedTitle(s.title, null)[1];
     s.flow = plainFlow({
-      title: s.title,
+      title: named,
       steps: [
         'Open the alerts page',
-        `Find ${s.title.toLowerCase()}`,
+        `Find ${named.toLowerCase()}`,
         'Set it up in one step',
         'See it working',
       ],
       screen: {
-        title: `${s.title} settings`,
+        title: `${named} settings`,
         regions: [
           'Header: what it does',
           'The one setting',
