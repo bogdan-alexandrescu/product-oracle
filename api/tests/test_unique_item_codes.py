@@ -61,6 +61,15 @@ async def one_feature_two_items(ctx) -> tuple[str, str]:
     return str(a.id), str(b.id)
 
 
+@pytest.fixture
+def before_the_rule(monkeypatch):
+    """Rows written as they stood before codes-at-write (Nov 23), which now numbers a second
+    item of a feature as it is written: the migration's pairs to renumber."""
+    from oracle.roadmap import codes
+
+    monkeypatch.setattr(codes._Numbering, "give", lambda self, row, code: None)
+
+
 def set_code(client, ctx, item: str, before: str | None, after: str | None):
     body = {"op": "set_code", "target": {"item_id": item}, "before": {"code": before},
             "after": {"code": after}}  # fmt: skip
@@ -129,7 +138,7 @@ def _at(day: int) -> datetime:
     return datetime(2026, 10, day, 9, 0, tzinfo=UTC)
 
 
-async def test_the_migration_gives_every_item_its_own_code(client):
+async def test_the_migration_gives_every_item_its_own_code(client, before_the_rule):
     """Each group sharing a code keeps it on its earliest start; the others take the next free
     numbers in date order, as do items with none; unique codes stay; audited; twice is once."""
     mig = migration()
@@ -283,7 +292,7 @@ async def _renumber():
     return made
 
 
-async def test_an_older_approved_versions_row_is_left_exactly_as_approved(client):
+async def test_an_older_approved_versions_row_is_left_exactly_as_approved(client, before_the_rule):
     """The item of the latest version is renumbered; its row on the older approved version
     keeps its title and every other column."""
     # protects=Current plan only (the owner, Nov 23): approved rows are never rewritten;
@@ -319,7 +328,7 @@ async def test_the_first_pass_leaves_an_older_versions_row_leading_with_another_
     assert (await _rows(ids))["lead1"]["title"] == "F-99 Quiet hours"
 
 
-async def test_a_second_run_changes_nothing_with_older_rows_present(client):
+async def test_a_second_run_changes_nothing_with_older_rows_present(client, before_the_rule):
     """The older row keeps the old shared code after the first run; the second run does not
     read it as a new duplicate: no changes, no new audit rows, every row as it was."""
     ctx = await make_people()
@@ -347,7 +356,7 @@ async def test_a_second_run_changes_nothing_with_older_rows_present(client):
     assert await _rows(ids) == stored
 
 
-async def test_the_latest_version_and_a_working_draft_are_renumbered(client):
+async def test_the_latest_version_and_a_working_draft_are_renumbered(client, before_the_rule):
     """The latest version's and the working draft's rows of the item take the new code; the
     keeper (earliest start) stays."""
     ctx = await make_people()

@@ -454,8 +454,8 @@ async def test_the_change_set_list_pages(client, owner, runtime):  # noqa: F811
 
 async def test_an_added_item_never_takes_a_code_another_item_has(client, owner, runtime):  # noqa: F811
     """protects=(every-field) Edit plan's Add an item never gives a code to a second item: a
-    title leading with a live item's code, or a picked Ground Truth feature whose code is a
-    live item's title code, is refused when added (422) in set_code's words; one taken after it
+    title leading with a live item's code is refused when added (422) in set_code's words (a
+    picked Ground Truth feature whose code is taken is numbered at write); one taken after it
     was added is refused at propose (409) and no version is made; fails_when=the proposed
     version holds two items reading F-31; no_claim=Simple's own add (its own test)."""
     tenant_id, auth = owner
@@ -476,10 +476,12 @@ async def test_an_added_item_never_takes_a_code_another_item_has(client, owner, 
     )
     assert r.status_code == 422, r.text
     assert r.json()["detail"] == taken
+    # codes-at-write (Nov 23): an item taking F-31 from its feature is never refused; it is
+    # numbered when written (tests/test_codes_at_write.py).
     r = await patch(client, auth, out, [{"op": "add", "title": "Launch flow", "horizon": "next",
                                          "feature_id": fid}])  # fmt: skip
-    assert r.status_code == 422, r.text
-    assert r.json()["detail"] == taken
+    assert r.status_code == 200, r.text
+    out = r.json()
     two = [
         {"op": "add", "title": t, "horizon": "next"}
         for t in ("F-33 Night digest", "F-33 Launch flow")
@@ -1011,13 +1013,12 @@ async def test_company_carry_keeps_a_code_the_version_before_held(client, owner,
     assert titles["payment-step"] == "F-31 Payment step", titles
 
 
-async def test_slices_of_one_feature_share_its_code(client, owner, runtime):  # noqa: F811
-    """protects=(every-field) one code, one item counts the items of one feature as one: an item
-    linked to F-31 and an item of no feature whose PRD section is F-31's (slices or parts of
-    F-31) both show F-31, on a write, an Edit plan add and a propose; a run's items of F-31
-    share it too; an item whose title alone claims F-31 is still refused on each;
-    fails_when=two slices of F-31 are refused as a clash (409 or 422), or the title claim is
-    stored."""
+async def test_slices_of_one_feature_get_their_own_codes(client, owner, runtime):  # noqa: F811
+    """protects=codes-at-write (Nov 23): slices of one feature are never refused and never
+    share its code: the first (linked to F-31) keeps it, a later one (linked, or of no feature
+    with F-31's PRD section) gets the next free number as it is written, on a write, an Edit
+    plan add and a propose; an item whose title alone claims F-31 is still refused on each;
+    fails_when=a slice is refused (409 or 422), two read F-31, or the title claim is stored."""
     from oracle.docs.models import Document, DocumentVersion
     from oracle.roadmap import items as items_mod
     from oracle.roadmap.codes import CodeTaken
@@ -1049,7 +1050,8 @@ async def test_slices_of_one_feature_share_its_code(client, owner, runtime):  # 
     r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
     assert r.status_code == 200, r.text
     titles = await _version_titles(tenant_id, 2)
-    assert "Launch flow end" in titles.values(), titles
+    assert titles == {"shipping-step": "Shipping step", "payment-step": "F-32 Payment step",
+                      "F-31": "F-33 Launch flow end"}, titles  # fmt: skip
     # A run's items, built on version 1 (a run's file names a feature, not a section the PRD
     # lacks): Payment step and a new item, Launch flow end, both of F-31; a new item whose
     # title alone claims F-31 is refused.

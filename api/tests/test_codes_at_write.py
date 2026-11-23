@@ -39,6 +39,7 @@ from oracle.roadmap import codes
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
+from oracle.trash.filter import INCLUDE_TRASHED
 from tests.test_simple_changes_api import make_people
 from tests.test_simple_roadmap_api import NOW, Seed
 
@@ -72,7 +73,8 @@ def item(w, key: str, n: int = 0, **kw) -> RoadmapItem:
 async def titles(w) -> dict[str, str]:
     async with tenant_session(w.t) as s:
         rows = await s.execute(select(RoadmapItem.item_key, RoadmapItem.title,
-                                      RoadmapItem.roadmap_version_id))  # fmt: skip
+                                      RoadmapItem.roadmap_version_id)
+                                .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
         return {f"{k}@{v}" if v != w.rv else k: t for k, t, v in rows}
 
 
@@ -162,7 +164,9 @@ async def test_a_copy_keeps_its_code_and_older_versions_stay():
         await s.commit()
     async with tenant_session(w.t) as s:
         v2 = await Seed(s).version(await s.get(type(w.rm_doc), w.rm), 2)
-        olds = list(await s.scalars(select(RoadmapItem).where(RoadmapItem.roadmap_version_id == w.rv)))
+        olds = list(
+            await s.scalars(select(RoadmapItem).where(RoadmapItem.roadmap_version_id == w.rv))
+        )
         for o in olds:
             fields = {c.key: getattr(o, c.key) for c in RoadmapItem.__mapper__.column_attrs
                       if c.key not in ("id", "created_at", "updated_at")}  # fmt: skip
@@ -171,7 +175,7 @@ async def test_a_copy_keeps_its_code_and_older_versions_stay():
         await s.commit()
     got = await titles(w)
     assert sorted(got.values()) == ["Alert routing a"] * 2 + ["Alert routing b"] * 2, got
-    assert await numberings(w) == []
+    assert [d["item_key"] for d in await numberings(w)] == ["b"]  # its first write only
 
 
 async def test_trash_and_older_versions_are_not_the_plan():

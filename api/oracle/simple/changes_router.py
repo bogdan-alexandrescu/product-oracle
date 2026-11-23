@@ -42,6 +42,7 @@ from oracle.docs import service as docs
 from oracle.docs.schemas import DocumentSummary
 from oracle.errors import exception_text
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
+from oracle.roadmap import codes
 from oracle.routing import APIRouter
 from oracle.simple import changes, drafts, one_pager
 from oracle.simple.router import _people
@@ -152,6 +153,8 @@ async def create_simple_change(
     async with _one_commit(db):
         out = await _run(db, changes.create(db, principal, body))
         await _in_meeting(db, principal, out, body.session_id)
+    # codes-at-write: the codes this write gave, so the page shows them at once.
+    out.change.numbered = db.sync_session.info.pop(codes.NUMBERED, {})
     await _with_visual(db, principal, out.change)
     return out
 

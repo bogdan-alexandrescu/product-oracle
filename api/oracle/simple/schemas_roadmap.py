@@ -998,6 +998,9 @@ class SimpleChangeOut(BaseModel):
     # null: not made in a meeting.
     from_meeting: SimpleChangeMeeting | None = None
     off_agenda: bool | None = None
+    # codes-at-write (Nov 23): the items this write gave their own number at once, because
+    # another item of the plan showed the code they take from their feature (item id -> code).
+    numbered: dict[str, str] = {}
 
 
 class SimpleItemFlags(BaseModel):
