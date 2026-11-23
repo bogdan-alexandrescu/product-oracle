@@ -140,13 +140,13 @@ test.describe('Roadmap findings, Nov 10', () => {
     await expect(row(page, 'Partner care track')).toContainText('5 features');
     await expect(row(page, 'Usage alerts track')).toContainText('0 features');
 
-    // A viewer reads the published Roadmap: the five are still on Usage alerts track there.
+    // de-inst (the owner, Nov 23): the owner's moves are live, so a viewer reads the same counts.
     await page.getByRole('button', { name: 'Close Tracks' }).click();
     await signOut(page);
     await roadmap(page, 'viewer@example.com');
     await page.getByTestId('tracks-open').click();
-    await expect(row(page, 'Usage alerts track')).toContainText('5 features');
-    await expect(row(page, 'Partner care track')).toContainText('0 features');
+    await expect(row(page, 'Usage alerts track')).toContainText('0 features');
+    await expect(row(page, 'Partner care track')).toContainText('5 features');
   });
 
   test("Move to Trash asks about what it moves, the draft's features and the published ones", async ({
