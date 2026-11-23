@@ -378,6 +378,9 @@ export function seedRoadmap(
       scenario === TRACK_ALERTS_STALE_SCENARIO || scenario === TRACK_ALERTS_STALE_REMOVED_SCENARIO;
     if (opts.plan && !withItems && !withDiff && !planStale && !alertsScenario) track.plan = true;
     db.tracks.push(track);
+    // The owner's report (Nov 23): the Plan's Weekly alert digest is flagged (its reasons say it
+    // may be out of date) with no stale alert on its track: its panel settles it all the same.
+    (db.freshness ??= {})['alert-digest'] = 'potentially_stale';
     const rv = roadmap && latest(ctx, roadmap.id);
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
     // The stale-marks walk: an item depending on one this version has no row for (named, never its key).
@@ -3278,7 +3281,13 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas['PlanO
       feature: s.feature ? entityRef('feature', s.feature) : null,
       requirements: (s.requirements ?? []).map((r) => entityRef('requirement', r)),
       state: origin === 'draft' ? 'proposed' : (s.state ?? 'planned'),
-      reasons: origin === 'draft' ? [] : (s.reasons ?? []),
+      // As the API: a reconciled item is not stale (staleness.is_stale).
+      reasons:
+        origin === 'draft'
+          ? []
+          : (s.reasons ?? []).filter(
+              (r) => r.kind !== 'stale' || db.freshness?.[s.key] !== 'reconciled',
+            ),
       drift: ctx.drift?.(s.key, origin) ?? [],
       decisions: ctx.decided?.(s.key) ?? [],
       engineering: {

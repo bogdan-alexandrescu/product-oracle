@@ -8,6 +8,7 @@ import { api, unwrap, type DocumentSummary, type Schemas } from '@/lib/api/clien
 import { DOC_STATUS_LABEL } from '@/lib/format';
 import { docLabel } from '@/lib/labels';
 import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
 import { HORIZON_LABEL, HORIZONS, type Horizon } from './_lib';
 
@@ -526,6 +527,10 @@ function Proposal({
           params: { path: { doc: set.roadmap, n } },
         }),
       );
+      // The owner, Nov 23: approving settles the stale items the version keeps, so the Inbox's
+      // track rows and the rail's counts read again at once.
+      invalidateWaiting();
+      waitingChanged();
       onApproved(n);
     } catch (e) {
       setError(errorMessage(e));

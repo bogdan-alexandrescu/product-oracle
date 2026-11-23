@@ -1232,6 +1232,11 @@ async def approve_version(
         from oracle.simple import approved_roadmap
 
         await approved_roadmap.apply(session, principal, document, version)
+        if not already or previous_approver != who:
+            # The owner, Nov 23: approving a version settles every stale item it keeps.
+            from oracle.roadmap import staleness
+
+            await staleness.settle_on_approval(session, principal, version)
         # H6: approving a roadmap version plans a launch per item in Now, owned by the
         # approver (none for items that already have one).
         from oracle.launches import service as launches_service
