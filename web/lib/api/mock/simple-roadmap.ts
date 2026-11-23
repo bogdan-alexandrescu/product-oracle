@@ -44,7 +44,7 @@ import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visua
 import { reply } from './typed';
 
 import type { OnePagerDb } from './simple-one-pager';
-export { takenFrom } from './item-code';
+
 import {
   PLAN_PRD_SLUG,
   planGoalNames,
@@ -57,7 +57,7 @@ import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { featureKeyOf, startEffort } from './simple-priorities';
 import { byPrdRank, prdRanker } from './prd-rank';
 
-export { codedTitle, prdCode, shownCode, shownName } from './item-code';
+export { codedTitle, prdCode, shownCode, shownName, takenFrom } from './item-code';
 
 type Item = Schemas['SimpleRoadmapItem'];
 type Suggestion = Schemas['DateSuggestionOut'];
