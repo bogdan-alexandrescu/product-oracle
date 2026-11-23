@@ -4,9 +4,11 @@ import { expect, test, type Page } from './test';
 /**
  * Card simple-speed-parallel-reads: protects = Simple's Roadmap starts the reads of its parts
  * (the tracks, what was removed, the draft PRDs) while its own read is still on its way, each
- * read once, and the app reads what the role may do while GET /v1/me is still on its way;
+ * read once, and on a cold load the app reads what the role may do, the roadmap and its parts
+ * while GET /v1/me is still on its way, each once;
  * fails_when = a part's read starts only after the roadmap has answered, a warmed read is made
- * a second time by its part, or the capabilities wait for GET /v1/me; no_claim = how fast the
+ * a second time, or the capabilities or the roadmap wait for GET /v1/me; no_claim = the rail's
+ * counts (they start once GET /v1/me has answered), how fast the
  * API answers (the API's own statement tests), nor the plans of a first visit (their PRDs are
  * known only from the roadmap's answer).
  */
@@ -17,6 +19,8 @@ const PARTS = [
   'GET /v1/simple/removed',
   'GET /v1/simple/roadmap/draft-prds',
 ];
+// A cold load of the Roadmap: what is read beside GET /v1/me, before it has answered.
+const COLD = [ROADMAP, ...PARTS];
 const SLOW_MS = 6000;
 
 /** The calls the in-browser mock API has served since this page loaded, in order. */
@@ -27,8 +31,8 @@ const calls = (page: Page) =>
 const slow = (page: Page, path: string) =>
   page.evaluate(
     ([p, ms]) => {
-      localStorage.setItem('po-mock-slow', p!);
-      localStorage.setItem('po-mock-slow-ms', ms!);
+      localStorage.setItem('po-mock-slow', p);
+      localStorage.setItem('po-mock-slow-ms', ms);
     },
     [path, String(SLOW_MS)],
   );
@@ -74,11 +78,25 @@ test('what the role may do is read while GET /v1/me is still on its way, once', 
       timeout: SLOW_MS - 2000,
     })
     .toBe(1);
+  // So are the roadmap's own read and its parts' (a cold load).
+  await expect
+    .poll(
+      async () => {
+        const made = await calls(page);
+        return COLD.filter((c) => !made.includes(c));
+      },
+      { timeout: SLOW_MS - 2000 },
+    )
+    .toEqual([]);
   // GET /v1/me has not answered yet: the rail still shows its frame.
   await expect(page.getByTestId('simple-nav-skeleton')).toBeVisible();
   await expect(page.getByTestId('simple-nav-roadmap').first()).toBeVisible({
     timeout: SLOW_MS + 15_000,
   });
   await expect(page.getByTestId('filters')).toBeVisible({ timeout: 15_000 });
-  expect(count(await calls(page), 'GET /v1/me/capabilities')).toBe(1);
+  await page.waitForTimeout(2500);
+  // The page took the reads already made: none is made a second time.
+  const seen = await calls(page);
+  for (const call of ['GET /v1/me/capabilities', ...COLD])
+    expect([call, count(seen, call)]).toEqual([call, 1]);
 });
