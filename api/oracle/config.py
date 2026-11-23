@@ -24,13 +24,17 @@ class Settings(BaseSettings):
     # Origins allowed to call the API with credentials (the web app in dev).
     cors_origins: list[str] = ["http://localhost:3000"]
     sql_echo: bool = False
-    # simple-speed: the API's connection pool. A page load is a burst of some 28 requests:
-    # with SQLAlchemy's default (5 kept, 10 more opened and closed again per burst) ten
-    # connections were made anew on every page load, each with nothing prepared. The ceiling
-    # per process is unchanged (15); they are now kept. Max instances x (pool size + overflow)
-    # must stay under the database's max_connections.
-    db_pool_size: int = 15
-    db_max_overflow: int = 0
+    # simple-speed: the API's connection pool, per process. Kept connections stay open until
+    # the process exits, so they are sized from the database's limit, not from a page load:
+    # about 50 connections, 3 reserved for superusers, shared with the start-up migrations (1)
+    # and the scheduler (1 or more). Up to 3 instances, and 6 while a release runs the old and
+    # new revisions side by side: 6 x (5 kept + 2 overflow) + 2 = 44 <= 47. Steady: 3 x 5 = 15
+    # held, as with SQLAlchemy's default. A deployment with more connections raises them
+    # (ORACLE_DB_POOL_SIZE, ORACLE_DB_MAX_OVERFLOW) by the same sum.
+    db_pool_size: int = 5
+    db_max_overflow: int = 2
+    # A kept connection older than this is closed and made anew at its next checkout.
+    db_pool_recycle_seconds: int = 300
     # A connection handed out again within this many seconds of its last use is not pinged
     # first (the ping is three round trips: BEGIN, an empty statement, ROLLBACK); one idle
     # for longer is, and is replaced when the ping fails. 0: ping on every checkout, as

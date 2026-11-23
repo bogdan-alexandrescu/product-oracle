@@ -60,6 +60,7 @@ def get_engine() -> AsyncEngine:
             pool_pre_ping=idle <= 0,
             pool_size=settings.db_pool_size,
             max_overflow=settings.db_max_overflow,
+            pool_recycle=settings.db_pool_recycle_seconds,
         )
         if idle > 0:
             ping_when_idle(_engine, idle)
