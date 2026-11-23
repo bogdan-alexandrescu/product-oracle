@@ -728,7 +728,9 @@ async def load(
             depends_on=[str(d) for d in e.depends_on],
             status=e.status,
             draft=e.row.draft,
-            owner_id=str(e.track.owner_id) if e.track and e.track.owner_id else None,
+            # stale-flags: the owner the panel shows and set_owner writes (its own, else its
+            # track's), so picking one there clears "Draft with no owner to confirm it".
+            owner_id=str(e.owner_id) if e.owner_id else None,
             blockers=e.blockers,
             milestone=(e.milestone.name or "Milestone", e.milestone.date)
             if e.milestone is not None and e.milestone.date is not None

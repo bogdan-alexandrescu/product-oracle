@@ -2207,6 +2207,7 @@ function flagsOf(
   r: { start: Dated; end: Dated },
   all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>,
   w: [string, string],
+  owned: boolean,
 ): Flag[] {
   const out: Flag[] = [];
   const flag = (
@@ -2297,7 +2298,8 @@ function flagsOf(
       );
     }
   }
-  if (s.draft && !s.track && !closed(s))
+  // stale-flags (service.check's Node.owner_id): the owner its panel shows and set_owner writes.
+  if (s.draft && !owned && !closed(s))
     flag('draft_without_owner', 'Draft with no owner to confirm it', []);
   return out;
 }
@@ -3126,7 +3128,7 @@ export function roadmapOut(
       needed_by: seeds
         .filter((x) => x.key !== s.key && (x.depends ?? []).some((k) => depOf(k) === s.key))
         .map((x) => db.ids[x.key]),
-      flags: flagsOf(s, r, all, w[s.horizon]),
+      flags: flagsOf(s, r, all, w[s.horizon], !!itemOwnerId(db, s.key)),
       owner: ownerOf(db, s, me?.names),
       // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
       own_owner_id: namedOn(db, s.key, 'owner_id') ?? null,
