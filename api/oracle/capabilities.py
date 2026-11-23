@@ -176,6 +176,9 @@ PER_ITEM: dict[str, Role | None] = {
     "accept_simple_change": "owner",
     "accept_track_alert_date": "owner",
     "add_discussion_participants": "commenter",
+    # Comments on a feature (#1553): a person adds one, edits their own, deletes their own
+    # (an owner any).
+    "add_feature_comment": "viewer",
     "add_scope_requirement": "approver",
     "answer_agent_question": "owner",
     "answer_question": "owner",
@@ -228,6 +231,7 @@ PER_ITEM: dict[str, Role | None] = {
     "delete_bucket_goal": "approver",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
+    "delete_feature_comment": "owner",
     "delete_goal_milestone": "owner",
     "delete_scope_item": "approver",
     # edit-decisions: its decider, whoever made it or an owner (decision_sheet.may_change).
@@ -240,6 +244,7 @@ PER_ITEM: dict[str, Role | None] = {
     "draft_request_replies": "approver",
     "drop_old_milestone": "owner",
     "edit_document_section": "approver",
+    "edit_feature_comment": None,
     # agenda-sheet: an owner or the decider edits, an approver proposes (meetings.edit_agenda).
     "edit_simple_meeting_agenda": "owner",
     "edit_simple_meeting_minutes": "owner",

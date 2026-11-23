@@ -28,6 +28,7 @@ from oracle.branding import router as branding_router
 from oracle.capabilities import stamp_openapi
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
+from oracle.comments.router import router as comments_router
 from oracle.company_time import STATE_HEADER, ZoneStateMiddleware
 from oracle.config import get_settings
 from oracle.connections.browse_github import router as github_browse_router
@@ -361,6 +362,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_removed_router)
     app.include_router(simple_decision_sheet_router)
     app.include_router(simple_changes_router)
+    app.include_router(comments_router)
     app.include_router(simple_additions_router)
     app.include_router(simple_chat_router)
     app.include_router(simple_meetings_router)

@@ -1,5 +1,6 @@
 'use client';
 
+import { CommentCount } from '@/components/simple/FeatureComments';
 import { Link, useSearchParams } from '@/lib/nav';
 import {
   useCallback,
@@ -1066,6 +1067,7 @@ function DoneItems({
               >
                 {itemName(i)}
               </button>
+              <CommentCount item={i} />
               {i.goal && <span className="truncate text-sm text-text2">{i.goal.title}</span>}
             </li>
           ))}
