@@ -591,9 +591,9 @@ function Row({ it, c, sel, lens, target, pressed }: { it: ReItem; c: Ctx; sel: b
             {pressed && (
               <span data-scroll-here="" style={{ position: 'absolute', left: 40, top: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d="M8 1v14M1 8h14" stroke="var(--text)" strokeWidth="1.6" /></svg>
-                <DateTip text={`Moving ${it.code} ${it.name}`} left="8px" top={-38} />
               </span>
             )}
+            {pressed && <DateTip text={`Moving ${it.code} ${it.name}`} left="calc(100% + 12px)" top={2} side />}
             {c.dec === 're3' && c.st === 'mid' && it.id === 'a2' && (re3 === 'a' || re3 === 'c' || re3 === 'b' || re3 === 'd') && (
               <DateTip text={`Moved · was ${range(it.was![0], it.was![1])}, now ${range(it.start, it.end)}`} left="calc(100% + 12px)" top={2} side />
             )}
