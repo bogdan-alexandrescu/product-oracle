@@ -102,3 +102,19 @@ test("The check's Confirm it gives the proposed feature the next F-code", async 
   await expect(row(page)).toHaveCount(0);
   await expect(count(page).locator('span').last()).toHaveText(String(before - 1));
 });
+
+test('A proposed feature given its own code is still flagged and confirmed from its panel', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/simple/goals');
+  await chip(page).getByRole('button').first().click();
+  await page.getByRole('button', { name: 'Change the code' }).click();
+  await page.getByLabel('Code').fill('F-90');
+  await page.getByTestId('card-code-edit').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByTestId('card-code')).toContainText('F-90');
+  await expect(page.getByTestId('card-code')).toContainText('Not in the Ground Truth');
+  await page.getByTestId('card-code-confirm').click();
+  await expect(chip(page)).not.toContainText('Not in the Ground Truth');
+  await expect(page.getByTestId('card-code-confirm')).toHaveCount(0);
+});
