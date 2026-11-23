@@ -111,7 +111,7 @@ export function RoleAccess() {
 /** MOCK-HOOK: the handful of tools most people use (of about 800, one per API operation). */
 function MostUsed() {
   return (
-    <InfoTip label="the tools you will use most" align="start">
+    <InfoTip label="the tools you will use most" align="start" trigger={<Chip kind="line">Most used tools</Chip>}>
       About 800 tools load, one per action in Oracle. The ones most people use: read the roadmap,
       change an item, add or edit a goal, add or edit a milestone, comment.
     </InfoTip>
@@ -270,7 +270,7 @@ export function ConnectGuide({ bare = false }: { bare?: boolean }) {
         </ol>
         {step === 1 && (
           <div className="flex flex-col gap-3">
-            <SegmentedControl label="Your tool" items={TABS} value={tab} onChange={setTab} />
+            <SegmentedControl label="Your tool" items={TABS} value={tab} onChange={setTab} fill />
             {access}
           </div>
         )}
@@ -318,7 +318,7 @@ export function ConnectGuide({ bare = false }: { bare?: boolean }) {
           <CheckStrip phase={m.phase} clients={clientsQ.data} />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <SegmentedControl label="Your tool" items={TABS} value={tab} onChange={setTab} />
+          <SegmentedControl label="Your tool" items={TABS} value={tab} onChange={setTab} fill />
           <ClientSteps tab={tab} copied={m.copied} />
         </div>
       </div>
@@ -348,7 +348,18 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
   const [pending, setPending] = useState<McpClient | null>(null); // MOCK-HOOK: b, undo window
   const [inline, setInline] = useState<string | null>(null); // MOCK-HOOK: c, inline confirm
   const [error, setError] = useState<string | null>(null); // MOCK-HOOK
-  const rows = q.data?.filter((c) => tokenState(c) === 'active' || c.id === pending?.id); // MOCK-HOOK
+  const tq = useQuery('my-tokens', () => unwrap(api.GET('/v1/me/tokens'))); // MOCK-HOOK: b lists tokens in the same list
+  const asRows: McpClient[] = (m.mc3 === 'b' ? (tq.data ?? []) : []).map((t) => ({
+    id: t.id, // MOCK-HOOK
+    client_id: 'token', // MOCK-HOOK
+    client_name: t.name, // MOCK-HOOK
+    scopes: t.scopes ?? [], // MOCK-HOOK
+    authorized_at: t.created_at, // MOCK-HOOK
+    last_used_at: t.last_used_at ?? t.created_at, // MOCK-HOOK
+    expires_at: t.expires_at ?? t.created_at, // MOCK-HOOK
+    revoked_at: tokenState(t) === 'active' ? null : (t.revoked_at ?? t.created_at), // MOCK-HOOK
+  }));
+  const rows = q.data && [...q.data, ...asRows].filter((c) => tokenState(c) === 'active' || c.id === pending?.id); // MOCK-HOOK
   useEffect(() => {
     if (m.revoke && q.data?.[0] && m.mc3 === 'a') setConfirming(q.data[q.data.length - 1]); // MOCK-HOOK
     if (m.revoke && q.data?.[0] && m.mc3 === 'c') setInline(q.data[q.data.length - 1].id); // MOCK-HOOK
@@ -373,7 +384,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
       </Chip>
     </Link>
   );
-  const where = (c: McpClient) => MOCK_WHERE[c.client_id] ?? 'Another app'; // MOCK-HOOK
+  const where = (c: McpClient) => (c.client_id === 'token' ? 'A script' : (MOCK_WHERE[c.client_id] ?? 'Another app')); // MOCK-HOOK
 
   if (m.mc3 === 'c') {
     // MOCK-HOOK: c, a card per client, Revoke asks inline in the card.
@@ -416,18 +427,18 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
       cell: (c) => (
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-medium" title={c.client_name}>{c.client_name}</span>
-          {m.mc3 === 'b' && <span className="text-sm text-text2">MCP client</span>}
+          {m.mc3 === 'b' && <span className="text-sm text-text2">{c.client_id === 'token' ? 'Personal token' : 'MCP client'}</span>}
         </span>
       ),
     },
-    { key: 'where', header: 'Where it runs', width: '160px', hideOnPhone: true, cell: (c) => <span className="text-text2">{where(c)}</span> },
-    { key: 'scopes', header: 'Access', width: '128px', hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
-    { key: 'at', header: 'Connected', width: '112px', hideOnPhone: true, cell: (c) => when(c.authorized_at) },
+    { key: 'where', header: 'Where it runs', width: '140px', hideOnPhone: true, cell: (c) => <span className="text-text2">{where(c)}</span> },
+    { key: 'scopes', header: 'Access', width: '116px', hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
+    { key: 'at', header: 'Connected', width: '104px', hideOnPhone: true, cell: (c) => when(c.authorized_at) },
     { key: 'used', header: 'Last used', width: '124px', phoneLabel: 'Used ', cell: (c) => usedCell(c.last_used_at) },
     {
       key: 'action',
       header: <span className="sr-only">Actions</span>,
-      width: '150px',
+      width: '120px',
       align: 'right',
       phone: 'action',
       wrap: true,
@@ -454,7 +465,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
 
   return (
     <Panel
-      title="Connected clients"
+      title={m.mc3 === 'b' ? 'What acts as you' : 'Connected clients'} // MOCK-HOOK
       count={rows?.length}
       testId="mcp-clients"
       tools={
@@ -504,7 +515,7 @@ export function CompanyMcp() {
   const connected = MOCK_COMPANY.filter((r) => r.clients > 0); // MOCK-HOOK
   const stat = (
     <Chip kind="line">
-      <span className="tnum">{connected.length}</span>&nbsp;of&nbsp;<span className="tnum">{MOCK_COMPANY.length}</span>&nbsp;people connected
+      <span className="tnum">{`${connected.length} of ${MOCK_COMPANY.length} people connected`}</span>
     </Chip>
   );
   if (m.mc3 === 'b')

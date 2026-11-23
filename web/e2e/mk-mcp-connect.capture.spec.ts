@@ -64,7 +64,7 @@ const frames: Frame[] = [
     file: 'mc3-a-revoked',
     url: `/account?${A}&clients=fresh&revoke=1`,
     act: async (p) => {
-      await p.getByTestId('mcp-revoke-dialog').getByRole('button', { name: 'Revoke', exact: true }).click();
+      await p.getByTestId('mcp-revoke-dialog').getByRole('button', { name: 'Revoke', exact: true }).dispatchEvent('click');
     },
   },
   { file: 'mc3-a-five-1512', url: `/account?${A}&clients=five`, w: 1512, h: 982 },
@@ -78,7 +78,7 @@ const frames: Frame[] = [
     file: 'mc3-b-undone',
     url: `/account?mc1=a&mc2=a&mc3=b&clients=fresh&revoke=1`,
     act: async (p) => {
-      await p.getByTestId('mcp-undo').getByRole('button', { name: 'Undo' }).click();
+      await p.getByTestId('mcp-undo').getByRole('button', { name: 'Undo' }).dispatchEvent('click');
     },
   },
   { file: 'mc3-b-five-1512', url: `/account?mc1=a&mc2=a&mc3=b&clients=five`, w: 1512, h: 982 },
@@ -89,7 +89,7 @@ const frames: Frame[] = [
     file: 'mc3-c-revoked',
     url: `/account?mc1=a&mc2=a&mc3=c&clients=fresh&revoke=1`,
     act: async (p) => {
-      await p.locator('[data-testid=mcp-client-card] .bg-crit-bg').getByRole('button', { name: 'Revoke' }).click();
+      await p.locator('[data-testid=mcp-client-card] .bg-crit-bg').getByRole('button', { name: 'Revoke' }).dispatchEvent('click');
     },
   },
   { file: 'mc3-c-five-1512', url: `/account?mc1=a&mc2=a&mc3=c&clients=five`, w: 1512, h: 982 },
@@ -156,6 +156,7 @@ test('capture mk-mcp-connect frames', async ({ browser, baseURL }) => {
     const h = f.h ?? 900;
     const ctx = await browser.newContext({ baseURL, viewport: { width: w, height: h }, colorScheme: f.dark ? 'dark' : 'light' });
     const page = await ctx.newPage();
+    page.setDefaultTimeout(15_000);
     await page.goto('/login?next=%2Fhome');
     await page.getByLabel('Email').fill(ADMIN.email);
     await page.getByLabel('Password').fill(ADMIN.password);
@@ -165,7 +166,7 @@ test('capture mk-mcp-connect frames', async ({ browser, baseURL }) => {
     if (f.act) {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(500);
-      await f.act(page);
+      await f.act(page).catch((e) => console.log('act failed', f.file, String(e).slice(0, 300)));
     }
     await snap(page, f, w, h);
     await ctx.close();

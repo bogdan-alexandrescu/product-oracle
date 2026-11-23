@@ -340,7 +340,11 @@ function UserMenu({
     () => typeof location !== 'undefined' && new URLSearchParams(location.search).get('menu') === '1', // MOCK-HOOK
   );
   const mcp = useMcpMock(); // MOCK-HOOK
-  const [mcpDialog, setMcpDialog] = useState(mcp.open); // MOCK-HOOK
+  const [mcpDialog, setMcpDialog] = useState(false); // MOCK-HOOK
+  useEffect(() => {
+    if (mcp.open && button.current?.offsetParent) setMcpDialog(true); // MOCK-HOOK: only the visible menu
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [at, setAt] = useState({ bottom: 12, left: 100 });
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -491,7 +495,6 @@ function UserMenu({
           Connect an AI tool
         </Link>
       )}
-      {mcpDialog && <ConnectDialog onClose={() => setMcpDialog(false)} />} {/* MOCK-HOOK */}
       {MOCK_MODE && (
         <button
           type="button"
@@ -552,6 +555,7 @@ function UserMenu({
         )}
       </button>
       {open && panel}
+      {mcpDialog && <ConnectDialog onClose={() => setMcpDialog(false)} />} {/* MOCK-HOOK */}
     </div>
   );
 }
