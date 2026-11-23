@@ -34,8 +34,8 @@ async function openInbox(page: Page) {
 }
 
 // protects = approving a roadmap version that keeps a flagged item settles it: its stale reason
-// leaves its Plan panel, and its stale alert the Inbox's track rows and count, with no reload;
-// fails_when = the mock's approve leaves the item flagged, or the Inbox keeps its old rows until
+// leaves its Plan panel, and its stale alert the rail's count and the Inbox's track rows, with no reload;
+// fails_when = the mock's approve leaves the item flagged, or the rail keeps its old count until
 // a reload; no_claim = the API's rule (api/tests/test_stale_settled_on_approval.py).
 test('approving a version that keeps a flagged item settles it on the Plan and in the Inbox', async ({
   page,
@@ -53,6 +53,8 @@ test('approving a version that keeps a flagged item settles it on the Plan and i
   await expect(page).toHaveURL(/\/plan$/);
   await staleRow(page).getByTestId('plan-title').click();
   await expect(staleReason(page)).toHaveCount(1);
+  const badge = rail(page).getByTestId('nav-inbox-badge');
+  const waiting = Number(await badge.innerText());
 
   // A change that keeps the Weekly alert digest as it is: Usage dashboard moves to Next.
   await page.getByTestId('plan-edit').click();
@@ -64,6 +66,8 @@ test('approving a version that keeps a flagged item settles it on the Plan and i
   await changes(page).getByRole('button', { name: 'Propose changes' }).click();
   await changes(page).getByRole('button', { name: 'Approve version 2' }).click();
   await expect(page.getByTestId('plan-live')).toHaveText('Version 2 is the live plan.');
+  // The rail's count follows at once, on the Plan.
+  await expect(badge).toHaveText(String(waiting - 1));
 
   await staleRow(page).getByTestId('plan-title').click();
   await expect(panel(page)).toBeVisible();
