@@ -60,20 +60,24 @@ async function onComment(
   out: (c: FeatureCommentRow) => Schemas['FeatureCommentOut'],
   req: Request,
 ): Promise<Response | null> {
-  const one = '/v1/simple/roadmap/items/{item_id}/comments/{comment_id}' as const;
   if (req.method === 'PATCH') {
     if (c.author_id !== me.id) return json(403, { detail: 'Only its author can edit a comment' });
     const body = await bodyOf(req);
     if (body instanceof Response) return body;
     c.body = body;
     c.edited_at = new Date().toISOString();
-    return reply(one, 'patch', out(c));
+    return reply('/v1/simple/roadmap/items/{item_id}/comments/{comment_id}', 'patch', out(c));
   }
   if (req.method === 'DELETE') {
     if (c.author_id !== me.id && me.role !== 'owner')
       return json(403, { detail: 'Only its author or an owner can delete it' });
     rows.splice(rows.indexOf(c), 1);
-    return reply(one, 'delete', undefined, 204);
+    return reply(
+      '/v1/simple/roadmap/items/{item_id}/comments/{comment_id}',
+      'delete',
+      undefined,
+      204,
+    );
   }
   return null;
 }
@@ -106,8 +110,8 @@ export async function routeFeatureComments(
     const c = mine.find((x) => x.id === p[6]);
     return c ? onComment(rows, c, me, out, req) : json(404, { detail: 'Comment not found' });
   }
-  const path = '/v1/simple/roadmap/items/{item_id}/comments' as const;
-  if (req.method === 'GET') return reply(path, 'get', mine.map(out));
+  if (req.method === 'GET')
+    return reply('/v1/simple/roadmap/items/{item_id}/comments', 'get', mine.map(out));
   if (req.method !== 'POST') return null;
   const body = await bodyOf(req);
   if (body instanceof Response) return body;
@@ -120,5 +124,5 @@ export async function routeFeatureComments(
     edited_at: null,
   };
   rows.push(row);
-  return reply(path, 'post', out(row), 201);
+  return reply('/v1/simple/roadmap/items/{item_id}/comments', 'post', out(row), 201);
 }
