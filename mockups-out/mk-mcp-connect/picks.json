@@ -1,0 +1,335 @@
+{
+ "title": "Connect with MCP: find it, connect a client, see what is connected",
+ "subtitle": "Mock-ups in the real web app behind ?mc1, ?mc2, ?mc3 (invented company and people). Today nothing in the app names MCP, its address or how to connect: 0 steps are possible from the UI; a person needs someone to send them the command.",
+ "decisions": [
+  {
+   "code": "MC1",
+   "name": "Where it lives",
+   "question": "Where does connecting with MCP live, and how does a person find it in Simple and Detailed?",
+   "common": "One entry point named 'Connect an AI tool'; the same guide (MC2) and client list (MC3) wherever it lives; the address is read from the app's own configuration; an owner also sees who in the company has connected.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "My account section",
+     "recommended": true,
+     "what": "A 'Connect an AI tool' item in the account menu, in both modes, leads to a 'Connect an AI tool' panel at the top of My account, with Connected clients right under it and personal tokens linked. The owner's company view sits in Settings > Connections.",
+     "why": "My account is already the one page both modes share and already holds personal tokens and MCP clients, so a person finds MCP where their other credentials are, from the same menu in Simple and Detailed. It takes 6 steps from 'I heard Oracle has MCP' to a working connection; today there are none in the app.",
+     "plus": "One page for everyone, whatever their role. No new route. Revoke and tokens sit side by side.",
+     "cost": "My account grows longer: Password and tokens move below the fold. On a phone the guide fills the first screen.",
+     "frames": [
+      {
+       "file": "frames/mc1-a-rest.html",
+       "caption": "Detailed Home: the account menu has a new 'Connect an AI tool' item under My account. 6 steps to a working connection: menu, Connect an AI tool, Copy, run it, /mcp, Approve."
+      },
+      {
+       "file": "frames/mc1-a-open.html",
+       "caption": "The item opens My account with the guide at the top and an empty Connected clients list below it."
+      },
+      {
+       "file": "frames/mc1-a-simple-menu.html",
+       "caption": "Simple has the same item in the same account menu."
+      },
+      {
+       "file": "frames/mc1-a-company-1512.html",
+       "caption": "Hard case at 1512: the owner's 'MCP across the company' panel in Settings > Connections, showing 5 of 8 people connected, with clients and last used per person."
+      },
+      {
+       "file": "frames/mc1-a-open-390.html",
+       "caption": "Phone 390: the guide stacks, and the client tabs fill the width."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Dialog from the menu",
+     "recommended": false,
+     "what": "The same account-menu item opens a dialog over whatever page the person is on, in either mode. It holds the guide, their connected clients and, for an owner, the company view. There is no page.",
+     "plus": "The person never leaves the page they are on. It takes 6 steps, the same as a.",
+     "cost": "Everything shares one scrolling dialog: with five clients and the company view, names truncate and the company list falls below the fold. A dialog can't be linked to from the consent screen or shared as a page.",
+     "frames": [
+      {
+       "file": "frames/mc1-b-rest.html",
+       "caption": "Simple Home with the account menu open on 'Connect an AI tool'."
+      },
+      {
+       "file": "frames/mc1-b-open.html",
+       "caption": "The item opens the dialog over Simple Home: the address, the steps, and an empty list."
+      },
+      {
+       "file": "frames/mc1-b-open-1512.html",
+       "caption": "Hard case at 1512: an owner with five clients, where names truncate and the company view starts at the dialog's foot."
+      },
+      {
+       "file": "frames/mc1-b-open-390.html",
+       "caption": "Phone 390: the dialog takes the whole screen."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Settings > Connections",
+     "recommended": false,
+     "what": "The guide and the client list live on Settings > Connections, beside GitHub and Slack, with the owner's company view at the top. Nothing is added to the account menu.",
+     "plus": "It sits with the other connections, and no new menu item is needed.",
+     "cost": "Simple has no Settings, so a Simple person must first switch to Detailed: 7 steps, and nothing says where to look. Connections means accounts Oracle reads, not tools that act as you.",
+     "frames": [
+      {
+       "file": "frames/mc1-c-rest.html",
+       "caption": "Simple Home: the account menu has no MCP item. A person here has nothing that points to it."
+      },
+      {
+       "file": "frames/mc1-c-open.html",
+       "caption": "Detailed Settings > Connections for an owner: the guide, Connected clients, the company view, and then GitHub and Slack."
+      },
+      {
+       "file": "frames/mc1-c-viewer-1512.html",
+       "caption": "Hard case at 1512: a viewer sees fewer Settings tabs and the guide reads 'Read only', but there is no company view."
+      },
+      {
+       "file": "frames/mc1-c-open-390.html",
+       "caption": "Phone 390: the guide sits under the Settings tabs."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "MC2",
+   "name": "The connect guide",
+   "question": "How does the guide take a person from the address to a working connection?",
+   "common": "The address with Copy; Claude Code first, with the exact command as a copy chip, then /mcp, then Approve; Claude app and 'Other client'; what the person's tools can do, read from their role, as a status with an (i) tip; the handful of most-used tools behind a chip; a check that it worked; what to do when the sign-in timed out.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Tabs and live check",
+     "recommended": true,
+     "what": "Left: the address, 'Your tools can' with the role status, and a check strip that turns green with the new client's name and 'Used a moment ago'. Right: a tab per client (Claude Code, Claude app, Other client), each with numbered steps and copy chips. A timed-out sign-in shows in the check strip with /mcp to copy again.",
+     "why": "Everything a person needs is on one screen without clicking Next, Claude Code is first, and the green check answers 'did it work?' in the same place the person is looking. It takes 4 actions after the page opens: Copy, run, /mcp, Approve.",
+     "plus": "Each client gets its own exact steps. The status shows the person's role. The check needs no refresh.",
+     "cost": "It is the tallest of the three (about 330 px) and two columns wide. On a phone the steps come below the check.",
+     "frames": [
+      {
+       "file": "frames/mc2-a-rest.html",
+       "caption": "At rest for a person who never connected: the address, 'Changes apply at once' for an owner, waiting for the first client, and the Claude Code steps."
+      },
+      {
+       "file": "frames/mc2-a-copied.html",
+       "caption": "The command has been copied (Copied) and the check strip is waiting."
+      },
+      {
+       "file": "frames/mc2-a-done.html",
+       "caption": "Just after Approve: the check strip shows 'Claude Code on Avery's laptop, Connected, Used a moment ago', and the client is listed below."
+      },
+      {
+       "file": "frames/mc2-a-late.html",
+       "caption": "The sign-in timed out: the check strip says so and offers /mcp to copy and start again."
+      },
+      {
+       "file": "frames/mc2-a-app.html",
+       "caption": "The Claude app tab: add a custom connector and paste the address."
+      },
+      {
+       "file": "frames/mc2-a-commenter-1512.html",
+       "caption": "Hard case at 1512 for a commenter with five clients: 'Changes become proposals', and the newest client in the check strip."
+      },
+      {
+       "file": "frames/mc2-a-viewer-1512.html",
+       "caption": "A viewer on the Other client tab: 'Read only', the address, and 'sign in with OAuth'."
+      },
+      {
+       "file": "frames/mc2-a-copied-390.html",
+       "caption": "Phone 390: the command wraps inside its chip, with Copy beside it."
+      },
+      {
+       "file": "frames/mc2-a-done-dark.html",
+       "caption": "Dark: the same connected state."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Three-step wizard",
+     "recommended": false,
+     "what": "Three steps, one at a time: Pick your tool (with the role status), Add Oracle (the steps for that tool), then Approve and check (waiting, connected, or timed out). The steps show as chips with Back and Next.",
+     "plus": "It is the shortest box and guides a first-timer one thing at a time.",
+     "cost": "It takes 2 more clicks (Next twice), 6 actions in all. A person who comes back to copy the address must step through again, and the check is hidden until step 3.",
+     "frames": [
+      {
+       "file": "frames/mc2-b-rest.html",
+       "caption": "Step 1: pick your tool, with what your tools can do."
+      },
+      {
+       "file": "frames/mc2-b-copied.html",
+       "caption": "Step 2: the Claude Code command copied."
+      },
+      {
+       "file": "frames/mc2-b-wait.html",
+       "caption": "Step 3: waiting for the client."
+      },
+      {
+       "file": "frames/mc2-b-done.html",
+       "caption": "Step 3 after Approve: the client is connected and was used a moment ago."
+      },
+      {
+       "file": "frames/mc2-b-late.html",
+       "caption": "Step 3 when the sign-in timed out."
+      },
+      {
+       "file": "frames/mc2-b-commenter-1512.html",
+       "caption": "Hard case at 1512 for a commenter: step 1 reads 'Changes become proposals'."
+      },
+      {
+       "file": "frames/mc2-b-copied-390.html",
+       "caption": "Phone 390: step 2."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "One compact card",
+     "recommended": false,
+     "what": "One short card with the Claude Code command to copy, 'Then /mcp, choose oracle, Approve', and the role status. The Claude app and other clients sit behind an (i). The client list below is the only check.",
+     "plus": "It is the smallest (about 130 px) and adds almost nothing to My account.",
+     "cost": "The address is not shown on its own, so web and desktop users must open a tip and copy from text. There is no timed-out help and no 'it worked' signal next to the steps.",
+     "frames": [
+      {
+       "file": "frames/mc2-c-rest.html",
+       "caption": "At rest: the command, the next steps on one line, and the role status."
+      },
+      {
+       "file": "frames/mc2-c-copied.html",
+       "caption": "The command has been copied."
+      },
+      {
+       "file": "frames/mc2-c-done.html",
+       "caption": "After Approve: the only sign is the new row in Connected clients below."
+      },
+      {
+       "file": "frames/mc2-c-viewer-1512.html",
+       "caption": "Hard case at 1512 for a viewer with five clients: 'Read only'."
+      },
+      {
+       "file": "frames/mc2-c-rest-390.html",
+       "caption": "Phone 390."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "MC3",
+   "name": "Connected clients and access",
+   "question": "How does a person see and revoke what is connected, and how does an owner see that MCP works for everyone?",
+   "common": "Each connected client with its name, where it runs, Read or Read and write, connected on, and last used; Revoke; personal tokens beside it or linked; the owner's company view (who has connected, how many, last used); the consent screen links back to this list.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Table, confirm, linked tokens",
+     "recommended": true,
+     "what": "A 'Connected clients' table under the guide. Revoke asks once in the existing confirm dialog. A chip links to the person's personal tokens. The owner gets a company table (person, role, clients, last used) with 'n of m people connected'. The consent screen gains a 'Your connected clients' link.",
+     "why": "It reuses the confirm and table patterns My account already has, the revoke is real at once (the API has no undo), and the company table answers 'does MCP work for everyone?' person by person.",
+     "plus": "It is honest about what Revoke does. Long names truncate with the full name on hover. The company table sorts and scans well.",
+     "cost": "Revoke takes 2 clicks, and the table needs 1440+ to show every column.",
+     "frames": [
+      {
+       "file": "frames/mc3-a-rest.html",
+       "caption": "Just after the first connection: one client, Your computer, Read & write, used a moment ago."
+      },
+      {
+       "file": "frames/mc3-a-revoke.html",
+       "caption": "Revoke opens a one-step confirm."
+      },
+      {
+       "file": "frames/mc3-a-revoked.html",
+       "caption": "After Revoke: the list is empty, the check strip waits again, and the MCP clients count is 0."
+      },
+      {
+       "file": "frames/mc3-a-five-1512.html",
+       "caption": "Hard case at 1512: five clients, including a long shared-machine name."
+      },
+      {
+       "file": "frames/mc3-a-company-1512.html",
+       "caption": "The owner's company table: 5 of 8 people connected."
+      },
+      {
+       "file": "frames/mc3-a-consent.html",
+       "caption": "The consent screen with a 'Your connected clients' link under Approve and Deny."
+      },
+      {
+       "file": "frames/mc3-a-five-390.html",
+       "caption": "Phone 390: rows show the name, when it was last used, and Revoke."
+      },
+      {
+       "file": "frames/mc3-a-five-dark.html",
+       "caption": "Dark: five clients."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "One list, undo",
+     "recommended": false,
+     "what": "'What acts as you' lists MCP clients and personal tokens together, each marked. Revoke acts at once with Undo in the row. The owner sees one chip per person with their client count.",
+     "plus": "There is one place for everything that acts as you, and Revoke takes 1 click.",
+     "cost": "Undo needs the API to hold the revoke for a few seconds (a new API change). The token-creation form still lives in its own panel, so tokens show twice. Chips do not show last used.",
+     "frames": [
+      {
+       "file": "frames/mc3-b-rest.html",
+       "caption": "One list: the new client and a personal token."
+      },
+      {
+       "file": "frames/mc3-b-revoke.html",
+       "caption": "After Revoke: the row shows 'Revoked' and Undo."
+      },
+      {
+       "file": "frames/mc3-b-undone.html",
+       "caption": "After Undo: the client is back."
+      },
+      {
+       "file": "frames/mc3-b-five-1512.html",
+       "caption": "Hard case at 1512: five clients and a token."
+      },
+      {
+       "file": "frames/mc3-b-company-1512.html",
+       "caption": "The owner's view: a chip per person."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Cards, inline confirm",
+     "recommended": false,
+     "what": "A card per client (name, where, access, connected, last used). Revoke asks inside the card ('It stops working at once', Revoke or Keep). The owner's table is sorted by last used.",
+     "plus": "Cards show a long name in full width, and nothing pops up.",
+     "cost": "Five clients take 2 rows of cards at 1512, and it is taller than a table. It is a new pattern for My account.",
+     "frames": [
+      {
+       "file": "frames/mc3-c-rest.html",
+       "caption": "The new client as a card."
+      },
+      {
+       "file": "frames/mc3-c-revoke.html",
+       "caption": "Revoke asks inside the card."
+      },
+      {
+       "file": "frames/mc3-c-revoked.html",
+       "caption": "After Revoke: no clients."
+      },
+      {
+       "file": "frames/mc3-c-five-1512.html",
+       "caption": "Hard case at 1512: five cards."
+      },
+      {
+       "file": "frames/mc3-c-company-1512.html",
+       "caption": "The owner's table, sorted by last used."
+      },
+      {
+       "file": "frames/mc3-c-five-390.html",
+       "caption": "Phone 390: the cards stack."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

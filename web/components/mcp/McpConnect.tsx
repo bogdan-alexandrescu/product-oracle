@@ -389,10 +389,11 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
     }
   }
 
+  const nTokens = tokens ?? tq.data?.filter((t) => tokenState(t) === 'active').length ?? 0; // MOCK-HOOK
   const tokensLink = (
     <Link href="/account#tokens-panel" className="rounded-full hover:underline" data-testid="mcp-tokens-link">
       <Chip kind="line">
-        <span className="tnum">{tokens ?? 0}</span> personal {tokens === 1 ? 'token' : 'tokens'}
+        <span className="tnum">{nTokens}</span> personal {nTokens === 1 ? 'token' : 'tokens'}
       </Chip>
     </Link>
   );
