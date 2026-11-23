@@ -75,6 +75,7 @@ import {
   type GoalMilestone,
   type Milestone,
 } from './_lib';
+import { inOrder } from './_order';
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
 export type Row =
@@ -142,7 +143,8 @@ export function layout(
   const below: Item[] = [];
   for (const g of data.groups) {
     const items = g.item_ids.map((id) => byId.get(id)).filter((i): i is Item => !!i);
-    const live = items.filter((i) => !closedItem(i));
+    // timeline-order: within its group, the one feature order (rows with no place after the ordered).
+    const live = inOrder(items.filter((i) => !closedItem(i)));
     below.push(...items.filter((i) => closedItem(i)));
     if (!live.length) continue;
     // kr-in-goal-card: a goal's lane holds its key results' items too; its own metric first.

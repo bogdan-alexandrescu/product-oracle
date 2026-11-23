@@ -47,7 +47,7 @@ import {
   type PlanDb,
 } from './simple-plan';
 import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
-import { featureKeyOf, startEffort } from './simple-priorities';
+import { featureKeyOf, startEffort, withOrder } from './simple-priorities';
 import {
   basePlan as fitBasePlan,
   PLAN_TARGET as FIT_PLAN_TARGET,
@@ -4030,14 +4030,14 @@ function readRoadmap(
   q: URLSearchParams,
   me: Who,
 ): Schemas['SimpleRoadmapOut'] | null {
-  if (!readsOn) return roadmapOut(db, role, q, me);
+  if (!readsOn) return withOrder(db, roadmapOut(db, role, q, me));
   const stored = JSON.stringify(db);
   if (stored !== reads.stored) reads = { stored, out: new Map() };
   const key = new URLSearchParams(q);
   if (!key.get('group')) key.set('group', 'goal');
   key.sort();
   const at = `${role}|${me.id}|${companyToday()}|${key}`;
-  if (!reads.out.has(at)) reads.out.set(at, roadmapOut(db, role, q, me));
+  if (!reads.out.has(at)) reads.out.set(at, withOrder(db, roadmapOut(db, role, q, me)));
   return reads.out.get(at) ?? null;
 }
 

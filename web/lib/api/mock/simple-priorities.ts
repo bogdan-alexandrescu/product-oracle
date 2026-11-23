@@ -862,36 +862,17 @@ export function featureShortCodes(
   return new Map(created.map((k, n) => [k, shorts[n]]));
 }
 
-export function prioritiesOut(
-  db: SimpleDb,
-  ctx: PrioritiesCtx,
-  route: (c: Schemas['SimpleChangeOut']) => string[],
-  decides: (itemId: string) => boolean,
-  lineKey: string | null = null,
-): Schemas['SimplePrioritiesOut'] {
-  const today = companyToday();
-  const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
-  const trackKeys = new Map(Object.keys(TRACKS).map((k) => [stableUuid(`simple-track/${k}`), k]));
-  const { lines, same } = linesOf(read, (id) => {
-    const k = trackKeys.get(id);
-    return k ? trackPrdTitles(db, k) : [];
-  });
-  const line = pickLine(lineKey, lines, same);
-  const readItems = new Map(read.items.map((i) => [i.id, i]));
-  // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
-  // S7: a draft merged into another is closed too.
-  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
-  const live = read.items.filter((i) => i.status !== 'cut' && !cut.has(i.key));
-  // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
-  // is a row with no item, never reorderable (priorities.py).
-  const seen = new Set(read.items.map((i) => i.id));
-  const all = openItems(db);
+/**
+ * The live ranking (priorities.service.compute): Oracle's order by score and dependency, then people's pins, oldest
+ * first, never above a dependency. `yours` is the one feature order: Priorities' rows, the Goal buckets' and the
+ * roadmap read's `position` (timeline-order).
+ */
+function ranking(db: SimpleDb, all: Item[] = openItems(db)) {
   const ranked = rankedItems(db, all);
   const byId = new Map(ranked.map((i) => [i.id, i]));
-  const keyOf = (i: Item) => i.key;
   const score = new Map<string, number>();
   for (const i of ranked) {
-    const e = estimates(db, keyOf(i), i.id);
+    const e = estimates(db, i.key, i.id);
     // No effort (PM-owned work): no score (scoring.py's missing_inputs), ranked after the scored.
     // No goal value (a goal Oracle has none for): no score either.
     if (e.effort && e.value != null)
@@ -916,6 +897,55 @@ export function prioritiesOut(
     yours.splice(Math.min(pos - 1, yours.length), 0, i);
   }
   yours = dependencyOrder(yours, byId);
+  return { ranked, byId, score, sc, oracleRank, yours };
+}
+
+/**
+ * timeline-order (service.py `item_order`): each item of a roadmap read with its place in the one feature order (its
+ * rank) and its pin as override_priority's `before.override` wants it; an item that does not rank has neither.
+ */
+export function withOrder(
+  db: SimpleDb,
+  out: Schemas['SimpleRoadmapOut'] | null,
+): Schemas['SimpleRoadmapOut'] | null {
+  if (!out) return out;
+  const rank = new Map(ranking(db).yours.map((i, n) => [i.id, n + 1]));
+  const items = out.items.map((i) => ({
+    ...i,
+    position: rank.get(i.id) ?? null,
+    before_override: rank.has(i.id)
+      ? ((stored(db, i.id).override as Record<string, unknown> | undefined) ?? null)
+      : null,
+  }));
+  return { ...out, items };
+}
+
+export function prioritiesOut(
+  db: SimpleDb,
+  ctx: PrioritiesCtx,
+  route: (c: Schemas['SimpleChangeOut']) => string[],
+  decides: (itemId: string) => boolean,
+  lineKey: string | null = null,
+): Schemas['SimplePrioritiesOut'] {
+  const today = companyToday();
+  const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
+  const trackKeys = new Map(Object.keys(TRACKS).map((k) => [stableUuid(`simple-track/${k}`), k]));
+  const { lines, same } = linesOf(read, (id) => {
+    const k = trackKeys.get(id);
+    return k ? trackPrdTitles(db, k) : [];
+  });
+  const line = pickLine(lineKey, lines, same);
+  const readItems = new Map(read.items.map((i) => [i.id, i]));
+  // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
+  // S7: a draft merged into another is closed too.
+  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
+  const live = read.items.filter((i) => i.status !== 'cut' && !cut.has(i.key));
+  // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
+  // is a row with no item, never reorderable (priorities.py).
+  const seen = new Set(read.items.map((i) => i.id));
+  const all = openItems(db);
+  const { ranked, byId, score, sc, oracleRank, yours } = ranking(db, all);
+  const keyOf = (i: Item) => i.key;
   const can = ctx.role !== 'viewer';
   // qa-prio-twins (priorities._held): a feature's live draft on the roadmap the reader sees, by its link.
   // Only the company roadmap's while there is one.

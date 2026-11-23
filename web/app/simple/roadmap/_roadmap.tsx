@@ -2623,6 +2623,10 @@ export function SimpleRoadmap() {
   const allProposals = (proposals.data ?? []).filter(
     (c) => !(c.op === 'add_feature_ask' && !c.document_id),
   );
+  // timeline-order: the rows whose move in the feature order waits for a decider.
+  const orderPending = new Set(
+    allProposals.filter((c) => c.op === 'override_priority').map((c) => String(c.target.item_id)),
+  );
   const proposalsFailed =
     proposals.error && !proposals.data
       ? { error: proposals.error, retry: () => void proposals.reload() }
@@ -3480,6 +3484,7 @@ export function SimpleRoadmap() {
                       // above, an open item in a panel at the right (a sheet on a phone).
                       <ZoomTimeline
                         data={goalLaned ?? data}
+                        orderPending={orderPending}
                         all={allLinks}
                         onAll={showAllLinks}
                         phone={phone}
