@@ -136,7 +136,7 @@ async def row(w: World, key: str) -> RoadmapItem:
 
 async def added(w: World, title: str) -> RoadmapItem | None:
     async with tenant_session(w.ctx.tenant_id) as s:
-        r = await s.scalar(select(RoadmapItem).where(RoadmapItem.title == title))
+        r = await s.scalar(select(RoadmapItem).where(RoadmapItem.title.endswith(f" {title}")))
         return await drafts.effective_row(s, r) if r is not None else None
 
 

@@ -105,6 +105,7 @@ LOOKS_LIKE = 0.6
 MAX_MATCHES = 2
 MIN_SUGGESTIONS, MAX_SUGGESTIONS = 3, 5
 TEXT_MAX = 1000
+_F_CODE = re.compile(r"F-(\d+)[a-j]?")
 
 
 # --------------------------------------------------------------------------- helpers
@@ -387,6 +388,35 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
     return doc, target, after
 
 
+async def _give_code(db: AsyncSession, c: SimpleChange, read_: service.Read) -> None:
+    """roadmap-add: an item placed with no code in its title gets the next free one at once
+    ("F-63 Night digest"), as the read shows a code: its title's."""
+    title = c.after["title"]
+    if service.coded_title(title, None)[0] is None:
+        c.after = {**c.after, "title": changes._with_code(await _next_code(db, read_), title)}
+
+
+async def _next_code(db: AsyncSession, read_: service.Read) -> str:
+    """roadmap-add: the next free feature code: the highest F-number any item (any roadmap,
+    version, draft or Trash) or Ground Truth feature uses, plus one; never one in use."""
+    from oracle.roadmap import codes
+    from oracle.simple.priorities import _short_codes
+
+    entries = list(read_.by_id().values())
+    await service.item_codes(db, entries)
+    used = [codes.shown_code(e.row.title, changes._code_of(e)) for e in entries]
+    used += [
+        service.coded_title(t, None)[0]
+        for t in await db.scalars(
+            select(RoadmapItem.title).where(RoadmapItem.title.op("~")(r"^F-[0-9]+[a-j]?\s"))
+        )
+    ]
+    used += list((await _short_codes(db, names=False)).values())
+    used += list(await db.scalars(select(Entity.key).where(Entity.type == "feature")))
+    nums = [int(m.group(1)) for u in used if u and (m := _F_CODE.fullmatch(u.split(".")[0]))]
+    return f"F-{max(nums, default=0) + 1}"
+
+
 async def _live_track(db: AsyncSession, raw: Any) -> uuid.UUID:
     """tb-mk: ``after.track_id`` of an add_item: a live track (not in Trash, not history)."""
     try:
@@ -462,9 +492,10 @@ async def _place(
     from oracle.simple import trash_items
 
     taken |= await trash_items.trashed_keys(db, doc)
-    key, n = _slug(c.after["title"]), 2
+    name = service.coded_title(c.after["title"], None)[1]
+    key, n = _slug(name), 2
     while key in taken:
-        key, n = f"{_slug(c.after['title'])[:21]}-{n}", n + 1
+        key, n = f"{_slug(name)[:21]}-{n}", n + 1
     position = await db.scalar(
         select(func.max(RoadmapItem.position)).where(
             (RoadmapItem.roadmap_version_id == base) | (RoadmapItem.simple_draft_id == d.id)
@@ -474,6 +505,10 @@ async def _place(
     track, prd, prd_version = await _home(db, doc)
     # tb-mk: the band's track, written as set_track writes it (the item's track_id).
     track_id = uuid.UUID(c.after["track_id"]) if c.after.get("track_id") else None
+    # roadmap-add: filed under the picked track's PRD, not the roadmap's first track's.
+    picked = await db.get(ProductTrack, track_id) if track_id else None
+    if picked is not None:
+        prd, prd_version = await tracks_mod.lead_prd(db, picked), picked.current_version_id
     row = RoadmapItem(
         id=item_id,
         roadmap_document_id=doc,
@@ -513,7 +548,7 @@ async def _place(
         )
     except jobs.JobError as e:
         log.info("S7: Oracle's drafting is off for %s: %s", doc, e.detail)
-    await _request_visual(db, principal, "draft_item", item_id, c.after["title"])
+    await _request_visual(db, principal, "draft_item", item_id, name)
     return row
 
 
@@ -564,6 +599,7 @@ async def create(
     if target.get("suggestion_id") and (s is None or s.status != "open"):
         raise ChangeError(409, f"This suggestion is {s.status if s else 'gone'} already")
     if applies:
+        await _give_code(db, c, read_)
         await _place(db, principal, c, session, me)
         session.last_change_at = now  # type: ignore[union-attr]
     db.add(c)
@@ -606,6 +642,7 @@ async def decide(
             await changes._title_code(db, None, c.after.get("title") or "", read_)
         except ChangeError as e:
             raise ChangeError(409, e.detail) from e
+        await _give_code(db, c, read_)
         session = await changes._session_for_change(db, me, None, True, now)
         await _place(db, principal, c, session, me)
         session.last_change_at = now  # type: ignore[union-attr]
@@ -875,7 +912,7 @@ async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
     goals = [g for g in await s.scalars(select(Entity).where(Entity.id.in_(cur.goal_ids or [])))]
     quarter = job.input.get("quarter")
     payload = {
-        "title": cur.title,
+        "title": service.coded_title(cur.title, None)[1],
         "horizon": cur.horizon,
         "quarter": quarter,
         "today": (await company_time.company_today(s)).isoformat(),

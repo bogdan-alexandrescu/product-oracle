@@ -265,7 +265,9 @@ async def test_a_feature_added_after_a_replace_is_filed_under_a_current_prd(clie
         "before": {}, "after": {"title": "Quiet hours digest"}})  # fmt: skip
     assert r.status_code == 201, r.text
     async with tenant_session(ctx.tenant_id) as s:
-        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.title == "Quiet hours digest"))
+        row = await s.scalar(
+            select(RoadmapItem).where(RoadmapItem.title.endswith(" Quiet hours digest"))
+        )
         assert row is not None
         assert (row.prd_document_id, row.prd_version_id) == (ids["safety"], ids["sv"])
     titles = {i["title"] for i in (await _get(client, ctx, "/v1/simple/roadmap"))["items"]}

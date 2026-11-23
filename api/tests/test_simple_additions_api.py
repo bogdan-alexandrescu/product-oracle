@@ -378,7 +378,7 @@ async def test_added_item_is_in_the_draft_only(client):
                 )
             )
         )
-        added = [r for r in new if r.title == "Guided setup"]
+        added = [r for r in new if r.title.endswith(" Guided setup")]
         assert (
             len(added) == 1 and added[0].draft and added[0].goal_ids == [uuid.UUID(w.goals["grow"])]
         )
@@ -847,7 +847,8 @@ async def test_date_suggestion_survives_publishing_an_added_item(client):
         assert await s.get(RoadmapItem, uuid.UUID(iid)) is None
         copy = await s.scalar(
             select(RoadmapItem).where(
-                RoadmapItem.title == "Guided setup", RoadmapItem.roadmap_version_id.is_not(None)
+                RoadmapItem.title.endswith(" Guided setup"),
+                RoadmapItem.roadmap_version_id.is_not(None),
             )
         )
         sug = await s.scalar(
@@ -876,7 +877,7 @@ async def test_picked_quarter_survives_publishing_a_quarter_add(client):
         assert await s.get(RoadmapItem, uuid.UUID(iid)) is None
         copy = await s.scalar(
             select(RoadmapItem).where(
-                RoadmapItem.title == "Saved search filters",
+                RoadmapItem.title.endswith(" Saved search filters"),
                 RoadmapItem.roadmap_version_id.is_not(None),
             )
         )
