@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 /**
  * Whole words in narrow table columns (priorities-words): a name wraps between its words, and a
@@ -124,7 +125,11 @@ export function useWidth(): [(el: HTMLElement | null) => void, number | null] {
   const [width, setWidth] = useState<number | null>(null);
   useEffect(() => {
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e.contentRect.width)));
+    // Rendered before the frame paints: when the fonts swap and the table's columns move, the
+    // words are fitted to the new width in that same frame, never cut for one (priorities-words).
+    const ro = new ResizeObserver(([e]) =>
+      flushSync(() => setWidth(Math.floor(e.contentRect.width))),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, [el]);
