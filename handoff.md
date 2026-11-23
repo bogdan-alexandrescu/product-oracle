@@ -1,40 +1,59 @@
-# de-r1 handoff (features directly on Simple's Roadmap)
+# de-merge handoff (five builders joined)
 
-Branch commits (on top of 7f932ba):
-- d9a1e71de part 1 ADD IN PLACE: done for Timeline (each track band ends with a faint "+ Add" row; a click at a week
-  puts a six-week bar, Monday-snapped, with the title field; Enter adds on that track with its code at those dates;
-  Escape cancels) and Now / Next / Later (every column ends with "+ Add", a card with the title field). Top add bar
-  untouched. NOT built: the Gantt's per-goal "+ Add" rows.
-- 6e887e210 part 2 GRAB THE BAR, partly: drag a Timeline bar up/down onto another track's band moves it there
-  (set_track; the band under the pointer is marked); the open bar shows its owner's initials, a click picks a person (set_owner, saved at once); click the open row's name renames in place (edit_title; Enter
-  saves, Escape keeps). Move and stretch by drag already existed (roadmap-r2). NOT built: week snap for the move drag
-  (it stays day-by-day as built), initials on bars at rest (only the open bar shows them), re-track on the Gantt.
-- f08c77ffc part 4 DELETE: with a bar or card selected (panel open), Delete/Backspace moves it to Trash at once with
-  Undo (the panel's Move to Trash, via useFeatureDelete with now=can_decide; who may only propose proposes); never
-  while focus is in a field.
-- part 3 PRIORITIZE: NOT built. The reorder op (after.position) exists in the API and mock, but the Timeline sorts a
-  track's rows by start date, and positions are plain integers (one row's move needs its neighbours renumbered).
-  Owner question in questions.json.
+Branch: r1's branch (360c6dbdb) + merges, in order, of de-inst (origin/swarm/task_4bd93d60f5a446978cac @ 0be201584),
+de-r2 (task_7e6fe371d35a4df59c2e @ 746385603), de-gm (task_ec04f2c0a91c4d67bf33 @ 8267a00b2),
+de-prd (task_74c5eb1d08ef484a97dd @ e64214e23), then three de-merge fix commits.
 
-Specs (mock-backed, --retries=0, all pass): web/e2e/de-r1-add.spec.ts (5, incl. a commenter proposing), de-r1-grab.spec.ts (3),
-de-r1-delete.spec.ts (2). A commenter's add in place files a proposal (toast names Needs a decision); NOT built: a pending mark on the Timeline (re-track/rename of a proposer go through
-the same propose/act calls, which file proposals; no new pending mark was built on the Timeline).
+## What each builder finished (from their commits; only r1 left a handoff.md in the tree)
+- de-r1 (Roadmap timeline): add in place (Timeline track bands, Now/Next/Later columns), drag a bar onto another
+  track, owner initials on the open bar, rename in place, Delete/Backspace to Trash with Undo; a commenter's add files
+  a proposal. NOT built (r1's own handoff): part 3 PRIORITIZE (no entry point exists), Gantt per-goal "+ Add",
+  week snap on the move drag, initials on bars at rest, a pending mark on the Timeline. Its questions.json item stands.
+- de-inst: a decider's change is the live roadmap for every reader at once (API services + mock readerView), not
+  counted in review; a decider's own addition waits on no one (no "Draft with no owner" flag); a decider dates a
+  PRD's milestone without asking; the approved version line counts a decider's change. Red tests first
+  (test_simple_decider_instant_api.py and others), spec de-inst-decider-instant. Its session hit a context
+  ceiling once ("WIP: context ceiling" commit) and was continued; its last commit only drops an unused import.
+- de-r2: milestones on the Roadmap band (click to add, drag or arrows to move, one-step card, Delete with Undo);
+  rename a goal in place on its Roadmap card.
+- de-gm: Goal map features add, move (drag between cells), rename (F2/double-click), Trash with Undo; Goal buckets
+  quick add, rename, Delete with Undo; Goal map milestone rename and date in one step; proposers file proposals.
+- de-prd: a PRD's features change in place on its one-pager (type to rename, add under a goal, owner/dates, Trash
+  with Undo), phone width with no sideways scroll.
+No builder other than r1 recorded an unfinished part; r1's unfinished parts have no entry point, so nothing
+half-built is reachable.
 
-Gates: tsc clean; eslint on touched files clean except base errors (_roadmap.tsx cognitive-complexity 8, same as the
-base file; _add.tsx max-lines and FeatureDelete complexity are base, untouched); prettier written on touched files.
-NOT run: full `npm run lint` (takes >10 min here, timed out), prose guard spec, vite build separately (the Playwright
-mock build ran and passed). roadmap-r2-timeline-drag.spec.ts at 1024 is flaky on the base too (a different test
-fails each run; seen on 7f932ba's _zoom.tsx).
-No API change, so no pytest.
+## Conflicts
+None: git merged all four with no textual conflict (the branches touched disjoint files apart from
+web/lib/api/mock/simple-changes.ts, which merged cleanly). No schema change, so `make openapi` was not needed.
+Merge breakage fixed:
+- 647c0f6c2: lint on _roadmap.tsx/_owner.tsx: three needless type assertions (two from the base's roadmap-add,
+  one from r1) removed; r1's quick-add `after` moved to a helper `addAfter`; onAdd's cognitive complexity (26, from
+  the base's roadmap-add) is the 8th in the file, so the file's suppression count went 7 -> 8 (r1 reported the
+  same 8 on the base). Owner may prefer a refactor of onAdd instead.
+- 6707555fc, f021400f7: three older specs asserted the pre-de-inst rule (a viewer reads the published roadmap till
+  publish; a decider's draft shows "Draft with no owner"). Confirmed caused by de-inst's mock (with the base's
+  simple-roadmap.ts they pass) and updated to the owner's Nov 23 rule: roadmap-dates.spec.ts:137,
+  simple-roadmap-home-qa.spec.ts:102 (the flag part), roadmap-nov10-findings.spec.ts:105 (viewer half).
 
-Files outside the territory (smallest change): web/app/simple/roadmap/_roadmap.tsx (onAdd takes a span; passes
-onAddAt / onAddIn; the Delete-key effect), web/lib/api/mock/simple-changes.ts (add_item keeps after.start_date and
-end_date, as additions._plan does).
-Open: a just-added draft's bar did not move with a horizontal mouse drag in a test (re-track of the same bar works);
-not looked into. Check it first if you pick this up.
+## inst rules check
+Decider's change final at once / proposer's pending: covered by de-inst-decider-instant (owner live for viewer,
+commenter waits), de-r1-add (commenter's add files a proposal), de-gm-buckets and de-gm-map-features ("someone who
+may only propose files the add as a proposal"; viewer has no handles). All pass. Gap kept from r1: no pending mark
+on the Timeline for a proposer's change.
 
-Regression check (existing specs, --retries=0, at fa3875522): roadmap-add, roadmap-edit-fixes(-2), qa-nov17-roadmap-layout,
-qa4r-timeline, fix2-simple-roadmap-board, roadmap-track-bands-milestone-kinds, panel-menu, board-quarters,
-fix4-simple-roadmap-chart, roadmap-dates, qa4-simple-roadmap, panel-menu-tree, roadmap-decide: 177 passed.
-roadmap-track-order.spec.ts:66 fails, and fails the same way with the base's files (7f932ba): pre-existing (the
-Track filter locator also reads a second select). The other ~50 specs that read the Timeline/board were not run.
+## Gates (at f021400f7 unless said)
+- api: ruff check + format --check: pass. alembic heads: one (0133_null_run_cost).
+- pytest: the 21 test files the branches touched/added, -n 2, Postgres 16: 395 passed.
+- web: tsc pass; format:check pass; lint on the 32 changed .ts/.tsx files: pass. Full `npm run lint` NOT run (r1
+  measured it over 10 minutes; out of time).
+- Playwright (--retries=0, mock build): the 14 specs the branches added/touched: all pass (7 skipped by design);
+  prose guard 33 passed with PROSE_BASE=7f932ba3f (shallow clone has no origin/main; ceilings file unchanged).
+- Prefix specs (simple-roadmap*, roadmap-*, goal-*, prio*, one-pager*; 125 files, ~990 tests): all pass except
+  five that fail on a strict-mode `Track` locator meeting two selects, which r1 found pre-existing on the base
+  (7f932ba: the add bar's Track select from roadmap-add): roadmap-track-order.spec.ts:66,
+  roadmap-tracks-sheet.spec.ts:44 and :116, simple-roadmap-filter-review.spec.ts:107,
+  simple-roadmap-stale-filters.spec.ts:60. Not fixed here (base, not the merge).
+- vite build ran (mock build) and passed. npm run test:unit NOT run (time).
+- Other pytest files beyond the touched ones NOT run: de-inst changed live-roadmap reads; the full suite may hold
+  more old-rule tests.
