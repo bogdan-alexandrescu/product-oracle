@@ -41,6 +41,13 @@ async function open(page: Page, qs: string, w: number, h: number, theme = 'light
   await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
   await page.waitForTimeout(500);
   await markRow(page);
+  if (qs.includes('hard=1'))
+    await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="floating-card"]');
+      document.querySelectorAll('*').forEach((el) => {
+        if (el.scrollLeft > 0 && !card?.contains(el)) el.scrollLeft = Math.max(0, el.scrollLeft - 80);
+      });
+    });
   // The page's place at rest, kept for the rest of the story (see snap).
   await page.evaluate(() => {
     document.querySelectorAll('*').forEach((el) => {
@@ -66,6 +73,28 @@ async function scrollCard(page: Page, id: string) {
     if (!body) return;
     const d = el.getBoundingClientRect().top - body.getBoundingClientRect().top;
     body.scrollTop += d - body.clientHeight * 0.4 + el.getBoundingClientRect().height / 2;
+    // A whole field at the panel's top: no half line under its header.
+    const top = body.getBoundingClientRect().top;
+    // The field cut by the panel's top (if any) is shown whole: scroll back to its start.
+    const cut = Array.from(body.querySelectorAll('[data-testid^="pe-field-"]'))
+      .map((r) => r.getBoundingClientRect())
+      .filter((r) => r.top < top - 1 && r.bottom > top + 1)
+      .map((r) => r.top - top)
+      .sort((a, b) => b - a)[0];
+    if (cut != null) body.scrollTop += cut - 4;
+  });
+}
+/** Scrolls the panel's body just enough that a flag's line and buttons sit above the toast. */
+async function clearOfToast(page: Page, id: string) {
+  await page.getByTestId(id).evaluate((el) => {
+    const b = document.querySelector('[aria-label="Dismiss"]');
+    let t = b?.parentElement ?? null;
+    while (t && t.getBoundingClientRect().height < 40) t = t.parentElement;
+    if (!t) return;
+    let body = el.parentElement;
+    while (body && !(body.scrollHeight > body.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(body).overflowY))) body = body.parentElement;
+    const over = el.getBoundingClientRect().bottom - t.getBoundingClientRect().top + 12;
+    if (body && over > 0) body.scrollTop += over;
   });
 }
 /** Lets the earlier toasts go before a frame that must show what they covered. */
@@ -223,7 +252,7 @@ test('frames', async ({ page, browser }) => {
     await clearToasts(page);
     if (m === 'c') await page.getByTestId('pe-edit').click();
     await page.getByTestId('pe-plus-needed').click();
-    await page.getByTestId('pe-add-needed').fill('Alert sound picker');
+    await page.getByTestId('pe-add-needed').fill('Alert sounds');
     await scrollCard(page, 'pe-add-needed');
     await snap(page, `${k}-add`, D.w, D.h);
     await page.getByTestId('pe-add-needed').press('Enter');
@@ -271,6 +300,7 @@ test('frames', async ({ page, browser }) => {
     await page.getByTestId('pe-input-end').fill('Dec 4');
     await page.keyboard.press('Enter');
     await page.mouse.move(5, 5);
+    await clearOfToast(page, 'pe-flag-link');
     await snap(page, `${k}-changed`, D.w, D.h);
     // The built fields, folded under More; Notes grows as it is typed.
     await page.getByTestId('pe-more').locator('summary').click();
@@ -308,11 +338,15 @@ test('frames', async ({ page, browser }) => {
     await page.getByTestId('pe-fix-owner-other').click();
     await snap(page, `${k}-mid`, D.w, D.h);
     await page.getByTestId('pe-opt-Priya Lund').click();
+    await page.mouse.move(5, 5);
+    if (f === 'a') await clearOfToast(page, 'pe-flag-link');
     await snap(page, `${k}-owner-fixed`, D.w, D.h);
     await strip();
     await page.getByTestId('pe-fix-dates').click();
     await strip();
     await page.getByTestId('pe-fix-link').click();
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(1200);
     await snap(page, `${k}-all-fixed`, D.w, D.h);
     await open(page, `${qs}&hard=1`, W.w, W.h);
     await strip();
@@ -322,7 +356,8 @@ test('frames', async ({ page, browser }) => {
     await snap(page, `${k}-hard-1512-dark`, W.w, W.h);
     for (const t of ['light', 'dark']) {
       await open(page, qs, P.w, P.h, t);
-      await strip();
+      // C at rest on a phone: the count only, its flags closed (as on the desktop).
+      if (f !== 'c') await strip();
       await snap(page, `${k}-rest-390${t === 'dark' ? '-dark' : ''}`, P.w, P.h);
     }
     await open(page, qs, D.w, D.h, 'dark');

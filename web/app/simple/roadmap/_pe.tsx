@@ -230,7 +230,7 @@ export function PePanel({
       const s0 = new Date(`${item.end.date}T12:00:00Z`);
       s0.setUTCDate(s0.getUTCDate() + 1);
       const e0 = new Date(s0);
-      e0.setUTCDate(e0.getUTCDate() + 27);
+      e0.setUTCDate(e0.getUTCDate() + 41); // MOCK-HOOK: six weeks, so its bar's dates fit
       const f = (d: Date) => d.toISOString().slice(0, 10);
       await act(
         { applied: `Added ${t}, placed after this feature`, proposed: `add ${t}` },
@@ -344,13 +344,28 @@ export function PePanel({
     if (how === 'remove') setVals({ ...vals, needed: vals.needed.slice(1) });
     setChanged((c) => new Set(c).add('needed'));
     setFlags({ ...flags, link: false });
-    toast(
-      how === 'move' ? 'F-79 Weekly alert digest now starts Nov 11, after this ends' : 'Link removed',
-      () => {
-        setVals(before.vals);
-        setFlags(before.flags);
-      },
-    );
+    // MOCK-HOOK: Move it after moves the first feature that needs this one for real (move_dates), keeping its length.
+    const after = how === 'move' ? items.get(item.needed_by[0]) : undefined;
+    const end = iso(vals.end, item.end.date);
+    if (after?.start.date && after.end.date && end) {
+      const f = (d: Date) => d.toISOString().slice(0, 10);
+      const s0 = new Date(`${end}T12:00:00Z`);
+      s0.setUTCDate(s0.getUTCDate() + 1);
+      const e0 = new Date(s0.getTime() + (Date.parse(after.end.date) - Date.parse(after.start.date)));
+      return void act(
+        { applied: `${name(after.id)} now starts ${day(f(s0))}, after this ends`, proposed: `move ${name(after.id)} after this` },
+        {
+          op: 'move_dates',
+          target: { item_id: after.id },
+          before: { start_date: after.start.date, end_date: after.end.date },
+          after: { start_date: f(s0), end_date: f(e0) },
+        },
+      );
+    }
+    toast(how === 'move' ? 'Moved it after this' : 'Link removed', () => {
+      setVals(before.vals);
+      setFlags(before.flags);
+    });
   };
   const nFlags = Object.values(flags).filter(Boolean).length;
   const btn = (children: ReactNode, onClick: () => void, main?: boolean, id?: string, key?: string) => (
