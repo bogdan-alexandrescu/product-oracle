@@ -148,7 +148,14 @@ import {
 } from './_lib';
 import { itemName, NotInGt } from './_gtflag';
 import { Chart, PHASES, type Layout } from './_timeline';
-import { keepPlanPrds, takePlan, takeProposals, takeRoadmap, warmRoadmapPage } from './_warm';
+import {
+  keepPlanPrds,
+  takeGoals,
+  takePlan,
+  takeProposals,
+  takeRoadmap,
+  warmRoadmapPage,
+} from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -1709,7 +1716,9 @@ export function SimpleRoadmap() {
   );
   // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
   const goalList = useQuery('simple-roadmap-goal-order', () =>
-    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+    takeGoals(() =>
+      unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+    ),
   );
   const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
   // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.

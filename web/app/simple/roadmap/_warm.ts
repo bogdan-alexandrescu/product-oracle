@@ -17,6 +17,8 @@ const DRAFT_PRDS = 'simple-roadmap-draft-prds';
 const PROPOSALS = 'simple-proposals';
 // Taken by useGoalSuggestions (components/simple/GoalSuggestions), under the same key.
 const SUGGESTIONS = 'simple-goal-suggestions';
+// The goals, which keep key results out of the Goal filter: begun first too.
+const GOALS = 'simple-roadmap-goal-order';
 const planKey = (prd: string) => `simple-prd-plan:${prd}`;
 // The roadmap's own read, by its query as the page writes it (JSON).
 const roadmapKey = (query: string) => `simple-roadmap:${query}`;
@@ -27,6 +29,7 @@ export const takeTracks = <T>(load: () => Promise<T>) => takeWarm(TRACKS, load);
 export const takeRemoved = <T>(load: () => Promise<T>) => takeWarm(REMOVED, load);
 export const takeDraftPrds = <T>(load: () => Promise<T>) => takeWarm(DRAFT_PRDS, load);
 export const takeProposals = <T>(load: () => Promise<T>) => takeWarm(PROPOSALS, load);
+export const takeGoals = <T>(load: () => Promise<T>) => takeWarm(GOALS, load);
 export const takePlan = <T>(prd: string, load: () => Promise<T>) => takeWarm(planKey(prd), load);
 export const takeRoadmap = <T>(query: string, load: () => Promise<T>) =>
   takeWarm(roadmapKey(query), load);
@@ -52,6 +55,9 @@ export function keepPlanPrds(prds: string[]): void {
 
 /** Starts the parts' reads now, beside the roadmap's own; a read already warm is kept. */
 export function warmRoadmapPage(): void {
+  warmRead(GOALS, () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
   warmRead(PROPOSALS, () =>
     unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
   );
