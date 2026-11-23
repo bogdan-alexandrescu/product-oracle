@@ -11,12 +11,11 @@ Test cards (protects / fails_when / no_claim):
   reading (``current``, ``unit``, with this line's ``target`` words and ``due``); the item reads
   its ``note``, which ``edit_note`` changes (viewers 403, over 500 characters 422);
   fails_when=any is missing; no_claim=Oracle's dates kept over a person's (not ported).
-- test_owner_set_in_the_panel_clears_the_draft_flag: protects=a draft is never flagged
-  ``draft_without_owner`` (de-inst, owner Nov 23) and ``set_owner`` still names the owner the
-  panel shows; fails_when=the flag comes back or the owner is not read.
+- test_owner_set_in_the_panel_clears_the_draft_flag: protects=``draft_without_owner`` reads
+  the owner the panel shows and ``set_owner`` writes (the item's own, else its track's), so
+  picking one clears the flag at once; fails_when=the rule reads only the track's owner.
 - test_a_draft_whose_track_owner_left_is_flagged: protects=a draft whose panel reads no owner
-  (its track's owner was removed) carries no ``draft_without_owner`` flag (de-inst, owner
-  Nov 23); fails_when=the flag comes back.
+  (its track's owner was removed) keeps the flag; fails_when=the rule reads the stored id.
 """
 
 from sqlalchemy import select, update
@@ -200,8 +199,7 @@ async def test_owner_set_in_the_panel_clears_the_draft_flag(client):
         await s.commit()
     kinds = lambda it: [f["kind"] for f in it["flags"]]  # noqa: E731
     it = await item_of(client, ctx, "decider", a)
-    # de-inst (owner, Nov 23): a draft is a decider's own addition, never flagged for no owner.
-    assert "draft_without_owner" not in kinds(it)
+    assert "draft_without_owner" in kinds(it)
     approver = str(ctx.users["approver"].id)
     r = await post(client, ctx, "decider", "set_owner", {"item_id": a}, {"owner_id": None},
                    {"owner_id": approver})  # fmt: skip
@@ -235,5 +233,4 @@ async def test_a_draft_whose_track_owner_left_is_flagged(client):
         await s.commit()
     it = await item_of(client, ctx, "decider", a)
     assert it["owner"] is None
-    # de-inst (owner, Nov 23): no "draft with no owner" flag exists any more.
-    assert "draft_without_owner" not in [f["kind"] for f in it["flags"]]
+    assert "draft_without_owner" in [f["kind"] for f in it["flags"]]

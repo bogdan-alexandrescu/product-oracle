@@ -190,7 +190,7 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
                     "depend on it" if len(live) > 1 else "depends on it"
                 )
                 flags.append(_flag(n, "cut_with_dependents", reason))
-        # de-inst (the owner, Nov 23): a draft item is a decider's own addition (only they
-        # place one), final at once: no flag says it waits for someone to confirm it.
+        if n.draft and not n.owner_id:
+            flags.append(_flag(n, "draft_without_owner", "Draft with no owner to confirm it"))
         out[n.id] = flags
     return out
