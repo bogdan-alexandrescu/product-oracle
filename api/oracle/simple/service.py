@@ -1903,6 +1903,12 @@ async def _track_bands(
     return out
 
 
+def _shown_owner(e: Entry) -> str:
+    """The owner the Owner filter matches: the one item_out shows (its own, else its
+    track's), as an id; "none" with no owner."""
+    return str(e.owner_id) if e.owner_id is not None and e.owner_name else "none"
+
+
 async def build(
     db: AsyncSession,
     principal: Any,
@@ -1913,13 +1919,14 @@ async def build(
     start: date | None = None,
     end: date | None = None,
     roadmap: str | None = None,
+    owner: str | None = None,
 ) -> SimpleRoadmapOut:
     from oracle.simple import drafts
 
     # roadmap-speed: the read writes nothing, so each document's deciders, reviewers and
     # owners are read once for all its parts.
     with drafts.one_read():
-        return await _build(db, principal, group, prd, goal, track, start, end, roadmap)
+        return await _build(db, principal, group, prd, goal, track, start, end, roadmap, owner)
 
 
 async def _build(
@@ -1932,6 +1939,7 @@ async def _build(
     start: date | None,
     end: date | None,
     roadmap: str | None,
+    owner: str | None = None,
 ) -> SimpleRoadmapOut:
     from oracle.simple import drafts, key_dates
 
@@ -1962,6 +1970,7 @@ async def _build(
             )
         )
         and (not track or (e.track is not None and track == str(e.track.id)))
+        and (not owner or owner == _shown_owner(e))
         and (start is None or e.resolved.end.date >= start)
         and (end is None or e.resolved.start.date <= end)
     ]

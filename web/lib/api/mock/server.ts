@@ -12680,12 +12680,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       welcome_dismissed: false,
       slack_pings: { ...SLACK_PINGS },
     });
-    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap.
+    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap
+    // (owner-filter: and an Owner pick of a person who owns nothing on it now).
     if (
       localStorage.getItem(MOCK_SCENARIO_KEY) === STALE_SIMPLE_FILTERS_SCENARIO &&
       mine.simple_filters === undefined
     )
-      mine.simple_filters = { prd: 'retired-example-prd', goal: 'retired-example-goal', track: '' };
+      mine.simple_filters = {
+        prd: 'retired-example-prd',
+        goal: 'retired-example-goal',
+        track: '',
+        owner: 'retired-example-person',
+      };
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === 'PATCH') {
       const patch = await body<Schemas['PreferencesUpdate']>();
@@ -12715,10 +12721,10 @@ async function route(db: Db, req: Request): Promise<Response> {
         mine.simple_roadmap = patch.simple_roadmap;
       }
       if (patch.simple_filters != null) {
-        // Its PRD, Goal and Track picks (preferences.SimpleFilters).
+        // Its PRD, Goal, Track and Owner picks (preferences.SimpleFilters).
         const picks = patch.simple_filters as Record<string, unknown>;
         if (
-          Object.keys(picks).some((k) => !['prd', 'goal', 'track'].includes(k)) ||
+          Object.keys(picks).some((k) => !['prd', 'goal', 'track', 'owner'].includes(k)) ||
           Object.values(picks).some(
             (v) => typeof v !== 'string' || !/^[A-Za-z0-9_.-]{0,200}$/.test(v),
           )
@@ -12728,6 +12734,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           prd: picks.prd ?? '',
           goal: picks.goal ?? '',
           track: picks.track ?? '',
+          owner: picks.owner ?? '',
         } as Schemas['SimpleFilters'];
       }
       if (patch.simple_decisions_view != null) {

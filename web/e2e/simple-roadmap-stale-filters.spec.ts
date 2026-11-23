@@ -16,7 +16,7 @@ const ROADMAP = '/simple/roadmap';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
 const filter = (page: Page, name: string): Locator =>
-  page.getByRole('combobox', { name, exact: true });
+  page.getByTestId('filters').getByRole('combobox', { name, exact: true });
 const boardCard = (page: Page, key: string): Locator =>
   page.locator(`[data-testid="board-card"][data-item="${key}"]`);
 
@@ -60,7 +60,7 @@ for (const [where, use] of [
     test('saved filters that are no longer on the roadmap are dropped and saved back', async ({
       page,
     }) => {
-      // protects: on desktop and on a phone, saved PRD and goal filters that are no longer on the roadmap are dropped: the Board still shows its cards, the PRD, Goal and Track pickers read All, empty filters are saved back with no toast, and a return visit still shows the items
+      // protects: on desktop and on a phone, saved PRD and goal filters that are no longer on the roadmap, and an Owner pick of a person who owns nothing on it, are dropped: the Board still shows its cards, the PRD, Goal, Track and Owner pickers read All, empty filters are saved back with no toast, and a return visit still shows the items
       // fails_when: the stale filters hide every item or show "Nothing matches these filters", a picker keeps its old pick, a toast shows, or the saved filters are not the empty ones
       // no_claim: links with a PRD or goal in the address, the picks of a live roadmap, or the real server's storage (the mock holds it)
       await page.addInitScript(([key, scenario]) => localStorage.setItem(key, scenario), [
@@ -73,18 +73,20 @@ for (const [where, use] of [
       await expect(boardCard(page, 'setup-checklist')).toHaveCount(1);
       await expect(page.getByText('Nothing matches these filters')).toHaveCount(0);
       await showPickers(page);
-      for (const name of ['PRD', 'Goal', 'Track']) {
+      for (const name of ['PRD', 'Goal', 'Track', 'Owner']) {
         await expect(filter(page, name)).toHaveValue('');
         await expect(filter(page, name).locator('option:checked')).toHaveText('All');
       }
       // Saved back, quietly: no toast. (The mock keeps its data in the page's storage.)
-      await expect.poll(() => savedFilters(page)).toEqual({ prd: '', goal: '', track: '' });
+      await expect
+        .poll(() => savedFilters(page))
+        .toEqual({ prd: '', goal: '', track: '', owner: '' });
       await expect(page.getByRole('status').filter({ hasText: 'filters' })).toHaveCount(0);
       // Coming back, the items are still there and nothing more is saved.
       await openBoard(page);
       await expect(boardCard(page, 'alert-rules')).toHaveCount(1);
       await expect(page.getByText('Nothing matches these filters')).toHaveCount(0);
-      expect(await savedFilters(page)).toEqual({ prd: '', goal: '', track: '' });
+      expect(await savedFilters(page)).toEqual({ prd: '', goal: '', track: '', owner: '' });
     });
 
     test('a link to a PRD no longer on the roadmap says so, with Clear', async ({ page }) => {
