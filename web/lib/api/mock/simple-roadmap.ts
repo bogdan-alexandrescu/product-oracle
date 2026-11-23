@@ -2297,8 +2297,7 @@ function flagsOf(
       );
     }
   }
-  if (s.draft && !s.track && !closed(s))
-    flag('draft_without_owner', 'Draft with no owner to confirm it', []);
+  // de-inst (the owner, Nov 23): a draft is a decider's own addition, waiting on no one.
   return out;
 }
 
