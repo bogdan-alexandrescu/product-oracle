@@ -1183,7 +1183,7 @@ function nameRefs(reasons: readonly string[], names: Record<string, string>): st
     const verb = verbs[n];
     if (!verb || verbs.filter((v) => v === verb).length !== 1) return r;
     const name = names[r.slice(0, -(verb.length + 1))];
-    return name ? `The ${r.split(':')[0]!.replace(/_/g, ' ')} "${name}" ${verb}` : r;
+    return name ? `The ${r.split(':')[0].replace(/_/g, ' ')} "${name}" ${verb}` : r;
   });
 }
 
@@ -1275,7 +1275,7 @@ function markItem(
   );
   const title = ALERTS_APPROVED.find((i) => i.key === key)?.title ?? key;
   if (alert) Object.assign(alert, { detail, state: 'open' });
-  else (db.alerts ??= []).push(staleAlert(db.tracks[0]!.id, key, title, detail));
+  else (db.alerts ??= []).push(staleAlert(db.tracks[0].id, key, title, detail));
 }
 
 /**
