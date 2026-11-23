@@ -618,13 +618,13 @@ export function PePanel({
     body = (
       <>
         <div className="mt-2 rounded-lg border border-line p-2.5">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-[650]">
-            <span data-testid="pe-field-start" className={`rounded-md ${markRow('start')}`}>{value('start')}</span>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 text-lg font-[650]">
+            <span data-testid="pe-field-start" className={`min-w-0 rounded-md px-1.5 ${markRow('start')}`}>{value('start')}</span>
             <span className="text-text2">–</span>
-            <span data-testid="pe-field-end" className={`rounded-md ${markRow('end')}`}>{value('end')}</span>
+            <span data-testid="pe-field-end" className={`min-w-0 rounded-md px-1.5 ${markRow('end')}`}>{value('end')}</span>
           </div>
           {datesFlag}
-          <div className="mt-1 grid grid-cols-2 gap-x-3">
+          <div className="mt-1 grid grid-cols-2 gap-x-3 px-1.5">
             <span data-testid="pe-field-owner" className={`rounded-md ${markRow('owner')}`}>{value('owner')}</span>
             <span data-testid="pe-field-status" className={`rounded-md ${markRow('status')}`}>{value('status')}</span>
           </div>
