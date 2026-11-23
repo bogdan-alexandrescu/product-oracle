@@ -1,0 +1,409 @@
+{
+  "title": "Feature panel: edit any field in one step and act on its flags in place",
+  "subtitle": "Mock-ups for the roadmap and PRD review: no Change, Save or Cancel per field; flags fixed where they show. Brightwell and its people are made up.",
+  "decisions": [
+    {
+      "code": "PE1",
+      "name": "How a field is edited",
+      "question": "How should a person change a field in the feature panel?",
+      "common": "One panel for every feature (opened here from the Roadmap). Every field (name, dates, status, milestone, owner, goal, links) can be changed in the panel; each change saves on its own with an Undo in the corner, Oracle's suggestions can be used or kept aside, and a read-only viewer sees the same panel as plain text. Story in every proposal: move the feature's end date to Dec 4, and the Roadmap bar moves at once.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Edit in place",
+          "recommended": true,
+          "what": "Every value is already a field: a thin dashed line under it at rest, a box on hover. Click it (or Tab to it), type or pick, and it saves when you leave the field or press Enter; Esc puts the old value back. Lists such as Owner or Milestone open on one click and save on the pick. A new milestone or a new feature is typed straight into its list.",
+          "why": "It removes the Change link, the Save button and the Cancel button at once: each common task drops to one or two clicks, and the panel still reads as a list, so nothing new to learn. The dashed line tells at a glance what can be changed, which the brief asks for.",
+          "plus": "Fewest clicks with the mouse; works with Tab and Enter too; nothing to remember.",
+          "cost": "Add a feature 1 click (+ Add, type, Enter: placed by its link, no drag); move its dates 1 click; set its owner 2 clicks (1 when Oracle suggests someone); add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. The dashed lines add some texture to the panel.",
+          "frames": [
+            {
+              "file": "frames/pe1-a-rest.html",
+              "caption": "At rest, opened from the Roadmap: every value has a dashed line, so it reads as changeable."
+            },
+            {
+              "file": "frames/pe1-a-open.html",
+              "caption": "One click on Ends: the field opens in place, with no Save button."
+            },
+            {
+              "file": "frames/pe1-a-mid.html",
+              "caption": "Typing the new end date, Dec 4."
+            },
+            {
+              "file": "frames/pe1-a-saved.html",
+              "caption": "Enter saves it: the bar on the Roadmap now ends Dec 4, the value is marked as changed, Undo sits in the corner. 1 click in all, against 3 today."
+            },
+            {
+              "file": "frames/pe1-a-milestone.html",
+              "caption": "Adding a milestone is 2 clicks: open Milestone and type the new one at the foot of the list."
+            },
+            {
+              "file": "frames/pe1-a-hard-1512.html",
+              "caption": "The hard case at 1512: a long name wraps in its field and 8 dependencies each keep their remove button."
+            },
+            {
+              "file": "frames/pe1-a-viewer-1512.html",
+              "caption": "A viewer who cannot change it sees plain text, no lines, no buttons; the (i) says who can."
+            },
+            {
+              "file": "frames/pe1-a-mid-390.html",
+              "caption": "On a phone the same field opens in the sheet; the keyboard's Enter saves it."
+            },
+            {
+              "file": "frames/pe1-a-saved-dark.html",
+              "caption": "The saved result in dark."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Click to edit",
+          "recommended": false,
+          "what": "Values read as plain text, like today without the Change links; hovering a value shows a box and a small pencil. One click turns that value into a field; it saves on Enter, on leaving it or on the pick, with no Save button.",
+          "plus": "The quietest panel to read; the same click counts as A.",
+          "cost": "Add a feature 1 click; move its dates 1 click; set its owner 2 clicks; add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Nothing shows what can be changed until the pointer is on it, so on a phone (no hover) a person must guess.",
+          "frames": [
+            {
+              "file": "frames/pe1-b-rest.html",
+              "caption": "At rest: plain values, no links and no lines."
+            },
+            {
+              "file": "frames/pe1-b-open.html",
+              "caption": "One click on Ends turns it into a field."
+            },
+            {
+              "file": "frames/pe1-b-mid.html",
+              "caption": "Typing Dec 4."
+            },
+            {
+              "file": "frames/pe1-b-saved.html",
+              "caption": "Enter saves it and the Roadmap bar moves; Undo in the corner. 1 click, against 3 today."
+            },
+            {
+              "file": "frames/pe1-b-milestone.html",
+              "caption": "A new milestone typed at the foot of the Milestone list: 2 clicks."
+            },
+            {
+              "file": "frames/pe1-b-hard-1512.html",
+              "caption": "At 1512 with a long name and 8 dependencies: reads like A, minus the lines."
+            },
+            {
+              "file": "frames/pe1-b-mid-390.html",
+              "caption": "On a phone: with no hover, the panel gives no sign of which values open."
+            },
+            {
+              "file": "frames/pe1-b-saved-dark.html",
+              "caption": "The saved result in dark."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "One Edit mode",
+          "recommended": false,
+          "what": "The panel reads as plain text until Edit is pressed; then every field turns into a box at once, and Done saves all the changes together, with one Undo for the lot.",
+          "plus": "A clear line between reading and changing; several changes can be made and checked before they count, which suits a review meeting.",
+          "cost": "Add a feature 3 clicks; move its dates 3 clicks (Edit, Ends, Done); set its owner 4 clicks; add a milestone 4 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Only the Save step is renamed Done; a change is lost if the panel is closed before Done, and a long name is cut off in its box.",
+          "frames": [
+            {
+              "file": "frames/pe1-c-rest.html",
+              "caption": "At rest: plain values and an Edit button."
+            },
+            {
+              "file": "frames/pe1-c-open.html",
+              "caption": "Edit turns every field into a box; Done replaces Edit."
+            },
+            {
+              "file": "frames/pe1-c-mid.html",
+              "caption": "Typing Dec 4 in Ends."
+            },
+            {
+              "file": "frames/pe1-c-saved.html",
+              "caption": "The owner picked too, then Done saves both together: the bar moves and one Undo covers both. 3 clicks for the dates alone."
+            },
+            {
+              "file": "frames/pe1-c-hard-1512.html",
+              "caption": "At 1512 in Edit mode: the long name is cut off in its box; 8 dependencies below."
+            },
+            {
+              "file": "frames/pe1-c-mid-390.html",
+              "caption": "On a phone every field is a box at once, so the sheet scrolls further."
+            },
+            {
+              "file": "frames/pe1-c-saved-dark.html",
+              "caption": "The saved result in dark."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Keyboard first",
+          "recommended": false,
+          "what": "A line at the top takes a typed change (owner Mira, ends Dec 4), and each common field has a letter: E opens Ends, O opens Owner, M opens Milestone, / jumps to the line. Values can still be clicked. The keys sit behind the line's (i).",
+          "plus": "No clicks at all for the common tasks once the keys are known; fastest in a meeting with the panel on screen.",
+          "cost": "Add a feature 1 click; move its dates 0 clicks (E, type, Enter); set its owner 0 clicks (/ owner mira, Enter); add a milestone 0 clicks (M, type, Enter). Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. The letters and the line are new things to learn, and they do nothing on a phone.",
+          "frames": [
+            {
+              "file": "frames/pe1-d-rest.html",
+              "caption": "At rest: the change line on top, each field's letter at its right."
+            },
+            {
+              "file": "frames/pe1-d-open.html",
+              "caption": "Pressing E opens Ends, no click."
+            },
+            {
+              "file": "frames/pe1-d-mid.html",
+              "caption": "Typing Dec 4."
+            },
+            {
+              "file": "frames/pe1-d-saved.html",
+              "caption": "Enter saves it and the Roadmap bar moves: 0 clicks."
+            },
+            {
+              "file": "frames/pe1-d-owner.html",
+              "caption": "Then 'owner mira' in the line and Enter: Mira Okafor owns it and the owner warning is gone."
+            },
+            {
+              "file": "frames/pe1-d-hard-1512.html",
+              "caption": "At 1512 with a long name and 8 dependencies."
+            },
+            {
+              "file": "frames/pe1-d-mid-390.html",
+              "caption": "On a phone the letters are no use; the values are tapped as in B."
+            },
+            {
+              "file": "frames/pe1-d-saved-dark.html",
+              "caption": "The saved result in dark."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PE2",
+      "name": "Reading order and marks",
+      "question": "In what order should the panel show a feature's fields, and how should a changeable and a changed field look?",
+      "common": "The name and code on top with a count of what needs fixing; every field editable in place (PE1 A); a changed field stays marked until the panel closes; Simple's colours, type and spacing as built.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Grouped list, plan first",
+          "recommended": true,
+          "what": "One list in four short groups: Plan (starts, ends, status, confidence, milestone), People (owner, decider), Goal (goal, measure, target) and Links (depends on, needed by). At rest a value has a dashed line under it; on hover it gets a box; once changed, its row gets a blue bar at the left and the value turns blue and bold.",
+          "why": "Dates and owner, the things changed most in a roadmap review, come first, and the groups make the panel easier to scan than today's flat list of 20 rows. The blue bar shows what was just changed without a new word on screen.",
+          "plus": "Same shape as today's panel, so it is familiar; every field always shown, nothing hidden.",
+          "cost": "Longest of the three: Links can fall below the fold on a laptop.",
+          "frames": [
+            {
+              "file": "frames/pe2-a-rest.html",
+              "caption": "At rest: Plan, People, Goal and Links, dates first."
+            },
+            {
+              "file": "frames/pe2-a-hover.html",
+              "caption": "Pointer on Owner: the value gets a box, a sign it opens on a click."
+            },
+            {
+              "file": "frames/pe2-a-changed.html",
+              "caption": "Owner set to Jonah Reyes and the end moved to Dec 4: both rows get a blue bar and blue values."
+            },
+            {
+              "file": "frames/pe2-a-hard-1512.html",
+              "caption": "At 1512 with a long name and 8 dependencies: the groups keep the list readable."
+            },
+            {
+              "file": "frames/pe2-a-rest-390.html",
+              "caption": "On a phone the groups stack in the sheet."
+            },
+            {
+              "file": "frames/pe2-a-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Summary card first",
+          "recommended": false,
+          "what": "A card on top holds what changes most, large: the dates as one line, then owner and status. Below it, folding sections: Goal and milestone (open), More (confidence, decider, measure; folded) and Links with their count. A changed value gets a soft blue fill.",
+          "plus": "The plan reads in one glance; the panel is short until a section is opened.",
+          "cost": "Folded fields are one more click to reach, and the panel's shape differs from the other pages' lists.",
+          "frames": [
+            {
+              "file": "frames/pe2-b-rest.html",
+              "caption": "At rest: the dates, owner and status in the card; the rest folded into sections."
+            },
+            {
+              "file": "frames/pe2-b-hover.html",
+              "caption": "Pointer on Owner in the card: a box shows it opens."
+            },
+            {
+              "file": "frames/pe2-b-changed.html",
+              "caption": "Owner and end date changed: both get a soft blue fill."
+            },
+            {
+              "file": "frames/pe2-b-hard-1512.html",
+              "caption": "At 1512: 8 dependencies sit in the Links section, the card stays on top."
+            },
+            {
+              "file": "frames/pe2-b-rest-390.html",
+              "caption": "On a phone the card fills the top of the sheet."
+            },
+            {
+              "file": "frames/pe2-b-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Two columns of tiles",
+          "recommended": false,
+          "what": "Each field is a small tile with its label above the value, two to a row: starts and ends, owner and status, milestone and confidence, then goal across, then target and decider, then the links. A changed tile gets a blue border and a tick by its label.",
+          "plus": "Short and even; each tile is a clear thing to click, and a changed one stands out.",
+          "cost": "Long values (a target, a long owner name) are cut off in a half-width tile; boxes everywhere make the panel busier than Simple's lists.",
+          "frames": [
+            {
+              "file": "frames/pe2-c-rest.html",
+              "caption": "At rest: two tiles to a row, dates first."
+            },
+            {
+              "file": "frames/pe2-c-hover.html",
+              "caption": "Pointer on Owner: the tile's value gets a box."
+            },
+            {
+              "file": "frames/pe2-c-changed.html",
+              "caption": "Owner and end date changed: blue border and a tick on both tiles."
+            },
+            {
+              "file": "frames/pe2-c-hard-1512.html",
+              "caption": "At 1512 with a long name and 8 dependencies in the links tile."
+            },
+            {
+              "file": "frames/pe2-c-rest-390.html",
+              "caption": "On a phone the tiles stay two across and long values cut off."
+            },
+            {
+              "file": "frames/pe2-c-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PE3",
+      "name": "Acting on a feature's flags",
+      "question": "Where should a feature's flags and Oracle's suggestions be acted on in the panel?",
+      "common": "Three flags on the story feature: a draft with no owner to confirm it, Oracle's suggested dates, and a feature that needs it starting too early. Each has its fix as one-click buttons (the two people Oracle suggests, Use these or Keep mine, Move it after or Remove link); acting clears the flag and the count at once, with Undo in the corner. A viewer sees the flags but no buttons work.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Fix on the field",
+          "recommended": true,
+          "what": "Each flag sits under the field it is about: the owner flag under Owner with Mira Okafor and Jonah Reyes as buttons, Oracle's dates under Ends, the early start under Needed by. The count on top says how many are left.",
+          "why": "The fix is shown with the value it changes, so a person sees what they are changing; one click clears it, no separate trip to Pick an owner.",
+          "plus": "One click per flag; the panel keeps one reading order.",
+          "cost": "A flag low in the panel (links) can be below the fold; the count on top is the only sign of it.",
+          "frames": [
+            {
+              "file": "frames/pe3-a-rest.html",
+              "caption": "At rest: each flag under its field; 3 to fix on top."
+            },
+            {
+              "file": "frames/pe3-a-owner-fixed.html",
+              "caption": "One click on Mira Okafor: she owns it, the draft is confirmed (status Planned), the flag is gone and the count drops to 2."
+            },
+            {
+              "file": "frames/pe3-a-all-fixed.html",
+              "caption": "Then Use these and Move it after: all three flags and the count gone. 3 clicks in all, against a trip each today."
+            },
+            {
+              "file": "frames/pe3-a-viewer-1512.html",
+              "caption": "A viewer at 1512: the flags show, the buttons do not work."
+            },
+            {
+              "file": "frames/pe3-a-rest-390.html",
+              "caption": "On a phone the flags sit with their fields down the sheet."
+            },
+            {
+              "file": "frames/pe3-a-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "List on top",
+          "recommended": false,
+          "what": "All the flags are listed together in an amber box at the top of the panel, each with its buttons; the fields below are left plain.",
+          "plus": "Everything that needs the person is in one place, first; easiest to clear in a review.",
+          "cost": "The fix is apart from the value it changes; with many flags the box pushes the fields down.",
+          "frames": [
+            {
+              "file": "frames/pe3-b-rest.html",
+              "caption": "At rest: the three flags in one box on top."
+            },
+            {
+              "file": "frames/pe3-b-owner-fixed.html",
+              "caption": "Mira Okafor picked: that line leaves the box and the count drops to 2."
+            },
+            {
+              "file": "frames/pe3-b-all-fixed.html",
+              "caption": "The other two fixed: the box is gone."
+            },
+            {
+              "file": "frames/pe3-b-viewer-1512.html",
+              "caption": "A viewer at 1512: the box shows, the buttons do not work."
+            },
+            {
+              "file": "frames/pe3-b-rest-390.html",
+              "caption": "On a phone the box fills the top of the sheet."
+            },
+            {
+              "file": "frames/pe3-b-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "One at a time",
+          "recommended": false,
+          "what": "The count on top is a button: it opens the first flag with its fix; acting on it brings the next one, until none are left.",
+          "plus": "A calm panel until the person chooses to fix; one thing to decide at a time.",
+          "cost": "One more click to start, and flags are easy to leave unseen.",
+          "frames": [
+            {
+              "file": "frames/pe3-c-rest.html",
+              "caption": "At rest: only the 3 to fix count shows the flags."
+            },
+            {
+              "file": "frames/pe3-c-open.html",
+              "caption": "A click on the count opens the first flag, with its buttons."
+            },
+            {
+              "file": "frames/pe3-c-owner-fixed.html",
+              "caption": "Mira Okafor picked: the next flag, Oracle's dates, takes its place; 2 left."
+            },
+            {
+              "file": "frames/pe3-c-all-fixed.html",
+              "caption": "The last two fixed: no count, no box. 4 clicks in all."
+            },
+            {
+              "file": "frames/pe3-c-viewer-1512.html",
+              "caption": "A viewer at 1512: the flag opens to read, its buttons do not work."
+            },
+            {
+              "file": "frames/pe3-c-rest-390.html",
+              "caption": "On a phone, with the first flag opened."
+            },
+            {
+              "file": "frames/pe3-c-rest-dark.html",
+              "caption": "In dark, with the first flag opened."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
