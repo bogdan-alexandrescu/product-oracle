@@ -168,9 +168,9 @@ async def test_approval_writes_the_prds_dated_items_and_key_dates_into_the_draft
     [src] = d["from_prds"]
     assert src["prd"]["slug"] == PRD and src["items"] == 2 and src["key_dates"] == 0
     assert d["can_submit"] is True
-    # A viewer reads the published roadmap: none of the draft's additions.
+    # de-inst (owner, Nov 23): the draft is the live roadmap: a viewer reads its additions.
     r = await client.get(ROADMAP, headers=ctx.as_("viewer"))
-    assert set(by_key(r.json())) == {"offline-sync"}
+    assert set(by_key(r.json())) == {"offline-sync", "route-search", "trip-reports"}
 
 
 async def test_reapproval_replaces_the_prds_items_rather_than_adding_them_again(client):
