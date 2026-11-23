@@ -108,8 +108,8 @@ function Avatar({ name, size = 22 }: { name: string | null; size?: number }) {
         flex: 'none',
         display: 'inline-grid',
         placeItems: 'center',
-        background: name ? 'var(--accent-mid)' : 'transparent',
-        color: name ? '#fff' : 'var(--text-faint)',
+        background: name ? 'var(--accent)' : 'transparent',
+        color: name ? 'var(--on-accent)' : 'var(--text-faint)',
         border: name ? 'none' : '1.5px dashed var(--line-strong)',
         fontWeight: 600,
       }}
@@ -266,7 +266,7 @@ function Bar({
         {re3 === 'a' && it.was && <Dot color="var(--today)" />}
         {(re3 === 'a' || re3 === 'b') && it.decision && <Flag />}
         {it.isNew && (
-          <span className="text-xs" style={{ background: 'var(--pass-bg)', color: 'var(--text)', borderRadius: 6, padding: '0 6px' }}>
+          <span className="text-xs" style={{ position: 'absolute', left: '100%', marginLeft: 8, background: 'var(--pass-bg)', color: 'var(--text)', borderRadius: 6, padding: '0 6px' }}>
             New
           </span>
         )}
@@ -380,7 +380,7 @@ function Ruler({ c, milestones }: { c: Ctx; milestones: ReMilestone[] }) {
   }
   const msAdd =
     c.dec === 're1' &&
-    ((c.st === 'ms' && !c.viewer) || (c.st === 'hard' && c.v === 'a'));
+    c.st === 'ms' && !c.viewer;
   return (
     <>
       <div style={{ position: 'relative', height: 30, borderBottom: '1px solid var(--line)' }}>
@@ -426,13 +426,15 @@ function MilestoneAdd({ c }: { c: Ctx }) {
   const at = '2027-03-08';
   if (c.v === 'd') return null;
   return (
-    <span style={{ position: 'absolute', left: `${pct(at)}%`, top: 6, display: 'flex', alignItems: 'center', gap: 6, zIndex: 20 }}>
-      <span style={{ width: 10, height: 10, background: 'var(--accent)', transform: 'rotate(45deg)', marginLeft: -5 }} />
-      <TitleInput value="Pilot with 500 homes" w={190} />
-      <span className="text-sm" style={{ color: 'var(--text2)' }}>
-        {fmt(at)}
+    <span data-scroll-here style={{ position: 'absolute', left: `${pct(at)}%`, top: 14, zIndex: 20 }}>
+      <span style={{ display: 'block', width: 12, height: 12, background: 'var(--accent)', transform: 'rotate(45deg)', marginLeft: -6, outline: '2px solid var(--surface)' }} />
+      <span style={{ ...pop, left: -20, top: 22, display: 'flex', gap: 8, alignItems: 'center', padding: 8 }}>
+        <TitleInput value="Pilot with 500 homes" w={190} />
+        <span className="text-sm" style={btn}>
+          {fmt(at)}
+        </span>
+        {c.v === 'c' && <span className="text-sm" style={btnOn}>Add</span>}
       </span>
-      {c.v === 'c' && <DateTip text="Enter adds it" left="60%" top={34} />}
     </span>
   );
 }
@@ -457,7 +459,6 @@ function Board({ c, items, by }: { c: Ctx; items: ReItem[]; by: 'track' | 'goal'
           <TodayLine />
           <Ruler c={c} milestones={milestonesFor(c)} />
         </div>
-        {re3 === 'c' && <div style={{ borderBottom: '1px solid var(--line)', height: 40, marginTop: -40 }} />}
         {groups.map((g) => (
           <Group key={g.key} g={g} c={c} sel={sel} lens={lens} />
         ))}
@@ -490,10 +491,11 @@ function Group({ g, c, sel, lens }: { g: { key: string; items: ReItem[] }; c: Ct
   // RE1's new item, once added (the result frame), or RE2's moved item.
   if (c.dec === 're1' && c.st === 'result' && first)
     items.push({ id: 'n1', code: 'F-31', name: 'Paper bill reminders', track: g.key, goal: g.key, start: '2026-12-07', end: c.v === 'c' ? '2027-02-05' : '2027-01-29', kind: 'est', owner: null, horizon: 'next', isNew: true });
-  const moved = c.dec === 're2' && c.st === 'result';
+  const moved = c.dec === 're2' && c.st === 'result' && c.v !== 'd';
   const shown = items
     .filter((i) => !(moved && i.id === 'a2'))
-    .concat(moved && g.key === 'Mobile app track' ? [{ ...RE_ITEMS[1], track: g.key, start: '2026-12-07', end: '2027-01-29', owner: c.v === 'd' ? 'Ines Okafor' : RE_ITEMS[1].owner }] : []);
+    .map((i) => (c.dec === 're2' && c.st === 'result' && c.v === 'd' && i.id === 'a2' ? { ...i, owner: 'Ines Okafor' } : i))
+    .concat(moved && g.key === 'Mobile app track' ? [c.v === 'c' ? { ...RE_ITEMS[1], track: g.key } : { ...RE_ITEMS[1], track: g.key, start: '2026-12-07', end: '2027-01-29' }] : []);
   return (
     <>
       {re3 === 'c' && <div style={{ borderBottom: '1px solid var(--line)', background: 'var(--surface2)' }} />}
@@ -504,7 +506,7 @@ function Group({ g, c, sel, lens }: { g: { key: string; items: ReItem[] }; c: Ct
         </span>
       </div>
       {shown.map((it) => (
-        <Row key={it.id} it={it} c={c} sel={sel === it.id} lens={lens} target={c.dec === 're2' && c.st === 'mid' && g.key === 'Mobile app track' && it.id === 'b2'} />
+        <Row key={it.id} it={it} c={c} sel={sel === it.id} lens={lens} target={c.dec === 're2' && c.st === 'mid' && (c.v === 'a' || c.v === 'b') && !c.viewer && it.id === 'b1'} />
       ))}
       {addRow && <AddRow c={c} open={first && (c.st === 'open' || c.st === 'mid')} hard={c.st === 'hard' && g.key === RE_GOALS[2]} />}
       {c.dec === 're1' && c.v === 'b' && first && (c.st === 'open' || c.st === 'mid') && <DrawRow c={c} />}
@@ -533,7 +535,7 @@ function Row({ it, c, sel, lens, target }: { it: ReItem; c: Ctx; sel: boolean; l
   const re3 = c.dec === 're3' ? c.v : '';
   const dim = lens === 'changes' && !it.was;
   const rowTint = re3 === 'd' && !c.viewer ? 'color-mix(in srgb, var(--accent-soft) 35%, transparent)' : undefined;
-  const midDrag = c.dec === 're2' && c.st === 'mid' && it.id === 'a2';
+  const midDrag = c.dec === 're2' && c.st === 'mid' && (c.v === 'a' || c.v === 'b') && it.id === 'a2';
   return (
     <>
       {re3 === 'c' && (
@@ -546,24 +548,32 @@ function Row({ it, c, sel, lens, target }: { it: ReItem; c: Ctx; sel: boolean; l
         </div>
       )}
       <Label it={it} c={c} />
-      <div style={{ position: 'relative', height: ROW, borderBottom: '1px solid var(--line)', background: target ? 'var(--accent-soft)' : rowTint }}>
+      <div style={{ position: 'relative', height: ROW, borderBottom: '1px solid var(--line)', background: target ? 'var(--accent-soft)' : rowTint, zIndex: sel ? 5 : undefined }}>
         {midDrag ? (
           <>
             <div aria-hidden style={{ position: 'absolute', top: 5, bottom: 5, left: `${pct(it.start)}%`, width: `${pct(it.end) - pct(it.start)}%`, border: '1.5px dashed var(--line-strong)', borderRadius: 8 }} />
-            <div style={{ position: 'absolute', inset: 0, transform: `translateY(${ROW * 3 + 34}px)`, zIndex: 25, pointerEvents: 'none' }}>
-              <Bar it={{ ...it, start: '2026-12-07', end: '2027-01-29' }} c={c} selected>
-                <DateTip text="Dec 7 – Jan 29 · Mobile app track" left="50%" top={-34} />
-              </Bar>
-            </div>
           </>
         ) : (
+          <>
+          {target && (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 25, pointerEvents: 'none', transform: 'translateY(-14px)', filter: 'drop-shadow(0 6px 10px rgba(0,0,0,.25))' }}>
+              <Bar it={{ ...RE_ITEMS[1], start: '2026-12-07', end: '2027-01-29' }} c={c} selected>
+                <DateTip text="Dec 7 – Jan 29 · Mobile app track" left="50%" top={-30} />
+              </Bar>
+            </div>
+          )}
           <Bar it={it} c={c} selected={sel} lensDim={dim}>
-            {sel && c.st === 'open' && <SelectExtras c={c} />}
+            {sel && <SelectExtras c={c} />}
             {c.dec === 're3' && c.st === 'mid' && it.id === 'a2' && (re3 === 'a' || re3 === 'c' || re3 === 'b' || re3 === 'd') && (
               <DateTip text={`Moved · was ${range(it.was![0], it.was![1])}, now ${range(it.start, it.end)}`} left="50%" top={-32} />
             )}
-            {c.dec === 're3' && c.st === 'result' && false}
           </Bar>
+          {c.dec === 're2' && c.st === 'hard' && it.id === 'x2' && (
+            <span style={{ position: 'absolute', left: `${pct(it.start)}%`, top: 0 }}>
+              <DateTip text={`${it.code} ${it.name} · ${range(it.start, it.end)} · ${it.owner ?? 'No owner yet'}`} left="140px" top={40} />
+            </span>
+          )}
+          </>
         )}
       </div>
     </>
@@ -572,7 +582,7 @@ function Row({ it, c, sel, lens, target }: { it: ReItem; c: Ctx; sel: boolean; l
 
 /** RE2's selected bar: what each proposal opens on it. */
 function SelectExtras({ c }: { c: Ctx }) {
-  if (c.v === 'a')
+  if (c.v === 'a' && c.st === 'open')
     return (
       <div style={{ ...pop, left: 4, top: 30 }}>
         <PeopleList pick="Tobias Fenn" />
@@ -586,8 +596,8 @@ function SelectExtras({ c }: { c: Ctx }) {
         <span className="text-sm" style={{ ...btn, display: 'flex', gap: 6, alignItems: 'center' }}>
           <Avatar name="Tobias Fenn" size={18} /> ▾
         </span>
-        <span className="text-sm" style={btnOn}>Billing track ▾</span>
-        <div style={{ ...pop, left: 380, top: 44 }}>
+        <span className="text-sm" style={c.st === 'mid' ? btnOn : btn}>Billing track ▾</span>
+        {c.st === 'mid' && <div style={{ ...pop, left: 380, top: 44 }}>
           <div className="text-base" style={{ display: 'grid', gap: 2, minWidth: 210 }}>
             {RE_TRACKS.map((t) => (
               <span key={t} style={{ padding: '4px 8px', borderRadius: 8, background: t === 'Mobile app track' ? 'var(--accent-soft)' : undefined }}>
@@ -595,7 +605,7 @@ function SelectExtras({ c }: { c: Ctx }) {
               </span>
             ))}
           </div>
-        </div>
+        </div>}
       </div>
     );
   return null;
@@ -613,7 +623,7 @@ function AddRow({ c, open, hard }: { c: Ctx; open: boolean; hard: boolean }) {
       </div>
       <div style={{ position: 'relative', height: ROW, borderBottom: '1px solid var(--line)', background: 'repeating-linear-gradient(90deg, transparent 0 calc(100% / 39 - 1px), var(--line) calc(100% / 39 - 1px) calc(100% / 39))', opacity: isOpen ? 1 : 0.9 }}>
         {isOpen && (
-          <div style={{ position: 'absolute', top: 5, bottom: 5, left: `${pct(s)}%`, width: `${pct(e) - pct(s)}%`, border: '1.5px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', padding: '0 4px', zIndex: 10 }}>
+          <div data-scroll-here={hard ? '' : undefined} style={{ position: 'absolute', top: 5, bottom: 5, left: `${pct(s)}%`, width: `${pct(e) - pct(s)}%`, border: '1.5px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', padding: '0 4px', zIndex: 10 }}>
             <TitleInput value={hard ? 'Move-in checklist' : 'Paper bill reminders'} w={180} />
             {c.st === 'mid' && <Grip side="r" />}
             {c.st === 'mid' && <DateTip text={range(s, e)} left="100%" top={-30} />}
@@ -904,10 +914,13 @@ function NnlCard({ it, c }: { it: ReItem; c: Ctx }) {
 function NnlAdd({ c, open }: { c: Ctx; open: boolean }) {
   if (open)
     return (
+      <>
+      {c.v === 'c' && <div style={{ height: 2, background: 'var(--accent)', position: 'relative' }}><span style={{ position: 'absolute', left: -6, top: -11, width: 24, height: 24, borderRadius: 12, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center' }}>+</span></div>}
       <div style={{ border: '1.5px solid var(--accent)', borderRadius: 8, padding: 8, display: 'grid', gap: 6, background: 'var(--accent-soft)' }}>
         <TitleInput value="Paper bill reminders" w={160} />
         <span className="text-sm" style={{ color: 'var(--text2)' }}>Next · Cut bill shocks</span>
       </div>
+      </>
     );
   if (c.v === 'c' || c.v === 'd' || c.v === 'b') return null;
   return (
@@ -948,6 +961,45 @@ function PhoneSheet({ c }: { c: Ctx }) {
   );
 }
 
+/** RE2 D: the feature panel as today, but every field is live: no Change link, no Save. */
+function SidePanel({ c }: { c: Ctx }) {
+  const it = RE_ITEMS[1];
+  const owner = c.st === 'result' ? 'Ines Okafor' : c.st === 'mid' ? 'Ine' : (it.owner ?? '');
+  const field = (label: string, body: ReactNode, saved?: boolean) => (
+    <div style={{ display: 'grid', gap: 4 }}>
+      <span className="text-sm" style={{ color: 'var(--text2)', display: 'flex', gap: 8 }}>
+        {label}
+        {saved && <span style={{ color: 'var(--pass)' }}>✓ Saved</span>}
+      </span>
+      {body}
+    </div>
+  );
+  const box: CSSProperties = { border: '1px solid var(--line)', borderRadius: 8, padding: '4px 10px', background: 'var(--surface)' };
+  return (
+    <aside style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 420, background: 'var(--surface)', borderLeft: '1px solid var(--line)', boxShadow: 'var(--tip-shadow)', padding: 24, display: 'grid', gap: 16, alignContent: 'start', zIndex: 45 }}>
+      <div className="text-2xl" style={{ fontWeight: 700 }}>
+        {it.code} {it.name}
+      </div>
+      {field('Name', <span className="text-base" style={box}>{it.name}</span>)}
+      {field('Dates', <span className="text-base" style={{ display: 'flex', gap: 8 }}><span style={box}>Nov 16</span>–<span style={box}>Jan 8</span></span>)}
+      {field(
+        'Owner',
+        <span style={{ position: 'relative' }}>
+          {c.st === 'mid' ? <TitleInput value={owner} w={360} /> : <span className="text-base" style={{ ...box, display: 'flex', gap: 8, alignItems: 'center' }}><Avatar name={owner} size={20} /> {owner}</span>}
+          {c.st === 'mid' && (
+            <div style={{ ...pop, left: 0, top: 34 }}>
+              <PeopleList pick="Ines Okafor" />
+            </div>
+          )}
+        </span>,
+        c.st === 'result',
+      )}
+      {field('Track', <span className="text-base" style={box}>{it.track} ▾</span>)}
+      {field('Goal', <span className="text-base" style={box}>{it.goal} ▾</span>)}
+    </aside>
+  );
+}
+
 // ——— the page ———
 
 export function ReMock() {
@@ -970,7 +1022,7 @@ export function ReMock() {
   if (st === 'result' && dec === 're1')
     toast = <span>Added <b>F-31 Paper bill reminders</b> to Billing track · Dec 7 – {v === 'c' ? 'Feb 5' : 'Jan 29'}</span>;
   if (st === 'result' && dec === 're2')
-    toast = v === 'd' ? <span>Owner of <b>F-14 Spike alerts by text</b> set to Ines Okafor</span> : <span>Moved <b>F-14 Spike alerts by text</b> to Mobile app track · Dec 7 – Jan 29</span>;
+    toast = v === 'd' ? <span>Owner of <b>F-14 Spike alerts by text</b> set to Ines Okafor</span> : v === 'c' ? <span>Moved <b>F-14 Spike alerts by text</b> to Mobile app track</span> : <span>Moved <b>F-14 Spike alerts by text</b> to Mobile app track · Dec 7 – Jan 29</span>;
   if (st === 'result' && dec === 're3') toast = <span>Owner of <b>F-17 Split bills between flatmates</b> set to Sofi Arden</span>;
   const shownItems =
     dec === 're3' && st === 'result'
@@ -986,6 +1038,7 @@ export function ReMock() {
         <Board c={c} items={shownItems} by={view === 'gantt' ? 'goal' : 'track'} />
       )}
       {phone && (st === 'open' || st === 'mid' || st === 'rest') && dec === 're2' && st !== 'rest' && <PhoneSheet c={c} />}
+      {!phone && dec === 're2' && v === 'd' && (st === 'open' || st === 'mid' || st === 'result') && <SidePanel c={c} />}
       {toast && <Toast>{toast}</Toast>}
     </div>
   );

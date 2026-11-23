@@ -60,7 +60,7 @@ export function reBigItems(): ReItem[] {
       id: `x${i}`,
       code: `F-${40 + i}`,
       name:
-        i === 7
+        i === 2
           ? 'Let renters and landlords share one energy account with separate bills and alerts'
           : `${WORDS[i % WORDS.length]} ${TAILS[(i * 3) % TAILS.length]}`,
       track: t,

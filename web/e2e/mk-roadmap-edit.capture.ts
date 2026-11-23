@@ -74,6 +74,7 @@ test('capture mk-roadmap-edit frames', async ({ browser }) => {
     await page.goto(`/simple/roadmap?${f.q}`);
     await page.locator('[data-testid="re-mock"]').waitFor();
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), f.theme);
+    await page.evaluate(() => document.querySelector('[data-scroll-here]')?.scrollIntoView({ block: 'center' }));
     await page.waitForTimeout(300);
     let html = await page.evaluate(() => {
       let css = '';
@@ -92,7 +93,7 @@ test('capture mk-roadmap-edit frames', async ({ browser }) => {
     html = await replaceAsync(html, /url\((["']?)([^)"']+)\1\)/g, async (m) => `url("${await asset(page!, m[2])}")`);
     html = await replaceAsync(html, /(src|href)="(\/[^"]*\.(?:png|svg|jpg|ico|woff2?))"/g, async (m) => `${m[1]}="${await asset(page!, m[2])}"`);
     const [w, h] = SIZES[f.sz];
-    const theme = `<script>(function(){var t=new URLSearchParams(location.search).get('theme')||'${f.theme}';document.documentElement.setAttribute('data-theme',t);})();</script>`;
+    const theme = `<script>(function(){var t=new URLSearchParams(location.search).get('theme')||'${f.theme}';document.documentElement.setAttribute('data-theme',t);addEventListener('load',function(){var e=document.querySelector('[data-scroll-here]');if(e)e.scrollIntoView({block:'center'});});})();</script>`;
     html = html.replace('<head>', `<head><meta name="mockup-viewport" content="${w}x${h}">${theme}`);
     writeFileSync(`${OUT}/frames/${f.name}.html`, html);
     await page.screenshot({ path: `${OUT}/frames/${f.name}.png` });
