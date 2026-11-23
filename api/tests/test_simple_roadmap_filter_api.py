@@ -66,6 +66,29 @@ async def test_filter_shows_one_roadmap_and_lists_the_readable_ones(client):
     assert roadmaps_of(await read(client, w, "approver", roadmap="board")) == {rm["board"]}
 
 
+async def test_owner_filter_shows_one_persons_items_or_the_ownerless(client):
+    """protects=``owner`` narrows the read to the items whose shown owner (their own, else
+    their track's) is that person, "none" to the items with no owner, and combines with the
+    other filters; fails_when=the filter is ignored, lets another person's or an ownerless
+    item through, or "none" shows owned items; no_claim=the web's select (the spec)."""
+    w = await world(track_owner="approver")
+    rm = await more_roadmaps(w)
+    everything = await read(client, w, "owner")
+    owned = {i["title"] for i in everything["items"] if i["owner"]}
+    ownerless = {i["title"] for i in everything["items"] if not i["owner"]}
+    assert owned and ownerless
+    who = str(w.ctx.users["approver"].id)
+    assert {i["owner"]["id"] for i in everything["items"] if i["owner"]} == {who}
+    mine = await read(client, w, "owner", owner=who)
+    assert {i["title"] for i in mine["items"]} == owned
+    nobody = await read(client, w, "owner", owner="none")
+    assert {i["title"] for i in nobody["items"]} == ownerless
+    both = await read(client, w, "owner", owner="none", roadmap=rm["growth"])
+    assert [i["title"] for i in both["items"]] == ["Growth A"]
+    assert (await read(client, w, "owner", owner=who, roadmap=rm["growth"]))["items"] == []
+    assert (await read(client, w, "owner", owner=str(uuid.uuid4())))["items"] == []
+
+
 async def test_key_date_goes_to_the_named_roadmap(client):
     """protects=an add_key_date naming ``target.roadmap_id`` lands in that roadmap's working
     draft and shows only when that roadmap is read (the Key dates editor of a filtered
