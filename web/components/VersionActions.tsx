@@ -9,6 +9,7 @@ import { DownloadNote, useDownloadNote } from '@/components/DownloadNote';
 import { api, unwrap } from '@/lib/api/client';
 import { downloadedNote } from '@/lib/export-note';
 import { formatDate } from '@/lib/format';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
 // O1f: Full (as before), Brief and Deck. Full keeps its labels ("Export PDF").
 // qa-docs-53: one order on every row: PDF, then HTML, then the row's own (MD, PPTX).
@@ -187,6 +188,9 @@ export function ApproveButton({
       await unwrap(
         api.POST('/v1/documents/{doc}/versions/{n}/approve', { params: { path: { doc, n } } }),
       );
+      // A roadmap's approval settles the stale items it keeps: the waiting counts read again.
+      invalidateWaiting();
+      waitingChanged();
       setConfirming(false);
       onApproved();
     } catch (e) {

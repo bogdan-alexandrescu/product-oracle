@@ -320,12 +320,15 @@ function AlertCards({
   onChanged,
   links,
   track = false,
+  withReasons = false,
 }: {
   item: PlanItem;
   onChanged?: () => Promise<void> | void;
   links?: PlanLinks;
   /** The track's own alerts (no item: an issue no item names, a newer PRD) instead of the item's. */
   track?: boolean;
+  /** The item's reasons follow its cards: a stale one with no stale card opens Still valid… itself. */
+  withReasons?: boolean;
 }) {
   const trackId = item.track_id;
   const q = useQuery(`plan|alerts|${trackId ?? 'none'}`, () =>
@@ -335,7 +338,23 @@ function AlertCards({
     (a) =>
       (track ? !a.item_key : a.item_key === item.key) && (a.state === 'open' || a.state === 'kept'),
   );
-  if (!trackId || shown.length === 0) return null;
+  // The owner's report (Nov 23): a flagged item whose track holds no stale alert for it still
+  // settles from its panel; only once the alerts are read, so the two never both open.
+  const settle = (!trackId || q.data !== undefined) && !shown.some((a) => a.kind === 'stale');
+  const reasons = withReasons
+    ? item.reasons.map((r, n) => (
+        <ReasonCard
+          key={n}
+          r={r}
+          item={item}
+          settle={settle && r.kind === 'stale'}
+          onChanged={async () => {
+            await Promise.all([q.reload(), onChanged?.()]);
+          }}
+        />
+      ))
+    : null;
+  if (!trackId || shown.length === 0) return reasons && <>{reasons}</>;
   const cards = shown.map((a) => (
     <AlertCard
       key={`${a.id}-${a.state}`}
@@ -347,11 +366,85 @@ function AlertCards({
       }}
     />
   ));
-  if (!track) return <>{cards}</>;
+  if (!track)
+    return (
+      <>
+        {cards}
+        {reasons}
+      </>
+    );
   return (
     <InspectorSection label="On this track" testId="plan-track-alerts">
       <div className="flex flex-col gap-2">{cards}</div>
     </InspectorSection>
+  );
+}
+
+/** Who may mark a stale item still valid, behind a tip, for a reader who may not. */
+function StaleWhoTip() {
+  return (
+    <span className="inline-flex">
+      <InfoTip label="who marks it still valid" align="start" testId="plan-stale-who">
+        Approvers and owners mark it still valid.
+      </InfoTip>
+    </span>
+  );
+}
+
+/** One reason the item needs you; a stale one the reader may settle opens Still valid… (Review). */
+function ReasonCard({
+  r,
+  item,
+  settle,
+  onChanged,
+}: {
+  r: PlanItem['reasons'][number];
+  item: PlanItem;
+  settle: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const { can } = useMe();
+  const may = settle && can('act_on_roadmap_item_staleness');
+  // null: as the page was opened (the Inbox's Review lands with ?review=1).
+  const [reviewing, setReviewing] = useState<boolean | null>(null);
+  const open = may && (reviewing ?? reviewAsked());
+  if (!settle)
+    return (
+      <div className="rounded-lg border border-line bg-surface2 px-3 py-2 text-base">
+        {r.detail}
+      </div>
+    );
+  return (
+    <div
+      data-testid="plan-reason"
+      data-kind={r.kind}
+      className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-base"
+    >
+      <span>{r.detail}</span>
+      {!may ? (
+        <StaleWhoTip />
+      ) : (
+        !open && (
+          <span className="flex">
+            <Button aria-expanded={false} onClick={() => setReviewing(true)}>
+              Review
+            </Button>
+          </span>
+        )
+      )}
+      {open && (
+        <StalenessActions
+          doc={item.roadmap.slug}
+          itemKey={item.key}
+          open
+          onCancel={() => setReviewing(false)}
+          onChanged={async () => {
+            setReviewing(false);
+            await onChanged();
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -434,6 +527,9 @@ function AlertCard({
       className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-base"
     >
       <span data-testid="plan-alert-detail">{alertSentence(a)}</span>
+      {a.kind === 'stale' && a.state !== 'resolved' && !has('review') && !has('reconcile') && (
+        <StaleWhoTip />
+      )}
       {a.state === 'kept' && (
         <span data-testid="plan-alert-kept" className="text-text2">
           Kept by {a.kept_by_name ?? 'someone'}
@@ -803,12 +899,7 @@ export function PlanInspector({
     >
       <InspectorSection label="Why it needs you" testId="plan-why">
         <div className="flex flex-col gap-2">
-          <AlertCards item={item} onChanged={onChanged} links={links} />
-          {item.reasons.map((r, n) => (
-            <div key={n} className="rounded-lg border border-line bg-surface2 px-3 py-2 text-base">
-              {r.detail}
-            </div>
-          ))}
+          <AlertCards item={item} onChanged={onChanged} links={links} withReasons />
           {item.next.action ? (
             // qa-plan-29: who takes the decision, in one sentence ("Owners decide on the slip").
             <p data-testid="plan-why-next" className="text-base font-semibold">

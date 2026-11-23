@@ -31,6 +31,7 @@ import { useScreenSubject } from '@/lib/screen-subject';
 import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
 import { sectionHref } from '@/lib/section-link';
 import { formatDate, plural } from '@/lib/format';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
 type Readiness = Schemas['ReadinessDashboard'];
 type Item = Schemas['ReadinessItem'];
@@ -806,6 +807,9 @@ export function PublishView({ doc }: { doc: string }) {
           return;
         }
         await unwrap(Promise.resolve(res));
+        // A roadmap's approval settles the stale items it keeps: the waiting counts read again.
+        invalidateWaiting();
+        waitingChanged();
       }
       // build-review (QV4 a): the same step publishes a roadmap's version for sharing.
       if (sharable) {

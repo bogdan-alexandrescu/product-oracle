@@ -302,7 +302,8 @@ async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
     # The 5 and then the 4 each touch three of the payment step's own: one line, its count.
     assert reasons == ["3 Ground Truth items changed"], reasons
 
-    # A bulk confirm of its three reads "were confirmed", never "was confirmed".
+    # A bulk confirm of its three is no change (the owner, Nov 23): no new reason. A stored
+    # one still reads "were confirmed" (below).
     approver = Principal(tenant_id=tenant_id, kind="user", role="owner")
     async with tenant_session(tenant_id) as s:
         for entity_id in touched:
@@ -315,7 +316,7 @@ async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
                 await baseline.set_entity_status(s, approver, entity, "confirmed", None)
         await s.commit()
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
-    assert reasons == ["3 Ground Truth items changed", "3 Ground Truth items were confirmed"]
+    assert reasons == ["3 Ground Truth items changed"], reasons
 
 
 def test_a_stored_baseline_items_reason_reads_ground_truth_and_merges():
