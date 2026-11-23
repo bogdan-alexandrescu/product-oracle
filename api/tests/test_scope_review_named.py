@@ -24,15 +24,24 @@ from tests.test_runs import (  # noqa: F401 - fixtures
 from tests.test_scope_review import _open, _read, _row
 
 
+def _baseline_features(scope_id):
+    """The scope's feature rows on a baseline feature, in the scope's own order. A scope's
+    requirement rows name baseline entities too, and Postgres hands rows back in no set
+    order: a requirement picked here has no evidence and no exclude (main CI, Nov 23)."""
+    return (
+        select(PrdScopeItem)
+        .where(
+            PrdScopeItem.scope_id == uuid.UUID(scope_id),
+            PrdScopeItem.kind == "feature",
+            PrdScopeItem.entity_id.is_not(None),
+        )
+        .order_by(PrdScopeItem.position, PrdScopeItem.key)
+    )
+
+
 async def _a_feature_with_a_goal(s, scope_id):
     """A scope row on a baseline feature that supports a confirmed goal, and that goal."""
-    rows = (
-        await s.scalars(
-            select(PrdScopeItem).where(
-                PrdScopeItem.scope_id == uuid.UUID(scope_id), PrdScopeItem.entity_id.is_not(None)
-            )
-        )
-    ).all()
+    rows = (await s.scalars(_baseline_features(scope_id))).all()
     for row in rows:
         goal = await s.scalar(
             select(Entity)
@@ -82,11 +91,7 @@ async def test_evidence_is_named_by_its_source(client, owner, runtime):  # noqa:
     tenant_id, auth = owner
     _, _, scope_id = await _open(client, owner, runtime)
     async with tenant_session(tenant_id) as s:
-        row = await s.scalar(
-            select(PrdScopeItem).where(
-                PrdScopeItem.scope_id == uuid.UUID(scope_id), PrdScopeItem.entity_id.is_not(None)
-            )
-        )
+        row = await s.scalar(_baseline_features(scope_id).limit(1))
         ev = Evidence(
             entity_id=row.entity_id,
             ref="Example customer interview",
