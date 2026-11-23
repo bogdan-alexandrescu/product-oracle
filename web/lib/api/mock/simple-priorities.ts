@@ -20,13 +20,13 @@ import {
   goalRank,
   prdCode,
   roadmapOut,
+  shownCode,
   trackPrdTitles,
   TRACKS,
   type SeedItem,
   type SimpleDb,
 } from './simple-roadmap';
 import { flowFor } from './simple-visuals';
-import { shownCode } from './item-code';
 import { madeOrder } from './made-order';
 import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
 import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
