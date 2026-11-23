@@ -15722,7 +15722,7 @@ function settleKept(db: Db, doc: DocumentRow, v: VersionRow, approverId: string)
   for (const i of proposed ?? []) {
     const b = base.get(i.key);
     if (!b || !flagged(rdb.freshness?.[i.key]) || !same(b, i)) continue;
-    rdb.freshness![i.key] = 'reconciled';
+    rdb.freshness[i.key] = 'reconciled';
     done.add(i.key);
   }
   const ours = new Set(rdb.tracks.filter((t) => t.roadmap_id === doc.id).map((t) => t.id));
