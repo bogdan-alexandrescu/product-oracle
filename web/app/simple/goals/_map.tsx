@@ -489,7 +489,7 @@ function MilestoneDay({ m, c }: { m: M; c: Ctx }) {
     <Button
       variant="ghost"
       data-testid="gm-strip-date"
-      className="h-auto px-0.5 text-xs font-normal whitespace-nowrap"
+      className="h-auto! gap-0! rounded-none! p-0! text-xs! font-normal! hover:bg-transparent hover:underline"
       onClick={() => setOpen(true)}
     >
       {day(m.due_on) || '+'}
