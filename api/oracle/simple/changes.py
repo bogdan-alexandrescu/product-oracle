@@ -1474,7 +1474,7 @@ async def _number_linked(
         return None  # its own code stays its code
     probe = SimpleNamespace(row=SimpleNamespace(id=None, feature_id=fid, prd_section_key=None),
                             code=None)  # fmt: skip
-    await service.item_codes(db, [probe, *by_id.values()])
+    await service.item_codes(db, [probe, *by_id.values()])  # type: ignore[list-item]
     code = _code_of(probe)
     if code is None:
         return None

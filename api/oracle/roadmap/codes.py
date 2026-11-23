@@ -378,11 +378,13 @@ def claim(session: Session, ids: list[Any]) -> None:
     numbering = _Numbering(session, by_feature)
     for row, code in claims:
         owner = _owner(row)
+        if owner is None:
+            continue
         if owner not in by_owner:
-            by_owner[owner] = _plan(session, owner, [], set())  # type: ignore[arg-type]
+            by_owner[owner] = _plan(session, owner, [], set())
         others = [o for o in by_owner[owner] if o is not row]
-        others += _base_rows(session, row, owner, by_owner)  # type: ignore[arg-type]
-        others += _draft_rows(session, row, owner, by_owner, [], set())  # type: ignore[arg-type]
+        others += _base_rows(session, row, owner, by_owner)
+        others += _draft_rows(session, row, owner, by_owner, [], set())
         if any(
             o.item_key != row.item_key and (shown(o, by_feature) or "").upper() == code.upper()
             for o in others
