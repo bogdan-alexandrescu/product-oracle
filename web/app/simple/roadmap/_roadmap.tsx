@@ -1,7 +1,7 @@
 'use client';
 
-import { Link, useSearchParams } from '@/lib/nav';
 import { CommentCount } from '@/components/simple/FeatureComments';
+import { Link, useSearchParams } from '@/lib/nav';
 import {
   useCallback,
   useContext,

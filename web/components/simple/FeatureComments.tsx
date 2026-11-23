@@ -5,7 +5,8 @@
  * own, an owner deletes any (each comment's can_* fields). Plain text, links shown as links.
  */
 import { useEffect, useState } from 'react';
-import { toast } from '@/components/ds';
+
+import { Button, toast } from '@/components/ds';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { formatInZone, useCompanyZone } from '@/lib/dates';
 import { useMe } from '@/lib/me';
@@ -180,22 +181,22 @@ export function FeatureComments({ item }: { item: CommentedItem }) {
               </span>
               <span className="ml-auto flex gap-2 text-xs">
                 {c.can_edit && (
-                  <button
-                    type="button"
-                    className="text-text2 hover:underline"
+                  <Button
+                    variant="ghost"
+                    className="h-6! px-1.5! text-xs!"
                     onClick={() => setEditing({ id: c.id, body: c.body })}
                   >
                     Edit
-                  </button>
+                  </Button>
                 )}
                 {c.can_delete && (
-                  <button
-                    type="button"
-                    className="text-text2 hover:underline"
+                  <Button
+                    variant="ghost"
+                    className="h-6! px-1.5! text-xs!"
                     onClick={() => void remove(c)}
                   >
                     Delete
-                  </button>
+                  </Button>
                 )}
               </span>
             </div>

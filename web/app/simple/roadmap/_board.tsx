@@ -1,6 +1,5 @@
 'use client';
 
-import { CommentCount } from '@/components/simple/FeatureComments';
 import {
   useEffect,
   useLayoutEffect,
@@ -11,6 +10,7 @@ import {
 } from 'react';
 
 import { InfoTip } from '@/components/ds';
+import { CommentCount } from '@/components/simple/FeatureComments';
 import { LINK_KINDS } from '@/lib/roadmap-links';
 
 import { itemName, NotInGt } from './_gtflag';

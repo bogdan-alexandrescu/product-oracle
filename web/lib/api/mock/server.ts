@@ -10,8 +10,8 @@ import { inboxCounts } from '@/lib/inbox-counts';
 import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
-import { mockName as displayName } from './people';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
+import { mockName as displayName } from './people';
 import { reply, rawReply } from './typed';
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from './ids';
