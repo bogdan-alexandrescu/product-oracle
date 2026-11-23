@@ -131,3 +131,37 @@ async def test_another_company_is_never_touched(client):
     r = await client.post("/v1/simple/changes", json=body, headers=a.ctx.as_("owner"))
     assert r.status_code in (403, 404), r.text
     assert positions(await items(client, b.ctx)) == theirs
+
+
+async def test_viewer_read_writes_nothing(client):
+    """protects=the roadmap read ranks through a read-only load: with unscored evidence on
+    the features, a viewer's read issues no UPDATE (nothing rescored, nothing committed) and
+    the evidence stays unscored; fails_when=the read rescores evidence or entities;
+    no_claim=Priorities' own read, which scores it."""
+    from sqlalchemy import event, func, select
+
+    from oracle.baseline.models import Entity, Evidence
+    from oracle.db import get_engine
+    from oracle.tenancy import tenant_session
+
+    w = await World(await make_people()).build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        for f in await s.scalars(select(Entity).where(Entity.type == "feature")):
+            s.add(Evidence(entity_id=f.id, url="https://example.com/unscored"))
+        await s.commit()
+    statements: list[str] = []
+
+    def seen(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        read = await items(client, w.ctx, "viewer")
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+    assert all(isinstance(read[k]["position"], int) for k in ORDERED)
+    assert not [st for st in statements if st.lstrip().upper().startswith("UPDATE")]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        q = select(func.count()).select_from(Evidence).where(Evidence.confidence.is_(None))
+        assert await s.scalar(q) > 0

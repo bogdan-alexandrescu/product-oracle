@@ -11,6 +11,9 @@ Test cards (protects / fails_when / no_claim):
 - test_reads_take_few_statements: protects=the roadmap read takes at most 60 statements and
   the waiting count at most 24 on that company; fails_when=a loader comes back per row or a
   table is read twice; no_claim=other pages.
+- test_read_ranks_through_a_light_load: protects=the read's rank loads columns only: no
+  evidence text, citation or source item is read, and no feature or goal is loaded twice as
+  a whole row; fails_when=the rank reads the Priorities page's full load; no_claim=its time.
 - test_reads_answer_within_budget (timing mark: CI runs it alone): protects=best of 3 after
   a warm-up: the roadmap under 300 ms, the waiting count under 110 ms; fails_when=the read
   slows past the budget; no_claim=production's network and load.
@@ -104,6 +107,24 @@ async def test_reads_take_few_statements(client):
     print(f"statements: roadmap {roadmap}, waiting {waiting}")
     assert roadmap <= 60, roadmap
     assert waiting <= 24, waiting
+
+
+async def test_read_ranks_through_a_light_load(client):
+    """The roadmap read's rank reads no evidence text and no source items."""
+    ctx = await seed_company()
+    statements: list[str] = []
+
+    def seen(conn, cursor, statement, *args):
+        statements.append(" ".join(statement.split()))
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        r = await client.get(ROADMAP, headers=ctx.as_("viewer"))
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+    assert r.status_code == 200, r.text
+    assert not [st for st in statements if "evidence.url" in st or "FROM source_items" in st]
 
 
 @pytest.mark.timing
