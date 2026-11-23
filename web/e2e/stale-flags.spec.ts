@@ -31,8 +31,8 @@ test.describe('stale flags', () => {
     const pick = card(page).getByTestId('card-owner-edit').getByLabel('Owner');
     await expect(pick.locator('option').nth(1)).toBeAttached();
     const name = (await pick.locator('option').nth(1).textContent())!;
+    // roadmap-add: choosing an owner saves it at once, with no Save.
     await pick.selectOption({ index: 1 });
-    await card(page).getByTestId('card-owner-edit').getByRole('button', { name: 'Save' }).click();
     await expect(card(page).getByTestId('card-owner')).toHaveText(name);
     await page.keyboard.press('Escape');
     await page.getByTestId('needs-decision').click();
