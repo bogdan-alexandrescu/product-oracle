@@ -1223,7 +1223,11 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
     for e in entries:
         e.code = codes.code_of(e.row, by_feature)
         fid = e.row.feature_id
-        if fid in titles and (by_feature.get(fid) or "") != e.code:
+        if (
+            fid in titles
+            and codes.title_code(e.row.title)
+            and (by_feature.get(fid) or "") != e.code
+        ):
             e.feature_name = f"{by_feature.get(fid) or ''} {titles[fid] or ''}".strip() or None
         f = to_confirm(open_.get(e.row.feature_id), e.row) if e.row.feature_id else None  # type: ignore[arg-type]
         e.confirm = f.id if f is not None else None

@@ -129,18 +129,20 @@ async def test_the_migration_gives_every_item_its_own_code(client):
             return seed.item(v, pv, key, title=title, created_at=_at(created), **kw)
 
         # Three slices of F-51: the earliest start keeps it.
+        await item(rv2, "a", "Routing rules", 1, feature_id=f51.id, start_date=date(2026, 12, 1))
+        await item(rv2, "b", "Routing by team", 2, feature_id=f51.id, start_date=date(2026, 11, 2))
+        await item(rv2, "c", "Routing digest", 3, feature_id=f51.id)
+        # The same item on the version before: every row of it is renumbered alike.
         await item(rv, "a", "Routing rules", 1, feature_id=f51.id, start_date=date(2026, 12, 1))
-        await item(rv, "b", "Routing by team", 2, feature_id=f51.id, start_date=date(2026, 11, 2))
-        await item(rv, "c", "Routing digest", 3, feature_id=f51.id)
-        # The same item on the next version: every row of it is renumbered alike.
-        await item(rv2, "a", "Routing rules", 9, feature_id=f51.id, start_date=date(2026, 12, 1))
+        # An item dropped before the latest version shares no plan with h: neither changes.
+        await item(rv, "z", "F-29a Old saved views", 1)
         # Two of F-62 on one start date: the earliest created keeps it.
-        await item(rv, "d", "Search index", 5, feature_id=f62.id, start_date=date(2026, 11, 9))
-        await item(rv, "e", "Search filters", 4, feature_id=f62.id, start_date=date(2026, 11, 9))
+        await item(rv2, "d", "Search index", 5, feature_id=f62.id, start_date=date(2026, 11, 9))
+        await item(rv2, "e", "Search filters", 4, feature_id=f62.id, start_date=date(2026, 11, 9))
         # Unique codes stay, slices with a suffix too; an item with none gets one.
-        await item(rv, "g", "F-37a Exports", 6)
-        await item(rv, "h", "F-29a Saved views", 7)
-        await item(rv, "i", "Loose ends", 8, start_date=date(2026, 11, 20))
+        await item(rv2, "g", "F-37a Exports", 6)
+        await item(rv2, "h", "F-29a Saved views", 7)
+        await item(rv2, "i", "Loose ends", 8, start_date=date(2026, 11, 20))
         await s.commit()
 
     async with unscoped_session() as s:
@@ -169,10 +171,11 @@ async def test_the_migration_gives_every_item_its_own_code(client):
             )
         )
     assert titles[(rv.id, "a")] == titles[(rv2.id, "a")] == "F-65 Routing rules"
-    assert titles[(rv.id, "b")] == "Routing by team"  # keeps F-51, from its feature
-    assert titles[(rv.id, "e")] == "Search filters"  # keeps F-62
-    assert titles[(rv.id, "g")] == "F-37a Exports"
-    assert titles[(rv.id, "h")] == "F-29a Saved views"
+    assert titles[(rv2.id, "b")] == "Routing by team"  # keeps F-51, from its feature
+    assert titles[(rv2.id, "e")] == "Search filters"  # keeps F-62
+    assert titles[(rv2.id, "g")] == "F-37a Exports"
+    assert titles[(rv2.id, "h")] == "F-29a Saved views"
+    assert titles[(rv.id, "z")] == "F-29a Old saved views"
     pairs = sorted(((e.data["old"], e.data["new"]) for e in events), key=str)
     assert pairs == sorted(got.values(), key=str)
     assert all(isinstance(e.entity_id, uuid.UUID) for e in events)
