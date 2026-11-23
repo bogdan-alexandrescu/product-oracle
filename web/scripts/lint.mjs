@@ -7,6 +7,8 @@
 //
 //   npm run lint [-- <eslint arguments>]   e.g. `-- app/inbox`, `-- --suppress-all`
 //
+// Plain `npx eslint` runs the untyped rules only, and fails on a file with typed suppressions.
+//
 // eslint-suppressions.json stays one file. The untyped and the typed passes each get their rules'
 // entries in a copy under $TMPDIR, since ESLint fails on entries for rules it did not run (the two
 // typed halves share theirs: entries for files a pass ignores are not checked); a copy a pass
