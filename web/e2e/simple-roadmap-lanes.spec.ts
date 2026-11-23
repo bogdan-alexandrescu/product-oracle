@@ -159,9 +159,14 @@ for (const scheme of ['light', 'dark'] as const) {
       );
       expect(await laneOf(page, 'plan-f-03')).toBe('Guided setup track');
       expect(await laneOf(page, 'plan-f-06')).toBe('Guided setup track');
-      expect((await row(page, 'plan-f-03').boundingBox())!.y).toBeLessThan(
-        (await row(page, 'plan-f-06').boundingBox())!.y,
-      );
+      // timeline-order: a track's rows follow the one feature order (Priorities' rank).
+      const [f03, f06] = [row(page, 'plan-f-03'), row(page, 'plan-f-06')];
+      const [p03, p06] = [
+        Number(await f03.getAttribute('data-position')),
+        Number(await f06.getAttribute('data-position')),
+      ];
+      const [y03, y06] = [(await f03.boundingBox())!.y, (await f06.boundingBox())!.y];
+      expect(p03 < p06).toBe(y03 < y06);
       // The Timeline's axis: months, Today (its line and its day in the key).
       await expect(page.getByTestId('timeline-month').filter({ hasText: /^Dec$/ })).not.toHaveCount(
         0,
@@ -195,9 +200,12 @@ for (const scheme of ['light', 'dark'] as const) {
       expect(Math.abs(gc.y - gs.y)).toBeGreaterThanOrEqual(gc.height - 1);
       expect(await groupOf(page, 'F-03 Setup failure alerts')).toBe('Reliability');
       expect(await groupOf(page, 'F-06 Setup error report')).toBe('Reliability');
-      expect((await bar(page, 'plan-f-03').boundingBox())!.y).toBeLessThan(
+      // Within their goal, too, in the one feature order.
+      const [b03, b06] = [
+        (await bar(page, 'plan-f-03').boundingBox())!.y,
         (await bar(page, 'plan-f-06').boundingBox())!.y,
-      );
+      ];
+      expect(b03 < b06).toBe(p03 < p06);
       // The Gantt draws PM-owned work grey and dashed, in the PM-owned group.
       await expect(group(page, 'PM-owned')).toHaveCount(1);
       for (const [code, title] of [
