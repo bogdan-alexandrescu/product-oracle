@@ -162,7 +162,7 @@ export function MkPrdReview() {
       const f2 = fs.find((f) => f.id === 'f2');
       if (f2) f2.end = '2027-01-19';
       const f5 = fs.find((f) => f.id === 'f5');
-      if (f5) f5.owner = 'p3';
+      if (f5) Object.assign(f5, { owner: 'p3', status: 'planned' });
     }
     return fs;
   });
@@ -223,6 +223,7 @@ export function MkPrdReview() {
     if (u?.field === 'dates') return { ...f, end: '2026-12-22' };
     return f;
   };
+  const isSaved = (k: string) => savedKey === k || (phase === 'done' && !!d2 && ['fn', 'f2', 'f5', 'sec:risks'].includes(k));
   const saved = (k: string) => {
     setSavedKey(k);
     setEditing(null);
@@ -323,7 +324,7 @@ export function MkPrdReview() {
         key={f.id}
         data-mk-row={f.id}
         onMouseEnter={() => d3 === 'a' && m && setHoverChange(m.change.id)}
-        className={`grid items-center gap-x-4 gap-y-1 border-b border-[var(--simple-rule)] py-${dense ? '1.5' : '2.5'} last:border-b-0 max-[600px]:grid-cols-1 ${d1 === 'c' ? 'grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)]' : 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)]'} ${markBar(m, f.id)} ${savedKey === f.id ? 'bg-accent-soft/60' : ''} ${mode === 'c' ? 'cursor-pointer hover:bg-surface2' : ''}`}
+        className={`grid items-center gap-x-4 gap-y-1 border-b border-[var(--simple-rule)] py-${dense ? '1.5' : '2.5'} last:border-b-0 max-[600px]:grid-cols-1 ${d1 === 'c' ? 'grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)]' : 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)]'} ${markBar(m, f.id)} ${isSaved(f.id) ? 'bg-accent-soft/60' : ''} ${mode === 'c' ? 'cursor-pointer hover:bg-surface2' : ''}`}
         onClick={rowClick}
       >
         <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -333,7 +334,7 @@ export function MkPrdReview() {
           </span>
           {inlineMark(m)}
           {flagged(f.id)}
-          {savedKey === f.id && <span className="text-xs font-semibold text-pass">Saved · Undo</span>}
+          {isSaved(f.id) && <span className="text-xs font-semibold text-pass">Saved · Undo</span>}
         </span>
         {d1 === 'c' && <span className="simple-small max-[600px]:hidden">{goalName(f.goal)}</span>}
         <span className="flex min-w-0 items-center gap-2 text-base">
@@ -435,7 +436,7 @@ export function MkPrdReview() {
           className="w-full resize-y rounded-md border-2 border-accent bg-surface px-3 py-2 text-base leading-6"
         />
       ) : (
-        <Editable mode={mode === 'c' ? 'a' : fieldMode} label={s.title} open={false} onOpen={() => setEditing(`sec:${s.key}`)} field={null} saved={savedKey === `sec:${s.key}`}>
+        <Editable mode={mode === 'c' ? 'a' : fieldMode} label={s.title} open={false} onOpen={() => setEditing(`sec:${s.key}`)} field={null} saved={isSaved(`sec:${s.key}`)}>
           {changedText && d3 === 'a' ? (
             <span>
               Small support teams answer customers from personal mailboxes. Requests get lost between people
@@ -657,9 +658,9 @@ export function MkPrdReview() {
         {live.length} {live.length === 1 ? 'change' : 'changes'} since version {MK_PRD.lastVersion} · {MK_PRD.lastVersionAt}
       </span>
       <span className="inline-flex gap-2 text-sm">
-        <Chip tone="pass">{live.filter((c) => c.kind === 'added').length} new</Chip>
-        <Chip tone="warn">{live.filter((c) => c.kind === 'changed').length} changed</Chip>
-        <Chip tone="crit">{live.filter((c) => c.kind === 'removed').length} removed</Chip>
+        {live.some((c) => c.kind === 'added') && <Chip tone="pass">{live.filter((c) => c.kind === 'added').length} new</Chip>}
+        {live.some((c) => c.kind === 'changed') && <Chip tone="warn">{live.filter((c) => c.kind === 'changed').length} changed</Chip>}
+        {live.some((c) => c.kind === 'removed') && <Chip tone="crit">{live.filter((c) => c.kind === 'removed').length} removed</Chip>}
       </span>
       {d3 === 'a' && (
         <label className="inline-flex items-center gap-2 text-sm">
@@ -748,7 +749,7 @@ export function MkPrdReview() {
   const owner = person(MK_PRD.owner);
   const edited = savedKey && phase !== 'done' ? 'Saved' : phase === 'done' && d2 ? 'All changes saved · 4 just now' : null;
   return (
-    <div className="simple-page" data-testid="simple-page" data-mk="prd-review">
+    <div className="simple-page" data-testid="simple-page" data-mk="prd-review" style={d3 === 'b' ? { maxWidth: 1360 } : undefined /* MOCK-HOOK room for the changes column */}>
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3 text-base">
           <a href="/simple/one-pagers" className="font-semibold text-accent-ink">
@@ -770,7 +771,7 @@ export function MkPrdReview() {
             )}
           </span>
         </div>
-        <h1 className="simple-h1">{MK_PRD.title}</h1>
+        <h1 className="simple-h1 max-[600px]:sr-only">{MK_PRD.title}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-text2">
           <Chip tone="accent">{MK_PRD.status}</Chip>
           <span>Version {MK_PRD.version}</span>·<span>Owner <b className="text-text">{owner?.name}</b></span>·
@@ -815,7 +816,7 @@ export function MkPrdRoadmap() {
     const f2 = fs.find((f) => f.id === 'f2');
     if (f2) f2.end = '2027-01-19';
     const f5 = fs.find((f) => f.id === 'f5');
-    if (f5) f5.owner = 'p3';
+    if (f5) Object.assign(f5, { owner: 'p3', status: 'planned' });
   }
   const ms = done ? [...MK_MILESTONES.slice(0, 1), { id: 'mn', name: 'Pricing review', date: '2027-02-08' }, MK_MILESTONES[1]] : MK_MILESTONES;
   return (
@@ -828,9 +829,9 @@ export function MkPrdRoadmap() {
       <section className="simple-card">
         <div className="grid grid-cols-[minmax(0,17rem)_minmax(0,1fr)] gap-x-4 gap-y-1.5 max-[600px]:grid-cols-[minmax(0,8rem)_minmax(0,1fr)]">
           <span className="text-sm font-semibold text-text-faint">Milestones</span>
-          <div className="relative h-7">
-            {ms.map((m) => (
-              <span key={m.id} className={`absolute top-0 text-sm font-semibold whitespace-nowrap ${m.id === 'mn' ? 'rounded bg-pass-bg px-1 text-pass' : 'text-accent-ink'}`} style={{ left: `calc(${pct(m.date)}% - 6px)` }}>
+          <div className="relative h-16">
+            {ms.map((m, i) => (
+              <span key={m.id} className={`absolute text-sm font-semibold whitespace-nowrap ${m.id === 'mn' ? 'rounded bg-pass-bg px-1 text-pass' : 'text-accent-ink'}`} style={{ left: `calc(${pct(m.date)}% - 6px)`, top: `${i * 20}px` }}>
                 ◆ {m.name} · {day(m.date)}
               </span>
             ))}
