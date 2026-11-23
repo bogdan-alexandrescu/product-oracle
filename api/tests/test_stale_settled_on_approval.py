@@ -172,7 +172,8 @@ def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision("0135_feature_comments").down_revision == REVISION
-    assert script.get_heads() == ["0135_feature_comments"]
+    assert script.get_revision("0136_stale_by_meaning").down_revision == "0135_feature_comments"
+    assert script.get_heads() == ["0136_stale_by_meaning"]
 
 
 async def test_the_migration_settles_todays_flags(client, owner, runtime):  # noqa: F811

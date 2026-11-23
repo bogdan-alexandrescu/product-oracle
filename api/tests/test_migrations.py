@@ -192,7 +192,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     # removed-tracks, prd-order, feature-parts, qaC-numfix, item-milestone, milestone-kinds,
     # tb-mk, feature-panel, track-order, ritual-failed-at, simple-change-indexes,
     # outcomes-edit, roadmap-dates, stale-approval, comments: renumbered on merge.
-    assert script.get_heads() == ["0135_feature_comments"]
+    assert script.get_heads() == ["0136_stale_by_meaning"]
 
     upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()
