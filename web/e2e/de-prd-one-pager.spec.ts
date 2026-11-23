@@ -118,3 +118,20 @@ test('a viewer reads the features with no handles', async ({ page }) => {
   await row(page, NAME).getByTestId('op-feature-name').click();
   await expect(features(page).getByLabel(`Name of ${NAME}`)).toHaveCount(0);
 });
+
+test.describe('at phone width', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('an admin renames a feature in place with no sideways page scroll', async ({ page }) => {
+    await onePager(page);
+    await row(page, NAME).getByTestId('op-feature-name').click();
+    const field = features(page).getByLabel(`Name of ${NAME}`);
+    await field.fill('Weekly alert summary');
+    await field.press('Enter');
+    await expect(row(page, 'Weekly alert summary').getByTestId('op-saved')).toBeVisible();
+    const wide = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(wide).toBeLessThanOrEqual(0);
+  });
+});
