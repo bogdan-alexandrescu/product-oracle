@@ -122,7 +122,7 @@ uv run oracle pull checkout-redesign --version 1 --out "$TMPDIR/oracle"
 | `make fmt` | ruff fixes and formats the API |
 | `make openapi` | regenerate `web/lib/api/openapi.json` and `schema.d.ts`; commit both |
 | `make web-build` | the production web build |
-| `make e2e` | the end-to-end Playwright spec against the real stack (below) |
+| `make e2e` | the end-to-end Playwright specs against the real stack (below) |
 | `make e2e-mock` | the UI Playwright suite against the mock API |
 
 ## Tests
@@ -146,9 +146,10 @@ uv run oracle pull checkout-redesign --version 1 --out "$TMPDIR/oracle"
   `e2e/prose-ceilings.json`; ceilings only go down (`npm run prose:ratchet`).
 - **Docs**: `python3 docs/contracts/check.py` checks the quotes, templates and YAML the
   docs contracts pin (`--write` refreshes them).
-- **End to end**: `make e2e` runs `web/e2e/real/feedback-loop.spec.ts` against the real
-  stack: push v1 with `oracle push`, comment and give verdicts in the UI, `oracle pull`,
-  push v2 with resolutions, check the diff, approve and export. Playwright
+- **End to end**: `make e2e` runs the specs in `web/e2e/real` against the real stack.
+  One of them, `feedback-loop.spec.ts`, is the PRD loop: push v1 with `oracle push`,
+  comment and give verdicts in the UI, `oracle pull`, push v2 with resolutions, check
+  the diff, approve and export. Playwright
   (`web/playwright.real.config.ts`) starts the API on :8100 against `oracle_e2e` (dropped,
   migrated and seeded on every run by `web/e2e/real/reset_stack.py`; override with
   `E2E_DATABASE_URL`) and a production web build behind nginx on :3200. It needs Postgres 16
@@ -222,8 +223,9 @@ gcloud projects describe <project-id> --format='value(projectNumber)'
 gcloud compute backend-services describe <backend-service-name> --global --format='value(id)'
 ```
 
-Users are matched by lowercased email in the seeded tenant (run `make seed` first) and
-created as owners; roles come later. A present but invalid assertion is a 401. *Sign
+Users are matched by lowercased email in the seeded tenant (run `make seed` first). A new
+user gets the role of their open invite, else the company's default role for Google
+sign-in (commenter when it is not set); existing users keep their role. A present but invalid assertion is a 401. *Sign
 out* sends the browser to IAP's `?gcp-iap-mode=CLEAR_LOGIN_COOKIE`, which clears the
 IAP session.
 
