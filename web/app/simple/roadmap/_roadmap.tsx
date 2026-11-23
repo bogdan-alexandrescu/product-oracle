@@ -243,6 +243,12 @@ type Dates = ReturnType<typeof storedDates>;
 const sameDates = (a: Dates, b: Dates) =>
   a.start_date === b.start_date && a.end_date === b.end_date;
 const sameHorizon = (a: Horizon, b: Horizon) => a === b;
+// de-r1: a quick add's after: its track, and the six weeks clicked for an add in place.
+const addAfter = (title: string, trackId?: string, span?: [string, string]) => ({
+  title,
+  ...(trackId ? { track_id: trackId } : {}),
+  ...(span ? { start_date: span[0], end_date: span[1] } : {}),
+});
 
 // pre-demo QA Demo 8: a draft's time with its day, month first, in the company zone, as the rest of
 // the app writes one ("Nov 6, 2026, 4:43 AM PST"), never a bare "4:43 AM".
@@ -2221,11 +2227,11 @@ export function SimpleRoadmap() {
           const t = (roadmap.data?.tracks ?? []).find((x) => x.id === a.track_id);
           return {
             track: t
-              ? ({
+              ? {
                   ...items.find((i) => i.track?.id === t.id)?.track,
                   id: t.id,
                   title: t.title,
-                } as Item['track'])
+                }
               : null,
           };
         }
@@ -2234,7 +2240,7 @@ export function SimpleRoadmap() {
             items.find((i) => i.goal?.id === a.goal_id)?.goal ??
             goalList.data
               ?.filter((x) => x.id === a.goal_id)
-              .map((x) => ({ id: x.id, key: x.key, title: x.title }) as Item['goal'])[0];
+              .map((x) => ({ id: x.id, key: x.key, title: x.title }))[0];
           return a.goal_id && g ? { goal: g, goal_ids: [g.id] } : null;
         }
         case 'change_horizon':
@@ -2731,12 +2737,7 @@ export function SimpleRoadmap() {
         op: 'add_item',
         target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } },
         before: {},
-        after: {
-          title,
-          ...(band ? { track_id: band.id } : {}),
-          // de-r1: an add in place comes with the six weeks clicked.
-          ...(span ? { start_date: span[0], end_date: span[1] } : {}),
-        },
+        after: addAfter(title, band?.id, span),
       });
       const c = r.change;
       const id = c.target.item_id;

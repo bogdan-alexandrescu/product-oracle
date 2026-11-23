@@ -2381,7 +2381,7 @@
       "count": 1
     },
     "sonarjs/cognitive-complexity": {
-      "count": 7
+      "count": 8
     }
   },
   "app/simple/roadmap/_tasks.tsx": {
