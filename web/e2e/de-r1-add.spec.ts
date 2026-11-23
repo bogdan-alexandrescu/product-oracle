@@ -15,6 +15,8 @@ import { expect, test, type Page } from './test';
  * - add in a column: protects=the card added in Later sits in Later, coded; fails_when=no
  *   "+ Add" in the column, or it lands in another column; no_claim=its track.
  * - Escape: protects=Escape drops the open bar and adds nothing; fails_when=it is added.
+ * - a commenter: protects=the same click and Enter files a proposal (no row yet); fails_when=no
+ *   "+ Add" row for them, or it is added at once.
  * - a viewer: protects=no "+ Add" anywhere; fails_when=a viewer sees one.
  */
 
@@ -84,6 +86,21 @@ test.describe('de-r1 add in place', () => {
     await expect(
       later.getByTestId('board-card').filter({ hasText: coded('Garden hose meter') }),
     ).toHaveCount(1);
+  });
+
+  test('a commenter, who may only propose, files a proposal with the same click', async ({
+    page,
+  }) => {
+    await open(page, 'timeline', 'commenter@example.com');
+    await page.getByRole('button', { name: 'Add to Guided setup track' }).click();
+    await page.getByTestId('add-row-title').fill('Shed door alarm');
+    await page.getByTestId('add-row-title').press('Enter');
+    await expect(
+      page.getByRole('status').filter({ hasText: /^Proposed Shed door alarm .*Needs a decision/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('timeline-row-name').getByText(coded('Shed door alarm')),
+    ).toHaveCount(0);
   });
 
   test('a viewer sees no add rows', async ({ page }) => {

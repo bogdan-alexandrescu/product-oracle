@@ -16,8 +16,8 @@ Branch commits (on top of 7f932ba):
   track's rows by start date, and positions are plain integers (one row's move needs its neighbours renumbered).
   Owner question in questions.json.
 
-Specs (mock-backed, --retries=0, all pass): web/e2e/de-r1-add.spec.ts (4), de-r1-grab.spec.ts (2),
-de-r1-delete.spec.ts (2). Not written: proposer-pending-mark spec (the add/re-track/rename of a proposer go through
+Specs (mock-backed, --retries=0, all pass): web/e2e/de-r1-add.spec.ts (5, incl. a commenter proposing), de-r1-grab.spec.ts (2),
+de-r1-delete.spec.ts (2). A commenter's add in place files a proposal (toast names Needs a decision); NOT built: a pending mark on the Timeline (re-track/rename of a proposer go through
 the same propose/act calls, which file proposals; no new pending mark was built on the Timeline).
 
 Gates: tsc clean; eslint on touched files clean except base errors (_roadmap.tsx cognitive-complexity 8, same as the
