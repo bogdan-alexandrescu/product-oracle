@@ -230,4 +230,4 @@ No API, mock or migration change. Files outside the merged lanes' own files: non
   (roadmap best 676 ms, waiting 125 ms; see above); alembic one head (0135_feature_comments);
   tsc 0; Playwright --retries=0 on a mock build: timeline-comment-count, timeline-order,
   simple-roadmap-lanes, feature-comments 15 passed; prose guard passed; format:check on the
-  touched files ok; full npm run lint: see the PR body.
+  touched files ok; full npm run lint: exit 0 (at 701f40ce, after the import-order fix).
