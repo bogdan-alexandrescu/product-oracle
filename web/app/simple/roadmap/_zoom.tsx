@@ -1753,6 +1753,7 @@ const TimelineRow = memo(function TimelineRow({
       data-testid="timeline-row"
       data-item={i.key}
       data-lane={lane}
+      data-position={i.position ?? undefined}
       data-depth={depth || undefined}
       data-open={sel || undefined}
       // A row out of sight is not painted (content-visibility), so a drag's frame repaints the

@@ -105,10 +105,23 @@ test.describe('Goals: prioritize by their header', () => {
     await page.reload();
     await expect(page.getByTestId('gm-grid')).toBeVisible();
     await expect.poll(() => mapGoals(page)).toEqual(before);
-    // Every page follows: moved on the map, Goal buckets reads the same order.
+    // Every page follows: moved on the map, Goal buckets reads the two goals in the same order
+    // (it lists the goals with features in this quarter first; the two keep their order among them).
+    const two = (gs: (string | null)[]) => gs.filter((g) => g === before[0] || g === before[1]);
+    const inBuckets = async () => {
+      await page.goto('/simple/priorities?tab=buckets');
+      await expect(page.getByTestId('goal-bucket').first()).toBeVisible();
+      return two(await bucketGoals(page));
+    };
+    expect(await inBuckets()).toEqual([before[0], before[1]]);
+    await page.goto('/simple/goals');
+    await expect(page.getByTestId('gm-grid')).toBeVisible();
     await handle(before[0]).focus();
     await page.keyboard.press('Alt+ArrowRight');
     await expect.poll(() => mapGoals(page)).toEqual(once);
+    // (The page was loaded again: the toast shown is this move's.)
+    await expect(saved).toBeVisible();
+    expect(await inBuckets()).toEqual([before[1], before[0]]);
   });
 
   // Goal-order proposals are not built: a commenter gets no goal handle (handoff.md).

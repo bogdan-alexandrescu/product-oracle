@@ -61,6 +61,11 @@ test.describe('Goal map: prioritize chips in their cell', () => {
     await expect.poll(() => chips(cell)).toEqual(after);
     await cell.getByTestId('gm-chip').nth(1).dragTo(cell.getByTestId('gm-chip').nth(0));
     await expect.poll(() => chips(cell)).toEqual(before);
+    await expect(page.getByRole('status').filter({ hasText: 'Moved' })).toBeVisible();
+    // The drag's order is saved too: the same after a reload.
+    await page.reload();
+    await expect(page.getByTestId('gm-chip').first()).toBeVisible();
+    await expect.poll(() => chips(cell)).toEqual(before);
   });
 
   test('a viewer: no chip can be dragged and Alt+Arrow moves nothing', async ({ page }) => {
