@@ -85,20 +85,27 @@ export function SlackPingsPanel() {
       <div className="space-y-3 px-4 py-3 text-base max-[600px]:px-3">
         {slack.data && !slack.data.connected && (
           <Notice testId="slack-pings-off">
-            {canConnect ? (
-              <>
-                Slack is not connected yet: connect it in{' '}
-                <Link
-                  href="/settings/notifications"
-                  className="font-medium text-accent-ink underline"
-                >
-                  Settings › Notifications
-                </Link>
-                . Your choices apply once it is.
-              </>
-            ) : (
-              'Slack is not connected yet: an owner connects it in Settings › Notifications. Your choices apply once it is.'
-            )}
+            {/* #1678: how it gets connected sits behind the (i); the link stays for an owner. */}
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              Slack is not connected yet
+              {canConnect && (
+                <>
+                  ·{' '}
+                  <Link
+                    href="/settings/notifications"
+                    className="font-medium text-accent-ink underline"
+                  >
+                    Settings › Notifications
+                  </Link>
+                </>
+              )}
+              <InfoTip label="Slack not connected" align="start" testId="slack-pings-off-tip">
+                {canConnect
+                  ? 'Connect it in Settings › Notifications.'
+                  : 'An owner connects it in Settings › Notifications.'}{' '}
+                Your choices apply once it is.
+              </InfoTip>
+            </span>
           </Notice>
         )}
         {(prefs.error || error) && <Notice tone="error">{error ?? prefs.error}</Notice>}

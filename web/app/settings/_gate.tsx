@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from '@/lib/nav';
 import { useEffect, type ReactNode } from 'react';
 
-import { Empty, LinkButton, PageHeader, PageSkeleton, Panel } from '@/components/ds';
+import { Empty, InfoTip, LinkButton, PageHeader, PageSkeleton, Panel } from '@/components/ds';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
 import { useQuery } from '@/lib/use-query';
@@ -59,8 +59,18 @@ export function SettingsGate({ children }: { children: ReactNode }) {
     <>
       <PageHeader title={tab.label} />
       <Panel testId="not-for-role" bodyClassName="flex flex-col items-center gap-3 pb-8">
-        <Empty icon="lock">Not available for your role</Empty>
-        <p className="text-base text-text2">{ELSEWHERE[pathname]?.text ?? askOwner}</p>
+        <Empty icon="lock">
+          <span className="inline-flex items-center gap-1.5">
+            Not available for your role
+            {/* #1678: who to ask sits behind the (i); a page with somewhere else to go says so. */}
+            {!ELSEWHERE[pathname] && (
+              <InfoTip label="who to ask" testId="not-for-role-tip">
+                {askOwner}
+              </InfoTip>
+            )}
+          </span>
+        </Empty>
+        {ELSEWHERE[pathname] && <p className="text-base text-text2">{ELSEWHERE[pathname].text}</p>}
         {ELSEWHERE[pathname]?.href ? (
           <LinkButton href={ELSEWHERE[pathname].href} variant="secondary">
             {ELSEWHERE[pathname].label}

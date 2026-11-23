@@ -93,8 +93,14 @@ test('rirs-10: the header and the inspector give one critical count, open and ho
 }) => {
   await openIntake(page);
   await expect(page.getByTestId('draft-reason')).toHaveText(
-    '4 critical questions open, 1 holds the draft: answer it or record a decision',
+    '4 critical questions open, 1 holds the draft',
   );
+  // #1678: what lifts the gate sits behind the (i).
+  await page.getByTestId('draft-reason-tip').click();
+  await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveText(
+    'Answer it or record a decision.',
+  );
+  await page.keyboard.press('Escape');
   const stat = inspector(page).getByTestId('stat-critical');
   await expect(stat).toContainText('Critical open');
   await expect(stat).toContainText('4');

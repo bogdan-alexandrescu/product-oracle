@@ -176,9 +176,7 @@ test.describe('phone', () => {
     await row(page, 'validation_plan').click();
     const sheet = page.getByTestId('sheet-criterion');
     const form = sheet.getByTestId('rating-form');
-    await expect(form.getByTestId('rating-hint')).toHaveText(
-      'Pick a status and add a reason to submit',
-    );
+    await expect(form.getByTestId('rating-hint')).toHaveText('Pick a status and add a reason');
     await form.getByRole('button', { name: 'Pass' }).click();
     await expect(form.getByTestId('rating-hint')).toHaveText('Add a reason to submit');
   });
