@@ -5,7 +5,7 @@
 // the roadmap marks edits), with &st=rest|open|mid|result|ms|hard and &viewer=1. Data is the
 // invented company in lib/api/mock/re-mock.ts.
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { useSearchParams } from '@/lib/nav';
 import {
@@ -102,10 +102,13 @@ function Avatar({ name, size = 22 }: { name: string | null; size?: number }) {
       title={name ?? 'No owner yet'}
       className="text-xs"
       style={{
-        width: size,
+        minWidth: size,
         height: size,
+        padding: name ? '0 5px' : 0,
         borderRadius: size,
         flex: 'none',
+        lineHeight: 1,
+        letterSpacing: 0.2,
         display: 'inline-grid',
         placeItems: 'center',
         background: name ? 'var(--accent)' : 'transparent',
@@ -238,9 +241,9 @@ function Bar({
             bottom: 3,
             left: `${pct(it.was[0])}%`,
             width: `${pct(it.was[1]) - pct(it.was[0])}%`,
-            border: '1.5px dashed var(--text-faint)',
+            background: 'color-mix(in srgb, var(--today) 16%, transparent)',
             borderRadius: 8,
-            opacity: lensDim ? 0.2 : 0.7,
+            opacity: lensDim ? 0.2 : 1,
           }}
         />
       )}
@@ -259,7 +262,7 @@ function Bar({
         }}
       >
         {showGrips && <Grip side="l" />}
-        {(c.dec === 're2' || c.dec === 're3') && <Avatar name={it.owner} size={18} />}
+        {((c.dec === 're2' && c.v === 'a') || c.dec === 're3') && <Avatar name={it.owner} size={18} />}
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
           <b style={{ fontWeight: 600 }}>{it.code}</b> {it.name}
         </span>
@@ -302,7 +305,7 @@ function Flag() {
   );
 }
 
-function DateTip({ text, left, top = -30 }: { text: string; left: string; top?: number }) {
+function DateTip({ text, left, top = -30, side }: { text: string; left: string; top?: number; side?: boolean }) {
   return (
     <span
       className="text-sm"
@@ -310,7 +313,7 @@ function DateTip({ text, left, top = -30 }: { text: string; left: string; top?: 
         position: 'absolute',
         left,
         top,
-        transform: 'translateX(-50%)',
+        transform: side ? undefined : 'translateX(-50%)',
         background: 'var(--tip)',
         color: 'var(--tip-text)',
         borderRadius: 8,
@@ -319,6 +322,7 @@ function DateTip({ text, left, top = -30 }: { text: string; left: string; top?: 
         zIndex: 40,
       }}
     >
+      {side && <span aria-hidden style={{ position: 'absolute', left: -6, top: '50%', marginTop: -6, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderRight: '6px solid var(--tip)' }} />}
       {text}
     </span>
   );
@@ -451,11 +455,11 @@ function Board({ c, items, by }: { c: Ctx; items: ReItem[]; by: 'track' | 'goal'
   const sel = selectedId(c);
   const editTint = c.dec === 're2' && c.v === 'b' && c.st !== 'rest' && !c.viewer;
   return (
-    <div style={{ ...card, overflow: 'hidden', background: editTint ? 'color-mix(in srgb, var(--accent-soft) 45%, var(--surface))' : 'var(--surface)' }}>
+    <div style={{ ...card, overflow: 'clip', background: editTint ? 'var(--accent-soft)' : 'var(--surface)', border: editTint ? '2px solid var(--accent)' : card.border }}>
       <div style={{ display: 'grid', gridTemplateColumns: `${re3 === 'c' ? '28px ' : ''}260px 1fr` }}>
         {re3 === 'c' && <div style={{ borderBottom: '1px solid var(--line)' }} />}
-        <div className="text-sm" style={{ borderBottom: '1px solid var(--line)', borderRight: '1px solid var(--line)', padding: '6px 12px', color: 'var(--text2)' }} />
-        <div style={{ position: 'relative' }}>
+        <div className="text-sm" style={{ borderBottom: '1px solid var(--line)', borderRight: '1px solid var(--line)', padding: '6px 12px', color: 'var(--text2)', ...stick(c) }} />
+        <div style={{ position: 'relative', ...stick(c) }}>
           <TodayLine />
           <Ruler c={c} milestones={milestonesFor(c)} />
         </div>
@@ -465,6 +469,11 @@ function Board({ c, items, by }: { c: Ctx; items: ReItem[]; by: 'track' | 'goal'
       </div>
     </div>
   );
+}
+
+/** The 60-item frames keep the month axis in view while the page scrolls. */
+function stick(c: Ctx): CSSProperties {
+  return c.st === 'hard' ? { position: 'sticky', top: 0, zIndex: 22, background: 'var(--surface)' } : {};
 }
 
 function TodayLine() {
@@ -499,14 +508,28 @@ function Group({ g, c, sel, lens }: { g: { key: string; items: ReItem[] }; c: Ct
   return (
     <>
       {re3 === 'c' && <div style={{ borderBottom: '1px solid var(--line)', background: 'var(--surface2)' }} />}
-      <div className="text-base" style={{ gridColumn: 'span 2', background: 'var(--surface2)', borderBottom: '1px solid var(--line)', padding: '6px 12px', fontWeight: 600, display: 'flex', gap: 10, alignItems: 'center' }}>
+      <div
+        data-scroll-here={c.dec === 're1' && c.v === 'a' && c.st === 'hard' && g.key === RE_GOALS[2] ? 'start' : undefined}
+        className="text-base"
+        style={{ gridColumn: 'span 2', background: 'var(--surface2)', borderBottom: '1px solid var(--line)', padding: '6px 12px', fontWeight: 600, display: 'flex', gap: 10, alignItems: 'center', scrollMarginTop: 80 }}
+      >
         {g.key}
         <span className="text-sm" style={{ color: 'var(--text2)', fontWeight: 400 }}>
-          {g.items.length} items
+          {shown.length} items
         </span>
       </div>
-      {shown.map((it) => (
-        <Row key={it.id} it={it} c={c} sel={sel === it.id} lens={lens} target={c.dec === 're2' && c.st === 'mid' && (c.v === 'a' || c.v === 'b') && !c.viewer && it.id === 'b1'} />
+      {shown.map((it, i) => (
+        <Fragment key={it.id}>
+          {c.dec === 're1' && c.v === 'c' && c.st === 'hard' && g.key === RE_GOALS[2] && i === 12 && <HoverPlus />}
+          <Row
+            it={it}
+            c={c}
+            sel={sel === it.id}
+            lens={lens}
+            target={((c.dec === 're2' && c.st === 'mid' && (c.v === 'a' || c.v === 'b')) || (c.dec === 're2' && c.st === 'hard' && c.v === 'a')) && !c.viewer && it.id === 'b1'}
+            pressed={c.dec === 're1' && c.v === 'b' && c.st === 'hard' && g.key === RE_GOALS[2] && i === shown.length - 1}
+          />
+        </Fragment>
       ))}
       {addRow && <AddRow c={c} open={first && (c.st === 'open' || c.st === 'mid')} hard={c.st === 'hard' && g.key === RE_GOALS[2]} />}
       {c.dec === 're1' && c.v === 'b' && first && (c.st === 'open' || c.st === 'mid') && <DrawRow c={c} />}
@@ -522,7 +545,7 @@ function Label({ it, c }: { it: ReItem; c: Ctx }) {
   return (
     <div className="text-base" style={{ padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRight: '1px solid var(--line)', borderBottom: '1px solid var(--line)', height: ROW, minWidth: 0 }}>
       {rename ? (
-        <TitleInput value="Spike alerts by text and email" w={200} />
+        <TitleInput value={it.name} w={200} />
       ) : (
         <span title={`${it.code} ${it.name}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderBottom: inputLook ? '1.5px solid var(--line-strong)' : undefined }}>
           {it.name}
@@ -532,11 +555,11 @@ function Label({ it, c }: { it: ReItem; c: Ctx }) {
   );
 }
 
-function Row({ it, c, sel, lens, target }: { it: ReItem; c: Ctx; sel: boolean; lens: string; target?: boolean }) {
+function Row({ it, c, sel, lens, target, pressed }: { it: ReItem; c: Ctx; sel: boolean; lens: string; target?: boolean; pressed?: boolean }) {
   const re3 = c.dec === 're3' ? c.v : '';
   const dim = lens === 'changes' && !it.was;
   const rowTint = re3 === 'd' && !c.viewer ? 'color-mix(in srgb, var(--accent-soft) 35%, transparent)' : undefined;
-  const midDrag = c.dec === 're2' && c.st === 'mid' && (c.v === 'a' || c.v === 'b') && it.id === 'a2';
+  const midDrag = c.dec === 're2' && ((c.st === 'mid' && (c.v === 'a' || c.v === 'b')) || (c.st === 'hard' && c.v === 'a')) && it.id === 'a2';
   return (
     <>
       {re3 === 'c' && (
@@ -557,27 +580,44 @@ function Row({ it, c, sel, lens, target }: { it: ReItem; c: Ctx; sel: boolean; l
         ) : (
           <>
           {target && (
-            <div style={{ position: 'absolute', inset: 0, zIndex: 25, pointerEvents: 'none', transform: 'translateY(-14px)', filter: 'drop-shadow(0 6px 10px rgba(0,0,0,.25))' }}>
+            <div data-scroll-here={c.st === 'hard' ? '' : undefined} style={{ position: 'absolute', inset: 0, zIndex: 25, pointerEvents: 'none', transform: 'translateY(-14px)', filter: 'drop-shadow(0 6px 10px rgba(0,0,0,.25))' }}>
               <Bar it={{ ...RE_ITEMS[1], start: '2026-12-07', end: '2027-01-29' }} c={c} selected>
                 <DateTip text="Dec 7 – Jan 29 · Mobile app track" left="50%" top={-30} />
               </Bar>
             </div>
           )}
-          <Bar it={it} c={c} selected={sel} lensDim={dim}>
+          <Bar it={it} c={c} selected={sel || pressed} lensDim={dim}>
             {sel && <SelectExtras c={c} />}
+            {pressed && (
+              <span data-scroll-here="" style={{ position: 'absolute', left: 40, top: 8 }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d="M8 1v14M1 8h14" stroke="var(--text)" strokeWidth="1.6" /></svg>
+                <DateTip text={`Moving ${it.code} ${it.name}`} left="8px" top={-38} />
+              </span>
+            )}
             {c.dec === 're3' && c.st === 'mid' && it.id === 'a2' && (re3 === 'a' || re3 === 'c' || re3 === 'b' || re3 === 'd') && (
-              <DateTip text={`Moved · was ${range(it.was![0], it.was![1])}, now ${range(it.start, it.end)}`} left="50%" top={-32} />
+              <DateTip text={`Moved · was ${range(it.was![0], it.was![1])}, now ${range(it.start, it.end)}`} left="calc(100% + 12px)" top={2} side />
             )}
           </Bar>
-          {c.dec === 're2' && c.st === 'hard' && it.id === 'x2' && (
-            <span style={{ position: 'absolute', left: `${pct(it.start)}%`, top: 0 }}>
-              <DateTip text={`${it.code} ${it.name} · ${range(it.start, it.end)} · ${it.owner ?? 'No owner yet'}`} left="140px" top={40} />
-            </span>
-          )}
+          {c.dec === 're2' && c.st === 'hard' && c.v === 'c' && it.id === 'x2' && <ReadCard it={it} />}
+          {c.dec === 're2' && c.st === 'hard' && c.v === 'd' && it.id === 'x2' && <span data-scroll-here="" />}
           </>
         )}
       </div>
     </>
+  );
+}
+
+/** RE2 C for a viewer: a click on a bar opens only this read view, no toolbar. */
+function ReadCard({ it }: { it: ReItem }) {
+  return (
+    <div data-scroll-here="" className="text-base" style={{ ...pop, left: `${pct(it.start)}%`, top: ROW - 2, width: 380, display: 'grid', gap: 6, padding: 12 }}>
+      <b style={{ fontWeight: 600, whiteSpace: 'normal' }}>
+        {it.code} {it.name}
+      </b>
+      <span className="text-sm" style={{ color: 'var(--text2)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {range(it.start, it.end)} · <Avatar name={it.owner} size={18} /> {it.owner ?? 'No owner yet'} · {it.track}
+      </span>
+    </div>
   );
 }
 
@@ -624,7 +664,7 @@ function AddRow({ c, open, hard }: { c: Ctx; open: boolean; hard: boolean }) {
       </div>
       <div style={{ position: 'relative', height: ROW, borderBottom: '1px solid var(--line)', background: 'repeating-linear-gradient(90deg, transparent 0 calc(100% / 39 - 1px), var(--line) calc(100% / 39 - 1px) calc(100% / 39))', opacity: isOpen ? 1 : 0.9 }}>
         {isOpen && (
-          <div data-scroll-here={hard ? '' : undefined} style={{ position: 'absolute', top: 5, bottom: 5, left: `${pct(s)}%`, width: `${pct(e) - pct(s)}%`, border: '1.5px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', padding: '0 4px', zIndex: 10 }}>
+          <div style={{ position: 'absolute', top: 5, bottom: 5, left: `${pct(s)}%`, width: `${pct(e) - pct(s)}%`, border: '1.5px solid var(--accent)', borderRadius: 8, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', padding: '0 4px', zIndex: 10 }}>
             <TitleInput value={hard ? 'Move-in checklist' : 'Paper bill reminders'} w={180} />
             {c.st === 'mid' && <Grip side="r" />}
             {c.st === 'mid' && <DateTip text={range(s, e)} left="100%" top={-30} />}
@@ -677,6 +717,21 @@ function PlusGap() {
   );
 }
 
+/** RE1 C on the 60-item Gantt: the thin line and + show only under the pointer. */
+function HoverPlus() {
+  return (
+    <div data-scroll-here="" style={{ gridColumn: 'span 2', position: 'relative', height: 0 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: -1, height: 2, background: 'var(--accent)', zIndex: 15 }} />
+      <span className="text-base" style={{ position: 'absolute', left: 236, top: -13, width: 26, height: 26, borderRadius: 13, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center', zIndex: 16 }}>
+        +
+      </span>
+      <svg width="18" height="22" viewBox="0 0 18 22" aria-hidden style={{ position: 'absolute', left: 252, top: 2, zIndex: 17 }}>
+        <path d="M1 1l0 17 4.5-4 3 7 3-1.3-3-6.8 6 0z" fill="var(--text)" stroke="var(--surface)" strokeWidth="1.2" />
+      </svg>
+    </div>
+  );
+}
+
 /** RE1 C after Enter: the new bar landed on guessed dates and is dragged to the right ones. */
 function GuessFix() {
   return (
@@ -717,6 +772,7 @@ function Header({ c, view, counts }: { c: Ctx; view: string; counts: { changed: 
           </span>
         ))}
       </div>
+      {c.dec === 're1' && c.v === 'b' && !c.viewer && <Tip text="Drag across an empty spot of a row to add a feature there. On a phone, press and hold." />}
       <div style={{ flex: 1 }} />
       {c.viewer && (
         <span className="text-sm" style={{ ...btn, color: 'var(--text2)', display: 'flex', alignItems: 'center' }}>
@@ -757,9 +813,11 @@ function Header({ c, view, counts }: { c: Ctx; view: string; counts: { changed: 
           })}
         </div>
       )}
-      <span className="text-base" style={{ ...btn, borderColor: 'var(--warn)' }}>
-        Needs a decision · {counts.decide}
-      </span>
+      {re3 !== 'b' && (
+        <span className="text-base" style={{ ...btn, borderColor: 'var(--warn)' }}>
+          Needs a decision · {counts.decide}
+        </span>
+      )}
       {(re3 === 'c' || re3 === 'd') && (
         <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <Tip text="What the marks mean" />
@@ -879,7 +937,7 @@ function Nnl({ c, items, phone }: { c: Ctx; items: ReItem[]; phone: boolean }) {
     ['next', 'Next'],
     ['later', 'Later'],
   ];
-  const goals = phone ? [RE_GOALS[0]] : RE_GOALS;
+  const goals = phone ? (c.dec === 're3' ? [RE_GOALS[1], RE_GOALS[0]] : [RE_GOALS[0]]) : RE_GOALS;
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {goals.map((g) => (
@@ -912,7 +970,7 @@ function NnlCard({ it, c }: { it: ReItem; c: Ctx }) {
   const s = barStyle(it, c, re3 === 'b' && c.st === 'open' && !it.was);
   const sel = c.dec === 're2' && c.st === 'open' && it.id === 'a2';
   return (
-    <div className="text-base" style={{ ...s, position: 'relative', top: undefined, bottom: undefined, padding: '8px 10px', display: 'flex', gap: 8, whiteSpace: 'normal', outline: sel ? '2px solid var(--accent)' : undefined }}>
+    <div data-scroll-here={c.dec === 're3' && it.id === 'a2' ? '' : undefined} className="text-base" style={{ ...s, position: 'relative', top: undefined, bottom: undefined, padding: '8px 10px', display: 'flex', gap: 8, whiteSpace: 'normal', outline: sel ? '2px solid var(--accent)' : undefined }}>
       {re3 === 'c' && (it.was || it.decision) && (
         <span style={{ color: it.decision ? 'var(--warn)' : 'var(--today)' }}>{it.decision ? '◆' : '●'}</span>
       )}
@@ -936,7 +994,10 @@ function NnlAdd({ c, open }: { c: Ctx; open: boolean }) {
     return (
       <>
       {c.v === 'c' && <div style={{ height: 2, background: 'var(--accent)', position: 'relative' }}><span style={{ position: 'absolute', left: -6, top: -11, width: 24, height: 24, borderRadius: 12, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center' }}>+</span></div>}
-      <div style={{ border: '1.5px solid var(--accent)', borderRadius: 8, padding: 8, display: 'grid', gap: 6, background: 'var(--accent-soft)' }}>
+      <div style={{ border: '1.5px solid var(--accent)', borderRadius: 8, padding: 8, display: 'grid', gap: 6, background: 'var(--accent-soft)', position: 'relative' }}>
+        {c.v === 'b' && (
+          <span aria-hidden style={{ position: 'absolute', right: 14, top: 8, width: 40, height: 40, borderRadius: 20, background: 'conic-gradient(var(--accent) 0 75%, color-mix(in srgb, var(--accent) 25%, transparent) 75% 100%)', WebkitMask: 'radial-gradient(circle, transparent 14px, #000 15px)', mask: 'radial-gradient(circle, transparent 14px, #000 15px)' }} />
+        )}
         <TitleInput value="Paper bill reminders" w={160} />
         <span className="text-sm" style={{ color: 'var(--text2)' }}>Next · Cut bill shocks</span>
       </div>
@@ -954,11 +1015,52 @@ function NnlAdd({ c, open }: { c: Ctx; open: boolean }) {
 function PhoneSheet({ c }: { c: Ctx }) {
   if (c.dec !== 're2' || c.viewer) return null;
   const it = RE_ITEMS[1];
-  const live = c.v !== 'b' || true;
+  if (c.v === 'd') {
+    // RE2 D on a phone: the panel's own labelled fields, as a tall sheet.
+    const box: CSSProperties = { border: '1px solid var(--line)', borderRadius: 8, padding: '6px 10px', display: 'flex', gap: 8, alignItems: 'center' };
+    const f = (label: string, body: ReactNode) => (
+      <div style={{ display: 'grid', gap: 2 }}>
+        <span className="text-sm" style={{ color: 'var(--text2)' }}>{label}</span>
+        <span className="text-base" style={box}>{body}</span>
+      </div>
+    );
+    return (
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, top: 120, background: 'var(--surface)', borderTop: '1px solid var(--line)', borderRadius: '18px 18px 0 0', boxShadow: 'var(--tip-shadow)', padding: 16, display: 'grid', gap: 12, alignContent: 'start', zIndex: 60 }}>
+        <span style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--line-strong)', justifySelf: 'center' }} />
+        <span className="text-xl" style={{ fontWeight: 700 }}>
+          {it.code} {it.name}
+        </span>
+        {f('Name', it.name)}
+        {f('Dates', range(it.start, it.end))}
+        {f('Owner', <><Avatar name={it.owner} size={20} /> {it.owner}</>)}
+        {f('Track', `${it.track} ▾`)}
+        {f('Goal', `${it.goal} ▾`)}
+      </div>
+    );
+  }
+  if (c.v === 'c')
+    return (
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, background: 'var(--surface)', borderTop: '1px solid var(--line)', boxShadow: 'var(--tip-shadow)', padding: 12, display: 'grid', gap: 8, zIndex: 60 }}>
+        <span className="text-base" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <b style={{ fontWeight: 600 }}>{it.code}</b>
+          <TitleInput value={it.name} w={250} />
+        </span>
+        <div className="text-base" style={{ display: 'flex', gap: 6 }}>
+          <span style={btnOn}>Nov 16 – Jan 8 ▾</span>
+          <span style={{ ...btn, display: 'flex', gap: 6, alignItems: 'center' }}>
+            <Avatar name={it.owner} size={18} /> ▾
+          </span>
+          <span style={btn}>Billing ▾</span>
+        </div>
+      </div>
+    );
   return (
     <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, background: 'var(--surface)', borderTop: '1px solid var(--line)', borderRadius: '18px 18px 0 0', boxShadow: 'var(--tip-shadow)', padding: 16, display: 'grid', gap: 10, zIndex: 60 }}>
       <span style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--line-strong)', justifySelf: 'center' }} />
-      <TitleInput value={`${it.code} ${it.name}`} w={300} />
+      <span className="text-base" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <b style={{ fontWeight: 600 }}>{it.code}</b>
+        <TitleInput value={it.name} w={270} />
+      </span>
       <div className="text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={btn}>−1 wk</span>
         <span style={{ flex: 1, textAlign: 'center' }}>{range(it.start, it.end)}</span>
@@ -976,7 +1078,6 @@ function PhoneSheet({ c }: { c: Ctx }) {
           <span key={t} style={t === it.track ? btnOn : btn}>{t.replace(' track', '')}</span>
         ))}
       </div>
-      {live && c.v === 'd' && <span className="text-sm" style={{ color: 'var(--text2)' }}>✓ Saved</span>}
     </div>
   );
 }
@@ -1020,6 +1121,28 @@ function SidePanel({ c }: { c: Ctx }) {
   );
 }
 
+/** RE2 D for a viewer: the same panel, read only. */
+function ReadPanel() {
+  const it = reBigItems().find((i) => i.id === 'x2')!;
+  const field = (label: string, body: ReactNode) => (
+    <div style={{ display: 'grid', gap: 2 }}>
+      <span className="text-sm" style={{ color: 'var(--text2)' }}>{label}</span>
+      <span className="text-base" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{body}</span>
+    </div>
+  );
+  return (
+    <aside style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 420, background: 'var(--surface)', borderLeft: '1px solid var(--line)', boxShadow: 'var(--tip-shadow)', padding: 24, display: 'grid', gap: 16, alignContent: 'start', zIndex: 45 }}>
+      <div className="text-2xl" style={{ fontWeight: 700 }}>
+        {it.code} {it.name}
+      </div>
+      {field('Dates', range(it.start, it.end))}
+      {field('Owner', <><Avatar name={it.owner} size={20} /> {it.owner ?? 'No owner yet'}</>)}
+      {field('Track', it.track)}
+      {field('Goal', it.goal)}
+    </aside>
+  );
+}
+
 // ——— the page ———
 
 export function ReMock() {
@@ -1027,7 +1150,7 @@ export function ReMock() {
   const dec: Dec = p.get('re1') ? 're1' : p.get('re2') ? 're2' : 're3';
   const v = p.get(dec) ?? 'a';
   const st = p.get('st') ?? 'rest';
-  const viewer = p.get('viewer') === '1' || (dec === 're2' && st === 'hard');
+  const viewer = p.get('viewer') === '1' || (st === 'hard' && ((dec === 're2' && (v === 'c' || v === 'd')) || dec === 're3'));
   const phone = useNarrow();
   const c: Ctx = { dec, v, st, viewer };
   const big = st === 'hard';
@@ -1059,6 +1182,7 @@ export function ReMock() {
       )}
       {phone && (st === 'open' || st === 'mid' || st === 'rest') && dec === 're2' && st !== 'rest' && <PhoneSheet c={c} />}
       {!phone && dec === 're2' && v === 'd' && (st === 'open' || st === 'mid' || st === 'result') && <SidePanel c={c} />}
+      {!phone && dec === 're2' && v === 'd' && st === 'hard' && <ReadPanel />}
       {toast && <Toast>{toast}</Toast>}
     </div>
   );

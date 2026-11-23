@@ -1,505 +1,553 @@
 {
- "title": "Roadmap editing: add and change items, features and milestones right on the roadmap",
- "subtitle": "Mock-ups for the Nov 23 roadmap and PRD review: Juniper Lane, an invented home-energy company. Pick one proposal per decision.",
- "decisions": [
-  {
-   "code": "RE1",
-   "name": "Adding in place",
-   "question": "How does a person add a feature or a milestone right where it goes on Timeline, Gantt and Now / Next / Later, in one step?",
-   "common": "Every proposal adds on the roadmap itself, on Timeline, Gantt and Now / Next / Later, saves the moment you press Enter (no Save), shows an Undo, and gives the new feature its code with its name. A viewer who may not edit sees no add control.",
-   "proposals": [
+  "title": "Roadmap editing: add and change items, features and milestones right on the roadmap",
+  "subtitle": "Mock-ups for the Nov 23 roadmap and PRD review: Juniper Lane, an invented home-energy company. Pick one proposal per decision.",
+  "decisions": [
     {
-     "letter": "a",
-     "name": "Click the spot",
-     "recommended": true,
-     "what": "Every track (Timeline) or goal (Gantt) ends with a faint '+ Add' row marked in weeks, and every Now / Next / Later column ends with '+ Add'. Click the week where the feature should start: a bar appears there, six weeks long, with the title field on it. Type and press Enter; it is saved. Drag its end to stretch it. A milestone is added the same way: click the date on the Milestones band and type its name.",
-     "why": "It is the only proposal where the place you click is the whole answer: track or goal, horizon and start date all come from the spot, so adding is one click and a title. The '+ Add' rows make the places you can add easy to see on a shared screen, and it works the same on all three views and on a phone.",
-     "plus": "One click and a title; nothing to pick; the add rows show at a glance where things can go.",
-     "cost": "One extra thin row per track or goal (three on this roadmap). Dates start as a six-week guess until the bar is stretched.",
-     "frames": [
-      {
-       "file": "re1-a-rest.html",
-       "caption": "At rest: each track ends with a faint '+ Add' row in weeks. Add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re1-a-open.html",
-       "caption": "The person clicked Dec 7 in Billing track's '+ Add' row: the new bar sits there with its title field; Enter saves it."
-      },
-      {
-       "file": "re1-a-mid.html",
-       "caption": "Mid-drag: stretching the new bar's end to Jan 29; the dates show as it moves."
-      },
-      {
-       "file": "re1-a-result.html",
-       "caption": "The result: F-31 Paper bill reminders is on Billing track, Dec 7 – Jan 29, marked New, with Undo. No Save was pressed."
-      },
-      {
-       "file": "re1-a-ms.html",
-       "caption": "Adding a milestone: one click on the Milestones band at Mar 8 opens its name field there."
-      },
-      {
-       "file": "re1-a-hard-1512.html",
-       "caption": "Hard case, 60 items on the Gantt in a 1512 window: the '+ Add' row stays at the end of its goal, so a new feature goes straight into Faster setup without scrolling to a form at the top."
-      },
-      {
-       "file": "re1-a-open-390.html",
-       "caption": "Phone 390, Now / Next / Later: '+ Add' ends each column; tapping it in Next opens the title field in place."
-      },
-      {
-       "file": "re1-a-rest-dark.html",
-       "caption": "Dark: the add rows and bars keep Simple's dark tokens."
-      }
-     ]
+      "code": "RE1",
+      "name": "Adding in place",
+      "question": "How does a person add a feature or a milestone right where it goes on Timeline, Gantt and Now / Next / Later, in one step?",
+      "common": "Every proposal adds on the roadmap itself, on Timeline, Gantt and Now / Next / Later, saves the moment you press Enter (no Save), shows an Undo, and gives the new feature its code with its name. A viewer who may not edit sees no add control.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Click the spot",
+          "recommended": true,
+          "what": "Every track (Timeline) or goal (Gantt) ends with a faint '+ Add' row marked in weeks, and every Now / Next / Later column ends with '+ Add'. Click the week where the feature should start: a bar appears there, six weeks long, with the title field on it. Type and press Enter; it is saved. Drag its end to stretch it. A milestone is added the same way: click the date on the Milestones band and type its name.",
+          "why": "It is the only proposal where the place you click is the whole answer: track or goal, horizon and start date all come from the spot, so adding is one click and a title. The '+ Add' rows make the places you can add easy to see on a shared screen, and it works the same on all three views and on a phone.",
+          "plus": "One click and a title; nothing to pick; the add rows show at a glance where things can go.",
+          "cost": "One extra thin row per track or goal (three on this roadmap). Dates start as a six-week guess until the bar is stretched.",
+          "frames": [
+            {
+              "file": "re1-a-rest.html",
+              "caption": "At rest: each track ends with a faint '+ Add' row in weeks. Add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re1-a-open.html",
+              "caption": "The person clicked Dec 7 in Billing track's '+ Add' row: the new bar sits there with its title field; Enter saves it."
+            },
+            {
+              "file": "re1-a-mid.html",
+              "caption": "Mid-drag: stretching the new bar's end to Jan 29; the dates show as it moves."
+            },
+            {
+              "file": "re1-a-result.html",
+              "caption": "The result: F-31 Paper bill reminders is on Billing track, Dec 7 – Jan 29, marked New, with Undo. No Save was pressed."
+            },
+            {
+              "file": "re1-a-ms.html",
+              "caption": "Adding a milestone: one click on the Milestones band at Mar 8 opens its name field there."
+            },
+            {
+              "file": "re1-a-hard-1512.html",
+              "caption": "Hard case, 60 items on the Gantt in a 1512 window: the month axis stays in view; Faster setup's '+ Add' row takes Move-in checklist at Dec 7, with no form at the top."
+            },
+            {
+              "file": "re1-a-open-390.html",
+              "caption": "Phone 390, Now / Next / Later: '+ Add' ends each column; tapping it in Next opens the title field in place."
+            },
+            {
+              "file": "re1-a-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re1-a-rest-dark.html",
+              "caption": "Dark: the add rows and bars keep Simple's dark tokens."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Draw a bar",
+          "recommended": false,
+          "what": "No add rows. Press on any empty spot of a track row and drag across the weeks the feature takes: the bar is drawn with its exact dates, then the title field opens on it; Enter saves. A milestone is a click on the Milestones band. On a phone, press and hold in a column.",
+          "plus": "Dates are exact from the first gesture, so no stretching after; the roadmap stays as clean as today.",
+          "cost": "Nothing on screen says you can draw: people must learn it (the hint lives behind an (i)). A drag that starts on a bar moves the bar instead, an easy slip. Press and hold on a phone is slow and hidden.",
+          "frames": [
+            {
+              "file": "re1-b-rest.html",
+              "caption": "At rest: the roadmap looks as today but for an (i) by the views, the only hint that empty space is the add control. Add a feature 1 drag and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re1-b-mid.html",
+              "caption": "Mid-drag: drawing on Billing track from Dec 7; the dates follow the pointer."
+            },
+            {
+              "file": "re1-b-open.html",
+              "caption": "Released at Jan 29: the drawn bar holds its title field; Enter saves it."
+            },
+            {
+              "file": "re1-b-result.html",
+              "caption": "The result: F-31 Paper bill reminders on Billing track, Dec 7 – Jan 29, with Undo."
+            },
+            {
+              "file": "re1-b-ms.html",
+              "caption": "Adding a milestone: a click on the Milestones band at Mar 8 opens its name field."
+            },
+            {
+              "file": "re1-b-hard-1512.html",
+              "caption": "Hard case, 60 items on the Gantt in 1512: a press on the last row of Faster setup lands on F-87 Help reminders and picks it up instead of drawing a new bar."
+            },
+            {
+              "file": "re1-b-open-390.html",
+              "caption": "Phone 390: drawing does not work by touch; holding a finger on an empty spot in Next fills the ring, then opens the title field. The only hint is behind the (i) by the views."
+            },
+            {
+              "file": "re1-b-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re1-b-rest-dark.html",
+              "caption": "Dark: at rest, unchanged from today's look."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Plus between rows",
+          "recommended": false,
+          "what": "Point between two rows and a line with a + appears; click it for a small form with the title, the track (filled in), dates guessed from the rows around it and an owner. Enter adds it. Milestones: the same + on the Milestones band.",
+          "plus": "Precise order between rows; track and owner can be set before it lands.",
+          "cost": "The + only shows on hover, so a shared screen never shows where to add; guessed dates usually need a drag after, making it two steps.",
+          "frames": [
+            {
+              "file": "re1-c-rest.html",
+              "caption": "At rest: nothing shows until you point between rows. Add a feature 1 click, a title and Enter (often plus 1 drag to fix the dates), move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re1-c-open.html",
+              "caption": "Pointing under Paper bill opt-out shows the line and +; its form has the title, Billing track, Jan 11 – Feb 5 guessed, and no owner yet."
+            },
+            {
+              "file": "re1-c-mid.html",
+              "caption": "Enter added it on the guessed Jan 11 – Feb 5; the second step is dragging its start back to Dec 7."
+            },
+            {
+              "file": "re1-c-result.html",
+              "caption": "The result: F-31 Paper bill reminders on Billing track, Dec 7 – Feb 5, with Undo; it took a click, a title and a drag."
+            },
+            {
+              "file": "re1-c-ms.html",
+              "caption": "Adding a milestone: the + on the Milestones band at Mar 8 opens its name, its date and Add (1 click, a name, then Add)."
+            },
+            {
+              "file": "re1-c-hard-1512.html",
+              "caption": "Hard case, 60 items on the Gantt in 1512: the gap between two rows is thin, and the line and + show only under the pointer."
+            },
+            {
+              "file": "re1-c-open-390.html",
+              "caption": "Phone 390: no hover on a phone, so the + line shows between cards while adding."
+            },
+            {
+              "file": "re1-c-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re1-c-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Smarter add bar",
+          "recommended": false,
+          "what": "Keep one add bar at the top, as today, but give it what dragging did: a Feature / Milestone switch, the title, a track picker and a dates picker, then Add. The item lands in place; nothing to drag.",
+          "plus": "Familiar; one place to add; works with a keyboard and for people who cannot drag.",
+          "cost": "Five clicks for a feature, far from where it goes; the bar takes a row of space above the roadmap on every visit.",
+          "frames": [
+            {
+              "file": "re1-d-rest.html",
+              "caption": "At rest: the add bar sits above the roadmap. Add a feature 5 clicks and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 3 clicks and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re1-d-open.html",
+              "caption": "The title is typed and the dates picker is open on Dec 7 – Jan 29."
+            },
+            {
+              "file": "re1-d-mid.html",
+              "caption": "The track picker is open on Billing track."
+            },
+            {
+              "file": "re1-d-result.html",
+              "caption": "The result: Add pressed; F-31 Paper bill reminders lands on Billing track, with Undo."
+            },
+            {
+              "file": "re1-d-ms.html",
+              "caption": "Adding a milestone: the switch is on Milestone, the name typed, Mar 8 picked."
+            },
+            {
+              "file": "re1-d-hard-1512.html",
+              "caption": "Hard case, 60 items in 1512: adding happens at the top while the place it lands may be far below."
+            },
+            {
+              "file": "re1-d-open-390.html",
+              "caption": "Phone 390: the bar wraps onto three lines above the columns."
+            },
+            {
+              "file": "re1-d-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re1-d-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "b",
-     "name": "Draw a bar",
-     "recommended": false,
-     "what": "No add rows. Press on any empty spot of a track row and drag across the weeks the feature takes: the bar is drawn with its exact dates, then the title field opens on it; Enter saves. A milestone is a click on the Milestones band. On a phone, press and hold in a column.",
-     "plus": "Dates are exact from the first gesture, so no stretching after; the roadmap stays as clean as today.",
-     "cost": "Nothing on screen says you can draw: people must learn it (the hint lives behind an (i)). A drag that starts on a bar moves the bar instead, an easy slip. Press and hold on a phone is slow and hidden.",
-     "frames": [
-      {
-       "file": "re1-b-rest.html",
-       "caption": "At rest: the roadmap looks as today; empty space is the add control. Add a feature 1 drag and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re1-b-mid.html",
-       "caption": "Mid-drag: drawing on Billing track from Dec 7; the dates follow the pointer."
-      },
-      {
-       "file": "re1-b-open.html",
-       "caption": "Released at Jan 29: the drawn bar holds its title field; Enter saves it."
-      },
-      {
-       "file": "re1-b-result.html",
-       "caption": "The result: F-31 Paper bill reminders on Billing track, Dec 7 – Jan 29, with Undo."
-      },
-      {
-       "file": "re1-b-ms.html",
-       "caption": "Adding a milestone: a click on the Milestones band at Mar 8 opens its name field."
-      },
-      {
-       "file": "re1-b-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: rows are full of bars, so there is little empty space to draw on and every press risks moving a bar."
-      },
-      {
-       "file": "re1-b-open-390.html",
-       "caption": "Phone 390: drawing does not work by touch; a press and hold in Next opens the title field."
-      },
-      {
-       "file": "re1-b-rest-dark.html",
-       "caption": "Dark: at rest, unchanged from today's look."
-      }
-     ]
+      "code": "RE2",
+      "name": "Changing in place",
+      "question": "How does a person move, stretch, rename, re-track or re-own an item right on the roadmap, without a form?",
+      "common": "Every proposal changes an item without the Change link and Save of today: each change saves as it is made and shows a short note with Undo instead of a confirm. A viewer who may not edit sees no handles.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Grab the bar",
+          "recommended": true,
+          "what": "The bar is the control. Drag it to move its dates, drag an end to stretch it, drag it up or down into another track or goal; click its name to rename it in place; click the owner's initials on the bar to pick a person. Each change saves at once and shows Undo. Grips show on the selected bar only.",
+          "why": "It removes every step between seeing and changing: moving dates, stretching and moving track are one drag each, the owner is two clicks on the bar itself, and Undo makes a slip cheap without a confirm. Grips show on the selected bar only, so the screen stays calm for a room. The Edit switch (B) was a close second; it is the better pick if the owner wants a shared screen locked against stray drags.",
+          "plus": "Fewest steps for every change; nothing to open; Undo instead of confirm.",
+          "cost": "Drags can happen by accident on a shared screen (Undo covers it); dragging needs a pointer, so a phone uses a sheet instead.",
+          "frames": [
+            {
+              "file": "re2-a-rest.html",
+              "caption": "At rest: each bar shows its owner's initials. Add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re2-a-open.html",
+              "caption": "F-14 Spike alerts by text is selected: grips at both ends, its name field is open, and its owner list is open."
+            },
+            {
+              "file": "re2-a-mid.html",
+              "caption": "Mid-drag: F-14 is lifted from Billing track (its old place dashed) into Mobile app track, Dec 7 – Jan 29."
+            },
+            {
+              "file": "re2-a-result.html",
+              "caption": "The result: F-14 now sits in Mobile app track, Dec 7 – Jan 29; the note says so, with Undo."
+            },
+            {
+              "file": "re2-a-hard-1512.html",
+              "caption": "Hard case, 60 items in 1512: F-14 is dragged from Billing track down to Mobile app track, about 20 rows away; its old place is off screen while the page scrolls."
+            },
+            {
+              "file": "re2-a-open-390.html",
+              "caption": "Phone 390: tapping a card opens a sheet: name, dates a week at a time, owner and track, each saving as it is tapped."
+            },
+            {
+              "file": "re2-a-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re2-a-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Edit switch",
+          "recommended": false,
+          "what": "The roadmap opens to read. An Edit switch in the header turns on editing for the whole page: grips on every bar, names underlined as fields, owners as pickers, a light tint on the canvas. Changes then save at once with Undo; turning the switch off locks it again.",
+          "plus": "A shared screen in a review cannot be changed by a stray click; it is plain when the page is in edit mode.",
+          "cost": "One more click before every editing session, and people forget it is on (or off).",
+          "frames": [
+            {
+              "file": "re2-b-rest.html",
+              "caption": "At rest: reading mode, Edit off. Add a feature 1 click to turn on Edit, then 1 click and a title; move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re2-b-open.html",
+              "caption": "Edit is on: the canvas turns blue inside a blue edge, every bar has grips, names are fields."
+            },
+            {
+              "file": "re2-b-mid.html",
+              "caption": "Mid-drag in edit mode: F-14 moves into Mobile app track, Dec 7 – Jan 29."
+            },
+            {
+              "file": "re2-b-result.html",
+              "caption": "The result: F-14 moved, with Undo; Edit stays on until switched off."
+            },
+            {
+              "file": "re2-b-hard-1512.html",
+              "caption": "Hard case, Edit on with 60 items in 1512: every bar has grips and every name is a field, and the long F-42 title is cut to fit."
+            },
+            {
+              "file": "re2-b-open-390.html",
+              "caption": "Phone 390: with Edit on, tapping a card opens the same sheet of live fields."
+            },
+            {
+              "file": "re2-b-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re2-b-rest-dark.html",
+              "caption": "Dark: at rest, Edit off."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Bar toolbar",
+          "recommended": false,
+          "what": "Click a bar and a small toolbar opens above it: its name as a field, dates, owner and track, each a one-click picker. No dragging; every pick saves at once with Undo.",
+          "plus": "Exact and keyboard friendly; nothing moves by accident; works the same with a mouse or a touch screen.",
+          "cost": "Three clicks for most changes (bar, field, pick); moving dates by picking is slower than a drag.",
+          "frames": [
+            {
+              "file": "re2-c-rest.html",
+              "caption": "At rest: bars as today. Add a feature 1 click and a title, move its dates 3 clicks, set its owner 3 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re2-c-open.html",
+              "caption": "F-14 clicked: its toolbar opens above it with name, Nov 16 – Jan 8, owner and Billing track."
+            },
+            {
+              "file": "re2-c-mid.html",
+              "caption": "The track picker is open on Mobile app track."
+            },
+            {
+              "file": "re2-c-result.html",
+              "caption": "The result: F-14 moved to Mobile app track, same dates, with Undo."
+            },
+            {
+              "file": "re2-c-hard-1512.html",
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: a click on F-42 opens only its read view, with the long title in full and no toolbar."
+            },
+            {
+              "file": "re2-c-open-390.html",
+              "caption": "Phone 390: the toolbar docks at the bottom: the name, then a picker each for dates, owner and track."
+            },
+            {
+              "file": "re2-c-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re2-c-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Live panel fields",
+          "recommended": false,
+          "what": "Keep today's feature panel, but every field is always a live field: no Change link, no Save, no Cancel. A field saves when you leave it and shows a small Saved tick, with Undo.",
+          "plus": "Least change to what people know; every field of a feature in one place; the panel stays the one place features open, as the rules ask.",
+          "cost": "Still a trip into a panel for every change, and the bar's dates cannot be dragged.",
+          "frames": [
+            {
+              "file": "re2-d-rest.html",
+              "caption": "At rest: bars as today. Add a feature 1 click and a title, move its dates 3 clicks, set its owner 3 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re2-d-open.html",
+              "caption": "F-14 clicked: the panel opens with every field ready to type in."
+            },
+            {
+              "file": "re2-d-mid.html",
+              "caption": "Typing 'Ine' in Owner shows the people list on Ines Okafor."
+            },
+            {
+              "file": "re2-d-result.html",
+              "caption": "The result: Owner saved with a tick, no Save pressed, and Undo at the bottom."
+            },
+            {
+              "file": "re2-d-hard-1512.html",
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: F-42's panel opens to read only, with no fields to type in."
+            },
+            {
+              "file": "re2-d-open-390.html",
+              "caption": "Phone 390: the panel opens as a tall sheet of the same labelled live fields; the code sits in the heading, not in the name field."
+            },
+            {
+              "file": "re2-d-open-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re2-d-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "c",
-     "name": "Plus between rows",
-     "recommended": false,
-     "what": "Point between two rows and a line with a + appears; click it for a small form with the title, the track (filled in), dates guessed from the rows around it and an owner. Enter adds it. Milestones: the same + on the Milestones band.",
-     "plus": "Precise order between rows; track and owner can be set before it lands.",
-     "cost": "The + only shows on hover, so a shared screen never shows where to add; guessed dates usually need a drag after, making it two steps.",
-     "frames": [
-      {
-       "file": "re1-c-rest.html",
-       "caption": "At rest: nothing shows until you point between rows. Add a feature 1 click, a title and Enter (often plus 1 drag to fix the dates), move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re1-c-open.html",
-       "caption": "Pointing under Paper bill opt-out shows the line and +; its form has the title, Billing track, Jan 11 – Feb 5 guessed, and no owner yet."
-      },
-      {
-       "file": "re1-c-mid.html",
-       "caption": "Enter added it on the guessed Jan 11 – Feb 5; the second step is dragging its start back to Dec 7."
-      },
-      {
-       "file": "re1-c-result.html",
-       "caption": "The result: F-31 Paper bill reminders on Billing track, Dec 7 – Feb 5, with Undo; it took a click, a title and a drag."
-      },
-      {
-       "file": "re1-c-ms.html",
-       "caption": "Adding a milestone: the + on the Milestones band opens its name, date and Add."
-      },
-      {
-       "file": "re1-c-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: the gaps between rows are thin; the + hides until you hover the right one."
-      },
-      {
-       "file": "re1-c-open-390.html",
-       "caption": "Phone 390: no hover on a phone, so the + line shows between cards while adding."
-      },
-      {
-       "file": "re1-c-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    },
-    {
-     "letter": "d",
-     "name": "Smarter add bar",
-     "recommended": false,
-     "what": "Keep one add bar at the top, as today, but give it what dragging did: a Feature / Milestone switch, the title, a track picker and a dates picker, then Add. The item lands in place; nothing to drag.",
-     "plus": "Familiar; one place to add; works with a keyboard and for people who cannot drag.",
-     "cost": "Five clicks for a feature, far from where it goes; the bar takes a row of space above the roadmap on every visit.",
-     "frames": [
-      {
-       "file": "re1-d-rest.html",
-       "caption": "At rest: the add bar sits above the roadmap. Add a feature 5 clicks and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 3 clicks and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re1-d-open.html",
-       "caption": "The title is typed and the dates picker is open on Dec 7 – Jan 29."
-      },
-      {
-       "file": "re1-d-mid.html",
-       "caption": "The track picker is open on Billing track."
-      },
-      {
-       "file": "re1-d-result.html",
-       "caption": "The result: Add pressed; F-31 Paper bill reminders lands on Billing track, with Undo."
-      },
-      {
-       "file": "re1-d-ms.html",
-       "caption": "Adding a milestone: the switch is on Milestone, the name typed, Mar 8 picked."
-      },
-      {
-       "file": "re1-d-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: adding happens at the top while the place it lands may be far below."
-      },
-      {
-       "file": "re1-d-open-390.html",
-       "caption": "Phone 390: the bar wraps onto three lines above the columns."
-      },
-      {
-       "file": "re1-d-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
+      "code": "RE3",
+      "name": "Marks for edits and changes",
+      "question": "How does the roadmap mark what can be changed, what changed since the approved version, drafts and what needs a decision, so a room reads it at a glance?",
+      "common": "Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides editing (grips, row tints, Put back) from a viewer who may not edit, who still sees what changed and what needs a decision.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Ghost of the approved",
+          "recommended": true,
+          "what": "A changed bar keeps a faint dashed outline where the approved version had it, plus a small dot; a bar that needs a decision carries an amber '!'; drafts stay dashed. 'Changed since approved · N' in the header lists each change, old dates to new, with Put back. Edit grips only show on the bar you select.",
+          "why": "The room sees what moved and by how much without a key: the ghost is the old plan drawn where it was. The '!' sits on the item it is about, so a decision is one click from where it is seen. The Review lens (B) came close; it is better when the room wants to look at one kind of change at a time.",
+          "plus": "Reads at a glance and in place; the size of each change is visible; one click to put a change back.",
+          "cost": "Ghost shadows add shapes to a busy row; on a phone the ghost becomes 'was …' text.",
+          "frames": [
+            {
+              "file": "re3-a-rest.html",
+              "caption": "At rest: F-14, F-19 and F-26 show their approved place as a faint shadow in the change colour (drafts keep their dashed outline) and a dot; F-17, F-19 and F-29 carry an amber '!'. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides editing (grips, row tints, Put back) from a viewer who may not edit, who still sees what changed and what needs a decision. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re3-a-open.html",
+              "caption": "'Changed since approved · 3' opened: each change, old dates to new, with Put back."
+            },
+            {
+              "file": "re3-a-mid.html",
+              "caption": "Pointing at F-14 opens a note beside it: was Nov 2 – Dec 18, now Nov 16 – Jan 8."
+            },
+            {
+              "file": "re3-a-result.html",
+              "caption": "The result of acting on F-17's '!' (no owner): owner set to Sofi Arden; the '!' is gone and Needs a decision drops to 2, with Undo."
+            },
+            {
+              "file": "re3-a-hard-1512.html",
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: View only; the 13 changes and 9 decisions still read row by row, with nothing to act on."
+            },
+            {
+              "file": "re3-a-rest-390.html",
+              "caption": "Phone 390: F-17 and F-29 carry the '!' on the card; F-14 and F-26 say 'was …' with the dot."
+            },
+            {
+              "file": "re3-a-rest-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re3-a-rest-dark.html",
+              "caption": "Dark: ghosts, dots and '!' on the dark tokens."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Review lens",
+          "recommended": false,
+          "what": "Bars stay clean, with only the '!' on items that need a decision. A switch in the header (All, Changes, Drafts, Decisions, each with its count) dims everything else, so the room looks at one kind at a time.",
+          "plus": "The cleanest roadmap at rest; a meeting can walk through changes, then drafts, then decisions.",
+          "cost": "At rest you cannot see what changed: it takes a click, and the dimmed view hides the context.",
+          "frames": [
+            {
+              "file": "re3-b-rest.html",
+              "caption": "At rest: All is on; only the '!' marks show; the Decisions tab carries the count. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides editing (grips, row tints, Put back) from a viewer who may not edit, who still sees what changed and what needs a decision. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re3-b-open.html",
+              "caption": "Changes · 3 picked: F-14, F-19 and F-26 stay, the rest dim."
+            },
+            {
+              "file": "re3-b-mid.html",
+              "caption": "Pointing at F-14 opens a note beside it saying what changed."
+            },
+            {
+              "file": "re3-b-result.html",
+              "caption": "The result of acting on F-17's '!': owner set, Decisions · 2, with Undo."
+            },
+            {
+              "file": "re3-b-hard-1512.html",
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: at rest nothing tells the room which of the 60 changed."
+            },
+            {
+              "file": "re3-b-rest-390.html",
+              "caption": "Phone 390: the switch fits on one line; cards show only the '!'."
+            },
+            {
+              "file": "re3-b-rest-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re3-b-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Margin marks",
+          "recommended": false,
+          "what": "A narrow column before the names holds the marks: a dot for changed, a diamond for needs a decision, a ring for draft. Bars are left exactly as today; the key is behind (i).",
+          "plus": "Bars untouched; scanning one column finds every mark on a long roadmap.",
+          "cost": "The mark is far from the bar it is about, and it says that something changed, not how; a key is needed.",
+          "frames": [
+            {
+              "file": "re3-c-rest.html",
+              "caption": "At rest: marks in the column before the names. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides editing (grips, row tints, Put back) from a viewer who may not edit, who still sees what changed and what needs a decision. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re3-c-open.html",
+              "caption": "The (i) is open: what the dot, diamond and ring mean."
+            },
+            {
+              "file": "re3-c-mid.html",
+              "caption": "Pointing at F-14 opens a note beside it saying what changed."
+            },
+            {
+              "file": "re3-c-result.html",
+              "caption": "The result of acting on F-17: its diamond is gone, Needs a decision · 2, with Undo."
+            },
+            {
+              "file": "re3-c-hard-1512.html",
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: one column to scan for marks."
+            },
+            {
+              "file": "re3-c-rest-390.html",
+              "caption": "Phone 390: the mark leads each card."
+            },
+            {
+              "file": "re3-c-rest-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re3-c-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Coloured states",
+          "recommended": false,
+          "what": "Bars are filled by state: a changed bar in solid blue, a bar that needs a decision in amber, drafts grey and dashed; rows a person may change get a light tint. The key is behind (i).",
+          "plus": "Readable from the back of the room.",
+          "cost": "The colours fight with dated / estimated and with status colours elsewhere in Simple, and say nothing about how much changed.",
+          "frames": [
+            {
+              "file": "re3-d-rest.html",
+              "caption": "At rest: changed bars solid blue, decisions amber, rows you may change tinted. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides editing (grips, row tints, Put back) from a viewer who may not edit, who still sees what changed and what needs a decision. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
+            },
+            {
+              "file": "re3-d-open.html",
+              "caption": "The (i) is open: what each colour means."
+            },
+            {
+              "file": "re3-d-mid.html",
+              "caption": "Pointing at F-14 opens a note beside it saying what changed."
+            },
+            {
+              "file": "re3-d-result.html",
+              "caption": "The result of acting on F-17: its amber is gone, Needs a decision · 2, with Undo."
+            },
+            {
+              "file": "re3-d-hard-1512.html",
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: whole rows of colour, without the tint of rows they may change."
+            },
+            {
+              "file": "re3-d-rest-390.html",
+              "caption": "Phone 390: cards filled by state."
+            },
+            {
+              "file": "re3-d-rest-390-dark.html",
+              "caption": "Phone 390, dark: the same phone screen on the dark tokens."
+            },
+            {
+              "file": "re3-d-rest-dark.html",
+              "caption": "Dark: at rest."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "code": "RE2",
-   "name": "Changing in place",
-   "question": "How does a person move, stretch, rename, re-track or re-own an item right on the roadmap, without a form?",
-   "common": "Every proposal changes an item without the Change link and Save of today: each change saves as it is made and shows a short note with Undo instead of a confirm. A viewer who may not edit sees no handles.",
-   "proposals": [
-    {
-     "letter": "a",
-     "name": "Grab the bar",
-     "recommended": true,
-     "what": "The bar is the control. Drag it to move its dates, drag an end to stretch it, drag it up or down into another track or goal; click its name to rename it in place; click the owner's initials on the bar to pick a person. Each change saves at once and shows Undo. Grips show on the selected bar only.",
-     "why": "It removes every step between seeing and changing: moving dates, stretching and moving track are one drag each, the owner is two clicks on the bar itself, and Undo makes a slip cheap without a confirm. Grips show on the selected bar only, so the screen stays calm for a room. The Edit switch (B) was a close second; it is the better pick if the owner wants a shared screen locked against stray drags.",
-     "plus": "Fewest steps for every change; nothing to open; Undo instead of confirm.",
-     "cost": "Drags can happen by accident on a shared screen (Undo covers it); dragging needs a pointer, so a phone uses a sheet instead.",
-     "frames": [
-      {
-       "file": "re2-a-rest.html",
-       "caption": "At rest: each bar shows its owner's initials. Add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re2-a-open.html",
-       "caption": "F-14 Spike alerts by text is selected: grips at both ends, its name is editable in place, and its owner list is open."
-      },
-      {
-       "file": "re2-a-mid.html",
-       "caption": "Mid-drag: F-14 is lifted from Billing track (its old place dashed) into Mobile app track, Dec 7 – Jan 29."
-      },
-      {
-       "file": "re2-a-result.html",
-       "caption": "The result: F-14 now sits in Mobile app track, Dec 7 – Jan 29; the note says so, with Undo."
-      },
-      {
-       "file": "re2-a-hard-1512.html",
-       "caption": "Hard case, a viewer who may not edit, 60 items in 1512: no grips or pickers, View only with its reason behind (i), and the long title reads in full on hover."
-      },
-      {
-       "file": "re2-a-open-390.html",
-       "caption": "Phone 390: tapping a card opens a sheet: name, dates a week at a time, owner and track, each saving as it is tapped."
-      },
-      {
-       "file": "re2-a-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    },
-    {
-     "letter": "b",
-     "name": "Edit switch",
-     "recommended": false,
-     "what": "The roadmap opens to read. An Edit switch in the header turns on editing for the whole page: grips on every bar, names underlined as fields, owners as pickers, a light tint on the canvas. Changes then save at once with Undo; turning the switch off locks it again.",
-     "plus": "A shared screen in a review cannot be changed by a stray click; it is plain when the page is in edit mode.",
-     "cost": "One more click before every editing session, and people forget it is on (or off).",
-     "frames": [
-      {
-       "file": "re2-b-rest.html",
-       "caption": "At rest: reading mode, Edit off. Add a feature 1 click to turn on Edit, then 1 click and a title; move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re2-b-open.html",
-       "caption": "Edit is on: every bar has grips, names are fields, the canvas is tinted."
-      },
-      {
-       "file": "re2-b-mid.html",
-       "caption": "Mid-drag in edit mode: F-14 moves into Mobile app track, Dec 7 – Jan 29."
-      },
-      {
-       "file": "re2-b-result.html",
-       "caption": "The result: F-14 moved, with Undo; Edit stays on until switched off."
-      },
-      {
-       "file": "re2-b-hard-1512.html",
-       "caption": "Hard case, a viewer in 1512 with 60 items: no Edit switch at all, View only behind (i)."
-      },
-      {
-       "file": "re2-b-open-390.html",
-       "caption": "Phone 390: with Edit on, tapping a card opens the same sheet of live fields."
-      },
-      {
-       "file": "re2-b-rest-dark.html",
-       "caption": "Dark: at rest, Edit off."
-      }
-     ]
-    },
-    {
-     "letter": "c",
-     "name": "Bar toolbar",
-     "recommended": false,
-     "what": "Click a bar and a small toolbar opens above it: its name as a field, dates, owner and track, each a one-click picker. No dragging; every pick saves at once with Undo.",
-     "plus": "Exact and keyboard friendly; nothing moves by accident; works the same with a mouse or a touch screen.",
-     "cost": "Three clicks for most changes (bar, field, pick); moving dates by picking is slower than a drag.",
-     "frames": [
-      {
-       "file": "re2-c-rest.html",
-       "caption": "At rest: bars as today. Add a feature 1 click and a title, move its dates 3 clicks, set its owner 3 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re2-c-open.html",
-       "caption": "F-14 clicked: its toolbar opens above it with name, Nov 16 – Jan 8, owner and Billing track."
-      },
-      {
-       "file": "re2-c-mid.html",
-       "caption": "The track picker is open on Mobile app track."
-      },
-      {
-       "file": "re2-c-result.html",
-       "caption": "The result: F-14 moved to Mobile app track, same dates, with Undo."
-      },
-      {
-       "file": "re2-c-hard-1512.html",
-       "caption": "Hard case, a viewer in 1512 with 60 items: clicking a bar opens no toolbar, only the read view."
-      },
-      {
-       "file": "re2-c-open-390.html",
-       "caption": "Phone 390: the toolbar becomes the sheet of live fields."
-      },
-      {
-       "file": "re2-c-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    },
-    {
-     "letter": "d",
-     "name": "Live panel fields",
-     "recommended": false,
-     "what": "Keep today's feature panel, but every field is always a live field: no Change link, no Save, no Cancel. A field saves when you leave it and shows a small Saved tick, with Undo.",
-     "plus": "Least change to what people know; every field of a feature in one place; the panel stays the one place features open, as the rules ask.",
-     "cost": "Still a trip into a panel for every change, and the bar's dates cannot be dragged.",
-     "frames": [
-      {
-       "file": "re2-d-rest.html",
-       "caption": "At rest: bars as today. Add a feature 1 click and a title, move its dates 3 clicks, set its owner 3 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re2-d-open.html",
-       "caption": "F-14 clicked: the panel opens with every field ready to type in."
-      },
-      {
-       "file": "re2-d-mid.html",
-       "caption": "Typing 'Ine' in Owner shows the people list on Ines Okafor."
-      },
-      {
-       "file": "re2-d-result.html",
-       "caption": "The result: Owner saved with a tick, no Save pressed, and Undo at the bottom."
-      },
-      {
-       "file": "re2-d-hard-1512.html",
-       "caption": "Hard case, a viewer in 1512 with 60 items: the panel opens to read only."
-      },
-      {
-       "file": "re2-d-open-390.html",
-       "caption": "Phone 390: the panel is a sheet of the same live fields."
-      },
-      {
-       "file": "re2-d-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "code": "RE3",
-   "name": "Marks for edits and changes",
-   "question": "How does the roadmap mark what can be changed, what changed since the approved version, drafts and what needs a decision, so a room reads it at a glance?",
-   "common": "Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides every edit mark from a viewer who may not edit.",
-   "proposals": [
-    {
-     "letter": "a",
-     "name": "Ghost of the approved",
-     "recommended": true,
-     "what": "A changed bar keeps a faint dashed outline where the approved version had it, plus a small dot; a bar that needs a decision carries an amber '!'; drafts stay dashed. 'Changed since approved · N' in the header lists each change, old dates to new, with Put back. Edit grips only show on the bar you select.",
-     "why": "The room sees what moved and by how much without a key: the ghost is the old plan drawn where it was. The '!' sits on the item it is about, so a decision is one click from where it is seen. The Review lens (B) came close; it is better when the room wants to look at one kind of change at a time.",
-     "plus": "Reads at a glance and in place; the size of each change is visible; one click to put a change back.",
-     "cost": "Ghost outlines add lines to a busy row; on a phone the ghost becomes 'was …' text.",
-     "frames": [
-      {
-       "file": "re3-a-rest.html",
-       "caption": "At rest: F-14, F-19 and F-26 show their approved place as a dashed ghost and a dot; F-17, F-19 and F-29 carry an amber '!'. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides every edit mark from a viewer who may not edit. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re3-a-open.html",
-       "caption": "'Changed since approved · 3' opened: each change, old dates to new, with Put back."
-      },
-      {
-       "file": "re3-a-mid.html",
-       "caption": "Pointing at F-14 says what changed: was Nov 2 – Dec 18, now Nov 16 – Jan 8."
-      },
-      {
-       "file": "re3-a-result.html",
-       "caption": "The result of acting on F-17's '!' (no owner): owner set to Sofi Arden; the '!' is gone and Needs a decision drops to 2, with Undo."
-      },
-      {
-       "file": "re3-a-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: 13 changes and 9 decisions still read row by row."
-      },
-      {
-       "file": "re3-a-rest-390.html",
-       "caption": "Phone 390: cards say 'was …' with the dot, and the '!' sits on the card."
-      },
-      {
-       "file": "re3-a-rest-dark.html",
-       "caption": "Dark: ghosts, dots and '!' on the dark tokens."
-      }
-     ]
-    },
-    {
-     "letter": "b",
-     "name": "Review lens",
-     "recommended": false,
-     "what": "Bars stay clean, with only the '!' on items that need a decision. A switch in the header (All, Changes, Drafts, Decisions, each with its count) dims everything else, so the room looks at one kind at a time.",
-     "plus": "The cleanest roadmap at rest; a meeting can walk through changes, then drafts, then decisions.",
-     "cost": "At rest you cannot see what changed: it takes a click, and the dimmed view hides the context.",
-     "frames": [
-      {
-       "file": "re3-b-rest.html",
-       "caption": "At rest: All is on; only the '!' marks show. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides every edit mark from a viewer who may not edit. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re3-b-open.html",
-       "caption": "Changes · 3 picked: F-14, F-19 and F-26 stay, the rest dim."
-      },
-      {
-       "file": "re3-b-mid.html",
-       "caption": "Pointing at F-14 says what changed."
-      },
-      {
-       "file": "re3-b-result.html",
-       "caption": "The result of acting on F-17's '!': owner set, Decisions · 2, with Undo."
-      },
-      {
-       "file": "re3-b-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: at rest nothing tells the room which of the 60 changed."
-      },
-      {
-       "file": "re3-b-rest-390.html",
-       "caption": "Phone 390: the switch wraps; cards show only the '!'."
-      },
-      {
-       "file": "re3-b-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    },
-    {
-     "letter": "c",
-     "name": "Margin marks",
-     "recommended": false,
-     "what": "A narrow column before the names holds the marks: a dot for changed, a diamond for needs a decision, a ring for draft. Bars are left exactly as today; the key is behind (i).",
-     "plus": "Bars untouched; scanning one column finds every mark on a long roadmap.",
-     "cost": "The mark is far from the bar it is about, and it says that something changed, not how; a key is needed.",
-     "frames": [
-      {
-       "file": "re3-c-rest.html",
-       "caption": "At rest: marks in the column before the names. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides every edit mark from a viewer who may not edit. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re3-c-open.html",
-       "caption": "The (i) is open: what the dot, diamond and ring mean."
-      },
-      {
-       "file": "re3-c-mid.html",
-       "caption": "Pointing at F-14 says what changed."
-      },
-      {
-       "file": "re3-c-result.html",
-       "caption": "The result of acting on F-17: its diamond is gone, Needs a decision · 2, with Undo."
-      },
-      {
-       "file": "re3-c-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: one column to scan for marks."
-      },
-      {
-       "file": "re3-c-rest-390.html",
-       "caption": "Phone 390: the mark leads each card."
-      },
-      {
-       "file": "re3-c-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    },
-    {
-     "letter": "d",
-     "name": "Coloured states",
-     "recommended": false,
-     "what": "Bars are filled by state: a changed bar in solid blue, a bar that needs a decision in amber, drafts grey and dashed; rows a person may change get a light tint. The key is behind (i).",
-     "plus": "Readable from the back of the room.",
-     "cost": "The colours fight with dated / estimated and with status colours elsewhere in Simple, and say nothing about how much changed.",
-     "frames": [
-      {
-       "file": "re3-d-rest.html",
-       "caption": "At rest: changed bars solid blue, decisions amber, rows you may change tinted. Every proposal keeps today's bar looks (dated solid, estimated striped, draft dashed), keeps the meaning of the marks behind (i), shows the owner's initials on each bar, and hides every edit mark from a viewer who may not edit. Editing works as in RE2's pick: add a feature 1 click and a title, move its dates 1 drag, set its owner 2 clicks, add a milestone 1 click and a name. Today: add a feature 8 steps (pick the roadmap 2, type, drag it into place, then open it and Change, set, Save its dates), move its dates 5, set its owner 4, add a milestone about 5."
-      },
-      {
-       "file": "re3-d-open.html",
-       "caption": "The (i) is open: what each colour means."
-      },
-      {
-       "file": "re3-d-mid.html",
-       "caption": "Pointing at F-14 says what changed."
-      },
-      {
-       "file": "re3-d-result.html",
-       "caption": "The result of acting on F-17: its amber is gone, Needs a decision · 2, with Undo."
-      },
-      {
-       "file": "re3-d-hard-1512.html",
-       "caption": "Hard case, 60 items in 1512: whole rows of colour."
-      },
-      {
-       "file": "re3-d-rest-390.html",
-       "caption": "Phone 390: cards filled by state."
-      },
-      {
-       "file": "re3-d-rest-dark.html",
-       "caption": "Dark: at rest."
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }

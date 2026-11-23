@@ -408,7 +408,7 @@ function UserMenu({
   }
 
   // walk-brief review: blank while /v1/me loads, never a "?" for a member not read yet.
-  const initials = me ? initialsOf(email) : '';
+  const initials = me ? initialsOf(name ?? email) : ''; // MOCK-HOOK (mk-roadmap-edit: the person's name, not the email)
   const rail = placement === 'rail';
   const current = pathname === '/account' || pathname.startsWith('/account/');
 
