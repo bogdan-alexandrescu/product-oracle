@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from oracle import company_time
 from oracle.models import AuditEvent
@@ -123,6 +123,7 @@ async def test_the_migration_gives_every_item_its_own_code(client):
         rv2 = await seed.version(rm, 2)
         f51 = await seed.entity("feature", "F-51")
         f62 = await seed.entity("feature", "F-62")
+        f31 = await seed.entity("feature", "F-31")
         await seed.entity("feature", "F-08")  # a feature with no item: its number is in use
 
         def item(v, key, title, created, **kw):
@@ -143,6 +144,14 @@ async def test_the_migration_gives_every_item_its_own_code(client):
         await item(rv2, "g", "F-37a Exports", 6)
         await item(rv2, "h", "F-29a Saved views", 7)
         await item(rv2, "i", "Loose ends", 8, start_date=date(2026, 11, 20))
+        # A title leading with another code than its feature's showed the feature's: unique, it
+        # keeps it (the title now leads with it); in a group, the audit names it too.
+        await item(rv2, "k", "F-99 Launch flow", 9, feature_id=f31.id)
+        m = await item(rv2, "m", "Wrap up", 10, feature_id=f51.id)
+        await s.commit()
+        # Written as rows stood before the write check, which refuses it now.
+        t = RoadmapItem.__table__
+        await s.execute(update(t).where(t.c.id == m.id).values(title="F-37a Wrap up"))
         await s.commit()
 
     async with unscoped_session() as s:
@@ -154,6 +163,7 @@ async def test_the_migration_gives_every_item_its_own_code(client):
         "i": (None, "F-64"),  # Nov 20
         "a": ("F-51", "F-65"),  # Dec 1
         "c": ("F-51", "F-66"),  # no start date: last
+        "m": ("F-51", "F-67"),
     }
 
     async with unscoped_session() as s:
@@ -176,6 +186,8 @@ async def test_the_migration_gives_every_item_its_own_code(client):
     assert titles[(rv2.id, "g")] == "F-37a Exports"
     assert titles[(rv2.id, "h")] == "F-29a Saved views"
     assert titles[(rv.id, "z")] == "F-29a Old saved views"
+    assert titles[(rv2.id, "k")] == "F-31 F-99 Launch flow"  # still shows F-31, same name
+    assert titles[(rv2.id, "m")] == "F-67 F-37a Wrap up"
     pairs = sorted(((e.data["old"], e.data["new"]) for e in events), key=str)
     assert pairs == sorted(got.values(), key=str)
     assert all(isinstance(e.entity_id, uuid.UUID) for e in events)
