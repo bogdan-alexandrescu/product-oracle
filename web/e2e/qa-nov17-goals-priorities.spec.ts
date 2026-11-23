@@ -114,7 +114,9 @@ test.describe('Goal map, desktop', () => {
     await expect(page.getByTestId('gm-grid')).toBeVisible();
     await page.locator('[data-testid^="gm-menu-g-"]').first().click();
     await page.getByRole('menuitem', { name: 'Rename' }).click();
-    await expect(page).toHaveURL(/\/simple\/priorities\?tab=buckets&edit=/);
+    // The ?edit= link opens the form once and then leaves the URL at once (flakes-dates), so the
+    // page is checked by its path and the open form, never by a link that is already gone.
+    await expect(page).toHaveURL(/\/simple\/priorities\?tab=buckets/);
     await expect(page.getByRole('heading', { name: 'Edit goal' })).toBeVisible();
     const name = page.getByRole('textbox', { name: 'Goal', exact: true });
     await expect(name).toBeFocused();
