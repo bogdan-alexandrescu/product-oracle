@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// `npm run lint`: ESLint in two passes over the same files, each in its own process under a
-// 4 GB heap (#1585 phase 4). The typed rules need a TypeScript program of the whole tree; with
-// every other rule in the same process the heap ran out. eslint.config.mjs picks the rules by
-// LINT_PASS: `untyped` is every rule but TYPED_RULES, `typed` is only those.
+// `npm run lint`: ESLint in three passes over the same files, each in its own process under a
+// 4 GB heap (#1585 phase 4). The typed rules need a TypeScript program; with every other rule in
+// the same process the heap ran out. eslint.config.mjs picks the rules and files by LINT_PASS:
+// `untyped` is every rule but TYPED_RULES, `typed-app` and `typed-e2e` are only those, over all
+// but e2e/ and over e2e/ alone.
 //
 //   npm run lint [-- <eslint arguments>]   e.g. `-- app/inbox`, `-- --suppress-all`
 //
-// eslint-suppressions.json stays one file. Each pass gets its rules' entries in a copy under
-// $TMPDIR, since ESLint fails on entries for rules it did not run; a pass that rewrote its copy
-// (--suppress-all, --prune-suppressions) is merged back. The exit code is the worse pass's.
+// eslint-suppressions.json stays one file. The untyped and the typed passes each get their rules'
+// entries in a copy under $TMPDIR, since ESLint fails on entries for rules it did not run (the two
+// typed halves share theirs: entries for files a pass ignores are not checked); a copy a pass
+// rewrote (--suppress-all, --prune-suppressions) is merged back. The exit code is the worst pass's.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,15 +44,22 @@ function slice(suppressions, typed) {
 
 const all = existsSync(SUPPRESSIONS) ? JSON.parse(readFileSync(SUPPRESSIONS, 'utf8')) : {};
 const dir = mkdtempSync(join(tmpdir(), 'lint-'));
-const passes = ['untyped', 'typed'].map((pass) => {
-  const file = join(dir, `${pass}.json`);
-  const text = stringify(slice(all, pass === 'typed'));
+const copies = [false, true].map((typed) => {
+  const file = join(dir, typed ? 'typed.json' : 'untyped.json');
+  const text = stringify(slice(all, typed));
   writeFileSync(file, text);
-  return { pass, file, text };
+  return { file, text };
 });
+// A path given on the command line may lie wholly in the other typed half.
+const TYPED_ARGS = ['--no-warn-ignored', '--no-error-on-unmatched-pattern'];
+const passes = [
+  { pass: 'untyped', file: copies[0].file, args: [] },
+  { pass: 'typed-app', file: copies[1].file, args: TYPED_ARGS },
+  { pass: 'typed-e2e', file: copies[1].file, args: TYPED_ARGS },
+];
 
 let status = 0;
-for (const { pass, file } of passes) {
+for (const { pass, file, args } of passes) {
   const run = spawnSync(
     process.execPath,
     [
@@ -58,6 +67,7 @@ for (const { pass, file } of passes) {
       ESLINT,
       '--suppressions-location',
       file,
+      ...args,
       ...process.argv.slice(2),
     ],
     { stdio: 'inherit', env: { ...process.env, LINT_PASS: pass } },
@@ -65,8 +75,8 @@ for (const { pass, file } of passes) {
   status = Math.max(status, run.status ?? 2);
 }
 
-const after = passes.map(({ file }) => readFileSync(file, 'utf8'));
-if (after.some((text, i) => text !== passes[i].text)) {
+const after = copies.map(({ file }) => readFileSync(file, 'utf8'));
+if (after.some((text, i) => text !== copies[i].text)) {
   const merged = {};
   for (const text of after) {
     for (const [file, rules] of Object.entries(JSON.parse(text))) {

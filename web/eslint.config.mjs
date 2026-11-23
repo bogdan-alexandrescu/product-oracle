@@ -365,10 +365,11 @@ const ALL_RULES = defineConfig([
 ]);
 
 // #1585 phase 4, the typed typescript-eslint rules ai-studio uses, at error with the same
-// suppressions baseline. They need a TypeScript program of the whole tree (about 2 GB); with the
-// rules above in the same process `npm run lint` ran out of a 4 GB heap. So scripts/lint.mjs lints
-// twice over the same files: LINT_PASS=untyped (every rule but these) then LINT_PASS=typed (only
-// these). Without LINT_PASS (an editor, `npx eslint <file>`) every rule runs.
+// suppressions baseline. They need a TypeScript program; with the rules above in the same process
+// `npm run lint` ran out of a 4 GB heap, and alone over the whole tree they needed more than 3 GB.
+// So scripts/lint.mjs lints in three processes over the same files: LINT_PASS=untyped (every rule
+// but these), then these alone in two halves, typed-app (all but e2e/) and typed-e2e (e2e/ only).
+// Without LINT_PASS (an editor, `npx eslint <file>`) every rule runs.
 export const TYPED_RULES = {
   '@typescript-eslint/await-thenable': 'error',
   '@typescript-eslint/no-floating-promises': 'error',
@@ -387,15 +388,18 @@ const OTHER_RULES_OFF = Object.fromEntries(
     .filter((rule) => !(rule in TYPED_RULES))
     .map((rule) => [rule, 'off']),
 );
+// Disable comments for the rules turned off here are the untyped pass's to report.
+const typedPass = (ignores) => [
+  ...ALL_RULES,
+  TYPED,
+  { linterOptions: { reportUnusedDisableDirectives: 'off' }, rules: OTHER_RULES_OFF },
+  globalIgnores(ignores),
+];
 
 const PASSES = {
   untyped: ALL_RULES,
-  // Disable comments for the rules turned off here are the untyped pass's to report.
-  typed: [
-    ...ALL_RULES,
-    TYPED,
-    { linterOptions: { reportUnusedDisableDirectives: 'off' }, rules: OTHER_RULES_OFF },
-  ],
+  'typed-app': typedPass(['e2e/']),
+  'typed-e2e': typedPass(['**/*', '!e2e/', '!e2e/**']),
 };
 const eslintConfig = PASSES[process.env.LINT_PASS] ?? [...ALL_RULES, TYPED];
 
