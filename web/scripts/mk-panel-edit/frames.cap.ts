@@ -174,6 +174,8 @@ async function saveEnds(page: Page, m: string) {
     await page.getByTestId('pe-opt-Mira Okafor').click();
     await page.getByTestId('pe-done').click();
   }
+  // The pointer leaves: a saved field shows its changed mark only, no hover box.
+  await page.mouse.move(5, 5);
 }
 
 test('frames', async ({ page, browser }) => {
