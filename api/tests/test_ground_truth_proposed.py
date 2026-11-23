@@ -16,8 +16,18 @@ Test cards (protects / fails_when / no_claim):
 - test_confirm_gives_the_next_code: protects=Confirm it from the item gives its feature the next
   code (next_code's), read with that code and nothing to confirm, and the check has one flag fewer;
   fails_when=the item still reads Not in the Ground Truth after the confirm.
+- test_a_proposed_feature_with_a_code_is_still_to_confirm: protects=Import history 2 from the
+  PRD section F-06 reads that code yet still names its proposed feature to confirm, the one the
+  check's Confirm it targets (so Simple flags it and offers Confirm); fails_when=a code from a
+  proposed feature hides the feature to confirm.
 """
 
+import uuid
+
+from sqlalchemy import update
+
+from oracle.roadmap.models import RoadmapItem
+from oracle.tenancy import tenant_session
 from tests.test_ground_truth_check import (
     _check,
     _fixes,
@@ -70,3 +80,19 @@ async def test_confirm_gives_the_next_code(client):
     out = await _check(client, w["ctx"])
     assert _flag(out, d) is None
     assert len(_of(out, "unlinked_item")) == before - 1
+
+
+async def test_a_proposed_feature_with_a_code_is_still_to_confirm(client):
+    """A code from its PRD section does not put a proposed feature in the Ground Truth."""
+    w = await world()
+    d = w["items"]["d"]
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        await s.execute(
+            update(RoadmapItem).where(RoadmapItem.id == uuid.UUID(d)).values(prd_section_key="f-06")
+        )
+        await s.commit()
+    item = (await _items(client, w))[d]
+    assert item["code"] == "F-06"
+    assert item["confirm_feature_id"] == w["features"]["proposed"]
+    out = await _check(client, w["ctx"])
+    assert _fixes(_flag(out, d))[0] == ("confirm_feature", item["confirm_feature_id"])

@@ -419,6 +419,13 @@ export function PanelFields({
                   ? 'It comes from its Ground Truth feature: change it there.'
                   : "It comes from its PRD's section: change it in the PRD."}
               </InfoTip>
+              {/* gt-proposed: a code from a feature a run only proposed is still no Ground Truth one. */}
+              {item.confirm_feature_id && (
+                <>
+                  <NotInGt className="h-5! px-2! text-xs!" />
+                  <ConfirmIntoGt item={item} />
+                </>
+              )}
             </span>
           ) : (
             (item.code ?? (

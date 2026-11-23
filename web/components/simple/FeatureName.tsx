@@ -26,18 +26,19 @@ export function Named({ item }: { item: { code?: string | null; title: string } 
 
 /**
  * The flag a feature with no Ground Truth code carries: the Roadmap's warn chip, on every page.
- * Given an item, it shows only when the item has no code.
+ * Given an item, it shows when the item has no code, or its feature is still to confirm
+ * (confirm_feature_id: in the Ground Truth, the API's one rule).
  */
 export function NotInGt({
   item,
   className = 'ml-1.5 h-5! px-2! text-xs!',
   short = false,
 }: {
-  item?: { code?: string | null };
+  item?: { code?: string | null; confirm_feature_id?: string | null };
   className?: string;
   short?: boolean;
 }) {
-  if (item?.code) return null;
+  if (item?.code && !item.confirm_feature_id) return null;
   return (
     <Chip
       kind="warn"
@@ -61,7 +62,11 @@ export function NotInGt({
 }
 
 /** "F-12 Alert rules engine"; a name with no code gets the "Not in the Ground Truth" flag. */
-export function FeatureName({ item }: { item: { code?: string | null; title: string } }) {
+export function FeatureName({
+  item,
+}: {
+  item: { code?: string | null; title: string; confirm_feature_id?: string | null };
+}) {
   return (
     <>
       <Named item={{ code: item.code ?? '', title: item.title }} />

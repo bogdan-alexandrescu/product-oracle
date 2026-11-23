@@ -179,6 +179,8 @@ interface Track {
 interface Ctx {
   map: GoalMap;
   codes: Map<string, string>;
+  /** gt-proposed: each feature whose Ground Truth feature is still to confirm (its confirm_feature_id), by id. */
+  confirm: Map<string, string>;
   mcode: Map<string, string>;
   tracks: Track[];
   onOpen: (c: Chip) => void;
@@ -1114,7 +1116,13 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                         className="block truncate hover:underline max-[600px]:whitespace-normal max-[600px]:line-clamp-2"
                         title={`${c.codes.get(f.id) ?? ''} ${f.name}`.trim()}
                       >
-                        <FeatureName item={{ code: c.codes.get(f.id), title: f.name }} />
+                        <FeatureName
+                          item={{
+                            code: c.codes.get(f.id),
+                            title: f.name,
+                            confirm_feature_id: c.confirm.get(f.id),
+                          }}
+                        />
                       </span>
                       {/* The milestones' codes and names, as people named them (a list, not prose). */}
                       <span
@@ -1342,6 +1350,15 @@ export function GoalMapPage() {
       ),
     [map, roadmap.data],
   );
+  const confirm = useMemo(
+    () =>
+      new Map(
+        (roadmap.data?.items ?? []).flatMap((i) =>
+          i.confirm_feature_id ? [[i.id, i.confirm_feature_id] as [string, string]] : [],
+        ),
+      ),
+    [roadmap.data],
+  );
   const mcode = useMemo(
     () =>
       new Map(
@@ -1481,6 +1498,7 @@ export function GoalMapPage() {
   const c: Ctx = {
     map,
     codes,
+    confirm,
     mcode,
     tracks,
     onOpen: setPanel,

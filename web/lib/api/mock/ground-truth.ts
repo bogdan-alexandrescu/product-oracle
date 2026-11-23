@@ -385,20 +385,34 @@ export const GROUND_TRUTH_PROPOSED_SCENARIO = 'ground-truth-proposed';
 
 /** The ground-truth-proposed scenario: the Goal map feature `mapItem` (its roadmap item's key) becomes Account discovery, from
  * no PRD section, on a run's proposal with no code of its own; the check reads it by its feature (toConfirm), not by the
- * scenario's list. */
+ * scenario's list. `codedItem` becomes IP proxies, the same from the PRD section F-77: it reads that code. */
 export function seedGroundTruthProposed(
   baseline: BaselineState,
   simple: SimpleDb,
   mapItem: string,
+  codedItem?: string,
 ): void {
   seedGroundTruthConfirm(baseline, simple);
+  proposedOnMap(baseline, simple, mapItem, 'account-discovery', 'Account discovery');
+  // And IP proxies, from the PRD section F-77, on a proposal: a code, yet still not in the Ground Truth.
+  if (codedItem) proposedOnMap(baseline, simple, codedItem, 'ip-proxies', 'IP proxies', 'f-77');
+}
+
+function proposedOnMap(
+  baseline: BaselineState,
+  simple: SimpleDb,
+  mapItem: string,
+  key: string,
+  title: string,
+  section?: string,
+): void {
   const template = baseline.entities.find((e) => e.type === 'feature')!;
-  const id = featureId('account-discovery');
+  const id = featureId(key);
   baseline.entities.push({
     ...template,
     id,
-    key: 'account-discovery',
-    title: 'Account discovery',
+    key,
+    title,
     body: null,
     attrs: {},
     parent_id: null,
@@ -410,10 +424,11 @@ export function seedGroundTruthProposed(
   });
   const it = simple.items.find((x) => x.key === mapItem);
   if (!it) return;
-  it.title = 'Account discovery';
+  it.title = title;
   it.feature_id = id;
-  delete it.section;
   delete it.heading;
+  if (section) it.section = section;
+  else delete it.section;
 }
 
 /** The ground-truth-shared scenario's roadmap items, both on the proposed Community alerts. */

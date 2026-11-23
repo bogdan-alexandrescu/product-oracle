@@ -10,11 +10,12 @@ import { expect, test, type Page } from './test';
  * data): Account discovery, a roadmap item on a feature a run only proposed, with no code. The Goal
  * map flags its chip Not in the Ground Truth, and the Ground Truth check lists it under Not in the
  * Ground Truth with Confirm it; its panel's Confirm into the Ground Truth confirms it with the next
- * F-code, and the chip shows that code and the check has one flag fewer.
+ * F-code, and the chip shows that code and the check has one flag fewer. IP proxies, the same
+ * from a PRD section that gives it a code, is flagged and confirmed the same way.
  *
  * Test card: protects=a proposed roadmap feature is counted by the check and can be confirmed from
- * Simple's feature panel or the check; fails_when=the check leaves it out, or the panel offers only
- * a free-text Code; no_claim=the Ground Truth page's own feature panel (feature-code-on-join).
+ * Simple's feature panel or the check; fails_when=the check leaves it out, the panel offers only
+ * a free-text Code, or a code hides the flag and the Confirm; no_claim=the Ground Truth page's own feature panel (feature-code-on-join).
  */
 
 const NAME = 'Account discovery';
@@ -59,6 +60,33 @@ test('Confirm into the Ground Truth from the Goal map gives the chip its F-code'
   expect(await flagged(page)).toBe(before - 1);
   await count(page).click();
   await expect(row(page)).toHaveCount(0);
+});
+
+test('A proposed feature that reads a code is flagged and confirmed from its panel', async ({
+  page,
+}) => {
+  // IP proxies reads F-77 from its PRD section, yet its feature is only proposed (confirm_feature_id).
+  const coded = page.getByTestId('gm-chip').filter({ hasText: 'IP proxies' });
+  await open(page);
+  const before = await flagged(page);
+  await count(page).click();
+  await expect(
+    page
+      .getByTestId('gt-list-unlinked_item')
+      .getByTestId('gt-row')
+      .filter({ hasText: 'IP proxies' }),
+  ).toHaveCount(1);
+
+  await page.goto('/simple/goals');
+  await expect(coded.getByTestId('gm-chip-name')).toContainText('F-77');
+  await expect(coded).toContainText('Not in the Ground Truth');
+  await coded.getByRole('button').first().click();
+  await expect(page.getByTestId('card-code')).toContainText('Not in the Ground Truth');
+  await page.getByTestId('card-code-confirm').click();
+  await expect(coded).not.toContainText('Not in the Ground Truth');
+  await expect(page.getByTestId('card-code-confirm')).toHaveCount(0);
+
+  expect(await flagged(page)).toBe(before - 1);
 });
 
 test("The check's Confirm it gives the proposed feature the next F-code", async ({ page }) => {
