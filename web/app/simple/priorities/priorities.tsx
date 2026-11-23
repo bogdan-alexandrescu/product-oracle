@@ -65,6 +65,10 @@ import {
   useGoalBuckets,
   type GoalFeatures,
   type Note,
+  nextNoteId,
+  PendingMark,
+  useFeatureOrder,
+  useGoalDrag,
 } from './goal-buckets';
 import { useBucketDrag } from './goal-drag';
 import {
@@ -3558,6 +3562,36 @@ function Buckets({
   return <UndatedBuckets data={data} suggestions={suggestions} kr={kr} />;
 }
 
+/** prioritize: the goal header drag of a buckets view, over the goals it shows (rights.order). */
+function useBucketGoalDrag(
+  gb: Schemas['GoalBucketsOut'] | undefined,
+  ids: (string | undefined)[],
+  rights: ReturnType<typeof useBucketRights>,
+  saved: (o: { before: string[]; after: string[] }) => Promise<void>,
+  failed: (e: unknown) => void,
+) {
+  const goals = gb?.goals ?? [];
+  return useGoalDrag({
+    ids: ids.filter((x): x is string => !!x),
+    all: [...goals].sort((a, b) => a.order - b.order).map((g) => g.id),
+    may: (id) => rights.order(goals.find((g) => g.id === id)),
+    saved,
+    failed,
+  });
+}
+
+/** The items in the order of `ids` (by `idOf`); one with no id keeps its place after them. */
+function inOrder<T>(items: T[], idOf: (x: T) => string | undefined, ids: string[]): T[] {
+  const at = (x: T) => {
+    const i = ids.indexOf(idOf(x) ?? '');
+    return i < 0 ? ids.length : i;
+  };
+  return items
+    .map((x, i) => ({ x, i }))
+    .sort((a, b) => at(a.x) - at(b.x) || a.i - b.i)
+    .map((y) => y.x);
+}
+
 const sameGoal = (a: string, b: string) =>
   goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
 
@@ -3587,7 +3621,16 @@ function UndatedBuckets({
   const reloadAll = () => sendCardChanged();
   const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
-  const drag = useBucketDrag({ gb, writes: liftedMoves(writes, read) });
+  // prioritize: a feature's place in its bucket is its rank, moved by drag or Alt+Arrow.
+  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError, noteId: nextNoteId });
+  const drag = useBucketDrag({
+    gb,
+    writes: liftedMoves(writes, read),
+    reorder: (code, over) => {
+      const b = buckets.find((x) => x.codes.includes(code));
+      if (b) void order.move(b.key, b.codes, code, over);
+    },
+  });
   const tasks = useBucketTasks({
     rows: data.rows,
     plan: null,
@@ -3685,9 +3728,25 @@ function UndatedBuckets({
   });
   const total = all.reduce((n, b) => n + b.weeks, 0);
   // An empty "No goal" bucket warns about nothing: it is left out.
-  const buckets: Bucket[] = all
+  const unsorted: Bucket[] = all
     .filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0))
     .map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
+  // prioritize: a goal's header dragged onto another goal (or Alt+Arrow) moves it in the goal order.
+  const goalDrag = useBucketGoalDrag(
+    gb,
+    unsorted.map((b) => goalOf(b)?.id),
+    rights,
+    async (o) => {
+      await reloadAll();
+      setNote({
+        id: nextNoteId(),
+        text: <>Goal order saved. Every page shows the new order.</>,
+        order: o,
+      });
+    },
+    (e) => setError(errorMessage(e)),
+  );
+  const buckets = inOrder(unsorted, (b) => goalOf(b)?.id, goalDrag.shown);
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? '' : weeksWords(r.effort));
   const acts = useGoalActs({
@@ -3771,6 +3830,7 @@ function UndatedBuckets({
               data-key={b.key}
               data-goal-id={rec?.id}
               data-drop={over ? '' : undefined}
+              {...goalDrag.target(rec?.id)}
               className={`group/bucket relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? 'border-2 border-accent bg-accent-soft' : b.no_goal ? 'border-warn' : 'border-line'}`}
             >
               {rec && editingGoal === rec.id ? (
@@ -3795,7 +3855,9 @@ function UndatedBuckets({
               ) : (
                 <>
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
+                    <h3 className="min-w-0 flex-1 font-semibold">
+                      <span {...(rec ? goalDrag.handle(rec.id, b.title) : {})}>{b.title}</span>
+                    </h3>
                     <span className="tabular-nums">
                       {weeksWords(b.weeks)} · <span data-testid="bucket-share">{percent[k]}%</span>
                     </span>
@@ -3852,7 +3914,7 @@ function UndatedBuckets({
                       Nothing this quarter
                     </li>
                   )}
-                  {b.codes.map((c) => {
+                  {order.arrange(b.key, b.codes).map((c) => {
                     const r = rowOf.get(c);
                     const name = r?.title ?? c;
                     const t = r ? tasks.taskOf(r.code, r.title) : undefined;
@@ -3895,7 +3957,15 @@ function UndatedBuckets({
                         }
                         actions={tasks.actions(t)}
                         // panel-menu: a part names the feature it is part of, as on the ranked rows.
-                        partOf={r && <PartOf r={r} />}
+                        partOf={
+                          r && (
+                            <>
+                              <PartOf r={r} />
+                              {order.pending(c) && <PendingMark />}
+                            </>
+                          )
+                        }
+                        onKeys={order.keys(b.key, b.codes, c)}
                         onRename={t && add ? (n) => tasks.rename(t, n) : undefined}
                         onDelete={t && add ? () => tasks.remove(t) : undefined}
                       />
@@ -4136,8 +4206,39 @@ function PlanBuckets({
   const year = data.today.slice(0, 4);
   const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
+  // prioritize: each goal's features in rank order, moved by drag or Alt+Arrow.
+  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError, noteId: nextNoteId });
+  const codesOf = (g: string | null) => order.sorted(planFeatures(plan, g).map((f) => f.code));
+  const ranked = (g: string | null) => ({
+    sort: (codes: string[]) => order.arrange(g ?? '', order.sorted(codes)),
+    keys: (codes: string[], code: string) => order.keys(g ?? '', order.sorted(codes), code),
+    pending: order.pending,
+  });
+  // prioritize: a goal's header dragged onto another goal (or Alt+Arrow) moves it in the goal order.
+  const goalDrag = useBucketGoalDrag(
+    gb,
+    goals.map((g) => goalOf(g)?.id),
+    rights,
+    async (o) => {
+      await reloadAll();
+      setNote({
+        id: nextNoteId(),
+        text: <>Goal order saved. Every page shows the new order.</>,
+        order: o,
+      });
+    },
+    (e) => setError(errorMessage(e)),
+  );
+  const shownGoals = inOrder(goals, (g) => goalOf(g)?.id, goalDrag.shown);
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
-  const drag = useBucketDrag({ gb, writes: liftedMoves(writes, readGb) });
+  const drag = useBucketDrag({
+    gb,
+    writes: liftedMoves(writes, readGb),
+    reorder: (code, over) => {
+      const g = [...goals, null].find((x) => codesOf(x).includes(code));
+      if (g !== undefined) void order.move(g ?? '', codesOf(g), code, over);
+    },
+  });
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
   // its preview shows a code only once it has one people know.
   const draftGrip = (t: Task, from: string | null) => {
@@ -4259,7 +4360,7 @@ function PlanBuckets({
       {tasks.failed}
       {/* Two columns only where a feature's row fits a card (31rem); beside a 768 px window's sidebar one, as on a phone. */}
       <ul className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-4">
-        {goals.map((g) => {
+        {shownGoals.map((g) => {
           const state = suggestionGoal(suggestions, g);
           const code = codeOf(g);
           const rec = goalOf(g);
@@ -4273,6 +4374,7 @@ function PlanBuckets({
               data-goal={g}
               data-goal-id={rec?.id}
               data-drop={over ? '' : undefined}
+              {...goalDrag.target(rec?.id)}
               className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-4 ${over ? 'border-2 border-accent bg-accent-soft' : incomplete ? 'border-warn' : 'border-line'}`}
             >
               {rec && editing === rec.id ? (
@@ -4300,7 +4402,9 @@ function PlanBuckets({
                   <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
                     <h3 className="min-w-0 flex-1 text-xl font-[650] leading-7">
-                      {goalLabel(g).name}
+                      <span {...(rec ? goalDrag.handle(rec.id, goalLabel(g).name) : {})}>
+                        {goalLabel(g).name}
+                      </span>
                     </h3>
                     {code && <CodeTag code={code} />}
                     <span
@@ -4370,6 +4474,7 @@ function PlanBuckets({
                 lifted={drag.lifted}
                 onGrip={featureGrip}
                 onOpen={setOpened}
+                ranked={ranked(g)}
                 {...taskRows(g, rec)}
               />
               {over && (
@@ -4471,6 +4576,7 @@ function PlanBuckets({
               lifted={drag.lifted}
               onGrip={featureGrip}
               onOpen={setOpened}
+              ranked={ranked(null)}
               {...taskRows(null, undefined)}
             />
           </li>

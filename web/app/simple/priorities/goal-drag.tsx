@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Schemas } from '@/lib/api/client';
 
+import { rowAt } from './feature-order';
 import { DragGhost, featureOf, type useBucketWrites } from './goal-buckets';
 import { type planFeatures, weeksWords } from './plan-buckets';
 
@@ -58,9 +59,12 @@ const drawnGoals = (): string[] => [
 export function useBucketDrag({
   gb,
   writes,
+  reorder,
 }: {
   gb: Buckets | undefined;
   writes: ReturnType<typeof useBucketWrites>;
+  /** prioritize: a feature dropped on another row of its own goal takes that row's place. */
+  reorder?: (code: string, over: string) => void;
 }) {
   const [carried, setCarried] = useState<Carried | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -172,6 +176,13 @@ export function useBucketDrag({
     const up = (e: PointerEvent) => {
       const c = ref.current.carried;
       if (!c) return;
+      const on = c.moved ? rowAt(e.clientX, e.clientY) : null;
+      if (reorder && on && on !== c.f.code && goalAt(e.clientX, e.clientY) === c.from) {
+        setCarried(null);
+        setEdge(null);
+        reorder(c.f.code, on);
+        return;
+      }
       void drop(c, c.moved ? goalAt(e.clientX, e.clientY) : null);
     };
     const cancel = () => {
