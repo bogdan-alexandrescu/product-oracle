@@ -1,8 +1,8 @@
-import { expect, test, type Page } from './test';
-
 import { GROUND_TRUTH_PROPOSED_SCENARIO } from '../lib/api/mock/ground-truth';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * gt-proposed: in the Ground Truth, one rule (the owner, Nov 23: every roadmap feature joins the

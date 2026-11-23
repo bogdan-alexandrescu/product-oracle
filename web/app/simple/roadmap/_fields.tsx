@@ -5,21 +5,19 @@
 
 import { useState } from 'react';
 
-import { toast } from '@/components/ds';
+import { Button, toast } from '@/components/ds';
 import { Icon } from '@/components/ds/Icon';
 import { InfoTip } from '@/components/ds/InfoTip';
-import { LoadError, Loading } from '@/components/ui';
 import { Named, NOT_IN_GT, NotInGt } from '@/components/simple/FeatureName';
-
+import { LoadError, Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
-import { goalFigure } from '@/lib/format';
 import { calendarDay } from '@/lib/dates';
+import { goalFigure } from '@/lib/format';
+import { useMe } from '@/lib/me';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
 import { byTrackOrder } from '@/lib/track-order';
-import { useMe } from '@/lib/me';
 import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 
-import type { Act } from './_card';
 import {
   confidenceWord,
   datesFrom,
@@ -35,6 +33,8 @@ import {
   type Item,
   type Milestone,
 } from './_lib';
+
+import type { Act } from './_card';
 
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
 const TAP =
@@ -282,15 +282,15 @@ function ConfirmIntoGt({ item }: { item: Item }) {
     }
   };
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       data-testid="card-code-confirm"
       disabled={busy}
-      className="text-left text-accent-ink hover:underline disabled:opacity-50"
+      className="h-6! px-2! text-xs!"
       onClick={() => void confirm()}
     >
       Confirm into the Ground Truth
-    </button>
+    </Button>
   );
 }
 
