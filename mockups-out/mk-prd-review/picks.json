@@ -152,7 +152,11 @@
             },
             {
               "file": "frames/pr2-a-done.html",
-              "caption": "The result of the meeting: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header's count of 4 also takes in the Risks text from the first frame."
+              "caption": "The result of the meeting: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header counts 4 with the Risks edit further down."
+            },
+            {
+              "file": "frames/pr2-a-done-risks.html",
+              "caption": "Further down the same page: Risks reworded, marked Saved, the fourth change the header counts."
             },
             {
               "file": "frames/pr2-a-roadmap.html",
@@ -202,7 +206,11 @@
             },
             {
               "file": "frames/pr2-b-done.html",
-              "caption": "The result of the meeting, with edit mode still on until Done: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header's count of 4 also takes in the Risks text from the first frame."
+              "caption": "The result of the meeting, with edit mode still on until Done: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header counts 4 with the Risks edit further down."
+            },
+            {
+              "file": "frames/pr2-b-done-risks.html",
+              "caption": "Further down the same page: Risks reworded in its box, which saves as you type; the fourth change the header counts."
             },
             {
               "file": "frames/pr2-b-roadmap.html",
@@ -252,7 +260,11 @@
             },
             {
               "file": "frames/pr2-c-done.html",
-              "caption": "The result of the meeting, the panel closed: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header's count of 4 also takes in the Risks text from the first frame."
+              "caption": "The result of the meeting, the panel closed: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header counts 4 with the Risks edit further down."
+            },
+            {
+              "file": "frames/pr2-c-done-risks.html",
+              "caption": "Further down the same page: Risks reworded, marked Saved, the fourth change the header counts."
             },
             {
               "file": "frames/pr2-c-roadmap.html",
