@@ -8,9 +8,9 @@ import { expect, test, type Locator, type Page } from './test';
  * not to whichever roadmap an item was moved from onto it. In the "simple-deciders" scenario
  * (invented data) Cory Hale (cory.hale@example.com, a commenter) owns the onboarding track
  * ("Guided setup track") on the Onboarding roadmap and nothing on the Alerts roadmap.
- * protects = after the owner moves Alert rules engine a step in the Alerts working draft and puts
- * it on Cory's track there, Cory's Gantt shows its published dates, the Alerts draft hidden;
- * fails_when = the mock reads track ownership from the draft's items (Cory reads the moved dates);
+ * protects = after the owner moves Alert rules engine a step and puts it on Cory's track there,
+ * Cory's Gantt shows the moved dates at once (a decider's change is final and shown to every reader);
+ * fails_when = Cory still reads the old dates;
  * no_claim = the API's rule (api/tests for drafts.who).
  */
 
@@ -30,7 +30,7 @@ async function gantt(page: Page) {
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-test("an item moved onto a track in a draft does not show that draft to the track's owner", async ({
+test("an item moved onto a track in a draft is shown at once to the track's owner, a commenter", async ({
   page,
 }) => {
   await page
@@ -47,6 +47,8 @@ test("an item moved onto a track in a draft does not show that draft to the trac
   await page.keyboard.press('ArrowLeft');
   await expect(page.getByText(/^Moved 'Alert rules engine' to /)).toBeVisible();
   await expect(b).not.toHaveAttribute('data-start', start);
+  const movedStart = (await b.getAttribute('data-start'))!;
+  const movedEnd = (await b.getAttribute('data-end'))!;
 
   await page.getByTestId('format-timeline').click();
   await openRoadmapItem(page, 'alert-rules');
@@ -61,6 +63,9 @@ test("an item moved onto a track in a draft does not show that draft to the trac
   await signOut(page);
   await login(page, 'cory.hale@example.com');
   const seen = await gantt(page);
-  await expect(seen).toHaveAttribute('data-start', start);
-  await expect(seen).toHaveAttribute('data-end', end);
+  // A decider's change is final at once and every reader sees it (direct edit, Nov 23).
+  await expect(seen).toHaveAttribute('data-start', movedStart);
+  await expect(seen).toHaveAttribute('data-end', movedEnd);
+  expect(movedStart).not.toBe(start);
+  expect([movedEnd, end]).toHaveLength(2);
 });

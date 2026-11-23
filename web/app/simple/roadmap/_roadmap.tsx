@@ -1,7 +1,5 @@
 'use client';
 
-import { CommentCount } from '@/components/simple/FeatureComments';
-import { Link, useSearchParams } from '@/lib/nav';
 import {
   useCallback,
   useContext,
@@ -23,6 +21,16 @@ import {
   toast as dsToast,
   type ToastAsk,
 } from '@/components/ds';
+import { InfoTip } from '@/components/ds/InfoTip';
+import { DecisionNotes, LeftOutLine } from '@/components/simple/DecisionNotes';
+import { CommentCount } from '@/components/simple/FeatureComments';
+import {
+  FeatureContextMenu,
+  ITEM_GOING_EVENT,
+  useFeatureDelete,
+  type ItemGoingDetail,
+} from '@/components/simple/FeatureDelete';
+import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import {
   GoalPanel,
   goalRows,
@@ -32,39 +40,24 @@ import {
   type GoalPanelStart,
   type GoalSuggestionsApi,
 } from '@/components/simple/GoalSuggestions';
-import { DecisionNotes, LeftOutLine } from '@/components/simple/DecisionNotes';
-import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import { StartSheet } from '@/components/simple/meetings/StartSheet';
 import { LoadError, Loading } from '@/components/ui';
 import { getBranding, logoDataUrl } from '@/lib/api/branding';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
-import { draftNext } from '@/lib/simple-home';
-import { invalidateWaiting, reloadWaiting, waitingChanged } from '@/lib/simple-waiting';
 import { CARD_CHANGED_EVENT } from '@/lib/api/simple-chat';
 import { displayZone, formatInZone } from '@/lib/dates';
 import { formatDate, formatShortDate } from '@/lib/format';
 import { goalNumbers } from '@/lib/goal-tree';
 import { keyResults, topGoalSuggestions, type KeyResults } from '@/lib/key-results';
-import { InfoTip } from '@/components/ds/InfoTip';
 import { useMe } from '@/lib/me';
+import { Link, useSearchParams } from '@/lib/nav';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
+import { draftNext } from '@/lib/simple-home';
+import { invalidateWaiting, reloadWaiting, waitingChanged } from '@/lib/simple-waiting';
 import { inTrackOrder } from '@/lib/track-order';
 import { useQuery } from '@/lib/use-query';
 
 import { QuickAdd } from './_add';
-import { RemovedButton } from './_removed';
-import { TracksButton } from './_tracks';
-import {
-  MsCard,
-  MsKey,
-  MsLayer,
-  MsProvider,
-  MsToast,
-  useMilestones,
-  useMsBand,
-  type MsLane,
-  type MsRow,
-} from './_milestones';
 import {
   Board,
   boardColumns,
@@ -79,12 +72,6 @@ import {
 } from './_board';
 import { useKeyBurst } from './_burst';
 import {
-  FeatureContextMenu,
-  ITEM_GOING_EVENT,
-  useFeatureDelete,
-  type ItemGoingDetail,
-} from '@/components/simple/FeatureDelete';
-import {
   changeRowWords,
   FlagLine,
   FixButtons,
@@ -96,6 +83,7 @@ import {
   SuggestionPopover,
   type Act,
 } from './_card';
+import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd } from './_drafts';
 import {
   boardPicture,
   chartPicture,
@@ -104,11 +92,10 @@ import {
   zoomPicture,
   type Brand,
 } from './_export';
-import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd } from './_drafts';
+import { GoalTitle } from './_goalcards';
+import { itemName, NotInGt } from './_gtflag';
 import { KeyDatesEditor } from './_keydates';
-import { FeaturePanel } from './_panel';
 import { Lanes, pmItem } from './_lanes';
-import { trackLaned } from './_trackbands';
 import {
   addDays,
   broken,
@@ -155,8 +142,22 @@ import {
   ownerPick,
   ownersSeen,
 } from './_lib';
-import { itemName, NotInGt } from './_gtflag';
+import {
+  MsCard,
+  MsKey,
+  MsLayer,
+  MsProvider,
+  MsToast,
+  useMilestones,
+  useMsBand,
+  type MsLane,
+  type MsRow,
+} from './_milestones';
+import { FeaturePanel } from './_panel';
+import { RemovedButton } from './_removed';
 import { Chart, PHASES, type Layout } from './_timeline';
+import { trackLaned } from './_trackbands';
+import { TracksButton } from './_tracks';
 import {
   keepPlanPrds,
   takeGoals,
@@ -257,6 +258,12 @@ type Dates = ReturnType<typeof storedDates>;
 const sameDates = (a: Dates, b: Dates) =>
   a.start_date === b.start_date && a.end_date === b.end_date;
 const sameHorizon = (a: Horizon, b: Horizon) => a === b;
+// de-r1: a quick add's after: its track, and the six weeks clicked for an add in place.
+const addAfter = (title: string, trackId?: string, span?: [string, string]) => ({
+  title,
+  ...(trackId ? { track_id: trackId } : {}),
+  ...(span ? { start_date: span[0], end_date: span[1] } : {}),
+});
 
 // pre-demo QA Demo 8: a draft's time with its day, month first, in the company zone, as the rest of
 // the app writes one ("Nov 6, 2026, 4:43 AM PST"), never a bare "4:43 AM".
@@ -617,7 +624,7 @@ function GoalCounters({
         data-testid="goal-counter-title"
       >
         <GoalNum n={numberOf(id, g.title)} />
-        {g.title}
+        <GoalTitle id={id} title={g.title} />
       </p>
       {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that.
           QA Nov 14 #8: no metric line that only repeats the title. */}
@@ -651,7 +658,7 @@ function GoalCounters({
     >
       <p className="truncate text-base font-semibold" title={g.goal.title}>
         <GoalNum n={numberOf(g.goal.id, g.goal.title)} />
-        {g.goal.title}
+        <GoalTitle id={g.goal.id} title={g.goal.title} />
       </p>
       <p className="truncate text-sm text-text2">
         {g.empty ? 'No items yet' : 'No items in these filters'}
@@ -669,7 +676,7 @@ function GoalCounters({
         ...empty.map((g) => ({ id: g.goal.id, title: g.goal.title, card: null, empty: g })),
       ]
         .sort((a, b) => rank(a.id, a.title) - rank(b.id, b.title) || a.title.localeCompare(b.title))
-        .map((t) => (t.card ? counterCard(t.id, t.card) : emptyCard(t.empty!)))}
+        .map((t) => (t.card ? counterCard(t.id, t.card) : emptyCard(t.empty)))}
       {filteredOut && (
         <li
           data-testid="goal-counter-empty"
@@ -2373,6 +2380,31 @@ export function SimpleRoadmap() {
   const removeFeature = useFeatureDelete(reload, toast, (id) =>
     setCard((c) => (c?.id === id ? null : c)),
   );
+  // de-r1 (part 4): with a bar or card selected (its panel open), Delete or Backspace moves it to
+  // Trash at once with Undo in the note, as the panel's Move to Trash (who may only propose, proposes).
+  // Never while a field has the keys.
+  useEffect(() => {
+    const it = card ? byId.get(card.id) : undefined;
+    if (!it || closedItem(it) || !(it.can_decide || canChange)) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="alertdialog"]'))
+        return;
+      e.preventDefault();
+      void removeFeature({
+        id: it.id,
+        title: itemName(it),
+        parts: it.parts,
+        propose: !it.can_decide,
+        deciders: it.deciders,
+        now: it.can_decide,
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [card, byId, canChange, removeFeature]);
   const onRowMenu = (e: ReactMouseEvent) => {
     const el = (e.target as Element).closest('[data-bar-id],[data-item-id]');
     const it = el
@@ -2740,6 +2772,7 @@ export function SimpleRoadmap() {
     at: Where,
     rmId?: string,
     trackId?: string,
+    span?: [string, string],
   ): Promise<boolean> => {
     // tb-mk: a quick add dropped on a track band is added to Next on that track (after.track_id, kept by a
     // proposal till it is accepted); an applied add the roadmap reads elsewhere is then put on it (set_track).
@@ -2754,7 +2787,7 @@ export function SimpleRoadmap() {
         op: 'add_item',
         target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } },
         before: {},
-        after: band ? { title, track_id: band.id } : { title },
+        after: addAfter(title, band?.id, span),
       });
       const c = r.change;
       const id = c.target.item_id;
@@ -3488,6 +3521,21 @@ export function SimpleRoadmap() {
                         dropTargets={canChange}
                         goalSuggestions={goalCounts}
                         onGoal={openGoal}
+                        onAddIn={
+                          canChange
+                            ? (h, title) =>
+                                onAdd(
+                                  title,
+                                  {
+                                    kind: 'horizon',
+                                    value: h,
+                                    label: HORIZONS.find((x) => x.key === h)?.label ?? h,
+                                  },
+                                  undefined,
+                                  addTrack ?? undefined,
+                                )
+                            : undefined
+                        }
                       />
                     ) : format === 'timeline' ? (
                       // mk-qa4-roadmap QR1 A..QR4 A: three months from just before today, the key and the broken links
@@ -3505,6 +3553,21 @@ export function SimpleRoadmap() {
                         onKeyMove={onKeyMove}
                         onKeyEnd={(item) => dates.flush(item.id)}
                         onKeyCancel={onKeyCancel(dates)}
+                        proposals={allProposals}
+                        onAddAt={
+                          canChange
+                            ? (lane, title, start, end) => {
+                                const g = (goalLaned ?? data).groups.find((x) => x.key === lane);
+                                const at: Where =
+                                  (goalLaned ?? data).group === 'track'
+                                    ? { kind: 'track', value: lane, label: g?.title ?? lane }
+                                    : { kind: 'goal', value: lane, label: g?.title ?? lane };
+                                // The roadmap the track's items are on, so an add on a track never asks which.
+                                const rm = data.items.find((i) => i.track?.id === lane)?.roadmap.id;
+                                return onAdd(title, at, rm, undefined, [start, end]);
+                              }
+                            : undefined
+                        }
                         openKey={cardItem?.key ?? null}
                         onOpen={(k) => {
                           const it = k ? data.items.find((x) => x.key === k) : undefined;

@@ -377,7 +377,7 @@ async def test_estimate_changes_the_rank(client):
 async def test_confirm_item_into_the_working_draft(client):
     """protects=an owner's confirm_item on a draft item writes draft false into the roadmap's
     working draft (the published row stays a draft until the draft is approved), and the
-    read no longer lists it among the drafts for who sees the draft; a non-draft item
+    read no longer lists it among the drafts for any reader (de-inst); a non-draft item
     answers 422; a commenter's confirm is a proposal that writes nothing;
     fails_when=the published row is written, a non-draft is confirmed or a proposal writes;
     no_claim=submitting the draft (tests/test_simple_drafts_api.py)."""
@@ -400,7 +400,8 @@ async def test_confirm_item_into_the_working_draft(client):
         d = await s.scalar(select(SimpleDraft))
         assert d.overlay[w.ids["pay-5"]]["draft"] is False
     assert (await w.read(client))["drafts"] == []
-    assert [d["code"] for d in (await w.read(client, "viewer"))["drafts"]] == ["pay-5"]
+    # de-inst (owner, Nov 23): the owner's confirm is live for every reader at once.
+    assert (await w.read(client, "viewer"))["drafts"] == []
 
 
 def test_short_codes_feature_code_initials_and_clashes():

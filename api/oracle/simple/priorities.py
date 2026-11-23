@@ -522,9 +522,17 @@ async def _shown_names(db: AsyncSession, key_of: dict[uuid.UUID, str]) -> dict[s
     )
     shown = service._versions(versions, with_items, await drafts.submitted_versions(db))
     best: dict[str, tuple[tuple, str]] = {}
-    for fid, title, horizon, item_key in await db.execute(
+    # de-inst (the owner, Nov 23): a decider's rename in the working draft is live at once.
+    drafted: dict[str, dict] = {
+        k: v for o in (await drafts.overlays_for(db, None)).values() for k, v in o.items()
+    }
+    for iid, fid, title, horizon, item_key in await db.execute(
         select(
-            RoadmapItem.feature_id, RoadmapItem.title, RoadmapItem.horizon, RoadmapItem.item_key
+            RoadmapItem.id,
+            RoadmapItem.feature_id,
+            RoadmapItem.title,
+            RoadmapItem.horizon,
+            RoadmapItem.item_key,
         ).where(
             RoadmapItem.roadmap_version_id.in_(list(shown.values())),
             RoadmapItem.feature_id.is_not(None),
@@ -532,6 +540,9 @@ async def _shown_names(db: AsyncSession, key_of: dict[uuid.UUID, str]) -> dict[s
         )
     ):
         k = key_of.get(fid)
+        mine = drafted.get(str(iid))
+        if isinstance(mine, dict):
+            title, horizon = mine.get("title", title), mine.get("horizon", horizon)
         if k is None or not (title or "").strip():
             continue
         rank = (HORIZONS.index(horizon) if horizon in HORIZONS else len(HORIZONS), item_key)

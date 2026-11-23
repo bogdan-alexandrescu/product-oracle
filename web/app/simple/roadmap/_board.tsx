@@ -13,8 +13,8 @@ import { InfoTip } from '@/components/ds';
 import { CommentCount } from '@/components/simple/FeatureComments';
 import { LINK_KINDS } from '@/lib/roadmap-links';
 
+import { AddCard } from './_addrow';
 import { itemName, NotInGt } from './_gtflag';
-import { MsBoardRow } from './_milestones';
 import {
   barKind,
   broken,
@@ -33,6 +33,7 @@ import {
   type Item,
   type Roadmap,
 } from './_lib';
+import { MsBoardRow } from './_milestones';
 
 export type Horizon = Item['horizon'];
 
@@ -251,6 +252,8 @@ export interface BoardProps {
   dropTargets?: boolean;
   goalSuggestions?: Map<string, number>;
   onGoal?: (goalId: string, title: string) => void;
+  /** de-r1 (RE1 A): add a feature in a column; absent, the columns have no "+ Add". */
+  onAddIn?: (horizon: Horizon, title: string) => Promise<boolean>;
 }
 
 /**
@@ -276,6 +279,7 @@ export function Board({
   dropTargets,
   goalSuggestions,
   onGoal,
+  onAddIn,
 }: BoardProps) {
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -703,6 +707,7 @@ export function Board({
             </div>
           ))}
           {!c.groups.length && <p className="px-1 py-3 text-sm text-text2">Nothing here yet.</p>}
+          {onAddIn && <AddCard label={c.label} onAdd={(t) => onAddIn(c.key, t)} />}
           {c.below.length > 0 && (
             <div
               className="mt-2 border-t border-dashed border-line-strong pt-2"

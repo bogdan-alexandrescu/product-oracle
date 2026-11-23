@@ -98,10 +98,10 @@ async def test_permission_matrix_per_op(client, role, with_decider):
         d = await s.scalar(select(SimpleDraft))
         assert (d is not None) is applies
     if applies:
-        # The draft has the launch and no board meeting; readers of the published version
-        # still see the board meeting.
+        # The draft has the launch and no board meeting; de-inst (owner, Nov 23): every
+        # reader reads it at once.
         assert names(await key_dates(client, w, role)) == ["Spring launch"]
-        assert names(await key_dates(client, w, "viewer")) == ["Board meeting"]
+        assert names(await key_dates(client, w, "viewer")) == ["Spring launch"]
 
 
 async def test_track_owner_decides_only_as_approver(client):
@@ -185,7 +185,7 @@ async def test_draft_publishes_key_dates_on_approval(client):
     """protects=key dates wait in the roadmap's working draft (readers who may not see it get
     the published ones) and become published rows when the draft is submitted and approved;
     the roadmap read names which roadmaps the reader may change (applies vs proposes);
-    fails_when=a draft's key date leaks to a viewer, or approval does not publish it;
+    fails_when=a viewer waits for the review (de-inst), or approval does not publish it;
     no_claim=review policies with required reviewers (the drafts' own tests)."""
     w = await world()
     kd = await published_key_date(w)
@@ -193,7 +193,8 @@ async def test_draft_publishes_key_dates_on_approval(client):
     assert (await post(client, w, "decider", "add_key_date", None, LAUNCH)).status_code == 201
     assert (await post(client, w, "decider", "remove_key_date", seen,
                        key_date_id=kd)).status_code == 201  # fmt: skip
-    assert names(await key_dates(client, w, "viewer")) == ["Board meeting"]
+    # de-inst: a decider's key dates are live for every reader at once.
+    assert names(await key_dates(client, w, "viewer")) == ["Spring launch"]
     out = (await client.get(ROADMAP, headers=w.ctx.as_("decider"))).json()
     assert [(r["applies"], r["can_change"]) for r in out["key_date_roadmaps"]] == [(True, True)]
     out = (await client.get(ROADMAP, headers=w.ctx.as_("commenter"))).json()

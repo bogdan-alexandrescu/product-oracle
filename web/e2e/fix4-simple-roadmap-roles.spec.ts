@@ -18,6 +18,12 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 const conflict = (page: Page, key: string): Locator =>
   page.locator(`[data-testid="conflict"][data-item="${key}"]`).first();
 
+/** The broken link's fix button for the digest (gone once that link is fixed). */
+const moveFix = (page: Page): Locator =>
+  page
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' });
+
 async function theme(page: Page, scheme: 'light' | 'dark') {
   await page
     .context()
@@ -71,21 +77,31 @@ async function drawnExport(page: Page): Promise<Locator> {
 test.describe('desktop', () => {
   test.use(DESKTOP);
 
-  test("qa-simple-roadmap-9: a commenter's fix is checked against the roadmap they see, not the owner's draft", async ({
+  test("qa-simple-roadmap-9: an owner's fix is final and seen at once; a commenter's fix is a proposal checked against the roadmap they see", async ({
     page,
   }) => {
-    // The owner moves the digest in their working draft, from the panel of broken links.
+    // Direct edit (Nov 23): the owner's move from the panel of broken links is final at once.
     await openRoadmap(page);
     await conflict(page, 'alert-digest')
       .getByRole('button', { name: 'Move the dependents' })
       .click();
     await expect(
-      page.getByText(/Moved what depends on .Alert rules engine. in your working draft/),
+      page.getByText(/Moved what depends on .Alert rules engine./).first(),
     ).toBeVisible();
+    await expect(moveFix(page)).toHaveCount(0);
     await signOut(page);
 
-    // The commenter still sees the published roadmap: the link is broken there, and its fix is
-    // proposed against those dates, not refused as changed since they saw it.
+    // A reader sees that change at once: that link is no longer broken for them.
+    await openRoadmap(page, 'viewer@example.com');
+    await expect(moveFix(page)).toHaveCount(0);
+    await signOut(page);
+    await openRoadmap(page, 'commenter@example.com');
+    await expect(moveFix(page)).toHaveCount(0);
+  });
+
+  test("qa-simple-roadmap-9b: a commenter's fix stays a proposal, checked against the roadmap they see", async ({
+    page,
+  }) => {
     await openRoadmap(page, 'commenter@example.com');
     const fix = conflict(page, 'alert-digest').getByRole('button', { name: 'Move the dependents' });
     await expect(fix).toBeVisible();

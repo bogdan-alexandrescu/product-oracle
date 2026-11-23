@@ -15,6 +15,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -175,6 +176,8 @@ type Draft = {
   prd: boolean;
   k: KindFields | null;
   only?: 'name';
+  /** de-r2: a click on the band opens its name alone, at its day (Enter adds it as a delivery). */
+  quick?: boolean;
 };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
@@ -200,7 +203,8 @@ export interface MsCtl {
   setDraft: (d: Draft | null) => void;
   /** The goal whose rows the pointer was last over. */
   overLane: (goal: string | null) => void;
-  begin: (date: string, goal: string | null) => void;
+  /** de-r2: quick, from a click on the band: its name alone at its day (a delivery). */
+  begin: (date: string, goal: string | null, quick?: boolean) => void;
   edit: (m: GoalMilestone) => void;
   /** home-milestone-rename: its card for its name alone (Home's plan rows). */
   rename: (m: GoalMilestone) => void;
@@ -209,10 +213,15 @@ export interface MsCtl {
   /** A bar tapped while the card is open: an item it waits on (again: no longer). */
   pick: (itemId: string) => boolean;
   save: (again: boolean) => Promise<void>;
-  remove: () => Promise<void>;
+  /** de-r2: the open card's change, saved at once (the card stays open); rolled back with the error if refused. */
+  commit: () => Promise<void>;
+  /** The open card's milestone, or the one named (de-r2: Delete on its band label). */
+  remove: (m?: GoalMilestone) => Promise<void>;
   /** milestone-rights: who may not change it proposes the card's change (or removing it) to the roadmap's decider. */
   propose: (remove: boolean) => Promise<void>;
   move: (m: GoalMilestone, date: string) => Promise<void>;
+  /** de-fix: an arrow key's nudge of its day, drawn at once; a burst sends in order and Undo goes back to before it. */
+  nudge: (m: GoalMilestone, days: number) => void;
   undo: () => Promise<void>;
   closeToast: () => void;
   /** roadmap-decide: the PRD milestone whose ask is open for its owner's Approve / Decline. */
@@ -276,9 +285,25 @@ export function useMilestones({
   const [moving, setMoving] = useState<{ id: string; date: string } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
+  // de-r2: added and removed ones show at once, before the API answers.
+  const [adding, setAdding] = useState<GoalMilestone[]>([]);
+  const [gone, setGone] = useState<string[]>([]);
+  const [nudged, setNudged] = useState<Record<string, string>>({});
+  const nudges = useRef<
+    Record<string, { date: string; from: string; chain: Promise<unknown>; n: number }>
+  >({});
   const lastLane = useRef<string | null>(null);
+  const live = useRef<Draft | null>(null);
+  useLayoutEffect(() => {
+    live.current = draft;
+  }, [draft]);
   if (!data) return null;
-  const list = data.goal_milestones ?? [];
+  const list = [
+    ...(data.goal_milestones ?? [])
+      .filter((m) => !gone.includes(m.id))
+      .map((m) => (nudged[m.id] ? { ...m, date: nudged[m.id] } : m)),
+    ...adding.filter((a) => !(data.goal_milestones ?? []).some((m) => m.id === a.id)),
+  ];
   const num = (m: GoalMilestone) => Number(msCode(m).slice(1)) || 0;
   const band = [
     ...new Map(list.filter((m) => m.date).map((m) => [msCode(m), m] as const)).values(),
@@ -347,6 +372,65 @@ export function useMilestones({
         body,
       }),
     );
+  // de-r2: the open card's change, saved at once (the feature panel's one step, no Save).
+  const commit = async () => {
+    const d = live.current;
+    const was = d?.id ? list.find((x) => x.id === d.id) : undefined;
+    if (!d || !was || d.prd || !was.can_change) return;
+    const name = d.name.trim() || was.name;
+    const body: Schemas['SimpleGoalMilestonePatch'] =
+      was.goal_target || d.only === 'name'
+        ? { name }
+        : {
+            name,
+            date: d.date,
+            goal_id: d.goal_id,
+            item_ids: d.item_ids,
+            counts_when: d.counts_when,
+            ...(d.k ? forKind(d.k) : {}),
+          };
+    const before = draftOf(was);
+    const saved: Record<string, unknown> = {
+      name: was.name,
+      date: before.date,
+      goal_id: before.goal_id,
+      item_ids: before.item_ids,
+      counts_when: before.counts_when,
+      ...forKind(kindFields(was)),
+    };
+    const same = Object.entries(body).every(
+      ([key, v]) => JSON.stringify(v ?? null) === JSON.stringify(saved[key] ?? null),
+    );
+    if (same) return;
+    try {
+      await patch(was.id, body);
+    } catch (e) {
+      // Rolled back: the card shows the saved values again, the toast the API's words.
+      setDraft((now) => (now?.id === was.id ? { ...before, only: now.only } : now));
+      setToast({
+        words: e instanceof Error && e.message ? e.message : 'Oracle could not save it',
+        undo: null,
+      });
+      return;
+    }
+    await done({
+      words: `${words({ code: d.code, name })} saved`,
+      undo: () =>
+        patch(
+          was.id,
+          was.goal_target || d.only === 'name'
+            ? { name: was.name }
+            : {
+                name: was.name,
+                date: was.date,
+                goal_id: was.goal_id,
+                item_ids: was.item_ids,
+                counts_when: was.counts_when,
+                ...kindFields(was),
+              },
+        ),
+    });
+  };
   return {
     asking,
     setAsking,
@@ -386,16 +470,25 @@ export function useMilestones({
     today: data.today,
     setHover,
     setMoving,
-    setDraft,
+    setDraft: (d) => {
+      live.current = d;
+      setDraft(d);
+    },
     overLane: (g) => {
       lastLane.current = g;
     },
-    begin: (date, goal) => {
+    begin: (date, goal, quick = false) => {
       setToast(null);
       setDraft((d) =>
         d && !d.id
           ? { ...d, date, code: nextCode(date) }
-          : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null),
+          : quick
+            ? {
+                ...fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null),
+                quick: true,
+                k: { kind: 'delivery', ...NO_KIND },
+              }
+            : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null),
       );
     },
     openItem: (itemId) => {
@@ -414,12 +507,16 @@ export function useMilestones({
       if (!draft || draft.prd) return false;
       const m = draft.id ? list.find((x) => x.id === draft.id) : null;
       if (m && !m.can_change && !m.can_propose) return false;
-      setDraft({
+      const next = {
         ...draft,
         item_ids: draft.item_ids.includes(itemId)
           ? draft.item_ids.filter((x) => x !== itemId)
           : [...draft.item_ids, itemId],
-      });
+      };
+      live.current = next;
+      setDraft(next);
+      // de-r2: a tapped bar is saved at once on a saved one the reader changes.
+      if (next.id && m?.can_change && !next.prd) void commit();
       return true;
     },
     save: async (again) => {
@@ -492,19 +589,59 @@ export function useMilestones({
         });
         return;
       }
-      const made = await unwrap(
-        api.POST('/v1/simple/roadmap/milestones', {
-          body: {
-            roadmap_id: roadmapOf(d.goal_id)!,
-            name: d.name.trim() || 'New milestone',
-            date: d.date,
-            goal_id: d.goal_id,
-            item_ids: d.item_ids,
-            counts_when: d.counts_when,
-            ...(d.k ? forKind(d.k) : { kind: 'delivery' as const, ...NO_KIND }),
-          },
-        }),
-      );
+      // de-r2: the new one is drawn at once, before the API answers; a refusal takes it off with the error.
+      const temp = `adding-${Date.now()}`;
+      const shownName = d.name.trim() || 'New milestone';
+      setAdding((a) => [
+        ...a,
+        {
+          id: temp,
+          roadmap_id: roadmapOf(d.goal_id) ?? '',
+          code: d.code,
+          roadmap_code: d.code,
+          name: shownName,
+          date: d.date,
+          goal_id: d.goal_id,
+          item_ids: d.item_ids,
+          counts_when: d.counts_when,
+          progress: 'not_started',
+          can_change: false,
+          can_propose: false,
+          kind: d.k?.kind ?? 'delivery',
+          done_when_line: '',
+          status: 'on_track',
+          sub_goal_ids: [],
+        } as unknown as GoalMilestone,
+      ]);
+      if (d.quick) setDraft(null);
+      const drop = () => setAdding((a) => a.filter((x) => x.id !== temp));
+      let made: GoalMilestone;
+      try {
+        made = await unwrap(
+          api.POST('/v1/simple/roadmap/milestones', {
+            body: {
+              roadmap_id: roadmapOf(d.goal_id)!,
+              name: d.name.trim() || 'New milestone',
+              date: d.date,
+              goal_id: d.goal_id,
+              item_ids: d.item_ids,
+              counts_when: d.counts_when,
+              ...(d.k ? forKind(d.k) : { kind: 'delivery' as const, ...NO_KIND }),
+            },
+          }),
+        );
+      } catch (e) {
+        drop();
+        if (d.quick) {
+          setToast({
+            words: e instanceof Error && e.message ? e.message : 'Oracle could not add it',
+            undo: null,
+          });
+          return;
+        }
+        throw e;
+      }
+      drop();
       const late = lateOf(d.item_ids, d.date);
       setDraft(
         again
@@ -527,15 +664,27 @@ export function useMilestones({
           ),
       });
     },
-    remove: async () => {
-      if (!draft?.id) return;
-      const m = list.find((x) => x.id === draft.id)!;
-      await unwrap(
-        api.DELETE('/v1/simple/roadmap/milestones/{milestone_id}', {
-          params: { path: { milestone_id: m.id } },
-        }),
-      );
+    commit,
+    remove: async (one) => {
+      const m = one ?? (draft?.id ? list.find((x) => x.id === draft.id) : undefined);
+      if (!m) return;
+      // de-r2: off the chart at once; a refusal puts it back with the error.
+      setGone((g) => [...g, m.id]);
       setDraft(null);
+      try {
+        await unwrap(
+          api.DELETE('/v1/simple/roadmap/milestones/{milestone_id}', {
+            params: { path: { milestone_id: m.id } },
+          }),
+        );
+      } catch (e) {
+        setGone((g) => g.filter((x) => x !== m.id));
+        setToast({
+          words: e instanceof Error && e.message ? e.message : 'Oracle could not remove it',
+          undo: null,
+        });
+        return;
+      }
       await done({
         words: `${words(m)} removed`,
         undo: () =>
@@ -623,11 +772,50 @@ export function useMilestones({
           undo: () => patch(m.id, { date: m.date }),
         });
     },
+    nudge: (m, days) => {
+      const was = nudges.current[m.id];
+      const from = was?.from ?? m.date;
+      if (!from) return;
+      const date = addDays(was?.date ?? from, days);
+      const n = (was?.n ?? 0) + 1;
+      const chain = (was?.chain ?? Promise.resolve()).then(() => patch(m.id, { date }));
+      nudges.current[m.id] = { date, from, chain, n };
+      setNudged((s) => ({ ...s, [m.id]: date }));
+      const last = () => nudges.current[m.id]?.n === n;
+      const clear = () => {
+        delete nudges.current[m.id];
+        setNudged((s) => {
+          const rest = { ...s };
+          delete rest[m.id];
+          return rest;
+        });
+      };
+      void chain.then(
+        async () => {
+          if (!last()) return;
+          await done({
+            words: `${words(m)} moved to ${day(date)}`,
+            undo: () => patch(m.id, { date: from }),
+          });
+          if (last()) clear();
+        },
+        async (e: unknown) => {
+          if (!last()) return;
+          clear();
+          setToast({
+            words: e instanceof Error ? e.message : 'Oracle could not move it',
+            undo: null,
+          });
+          await reload();
+        },
+      );
+    },
     undo: async () => {
       const u = toast?.undo;
       setToast(null);
       if (u) {
         await u();
+        setGone([]);
         await reload();
       }
     },
@@ -1489,7 +1677,7 @@ export function MsLayer(props: MsLayerProps) {
           e.preventDefault();
           const px = e.clientX - e.currentTarget.getBoundingClientRect().left;
           ms.setHover(null);
-          ms.begin(dayAt(x, px, ms.today), null);
+          ms.begin(dayAt(x, px, ms.today), null, true);
         }}
       />,
     );
@@ -1549,6 +1737,12 @@ export function MsLayer(props: MsLayerProps) {
           title="New milestone"
           testid="ms-new"
         />,
+      );
+    if (!d.id && d.quick && !ms.phone)
+      out.push(
+        <div key="quick" className="absolute z-[40]" style={{ left: nx - 20, top: axisY + 14 }}>
+          <QuickAdd />
+        </div>,
       );
     // Its dashed line runs through every band, as a saved one's does.
     if (!d.id)
@@ -1709,6 +1903,17 @@ export function MsLayer(props: MsLayerProps) {
           onPointerLeave={() => setBandTip(null)}
           onBlur={() => setBandTip(null)}
           onClick={() => ms.edit(m)}
+          // de-r2: on its focused label, Delete removes it (Undo in the note) and arrows nudge its day (Shift: a week).
+          onKeyDown={(e) => {
+            if (!m.can_change || m.prd || m.goal_target || !m.date) return;
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+              e.preventDefault();
+              void ms.remove(m);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              ms.nudge(m, (e.shiftKey ? 7 : 1) * (e.key === 'ArrowLeft' ? -1 : 1));
+            }
+          }}
           className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap"
           style={{
             left: p.left,
@@ -2035,6 +2240,48 @@ function KindList({ onPick }: { onPick: (kind: MkKind) => void }) {
 }
 
 /** The milestone's card: in the chart's top corner (a sheet on a phone). */
+/** de-r2 (re1-a-ms): a click on the band adds one there: its name, Enter adds it (a delivery), Esc cancels;
+ * "⋯" opens its kind and the rest. */
+function QuickAdd() {
+  const ms = useMsCtl();
+  const d = ms?.draft;
+  if (!ms || !d) return null;
+  return (
+    <div
+      data-testid="ms-quick"
+      data-ms-quick
+      role="dialog"
+      aria-label="New milestone"
+      className="flex items-center gap-2 rounded-xl border border-line bg-surface p-2 shadow-xl"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <input
+        autoFocus
+        aria-label="Name"
+        data-testid="ms-quick-name"
+        value={d.name}
+        placeholder={d.code}
+        onChange={(e) => ms.setDraft({ ...d, name: e.target.value })}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          void ms.save(false);
+        }}
+        className="h-8 w-[190px] min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-base text-text"
+      />
+      <span className="text-sm whitespace-nowrap text-text2 tnum">{day(d.date)}</span>
+      <Button
+        variant="ghost"
+        aria-label="Kind and more"
+        data-testid="ms-quick-more"
+        onClick={() => ms.setDraft({ ...d, quick: false, k: null })}
+      >
+        ⋯
+      </Button>
+    </div>
+  );
+}
+
 export function MsCard() {
   const ms = useMsCtl();
   const [busy, setBusy] = useState(false);
@@ -2044,15 +2291,37 @@ export function MsCard() {
   // an Escape a dialog over it, or a "+N" / same-day list, already took is theirs alone.
   const open = !!ms?.draft;
   const close = ms?.setDraft;
+  const latest = useRef(ms);
+  useEffect(() => {
+    latest.current = ms;
+  });
+  // de-r2: the open milestone Delete removes, where the reader changes it (not a PRD's, a goal's own, or a rename).
+  const removable = () => {
+    const c = latest.current;
+    const dd = c?.draft;
+    const own = dd?.id ? c?.list.find((x) => x.id === dd.id) : undefined;
+    return c && dd && own?.can_change && !dd.prd && !dd.only && !own.goal_target ? c : null;
+  };
   useEffect(() => {
     if (!open || !close) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
       const at = e.target as Element | null;
+      // de-r2: Delete removes the open milestone at once (Undo in the note), outside its fields.
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        !e.defaultPrevented &&
+        !at?.closest?.('input, textarea, select, [contenteditable="true"]') &&
+        removable()
+      ) {
+        e.preventDefault();
+        void removable()!.remove();
+        return;
+      }
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       const over = at?.closest?.('[role="dialog"], [role="alertdialog"]');
       if (
         over &&
-        !['ms-card', 'ms-prd-card', 'ms-kind-picker'].includes(
+        !['ms-card', 'ms-prd-card', 'ms-kind-picker', 'ms-quick'].includes(
           over.getAttribute('data-testid') ?? '',
         )
       )
@@ -2167,6 +2436,32 @@ export function MsCard() {
   // milestone-rights: who changes it saves; who may only propose proposes; anyone else reads.
   const rights = !own || own.can_change ? 'change' : own.can_propose ? 'propose' : 'read';
   const reads = rights === 'read';
+  // de-r2: a saved one the reader changes takes each field at once: a pick on change, typing on Enter or leaving it.
+  const liveOn = !!d.id && rights === 'change' && !d.prd;
+  const typed = (t: EventTarget) =>
+    t instanceof HTMLTextAreaElement ||
+    (t instanceof HTMLInputElement && ['text', 'search', 'number'].includes(t.type));
+  const liveProps = liveOn
+    ? {
+        onChange: (e: { target: EventTarget }) => {
+          if (!typed(e.target)) setTimeout(() => void ms.commit(), 0);
+        },
+        onBlur: (e: { target: EventTarget }) => {
+          if (typed(e.target)) void ms.commit();
+        },
+        onKeyDown: (e: ReactKeyboardEvent) => {
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement && typed(e.target)) {
+            e.preventDefault();
+            void ms.commit();
+          }
+        },
+      }
+    : {};
+  // Close takes what is still typed (saved at once), then closes.
+  const shut = async () => {
+    await ms.commit();
+    ms.setDraft(null);
+  };
   const head = !d.id
     ? d.second
       ? 'Next milestone'
@@ -2174,6 +2469,12 @@ export function MsCard() {
     : reads
       ? `${d.code} ${d.name}`
       : `Edit ${d.code}`;
+  if (!d.id && d.quick)
+    return phone ? (
+      <div className={`${cls} bg-surface p-3 shadow-xl`}>
+        <QuickAdd />
+      </div>
+    ) : null;
   const late = (id: string) => endsAfter(ms.items.get(id), d.date);
   // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's);
   // home-milestone-rename: any milestone renamed from Home, the same card.
@@ -2185,6 +2486,7 @@ export function MsCard() {
         role="dialog"
         aria-label={head}
         className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}
+        {...liveProps}
       >
         {phone && (
           <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
@@ -2207,9 +2509,14 @@ export function MsCard() {
         <Asked m={own} />
         {error}
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          {rights === 'change' && (
+          {rights === 'change' && !liveOn && (
             <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
               Save
+            </Btn>
+          )}
+          {liveOn && (
+            <Btn testid="ms-save" onClick={() => run(shut)}>
+              Close
             </Btn>
           )}
           {rights === 'propose' && (
@@ -2222,13 +2529,15 @@ export function MsCard() {
               Propose
             </Btn>
           )}
-          <button
-            type="button"
-            className="px-1 text-sm leading-8 text-text2"
-            onClick={() => ms.setDraft(null)}
-          >
-            {reads ? 'Close' : 'Cancel'}
-          </button>
+          {!liveOn && (
+            <button
+              type="button"
+              className="px-1 text-sm leading-8 text-text2"
+              onClick={() => ms.setDraft(null)}
+            >
+              {reads ? 'Close' : 'Cancel'}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -2333,6 +2642,7 @@ export function MsCard() {
       role="dialog"
       aria-label={head}
       className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}
+      {...liveProps}
     >
       {phone && (
         <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
@@ -2535,7 +2845,10 @@ export function MsCard() {
                     type="button"
                     aria-label={`Take ${it?.title ?? 'it'} off`}
                     className="text-text2"
-                    onClick={() => set({ item_ids: d.item_ids.filter((x) => x !== id) })}
+                    onClick={() => {
+                      set({ item_ids: d.item_ids.filter((x) => x !== id) });
+                      if (liveOn) setTimeout(() => void ms.commit(), 0);
+                    }}
                   >
                     ×
                   </button>
@@ -2553,9 +2866,14 @@ export function MsCard() {
       )}
       {error}
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        {rights === 'change' && (
+        {rights === 'change' && !liveOn && (
           <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
             {d.id ? 'Save' : 'Add'}
+          </Btn>
+        )}
+        {liveOn && (
+          <Btn testid="ms-save" onClick={() => run(shut)}>
+            Close
           </Btn>
         )}
         {rights === 'propose' && (
@@ -2588,9 +2906,15 @@ export function MsCard() {
             Propose removing it
           </Btn>
         )}
-        <button type="button" className="px-1 text-sm text-text2" onClick={() => ms.setDraft(null)}>
-          {reads ? 'Close' : 'Cancel'}
-        </button>
+        {!liveOn && (
+          <button
+            type="button"
+            className="px-1 text-sm text-text2"
+            onClick={() => ms.setDraft(null)}
+          >
+            {reads ? 'Close' : 'Cancel'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2599,6 +2923,20 @@ export function MsCard() {
 /** What was just done, with Undo. */
 export function MsToast() {
   const ms = useMsCtl();
+  // de-r2: Cmd/Ctrl+Z undoes what the note names, outside a field.
+  const undo = ms?.toast?.undo ? ms.undo : null;
+  useEffect(() => {
+    if (!undo) return;
+    const onKey = (e: KeyboardEvent) => {
+      const at = e.target as Element | null;
+      if (e.key.toLowerCase() !== 'z' || !(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+      if (at?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      void undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo]);
   if (!ms?.toast) return null;
   return (
     <div

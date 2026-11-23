@@ -8,17 +8,29 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
-import { byPrdRank, prdRanker } from './prd-rank';
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
-import { withRoadmapCodes } from './roadmap-codes';
-import { plainFlow } from './simple-visuals';
-import { leftOut } from './decision-notes';
-import { unitOk } from './goal-units';
+
+import {
+  appliedMilestones,
+  planRowState,
+  rowCodeTaken,
+  type AppliedRecord,
+} from './approved-roadmap';
 import { mockNowMs } from './clock';
 import { companyDayIso } from './connections';
+import { leftOut } from './decision-notes';
+import {
+  basePlan as fitBasePlan,
+  PLAN_TARGET as FIT_PLAN_TARGET,
+  schedule as fitSchedule,
+} from './fit-date-engine';
+import { unitOk } from './goal-units';
 import { newCompany, seeded, stableUuid } from './ids';
+import { codedTitle, prdCode } from './item-code';
+import { withRoadmapCodes } from './roadmap-codes';
+import { plainFlow } from './simple-visuals';
 import {
   calendarDay,
   milestoneOut,
@@ -29,15 +41,10 @@ import {
   type OldCtx,
 } from './simple-milestones';
 import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
+import { reply } from './typed';
+
 import type { OnePagerDb } from './simple-one-pager';
-import {
-  appliedMilestones,
-  planRowState,
-  rowCodeTaken,
-  type AppliedRecord,
-} from './approved-roadmap';
-import { codedTitle, prdCode } from './item-code';
-export { codedTitle, prdCode, shownCode, shownName } from './item-code';
+
 import {
   PLAN_PRD_SLUG,
   planGoalNames,
@@ -48,12 +55,9 @@ import {
 } from './simple-plan';
 import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { featureKeyOf, startEffort } from './simple-priorities';
-import {
-  basePlan as fitBasePlan,
-  PLAN_TARGET as FIT_PLAN_TARGET,
-  schedule as fitSchedule,
-} from './fit-date-engine';
-import { reply } from './typed';
+import { byPrdRank, prdRanker } from './prd-rank';
+
+export { codedTitle, prdCode, shownCode, shownName } from './item-code';
 
 type Item = Schemas['SimpleRoadmapItem'];
 type Suggestion = Schemas['DateSuggestionOut'];
@@ -672,7 +676,7 @@ export function itemSubjectName(
   id: string,
 ): string | null {
   const key = db && Object.keys(db.ids).find((k) => db.ids[k] === id);
-  const item = key ? db!.items.find((s) => s.key === key) : undefined;
+  const item = key ? db.items.find((s) => s.key === key) : undefined;
   if (!item) return null;
   const code = prdCode(item.section);
   return code ? `${code} ${item.title}` : item.title;
@@ -713,7 +717,7 @@ export const TYPED_TARGET = /^(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
 export const measuredUnit = (key: string, target: string | null): string | null => {
   const unit = READINGS[key]?.unit;
   const m = unit && target ? TYPED_TARGET.exec(target) : null;
-  return m && m[2] === unit ? unit! : null;
+  return m && m[2] === unit ? unit : null;
 };
 /** A typed target's number, with its unit (if any) before or after it ("3", "3 Days", "$1,200"). */
 const TYPED_NUMBER = /^(\D*?)(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
@@ -1003,13 +1007,7 @@ function withAsks(
         counts_when: differs(after.counts_when, m.counts_when),
         asked_of: to ? (me?.names?.[to] ?? null) : null,
         change_id: c.id,
-        can_decide:
-          !!me &&
-          decidesMilestoneAsk(
-            db,
-            c as Schemas['SimpleChangeOut'] & { target: Record<string, unknown> },
-            me,
-          ),
+        can_decide: !!me && decidesMilestoneAsk(db, c, me),
       },
     };
   });
@@ -2856,9 +2854,9 @@ function readerView(
   hiddenBy: Record<string, number>;
 } {
   const hiddenBy: Record<string, number> = {};
-  let items = db.items;
-  let own = db.own;
-  let keyDates = db.key_dates ?? {};
+  const items = db.items;
+  const own = db.own;
+  const keyDates = db.key_dates ?? {};
   let hidden = 0;
   const visible: Schemas['SimpleDraftBrief'][] = [];
   // replaced-prd-history (drafts.reader): a replaced PRD's roadmap is history: no draft, no count.
@@ -2873,17 +2871,9 @@ function readerView(
         status: d.out.status,
         changes: draftChanges(db, d.out.id),
       });
-      continue;
     }
-    hidden += draftChanges(db, d.out.id);
-    hiddenBy[d.out.document.id] = (hiddenBy[d.out.document.id] ?? 0) + draftChanges(db, d.out.id);
-    const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
-    items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
-    keyDates = { ...keyDates, [d.roadmap]: d.published.key_dates ?? [] };
-    own = {
-      ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))),
-      ...d.published.own,
-    };
+    // de-inst (drafts.reader, the owner Nov 23): a decider's applied change is the live
+    // roadmap every reader reads at once, never counted as in review.
   }
   const shownDocs = new Set(visible.map((v) => v.document_id));
   const proposed = (db.changes ?? []).filter(
@@ -3305,6 +3295,8 @@ export function roadmapOut(
     // track has no PRD and its milestones keep their target day and counts only, no plan.
     ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
       const inPlay = items.some((i) => i.prd?.slug === slug);
+      const horizonOf = (d: string): Horizon =>
+        d <= w.now[1] ? 'now' : d <= w.next[1] ? 'next' : 'later';
       return planMilestones().map((m) => ({
         id: stableUuid(
           slug === PLAN_PRD_SLUG
@@ -3316,11 +3308,7 @@ export function roadmapOut(
         ),
         name: `${m.code} · ${m.name}`,
         date: m.end_date,
-        horizon: (m.end_date <= w.now[1]
-          ? 'now'
-          : m.end_date <= w.next[1]
-            ? 'next'
-            : 'later') as Horizon,
+        horizon: horizonOf(m.end_date),
         status: 'planned' as const,
         item_ids: items
           .filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code))
@@ -3387,6 +3375,7 @@ export function roadmapOut(
         g.id,
         comparison ? comparison === 'at_most' || comparison === 'below' : undefined,
       );
+      const progress: Schemas['SimpleGoalMilestone']['progress'] = 'not_started';
       return [
         {
           id: g.id,
@@ -3397,7 +3386,7 @@ export function roadmapOut(
           goal_id: g.id,
           item_ids: mine.map((i) => i.id),
           counts_when: '',
-          progress: 'not_started' as Schemas['SimpleGoalMilestone']['progress'],
+          progress,
           prd: null,
           prd_owner: null,
           pending: null,

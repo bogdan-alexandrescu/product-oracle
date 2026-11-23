@@ -3771,7 +3771,7 @@ function UndatedBuckets({
               data-key={b.key}
               data-goal-id={rec?.id}
               data-drop={over ? '' : undefined}
-              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? 'border-2 border-accent bg-accent-soft' : b.no_goal ? 'border-warn' : 'border-line'}`}
+              className={`group/bucket relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? 'border-2 border-accent bg-accent-soft' : b.no_goal ? 'border-warn' : 'border-line'}`}
             >
               {rec && editingGoal === rec.id ? (
                 <GoalForm
@@ -3896,6 +3896,8 @@ function UndatedBuckets({
                         actions={tasks.actions(t)}
                         // panel-menu: a part names the feature it is part of, as on the ranked rows.
                         partOf={r && <PartOf r={r} />}
+                        onRename={t && add ? (n) => tasks.rename(t, n) : undefined}
+                        onDelete={t && add ? () => tasks.remove(t) : undefined}
                       />
                     );
                   })}
@@ -3926,6 +3928,7 @@ function UndatedBuckets({
                       />
                     );
                   })}
+                  {!b.no_goal && rec && tasks.quick({ id: rec.id, title: b.title })}
                   {add}
                 </ul>
               ) : (
