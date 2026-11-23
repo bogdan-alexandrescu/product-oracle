@@ -265,7 +265,8 @@ async def roadmap_key_dates(
     out: list[SimpleKeyDate] = []
     for doc_id, doc in docs.items():
         d = open_.get(doc_id)
-        sees = d is not None and drafts.sees(principal, d, w)
+        # de-inst (the owner, Nov 23): a decider's key date change is live for every reader.
+        sees = d is not None
         values = patched(pub[doc_id], d.overlay if sees else None)
         changed = set(((d.overlay or {}).get(KEY) or {}) if sees and d else {}) - copied(
             d.overlay if sees and d else None
@@ -411,8 +412,8 @@ async def _current(
 ) -> dict[str, Any] | None:
     """The key date as the caller reads it (the working draft's when they see it)."""
     d = await _open_draft(db, doc)
-    w = await drafts.who(db, {doc})
-    sees = d is not None and drafts.sees(principal, d, w)
+    # de-inst: every reader reads the working draft's key dates (a decider's, live at once).
+    sees = d is not None
     return patched((await published(db, {doc}))[doc], d.overlay if sees else None).get(kd_id)
 
 

@@ -223,13 +223,12 @@ async def test_with_no_working_draft_the_run_reads_the_published_version():
 
 
 async def test_a_run_started_by_someone_who_may_not_see_the_draft_reads_the_published_one():
-    """Keeps a run from leaking an unpublished plan's contents to someone barred from it."""
-    # The draft's own rule (oracle.simple.drafts.sees): a commenter who took no part in it
-    # reads the published version, so the PRD their run writes shows nothing of the draft.
+    """de-inst (owner, Nov 23): the working draft is a decider's live roadmap, so a run a
+    commenter started reads it too; nothing waits on a publish."""
     w = await world(starter="commenter")
     prompt, knobs = await _prompt(w)
-    assert knobs["roadmap_read"] == "Company roadmap v7 (published Nov 4)"
-    assert "Weekly summary email" not in prompt and "Digest preview" not in prompt
+    assert knobs["roadmap_read"] == DRAFT_LABEL
+    assert "Weekly summary email" in prompt and "Digest preview" in prompt
 
 
 DRAFT_LABEL = "Company roadmap, working draft (edited Nov 5, 2026, 11:40 PM PST)"
@@ -261,8 +260,8 @@ async def _let_in(w: dict, how: str) -> None:
         await s.commit()
 
 
-# Who reads the working draft: whoever the draft's own rule lets see it; everyone else
-# reads the published version (round 1 review).
+# Who reads the working draft: everyone (de-inst, owner Nov 23: a decider's changes are the
+# live roadmap); the draft's own rule now decides only who sees the draft itself.
 WHO = [
     ("owner", None, True),
     ("commenter", "participant", True),
@@ -271,9 +270,9 @@ WHO = [
     ("commenter", "track owner", True),
     ("commenter", "waiting on", True),
     ("commenter", "added reviewer", True),
-    ("approver", None, False),
-    ("commenter", None, False),
-    ("viewer", None, False),
+    ("approver", None, True),
+    ("commenter", None, True),
+    ("viewer", None, True),
 ]
 
 
@@ -291,7 +290,7 @@ async def test_the_run_reads_the_draft_only_when_its_starter_may_see_it(starter,
     assert ("Weekly digest email" in prompt) is not sees
 
 
-@pytest.mark.parametrize(("starter", "sees"), [("owner", True), ("commenter", False)])
+@pytest.mark.parametrize(("starter", "sees"), [("owner", True), ("commenter", True)])
 async def test_build_next_draft_follows_the_same_rule(starter, sees):
     """Building the next draft follows the same draft-visibility rule as other flows."""
     w = await world(starter=starter, flow="feedback_loop")
@@ -302,13 +301,11 @@ async def test_build_next_draft_follows_the_same_rule(starter, sees):
 
 @pytest.mark.parametrize("target", ["company", "approvers"])
 async def test_a_run_nobody_started_reads_the_published_version(target):
-    """A run nobody started reads the published roadmap, regardless of who may see it."""
-    # No starter, nobody who may see the draft: the published version, whoever the PRD's
-    # readers are.
+    """de-inst: a run nobody started reads the live roadmap (the working draft) too."""
     w = await world(starter=None, digest_visibility=target)
     prompt, knobs = await _prompt(w)
-    assert knobs["roadmap_read"] == PUBLISHED_LABEL
-    assert "Weekly summary email" not in prompt and "Digest preview" not in prompt
+    assert knobs["roadmap_read"] == DRAFT_LABEL
+    assert "Weekly summary email" in prompt
 
 
 async def test_a_company_visible_prd_s_run_leaves_out_an_approvers_only_prd_s_items():
