@@ -782,7 +782,7 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
             assert r.status_code == 200, r.text
         assert r.json()["status"] == "approved", r.text
         listed = (await client.get("/v1/trash", headers=w.as_("owner"))).json()
-        assert [e["root"]["title"] for e in listed] == ["Guided setup"]
+        assert [e["root"]["title"] for e in listed] == ["F-1 Guided setup"]
 
     r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("owner"))
     assert r.status_code == 200, r.text
@@ -803,7 +803,8 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
     assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}
     assert await _on_versions(w, "guided-setup") == {}
     async with tenant_session(w.ctx.tenant_id) as s:
-        rows = list(await s.scalars(select(RoadmapItem).where(RoadmapItem.title == "Guided setup")))
+        found = select(RoadmapItem).where(RoadmapItem.title == "F-1 Guided setup")
+        rows = list(await s.scalars(found))
         drafts = [await s.get(SimpleDraft, r.simple_draft_id) for r in rows]
     assert [(str(r.id), r.roadmap_version_id) for r in rows] == [(iid, None)]
     # Back in the roadmap's working draft (when its own was approved, a new one).
