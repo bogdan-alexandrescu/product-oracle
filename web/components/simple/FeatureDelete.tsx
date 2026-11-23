@@ -25,61 +25,72 @@ const going = (id: string, on: boolean) =>
     new CustomEvent<ItemGoingDetail>(ITEM_GOING_EVENT, { detail: { id, going: on } }),
   );
 
+type Gone = {
+  id: string;
+  title: string;
+  parts?: readonly unknown[];
+  rows?: { label: string; value: string }[];
+  propose?: boolean;
+  deciders?: string[];
+  now?: boolean;
+};
+/** roadmap-add: a `now` row hidden at once comes back when it did not go (or on Undo). */
+const back = (id: string, now: boolean) => now && going(id, false);
+/** Whether it goes ahead: `now` at once (hidden on every view), else after the ask it needs. */
+async function goAhead(f: Gone, parts: string, now: boolean): Promise<boolean> {
+  // pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what points at it.
+  // Who may not decide on it (`propose`) is asked to propose it, not to move it.
+  if (now) {
+    going(f.id, true);
+    return true;
+  }
+  if (f.rows) {
+    const ask = f.propose
+      ? {
+          action: 'Propose',
+          title: `Propose moving ${f.title} to Trash?`,
+          message: parts,
+          rows: f.rows,
+          cancel: 'Cancel',
+        }
+      : {
+          action: 'Move to Trash',
+          title: `Move ${f.title} to Trash?`,
+          message: parts,
+          rows: f.rows,
+          destructive: true,
+          cancel: 'Cancel',
+        };
+    return confirmInPage(ask);
+  }
+  return (
+    !parts ||
+    (await confirmInPage({
+      action: 'Delete',
+      title: `Delete ${f.title}?`,
+      message: parts,
+      destructive: true,
+      cancel: 'Cancel',
+    }))
+  );
+}
+
 export function useFeatureDelete(
   reload: () => Promise<unknown>,
   toast: (ask: ToastAsk) => void = dsToast,
   onGone?: (id: string) => void,
 ) {
-  return async (f: {
-    id: string;
-    title: string;
-    parts?: readonly unknown[];
-    rows?: { label: string; value: string }[];
-    propose?: boolean;
-    deciders?: string[];
-    now?: boolean;
-  }): Promise<void> => {
+  return async (f: Gone): Promise<void> => {
     const parts = partsWords(f.parts?.length ?? 0, 'stay');
     const now = !!f.now && !f.propose;
-    // pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what points at it.
-    // Who may not decide on it (`propose`) is asked to propose it, not to move it.
-    if (now) going(f.id, true);
-    else if (f.rows) {
-      const ask = f.propose
-        ? {
-            action: 'Propose',
-            title: `Propose moving ${f.title} to Trash?`,
-            message: parts,
-            rows: f.rows,
-            cancel: 'Cancel',
-          }
-        : {
-            action: 'Move to Trash',
-            title: `Move ${f.title} to Trash?`,
-            message: parts,
-            rows: f.rows,
-            destructive: true,
-            cancel: 'Cancel',
-          };
-      if (!(await confirmInPage(ask))) return;
-    } else if (
-      parts &&
-      !(await confirmInPage({
-        action: 'Delete',
-        title: `Delete ${f.title}?`,
-        message: parts,
-        destructive: true,
-        cancel: 'Cancel',
-      }))
-    )
-      return;
+    if (!(await goAhead(f, parts, now))) return;
     try {
       const out = await unwrap(
         api.DELETE('/v1/simple/roadmap/items/{item_id}', { params: { path: { item_id: f.id } } }),
       );
       // In Trash: its panel, if open, closes with it.
       if (out.entry) onGone?.(f.id);
-      else if (now) going(f.id, false);
+      else back(f.id, now);
       await reload();
       if (!out.entry) {
         toast({
@@ -102,7 +113,7 @@ export function useFeatureDelete(
                     }),
                   );
                   toast({ message: `Undone: ${f.title} and its links are back.` });
-                  if (now) going(f.id, false);
+                  back(f.id, now);
                 } catch (e) {
                   toast({ message: errorMessage(e) });
                 }
@@ -112,7 +123,7 @@ export function useFeatureDelete(
           : undefined,
       });
     } catch (e) {
-      if (now) going(f.id, false);
+      back(f.id, now);
       toast({ message: errorMessage(e) });
     }
   };

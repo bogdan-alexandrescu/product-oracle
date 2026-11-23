@@ -2220,11 +2220,11 @@ export function SimpleRoadmap() {
           const t = (roadmap.data?.tracks ?? []).find((x) => x.id === a.track_id);
           return {
             track: t
-              ? ({
+              ? {
                   ...items.find((i) => i.track?.id === t.id)?.track,
                   id: t.id,
                   title: t.title,
-                } as Item['track'])
+                }
               : null,
           };
         }
@@ -2233,7 +2233,7 @@ export function SimpleRoadmap() {
             items.find((i) => i.goal?.id === a.goal_id)?.goal ??
             goalList.data
               ?.filter((x) => x.id === a.goal_id)
-              .map((x) => ({ id: x.id, key: x.key, title: x.title }) as Item['goal'])[0];
+              .map((x) => ({ id: x.id, key: x.key, title: x.title }))[0];
           return a.goal_id && g ? { goal: g, goal_ids: [g.id] } : null;
         }
         case 'change_horizon':
@@ -2250,6 +2250,22 @@ export function SimpleRoadmap() {
     },
     [roadmap.data, goalList.data],
   );
+  /** roadmap-add: lays a panel change on its item (who decides on it) till `unlay` is called. */
+  const lay = useCallback(
+    (body: Parameters<Act>[1]): (() => void) => {
+      const id = String(body.target?.item_id ?? '');
+      const patch = latest.current.get(id)?.can_decide ? movedTo(body) : null;
+      if (!patch) return () => undefined;
+      setMoving((m) => new Map(m).set(id, patch));
+      return () =>
+        setMoving((m) => {
+          const n = new Map(m);
+          n.delete(id);
+          return n;
+        });
+    },
+    [movedTo],
+  );
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
     async (
@@ -2257,9 +2273,7 @@ export function SimpleRoadmap() {
       body: Parameters<Act>[1],
       note?: string,
     ): Promise<ChangeResult | null> => {
-      const id = String(body.target?.item_id ?? '');
-      const patch = latest.current.get(id)?.can_decide ? movedTo(body) : null;
-      if (patch) setMoving((m) => new Map(m).set(id, patch));
+      const unlay = lay(body);
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ''));
@@ -2303,15 +2317,10 @@ export function SimpleRoadmap() {
         return null;
       } finally {
         await reloadAfter();
-        if (patch)
-          setMoving((m) => {
-            const n = new Map(m);
-            n.delete(id);
-            return n;
-          });
+        unlay();
       }
     },
-    [reload, reloadAfter, movedTo],
+    [reload, reloadAfter, lay],
   );
   const act: Act = useCallback(
     async (what, body, note) => {

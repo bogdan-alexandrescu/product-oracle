@@ -4,6 +4,9 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 
 import { Button, Icon, Sheet } from '@/components/ds';
 
+import { mark, trackAt, whereAt } from './_add-drop';
+import { TrackPick, useTrackPick } from './_add-track';
+
 import type { Where } from './_lib';
 
 type Ref = { id: string; title: string };
@@ -47,17 +50,7 @@ export function QuickAdd({
 }) {
   const [title, setTitle] = useState('');
   const [rm, setRm] = useState('');
-  const [tr, setTr] = useState(track ?? '');
-  const [trFrom, setTrFrom] = useState(track);
-  if (trFrom !== track) {
-    setTrFrom(track);
-    setTr(track ?? '');
-  }
-  const askTrack = tracks.length > 1;
-  const pickedTrack =
-    tracks.find((t) => t.id === tr)?.id ?? (tracks.length === 1 ? tracks[0].id : undefined);
-  const trackPicker = useRef<HTMLSelectElement>(null);
-  const [noTrack, setNoTrack] = useState(false);
+  const trk = useTrackPick(tracks, track);
   const [sheet, setSheet] = useState(false);
   const ask = roadmaps.length > 0;
   const chosen = ask ? roadmaps.find((r) => r.id === rm)?.id : undefined;
@@ -75,20 +68,6 @@ export function QuickAdd({
     over: HTMLElement | null;
   } | null>(null);
 
-  const whereAt = (x: number, y: number): HTMLElement | null => {
-    for (const el of document.elementsFromPoint(x, y)) {
-      const t = el.closest<HTMLElement>('[data-add-where]');
-      if (t) return t;
-    }
-    return null;
-  };
-  const mark = (el: HTMLElement | null, on: boolean) => {
-    if (!el) return;
-    if (on) el.setAttribute('data-drop-target', 'true');
-    else el.removeAttribute('data-drop-target');
-    if (el instanceof SVGElement) el.style.fill = on ? 'var(--accent-soft)' : '';
-    else el.style.outline = on ? '2px solid var(--accent)' : '';
-  };
   const parse = (attr: string): Where | null => {
     const at = attr.indexOf(':');
     const kind = attr.slice(0, at) as Where['kind'];
@@ -101,16 +80,16 @@ export function QuickAdd({
   const send = async (where: Where, dropped?: string) => {
     const t = title.trim();
     if (!t || (ask && !chosen)) return;
-    const onTrack = where.kind === 'track' ? where.value : (dropped ?? pickedTrack);
-    if (askTrack && !onTrack) {
-      setNoTrack(true);
-      trackPicker.current?.focus();
+    const onTrack = where.kind === 'track' ? where.value : (dropped ?? trk.picked);
+    if (trk.ask && !onTrack) {
+      trk.setInvalid(true);
+      trk.props.pickRef.current?.focus();
       return;
     }
     if (await onAdd(t, where, chosen, onTrack)) {
       setTitle('');
       setTried(false);
-      setNoTrack(false);
+      trk.setInvalid(false);
     }
   };
 
@@ -172,15 +151,7 @@ export function QuickAdd({
     const where = over
       ? parse(over.dataset.addWhere ?? over.getAttribute('data-add-where') ?? '')
       : null;
-    if (where) void send(where, drop ? trackAt(e.clientX, e.clientY) : undefined);
-  };
-  // roadmap-add: the track row under the drop, when the view draws tracks as rows.
-  const trackAt = (x: number, y: number): string | undefined => {
-    for (const el of document.elementsFromPoint(x, y)) {
-      const t = el.closest<HTMLElement>('[data-add-track]')?.getAttribute('data-add-track');
-      if (t && tracks.some((k) => k.id === t)) return t;
-    }
-    return undefined;
+    if (where) void send(where, drop ? trackAt(e.clientX, e.clientY, tracks) : undefined);
   };
 
   const form = (
@@ -192,11 +163,11 @@ export function QuickAdd({
       initialRoadmap={rm}
       target={target}
       tracks={tracks}
-      initialTrack={tr}
+      initialTrack={trk.props.value}
       onSubmit={async (t, w, r, k) => {
         if (r) setRm(r);
-        if (k) setTr(k);
-        const ok = await onAdd(t, w, r, k ?? (tracks.length === 1 ? tracks[0].id : undefined));
+        if (k) trk.setValue(k);
+        const ok = await onAdd(t, w, r, k ?? trk.only);
         if (ok) {
           setTitle('');
           setSheet(false);
@@ -255,28 +226,7 @@ export function QuickAdd({
           ))}
         </select>
       )}
-      {askTrack && (
-        <select
-          ref={trackPicker}
-          aria-label="Track"
-          data-testid="quick-add-track"
-          value={tr}
-          onChange={(e) => {
-            setTr(e.target.value);
-            setNoTrack(false);
-          }}
-          aria-invalid={noTrack || undefined}
-          aria-describedby={noTrack ? 'quick-add-track-error' : undefined}
-          className={`h-9 rounded-lg border bg-surface px-2 text-base text-text ${noTrack ? 'border-crit' : 'border-line-strong'}`}
-        >
-          <option value="">Which track?</option>
-          {tracks.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.title}
-            </option>
-          ))}
-        </select>
-      )}
+      {trk.ask && <TrackPick {...trk.props} />}
       <input
         id="quick-add-title"
         value={title}
@@ -334,13 +284,13 @@ export function QuickAdd({
           Enter adds it to {options[0].label}
         </span>
       )}
-      {(noTitle || noRoadmap || noTrack) && (
+      {(noTitle || noRoadmap || trk.invalid) && (
         <p role="alert" data-testid="quick-add-error" className="w-full text-sm text-crit">
           {noTitle && <span id="quick-add-title-error">Type a title</span>}
           {noTitle && noRoadmap && ' · '}
           {noRoadmap && <span id="quick-add-roadmap-error">Pick the roadmap it goes on</span>}
-          {(noTitle || noRoadmap) && noTrack && ' · '}
-          {noTrack && <span id="quick-add-track-error">Pick the track it goes on</span>}
+          {(noTitle || noRoadmap) && trk.invalid && ' · '}
+          {trk.invalid && <span id="quick-add-track-error">Pick the track it goes on</span>}
         </p>
       )}
     </section>
@@ -456,32 +406,7 @@ function AddForm({
         </label>
       )}
       {askTrack && (
-        <label className="flex flex-col gap-1 text-sm font-semibold">
-          Track
-          <select
-            value={tr}
-            data-testid="quick-add-track"
-            onChange={(e) => setTr(e.target.value)}
-            aria-invalid={noTrack || undefined}
-            className={`h-11 rounded-lg border bg-surface px-2 text-base font-normal text-text ${noTrack ? 'border-crit' : 'border-line-strong'}`}
-          >
-            <option value="">Which track?</option>
-            {tracks.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
-              </option>
-            ))}
-          </select>
-          {noTrack && (
-            <span
-              role="alert"
-              data-testid="quick-add-error"
-              className="text-sm font-normal text-crit"
-            >
-              Pick the track it goes on
-            </span>
-          )}
-        </label>
+        <TrackPick tracks={tracks} value={tr} onChange={setTr} invalid={noTrack} sheet />
       )}
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Where
