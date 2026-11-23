@@ -42,18 +42,36 @@ def title_code(title: str | None) -> str | None:
 
 
 def shown_code(title: str | None, code: str | None) -> str | None:
-    """The code a person sees on an item: ``code`` (its feature's, else its PRD section's:
-    :func:`code_of`), else the one its title leads with."""
-    return code or title_code(title)
+    """The code a person sees on an item: its own, the one its title leads with, else
+    ``code`` (its feature's, else its PRD section's: :func:`inherited`)."""
+    return title_code(title) or code
+
+
+def inherited(row: Any, by_feature: dict[uuid.UUID, str]) -> str | None:
+    """The code an item takes from its feature (``by_feature``: :func:`feature_codes`), else
+    from its PRD section; None for an item with neither."""
+    from oracle.simple.priorities import prd_code
+
+    got = by_feature.get(row.feature_id) if getattr(row, "feature_id", None) is not None else None
+    return got or prd_code(getattr(row, "prd_section_key", None))
 
 
 def code_of(row: Any, by_feature: dict[uuid.UUID, str]) -> str | None:
-    """An item's code from its feature (``by_feature``: :func:`feature_codes`), else its PRD
-    section's; None for an item with neither."""
-    from oracle.simple.priorities import prd_code
+    """unique-codes (Nov 23): an item's own code, the one its title leads with, else the one
+    it takes from its feature or PRD section (:func:`inherited`); None for an item with none.
+    Every item has its own: two items of one feature never read the same code."""
+    return title_code(getattr(row, "title", None)) or inherited(row, by_feature)
 
-    got = by_feature.get(row.feature_id) if row.feature_id is not None else None
-    return got or prd_code(getattr(row, "prd_section_key", None))
+
+def next_number(used: Any) -> str:
+    """unique-codes: the next free feature code, the highest F-number in ``used`` (codes,
+    "F-12", "F-37a", "F-12.2"; None skipped) plus one. The one numbering rule: a new item
+    (oracle.simple.additions._next_code) and the duplicate-code migration both use it."""
+    nums = [int(m.group(1)) for u in used if u and (m := _F_NUMBER.fullmatch(u.split(".")[0]))]
+    return f"F-{max(nums, default=0) + 1}"
+
+
+_F_NUMBER = re.compile(r"F-(\d+)[a-j]?")
 
 
 def shown(row: Any, by_feature: dict[uuid.UUID, str]) -> str | None:
@@ -195,23 +213,28 @@ def clash(
     others: list[Any],
     by_feature: dict[uuid.UUID, str],
     section: str | None = None,
+    title: str | None = None,
 ) -> Any:
     """The first of ``others`` (items: ``item_key``, ``title``, ``feature_id``,
     ``prd_section_key``) that shows ``code``, other than the item ``key`` and the slices of
     its feature: an item of the same feature, or, when the item's feature or PRD section
     (``feature_id``, ``section``) gives it ``code``, an item whose own feature or PRD section
     gives it ``code`` too, unless the two are linked to different features."""
-    own = code_of(SimpleNamespace(feature_id=feature_id, prd_section_key=section), by_feature)
-    part = (own or "").upper() == code.upper()
+    own = inherited(SimpleNamespace(feature_id=feature_id, prd_section_key=section), by_feature)
+    # unique-codes (Nov 23): an item's own code (its title's) is its alone, whatever its
+    # feature; only two items that both take it from their feature or section still share it.
+    part = (own or "").upper() == code.upper() and not title_code(title)
     for o in others:
-        if o.item_key == key or (feature_id is not None and o.feature_id == feature_id):
+        if o.item_key == key:
             continue
         if (shown(o, by_feature) or "").upper() != code.upper():
             continue
-        if (
-            part
-            and (code_of(o, by_feature) or "").upper() == code.upper()
-            and (feature_id is None or o.feature_id is None)
+        if not part or title_code(o.title):
+            return o
+        if feature_id is not None and o.feature_id == feature_id:
+            continue
+        if (inherited(o, by_feature) or "").upper() == code.upper() and (
+            feature_id is None or o.feature_id is None
         ):
             continue  # a slice of the same feature, by its code
         return o
@@ -307,7 +330,7 @@ def check_flush(session: Session) -> None:
             by_owner[owner] = [o for o in live if o not in gone and o.deleted_at is None]
         others = [o for o in by_owner[owner] if o is not row]
         hit = clash(code, row.item_key, row.feature_id, others, by_feature,
-                    row.prd_section_key)  # fmt: skip
+                    row.prd_section_key, row.title)  # fmt: skip
         if hit is not None:
             raise CodeTaken(code, named(hit, by_feature))
 

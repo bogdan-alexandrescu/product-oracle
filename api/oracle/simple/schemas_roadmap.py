@@ -322,6 +322,9 @@ class SimpleRoadmapItem(BaseModel):
     # waits for its own Confirm it): Confirm into the Ground Truth confirms it for this item and
     # gives it the next F-code; null when the item is in the Ground Truth or has no feature.
     confirm_feature_id: uuid.UUID | None = None
+    # unique-codes (Nov 23): the Ground Truth feature it is part of, its code and name ("F-51
+    # Alert routing"), when the item reads a code of its own; null otherwise.
+    feature_name: str | None = None
     title: str
     outcome: str | None = None
     # build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row.

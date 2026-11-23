@@ -161,7 +161,9 @@ async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]
         code = codes.shown(item(p), by_feature)
         others = [item(o) for o in before]
         hit = (
-            codes.clash(code, p.key, p.feature_id, others, by_feature, item(p).prd_section_key)
+            codes.clash(
+                code, p.key, p.feature_id, others, by_feature, item(p).prd_section_key, p.title
+            )
             if code
             else None
         )
