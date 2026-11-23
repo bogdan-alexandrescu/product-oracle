@@ -210,8 +210,7 @@ async def test_prd_goal_and_track_are_remembered_per_person(client):
 
 async def test_a_working_draft_belongs_to_one_roadmap(client):
     """protects=each roadmap's read and ``GET /v1/simple/drafts?roadmap=`` carry only that
-    roadmap's working draft, and ``changes_in_review`` counts only that roadmap's hidden
-    changes; fails_when=a change staged on one roadmap shows on another roadmap's page
+    roadmap's working draft, and ``changes_in_review`` counts none of an owner's changes; fails_when=a change staged on one roadmap shows on another roadmap's page
     (one person's draft carrying every roadmap's changes); no_claim=the unfiltered read,
     which lists every roadmap's drafts."""
     w = await world()
@@ -230,7 +229,8 @@ async def test_a_working_draft_belongs_to_one_roadmap(client):
         assert [(d["document"]["id"], d["changes"]) for d in r.json()] == [(rid, n)], given
         one = await read(client, w, "owner", roadmap=given)
         assert [(d["document_id"], d["changes"]) for d in one["drafts"]] == [(rid, n)], given
-        assert (await read(client, w, "viewer", roadmap=given))["changes_in_review"] == n
+        # de-inst: an owner's change is live, never counted as in review.
+        assert (await read(client, w, "viewer", roadmap=given))["changes_in_review"] == 0
     assert (await read(client, w, "owner", roadmap="board"))["drafts"] == []
     r = await client.get("/v1/simple/drafts", params={"roadmap": "nope"},
                          headers=w.ctx.as_("owner"))  # fmt: skip

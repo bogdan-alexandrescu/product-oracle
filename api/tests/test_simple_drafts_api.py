@@ -11,15 +11,15 @@ Test cards (protects / fails_when / no_claim):
 
 - test_published_version_unchanged_while_a_draft_exists: protects=the decider's applied
   change and an accepted proposal land in the roadmap's working draft (the change names
-  it), the published item rows never change, the decider reads the draft on the Simple
-  roadmap while a viewer reads the published version; fails_when=a change writes the
-  approved version's rows or the draft is lost to its people; no_claim=PRD sections (S5).
+  it), the published item rows never change, and every reader (a viewer too) reads the
+  change on the Simple roadmap at once (de-inst, owner Nov 23); fails_when=a change writes
+  the approved version's rows or a reader waits for the review; no_claim=PRD sections (S5).
 - test_visibility_per_role (role x document role): protects=the draft and its changes are
   visible to company owners, the decider, required reviewers, the document's owner (its
-  track's owner) and the session's people; everyone else reads the published version and
-  ``changes_in_review`` (the count only) on the Simple roadmap and the document API, and
-  no change in GET /v1/simple/changes; fails_when=a detail leaks or a member who may see
-  the draft gets the published version; no_claim=Studio's version list after submit.
+  track's owner) and the session's people; everyone reads the change itself at once and
+  nothing counts as in review (de-inst, owner Nov 23), but only those people get the draft
+  and its change rows; fails_when=the draft's list leaks, or a reader keeps the published
+  values; no_claim=Studio's version list after submit.
 - test_submit_goes_through_the_review_policy: protects=only someone who may change the
   roadmap submits; submit imports the next version holding the draft (unapproved, so
   readers keep the published one); while it is in review new direct changes and undo are
@@ -135,7 +135,7 @@ async def test_published_version_unchanged_while_a_draft_exists(client):
     assert (await published(w, "edit_title-a")).title == TITLE
     assert title_in(await roadmap(client, w, "decider"), "edit_title-a") == "Ledger v2"
     seen = await roadmap(client, w, "viewer")
-    assert title_in(seen, "edit_title-a") == TITLE
+    assert title_in(seen, "edit_title-a") == "Ledger v2"
     # A proposal accepted by the decider joins the same working draft.
     prop = (await w.post(client, "commenter", "move_dates")).json()["change"]
     acc = await client.post(f"{CHANGES}/{prop['id']}/accept", headers=w.ctx.as_("decider"))
@@ -166,11 +166,11 @@ async def test_visibility_per_role(client, who, track_owner, sees):
     w = await world(reviewers=("approver",), track_owner=track_owner)
     assert (await edit_title(client, w, "decider")).status_code == 201
     view = await roadmap(client, w, who)
-    assert title_in(view, "edit_title-a") == ("Ledger v2" if sees else TITLE)
-    assert view["changes_in_review"] == (0 if sees else 1)
+    assert title_in(view, "edit_title-a") == "Ledger v2"
+    assert view["changes_in_review"] == 0
     assert [d["status"] for d in view["drafts"]] == (["working"] if sees else [])
     doc = await client.get(f"/v1/documents/{await slug(w)}", headers=w.ctx.as_(who))
-    assert doc.status_code == 200 and doc.json()["changes_in_review"] == 1
+    assert doc.status_code == 200 and doc.json()["changes_in_review"] == 0
     listed = await client.get(CHANGES, headers=w.ctx.as_(who))
     assert len(listed.json()) == (1 if sees else 0)
     drafts_ = (await client.get(DRAFTS, headers=w.ctx.as_(who))).json()
@@ -202,7 +202,7 @@ async def test_submit_goes_through_the_review_policy(client):
             )
         }
         assert titles["edit_title-a"] == "Ledger v2" and len(titles) == 6
-    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == TITLE
+    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == "Ledger v2"
     # In review: no more direct changes, no undo.
     r = await w.post(client, "decider", "move_dates")
     assert r.status_code == 409, r.text
@@ -216,7 +216,7 @@ async def test_submit_goes_through_the_review_policy(client):
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "submitted" and r.json()["decider_approved"]
-    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == TITLE
+    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == "Ledger v2"
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("commenter"))
     assert r.status_code == 404
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("approver"))
@@ -247,7 +247,7 @@ async def test_approve_in_meeting_present_and_absent(client):
         await s.commit()
     assert out.status == "submitted"
     assert out.waiting_on == [w.ctx.users["reviewer2"].id]
-    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == TITLE
+    assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == "Ledger v2"
     assert (await inbox(client, w, "approver"))["simple_approvals"] == []
     [row] = (await inbox(client, w, "reviewer2"))["simple_approvals"]
     assert row["draft_id"] == d["id"] and row["decider_approved"]
