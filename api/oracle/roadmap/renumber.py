@@ -16,10 +16,12 @@ finds nothing to change. Sync on purpose: migration 0136 runs it.
 
 import uuid
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import Table, column, insert, select, table, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
+from sqlalchemy.types import Text, Uuid
 
 from oracle.roadmap import codes
 
@@ -38,12 +40,22 @@ def renumber(session: Session) -> list[dict[str, Any]]:
     ``{"tenant_id", "roadmap_document_id", "item_key", "title", "old", "new"}``."""
     from oracle.baseline.models import Entity
     from oracle.docs.models import DocumentVersion
-    from oracle.models import AuditEvent
     from oracle.roadmap.models import RoadmapItem
 
     by_feature = codes._feature_codes_sync(session)
     # Items an earlier run numbered: their title's lead is their own code.
-    a = AuditEvent.__table__
+    # The audit columns this writes and reads, by name: a column a later migration adds (with
+    # a Python-side default) is neither selected nor required here.
+    a = table(
+        "audit_events",
+        column("id", Uuid),
+        column("tenant_id", Uuid),
+        column("actor", Text),
+        column("action", Text),
+        column("entity", Text),
+        column("entity_id", Uuid),
+        column("data", JSONB),
+    )
     numbered = {
         (tid, d["roadmap_document_id"], d["item_key"]): d["new"]
         for tid, d in session.execute(select(a.c.tenant_id, a.c.data).where(a.c.action == ACTION))
@@ -59,7 +71,7 @@ def renumber(session: Session) -> list[dict[str, Any]]:
         return codes.inherited(r, by_feature) or lead
 
     # The columns it reads, by name: a later column added to the table is never selected.
-    t = RoadmapItem.__table__
+    t = cast(Table, RoadmapItem.__table__)
     rows = list(
         session.execute(
             select(
@@ -153,7 +165,7 @@ def renumber(session: Session) -> list[dict[str, Any]]:
             ids = [r.id for r in items[k]]
             session.execute(update(t).where(t.c.id.in_(ids)).values(title=title))
             session.execute(
-                insert(AuditEvent.__table__).values(
+                insert(a).values(
                     id=uuid.uuid4(),
                     tenant_id=tenant,
                     actor="system",

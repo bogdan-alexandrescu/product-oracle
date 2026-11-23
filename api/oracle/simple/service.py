@@ -1224,7 +1224,8 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
         e.code = codes.code_of(e.row, by_feature)
         fid = e.row.feature_id
         if (
-            fid in titles
+            fid is not None
+            and fid in titles
             and codes.title_code(e.row.title)
             and (by_feature.get(fid) or "") != e.code
         ):
