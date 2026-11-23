@@ -30,6 +30,8 @@ from typing import Any
 
 from sqlalchemy import ColumnElement, Table, Text, and_, cast, event, literal_column, or_, select
 from sqlalchemy.orm import ORMExecuteState, with_loader_criteria
+from sqlalchemy.orm.interfaces import CriteriaOption
+from sqlalchemy.sql.visitors import InternalTraversal
 
 from oracle.tenancy import TenantSession
 
@@ -291,18 +293,59 @@ def _leave_out_trash(state: ORMExecuteState) -> None:
     state.statement = state.statement.options(*_options())
 
 
+class LiveRows(CriteriaOption):
+    """simple-speed: every trash criteria option, as one option of the statement.
+
+    Each SELECT got one ``with_loader_criteria`` option per trashable class (about sixty):
+    adding them to the statement and reading each one into the statement's cache key cost
+    more than the query's own work, on every read of every request. This option adds the
+    same criteria options to the compile, in the same order, so the SQL is the same; its
+    cache key is one constant, which is right because the options are built once per
+    process and hold no bound value (:func:`_options` checks it, else they go as before).
+    """
+
+    __slots__ = ("name", "options")
+
+    _traverse_internals = [("name", InternalTraversal.dp_string)]
+    propagate_to_loaders = True
+
+    def __init__(self, options: tuple[Any, ...]) -> None:
+        self.name = "oracle_live_rows"
+        self.options = options
+
+    def get_global_criteria(self, attributes: dict[Any, Any]) -> None:
+        for option in self.options:
+            option.get_global_criteria(attributes)
+
+    def process_compile_state(self, compile_state: Any) -> None:
+        self.get_global_criteria(compile_state.global_attributes)
+
+    def process_compile_state_replaced_entities(
+        self, compile_state: Any, mapper_entities: Any
+    ) -> None:
+        self.process_compile_state(compile_state)
+
+
 # The criteria options, built once (each holds no bound value): building one per trashable
 # class on every SELECT was a large share of a read's time (the Inbox makes about 75 reads).
 _OPTIONS: tuple[Any, ...] = ()
 
 
+def each_option() -> tuple[Any, ...]:
+    """One criteria option per trashable class (what :class:`LiveRows` holds)."""
+    # One function for every class: SQLAlchemy caches a criteria function by its code,
+    # so per-class closures would all get the first class's clause.
+    return tuple(
+        with_loader_criteria(entity, lambda cls: _live(cls), include_aliases=True)
+        for entity in criteria()
+    )
+
+
 def _options() -> tuple[Any, ...]:
     global _OPTIONS
     if not _OPTIONS:
-        # One function for every class: SQLAlchemy caches a criteria function by its code,
-        # so per-class closures would all get the first class's clause.
-        _OPTIONS = tuple(
-            with_loader_criteria(entity, lambda cls: _live(cls), include_aliases=True)
-            for entity in criteria()
-        )
+        each = each_option()
+        # One constant cache key stands for them all only while none carries a value.
+        constant = all(not option._generate_cache_key().bindparams for option in each)
+        _OPTIONS = (LiveRows(each),) if constant else each
     return _OPTIONS

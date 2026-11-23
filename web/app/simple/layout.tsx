@@ -2,13 +2,15 @@
 
 import { Outlet, createFileRoute } from '@tanstack/react-router';
 import { usePathname } from '@/lib/nav';
-import { Suspense, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, type ReactNode } from 'react';
 
 import { HomeSkeleton } from '@/app/simple/_home/skeleton';
 import { LinkedDiscussion } from '@/components/discuss/LinkedDiscussion';
 import { SimplePageSkeleton, useSimpleShown } from '@/components/simple/SimpleShell';
 import { useMe } from '@/lib/me';
 import { SIMPLE_HOME } from '@/lib/experience';
+
+import { warmSimple } from './roadmap/_warm';
 
 /**
  * Simple's pages draw only once Simple is known to be on (#725 review: no flash while off).
@@ -30,8 +32,14 @@ function SimpleLayout() {
 
 function Gate({ children }: { children: ReactNode }) {
   const shown = useSimpleShown();
-  const { me, capsReady, simpleMode } = useMe();
-  const home = usePathname() === SIMPLE_HOME;
+  const { me, loading, capsReady, simpleMode } = useMe();
+  const pathname = usePathname();
+  const home = pathname === SIMPLE_HOME;
+  // simple-speed: once, and only while who is signed in is not known yet (a cold load).
+  const cold = useRef(loading);
+  useEffect(() => {
+    if (cold.current) warmSimple(window.location.pathname, window.location.search);
+  }, []);
   if (shown)
     return (
       <>
