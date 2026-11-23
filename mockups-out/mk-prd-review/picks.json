@@ -1,0 +1,427 @@
+{
+  "title": "PRD one-pager for a review meeting: read clearly, change in place, see what changed",
+  "subtitle": "Three decisions on Simple's one-pager, shown on an invented PRD (Shared team inbox, Lanternfish); frames at 1440, the hard case at 1512, phone 390, light and dark.",
+  "decisions": [
+    {
+      "code": "PR1",
+      "name": "Reading view for the meeting",
+      "question": "What should a shared screen show first when the room reads a PRD's one-pager together?",
+      "common": "Every proposal keeps Simple's type, tokens and spacing, shows each feature with its code, owner and month-first dates, and the PRD's header (status, version, owner, span). A viewer sees the same page with no change controls.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Goals first",
+          "recommended": true,
+          "what": "The page opens on the goals, each with its measure from start to target, and under each goal its features as one row each: code and name, owner, dates and a small bar on a shared Dec to Mar scale. The prose (problem, who has it, not doing, risks) folds to one line per part below, then the timeline with its milestones.",
+          "why": "A review meeting argues about what is built for which goal and by when; this answers that in the first screen and puts prose a glance away, not a scroll away. It also gives every editable thing (owner, dates, target) one fixed column, which PR2 needs.",
+          "plus": "What, why and when on one screen; 20 features still read as three short groups; same rows on the phone.",
+          "cost": "The prose sits lower than today's paper order; the problem statement is not the first thing read.",
+          "frames": [
+            {
+              "file": "frames/pr1-a-rest.html",
+              "caption": "At rest, 1440: three goals with their features, owners, dates and bars; the prose starts below the fold."
+            },
+            {
+              "file": "frames/pr1-a-long-1512.html",
+              "caption": "The hard case at 1512, as a viewer: 20 features still sit under their three goals, long names wrap inside the row."
+            },
+            {
+              "file": "frames/pr1-a-phone-390.html",
+              "caption": "Phone 390: each row stacks name, owner and dates; the bars give way to the dates."
+            },
+            {
+              "file": "frames/pr1-a-rest-dark.html",
+              "caption": "The same page in dark."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Paper as today",
+          "recommended": false,
+          "what": "Keep today's document order: problem, who has it, what we will build as a bulleted list (each line naming its goal, owner and dates), outcomes, not doing, risks, then the timeline.",
+          "plus": "Reads like the PRD people wrote; nothing new to learn; the problem comes first.",
+          "cost": "Owners and dates hide inside sentences; goals and features are two lists far apart; on a shared screen the room scrolls to find a feature.",
+          "frames": [
+            {
+              "file": "frames/pr1-b-rest.html",
+              "caption": "At rest, 1440: the paper order, features as one bulleted line each."
+            },
+            {
+              "file": "frames/pr1-b-long-1512.html",
+              "caption": "The hard case at 1512: 20 bulleted features make one long block between the prose."
+            },
+            {
+              "file": "frames/pr1-b-phone-390.html",
+              "caption": "Phone 390: the same paper, one column."
+            },
+            {
+              "file": "frames/pr1-b-rest-dark.html",
+              "caption": "The same page in dark."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Feature table",
+          "recommended": false,
+          "what": "Problem and who has it fold to two lines at the top, then one table of every feature with its goal, owner and dates, status and milestone, then the rest of the prose.",
+          "plus": "The densest view: 20 features fit about one screen; good for checking each row.",
+          "cost": "Goals become a column, so the room no longer sees which goal a group serves; no picture of time.",
+          "frames": [
+            {
+              "file": "frames/pr1-c-rest.html",
+              "caption": "At rest, 1440: one table, a row per feature, the goal as a column."
+            },
+            {
+              "file": "frames/pr1-c-long-1512.html",
+              "caption": "The hard case at 1512: 20 rows in one tight table."
+            },
+            {
+              "file": "frames/pr1-c-phone-390.html",
+              "caption": "Phone 390: the table becomes stacked rows."
+            },
+            {
+              "file": "frames/pr1-c-rest-dark.html",
+              "caption": "The same page in dark."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Timeline first",
+          "recommended": false,
+          "what": "A full-width timeline of the features, grouped by goal, opens the page; the prose follows as one-line parts. Owners show in the feature itself, not on the strip.",
+          "plus": "The best picture of order and overlap; matches the roadmap people already know.",
+          "cost": "Owners and exact dates are a click away; names cut short on a phone.",
+          "frames": [
+            {
+              "file": "frames/pr1-d-rest.html",
+              "caption": "At rest, 1440: the features as bars by goal, the prose below."
+            },
+            {
+              "file": "frames/pr1-d-long-1512.html",
+              "caption": "The hard case at 1512: 20 bars, names cut where long."
+            },
+            {
+              "file": "frames/pr1-d-phone-390.html",
+              "caption": "Phone 390: names cut to a few words beside short bars."
+            },
+            {
+              "file": "frames/pr1-d-rest-dark.html",
+              "caption": "The same page in dark."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PR2",
+      "name": "Changing the PRD in the meeting",
+      "question": "How should someone change a section, a feature, its owner, its dates or a milestone during the meeting without an edit and save loop?",
+      "common": "Every change saves the moment it is made (no Save button), says Saved with an Undo, and moves the roadmap item at once. New features land under the goal they were added to, with dates after the goal's last feature. Today: add a feature 3 steps (click the field, type, drag it into place) and 4 more clicks to give it dates; move dates 4 clicks (open, Change, edit, Save); set an owner 4 clicks, 5 from a 'Draft with no owner' flag (Pick an owner trip); add a milestone 3 clicks and typing (+ Milestone, kind, name, Propose). Shown on the Goals first page (PR1 a).",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Click to type",
+          "recommended": true,
+          "what": "Every value a person may change is underlined with dots on hover: a click turns it into its field right there (text, owner list, date steppers), and it saves on Enter or on click away. Each goal ends with a '+ Add a feature' row and the timeline with a '+ Add a milestone' row: type a name, press Enter. A 'No owner' flag is itself the owner picker.",
+          "why": "It removes every step that is not the change itself, keeps the page readable for the room (no boxes until you click), and the dotted underline makes what can change easy to see without a mode.",
+          "plus": "Add a feature: 1 click, type, Enter (today 3 steps plus 4 for dates). Move dates: 2 clicks (dates, then a week step) (today 4). Set an owner: 2 clicks (today 4 to 5). Add a milestone: 1 click, type, Enter (today 3 clicks and typing). No Save anywhere.",
+          "cost": "What can change only shows on hover or focus; a viewer and an owner see near the same page, so the hint rests on the dotted underline.",
+          "frames": [
+            {
+              "file": "frames/pr2-a-rest.html",
+              "caption": "At rest: the page reads as PR1 a; '+ Add a feature' rows end each goal and the timeline has '+ Add a milestone'."
+            },
+            {
+              "file": "frames/pr2-a-section-open.html",
+              "caption": "Editing a section: one click on Risks turns its text into a field in place; it saves when you click away."
+            },
+            {
+              "file": "frames/pr2-a-feature-mid.html",
+              "caption": "Adding a feature: one click on '+ Add a feature' under Faster first reply, the name half typed; Enter adds it."
+            },
+            {
+              "file": "frames/pr2-a-feature-added.html",
+              "caption": "The result of that Enter: Bulk reply to similar requests sits under Faster first reply with dates after Reply templates, marked Saved with Undo."
+            },
+            {
+              "file": "frames/pr2-a-owner-open.html",
+              "caption": "Setting an owner: one click on Snooze a thread's 'No owner · pick' opens the owner list in its place; picking saves (2 clicks)."
+            },
+            {
+              "file": "frames/pr2-a-done.html",
+              "caption": "The result after the meeting's four changes: the new feature, Assign rules a week later, Snooze owned by Dot Varga and Risks reworded, each marked Saved, and 'All changes saved' in the header."
+            },
+            {
+              "file": "frames/pr2-a-roadmap.html",
+              "caption": "The same changes on the roadmap at once: the new bar, the moved bar over its old outline, the owner set, the new Pricing review milestone."
+            },
+            {
+              "file": "frames/pr2-a-long-1512.html",
+              "caption": "The hard case at 1512 with 20 features: the add row sits at the end of its goal's eight features, still in reach."
+            },
+            {
+              "file": "frames/pr2-a-viewer.html",
+              "caption": "A viewer: the same page with no dotted underlines and no add rows."
+            },
+            {
+              "file": "frames/pr2-a-phone-390.html",
+              "caption": "Phone 390: the owner list opens in the row, as on desktop."
+            },
+            {
+              "file": "frames/pr2-a-done-dark.html",
+              "caption": "The result in dark."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "One Edit switch",
+          "recommended": false,
+          "what": "An Edit button in the header turns the whole page into fields at once (boxes around every text, owner and date, the add rows shown); everything saves as you type; Done returns to reading.",
+          "plus": "Unmistakable: once on, every changeable thing is a box. Inside the mode: add a feature 1 click and type; move dates 1 click per week (steppers always shown); owner 2 clicks; milestone 1 click and type.",
+          "cost": "One extra click to enter and one to leave per meeting; while on, the page is busy with boxes and harder for the room to read; people forget to press Done.",
+          "frames": [
+            {
+              "file": "frames/pr2-b-rest.html",
+              "caption": "At rest: a reading page with one Edit button in the header, the real cost of this proposal (1 click before any change)."
+            },
+            {
+              "file": "frames/pr2-b-section-open.html",
+              "caption": "Edit on: every section is a box; Risks is being changed; it saves as you type."
+            },
+            {
+              "file": "frames/pr2-b-feature-mid.html",
+              "caption": "Adding a feature in edit mode: the name half typed under Faster first reply, owner lists and date steppers shown on every row."
+            },
+            {
+              "file": "frames/pr2-b-owner-open.html",
+              "caption": "Setting an owner in edit mode: the owner list is already on the row; picking saves."
+            },
+            {
+              "file": "frames/pr2-b-done.html",
+              "caption": "The result after the four changes, with edit mode still on until Done."
+            },
+            {
+              "file": "frames/pr2-b-roadmap.html",
+              "caption": "The same changes on the roadmap."
+            },
+            {
+              "file": "frames/pr2-b-long-1512.html",
+              "caption": "The hard case at 1512: 20 rows of boxes."
+            },
+            {
+              "file": "frames/pr2-b-viewer.html",
+              "caption": "A viewer: no Edit button."
+            },
+            {
+              "file": "frames/pr2-b-phone-390.html",
+              "caption": "Phone 390 in edit mode: each row stacks its boxes."
+            },
+            {
+              "file": "frames/pr2-b-done-dark.html",
+              "caption": "The result in dark."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Live side panel",
+          "recommended": false,
+          "what": "Section text changes in place as in a; a click on a feature row opens the feature panel at the side with every field already live (no Change links), saving as you change it; '+ Add a feature' opens the panel with the name to type.",
+          "plus": "One place for everything about a feature (goal, dependencies too); matches the rule that every feature opens the same panel. Move dates: 2 clicks (row, week step). Add a feature: 1 click and type.",
+          "cost": "Set an owner is 3 clicks (row, list, pick); the panel covers a third of the shared screen, so the room loses the rows beside it.",
+          "frames": [
+            {
+              "file": "frames/pr2-c-rest.html",
+              "caption": "At rest: the reading page; a click on any feature row opens its panel."
+            },
+            {
+              "file": "frames/pr2-c-section-open.html",
+              "caption": "Editing a section: Risks becomes a field in place, as in a."
+            },
+            {
+              "file": "frames/pr2-c-feature-mid.html",
+              "caption": "Adding a feature: '+ Add a feature' opens the panel with the name half typed; it saves when named."
+            },
+            {
+              "file": "frames/pr2-c-owner-open.html",
+              "caption": "Setting an owner: Snooze a thread's panel is open with its owner list live (3 clicks in all)."
+            },
+            {
+              "file": "frames/pr2-c-done.html",
+              "caption": "The result after the four changes, the panel closed."
+            },
+            {
+              "file": "frames/pr2-c-roadmap.html",
+              "caption": "The same changes on the roadmap."
+            },
+            {
+              "file": "frames/pr2-c-long-1512.html",
+              "caption": "The hard case at 1512: the add row at the end of a long goal."
+            },
+            {
+              "file": "frames/pr2-c-viewer.html",
+              "caption": "A viewer: rows open nothing to change."
+            },
+            {
+              "file": "frames/pr2-c-phone-390.html",
+              "caption": "Phone 390: the panel takes the whole screen."
+            },
+            {
+              "file": "frames/pr2-c-done-dark.html",
+              "caption": "The result in dark."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PR3",
+      "name": "What changed since the last version",
+      "question": "How should a reviewer see what changed since the last version at a glance and accept, flag or undo each change?",
+      "common": "Every proposal counts the changes since version 3 (Nov 9, 2026) in one bar under the header, new in green, changed in amber, removed in red, with Accept all; Accept clears a mark, Flag keeps the change and asks its owner to look, Undo puts back version 3. A viewer sees the marks but no actions.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Marks in place",
+          "recommended": true,
+          "what": "Each changed thing is marked where it lives: a coloured edge on its row, a New, Changed or Removed tag, the old value struck through beside the new one, and on a moved feature its old dates as an outline behind the bar. Pointing at a mark shows Accept, Flag and Undo on that row. A tick limits the list to changed features.",
+          "why": "The reviewer reads the PRD and the delta at once, in the same rows they would change, so nothing is drawn twice and each action sits on the thing it changes.",
+          "plus": "Delta and page are one; 1 click per change; works the same on the phone.",
+          "cost": "With many changes the page gets busy; there is no single list to walk through in order.",
+          "frames": [
+            {
+              "file": "frames/pr3-a-rest.html",
+              "caption": "At rest: 6 changes counted in the bar; the goal target, Assign rules' dates, Overdue nudges' owner and the new Snooze a thread are marked in their rows."
+            },
+            {
+              "file": "frames/pr3-a-open.html",
+              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar."
+            },
+            {
+              "file": "frames/pr3-a-done.html",
+              "caption": "The result: the target and owner accepted (marks gone), Assign rules flagged for Mara, the removed 'Not doing' line undone; the bar now counts 2."
+            },
+            {
+              "file": "frames/pr3-a-long-1512.html",
+              "caption": "The hard case at 1512, a viewer, 20 features: the marks stand out in the long list; no actions."
+            },
+            {
+              "file": "frames/pr3-a-phone-390.html",
+              "caption": "Phone 390: the marks and struck values stack in each row."
+            },
+            {
+              "file": "frames/pr3-a-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Changes column",
+          "recommended": false,
+          "what": "A column beside the page lists each change as a card (what, who, when) with Accept, Flag and Undo; pointing at a card lights up its row on the page, which keeps a coloured edge.",
+          "plus": "One list to walk through in order; who and when on every change; close to today's Changes and proposals margin.",
+          "cost": "Every change is drawn twice (card and row); the column narrows the page; it drops below the page on a phone.",
+          "frames": [
+            {
+              "file": "frames/pr3-b-rest.html",
+              "caption": "At rest: the changes column beside the page, six cards."
+            },
+            {
+              "file": "frames/pr3-b-open.html",
+              "caption": "Pointing at the Assign rules card lights up its row."
+            },
+            {
+              "file": "frames/pr3-b-done.html",
+              "caption": "The result: cards say Accepted, Flagged or Undone."
+            },
+            {
+              "file": "frames/pr3-b-long-1512.html",
+              "caption": "The hard case at 1512, a viewer: cards without actions beside 20 rows."
+            },
+            {
+              "file": "frames/pr3-b-phone-390.html",
+              "caption": "Phone 390: the column falls below the whole page."
+            },
+            {
+              "file": "frames/pr3-b-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Versions side by side",
+          "recommended": false,
+          "what": "A switch in the bar, Now or 'Version 3 beside now', puts the two versions in two columns, one line per change, old on the left in red, new on the right in green, actions on the right.",
+          "plus": "The plainest before and after; good for a careful pass before approval.",
+          "cost": "A separate view from the page people change; one more click to open; two columns crowd a phone.",
+          "frames": [
+            {
+              "file": "frames/pr3-c-rest.html",
+              "caption": "At rest: changed rows carry a coloured edge; the switch sits in the bar."
+            },
+            {
+              "file": "frames/pr3-c-open.html",
+              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions."
+            },
+            {
+              "file": "frames/pr3-c-done.html",
+              "caption": "The result in the compare view: each line says what was done."
+            },
+            {
+              "file": "frames/pr3-c-long-1512.html",
+              "caption": "The hard case at 1512, a viewer."
+            },
+            {
+              "file": "frames/pr3-c-phone-390.html",
+              "caption": "Phone 390: the page with coloured edges and the switch in the bar."
+            },
+            {
+              "file": "frames/pr3-c-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "What changed card",
+          "recommended": false,
+          "what": "A card at the top says what changed in plain sentences, each with Accept, Flag and Undo; the page below carries no marks.",
+          "plus": "The quickest read of the delta for the room; the page stays clean.",
+          "cost": "The change and the thing it changes are apart; the reader scrolls to see a change in context.",
+          "frames": [
+            {
+              "file": "frames/pr3-d-rest.html",
+              "caption": "At rest: six sentences in the What changed card above an unmarked page."
+            },
+            {
+              "file": "frames/pr3-d-open.html",
+              "caption": "The same card while pointing at one change."
+            },
+            {
+              "file": "frames/pr3-d-done.html",
+              "caption": "The result: each sentence says Accepted, Flagged or Undone."
+            },
+            {
+              "file": "frames/pr3-d-long-1512.html",
+              "caption": "The hard case at 1512, a viewer."
+            },
+            {
+              "file": "frames/pr3-d-phone-390.html",
+              "caption": "Phone 390: the card's sentences stack."
+            },
+            {
+              "file": "frames/pr3-d-rest-dark.html",
+              "caption": "At rest in dark."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

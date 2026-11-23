@@ -831,7 +831,7 @@ export function MkPrdRoadmap() {
           <span className="text-sm font-semibold text-text-faint">Milestones</span>
           <div className="relative h-16">
             {ms.map((m, i) => (
-              <span key={m.id} className={`absolute text-sm font-semibold whitespace-nowrap ${m.id === 'mn' ? 'rounded bg-pass-bg px-1 text-pass' : 'text-accent-ink'}`} style={{ left: `calc(${pct(m.date)}% - 6px)`, top: `${i * 20}px` }}>
+              <span key={m.id} className={`absolute text-sm font-semibold whitespace-nowrap ${m.id === 'mn' ? 'rounded bg-pass-bg px-1 text-pass' : 'text-accent-ink'}`} style={{ left: `calc(${pct(m.date)}% - 6px)`, top: `${i * 20}px`, transform: pct(m.date) > 70 ? 'translateX(calc(-100% + 14px))' : undefined }}>
                 ◆ {m.name} · {day(m.date)}
               </span>
             ))}
