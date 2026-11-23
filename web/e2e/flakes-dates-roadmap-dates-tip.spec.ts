@@ -62,7 +62,7 @@ async function publishWorkingDraft(page: Page, roadmap: string) {
   await expect(many ? lines.filter({ hasText: roadmap }) : banner).toHaveCount(0);
 }
 
-test('an accepted suggestion a dependency later moves reads as estimated after its dependencies, not accepted, for a reader who cannot see that draft', async ({
+test("an accepted suggestion a dependency later moves still reads as accepted, to a commenter too, because a decider's change is shown to every reader at once", async ({
   page,
 }) => {
   await login(page);
@@ -93,6 +93,7 @@ test('an accepted suggestion a dependency later moves reads as estimated after i
   await tap(panel(page).getByTestId('card-suggestion').getByRole('button', { name: 'Accept' }));
   await expect(panel(page).getByTestId('card-suggestion')).toHaveCount(0);
   await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Dates accepted from Oracle');
+  const acceptedDates = await panel(page).getByTestId('card-dates').innerText();
   await closePanel(page);
   await expect(page.getByTestId('draft-banner')).toBeVisible();
 
@@ -106,23 +107,17 @@ test('an accepted suggestion a dependency later moves reads as estimated after i
   await expect(page.getByTestId('draft-banner')).toContainText('Onboarding roadmap');
   await publishWorkingDraft(page, 'Onboarding roadmap');
 
-  // A commenter: not the draft's author, not named as the Alerts roadmap's decider or a
-  // required reviewer, and not a track owner either, so seesDraft() is false for them
-  // (simple-roadmap.ts ~1769): the mock's db.own for alert-sso reads, for them, as it did
-  // before the accept (readerView, ~1766), while the published dependency and Sample data
-  // import's published dates read as they truly are.
+  // A commenter: a decider's change is final at once and shown to every reader (direct edit,
+  // Nov 23), so the open draft's accepted dates read for them exactly as they do for the owner,
+  // as accepted, while the published dependency and Sample data import's dates read as they are.
   await page.goto('/home');
   await signOut(page);
   await login(page, 'commenter@example.com');
   await openRoadmap(page);
   await openItem(page, 'alert-sso');
   const dates = panel(page).getByTestId('card-dates');
-  // Oracle's estimate for alert-sso, unseen as accepted, is still moved after the dependency
-  // (Sample data import ends Dec 31, 2027): the (i) must say so, never that it was accepted.
   await expect(dates).not.toHaveText(before);
-  await expect(dates).toContainText('2028');
-  await expect(why).not.toHaveAccessibleDescription(/accepted/);
-  await expect(why).toHaveAccessibleDescription(
-    /Oracle estimated these dates from the .* window and what the feature depends on/,
-  );
+  await expect(dates).toContainText(acceptedDates.split(' · ')[0]);
+  await expect(panel(page).getByTestId('card-dates-kind')).toHaveText('Dates accepted from Oracle');
+  await expect(why).toHaveAccessibleDescription(/accepted/);
 });
