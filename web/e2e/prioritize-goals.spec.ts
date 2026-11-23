@@ -100,7 +100,7 @@ test.describe('Goals: prioritize by their header', () => {
     const first = await saved.elementHandle();
     await handle(once[1]).dragTo(handle(once[0]));
     await expect.poll(() => mapGoals(page)).toEqual(before);
-    await first!.waitForElementState('hidden');
+    await first.waitForElementState('hidden');
     await expect(saved).toBeVisible();
     await page.reload();
     await expect(page.getByTestId('gm-grid')).toBeVisible();
