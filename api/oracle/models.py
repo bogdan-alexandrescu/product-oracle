@@ -63,6 +63,7 @@ from oracle.claude_accounts.models import (  # noqa: E402
     ClaudeFallbackCredential,
     ClaudeSweepLease,
 )
+from oracle.comments.models import FeatureComment  # noqa: E402
 from oracle.connections.models import Connection  # noqa: E402
 from oracle.currentstate.models import FeatureProof, FeatureState  # noqa: E402
 from oracle.decisions.models import Decision, DecisionReview  # noqa: E402
@@ -192,6 +193,7 @@ __all__ = [
     "WebhookDelivery",
     "WebhookEvent",
     "BrandAsset",
+    "FeatureComment",
     "ShareLink",
     "ShareLinkView",
     "NextDraftChange",

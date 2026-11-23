@@ -30,6 +30,7 @@ import { flagKey } from '@/components/simple/chat/ChatCard';
 import { ItemTalk } from '@/components/simple/chat/ItemTalk';
 import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from '@/lib/api/simple-chat';
 import { DecidedWho } from '@/components/simple/DecidedWho';
+import { FeatureComments } from '@/components/simple/FeatureComments';
 import { useMe } from '@/lib/me';
 import { useScreenSubject } from '@/lib/screen-subject';
 import { errorMessage } from '@/lib/use-query';
@@ -1230,8 +1231,9 @@ export function FloatingCard({
                     () => void cutIt(),
                   )}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
+              {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
               {menuItem(
-                item.can_decide ? 'Move to Trash…' : 'Propose: move to Trash…',
+                item.can_decide ? 'Move to Trash' : 'Propose: move to Trash…',
                 () =>
                   void remove({
                     id: item.id,
@@ -1240,6 +1242,7 @@ export function FloatingCard({
                     rows: pointsAt(item, items),
                     propose: !item.can_decide,
                     deciders: item.deciders,
+                    now: item.can_decide,
                   }),
                 true,
               )}
@@ -1677,6 +1680,7 @@ export function FloatingCard({
           </button>
         )}
       </div>
+      <FeatureComments item={item} />
       {after}
     </>
   );

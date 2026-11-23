@@ -3216,6 +3216,8 @@ export function roadmapOut(
   const track = q.get('track');
   const from = q.get('from');
   const to = q.get('to');
+  // owner-filter (service._shown_owner): a person's id, or "none" for no owner.
+  const owner = q.get('owner');
   const onDraft = new Set(db.items.filter((s) => s.draft_roadmap).map((s) => db.ids[s.key]));
   // kr-in-goal-card (service._lane_goal): a key result's items sit under its parent goal.
   const laneGoal = (i: Item): Item['goal'] => {
@@ -3237,6 +3239,7 @@ export function roadmapOut(
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || [i.goal, laneGoal(i)].some((g) => g?.key === goal || g?.id === goal)) &&
       (!track || i.track?.id === track) &&
+      (!owner || (i.owner?.id ?? 'none') === owner) &&
       (!from || i.end.date >= from) &&
       (!to || i.start.date <= to),
   );
@@ -3906,10 +3909,10 @@ export function settleDrafting(db: SimpleDb): void {
     // outcome, and a feature (simplified: the first by key whose name shares a word with the title).
     const filled: string[] = [];
     if (s.outcome == null) {
-      s.outcome = `Teams get ${s.title.toLowerCase()} without asking support`;
+      s.outcome = `Teams get ${codedTitle(s.title, null)[1].toLowerCase()} without asking support`;
       filled.push('outcome');
     }
-    const mine = WORDS(s.title);
+    const mine = WORDS(codedTitle(s.title, null)[1]);
     const feature = Object.keys(db.feature_titles ?? {})
       .sort((a, b) => (db.feature_keys?.[a] ?? a).localeCompare(db.feature_keys?.[b] ?? b))
       .find((f) => [...WORDS(db.feature_titles![f])].some((w) => mine.has(w)));
@@ -3921,16 +3924,18 @@ export function settleDrafting(db: SimpleDb): void {
       s.drafted_at = new Date(now).toISOString();
       s.drafted = filled;
     }
+    // roadmap-add: drawn from its name (additions._place asks the visual for the name, not its code).
+    const named = codedTitle(s.title, null)[1];
     s.flow = plainFlow({
-      title: s.title,
+      title: named,
       steps: [
         'Open the alerts page',
-        `Find ${s.title.toLowerCase()}`,
+        `Find ${named.toLowerCase()}`,
         'Set it up in one step',
         'See it working',
       ],
       screen: {
-        title: `${s.title} settings`,
+        title: `${named} settings`,
         regions: [
           'Header: what it does',
           'The one setting',

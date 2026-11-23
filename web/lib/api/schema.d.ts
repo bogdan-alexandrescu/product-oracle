@@ -12528,7 +12528,8 @@ export interface paths {
          *     tracks' milestones, the horizon windows, the company's today and the shown roadmaps' key
          *     dates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``
          *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping),
-         *     ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it).
+         *     ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it),
+         *     ``owner`` (a person's id: the items they own, their own or their track's; "none": no owner).
          *     ``roadmaps``: every roadmap the caller may read, for the Roadmap filter.
          */
         get: operations["get_simple_roadmap"];
@@ -13948,6 +13949,62 @@ export interface paths {
          *     its page says so in ``X-Oracle-Overflow-Pages`` (the page count), never in the PDF.
          */
         get: operations["export_simple_one_pager"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/items/{item_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Feature Comments */
+        get: operations["list_feature_comments"];
+        put?: never;
+        /** Add Feature Comment */
+        post: operations["add_feature_comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/items/{item_id}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Feature Comment */
+        delete: operations["delete_feature_comment"];
+        options?: never;
+        head?: never;
+        /** Edit Feature Comment */
+        patch: operations["edit_feature_comment"];
+        trace?: never;
+    };
+    "/v1/simple/comment-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Feature Comment Counts
+         * @description How many comments each feature has (only those with one), by roadmap and key.
+         */
+        get: operations["list_feature_comment_counts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -25079,6 +25136,55 @@ export interface components {
              * @enum {string}
              */
             answer: "still_runs" | "changed" | "no_longer_runs";
+        };
+        /** FeatureCommentAuthor */
+        FeatureCommentAuthor: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** FeatureCommentCount */
+        FeatureCommentCount: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Key */
+            key: string;
+            /** Count */
+            count: number;
+        };
+        /** FeatureCommentIn */
+        FeatureCommentIn: {
+            /** Body */
+            body: string;
+        };
+        /** FeatureCommentOut */
+        FeatureCommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            author: components["schemas"]["FeatureCommentAuthor"];
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Edited At */
+            edited_at?: string | null;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Delete */
+            can_delete: boolean;
         };
         /** FeatureMoveIn */
         FeatureMoveIn: {
@@ -42248,7 +42354,8 @@ export interface components {
         };
         /**
          * SimpleFilters
-         * @description The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter.
+         * @description The Simple roadmap's PRD, Goal, Track and Owner picks, remembered like its Roadmap filter
+         *     (owner: a person's id, or "none" for No owner).
          */
         SimpleFilters: {
             /**
@@ -42266,6 +42373,11 @@ export interface components {
              * @default
              */
             track: string;
+            /**
+             * Owner
+             * @default
+             */
+            owner: string;
         };
         /** SimpleFlag */
         SimpleFlag: {
@@ -75270,6 +75382,7 @@ export interface operations {
                 from?: string | null;
                 to?: string | null;
                 roadmap?: string | null;
+                owner?: string | null;
             };
             header?: never;
             path?: never;
@@ -77536,6 +77649,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feature_comments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCommentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_feature_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureCommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_feature_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_feature_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureCommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feature_comment_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCommentCount"][];
                 };
             };
         };

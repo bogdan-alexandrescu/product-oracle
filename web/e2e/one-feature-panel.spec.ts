@@ -98,9 +98,11 @@ for (const size of SIZES) {
       );
       expect(faster).toBeTruthy();
       await pick.selectOption({ label: faster! });
-      await tap(panel(page).getByTestId('card-goal-edit').getByRole('button', { name: 'Save' }));
       await expect(goal).toContainText('Faster activation');
-      await tap(page.getByRole('button', { name: 'Undo' }).last());
+      // roadmap-add: the pick saves at once; its own toast replaces the earlier one, so wait for it.
+      const toast = page.getByTestId('toasts').filter({ hasText: 'Goal changed' });
+      await expect(toast).toBeVisible();
+      await tap(toast.getByRole('button', { name: 'Undo' }));
       await expect(goal).toContainText('Grow retention');
       await expect(panel(page).getByTestId('card-name')).toContainText('Weekly alert summary');
     });
@@ -182,7 +184,6 @@ for (const size of SIZES) {
       const names = (await pick.locator('option').allTextContents()).slice(1);
       const name = names[names.length - 1];
       await pick.selectOption({ label: name });
-      await tap(panel(page).getByTestId('card-owner-edit').getByRole('button', { name: 'Save' }));
       await expect(panel(page).getByTestId('card-owner')).toHaveText(name);
     });
 

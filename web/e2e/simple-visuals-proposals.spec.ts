@@ -30,11 +30,13 @@ async function addDraft(page: Page, phone: boolean): Promise<Locator> {
     await sheet.getByLabel('Title').fill(DRAFT);
     await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
     await sheet.getByLabel('Where').selectOption({ label: 'Next' });
+    await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
     await sheet.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(sheet).toBeHidden();
   } else {
     await page.getByLabel('Add an item').fill(DRAFT);
     await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+    await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
     await page.getByLabel('Add an item').press('Enter');
   }
   const card = page.getByTestId('floating-card');

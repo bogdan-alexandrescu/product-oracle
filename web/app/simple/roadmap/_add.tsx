@@ -4,6 +4,9 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 
 import { Button, Icon, Sheet } from '@/components/ds';
 
+import { mark, trackAt, whereAt } from './_add-drop';
+import { TrackPick, useTrackPick } from './_add-track';
+
 import type { Where } from './_lib';
 
 type Ref = { id: string; title: string };
@@ -17,6 +20,9 @@ type Ref = { id: string; title: string };
  * others propose). The Roadmap filter decides which roadmap: one chosen (`target`) is named
  * in the field; with all roadmaps and more than one (`roadmaps`), the field and the sheet
  * ask which (a select), and nothing is sent until one is chosen.
+ * roadmap-add: the track it goes on is the one picked in the field (the Track filter's to
+ * start with), else the track row it is dropped on (data-add-track="<track id>" around the
+ * drop); with more than one track and none of those, it asks for one instead of guessing.
  */
 export function QuickAdd({
   phone,
@@ -25,19 +31,26 @@ export function QuickAdd({
   onAdd,
   target = null,
   roadmaps = [],
+  tracks = [],
+  track = null,
 }: {
   phone: boolean;
   options: Where[];
   /** "Add" when the caller's change applies there, else "Propose". */
   verb: (w: Where, roadmap?: string) => 'Add' | 'Propose';
-  onAdd: (title: string, where: Where, roadmap?: string) => Promise<boolean>;
+  onAdd: (title: string, where: Where, roadmap?: string, track?: string) => Promise<boolean>;
   /** The one roadmap the item goes to (the Roadmap filter's), named in the field. */
   target?: string | null;
   /** All roadmaps and more than one: the roadmaps to choose from. */
   roadmaps?: Ref[];
+  /** roadmap-add: the tracks it may go on (more than one: the field asks which). */
+  tracks?: Ref[];
+  /** The Track filter's track, picked to start with. */
+  track?: string | null;
 }) {
   const [title, setTitle] = useState('');
   const [rm, setRm] = useState('');
+  const trk = useTrackPick(tracks, track);
   const [sheet, setSheet] = useState(false);
   const ask = roadmaps.length > 0;
   const chosen = ask ? roadmaps.find((r) => r.id === rm)?.id : undefined;
@@ -55,20 +68,6 @@ export function QuickAdd({
     over: HTMLElement | null;
   } | null>(null);
 
-  const whereAt = (x: number, y: number): HTMLElement | null => {
-    for (const el of document.elementsFromPoint(x, y)) {
-      const t = el.closest<HTMLElement>('[data-add-where]');
-      if (t) return t;
-    }
-    return null;
-  };
-  const mark = (el: HTMLElement | null, on: boolean) => {
-    if (!el) return;
-    if (on) el.setAttribute('data-drop-target', 'true');
-    else el.removeAttribute('data-drop-target');
-    if (el instanceof SVGElement) el.style.fill = on ? 'var(--accent-soft)' : '';
-    else el.style.outline = on ? '2px solid var(--accent)' : '';
-  };
   const parse = (attr: string): Where | null => {
     const at = attr.indexOf(':');
     const kind = attr.slice(0, at) as Where['kind'];
@@ -78,12 +77,19 @@ export function QuickAdd({
     );
   };
 
-  const send = async (where: Where) => {
+  const send = async (where: Where, dropped?: string) => {
     const t = title.trim();
     if (!t || (ask && !chosen)) return;
-    if (await onAdd(t, where, chosen)) {
+    const onTrack = where.kind === 'track' ? where.value : (dropped ?? trk.picked);
+    if (trk.ask && !onTrack) {
+      trk.setInvalid(true);
+      trk.props.pickRef.current?.focus();
+      return;
+    }
+    if (await onAdd(t, where, chosen, onTrack)) {
       setTitle('');
       setTried(false);
+      trk.setInvalid(false);
     }
   };
 
@@ -145,7 +151,7 @@ export function QuickAdd({
     const where = over
       ? parse(over.dataset.addWhere ?? over.getAttribute('data-add-where') ?? '')
       : null;
-    if (where) void send(where);
+    if (where) void send(where, drop ? trackAt(e.clientX, e.clientY, tracks) : undefined);
   };
 
   const form = (
@@ -156,9 +162,12 @@ export function QuickAdd({
       roadmaps={roadmaps}
       initialRoadmap={rm}
       target={target}
-      onSubmit={async (t, w, r) => {
+      tracks={tracks}
+      initialTrack={trk.props.value}
+      onSubmit={async (t, w, r, k) => {
         if (r) setRm(r);
-        const ok = await onAdd(t, w, r);
+        if (k) trk.setValue(k);
+        const ok = await onAdd(t, w, r, k ?? trk.only);
         if (ok) {
           setTitle('');
           setSheet(false);
@@ -217,6 +226,7 @@ export function QuickAdd({
           ))}
         </select>
       )}
+      {trk.ask && <TrackPick {...trk.props} />}
       <input
         id="quick-add-title"
         value={title}
@@ -274,11 +284,13 @@ export function QuickAdd({
           Enter adds it to {options[0].label}
         </span>
       )}
-      {(noTitle || noRoadmap) && (
+      {(noTitle || noRoadmap || trk.invalid) && (
         <p role="alert" data-testid="quick-add-error" className="w-full text-sm text-crit">
           {noTitle && <span id="quick-add-title-error">Type a title</span>}
           {noTitle && noRoadmap && ' · '}
           {noRoadmap && <span id="quick-add-roadmap-error">Pick the roadmap it goes on</span>}
+          {(noTitle || noRoadmap) && trk.invalid && ' · '}
+          {trk.invalid && <span id="quick-add-track-error">Pick the track it goes on</span>}
         </p>
       )}
     </section>
@@ -292,6 +304,8 @@ function AddForm({
   roadmaps,
   initialRoadmap,
   target,
+  tracks,
+  initialTrack,
   onSubmit,
 }: {
   initial: string;
@@ -300,10 +314,15 @@ function AddForm({
   roadmaps: Ref[];
   initialRoadmap: string;
   target: string | null;
-  onSubmit: (title: string, where: Where, roadmap?: string) => Promise<void>;
+  tracks: Ref[];
+  initialTrack: string;
+  onSubmit: (title: string, where: Where, roadmap?: string, track?: string) => Promise<void>;
 }) {
   const [title, setTitle] = useState(initial);
   const [rm, setRm] = useState(initialRoadmap);
+  const [tr, setTr] = useState(initialTrack);
+  const askTrack = tracks.length > 1;
+  const track = tracks.find((t) => t.id === tr)?.id;
   const ask = roadmaps.length > 0;
   const roadmap = ask ? roadmaps.find((r) => r.id === rm)?.id : undefined;
   const [where, setWhere] = useState(options[0] ? `${options[0].kind}:${options[0].value}` : '');
@@ -313,6 +332,7 @@ function AddForm({
   const [tried, setTried] = useState(false);
   const noTitle = tried && !title.trim();
   const noRoadmap = tried && ask && !roadmap;
+  const noTrack = tried && askTrack && !track;
   const groups: [string, Where['kind']][] = [
     ['Quarters', 'quarter'],
     ['Now / Next / Later', 'horizon'],
@@ -324,10 +344,10 @@ function AddForm({
       onSubmit={async (e) => {
         e.preventDefault();
         setTried(true);
-        if (!title.trim() || !chosen || (ask && !roadmap)) return;
+        if (!title.trim() || !chosen || (ask && !roadmap) || (askTrack && !track)) return;
         setBusy(true);
         try {
-          await onSubmit(title.trim(), chosen, roadmap);
+          await onSubmit(title.trim(), chosen, roadmap, track);
         } finally {
           setBusy(false);
         }
@@ -384,6 +404,9 @@ function AddForm({
             </span>
           )}
         </label>
+      )}
+      {askTrack && (
+        <TrackPick tracks={tracks} value={tr} onChange={setTr} invalid={noTrack} sheet />
       )}
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Where

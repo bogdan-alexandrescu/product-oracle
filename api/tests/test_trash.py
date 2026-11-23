@@ -505,6 +505,9 @@ DOCUMENT_LINKS_EXEMPT = {
     "brief takes the PRD, not the other way round",
     ("ProductRequest", "document_id"): "a request is its requester's: it outlives the PRD "
     "it fed (SET NULL on purge)",
+    ("FeatureComment", "roadmap_document_id"): "a comment is read through its feature's "
+    "row, which Trash hides; it goes when the feature (before_purge) or roadmap (CASCADE) "
+    "is purged",
     ("ProductTrack", "roadmap_document_id"): "a track is its PRDs' (track_prds); its "
     "roadmap link is cleared on purge",
     ("RoadmapItem", "prd_document_id"): "an item is its roadmap's (roadmap_document_id); "

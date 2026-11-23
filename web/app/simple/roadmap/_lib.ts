@@ -864,3 +864,19 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
   }
   return { ...data, groups };
 }
+
+/** owner-filter: the Owner filter's value for "No owner" (the API's owner=none). */
+export const NO_OWNER = 'none';
+
+/** owner-filter: an item's Owner pick, the owner its panel shows (its own, else its track's). */
+export const ownerPick = (i: Item): string => i.owner?.id ?? NO_OWNER;
+
+/** owner-filter: the people owning the items seen, as [id, name] pairs to add to the seen list. */
+export const ownersSeen = (items: Item[]): [string, string][] =>
+  items.flatMap((i) => (i.owner ? [[i.owner.id, i.owner.name] as [string, string]] : []));
+
+/** owner-filter: the Owner filter's choices after All: each person by name, then No owner. */
+export const ownerOptions = (seen: [string, string][]): [string, string][] => [
+  ...[...seen].sort(([, a], [, b]) => a.localeCompare(b)),
+  [NO_OWNER, 'No owner'],
+];

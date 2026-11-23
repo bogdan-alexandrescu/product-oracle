@@ -243,8 +243,8 @@ test('feature panel (Priorities, Roadmap): Move to Trash… names the feature wi
   await openRoadmapItem(page, 'setup-health-log');
   const panel = page.getByTestId('floating-card');
   await tap(panel.getByRole('button', { name: 'More actions' }));
-  await tap(panel.getByRole('menuitem', { name: 'Move to Trash…' }));
-  const ask = page.getByRole('alertdialog', { name: /^Move F-\d+[a-j]? Health log to Trash\?$/ });
-  await tap(ask.getByRole('button', { name: 'Move to Trash' }));
+  // roadmap-add: Move to Trash asks nothing; the note names it with its code.
+  await tap(panel.getByRole('menuitem', { name: 'Move to Trash' }));
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(page.getByTestId('toasts')).toContainText(/Moved F-\d+[a-j]? Health log to Trash\./);
 });

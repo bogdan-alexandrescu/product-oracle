@@ -398,6 +398,7 @@ test.describe('desktop, a commenter adds', () => {
     await page.getByTestId('zoom-6m').click();
     await page.getByLabel('Add an item').fill('Quiet hours setting');
     await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+    await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
     const chip = page.getByTestId('quick-add-chip');
     await expect(chip).toHaveAttribute('aria-disabled', 'false');
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -434,6 +435,7 @@ test.describe('phone, proposals', () => {
     await sheet.getByLabel('Title').fill('Pause alerts on holidays');
     await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
     await sheet.getByLabel('Where').selectOption({ label: 'Keep alerts quiet' });
+    await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
     await expect(sheet.getByRole('button', { name: 'Add', exact: true })).toHaveCount(0);
     await sheet.getByRole('button', { name: 'Propose', exact: true }).click();
     await expect(

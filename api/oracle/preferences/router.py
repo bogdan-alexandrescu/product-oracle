@@ -32,13 +32,15 @@ SimpleFilterPick = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]{0,
 
 
 class SimpleFilters(BaseModel):
-    """The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter."""
+    """The Simple roadmap's PRD, Goal, Track and Owner picks, remembered like its Roadmap filter
+    (owner: a person's id, or "none" for No owner)."""
 
     model_config = ConfigDict(extra="forbid")
 
     prd: SimpleFilterPick = ""
     goal: SimpleFilterPick = ""
     track: SimpleFilterPick = ""
+    owner: SimpleFilterPick = ""
 
 
 class SlackPings(BaseModel):

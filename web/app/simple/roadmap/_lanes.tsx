@@ -1433,7 +1433,13 @@ function DesktopLanes({
               data-add-where={
                 dropTargets && lane === 'goal' && l.kind === 'group' && goalLane(l.key)
                   ? whereAttr('goal', l.key)
-                  : undefined
+                  : // roadmap-add: a track's row takes a quick add onto its track.
+                    dropTargets &&
+                      lane === 'track' &&
+                      l.kind === 'group' &&
+                      (data.tracks ?? []).some((t) => t.id === l.key)
+                    ? whereAttr('track', l.key)
+                    : undefined
               }
               data-add-label={l.title}
               style={{ height: geo[n].height }}

@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { InfoTip } from '@/components/ds';
+import { CommentCount } from '@/components/simple/FeatureComments';
 import { LINK_KINDS } from '@/lib/roadmap-links';
 
 import { itemName, NotInGt } from './_gtflag';
@@ -548,6 +549,7 @@ export function Board({
             className={`text-base leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
           >
             {itemName(item)}
+            <CommentCount item={item} />
           </p>
           <NotInGt item={item} className="mt-1 h-5! px-2! text-xs!" />
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
@@ -662,7 +664,13 @@ export function Board({
             keyDates={keyDates}
           />
           {c.groups.map((g) => (
-            <div key={g.key} className="mb-2" data-testid="board-group">
+            <div
+              key={g.key}
+              className="mb-2"
+              data-testid="board-group"
+              // roadmap-add: a quick add dropped in a track's group goes on that track.
+              data-add-track={data.group === 'track' ? g.key : undefined}
+            >
               <h3
                 className="flex items-center gap-1 truncate px-1 pb-1 text-sm font-semibold text-text2"
                 data-add-where={

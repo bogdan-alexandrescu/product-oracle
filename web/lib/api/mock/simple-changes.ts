@@ -3934,6 +3934,19 @@ function reopenSuggestion(db: SimpleDb, c: Change): void {
     });
 }
 
+/** additions._next_code: the highest F-number any item or Ground Truth feature uses, plus one. */
+function nextCode(db: SimpleDb): string {
+  const used = [
+    ...db.items.map((x) => shownCode(x, (id) => db.feature_codes?.[id])),
+    ...Object.values(db.feature_codes ?? {}),
+  ];
+  const nums = used.flatMap((u) => {
+    const m = /^F-(\d+)[a-j]?$/.exec((u ?? '').split('.')[0]);
+    return m ? [Number(m[1])] : [];
+  });
+  return `F-${Math.max(0, ...nums) + 1}`;
+}
+
 function applyS7(db: SimpleDb, c: Change, undo = false): void {
   const id = String(c.target.item_id);
   if (c.op === 'add_item') {
@@ -3945,10 +3958,14 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
       reopenSuggestion(db, c);
       return;
     }
+    // roadmap-add (additions._give_code): a title with no code gets the next free one at once.
+    if (!codedTitle(String(c.after.title), null)[0])
+      c.after = { ...c.after, title: `${nextCode(db)} ${String(c.after.title)}` };
     const a = c.after;
     const roadmap = slugOf(c.target.roadmap_id)!;
-    let key = slug(String(a.title));
-    for (let n = 2; db.ids[key]; n++) key = `${slug(String(a.title))}-${n}`;
+    const name = codedTitle(String(a.title), null)[1];
+    let key = slug(name);
+    for (let n = 2; db.ids[key]; n++) key = `${slug(name)}-${n}`;
     const goalKey = Object.keys(GOALS).find((k) => (a.goal_ids as string[]).includes(goalId(k)));
     db.ids[key] = id;
     const added: SeedItem = {
@@ -3978,7 +3995,12 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     const band = Object.keys(TRACKS).find(
       (k) => !!a.track_id && stableUuid(`simple-track/${k}`) === a.track_id,
     );
-    if (band) added.track = band;
+    if (band) {
+      added.track = band;
+      // roadmap-add: filed under the picked track's PRD (its first item's), not the first track's.
+      const onBand = db.items.find((x) => x.roadmap === roadmap && x.track === band);
+      if (onBand) added.prd_doc = ownPrd(onBand);
+    }
     db.items.push(added);
     return;
   }

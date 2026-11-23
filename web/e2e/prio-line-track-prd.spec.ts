@@ -39,7 +39,6 @@ test("a milestone's line stays under its track's first PRD when a feature from a
     .getByTestId('card-track-edit')
     .getByLabel('Track')
     .selectOption({ label: 'Usage alerts track' });
-  await panel(page).getByTestId('card-track-edit').getByRole('button', { name: 'Save' }).click();
   await expect(panel(page).getByTestId('card-track')).toHaveText('Usage alerts track');
 
   expect(await betaGroup(page)).toBe('Usage alerts');

@@ -361,7 +361,11 @@ test('a feature added after a replace stays on the Roadmap and the Ranked tab', 
   await tray.getByRole('button', { name: 'Close' }).click();
   await expect(tray).toHaveCount(0);
   await expect(
-    page.getByText('Quiet hours for alerts', { exact: true }).filter({ visible: true }).first(),
+    // roadmap-add: a new item is given its code at creation, shown with its name.
+    page
+      .getByText(/^F-\d+ Quiet hours for alerts$/)
+      .filter({ visible: true })
+      .first(),
   ).toBeVisible();
 
   await page.goto('/simple/priorities?tab=ranked');

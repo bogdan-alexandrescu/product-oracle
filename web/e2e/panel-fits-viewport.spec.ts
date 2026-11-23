@@ -114,7 +114,7 @@ for (const size of SIZES) {
           const close = panel.getByRole('button', { name: 'Close', exact: true });
           await inViewport(page, close);
           await inViewport(page, panel.getByTestId('card-name'));
-          const y = await pageY(page);
+          let y = await pageY(page);
 
           // The wheel inside the panel reaches its last control; the header stays in view.
           const last = panel.locator('button:visible, a:visible, select:visible').last();
@@ -124,8 +124,10 @@ for (const size of SIZES) {
           await inViewport(page, panel);
           expect(await pageY(page)).toBe(y);
 
-          // A field low in the panel opens and its Save is reached by scrolling inside it.
-          const change = panel.getByRole('button', { name: /^Change the / }).last();
+          // A text field low in the panel opens and its Save is reached by scrolling inside it
+          // (roadmap-add: the select fields save at once, with no Save, so the notes are the
+          // low field that still waits for one).
+          const change = panel.getByRole('button', { name: 'Change the notes', exact: true });
           await wheelTo(page, panel, change);
           await change.click();
           const save = panel.getByRole('button', { name: 'Save', exact: true }).last();
@@ -133,6 +135,9 @@ for (const size of SIZES) {
           await inViewport(page, save);
           await inViewport(page, panel);
           await panel.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+          // Closing an editor above the foot shortens the panel and the page may settle a few
+          // pixels (the panel is placed again); the steps below hold that page position.
+          y = await pageY(page);
 
           if (!size.phone) {
             // Keyboard: back to the head with Home on the panel, then PageDown to its foot.

@@ -43,7 +43,6 @@ const card = (page: Page): Locator => page.getByTestId('floating-card');
 async function pick(page: Page, label: string) {
   await card(page).getByRole('button', { name: 'Change the milestone' }).click();
   await card(page).getByLabel('Milestone', { exact: true }).selectOption({ label });
-  await card(page).getByRole('button', { name: 'Save' }).click();
 }
 
 /** The items (their keys) in a lane of the Gantt: the bars between its header and the next one's. */
@@ -103,7 +102,7 @@ for (const [name, device] of [
       await expect(
         card(page).getByLabel('Milestone', { exact: true }).locator('option'),
       ).toHaveText(['No milestone', SCALE_M1, SCALE_M2, SCALE_M3, SAFETY_M1, SAFETY_M2, SAFETY_M3]);
-      await card(page).getByRole('button', { name: 'Cancel' }).click();
+      await page.keyboard.press('Escape');
 
       await pick(page, SAFETY_M2);
       await expect(page.getByText('Milestone changed in your working draft').first()).toBeVisible();
@@ -285,7 +284,7 @@ test('undoing a pick refuses a milestone moved to Trash since', async ({ page })
     card(page).getByLabel('Milestone', { exact: true }).locator('option', { hasText: name });
   const first = (await option('Alerts live for 50 teams').textContent())!.trim();
   const second = (await option('60% of teams active at day 90').textContent())!.trim();
-  await card(page).getByRole('button', { name: 'Cancel' }).click();
+  await page.keyboard.press('Escape');
 
   await pick(page, first);
   await expect(card(page).getByTestId('card-milestone')).toHaveText(first);

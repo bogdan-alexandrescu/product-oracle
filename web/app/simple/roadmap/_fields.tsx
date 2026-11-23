@@ -13,6 +13,7 @@ import { LoadError, Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
 import { calendarDay } from '@/lib/dates';
 import { goalFigure } from '@/lib/format';
+import { goalTree } from '@/lib/goal-tree';
 import { useMe } from '@/lib/me';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
 import { byTrackOrder } from '@/lib/track-order';
@@ -115,7 +116,9 @@ function SaveCancel({ onCancel, disabled }: { onCancel: () => void; disabled?: b
   );
 }
 
-/** A select editor: the options, the current value, saved by `save`. */
+/** A select editor: the options, the current value, saved by `save`. roadmap-add: choosing a
+ * value saves it at once (Esc cancels); only a value with a `note` waits for Save, so its note
+ * is read first. */
 function Pick({
   label,
   value,
@@ -141,12 +144,24 @@ function Pick({
         done();
         if (v !== value) void save(v);
       }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        done();
+      }}
     >
       <select
         aria-label={label}
         className={INPUT}
         value={v}
-        onChange={(e) => setV(e.target.value)}
+        onChange={(e) => {
+          const next = e.target.value;
+          setV(next);
+          if (note?.(next) || next === value) return;
+          done();
+          void save(next);
+        }}
         autoFocus
       >
         {options.map((o) => (
@@ -156,11 +171,13 @@ function Pick({
         ))}
       </select>
       {said && (
-        <p className="mt-1 text-sm text-text2" data-testid="pick-note">
-          {said}
-        </p>
+        <>
+          <p className="mt-1 text-sm text-text2" data-testid="pick-note">
+            {said}
+          </p>
+          <SaveCancel onCancel={done} />
+        </>
       )}
-      <SaveCancel onCancel={done} />
     </form>
   );
 }
@@ -379,7 +396,21 @@ export function PanelFields({
   ].sort(byTrackOrder);
   // prd-order: the PRD picker in the company PRD order.
   const prds = refs(items, (i) => i.prd).sort(byPrdOrderOf(prdOrderOf));
-  const goals = refs(items, (i) => i.goal);
+  // roadmap-add: any live top-level goal may be picked, one no item serves yet too (the page's own goal
+  // read, in the goals' order; Trash and archived are out of it), then the goals the items name.
+  const goalList = useQuery('simple-roadmap-goal-order', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
+  const goals: { id: string; title: string; metric?: string | null }[] = [
+    ...new Map(
+      [
+        ...goalTree((goalList.data ?? []).filter((g) => g.status === 'confirmed'))
+          .filter((n) => !n.parentId)
+          .map((n) => ({ id: n.goal.id, title: n.name })),
+        ...refs(items, (i) => i.goal),
+      ].map((g) => [g.id, g] as const),
+    ).values(),
+  ];
   // roadmap-edit-fixes: the stored key the read says names it (another PRD's feature key is
   // neither its key nor its code), else the one matching its key or code.
   // roadmap-edit-fixes round 1: every stored key that names it (the read's, and its key or code

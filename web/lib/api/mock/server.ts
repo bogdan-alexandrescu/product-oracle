@@ -10,6 +10,7 @@ import { inboxCounts } from '@/lib/inbox-counts';
 import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
+import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { mockName as displayName } from './people';
 import { reply, rawReply } from './typed';
 
@@ -440,6 +441,7 @@ import {
 import {
   bucketGoalsInOrder,
   goalBucketsDb,
+  goalInTrashByKey,
   placeBucketGoal,
   placeBucketGoals,
   routeGoalBuckets,
@@ -625,7 +627,7 @@ import {
   seedStuckPrdAsk,
 } from './simple-milestones';
 import { knowPrdOrder } from './prd-rank';
-import { codedTitle, openDraft, targetRead } from './simple-roadmap';
+import { codedTitle, openDraft, roadmapId, targetRead } from './simple-roadmap';
 import {
   appliedVersionOf,
   approvedPrdToDraft,
@@ -839,6 +841,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** #1553: comments on a feature (./feature-comments.ts). */
+  feature_comments?: FeatureCommentRow[];
   /** A5: access requests (Settings › Members). */
   access_requests?: Schemas['AccessRequestOut'][];
   /** A5: the note the pending person sent with their request (the access-pending scenario). */
@@ -9801,7 +9805,13 @@ function routeBaselineFor(
       memberEmail,
       sourceItem,
       isMember: (id) => activeMember(db, id),
-      hidden: (id) => hidden.has(id),
+      // A goal in Trash is out of the entity list and reads, as the API's trash filter leaves it out.
+      hidden: (id) =>
+        hidden.has(id) ||
+        goalInTrashByKey(
+          db.simple_roadmap?.goal_buckets,
+          db.baseline.entities.find((e) => e.id === id && e.type === 'goal')?.key ?? '',
+        ),
       codesSeen: () => codesSeen(db.simple_roadmap),
       codesOf: (id) => tiedCodes(db.simple_roadmap, id, db.baseline),
       codesRead: () => codesRead(db.simple_roadmap, db.baseline),
@@ -12504,6 +12514,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === 'disabled') return json(401, { detail: 'Not authenticated' });
   const me = withMockRole(member);
+  // #1553: comments on a feature, on the roadmap item the panel shows (as its roadmap read has it).
+  const comments = await routeFeatureComments(
+    (db.feature_comments ??= []),
+    me,
+    (id) => {
+      const x = db.members.find((y) => y.id === id);
+      return x ? displayName(x.email, x.name) : 'Someone';
+    },
+    async (itemId) => {
+      const r = await route(db, new Request(new URL('/v1/simple/roadmap', url)));
+      if (!r.ok) return null;
+      const read = (await r.json()) as Schemas['SimpleRoadmapOut'];
+      const item = read.items.find((i) => i.id === itemId);
+      return item ? { roadmap_id: item.roadmap.id, key: item.key } : null;
+    },
+    req,
+    p,
+  );
+  if (comments) return comments;
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   if (
     scenario === DRIVE_PICKER_UNSET_SCENARIO &&
@@ -12574,6 +12603,15 @@ async function route(db: Db, req: Request): Promise<Response> {
           ],
           goal_map: db.goal_map,
         },
+      // #1553: a purged feature takes its comments (trash_items.before_purge).
+      onPurge: (entry) => {
+        const { type, slug } = entry.out.root;
+        if (type !== 'feature' || !db.feature_comments) return;
+        const doc = entry.roadmap ? roadmapId(entry.roadmap) : null;
+        db.feature_comments = db.feature_comments.filter(
+          (c) => c.key !== slug || (doc !== null && c.roadmap_id !== doc),
+        );
+      },
       // delete-prd-simple: the roadmap items and tracks a PRD feeds, named by Delete PRD.
       // Read from the seed when Simple has not been opened yet, never storing it (the dependents only read).
       feeds: (slugs, gone) => prdFeeds(db.simple_roadmap ?? seedSimpleRoadmap(), slugs, gone),
@@ -12680,12 +12718,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       welcome_dismissed: false,
       slack_pings: { ...SLACK_PINGS },
     });
-    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap.
+    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap
+    // (owner-filter: and an Owner pick of a person who owns nothing on it now).
     if (
       localStorage.getItem(MOCK_SCENARIO_KEY) === STALE_SIMPLE_FILTERS_SCENARIO &&
       mine.simple_filters === undefined
     )
-      mine.simple_filters = { prd: 'retired-example-prd', goal: 'retired-example-goal', track: '' };
+      mine.simple_filters = {
+        prd: 'retired-example-prd',
+        goal: 'retired-example-goal',
+        track: '',
+        owner: 'retired-example-person',
+      };
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === 'PATCH') {
       const patch = await body<Schemas['PreferencesUpdate']>();
@@ -12715,10 +12759,10 @@ async function route(db: Db, req: Request): Promise<Response> {
         mine.simple_roadmap = patch.simple_roadmap;
       }
       if (patch.simple_filters != null) {
-        // Its PRD, Goal and Track picks (preferences.SimpleFilters).
+        // Its PRD, Goal, Track and Owner picks (preferences.SimpleFilters).
         const picks = patch.simple_filters as Record<string, unknown>;
         if (
-          Object.keys(picks).some((k) => !['prd', 'goal', 'track'].includes(k)) ||
+          Object.keys(picks).some((k) => !['prd', 'goal', 'track', 'owner'].includes(k)) ||
           Object.values(picks).some(
             (v) => typeof v !== 'string' || !/^[A-Za-z0-9_.-]{0,200}$/.test(v),
           )
@@ -12728,6 +12772,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           prd: picks.prd ?? '',
           goal: picks.goal ?? '',
           track: picks.track ?? '',
+          owner: picks.owner ?? '',
         } as Schemas['SimpleFilters'];
       }
       if (patch.simple_decisions_view != null) {
