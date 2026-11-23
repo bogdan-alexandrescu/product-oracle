@@ -194,3 +194,40 @@ NOT RUN or not green:
 
 Minors not done (this step was asked to fix the majors only): undo's setGone([]) redraw, a proposer's milestone drag, Esc on the track rename, PRIORITIZE (not built and not reachable), the onAdd suppression.
 No API, mock or migration change. Files outside the merged lanes' own files: none new, apart from `_add-form.tsx` (split out of `_add.tsx`).
+
+### Fix round 2 (re-review NOT_YET: one major, minors; owner's Nov 23 picks)
+- Major, the rank in every roadmap read: `priorities.ranks()` now reads through `_rank_inputs`
+  (api/oracle/priorities/service.py): column selects only (entities, edges, evidence id/entity/
+  confidence; no evidence text, citations or source items), each goal's link worked out once,
+  and it never writes (unscored evidence stays unscored: what `rescore=False` reads). Priorities'
+  own read is unchanged. Red tests first (2a317093): a viewer's read issues no UPDATE
+  (test_simple_roadmap_order_api.py::test_viewer_read_writes_nothing) and the read selects no
+  evidence text or source items (test_simple_roadmap_speed.py::test_read_ranks_through_a_light_load).
+- Cost left: on this machine (timing test alone, no xdist, alternated) best of 3 was 494-522 ms
+  with the rank and 382-396 ms with item_order stubbed out, so about +0.1 s. Most of it is rank()'s
+  own Python (about 41 ms on 1,600 features) plus about 50 ms of load. This machine is too slow to
+  meet the budget: the read misses 0.3 s even without the rank, and the waiting count misses
+  0.11 s, which this round did not touch. Filed as questions.json ("Accept the cost" built;
+  "Store the live ranking" is the other choice). Statements: roadmap 59 (budget 60), waiting 18.
+- Minor, the settings cache (api/oracle/tenant_settings_api.py): the cached read now honours
+  UNSCOPED_KEY, and a lock taken with a SELECT (FOR UPDATE, pg_advisory_*lock) forgets it. Kept
+  because the 60-statement budget needs it. Red first: tests/test_tenant_settings_cache.py
+  (across companies, after a lock (advisory, FOR UPDATE), after a write).
+- Owner's pick: the comment count on Timeline rows. CommentCount came with the comments feature
+  on main, so main was merged in (51566a0c). Conflicts kept both sides; the 5 roadmap digests were
+  updated, since the bodies now carry main's confirm_feature_id and this branch's position. The
+  mock's duplicated imports were fixed in cce45e32. The count is mounted after the row's name in
+  _zoom.tsx; spec e2e/timeline-comment-count.spec.ts (red on a build without it, cce45e32, green
+  after ed263036).
+- Minor done (test only): simple-roadmap-lanes.spec.ts asserts both positions exist and differ.
+- Minors left, as the brief says (behaviour changes or other files, not one-line): a no-op move
+  still says 'Moved'; an optimistic move above its own dependency snaps back with no words; no row
+  redraw measurement for _order.tsx; the red-test rewrite inside 8aba3e304 is history. The full
+  lint's old _add.tsx and FeatureDelete.tsx errors were not reported on this tree (main fixed them).
+  _zoom.tsx's import order is fixed and its suppression pruned (1ea9dca4).
+- Gates (at 1ea9dca4): ruff ok; pytest speed (not timing), order_api, tenant_settings_cache,
+  tenant_settings_api, simple_priorities_api: 64 passed; timing test alone: FAILED on this machine
+  (roadmap best 676 ms, waiting 125 ms; see above); alembic one head (0135_feature_comments);
+  tsc 0; Playwright --retries=0 on a mock build: timeline-comment-count, timeline-order,
+  simple-roadmap-lanes, feature-comments 15 passed; prose guard passed; format:check on the
+  touched files ok; full npm run lint: see the PR body.
