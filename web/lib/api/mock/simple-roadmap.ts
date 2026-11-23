@@ -3906,10 +3906,10 @@ export function settleDrafting(db: SimpleDb): void {
     // outcome, and a feature (simplified: the first by key whose name shares a word with the title).
     const filled: string[] = [];
     if (s.outcome == null) {
-      s.outcome = `Teams get ${s.title.toLowerCase()} without asking support`;
+      s.outcome = `Teams get ${codedTitle(s.title, null)[1].toLowerCase()} without asking support`;
       filled.push('outcome');
     }
-    const mine = WORDS(s.title);
+    const mine = WORDS(codedTitle(s.title, null)[1]);
     const feature = Object.keys(db.feature_titles ?? {})
       .sort((a, b) => (db.feature_keys?.[a] ?? a).localeCompare(db.feature_keys?.[b] ?? b))
       .find((f) => [...WORDS(db.feature_titles![f])].some((w) => mine.has(w)));
@@ -3921,16 +3921,18 @@ export function settleDrafting(db: SimpleDb): void {
       s.drafted_at = new Date(now).toISOString();
       s.drafted = filled;
     }
+    // roadmap-add: drawn from its name (additions._place asks the visual for the name, not its code).
+    const named = codedTitle(s.title, null)[1];
     s.flow = plainFlow({
-      title: s.title,
+      title: named,
       steps: [
         'Open the alerts page',
-        `Find ${s.title.toLowerCase()}`,
+        `Find ${named.toLowerCase()}`,
         'Set it up in one step',
         'See it working',
       ],
       screen: {
-        title: `${s.title} settings`,
+        title: `${named} settings`,
         regions: [
           'Header: what it does',
           'The one setting',

@@ -1079,9 +1079,8 @@ export function Chart({
                   ? undefined
                   : lane === 'goal' && goalLane(r.key)
                     ? whereAttr('goal', r.key)
-                    : trackBands &&
-                        lane === 'track' &&
-                        (data.tracks ?? []).some((t) => t.id === r.key)
+                    : // roadmap-add: any track row takes a quick add onto its track.
+                      lane === 'track' && (data.tracks ?? []).some((t) => t.id === r.key)
                       ? whereAttr('track', r.key)
                       : undefined
               }
@@ -1144,7 +1143,16 @@ export function Chart({
               )}
             </div>
           ) : (
-            <div key={r.item.id} style={{ height: l.hs[n] }}>
+            <div
+              key={r.item.id}
+              style={{ height: l.hs[n] }}
+              data-add-where={
+                dropTargets && lane === 'track' && r.item.track
+                  ? whereAttr('track', r.item.track.id)
+                  : undefined
+              }
+              data-add-label={lane === 'track' ? r.item.track?.title : undefined}
+            >
               <button
                 type="button"
                 data-testid="chart-label"

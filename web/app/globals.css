@@ -1779,3 +1779,9 @@ code .date-mark {
     display: table-header-group;
   }
 }
+
+/* roadmap-add: a just-added item's row, marked for a moment. */
+[data-just-added] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

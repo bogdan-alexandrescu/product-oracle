@@ -92,7 +92,6 @@ test.describe('A feature moved onto a goal on Priorities', () => {
     await panel(page)
       .getByRole('combobox', { name: 'Goal' })
       .selectOption({ label: 'Grow retention (measured by Teams active after 90 days)' });
-    await panel(page).getByRole('button', { name: 'Save' }).click();
     await expect(panel(page).getByTestId('card-goal')).toHaveText('Grow retention');
     await expect(page.getByTestId('toasts')).not.toContainText('Changed since you saw it');
     // The change's before is the goal the panel read: Undo puts Revenue back.

@@ -37,6 +37,7 @@ async function readyQuickAdd(page: Page, title: string) {
   await page.getByLabel('Add an item').fill(title);
   const roadmap = page.getByTestId('quick-add-roadmap');
   if (await roadmap.count()) await roadmap.selectOption({ label: 'Alerts roadmap' });
+  await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
   await expect(page.getByTestId('quick-add-chip')).toHaveAttribute('aria-disabled', 'false');
 }
 

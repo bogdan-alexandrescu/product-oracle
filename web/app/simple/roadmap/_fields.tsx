@@ -115,7 +115,9 @@ function SaveCancel({ onCancel, disabled }: { onCancel: () => void; disabled?: b
   );
 }
 
-/** A select editor: the options, the current value, saved by `save`. */
+/** A select editor: the options, the current value, saved by `save`. roadmap-add: choosing a
+ * value saves it at once (Esc cancels); only a value with a `note` waits for Save, so its note
+ * is read first. */
 function Pick({
   label,
   value,
@@ -141,12 +143,24 @@ function Pick({
         done();
         if (v !== value) void save(v);
       }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        done();
+      }}
     >
       <select
         aria-label={label}
         className={INPUT}
         value={v}
-        onChange={(e) => setV(e.target.value)}
+        onChange={(e) => {
+          const next = e.target.value;
+          setV(next);
+          if (note?.(next) || next === value) return;
+          done();
+          void save(next);
+        }}
         autoFocus
       >
         {options.map((o) => (
@@ -156,11 +170,13 @@ function Pick({
         ))}
       </select>
       {said && (
-        <p className="mt-1 text-sm text-text2" data-testid="pick-note">
-          {said}
-        </p>
+        <>
+          <p className="mt-1 text-sm text-text2" data-testid="pick-note">
+            {said}
+          </p>
+          <SaveCancel onCancel={done} />
+        </>
       )}
-      <SaveCancel onCancel={done} />
     </form>
   );
 }

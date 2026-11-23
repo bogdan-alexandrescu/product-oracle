@@ -234,8 +234,7 @@ for (const size of SIZES)
             await tap(panel(page).getByRole('button', { name: 'More actions' }));
             await expect(
               panel(page).getByRole('menuitem', {
-                name:
-                  who === 'commenter@example.com' ? 'Propose: move to Trash…' : 'Move to Trash…',
+                name: who === 'commenter@example.com' ? 'Propose: move to Trash…' : 'Move to Trash',
               }),
             ).toBeVisible();
             await page.keyboard.press('Escape');
@@ -313,8 +312,7 @@ for (const size of SIZES)
       await login(page);
       await open(page, 'alert-export');
       await partOf(page, 'Alert routing by team');
-      await menu(page, 'Move to Trash…');
-      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Move to Trash' }));
+      await menu(page, 'Move to Trash');
       await expect(toasts(page)).toContainText('Moved Alert history export to Trash.');
       // Meanwhile its parent moves: it becomes a part of Alert rules engine.
       await open(page, 'alert-sso');
@@ -330,8 +328,7 @@ for (const size of SIZES)
       );
 
       // Deleted again, and its parent merged away meanwhile: it comes back at the top level.
-      await menu(page, 'Move to Trash…');
-      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Move to Trash' }));
+      await menu(page, 'Move to Trash');
       await expect(toasts(page)).toContainText('Moved Alert history export to Trash.');
       await open(page, 'alert-sso');
       await menu(page, 'Merge into…');
@@ -358,8 +355,7 @@ for (const size of SIZES)
       await open(page, 'alert-sso');
       await partOf(page, 'Alert rules engine');
       await open(page, 'alert-rules');
-      await menu(page, 'Move to Trash…');
-      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Move to Trash' }));
+      await menu(page, 'Move to Trash');
       await expect(toasts(page)).toContainText('Moved Alert rules engine to Trash.');
       await open(page, 'alert-sso');
       await expect(panel(page).getByTestId('card-part-of')).toHaveText(
@@ -421,7 +417,6 @@ for (const size of SIZES)
           .evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))
       ).find((v) => v && v !== now)!;
       await goal.selectOption(other);
-      await tap(panel(page).getByTestId('card-goal-edit').getByRole('button', { name: 'Save' }));
       await expect(toasts(page)).toContainText('Its 1 part keeps its own goal.');
       // Cut: its part stays on the roadmap, said beside Cut before Save, and again after.
       await menu(page, 'Cut from the roadmap');
@@ -430,14 +425,9 @@ for (const size of SIZES)
       await tap(cutAsk.getByRole('button', { name: 'Cut', exact: true }));
       await expect(toasts(page)).toContainText('Its 1 part stays on the roadmap.');
       // To Trash: asked first with the count (Cancel keeps it), said again once done.
-      await menu(page, 'Move to Trash…');
-      const ask = page.getByRole('alertdialog', { name: 'Move Alert rules engine to Trash?' });
-      await expect(ask).toContainText('Its 1 part stays on the roadmap.');
-      await tap(ask.getByRole('button', { name: 'Cancel' }));
-      await expect(ask).toHaveCount(0);
-      await expect(panel(page).getByTestId('card-name')).toContainText('Alert rules engine');
-      await menu(page, 'Move to Trash…');
-      await tap(ask.getByRole('button', { name: 'Move to Trash' }));
+      // roadmap-add: Move to Trash asks nothing; the note says what happens to its parts.
+      await menu(page, 'Move to Trash');
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
       await expect(toasts(page)).toContainText(
         'Moved Alert rules engine to Trash. Its 1 part stays on the roadmap.',
       );

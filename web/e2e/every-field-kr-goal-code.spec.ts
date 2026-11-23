@@ -185,6 +185,7 @@ test.describe("an added item's code", () => {
     await sheet.getByLabel('Title').fill(title);
     await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
     await sheet.getByLabel('Where').selectOption({ label: 'Next' });
+    await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
     await sheet.getByRole('button', { name: 'Add', exact: true }).click();
     return sheet;
   }

@@ -98,7 +98,6 @@ for (const size of SIZES) {
       );
       expect(faster).toBeTruthy();
       await pick.selectOption({ label: faster! });
-      await tap(panel(page).getByTestId('card-goal-edit').getByRole('button', { name: 'Save' }));
       await expect(goal).toContainText('Faster activation');
       await tap(page.getByRole('button', { name: 'Undo' }).last());
       await expect(goal).toContainText('Grow retention');
@@ -182,7 +181,6 @@ for (const size of SIZES) {
       const names = (await pick.locator('option').allTextContents()).slice(1);
       const name = names[names.length - 1];
       await pick.selectOption({ label: name });
-      await tap(panel(page).getByTestId('card-owner-edit').getByRole('button', { name: 'Save' }));
       await expect(panel(page).getByTestId('card-owner')).toHaveText(name);
     });
 

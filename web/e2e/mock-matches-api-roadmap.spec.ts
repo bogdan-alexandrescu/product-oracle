@@ -106,7 +106,6 @@ test("Cut from the panel's menu lists the feature as cut today, by who cut it", 
 async function setStatus(page: Page, status: string, word: string) {
   await tap(panel(page).getByRole('button', { name: 'Change the status' }));
   await panel(page).getByTestId('card-status-edit').getByLabel('Status').selectOption(status);
-  await tap(panel(page).getByTestId('card-status-edit').getByRole('button', { name: 'Save' }));
   await expect(panel(page).getByTestId('card-status')).toContainText(word);
 }
 

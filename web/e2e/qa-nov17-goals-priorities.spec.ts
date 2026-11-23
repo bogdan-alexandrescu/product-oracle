@@ -155,7 +155,6 @@ test.describe('Goal map, desktop', () => {
       .filter({ hasText: /^M1 25 sign-ups per rep/ })
       .first();
     await picker.selectOption((await option.getAttribute('value'))!);
-    await panel.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText("That milestone is not on this item's roadmap.")).toHaveCount(0);
     await expect(panel.getByTestId('card-milestone')).toContainText('25 sign-ups per rep');
   });

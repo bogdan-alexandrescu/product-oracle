@@ -77,7 +77,12 @@ import {
   type LegendEntry,
 } from './_board';
 import { useKeyBurst } from './_burst';
-import { FeatureContextMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
+import {
+  FeatureContextMenu,
+  ITEM_GOING_EVENT,
+  useFeatureDelete,
+  type ItemGoingDetail,
+} from '@/components/simple/FeatureDelete';
 import {
   changeRowWords,
   FlagLine,
@@ -1990,7 +1995,33 @@ export function SimpleRoadmap() {
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
   // roadmap-done (owner, Nov 4): a done (shipped) item leaves the plan: no view draws it and no
   // count reads it (the API checks it no more); it is kept under the Done list, which opens it.
-  const all = roadmap.data;
+  // roadmap-add: a value picked in the feature panel (track, goal, horizon, status, PRD) is laid
+  // on its item at once, so every view moves the row before the change returns; the read after
+  // the change replaces it (the old value again when it was refused).
+  const [moving, setMoving] = useState<ReadonlyMap<string, Partial<Item>>>(new Map());
+  // roadmap-add: an item moved to Trash from its panel leaves every view at once (back on Undo).
+  const [trashing, setTrashing] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { id, going } = (e as CustomEvent<ItemGoingDetail>).detail;
+      setTrashing((g) => {
+        const n = new Set(g);
+        if (going) n.add(id);
+        else n.delete(id);
+        return n;
+      });
+    };
+    window.addEventListener(ITEM_GOING_EVENT, on);
+    return () => window.removeEventListener(ITEM_GOING_EVENT, on);
+  }, []);
+  const all = useMemo(() => {
+    const d = roadmap.data;
+    if (!d || (!moving.size && !trashing.size)) return d;
+    return {
+      ...d,
+      items: d.items.filter((i) => !trashing.has(i.id)).map((i) => ({ ...i, ...moving.get(i.id) })),
+    };
+  }, [roadmap.data, moving, trashing]);
   const data = useMemo(() => {
     if (!all) return undefined;
     const items = all.items.filter((i) => i.status !== 'done');
@@ -2203,6 +2234,62 @@ export function SimpleRoadmap() {
     latest.current = byId;
   });
 
+  /** roadmap-add: what a panel change makes its item read, laid on it till the read after it. */
+  const movedTo = useCallback(
+    (body: Parameters<Act>[1]): Partial<Item> | null => {
+      const a = (body.after ?? {}) as Record<string, string | null | undefined>;
+      const items = roadmap.data?.items ?? [];
+      switch (body.op) {
+        case 'set_track': {
+          const t = (roadmap.data?.tracks ?? []).find((x) => x.id === a.track_id);
+          return {
+            track: t
+              ? {
+                  ...items.find((i) => i.track?.id === t.id)?.track,
+                  id: t.id,
+                  title: t.title,
+                }
+              : null,
+          };
+        }
+        case 'set_goal': {
+          const g =
+            items.find((i) => i.goal?.id === a.goal_id)?.goal ??
+            goalList.data
+              ?.filter((x) => x.id === a.goal_id)
+              .map((x) => ({ id: x.id, key: x.key, title: x.title }))[0];
+          return a.goal_id && g ? { goal: g, goal_ids: [g.id] } : null;
+        }
+        case 'change_horizon':
+          return a.horizon ? { horizon: a.horizon as Item['horizon'] } : null;
+        case 'set_status':
+          return a.status ? { status: a.status as Item['status'] } : null;
+        case 'set_prd': {
+          const p = items.find((i) => i.prd?.id === a.prd_document_id)?.prd;
+          return p ? { prd: p } : null;
+        }
+        default:
+          return null;
+      }
+    },
+    [roadmap.data, goalList.data],
+  );
+  /** roadmap-add: lays a panel change on its item (who decides on it) till `unlay` is called. */
+  const lay = useCallback(
+    (body: Parameters<Act>[1]): (() => void) => {
+      const id = String(body.target?.item_id ?? '');
+      const patch = latest.current.get(id)?.can_decide ? movedTo(body) : null;
+      if (!patch) return () => undefined;
+      setMoving((m) => new Map(m).set(id, patch));
+      return () =>
+        setMoving((m) => {
+          const n = new Map(m);
+          n.delete(id);
+          return n;
+        });
+    },
+    [movedTo],
+  );
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
     async (
@@ -2210,6 +2297,7 @@ export function SimpleRoadmap() {
       body: Parameters<Act>[1],
       note?: string,
     ): Promise<ChangeResult | null> => {
+      const unlay = lay(body);
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ''));
@@ -2253,9 +2341,10 @@ export function SimpleRoadmap() {
         return null;
       } finally {
         await reloadAfter();
+        unlay();
       }
     },
-    [reload, reloadAfter],
+    [reload, reloadAfter, lay],
   );
   const act: Act = useCallback(
     async (what, body, note) => {
@@ -2626,13 +2715,23 @@ export function SimpleRoadmap() {
     if (known) return known.applies ? 'Add' : 'Propose';
     return data.items.some((i) => i.roadmap.id === rm && i.can_decide) ? 'Add' : 'Propose';
   };
-  const onAdd = async (title: string, at: Where, rmId?: string): Promise<boolean> => {
+  // roadmap-add: the tracks a new item may go on; the Track filter's is picked to start with.
+  const addTracks = (data.tracks ?? []).map((t) => ({ id: t.id, title: t.title }));
+  const addTrack = f.track && addTracks.some((t) => t.id === f.track) ? f.track : null;
+  const onAdd = async (
+    title: string,
+    at: Where,
+    rmId?: string,
+    trackId?: string,
+  ): Promise<boolean> => {
     // tb-mk: a quick add dropped on a track band is added to Next on that track (after.track_id, kept by a
     // proposal till it is accepted); an applied add the roadmap reads elsewhere is then put on it (set_track).
-    const band =
-      at.kind === 'track' ? (data.tracks ?? []).find((t) => t.id === at.value) : undefined;
-    if (at.kind === 'track' && !band) return false;
-    const w: Where = band ? { kind: 'horizon', value: 'next', label: band.title } : at;
+    // roadmap-add: the same for the track picked in the add bar or the track row it was dropped on.
+    const onTrack = at.kind === 'track' ? at.value : trackId;
+    const band = onTrack ? (data.tracks ?? []).find((t) => t.id === onTrack) : undefined;
+    if (onTrack && !band) return false;
+    const w: Where =
+      at.kind === 'track' && band ? { kind: 'horizon', value: 'next', label: band.title } : at;
     try {
       const r = await propose({
         op: 'add_item',
@@ -2693,9 +2792,20 @@ export function SimpleRoadmap() {
           message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision`,
         });
       await reloadAfter();
-      // one-feature-panel: the added item opens its panel, to fill in the rest.
+      // one-feature-panel: the added item opens its panel, to fill in the rest; roadmap-add: its
+      // row comes into sight, marked for a moment.
       const added = c.status === 'applied' ? c.target.item_id : null;
-      if (typeof added === 'string') setCard({ id: added, ...anchorOf(added) });
+      if (typeof added === 'string') {
+        requestAnimationFrame(() => {
+          const row = wrap.current?.querySelector<HTMLElement>(
+            `[data-bar-id="${CSS.escape(added)}"],[data-item-id="${CSS.escape(added)}"]`,
+          );
+          row?.scrollIntoView({ block: 'center' });
+          row?.setAttribute('data-just-added', 'true');
+          setTimeout(() => row?.removeAttribute('data-just-added'), 2000);
+          setCard({ id: added, ...anchorOf(added) });
+        });
+      }
       return true;
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : 'Oracle could not add it' });
@@ -2754,6 +2864,8 @@ export function SimpleRoadmap() {
           onAdd={onAdd}
           target={target?.title ?? null}
           roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []}
+          tracks={addTracks}
+          track={addTrack}
         />
       )}
       {decides && !blank && (
@@ -3224,6 +3336,8 @@ export function SimpleRoadmap() {
                   onAdd={onAdd}
                   target={target?.title ?? null}
                   roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []}
+                  tracks={addTracks}
+                  track={addTrack}
                 />
               )}
               {!phone && goalCounters}

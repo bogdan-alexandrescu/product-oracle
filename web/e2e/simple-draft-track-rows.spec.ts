@@ -56,7 +56,6 @@ test("an item moved onto a track in a draft does not show that draft to the trac
     .getByTestId('card-track-edit')
     .getByLabel('Track')
     .selectOption({ label: 'Guided setup track' });
-  await panel(page).getByTestId('card-track-edit').getByRole('button', { name: 'Save' }).click();
   await expect(panel(page).getByTestId('card-track')).toHaveText('Guided setup track');
 
   await signOut(page);

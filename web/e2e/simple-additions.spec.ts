@@ -85,10 +85,13 @@ async function dragAdd(
   title: string,
   target: Locator,
   at: 'top' | 'middle' = 'middle',
+  track: string | null = 'Usage alerts track',
 ) {
   await page.getByLabel('Add an item').fill(title);
   // All roadmaps and more than one: quick add asks which (the Roadmap filter's spec).
   await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+  // roadmap-add: the track it goes on is picked, unless the drop is on a track band (null).
+  if (track) await page.getByTestId('quick-add-track').selectOption({ label: track });
   const chip = page.getByTestId('quick-add-chip');
   await expect(chip).toHaveAttribute('aria-disabled', 'false');
   // The chip and the target's top on screen together (the page's top).
@@ -121,6 +124,7 @@ async function sheetAdd(page: Page, title: string, where: string, button: 'Add' 
   await sheet.getByLabel('Title').fill(title);
   await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
   await sheet.getByLabel('Where').selectOption({ label: where });
+  await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
   await sheet.getByRole('button', { name: button, exact: true }).click();
   await expect(sheet).toBeHidden();
 }
@@ -263,7 +267,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(c.getByTestId('item-merged')).toHaveText('Merged into F-79 Weekly alert digest');
       await boardCard(page, 'alert-digest').click();
       await expect(page.getByTestId('floating-card').getByTestId('card-reasons')).toContainText(
-        `Merged ${TWIN} (${TWIN_KEY}) into it.`,
+        new RegExp(`Merged F-\\d+ ${TWIN} \\(${TWIN_KEY}\\) into it\\.`),
       );
       await page.getByTestId('floating-card').getByRole('button', { name: 'Close' }).click();
 
@@ -317,7 +321,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await openRoadmap(page);
       await expect(page.getByTestId('group-track')).toHaveAttribute('aria-pressed', 'true');
       const guided = page.getByTestId('chart-group').filter({ hasText: 'Guided setup track' });
-      await dragAdd(page, 'Team usage report', guided);
+      await dragAdd(page, 'Team usage report', guided, 'middle', null);
       await expect(toastWith(page, 'Added Team usage report as a draft')).toBeVisible();
       await expect(bar(page, 'team-usage-report')).toBeVisible();
       await expect.poll(() => groupOf(page, 'Team usage report')).toBe('Guided setup track');
@@ -331,7 +335,7 @@ for (const scheme of ['light', 'dark'] as const) {
         .getByTestId('timeline-lane')
         .filter({ hasText: 'Guided setup track' })
         .locator('[data-add-where]');
-      await dragAdd(page, 'Setup tips by mail', head);
+      await dragAdd(page, 'Setup tips by mail', head, 'middle', null);
       await expect(toastWith(page, 'Added Setup tips by mail as a draft')).toBeVisible();
       await expect.poll(() => bandOf(page, 'setup-tips-by-mail')).toBe('Guided setup track');
       expect(await bandOf(page, 'team-usage-report')).toBe('Guided setup track');
@@ -368,6 +372,8 @@ for (const scheme of ['light', 'dark'] as const) {
         page,
         'Rule import from a file',
         page.getByTestId('chart-group').filter({ hasText: 'Guided setup track' }),
+        'middle',
+        null,
       );
       await expect(
         toastWith(

@@ -387,7 +387,9 @@ async def test_a_feature_added_in_simple_lands_on_the_company_roadmap(client):
         "before": {}, "after": {"title": "Night alerts digest"}})  # fmt: skip
     assert r.status_code == 201, r.text
     async with tenant_session(ctx.tenant_id) as s:
-        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.title == "Night alerts digest"))
+        row = await s.scalar(
+            select(RoadmapItem).where(RoadmapItem.title.endswith(" Night alerts digest"))
+        )
         assert row is not None and row.roadmap_document_id == ids["company"]
         # A goal with no items yet files its suggestions under the company roadmap too.
         doc = await additions._job_document(s, await s.get(Entity, goal_id))

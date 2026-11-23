@@ -61,6 +61,7 @@ async function quickAdd(
   title: string,
   where: string,
   button: 'Add' | 'Propose',
+  track: string,
   roadmap?: string,
 ) {
   if (phone) {
@@ -77,6 +78,8 @@ async function quickAdd(
     } else {
       await expect(page.getByTestId('quick-add-roadmap')).toHaveCount(0);
     }
+    // roadmap-add: the track it goes on is picked (dropped off a track row, nothing goes without one).
+    await page.getByTestId('quick-add-track').selectOption({ label: track });
     await expect(page.getByTestId('quick-add-chip')).toHaveAttribute('aria-disabled', 'false');
     // QA2 qa-simple-roadmap-10: a desktop's Enter adds at once (no sheet repeating the row's
     // fields); a place other than the first is chosen by dragging the chip onto it.
@@ -96,6 +99,7 @@ async function quickAdd(
   await expect(sheet).toBeVisible();
   await sheet.getByLabel('Title').fill(title);
   await sheet.getByLabel('Where').selectOption({ label: where });
+  await sheet.getByLabel('Track').selectOption({ label: track });
   if (roadmap && phone) {
     // fix4 qa-simple-roadmap-14: nothing goes until a roadmap is chosen, and the sheet says so.
     await sheet.getByRole('button', { name: button, exact: true }).click();
@@ -142,7 +146,7 @@ for (const [where, use] of [
         await expect(boardCard(page, 'price-tiers')).toHaveCount(0);
         if (!phone)
           await expect(page.getByTestId('quick-add-target')).toHaveText('to Onboarding roadmap');
-        await quickAdd(page, phone, 'Referral rewards', 'Next', 'Add');
+        await quickAdd(page, phone, 'Referral rewards', 'Next', 'Add', 'Guided setup track');
         await expect(toastWith(page, 'Added Referral rewards as a draft')).toBeVisible();
         await expect(boardCard(page, 'referral-rewards')).toHaveCount(1);
         // one-feature-panel: the added item opens its panel; closing it gives the page back.
@@ -193,7 +197,15 @@ for (const [where, use] of [
         await login(page);
         await openBoard(page);
         await expect(page.getByTestId('roadmap-scope')).toHaveText('All roadmaps');
-        await quickAdd(page, phone, 'Partner badges', 'Later', 'Add', 'Onboarding roadmap');
+        await quickAdd(
+          page,
+          phone,
+          'Partner badges',
+          'Later',
+          'Add',
+          'Guided setup track',
+          'Onboarding roadmap',
+        );
         await expect(toastWith(page, 'Added Partner badges as a draft')).toBeVisible();
         await expect(boardCard(page, 'partner-badges')).toHaveCount(1);
         // one-feature-panel: the added item opens its panel; closing it gives the page back.
@@ -245,7 +257,7 @@ for (const [where, use] of [
           'Onboarding roadmap',
         ]);
         await pick(page, 'Alerts roadmap');
-        await quickAdd(page, phone, 'Alert snooze', 'Next', 'Propose');
+        await quickAdd(page, phone, 'Alert snooze', 'Next', 'Propose', 'Usage alerts track');
         await expect(toastWith(page, /Proposed Alert snooze/)).toBeVisible();
         await page.goto('/home');
         if (phone) {
