@@ -2326,6 +2326,31 @@ export function SimpleRoadmap() {
   const removeFeature = useFeatureDelete(reload, toast, (id) =>
     setCard((c) => (c?.id === id ? null : c)),
   );
+  // de-r1 (part 4): with a bar or card selected (its panel open), Delete or Backspace moves it to
+  // Trash at once with Undo in the note, as the panel's Move to Trash (who may only propose, proposes).
+  // Never while a field has the keys.
+  useEffect(() => {
+    const it = card ? byId.get(card.id) : undefined;
+    if (!it || closedItem(it) || !(it.can_decide || canChange)) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="alertdialog"]'))
+        return;
+      e.preventDefault();
+      void removeFeature({
+        id: it.id,
+        title: itemName(it),
+        parts: it.parts,
+        propose: !it.can_decide,
+        deciders: it.deciders,
+        now: it.can_decide,
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [card, byId, canChange, removeFeature]);
   const onRowMenu = (e: ReactMouseEvent) => {
     const el = (e.target as Element).closest('[data-bar-id],[data-item-id]');
     const it = el
