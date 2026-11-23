@@ -26,8 +26,10 @@
   /version is asked without one and IAP turns it away.
 - test_laptop_deploy_*: protects=ops/deploy/deploy-api.sh (laptop deploys) passes the serving
   revision's ORACLE_MIGRATE_AT_START through, never deploys when it can not read it, and only
-  prints the traffic-only rollback once Actions deploys are on (or it can not tell);
-  fails_when=a laptop deploy drops the value or deploys beside the Actions job.
+  prints the traffic-only rollback once Actions deploys are on (or it can not tell), and reads
+  gcloud's ^<delim>^ form (values with commas, such as a JSON list) as well as NAME=value,...;
+  fails_when=a laptop deploy drops the value, deploys beside the Actions job, refuses or
+  rewrites the ^<delim>^ form, or lets ORACLE_MIGRATE_AT_START in through it.
 """
 
 import json
@@ -271,13 +273,15 @@ def test_version_routes_are_asked_with_an_iap_id_token():
     assert "IAP_AUDIENCE_API" in required and "IAP_AUDIENCE_WEB" in required
 
 
-def _laptop(env: dict, *extra: str) -> subprocess.CompletedProcess:
+def _laptop(
+    env: dict, *extra: str, env_vars: str = "ORACLE_ENV=prod,ORACLE_EXAMPLE=1"
+) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
             "bash",
             str(LAPTOP),
             "example-image@sha256:abc",
-            "ORACLE_ENV=prod,ORACLE_EXAMPLE=1",
+            env_vars,
             *extra,
         ],
         env=env,
@@ -299,6 +303,52 @@ def test_laptop_deploy_passes_migrate_at_start_through(tmp_path):
     # Then the traffic moves to it (an Actions deploy left it on one revision).
     assert "update-traffic oracle-api" in calls[-1] and "--to-latest" in calls[-1]
     assert "--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1,ORACLE_MIGRATE_AT_START=0" in deploy[0]
+
+
+def test_laptop_deploy_reads_the_alternate_delimiter_form(tmp_path):
+    """Values with commas pass through intact in gcloud's ^##^ form, the kept value appended."""
+    serving = {"r1": {"ORACLE_MIGRATE_AT_START": "0"}}
+    given = (
+        '^##^ORACLE_ENV=prod##ORACLE_IAP_BACKENDS=["a-be","b-be"]'
+        '##ORACLE_IAP_AUDIENCES=["/projects/N/global/backendServices/M"]'
+    )
+    env = _fake(tmp_path / "alt", serving)
+    r = _laptop(env, "--set-secrets=EXAMPLE_KEY=example-key:latest", env_vars=given)
+    assert r.returncode == 0, r.stdout + r.stderr
+    deploy = [c for c in _calls(env).splitlines() if c.startswith("gcloud run deploy")]
+    assert len(deploy) == 1
+    assert f"--set-env-vars={given}##ORACLE_MIGRATE_AT_START=0 " in deploy[0]
+    assert deploy[0].endswith(" --set-secrets=EXAMPLE_KEY=example-key:latest")
+    # Another delimiter is kept as given too.
+    colon = _fake(tmp_path / "colon", serving)
+    r = _laptop(colon, env_vars="^:^ORACLE_ENV=prod:ORACLE_LIST=a,b")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "--set-env-vars=^:^ORACLE_ENV=prod:ORACLE_LIST=a,b:ORACLE_MIGRATE_AT_START=0" in _calls(
+        colon
+    )
+    # The plain comma form still works the same.
+    plain = _fake(tmp_path / "plain", serving)
+    r = _laptop(plain)
+    assert r.returncode == 0, r.stdout + r.stderr
+    deploy = [c for c in _calls(plain).splitlines() if c.startswith("gcloud run deploy")]
+    assert deploy[0].endswith(
+        "--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1,ORACLE_MIGRATE_AT_START=0"
+    )
+
+
+def test_laptop_deploy_refuses_migrate_at_start_in_either_form(tmp_path):
+    """ORACLE_MIGRATE_AT_START given in the arguments is refused, in the ^##^ form as well."""
+    for case, given in {
+        "alt-first": '^##^ORACLE_MIGRATE_AT_START=1##ORACLE_LIST=["a","b"]',
+        "alt-later": '^##^ORACLE_LIST=["a","b"]##ORACLE_MIGRATE_AT_START=1',
+        "plain-later": "ORACLE_ENV=prod,ORACLE_MIGRATE_AT_START=1",
+        "no-delimiter": "^^ORACLE_ENV=prod",
+        "unclosed": "^##ORACLE_ENV=prod",
+    }.items():
+        env = _fake(tmp_path / case, {"r1": {"ORACLE_MIGRATE_AT_START": "0"}})
+        r = _laptop(env, env_vars=given)
+        assert r.returncode != 0, case
+        assert "gcloud run deploy" not in _calls(env), case
 
 
 def test_laptop_deploy_never_deploys_blind_or_over_the_kept_value(tmp_path):

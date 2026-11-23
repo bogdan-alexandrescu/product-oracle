@@ -4,6 +4,7 @@ import { createNodeResolver, importX } from 'eslint-plugin-import-x';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
+import sonarjs from 'eslint-plugin-sonarjs';
 import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 import { configs as tseslintConfigs } from 'typescript-eslint';
@@ -291,6 +292,23 @@ const eslintConfig = defineConfig([
       'lib/api/mock/goal-ladder.ts',
     ],
     rules: { 'max-lines': 'off' },
+  },
+  // #1585 phase 3b, cognitive complexity, ai-studio's threshold, at error with the same
+  // suppressions baseline. Only this sonarjs rule; a function over it is split, never given more.
+  {
+    plugins: { sonarjs },
+    rules: { 'sonarjs/cognitive-complexity': ['error', 15] },
+  },
+  {
+    // Tests (unit and Playwright), fixtures and generated code.
+    files: [
+      '**/*.test.{ts,tsx}',
+      '**/*.spec.ts',
+      'e2e/**',
+      '**/fixtures.ts',
+      '**/__generated__/**',
+    ],
+    rules: { 'sonarjs/cognitive-complexity': 'off' },
   },
   {
     plugins: { typography: { rules: { 'no-arbitrary-text-size': TEXT_SIZE_RULE } } },
