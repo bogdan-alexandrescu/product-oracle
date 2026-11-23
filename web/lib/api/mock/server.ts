@@ -12645,7 +12645,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       welcome_dismissed: false,
       slack_pings: { ...SLACK_PINGS },
     });
-    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap.
+    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap
+    // (owner-filter: and an Owner pick of a person who owns nothing on it now).
     if (
       localStorage.getItem(MOCK_SCENARIO_KEY) === STALE_SIMPLE_FILTERS_SCENARIO &&
       mine.simple_filters === undefined
@@ -12654,7 +12655,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         prd: 'retired-example-prd',
         goal: 'retired-example-goal',
         track: '',
-        owner: '',
+        owner: 'retired-example-person',
       };
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === 'PATCH') {
