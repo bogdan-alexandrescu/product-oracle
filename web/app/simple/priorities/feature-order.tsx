@@ -34,7 +34,7 @@ export function useFeatureOrder({
   setError,
   noteId,
 }: {
-  data: Out;
+  data: Pick<Out, 'rows' | 'proposals'> | undefined;
   reload: () => Promise<void> | void;
   setNote: (n: { id: number; text: ReactNode; changes?: string[] } | null) => void;
   /** The note's own id (goal-buckets' nextNoteId). */
@@ -42,14 +42,17 @@ export function useFeatureOrder({
   setError: (e: string | null) => void;
 }) {
   const [local, setLocal] = useState<{ key: string; codes: string[] } | null>(null);
+  const rows = data?.rows ?? [];
+  // A row by its item's key, its feature's short code, or its feature's or item's id (the Goal map's chips).
   const rowOf = (code: string): Row | undefined =>
-    data.rows.find((r) => r.code === code) ??
-    data.rows.find((r) => !!r.short_code && r.short_code === code);
+    rows.find((r) => r.code === code) ??
+    rows.find((r) => !!r.short_code && r.short_code === code) ??
+    rows.find((r) => r.feature_id === code || r.item_id === code);
   const pending = (code: string): boolean => {
     const r = rowOf(code);
     return (
       !!r &&
-      data.proposals.some((p) => p.feature_id === r.feature_id && p.op === 'override_priority')
+      !!data?.proposals.some((p) => p.feature_id === r.feature_id && p.op === 'override_priority')
     );
   };
   /** The codes as shown: a move in flight first, else as given. */
@@ -102,11 +105,7 @@ export function useFeatureOrder({
       await reload();
       setNote({
         id: noteId(),
-        text: (
-          <>
-            {r.applies ? 'Moved' : 'Proposed moving'} {r.title} to rank {position}
-          </>
-        ),
+        text: `${r.applies ? 'Moved' : 'Proposed moving'} ${r.title} to rank ${position}`,
         changes: r.applies ? [out.change.id] : undefined,
       });
     } catch (e) {
