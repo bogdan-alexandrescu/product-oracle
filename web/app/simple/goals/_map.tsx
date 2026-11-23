@@ -11,9 +11,14 @@
 import { Link, useRouter, useSearchParams } from '@/lib/nav';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
-import { toast as dsToast, type ToastAsk } from '@/components/ds';
+import { Button, toast as dsToast, type ToastAsk } from '@/components/ds';
 import { Icon } from '@/components/ds/Icon';
 import { InfoTip } from '@/components/ds/InfoTip';
+import {
+  ITEM_GOING_EVENT,
+  useFeatureDelete,
+  type ItemGoingDetail,
+} from '@/components/simple/FeatureDelete';
 import { FeatureName } from '@/components/simple/FeatureName';
 import { NewPrdSheet, useCanStartPrd } from '@/components/simple/NewPrd';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
@@ -23,7 +28,7 @@ import { joinTwins } from '@/lib/goal-map-twins';
 import { keyResults, type KeyResults } from '@/lib/key-results';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { propose, resultWords, undo, type ChangeResult } from '../roadmap/_lib';
+import { ChangeFailed, propose, resultWords, undo, type ChangeResult } from '../roadmap/_lib';
 import { Editor, type Edit, type EditSave } from './_editors';
 import { FeaturePanel, type Placement } from './_panel';
 
@@ -198,6 +203,23 @@ interface Ctx {
   onEdit: (e: Edit) => void;
   /** Whether this person may start a PRD (New PRD from it). */
   canPrd: boolean;
+  /** de-gm: whether this person may add, rename or move features here (applied or proposed, as the change engine decides). */
+  canChange: boolean;
+  /** de-gm: features typed in and not yet back from the API, shown at once in their cell. */
+  ghosts: Ghost[];
+  addHere: (title: string, goal: string, track: string | null) => void;
+  /** de-gm: chips dragged to another cell, shown there before the API answers (by ringOf). */
+  shifted: Map<string, { goal: string; track: string | null }>;
+  dropOn: (key: string, goal: string, track: string | null) => void;
+}
+
+interface Ghost {
+  key: number;
+  title: string;
+  goal: string;
+  track: string | null;
+  /** Filed as a proposal: it waits for someone who decides. */
+  proposed?: boolean;
 }
 
 const mWords = (m: M, c: { mcode: Map<string, string> }) =>
@@ -526,7 +548,10 @@ function useActs(
     const m = map.milestones.find((x) => x.id === id);
     return m ? mWords(m, { mcode }) : 'No milestone';
   };
-  const failed = (e: unknown) => toast({ message: errorMessage(e) });
+  const failed = (e: unknown) => {
+    toast({ message: e instanceof ChangeFailed ? e.message : errorMessage(e) });
+  };
+  const remove = useFeatureDelete(reload, toast);
   type Link = Pick<GmFeature['links'][number], 'milestone' | 'expected' | 'confidence'>;
   // A link put (back) on a milestone, with its own expected lift and confidence, filed under the
   // feature's own area, else the map's first.
@@ -740,6 +765,28 @@ function useActs(
     },
     rename: async (id: string, name: string, was: string) => {
       const m = map.milestones.find((x) => x.id === id);
+      // de-gm: a feature's chip renames it through the change engine (proposed for who may only propose).
+      if (!m && !map.goals.some((g) => g.id === id)) {
+        // The new name shows at once; a refusal reads the map again, so the old one comes back.
+        setMap({
+          ...map,
+          features: map.features.map((x) => (x.id === id ? { ...x, name } : x)),
+          unplaced: map.unplaced.map((x) => (x.id === id ? { ...x, name } : x)),
+        });
+        try {
+          const r = await propose({
+            op: 'edit_title',
+            target: { item_id: id },
+            before: { title: was },
+            after: { title: name },
+          });
+          await change(r, `Renamed ${was} to ${name}`, `Renamed ${name} back to ${was}`);
+        } catch (e) {
+          failed(e);
+          await reload();
+        }
+        return;
+      }
       // A goal's name through its goal bucket, its measure, target and date as they are.
       const goalTo = async (title: string, seen: string) => {
         const b = (await unwrap(api.GET('/v1/simple/goal-buckets'))).goals.find((x) => x.id === id);
@@ -784,19 +831,70 @@ function useActs(
         failed(e);
       }
     },
-    trashFeature: async (f: Chip) => {
+    /** de-gm: a feature typed into a cell: it serves that goal (on its next open milestone) on that track, with its code. */
+    create: async (title: string, goal: string, track: string | null, roadmap?: string) => {
       try {
         const r = await propose({
-          op: 'delete_item',
-          target: { item_id: f.id },
-          before: { deleted: false },
-          after: { deleted: true },
+          op: 'add_item',
+          target: { roadmap_id: roadmap ?? null, where: { kind: 'goal', value: goal } },
+          before: {},
+          after: track ? { title, track_id: track } : { title },
         });
-        await change(r, `Moved ${named(f)} to Trash`, `Put back ${named(f)}`);
+        const id = r.change.target.item_id;
+        if (r.change.status !== 'applied' || typeof id !== 'string') {
+          toast({ message: resultWords(r, `Added ${title}`) });
+          return 'proposed' as const;
+        }
+        const ms = map.milestones.filter((m) => m.goal === goal).sort(byDate);
+        const m = ms.find((x) => x.status !== 'met') ?? ms[0];
+        if (m)
+          await attach(
+            {
+              id,
+              name: title,
+              f: null,
+              m: null,
+              ms: [],
+              goal,
+              track,
+              done: false,
+              lift: 'not_measured',
+            },
+            { milestone: m.id, expected: '', confidence: 'Medium' },
+          );
+        // Its track as the roadmap reads it, then the cell's.
+        const now = await unwrap(api.GET('/v1/simple/roadmap', { params: { query: {} } }));
+        const had = now.items.find((i) => i.id === id)?.track?.id ?? null;
+        if (had !== track)
+          await propose({
+            op: 'set_track',
+            target: { item_id: id },
+            before: { track_id: had },
+            after: { track_id: track },
+          });
+        await reload();
+        setMoved(ringOf(id, goal));
+        toast({
+          message: `Added ${title}`,
+          action: r.change.can_undo
+            ? {
+                label: 'Undo',
+                onClick: () =>
+                  void undo(r.change.id)
+                    .then(reload)
+                    .then(() => toast({ message: `Took back ${title}` }), failed),
+              }
+            : undefined,
+        });
+        return 'applied' as const;
       } catch (e) {
         failed(e);
+        await reload();
+        return 'failed' as const;
       }
     },
+    // de-gm: Move to Trash at once (its chip hidden before the call returns), with Undo in the note.
+    trashFeature: (f: Chip) => remove({ id: f.id, title: named(f), now: true }),
     trashMilestone: async (m: M) => {
       try {
         await unwrap(
@@ -943,6 +1041,11 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
       (a, b) => (a.m ? order.get(a.m.id)! : all.length) - (b.m ? order.get(b.m.id)! : all.length),
     );
   const n = goals.length;
+  // de-gm: a chip dragged to another cell sits there at once, before the API answers.
+  const at = (f: Chip) => c.shifted.get(ringOf(f.id, f.goal)) ?? f;
+  const clickAt = useRef<number | undefined>(undefined);
+  const inCell = (goal: string, track: string | null) =>
+    chips.filter((f) => at(f).goal === goal && at(f).track === track);
   return (
     <div className="flex flex-col gap-3 overflow-x-auto" data-testid="gm-grid">
       <div
@@ -1077,6 +1180,16 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                 data-testid="gm-cell"
                 data-track={t.id ?? 'none'}
                 data-goal={g.id}
+                onDragOver={(e) => {
+                  if (c.canChange && e.dataTransfer.types.includes('text/x-gm-chip'))
+                    e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  const key = e.dataTransfer.getData('text/x-gm-chip');
+                  if (!key) return;
+                  e.preventDefault();
+                  c.dropOn(key, g.id, t.id);
+                }}
               >
                 {/* simple-goals: an empty cell adds a feature of its track to its goal's first milestone (out of sight at rest, as a chip's ⋯). */}
                 {c.map.can_edit &&
@@ -1093,7 +1206,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                       </button>
                     </li>
                   )}
-                {inOrder(chips.filter((f) => f.goal === g.id && f.track === t.id)).map((f) => (
+                {inOrder(inCell(g.id, t.id)).map((f) => (
                   <li
                     key={f.id}
                     data-testid="gm-chip"
@@ -1101,13 +1214,44 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     data-goal={g.id}
                     data-track={t.id ?? 'none'}
                     data-moved={c.moved === ringOf(f.id, g.id) ? '1' : undefined}
+                    draggable={c.canChange && c.renaming !== ringOf(f.id, f.goal)}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/x-gm-chip', ringOf(f.id, f.goal));
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
                     className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-sm leading-[17px] ${c.moved === ringOf(f.id, g.id) ? 'border-accent bg-accent-soft ring-2 ring-accent' : 'border-line'}`}
                     style={{ borderLeft: `3px solid ${t.color}` }}
                   >
+                    {c.renaming === ringOf(f.id, f.goal) && (
+                      <Rename id={f.id} was={f.name} c={c} className="flex-1 text-sm" />
+                    )}
                     <button
                       type="button"
-                      onClick={() => c.onOpen(f)}
-                      className="min-w-0 flex-1 text-left"
+                      onClick={() => {
+                        // A double-click renames, so the panel waits a beat for a second click.
+                        window.clearTimeout(clickAt.current);
+                        clickAt.current = window.setTimeout(
+                          () => c.onOpen(f),
+                          c.canChange ? 220 : 0,
+                        );
+                      }}
+                      onDoubleClick={() => {
+                        window.clearTimeout(clickAt.current);
+                        if (c.canChange) c.setRenaming(ringOf(f.id, f.goal));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'F2' && c.canChange) {
+                          e.preventDefault();
+                          c.setRenaming(ringOf(f.id, f.goal));
+                        } else if (
+                          (e.key === 'Delete' || e.key === 'Backspace') &&
+                          c.map.can_edit
+                        ) {
+                          e.preventDefault();
+                          void c.act.trashFeature(f);
+                        }
+                      }}
+                      className={`min-w-0 flex-1 text-left ${c.renaming === ringOf(f.id, f.goal) ? 'hidden' : ''}`}
                     >
                       <span
                         data-testid="gm-chip-name"
@@ -1129,12 +1273,76 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     <Slot f={f} c={c} />
                   </li>
                 ))}
+                {c.ghosts
+                  .filter((x) => x.goal === g.id && x.track === t.id)
+                  .map((x) => (
+                    <li
+                      key={x.key}
+                      data-testid="gm-chip-pending"
+                      data-proposed={x.proposed ? '1' : undefined}
+                      aria-busy={!x.proposed}
+                      className="flex items-center gap-1 rounded-lg border border-dashed border-line bg-surface px-2 py-0.5 text-sm leading-[17px] opacity-60"
+                      style={{ borderLeft: `3px solid ${t.color}` }}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{x.title}</span>
+                      {x.proposed && (
+                        <span className="text-xs text-text2" title="Waiting for a decision">
+                          ◷
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                {c.canChange && <CellAdd goal={g.id} track={t.id} c={c} />}
               </ul>
             ))}
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+/** de-gm: a cell's faint + Add (out of sight at rest, as a chip's ⋯): type, Enter adds a feature there and keeps the
+ * field for the next; Esc or leaving it empty closes it. */
+function CellAdd({ goal, track, c }: { goal: string; track: string | null; c: Ctx }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState('');
+  if (!open)
+    return (
+      <li className="sr-only group-hover:not-sr-only group-focus-within:not-sr-only max-[600px]:not-sr-only">
+        <Button
+          variant="ghost"
+          data-testid="gm-cell-new"
+          className="h-6 justify-start px-1"
+          onClick={() => setOpen(true)}
+        >
+          + Add
+        </Button>
+      </li>
+    );
+  return (
+    <li>
+      <input
+        autoFocus
+        aria-label="Add a feature"
+        data-testid="gm-cell-input"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => {
+          if (!v.trim()) setOpen(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setV('');
+            setOpen(false);
+          } else if (e.key === 'Enter' && v.trim()) {
+            c.addHere(v.trim(), goal, track);
+            setV('');
+          }
+        }}
+        className="w-full min-w-0 rounded-md border border-accent bg-surface px-1.5 py-0.5 text-sm outline-none ring-2 ring-accent/30"
+      />
+    </li>
   );
 }
 
@@ -1363,6 +1571,25 @@ export function GoalMapPage() {
   const [mover, setMover] = useState<Chip | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [moved, setMoved] = useState<string | null>(null);
+  const [ghosts, setGhosts] = useState<Ghost[]>([]);
+  // de-gm: a feature going to Trash leaves its cell before the API answers (back if it refuses).
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { id, going } = (e as CustomEvent<ItemGoingDetail>).detail;
+      setGone((s) => {
+        const n = new Set(s);
+        if (going) n.add(id);
+        else n.delete(id);
+        return n;
+      });
+    };
+    window.addEventListener(ITEM_GOING_EVENT, on);
+    return () => window.removeEventListener(ITEM_GOING_EVENT, on);
+  }, []);
+  const [shifted, setShifted] = useState<Map<string, { goal: string; track: string | null }>>(
+    new Map(),
+  );
   const [panel, setPanel] = useState<Chip | null>(null);
   const [attach, setAttach] = useState<string | null>(null);
   const [attachTrack, setAttachTrack] = useState<string | null>(null);
@@ -1432,8 +1659,8 @@ export function GoalMapPage() {
           ]
         : [],
     );
-    return [...placed, ...loose];
-  }, [map, trackOf, doneOf]);
+    return [...placed, ...loose].filter((c) => !gone.has(c.id));
+  }, [map, trackOf, doneOf, gone]);
   const tracks = useMemo((): Track[] => {
     const rows: Track[] = [...(roadmap.data?.tracks ?? [])].map((t, i) => ({
       id: t.id,
@@ -1499,6 +1726,48 @@ export function GoalMapPage() {
     go: (href) => router.push(href),
     onEdit: setEdit,
     canPrd,
+    canChange: map.can_edit || (roadmap.data.roadmaps ?? []).some((r) => r.can_change),
+    ghosts,
+    addHere: (title, goal, track) => {
+      // The roadmap of a feature already serving that goal, else one this person decides on (as the Roadmap's quick add).
+      const items = roadmap.data?.items ?? [];
+      const here = new Set(chips.filter((x) => x.goal === goal).map((x) => x.id));
+      const rm =
+        roadmap.data?.roadmap?.id ??
+        items.find((i) => here.has(i.id))?.roadmap.id ??
+        items.find((i) => i.can_decide)?.roadmap.id;
+      const key = Date.now() + Math.random();
+      setGhosts((xs) => [...xs, { key, title, goal, track }]);
+      // A proposal keeps its chip, marked as waiting, till someone who decides accepts it.
+      void act
+        .create(title, goal, track, rm)
+        .then((how) =>
+          setGhosts((xs) =>
+            how === 'proposed'
+              ? xs.map((x) => (x.key === key ? { ...x, proposed: true } : x))
+              : xs.filter((x) => x.key !== key),
+          ),
+        );
+    },
+    shifted,
+    // de-gm: a chip dropped on another cell takes that cell's track, then (on its next open milestone) its goal.
+    dropOn: (key, goal, track) => {
+      const f = chips.find((x) => ringOf(x.id, x.goal) === key);
+      if (!f || (f.goal === goal && f.track === track)) return;
+      const ms = map.milestones.filter((m) => m.goal === goal).sort(byDate);
+      const to = ms.find((m) => m.status !== 'met') ?? ms[0];
+      setShifted((m) => new Map(m).set(key, { goal: to ? goal : f.goal, track }));
+      void (async () => {
+        if (f.track !== track) await act.track(f, track);
+        if (f.goal !== goal && to) await act.move({ ...f, track }, to.id);
+      })().finally(() =>
+        setShifted((m) => {
+          const n = new Map(m);
+          n.delete(key);
+          return n;
+        }),
+      );
+    },
   };
   const add = async (feature: string, milestone: string, expected: string, from: string | null) => {
     const name =
