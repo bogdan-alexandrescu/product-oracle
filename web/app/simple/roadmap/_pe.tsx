@@ -47,7 +47,12 @@ type K =
   | 'measure'
   | 'target'
   | 'owner'
-  | 'decider';
+  | 'decider'
+  | 'tdate'
+  | 'outcome'
+  | 'notes'
+  | 'horizon'
+  | 'track';
 type Vals = Record<K, string> & { deps: string[]; needed: string[] };
 const LABEL: Record<K, string> = {
   title: 'Name',
@@ -61,6 +66,11 @@ const LABEL: Record<K, string> = {
   target: 'Target',
   owner: 'Owner',
   decider: 'Decider',
+  tdate: 'Date',
+  outcome: 'Outcome',
+  notes: 'Notes',
+  horizon: 'Horizon',
+  track: 'Track',
 };
 const OPTIONS: Partial<Record<K, string[]>> = {
   status: ['Draft', 'Planned', 'In progress', 'Done'],
@@ -68,9 +78,18 @@ const OPTIONS: Partial<Record<K, string[]>> = {
   owner: PE_PEOPLE.map((p) => p.name),
   decider: PE_PEOPLE.map((p) => p.name),
   milestone: PE_MILESTONES,
+  horizon: ['Now', 'Next', 'Later'],
+  track: ['Usage alerts track', 'Billing track', 'Onboarding track'],
   goal: ['Grow retention', 'Win mid-size teams', 'Cut time to first value'],
 };
 const KEYS: Partial<Record<K, string>> = { start: 'S', end: 'E', owner: 'O', milestone: 'M', status: 'T' };
+
+/** A text field grows to show all its words (a long name wraps instead of being cut). */
+const grow = (el: HTMLTextAreaElement | null) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight + 2}px`;
+};
 
 const Pencil = () => (
   <svg aria-hidden width="13" height="13" viewBox="0 0 16 16" className="flex-none">
@@ -122,12 +141,17 @@ export function PePanel({
     title: hard ? PE_HARD.title : item.title,
     start: day(item.start.date),
     end: day(item.end.date),
-    status: 'Draft',
+    status: 'In progress',
     confidence: item.confidence ? item.confidence[0].toUpperCase() + item.confidence.slice(1) : 'High',
     milestone: item.milestone?.name ?? '',
     goal: item.goal?.title ?? 'Grow retention',
     measure: 'Teams active after 90 days',
-    target: '70% of teams by Mar 31, 2027',
+    target: '70% of teams',
+    tdate: 'Mar 31, 2027',
+    outcome: '',
+    notes: '',
+    horizon: 'Now',
+    track: 'Usage alerts track',
     owner: item.owner?.name ?? '',
     decider: 'Avery Stone',
     deps: hard ? PE_HARD.deps : item.depends_on.map(name),
@@ -176,7 +200,7 @@ export function PePanel({
     const before = vals;
     if (JSON.stringify(v[k]) === JSON.stringify(val)) return;
     if (draftVals) return setDraftVals({ ...draftVals, [k]: val });
-    setVals({ ...vals, [k]: val, ...(k === 'owner' && vals.status === 'Draft' ? { status: 'Planned' } : {}) });
+    setVals({ ...vals, [k]: val });
     setChanged((c) => new Set(c).add(k));
     if (k === 'owner' && flags.owner) setFlags({ ...flags, owner: false });
     if ((k === 'start' || k === 'end') && typeof val === 'string') {
@@ -220,10 +244,10 @@ export function PePanel({
   const suggested = PE_PEOPLE.slice(0, 2).map((p) => p.name);
   const fixOwner = (who: string) => {
     const before = { vals, flags };
-    setVals({ ...vals, owner: who, status: vals.status === 'Draft' ? 'Planned' : vals.status });
+    setVals({ ...vals, owner: who });
     setChanged((c) => new Set(c).add('owner'));
     setFlags({ ...flags, owner: false });
-    toast(`${who} owns it now, so the draft is confirmed`, () => {
+    toast(`${who} owns it now`, () => {
       setVals(before.vals);
       setFlags(before.flags);
     });
@@ -274,12 +298,12 @@ export function PePanel({
         <span className="pt-0.5"><Warn /></span>
         <span className="min-w-0 text-sm text-text">{PE_FLAGS[f]}</span>
       </span>
-      <span className="flex flex-wrap gap-1.5">
+      {!ro && <span className="flex flex-wrap gap-1.5">
         {f === 'owner' &&
           suggested.map((p, i) => (
             btn(p, () => fixOwner(p), i === 0, `pe-fix-owner-${i}`, p)
           ))}
-        {f === 'owner' && btn('Someone else', () => setOpen('owner'))}
+        {f === 'owner' && btn('Someone else', () => setOpen('owner'), false, 'pe-fix-owner-other')}
         {f === 'dates' && (
           <>
             {btn('Use these', () => fixDates(true), true, 'pe-fix-dates')}
@@ -292,7 +316,7 @@ export function PePanel({
             {btn('Remove link', () => fixLink('remove'))}
           </>
         )}
-      </span>
+      </span>}
     </div>
   );
   const onField = fix === 'a';
@@ -308,9 +332,11 @@ export function PePanel({
     const val = v[k];
     const opts = OPTIONS[k];
     const isOpen = open === k;
-    const hoverHeld = held === k;
+    const hoverHeld = held === k && !changed.has(k) && !isOpen;
     const empty = !val;
-    const shown = empty ? (k === 'owner' ? 'No owner yet' : k === 'milestone' ? 'No milestone' : '—') : val;
+    const shown = empty
+      ? ({ owner: 'No owner yet', milestone: 'No milestone', outcome: 'Not written yet', notes: 'No notes yet' } as Partial<Record<K, string>>)[k] ?? '—'
+      : val;
     const valueCls = `${empty ? 'text-text2' : ''} ${changed.has(k) && order === 'a' ? 'text-accent-ink font-[650]' : ''}`;
     if (ro || !editing)
       return (
@@ -329,16 +355,23 @@ export function PePanel({
       } ${k === 'title' ? 'text-lg font-[650] leading-6' : ''} ${valueCls}`;
       if (model === 'a' || model === 'c' || isOpen)
         return (
-          <input
+          <textarea
             data-testid={`pe-input-${k}`}
             data-hover={hoverHeld}
             aria-label={LABEL[k]}
             autoFocus={isOpen && model !== 'a'}
             defaultValue={val}
             key={`${k}-${val}`}
+            rows={1}
+            placeholder={empty && k !== 'title' ? shown : undefined}
+            ref={grow}
+            onInput={(e) => grow(e.currentTarget)}
             onFocus={() => setOpen(k)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Enter' && !(k === 'notes' && e.shiftKey)) {
+                e.preventDefault();
+                (e.target as HTMLTextAreaElement).blur();
+              }
               if (e.key === 'Escape') {
                 (e.target as HTMLInputElement).value = val;
                 setOpen(null);
@@ -346,7 +379,7 @@ export function PePanel({
               }
             }}
             onBlur={(e) => commit(k, e.target.value)}
-            className={`${inputCls} ${wide ? '' : ''}`}
+            className={`${inputCls} block resize-none break-words placeholder:text-text2 ${wide ? '' : ''}`}
           />
         );
     }
@@ -373,7 +406,7 @@ export function PePanel({
               <Pencil />
             </span>
           )}
-          {model === 'd' && KEYS[k] && (
+          {model === 'd' && !phone && KEYS[k] && (
             <kbd className="rounded border border-line px-1 font-mono text-xs text-text2">{KEYS[k]}</kbd>
           )}
           {model === 'a' && opts && (
@@ -477,7 +510,7 @@ export function PePanel({
                 const t = (e.target as HTMLInputElement).value.trim();
                 if (e.key === 'Enter' && t) {
                   setAdding(null);
-                  commit(which, [...list, `F-213 ${t}`], `Added F-213 ${t}, placed ${which === 'deps' ? 'before' : 'after'} this feature`);
+                  commit(which, [...list, t], `Added ${t}, placed ${which === 'deps' ? 'before' : 'after'} this feature`);
                 }
                 if (e.key === 'Escape') setAdding(null);
               }}
@@ -498,7 +531,7 @@ export function PePanel({
   };
 
   // ---- the head ----
-  const flagChip = nFlags > 0 && (
+  const flagChip = nFlags > 0 && !ro && (
     <button
       type="button"
       data-testid="pe-flags-badge"
@@ -509,9 +542,9 @@ export function PePanel({
     </button>
   );
   const head = (
+    <div>
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <span className="font-mono text-sm text-text2">{hard ? PE_HARD.code : (item.code ?? 'F-78')}</span>
         {order === 'b' || model === 'c' || ro ? (
           <h2 className="break-words text-lg font-[650] leading-6">
             {ro || !editing ? v.title : value('title')}
@@ -540,8 +573,19 @@ export function PePanel({
         ×
       </button>
     </div>
+        <span data-testid="pe-code" className="mt-0.5 flex flex-wrap items-center gap-x-1 text-sm text-text2">
+          Code {item.code ?? 'None'}
+          {!item.code && (
+            <>
+              {' · '}
+              <span className="text-warn">Not in the Ground Truth</span>
+              <InfoTip label="Not in the Ground Truth">Roadmap items that are no feature of the Ground Truth, or one only proposed so far.</InfoTip>
+            </>
+          )}
+        </span>
+    </div>
   );
-  const cmdBar = model === 'd' && !ro && (
+  const cmdBar = model === 'd' && !ro && !phone && (
     <div className="mt-2 flex items-center gap-2 rounded-lg border border-line bg-surface2 px-2 py-1">
       <kbd className="rounded border border-line px-1 font-mono text-xs text-text2">/</kbd>
       <input
@@ -568,15 +612,14 @@ export function PePanel({
     </div>
   );
   const strip =
-    (fix === 'b' || (fix === 'c' && step)) && nFlags > 0 ? (
+    (fix === 'b' || (fix === 'c' && (step || ro))) && nFlags > 0 ? (
       <div data-testid="pe-strip" className="mt-2 flex flex-col gap-2 rounded-lg border border-warn bg-warn-bg px-3 py-2">
-        {(fix === 'b'
+        {(fix === 'b' || ro
           ? (['owner', 'dates', 'link'] as const).filter((f) => flags[f])
           : (['owner', 'dates', 'link'] as const).filter((f) => flags[f]).slice(0, 1)
         ).map((f) => (
           <div key={f}>{flagBody(f, true)}</div>
         ))}
-        {fix === 'c' && <span className="text-sm text-text2">{nFlags} left</span>}
       </div>
     ) : null;
 
@@ -586,6 +629,30 @@ export function PePanel({
   );
   const ownerFlag = onField && flags.owner && !v.owner ? flagBody('owner') : null;
   const datesFlag = onField && flags.dates ? flagBody('dates') : null;
+  // The built panel's other fields, folded (every proposal keeps them; Notes grows as it is typed).
+  const line = (label: string, text: string) => (
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-x-3 py-1">
+      <span className="text-text2">{label}</span>
+      <span className="min-w-0 break-words">{text}</span>
+    </div>
+  );
+  const more = (
+    <details data-testid="pe-more" className="mt-2">
+      <summary className="cursor-pointer py-1 text-xs font-[650] uppercase tracking-wide text-text2">
+        More: outcome, notes, horizon, track, why
+      </summary>
+      {row('outcome')}
+      {row('notes')}
+      {row('horizon')}
+      {row('track')}
+      {line('PRD', 'Usage alerts')}
+      {line('Reading', 'Today 61% · target 70% of teams by Mar 31, 2027')}
+      {line('Near', 'Customer conference (Nov 14): ends 4 days before')}
+      {line('Why', 'Admins asked for it most this quarter. Serves the goal Grow retention.')}
+      {line('Open decisions', 'None')}
+      {line('Tasks', 'None')}
+    </details>
+  );
   let body: ReactNode;
   if (order === 'a')
     body = (
@@ -603,6 +670,7 @@ export function PePanel({
         {row('goal')}
         {row('measure')}
         {row('target')}
+        {row('tdate')}
         {h('Links')}
         <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 py-1">
           <span className="text-text2">Depends on</span>
@@ -612,6 +680,7 @@ export function PePanel({
           <span className="text-text2">Needed by</span>
           {links('needed')}
         </div>
+        {more}
       </>
     );
   else if (order === 'b')
@@ -634,6 +703,7 @@ export function PePanel({
           <summary className="cursor-pointer py-1 text-xs font-[650] uppercase tracking-wide text-text2">Goal and milestone</summary>
           {row('goal')}
           {row('target')}
+          {row('tdate')}
           {row('milestone')}
         </details>
         <details className="mt-1">
@@ -651,6 +721,7 @@ export function PePanel({
           <span className="mt-1 block text-sm text-text2">Needed by</span>
           {links('needed')}
         </details>
+        {more}
       </>
     );
   else
@@ -666,7 +737,8 @@ export function PePanel({
         {tile('confidence')}
         <div className="col-span-2">{tile('goal')}</div>
         {tile('target')}
-        {tile('decider')}
+        {tile('tdate')}
+        <div className="col-span-2">{tile('decider')}</div>
         <div className="col-span-2 rounded-lg border border-line px-2.5 py-1.5">
           <span className="text-sm text-text2">Depends on</span>
           {links('deps')}
@@ -675,6 +747,7 @@ export function PePanel({
           <span className="text-sm text-text2">Needed by</span>
           {links('needed')}
         </div>
+        <div className="col-span-2">{more}</div>
       </div>
     );
 

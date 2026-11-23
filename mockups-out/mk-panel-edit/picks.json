@@ -6,7 +6,7 @@
       "code": "PE1",
       "name": "How a field is edited",
       "question": "How should a person change a field in the feature panel?",
-      "common": "One panel for every feature (opened here from the Roadmap). Every field (name, dates, status, milestone, owner, goal, links) can be changed in the panel; each change saves on its own with an Undo in the corner, Oracle's suggestions can be used or kept aside, and a read-only viewer sees the same panel as plain text. Story in every proposal: move the feature's end date to Dec 4, and the Roadmap bar moves at once.",
+      "common": "One panel for every feature (opened here from the Roadmap). The fields the panel has today all stay: the main ones in view, and outcome, notes, horizon, track, PRD, reading, near, why, open decisions and tasks under More (see PE2). Each change saves on its own with an Undo in the corner, Oracle's suggestions can be used or kept aside, and a viewer sees the same panel as plain text, with the flags' words but no buttons. The panel keeps today's 'Code None · Not in the Ground Truth' line. A feature is added from + Add under Depends on or Needed by and is placed by that link, with no drag; a milestone is added at the foot of the Milestone list, and the '+ Milestone' hint on the time axis stays for a milestone with no feature yet. Story in every proposal: move the end date to Dec 4 (the Roadmap bar moves at once), act on a flag, then add a feature.",
       "proposals": [
         {
           "letter": "A",
@@ -31,23 +31,43 @@
             },
             {
               "file": "frames/pe1-a-saved.html",
-              "caption": "Enter saves it: the bar on the Roadmap now ends Dec 4, the value is marked as changed, Undo sits in the corner. 1 click in all, against 3 today."
+              "caption": "Enter saves it: the Roadmap bar now ends Dec 4 (its new risk line shows above the Roadmap), the row is marked as changed, Undo sits in the corner. 1 click, against 3 today."
+            },
+            {
+              "file": "frames/pe1-a-flag.html",
+              "caption": "One click on Mira Okafor under the owner flag: she owns it and the flag and its count are gone."
             },
             {
               "file": "frames/pe1-a-milestone.html",
-              "caption": "Adding a milestone is 2 clicks: open Milestone and type the new one at the foot of the list."
+              "caption": "Open Milestone and type a new one at the foot of the list."
+            },
+            {
+              "file": "frames/pe1-a-milestone-added.html",
+              "caption": "Enter: the new milestone is set on the feature and marked as changed. 2 clicks."
+            },
+            {
+              "file": "frames/pe1-a-add.html",
+              "caption": "+ Add under Needed by: typing the new feature, Alert sound picker."
+            },
+            {
+              "file": "frames/pe1-a-added.html",
+              "caption": "Enter, and the panel scrolled down to Needed by: it joins Needed by, placed after this feature by its link, with no drag. 1 click, against 2 and a drag today."
             },
             {
               "file": "frames/pe1-a-hard-1512.html",
-              "caption": "The hard case at 1512: a long name wraps in its field and 8 dependencies each keep their remove button."
+              "caption": "At 1512, a long name: it wraps in full in its field, and the 8 dependencies follow below with their remove buttons."
             },
             {
               "file": "frames/pe1-a-viewer-1512.html",
-              "caption": "A viewer who cannot change it sees plain text, no lines, no buttons; the (i) says who can."
+              "caption": "A viewer at 1512: plain text and the flags' words, no lines and no buttons; the (i) says who can change it."
             },
             {
               "file": "frames/pe1-a-mid-390.html",
               "caption": "On a phone the same field opens in the sheet; the keyboard's Enter saves it."
+            },
+            {
+              "file": "frames/pe1-a-mid-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe1-a-saved-dark.html",
@@ -65,7 +85,7 @@
           "frames": [
             {
               "file": "frames/pe1-b-rest.html",
-              "caption": "At rest: plain values, no links and no lines."
+              "caption": "At rest: plain values, no lines."
             },
             {
               "file": "frames/pe1-b-open.html",
@@ -80,20 +100,40 @@
               "caption": "Enter saves it and the Roadmap bar moves; Undo in the corner. 1 click, against 3 today."
             },
             {
+              "file": "frames/pe1-b-flag.html",
+              "caption": "One click on Mira Okafor under the owner flag: the flag and its count are gone."
+            },
+            {
               "file": "frames/pe1-b-milestone.html",
-              "caption": "A new milestone typed at the foot of the Milestone list: 2 clicks."
+              "caption": "A new milestone typed at the foot of the Milestone list."
+            },
+            {
+              "file": "frames/pe1-b-milestone-added.html",
+              "caption": "Enter: the milestone is set and marked. 2 clicks."
+            },
+            {
+              "file": "frames/pe1-b-add.html",
+              "caption": "+ Add under Needed by: typing Alert sound picker."
+            },
+            {
+              "file": "frames/pe1-b-added.html",
+              "caption": "Enter, and the panel scrolled down to Needed by: it joins Needed by, placed after this feature, no drag."
             },
             {
               "file": "frames/pe1-b-hard-1512.html",
-              "caption": "At 1512 with a long name and 8 dependencies: reads like A, minus the lines."
+              "caption": "At 1512, a long name wraps in full at the top, the same way as in A, minus the lines."
             },
             {
               "file": "frames/pe1-b-viewer-1512.html",
-              "caption": "A viewer at 1512: the same plain text, with no hover box and no pencil."
+              "caption": "A viewer at 1512: the same plain text and the flags' words, no buttons."
             },
             {
-              "file": "frames/pe1-b-mid-390.html",
-              "caption": "On a phone: with no hover, the panel gives no sign of which values open."
+              "file": "frames/pe1-b-rest-390.html",
+              "caption": "On a phone at rest: with no pointer to hover, nothing tells which values open."
+            },
+            {
+              "file": "frames/pe1-b-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe1-b-saved-dark.html",
@@ -107,7 +147,7 @@
           "recommended": false,
           "what": "The panel reads as plain text until Edit is pressed; then every field turns into a box at once, and Done saves all the changes together, with one Undo for the lot.",
           "plus": "A clear line between reading and changing; several changes can be made and checked before they count, which suits a review meeting.",
-          "cost": "Add a feature 3 clicks; move its dates 3 clicks (Edit, Ends, Done); set its owner 4 clicks; add a milestone 4 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Only the Save step is renamed Done; a change is lost if the panel is closed before Done, and a long name is cut off in its box.",
+          "cost": "Add a feature 3 clicks; move its dates 3 clicks (Edit, Ends, Done); set its owner 4 clicks; add a milestone 4 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Only the Save step is renamed Done; a change is lost if the panel is closed before Done.",
           "frames": [
             {
               "file": "frames/pe1-c-rest.html",
@@ -123,19 +163,35 @@
             },
             {
               "file": "frames/pe1-c-saved.html",
-              "caption": "The owner picked too, then Done saves both together and the bar moves. 3 clicks for the dates alone, 5 with the owner."
+              "caption": "The owner picked too, then Done saves both and the bar moves. 3 clicks for the dates alone, 5 with the owner."
+            },
+            {
+              "file": "frames/pe1-c-flag.html",
+              "caption": "Use these under Oracle's dates: the dates change and the flag is gone."
+            },
+            {
+              "file": "frames/pe1-c-add.html",
+              "caption": "Edit again, + Add under Needed by, typing Alert sound picker."
+            },
+            {
+              "file": "frames/pe1-c-added.html",
+              "caption": "Enter, then Done: it joins Needed by, placed after this feature; one Saved toast. 3 clicks."
             },
             {
               "file": "frames/pe1-c-hard-1512.html",
-              "caption": "At 1512 in Edit mode: the long name is cut off in its box; 8 dependencies below."
+              "caption": "At 1512 in Edit mode: the long name wraps in full, but in a narrow box beside Done; 8 dependencies below."
             },
             {
               "file": "frames/pe1-c-viewer-1512.html",
-              "caption": "A viewer at 1512: no Edit button, plain text."
+              "caption": "A viewer at 1512: no Edit button, plain text and the flags' words."
             },
             {
               "file": "frames/pe1-c-mid-390.html",
               "caption": "On a phone every field is a box at once, so the sheet scrolls further."
+            },
+            {
+              "file": "frames/pe1-c-mid-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe1-c-saved-dark.html",
@@ -169,19 +225,31 @@
             },
             {
               "file": "frames/pe1-d-owner.html",
-              "caption": "Then 'owner mira' in the line and Enter: Mira Okafor owns it and the owner warning is gone."
+              "caption": "Then 'owner mira' in the line and Enter: Mira Okafor owns it and the owner flag is gone."
+            },
+            {
+              "file": "frames/pe1-d-add.html",
+              "caption": "+ Add under Needed by: typing Alert sound picker."
+            },
+            {
+              "file": "frames/pe1-d-added.html",
+              "caption": "Enter, and the panel scrolled down to Needed by: it joins Needed by, placed after this feature."
             },
             {
               "file": "frames/pe1-d-hard-1512.html",
-              "caption": "At 1512 with a long name and 8 dependencies."
+              "caption": "At 1512, a long name wraps in full in its field."
             },
             {
               "file": "frames/pe1-d-viewer-1512.html",
-              "caption": "A viewer at 1512: no change line and no letters."
+              "caption": "A viewer at 1512: no change line, no letters, no buttons."
             },
             {
               "file": "frames/pe1-d-mid-390.html",
-              "caption": "On a phone the letters are no use; the values are tapped as in B."
+              "caption": "On a phone the letters and the change line are gone; the value is tapped and typed as in B."
+            },
+            {
+              "file": "frames/pe1-d-mid-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe1-d-saved-dark.html",
@@ -195,7 +263,7 @@
       "code": "PE2",
       "name": "Reading order and marks",
       "question": "In what order should the panel show a feature's fields, and how should a changeable and a changed field look?",
-      "common": "The name and code on top with a count of what needs fixing; every field editable in place (PE1 A); a changed field stays marked until the panel closes; Simple's colours, type and spacing as built.",
+      "common": "The name on top with today's 'Code None · Not in the Ground Truth' line and a count of what needs fixing; every field editable in place (PE1 A); the fields the panel has today all kept, the rarer ones folded under More, where Notes grows as it is typed; a changed field stays marked until the panel closes; Simple's colours, type and spacing as built.",
       "proposals": [
         {
           "letter": "A",
@@ -208,27 +276,39 @@
           "frames": [
             {
               "file": "frames/pe2-a-rest.html",
-              "caption": "At rest: Plan, People, Goal and Links, dates first."
+              "caption": "At rest: Plan, People, Goal and Links, dates first; the rest under More."
             },
             {
               "file": "frames/pe2-a-hover.html",
               "caption": "Pointer on Owner: the value gets a box, a sign it opens on a click."
             },
             {
+              "file": "frames/pe2-a-mid.html",
+              "caption": "The click: the owner list opens in place."
+            },
+            {
               "file": "frames/pe2-a-changed.html",
-              "caption": "Owner set to Jonah Reyes and the end moved to Dec 4: both rows get a blue bar and blue values."
+              "caption": "Jonah Reyes picked and the end moved to Dec 4: Owner and Ends get a blue bar and blue values; nothing else changed."
+            },
+            {
+              "file": "frames/pe2-a-more.html",
+              "caption": "More opened, scrolled down to it: Notes is typed in place and grows to fit, three lines here."
             },
             {
               "file": "frames/pe2-a-hard-1512.html",
-              "caption": "At 1512 with a long name and 8 dependencies: the groups keep the list readable."
+              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies."
             },
             {
               "file": "frames/pe2-a-viewer-1512.html",
-              "caption": "A viewer at 1512: the groups stay, every value plain, no dashed lines."
+              "caption": "A viewer at 1512: the same order, every value plain, the flags' words without buttons."
             },
             {
               "file": "frames/pe2-a-rest-390.html",
-              "caption": "On a phone the groups stack in the sheet."
+              "caption": "On a phone, at rest in the sheet."
+            },
+            {
+              "file": "frames/pe2-a-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe2-a-rest-dark.html",
@@ -250,23 +330,35 @@
             },
             {
               "file": "frames/pe2-b-hover.html",
-              "caption": "Pointer on Owner in the card: a box shows it opens."
+              "caption": "Pointer on Owner: the value gets a box, a sign it opens on a click."
+            },
+            {
+              "file": "frames/pe2-b-mid.html",
+              "caption": "The click: the owner list opens in place."
             },
             {
               "file": "frames/pe2-b-changed.html",
-              "caption": "Owner and end date changed: both get a soft blue fill."
+              "caption": "Jonah Reyes picked and the end moved to Dec 4: Owner and Ends get a soft blue fill; nothing else changed."
+            },
+            {
+              "file": "frames/pe2-b-more.html",
+              "caption": "More opened, scrolled down to it: Notes is typed in place and grows to fit, three lines here."
             },
             {
               "file": "frames/pe2-b-hard-1512.html",
-              "caption": "At 1512: 8 dependencies sit in the Links section, the card stays on top."
+              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies."
             },
             {
               "file": "frames/pe2-b-viewer-1512.html",
-              "caption": "A viewer at 1512: the card and sections stay, every value plain."
+              "caption": "A viewer at 1512: the same order, every value plain, the flags' words without buttons."
             },
             {
               "file": "frames/pe2-b-rest-390.html",
-              "caption": "On a phone the card fills the top of the sheet."
+              "caption": "On a phone, at rest in the sheet."
+            },
+            {
+              "file": "frames/pe2-b-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe2-b-rest-dark.html",
@@ -280,31 +372,43 @@
           "recommended": false,
           "what": "Each field is a small tile with its label above the value, two to a row: starts and ends, owner and status, milestone and confidence, then goal across, then target and decider, then the links. A changed tile gets a blue border and a tick by its label.",
           "plus": "Short and even; each tile is a clear thing to click, and a changed one stands out.",
-          "cost": "Add a feature 1 click; move its dates 1 click; set its owner 2 clicks; add a milestone 2 clicks (with PE1 A). Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Long values (a target, a long owner name) are cut off in a half-width tile; boxes everywhere make the panel busier than Simple's lists.",
+          "cost": "Add a feature 1 click; move its dates 1 click; set its owner 2 clicks; add a milestone 2 clicks (with PE1 A). Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Long values wrap in a half-width tile, so rows of tiles grow uneven; boxes everywhere make the panel busier than Simple's lists.",
           "frames": [
             {
               "file": "frames/pe2-c-rest.html",
-              "caption": "At rest: two tiles to a row, dates first."
+              "caption": "At rest: two tiles to a row, dates first; the rest under More."
             },
             {
               "file": "frames/pe2-c-hover.html",
-              "caption": "Pointer on Owner: the tile's value gets a box."
+              "caption": "Pointer on Owner: the value gets a box, a sign it opens on a click."
+            },
+            {
+              "file": "frames/pe2-c-mid.html",
+              "caption": "The click: the owner list opens in place."
             },
             {
               "file": "frames/pe2-c-changed.html",
-              "caption": "Owner and end date changed: blue border and a tick on both tiles."
+              "caption": "Jonah Reyes picked and the end moved to Dec 4: Owner and Ends get a blue border and a tick; nothing else changed."
+            },
+            {
+              "file": "frames/pe2-c-more.html",
+              "caption": "More opened, scrolled down to it: Notes is typed in place and grows to fit, three lines here."
             },
             {
               "file": "frames/pe2-c-hard-1512.html",
-              "caption": "At 1512 with a long name and 8 dependencies in the links tile."
+              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies."
             },
             {
               "file": "frames/pe2-c-viewer-1512.html",
-              "caption": "A viewer at 1512: the tiles stay, every value plain."
+              "caption": "A viewer at 1512: the same order, every value plain, the flags' words without buttons."
             },
             {
               "file": "frames/pe2-c-rest-390.html",
-              "caption": "On a phone the tiles stay two across and long values cut off."
+              "caption": "On a phone the tiles stay two across; long values wrap, so the sheet runs longer."
+            },
+            {
+              "file": "frames/pe2-c-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe2-c-rest-dark.html",
@@ -318,7 +422,7 @@
       "code": "PE3",
       "name": "Acting on a feature's flags",
       "question": "Where should a feature's flags and Oracle's suggestions be acted on in the panel?",
-      "common": "Three flags on the story feature: a draft with no owner to confirm it, Oracle's suggested dates, and a feature that needs it starting too early. Each has its fix as one-click buttons (the two people Oracle suggests, Use these or Keep mine, Move it after or Remove link); acting clears the flag and the count at once, with Undo in the corner. A viewer sees the flags but no buttons work.",
+      "common": "Three flags on the story feature: no owner yet, Oracle's suggested dates, and a feature that needs it starting too early. Each has its fix as one-click buttons (the two people Oracle suggests or Someone else, Use these or Keep mine, Move it after or Remove link); acting clears the flag and the count at once, with Undo in the corner. A viewer sees the flags' words and no buttons; the (i) by the name says who can act. The 'Not in the Ground Truth' line stays as built, beside the code.",
       "proposals": [
         {
           "letter": "A",
@@ -327,27 +431,39 @@
           "what": "Each flag sits under the field it is about: the owner flag under Owner with Mira Okafor and Jonah Reyes as buttons, Oracle's dates under Ends, the early start under Needed by. The count on top says how many are left.",
           "why": "The fix is shown with the value it changes, so a person sees what they are changing; one click clears it, no separate trip to Pick an owner.",
           "plus": "One click per flag; the panel keeps one reading order.",
-          "cost": "Set its owner 1 click when the draft flag suggests someone; add a feature 1 click; move its dates 1 click (or Use these); add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. A flag low in the panel (links) can be below the fold; the count on top is the only sign of it.",
+          "cost": "Set its owner 1 click when the owner flag suggests someone; add a feature 1 click; move its dates 1 click (or Use these); add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. A flag low in the panel (links) can be below the fold; the count on top is the only sign of it.",
           "frames": [
             {
               "file": "frames/pe3-a-rest.html",
               "caption": "At rest: each flag under its field; 3 to fix on top."
             },
             {
+              "file": "frames/pe3-a-mid.html",
+              "caption": "Someone else, under its field: the owner list opens."
+            },
+            {
               "file": "frames/pe3-a-owner-fixed.html",
-              "caption": "One click on Mira Okafor: she owns it, the draft is confirmed (status Planned), the flag is gone and the count drops to 2."
+              "caption": "Priya Lund picked: she owns it, that flag is gone and the count drops to 2."
             },
             {
               "file": "frames/pe3-a-all-fixed.html",
-              "caption": "Then Use these and Move it after: all three flags and the count gone. 3 clicks in all, against a trip each today."
+              "caption": "Then Use these and Move it after: every flag and the count gone."
+            },
+            {
+              "file": "frames/pe3-a-hard-1512.html",
+              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on."
             },
             {
               "file": "frames/pe3-a-viewer-1512.html",
-              "caption": "A viewer at 1512: the flags show, the buttons do not work."
+              "caption": "A viewer at 1512: the flags' words show, with no buttons."
             },
             {
               "file": "frames/pe3-a-rest-390.html",
-              "caption": "On a phone the flags sit with their fields down the sheet."
+              "caption": "On a phone at rest."
+            },
+            {
+              "file": "frames/pe3-a-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe3-a-rest-dark.html",
@@ -368,20 +484,32 @@
               "caption": "At rest: the three flags in one box on top."
             },
             {
+              "file": "frames/pe3-b-mid.html",
+              "caption": "Someone else, in the box on top: the owner list opens."
+            },
+            {
               "file": "frames/pe3-b-owner-fixed.html",
-              "caption": "Mira Okafor picked: that line leaves the box and the count drops to 2."
+              "caption": "Priya Lund picked: she owns it, that flag is gone and the count drops to 2."
             },
             {
               "file": "frames/pe3-b-all-fixed.html",
-              "caption": "The other two fixed: the box is gone."
+              "caption": "Then Use these and Move it after: every flag and the count gone."
+            },
+            {
+              "file": "frames/pe3-b-hard-1512.html",
+              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on."
             },
             {
               "file": "frames/pe3-b-viewer-1512.html",
-              "caption": "A viewer at 1512: the box shows, the buttons do not work."
+              "caption": "A viewer at 1512: the flags' words show, with no buttons."
             },
             {
               "file": "frames/pe3-b-rest-390.html",
-              "caption": "On a phone the box fills the top of the sheet."
+              "caption": "On a phone at rest."
+            },
+            {
+              "file": "frames/pe3-b-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe3-b-rest-dark.html",
@@ -399,31 +527,43 @@
           "frames": [
             {
               "file": "frames/pe3-c-rest.html",
-              "caption": "At rest: only the 3 to fix count shows the flags."
+              "caption": "At rest: only the 3 to fix count shows there are flags."
             },
             {
               "file": "frames/pe3-c-open.html",
-              "caption": "A click on the count opens the first flag, with its buttons."
+              "caption": "A click on the count opens the first flag, with its buttons; the count stays the only number."
+            },
+            {
+              "file": "frames/pe3-c-mid.html",
+              "caption": "Someone else, in the opened flag: the owner list opens."
             },
             {
               "file": "frames/pe3-c-owner-fixed.html",
-              "caption": "Mira Okafor picked: the next flag, Oracle's dates, takes its place; 2 left."
+              "caption": "Priya Lund picked: she owns it, that flag is gone and the count drops to 2."
             },
             {
               "file": "frames/pe3-c-all-fixed.html",
-              "caption": "The last two fixed: no count, no box. 4 clicks in all."
+              "caption": "Then Use these and Move it after: every flag and the count gone."
+            },
+            {
+              "file": "frames/pe3-c-hard-1512.html",
+              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on."
             },
             {
               "file": "frames/pe3-c-viewer-1512.html",
-              "caption": "A viewer at 1512: the flag opens to read, its buttons do not work."
+              "caption": "A viewer at 1512: the flags' words show, with no buttons."
             },
             {
               "file": "frames/pe3-c-rest-390.html",
-              "caption": "On a phone, with the first flag opened."
+              "caption": "On a phone at rest."
+            },
+            {
+              "file": "frames/pe3-c-rest-390-dark.html",
+              "caption": "The same on a phone in dark."
             },
             {
               "file": "frames/pe3-c-rest-dark.html",
-              "caption": "In dark, with the first flag opened."
+              "caption": "At rest in dark."
             }
           ]
         }

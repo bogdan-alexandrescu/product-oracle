@@ -30,7 +30,7 @@ export const PE_HARD = { // MOCK-HOOK
 
 /** The flags every proposal acts on (invented). */
 export const PE_FLAGS = { // MOCK-HOOK
-  owner: 'Draft with no owner to confirm it', // MOCK-HOOK
+  owner: 'No owner yet: nobody answers for it', // MOCK-HOOK
   dates: 'Oracle suggests Oct 6 – Nov 24 from the team’s pace', // MOCK-HOOK
   link: 'F-79 Weekly alert digest starts before this ends', // MOCK-HOOK
 }; // MOCK-HOOK

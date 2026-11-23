@@ -40,10 +40,27 @@ async function open(page: Page, qs: string, w: number, h: number, theme = 'light
   await page.locator('[data-testid="floating-card"][data-pe]').waitFor({ timeout: 15000 });
   await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
   await page.waitForTimeout(500);
+  // The page's place at rest, kept for the rest of the story (see snap).
+  await page.evaluate(() => {
+    document.querySelectorAll('*').forEach((el) => {
+      if (el.scrollTop) (el as HTMLElement).dataset.mkS = String(el.scrollTop);
+    });
+    (window as unknown as { mkY: number }).mkY = window.scrollY;
+  });
 }
 
-async function snap(page: Page, file: string, w: number, h: number) {
+async function snap(page: Page, file: string, w: number, h: number, free = false) {
   await page.waitForTimeout(350);
+  // Every frame of a story shows the page at the same place (free: a frame scrolled to its result).
+  if (!free) await page.evaluate(() => {
+    const card = document.querySelector('[data-testid="floating-card"]');
+    document.querySelectorAll('*').forEach((el) => {
+      if (card?.contains(el)) return;
+      const at = (el as HTMLElement).dataset.mkS;
+      if (at != null || el.scrollTop) el.scrollTop = Number(at ?? 0);
+    });
+    window.scrollTo(0, (window as unknown as { mkY: number }).mkY ?? 0);
+  });
   await page.screenshot({ path: path.join(FR, `${file}.png`) });
   const { html, urls } = await page.evaluate(
     ({ w, h }) => {
@@ -137,24 +154,47 @@ test('frames', async ({ page }) => {
     await snap(page, `${k}-mid`, D.w, D.h);
     await saveEnds(page, m);
     await snap(page, `${k}-saved`, D.w, D.h);
-    // The cost of the other common tasks: set the owner and add a milestone.
+    // A flag acted on in place: the owner (C already set it in Edit, so it takes Oracle's dates).
     if (m === 'd') {
       await page.getByTestId('pe-cmd').fill('owner mira');
       await page.getByTestId('pe-cmd').press('Enter');
       await snap(page, `${k}-owner`, D.w, D.h);
-    } else if (m !== 'c') {
+    } else {
+      await page.getByTestId(m === 'c' ? 'pe-fix-dates' : 'pe-fix-owner-0').click();
+      await snap(page, `${k}-flag`, D.w, D.h);
+    }
+    // A milestone added from the panel.
+    if (m === 'a' || m === 'b') {
       await page.getByTestId('pe-input-milestone').click();
       await page.getByTestId('pe-new-milestone').fill('Pilot with 3 teams · Dec 18');
       await snap(page, `${k}-milestone`, D.w, D.h);
+      await page.getByTestId('pe-new-milestone').press('Enter');
+      await snap(page, `${k}-milestone-added`, D.w, D.h);
     }
+    // A feature added: typed under Needed by, placed after this one by its link (no drag).
+    if (m === 'c') await page.getByTestId('pe-edit').click();
+    await page.getByTestId('pe-plus-needed').click();
+    await page.getByTestId('pe-add-needed').fill('Alert sound picker');
+    await snap(page, `${k}-add`, D.w, D.h);
+    await page.getByTestId('pe-add-needed').press('Enter');
+    if (m === 'c') await page.getByTestId('pe-done').click();
+    await page.getByTestId('pe-field-needed').getByText('Alert sound picker').scrollIntoViewIfNeeded();
+    await page.getByTestId('pe-field-needed').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await snap(page, `${k}-added`, D.w, D.h, true);
     await open(page, `${qs}&hard=1`, W.w, W.h);
     if (m === 'c') await page.getByTestId('pe-edit').click();
-    await page.getByTestId('pe-field-deps').scrollIntoViewIfNeeded();
     await snap(page, `${k}-hard-1512`, W.w, W.h);
-    await open(page, qs, P.w, P.h);
-    await openEnds(page, m);
-    await typeEnds(page);
-    await snap(page, `${k}-mid-390`, P.w, P.h);
+    for (const t of ['light', 'dark']) {
+      await open(page, qs, P.w, P.h, t);
+      const sfx = t === 'dark' ? '-dark' : '';
+      if (m === 'b') {
+        await snap(page, `${k}-rest-390${sfx}`, P.w, P.h);
+        continue;
+      }
+      await openEnds(page, m === 'd' ? 'a' : m);
+      await typeEnds(page);
+      await snap(page, `${k}-mid-390${sfx}`, P.w, P.h);
+    }
     await open(page, qs, D.w, D.h, 'dark');
     await openEnds(page, m);
     await typeEnds(page);
@@ -162,13 +202,6 @@ test('frames', async ({ page }) => {
     await snap(page, `${k}-saved-dark`, D.w, D.h);
     await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
     await snap(page, `${k}-viewer-1512`, W.w, W.h);
-  }
-  {
-    const k = 'pe1-a';
-    if (want(k)) {
-      await open(page, `pe1=a&pe2=a&pe3=a&hard=1&viewer=1`, W.w, W.h);
-      await snap(page, `${k}-viewer-1512`, W.w, W.h);
-    }
   }
 
   for (const o of ['a', 'b', 'c']) {
@@ -180,17 +213,29 @@ test('frames', async ({ page }) => {
     await open(page, `${qs}&hover=owner`, D.w, D.h);
     await snap(page, `${k}-hover`, D.w, D.h);
     await page.getByTestId('pe-input-owner').click();
+    await snap(page, `${k}-mid`, D.w, D.h);
     await page.getByTestId('pe-opt-Jonah Reyes').click();
     await page.getByTestId('pe-input-end').click();
     await page.getByTestId('pe-input-end').fill('Dec 4');
     await page.keyboard.press('Enter');
+    await page.mouse.move(5, 5);
     await snap(page, `${k}-changed`, D.w, D.h);
+    // The built fields, folded under More; Notes grows as it is typed.
+    await page.getByTestId('pe-more').locator('summary').click();
+    await page.getByTestId('pe-input-notes').click();
+    await page.getByTestId('pe-input-notes').pressSequentially('Ask two pilot teams which alerts they mute. ');
+    await page.keyboard.press('Shift+Enter');
+    await page.getByTestId('pe-input-notes').pressSequentially('Keep quiet hours per team, not per person.');
+    await page.getByTestId('pe-input-notes').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await snap(page, `${k}-more`, D.w, D.h, true);
     await open(page, `${qs}&hard=1`, W.w, W.h);
     await snap(page, `${k}-hard-1512`, W.w, W.h);
     await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
     await snap(page, `${k}-viewer-1512`, W.w, W.h);
     await open(page, qs, P.w, P.h);
     await snap(page, `${k}-rest-390`, P.w, P.h);
+    await open(page, qs, P.w, P.h, 'dark');
+    await snap(page, `${k}-rest-390-dark`, P.w, P.h);
     await open(page, qs, D.w, D.h, 'dark');
     await snap(page, `${k}-rest-dark`, D.w, D.h);
   }
@@ -199,27 +244,36 @@ test('frames', async ({ page }) => {
     const k = `pe3-${f}`;
     if (!want(k)) continue;
     const qs = `pe1=a&pe2=a&pe3=${f}`;
+    const strip = async () => {
+      if (f === 'c' && !(await page.getByTestId('pe-strip').count())) await page.getByTestId('pe-flags-badge').click();
+    };
     await open(page, qs, D.w, D.h);
     await snap(page, `${k}-rest`, D.w, D.h);
     if (f === 'c') {
       await page.getByTestId('pe-flags-badge').click();
       await snap(page, `${k}-open`, D.w, D.h);
     }
-    await page.getByTestId('pe-fix-owner-0').click();
+    await page.getByTestId('pe-fix-owner-other').click();
+    await snap(page, `${k}-mid`, D.w, D.h);
+    await page.getByTestId('pe-opt-Priya Lund').click();
     await snap(page, `${k}-owner-fixed`, D.w, D.h);
-    if (f === 'c' && !(await page.getByTestId('pe-strip').count())) await page.getByTestId('pe-flags-badge').click();
+    await strip();
     await page.getByTestId('pe-fix-dates').click();
-    if (f === 'c' && !(await page.getByTestId('pe-strip').count())) await page.getByTestId('pe-flags-badge').click();
+    await strip();
     await page.getByTestId('pe-fix-link').click();
     await snap(page, `${k}-all-fixed`, D.w, D.h);
+    await open(page, `${qs}&hard=1`, W.w, W.h);
+    await strip();
+    await snap(page, `${k}-hard-1512`, W.w, W.h);
     await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
-    if (f === 'c') await page.getByTestId('pe-flags-badge').click();
     await snap(page, `${k}-viewer-1512`, W.w, W.h);
-    await open(page, qs, P.w, P.h);
-    if (f === 'c') await page.getByTestId('pe-flags-badge').click();
-    await snap(page, `${k}-rest-390`, P.w, P.h);
+    for (const t of ['light', 'dark']) {
+      await open(page, qs, P.w, P.h, t);
+      await strip();
+      await snap(page, `${k}-rest-390${t === 'dark' ? '-dark' : ''}`, P.w, P.h);
+    }
     await open(page, qs, D.w, D.h, 'dark');
-    if (f === 'c') await page.getByTestId('pe-flags-badge').click();
+    await strip();
     await snap(page, `${k}-rest-dark`, D.w, D.h);
   }
 

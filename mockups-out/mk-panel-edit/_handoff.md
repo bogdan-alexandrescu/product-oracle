@@ -4,15 +4,15 @@ Mock-ups for "Feature panel: edit any field in one step and act on its flags in 
 (decisions PE1 to PE3). Open `picks.json`; each frame is a static `frames/*.html` (with
 `?theme=light|dark`) plus a `.png`.
 
-## Today's friction, checked in the mock app (Nov 23)
+## Today's friction (Nov 23): two checked in the mock app with frames, two read from the code
 
 - `frames/today-rest.html`: the feature panel lists about 20 fields, each with its own
   **Change** link.
 - `frames/today-change.html`: Change opens a field with **Save** and **Cancel**: two clicks plus a
   Save for every field (dates, owner, milestone alike).
-- Adding an item: the quick add says "Type a title, then drag it into place"
+- Adding an item (read from the code, no frame): the quick add says "Type a title, then drag it into place"
   (`web/app/simple/roadmap/_add.tsx`): a title, then a drag onto a quarter.
-- A draft with no owner shows "Draft with no owner to confirm it"; its fix is a separate
+- A draft with no owner (read from the code, no frame) shows "Draft with no owner to confirm it"; its fix is a separate
   "Pick an owner" trip (`web/app/simple/roadmap/_roadmap.tsx`, the flag list), not in the panel.
 - Milestones are added from the "+ Milestone" chip on the time axis, apart from the items
   (visible in `today-rest.png`, top of the Timeline).
