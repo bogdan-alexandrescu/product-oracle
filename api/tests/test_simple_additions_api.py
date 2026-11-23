@@ -37,11 +37,12 @@ Test cards (protects / fails_when / no_claim):
   list the new goal as its feature's first link, and the old one is gone; the owner's own
   move applies at once and its Undo puts the link back; fails_when=the feature stays
   under its old goal after the accept, or Undo leaves it moved; no_claim=the web.
-- test_added_item_is_in_the_draft_only: protects=an added item is read by those who see
-  the roadmap's working draft and never by others or by the published version (Detailed's
-  rows are untouched); submitting the draft carries the item into the next version;
-  fails_when=a viewer sees an unpublished addition or submit drops it; no_claim=the review
-  policy itself (tests/test_simple_drafts_api.py).
+- test_added_item_is_in_the_draft_only: protects=an owner's added item is live for every
+  reader at once (a viewer too) and confirmed (no "Draft with no owner to confirm it"),
+  never in the published version's rows (Detailed's rows are untouched); submitting the
+  draft carries the item into the next version; fails_when=a reader waits for the review,
+  an owner's own addition waits to be confirmed, or submit drops it (de-inst, owner Nov
+  23); no_claim=the review policy itself (tests/test_simple_drafts_api.py).
 - test_drafting_job_fills_the_draft: protects=the drafting job fills the outcome, links
   the best-matching baseline feature, adds the dependencies it names (known keys only)
   and opens a date suggestion inside the dropped quarter; it never overwrites an outcome
@@ -358,7 +359,10 @@ async def test_added_item_is_in_the_draft_only(client):
     c = (await w.add(client, "owner", "Guided setup"))["change"]
     iid = c["target"]["item_id"]
     assert iid in await w.items(client, "decider")
-    assert iid not in await w.items(client, "viewer")
+    seen = await w.items(client, "viewer")
+    assert iid in seen
+    assert seen[iid]["status"] != "draft"
+    assert not [f for f in seen[iid]["flags"] if f["kind"] == "draft_without_owner"]
     async with tenant_session(w.ctx.tenant_id) as s:
         published = list(
             await s.scalars(select(RoadmapItem).where(RoadmapItem.roadmap_version_id == w.rv_id))
@@ -380,7 +384,9 @@ async def test_added_item_is_in_the_draft_only(client):
         )
         added = [r for r in new if r.title.endswith(" Guided setup")]
         assert (
-            len(added) == 1 and added[0].draft and added[0].goal_ids == [uuid.UUID(w.goals["grow"])]
+            len(added) == 1
+            and not added[0].draft
+            and added[0].goal_ids == [uuid.UUID(w.goals["grow"])]
         )
 
 
