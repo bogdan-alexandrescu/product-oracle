@@ -317,3 +317,44 @@ async def test_a_plan_item_is_under_the_track_that_holds_its_alerts(
     plan = (await client.get("/v1/plan", headers=auth)).json()
     tracks = {i["key"]: i["track_id"] for i in plan["items"]}
     assert tracks["payment-step"] == str(holder), (tracks, str(other_id))
+
+
+async def test_approving_takes_the_kept_items_stale_alert_out_of_the_inbox(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=approving a version settles its kept items' stale alerts in the same request
+    (views.monitor_owners, as the item-staleness route does); fails_when=the alert stays open
+    until the hourly monitor_due pass, so the Inbox and its counts keep it; no_claim=the
+    alerts' own rules."""
+    from oracle.roadmap import alerts
+    from oracle.roadmap.models import ProductTrack
+
+    tenant_id, auth = owner
+    await _two_versions(client, auth, tenant_id, runtime)
+    async with tenant_session(tenant_id) as s:
+        roadmap = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        track_ids = list(
+            await s.scalars(
+                select(ProductTrack.id).where(ProductTrack.roadmap_document_id == roadmap.id)
+            )
+        )
+    for track_id in track_ids:
+        r = await client.post(f"/v1/tracks/{track_id}/monitor", headers=auth)
+        assert r.status_code == 200, r.text
+
+    async def open_keys() -> set[str]:
+        async with tenant_session(tenant_id) as s:
+            return {
+                a.item_key
+                for a in await s.scalars(
+                    select(alerts.TrackAlert).where(alerts.TrackAlert.state == "open")
+                )
+            }
+
+    assert "payment-step" in await open_keys()
+
+    await _approve(client, auth, 2)
+
+    assert "payment-step" not in await open_keys()
