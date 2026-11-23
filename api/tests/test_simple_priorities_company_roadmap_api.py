@@ -30,10 +30,12 @@ Test cards (protects / fails_when / no_claim):
 - test_a_move_reuses_the_features_draft_item: protects=moving a feature whose only item on
   the company roadmap is a draft confirms that item, never a second one; fails_when=a second
   item is added for the feature.
-- test_a_move_never_gives_the_features_code_to_a_second_item: protects=adding a feature to
-  the company roadmap from Priorities is refused in set_code's words when another item shows
-  the feature's code as its own title's, and no item is added; fails_when=two items read
-  F-40; no_claim=items linked to the same feature (its slices).
+- test_a_move_numbers_the_item_when_another_shows_the_features_code: protects=codes-at-write
+  (Nov 23): adding a feature from Priorities when another item shows the feature's code gives
+  the new item the next free number at once, in the response and on the row; fails_when=two
+  items read F-40, or the add is refused.
+- test_a_move_numbers_a_second_item_of_the_feature: protects=a feature already on the company
+  roadmap by a cut item: the added item reads its own number; fails_when=both read F-40.
 """
 
 import uuid
@@ -193,8 +195,9 @@ async def test_a_move_reuses_the_features_draft_item(client):
     assert row["on_roadmap"] is True and row["item_id"] == w.ids["pay-5"]
 
 
-async def test_a_move_never_gives_the_features_code_to_a_second_item(client):
-    """A move is refused if the feature's code already names another item's title."""
+async def test_a_move_numbers_the_item_when_another_shows_the_features_code(client):
+    """codes-at-write (Nov 23): the feature's code already names another item, so the item the
+    move adds gets the next free number at once, and the response and the row say it."""
     w = await company_world()
     async with tenant_session(w.ctx.tenant_id) as s:
         (await s.get(Entity, uuid.UUID(w.ids["insights"]))).key = "F-40"
@@ -204,10 +207,39 @@ async def test_a_move_never_gives_the_features_code_to_a_second_item(client):
             "before": {"override": None},
             "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
-    assert r.status_code == 422, r.text
-    assert r.json()["detail"] == "F-40 is already the code of F-40 Night digest"
+    assert r.status_code == 201, r.text
     async with tenant_session(w.ctx.tenant_id) as s:
-        found = await s.scalar(
-            select(RoadmapItem.id).where(RoadmapItem.feature_id == uuid.UUID(w.ids["insights"]))
+        added = await s.scalar(
+            select(RoadmapItem).where(RoadmapItem.feature_id == uuid.UUID(w.ids["insights"]))
         )
-        assert found is None
+        assert added.title == "F-41 Insights"
+    assert r.json()["change"]["numbered"] == {str(added.id): "F-41"}
+    row = by_feature(await w.read(client), w)["insights"]
+    assert (row["own_key"], row["item_id"]) == ("F-41", str(added.id))
+
+
+async def test_a_move_numbers_a_second_item_of_the_feature(client):
+    """codes-at-write: a feature whose cut item is on the company roadmap already: the item a
+    move adds reads its own number, not the feature's code beside the cut one."""
+    w = await company_world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(Entity, uuid.UUID(w.ids["insights"]))).key = "F-40"
+        pay = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-6"]))
+        s.add(RoadmapItem(roadmap_document_id=pay.roadmap_document_id,
+                          roadmap_version_id=pay.roadmap_version_id, item_key="ins-old",
+                          position=9, title="Insights", horizon="later", cut=True,
+                          feature_id=uuid.UUID(w.ids["insights"])))  # fmt: skip
+        await s.commit()
+    body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
+            "before": {"override": None},
+            "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        found = {
+            t.item_key: t.title
+            for t in await s.scalars(
+                select(RoadmapItem).where(RoadmapItem.feature_id == uuid.UUID(w.ids["insights"]))
+            )
+        }
+    assert found == {"ins-old": "Insights", "F-40": "F-41 Insights"}, found
