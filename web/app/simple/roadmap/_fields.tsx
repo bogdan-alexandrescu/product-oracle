@@ -3,7 +3,7 @@
 // save is one Simple change (Undo, the "changed by …" conflict rule; a commenter's is a
 // suggestion for an approver). Without canChange (a viewer) the fields only read.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button, toast } from '@/components/ds';
 import { Icon } from '@/components/ds/Icon';
@@ -294,6 +294,18 @@ function ConfirmIntoGt({ item }: { item: Item }) {
   );
 }
 
+/** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either. */
+function ownCode(item: Item): ReactNode {
+  if (!item.code || !item.confirm_feature_id) return item.code;
+  return (
+    <span className="inline-flex items-center gap-1">
+      {item.code}
+      <NotInGt className="h-5! px-2! text-xs!" />
+      <ConfirmIntoGt item={item} />
+    </span>
+  );
+}
+
 export function PanelFields({
   item,
   items,
@@ -427,15 +439,8 @@ export function PanelFields({
                 </>
               )}
             </span>
-          ) : item.code && item.confirm_feature_id ? (
-            // gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either.
-            <span className="inline-flex items-center gap-1">
-              {item.code}
-              <NotInGt className="h-5! px-2! text-xs!" />
-              <ConfirmIntoGt item={item} />
-            </span>
           ) : (
-            (item.code ?? (
+            (ownCode(item) ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
               <span
                 className="inline-flex flex-wrap items-center gap-x-1"
