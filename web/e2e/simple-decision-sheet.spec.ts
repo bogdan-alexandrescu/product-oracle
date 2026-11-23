@@ -248,13 +248,11 @@ for (const phone of [false, true]) {
       test('eq2: + Ask a question adds one to a PRD', async ({ page }) => {
         await decisions(page);
         // Every PRD the person reads is offered, as the PRD filter lists them (not only those with questions).
-        const readable = (
-          await page
-            .locator('label', { hasText: /^PRD/ })
-            .first()
-            .locator('option')
-            .allTextContents()
-        ).filter((t) => t !== 'All PRDs');
+        // The filter lists them once the page's own read answers: the heading draws before that
+        // (sooner still since simple-speed), so the list is waited for, not read as it stands.
+        const listed = page.locator('label', { hasText: /^PRD/ }).first().locator('option');
+        await expect.poll(() => listed.count()).toBeGreaterThan(2);
+        const readable = (await listed.allTextContents()).filter((t) => t !== 'All PRDs');
         expect(readable.length).toBeGreaterThan(1);
         await region(page, 'Waiting for you').getByTestId('questions-ask').click();
         const s = sheet(page);
