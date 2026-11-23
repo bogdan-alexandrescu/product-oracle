@@ -164,6 +164,28 @@ function MonthHead() {
   );
 }
 
+/** MOCK-HOOK The meeting's result: Bulk reply added (as typed, with the PRD owner and dates after
+ * Reply templates), Assign rules moved a week, Snooze a thread owned. */
+function mkDoneStory(fs: MkFeature[]) {
+  const inGoal = fs.filter((f) => f.goal === 'g1');
+  const last = inGoal[inGoal.length - 1];
+  const start = addDays(last.end, 3);
+  fs.splice(fs.lastIndexOf(last) + 1, 0, {
+    id: 'fn',
+    code: 'F-227',
+    name: 'Bulk reply to similar requests',
+    goal: 'g1',
+    owner: 'p1',
+    start,
+    end: addDays(start, 25),
+    status: 'planned',
+  });
+  const f2 = fs.find((f) => f.id === 'f2');
+  if (f2) f2.end = addDays(f2.end, 7);
+  const f5 = fs.find((f) => f.id === 'f5');
+  if (f5) Object.assign(f5, { owner: 'p3', status: 'planned' });
+}
+
 export function MkPrdReview() {
   const p = useMemo(mkParams, []);
   const d1 = (p.pr1 ?? 'a') as 'a' | 'b' | 'c' | 'd';
@@ -179,34 +201,11 @@ export function MkPrdReview() {
   const [features, setFeatures] = useState<MkFeature[]>(() => {
     const fs = mkFeatures(big);
     if (phase === 'done' && d2) {
-      // MOCK-HOOK the result of the story: Bulk reply added, Assign rules moved a week, Snooze owned.
-      fs.splice(3, 0, {
-        id: 'fn',
-        code: 'F-227',
-        name: 'Bulk reply to similar requests',
-        goal: 'g1',
-        owner: 'p6',
-        start: '2027-01-25',
-        end: '2027-02-19',
-        status: 'planned',
-        milestone: 'm2',
-      });
-      const f2 = fs.find((f) => f.id === 'f2');
-      if (f2) f2.end = '2027-01-19';
-      const f5 = fs.find((f) => f.id === 'f5');
-      if (f5) Object.assign(f5, { owner: 'p3', status: 'planned' });
+      mkDoneStory(fs); // MOCK-HOOK the result of the story
     }
     return fs;
   });
-  const [milestones, setMilestones] = useState(() =>
-    phase === 'done' && d2
-      ? [
-          ...MK_MILESTONES.slice(0, 1),
-          { id: 'mn', name: 'Pricing review', date: '2027-02-08' },
-          MK_MILESTONES[1],
-        ]
-      : MK_MILESTONES,
-  );
+  const [milestones, setMilestones] = useState(MK_MILESTONES);
   const [sections, setSections] = useState(() =>
     MK_SECTIONS.map((s) =>
       phase === 'done' && d2 && s.key === 'risks'
@@ -241,10 +240,14 @@ export function MkPrdReview() {
         ? 'new'
         : null,
   );
+  // MOCK-HOOK the owner list drawn open (a native list can't be snapshotted open), pointer on Dot.
+  const [ownerList, setOwnerList] = useState<string | null>(
+    phase === 'open' && task === 'owner' ? 'f5' : null,
+  );
   const [editAll, setEditAll] = useState(d2 === 'b' && phase !== 'rest');
   const [draft, setDraft] = useState(() =>
     phase === 'mid' && task === 'feature'
-      ? 'Bulk reply to similar'
+      ? 'Bulk reply to similar requests'
       : phase === 'mid' && task === 'milestone'
         ? 'Pricing rev'
         : '',
@@ -290,18 +293,18 @@ export function MkPrdReview() {
     setEditing(null);
   };
 
+  const pickOwner = (f: MkFeature, id: string) => {
+    setFeatures((fs) => fs.map((x) => (x.id === f.id ? { ...x, owner: id || null } : x)));
+    setOwnerList(null);
+    saved(f.id);
+  };
   const ownerField = (f: MkFeature) => (
     <span className="relative inline-flex">
       <select
         aria-label={`Owner of ${f.name}`}
         className="rounded-md border border-accent bg-surface px-2 py-1 text-base"
         value={f.owner ?? ''}
-        onChange={(e) => {
-          setFeatures((fs) =>
-            fs.map((x) => (x.id === f.id ? { ...x, owner: e.target.value || null } : x)),
-          );
-          saved(f.id);
-        }}
+        onChange={(e) => pickOwner(f, e.target.value)}
       >
         <option value="">No owner</option>
         {MK_PEOPLE.map((x) => (
@@ -310,6 +313,34 @@ export function MkPrdReview() {
           </option>
         ))}
       </select>
+      {ownerList === f.id && (
+        <ul
+          role="listbox"
+          aria-label={`Owner of ${f.name}`}
+          className="absolute top-full left-0 z-30 mt-1 min-w-[12rem] rounded-md border border-line bg-surface py-1 text-base font-normal text-text shadow-lg"
+        >
+          {MK_PEOPLE.map((x) => (
+            <li
+              key={x.id}
+              role="option"
+              aria-selected={x.id === 'p3'}
+              onClick={(e) => {
+                e.stopPropagation();
+                pickOwner(f, x.id);
+              }}
+              className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 ${x.id === 'p3' ? 'bg-accent-soft' : 'hover:bg-surface2'}`}
+            >
+              <Avatar id={x.id} />
+              {x.name}
+              {x.id === 'p3' && (
+                <span aria-hidden="true" className="ml-auto text-text-faint">
+                  ◂
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </span>
   );
   const shift = (f: MkFeature, which: 'start' | 'end', n: number) =>
@@ -531,7 +562,7 @@ export function MkPrdReview() {
     const start = last ? addDays(last.end, 3) : '2026-12-01';
     const nf: MkFeature = {
       id: `n${Date.now()}`,
-      code: `F-${227 + features.length}`,
+      code: 'F-227', // MOCK-HOOK the story's one new feature
       name,
       goal,
       owner: 'p1',
@@ -791,7 +822,8 @@ export function MkPrdReview() {
     reading = (
       <>
         <section aria-label="Timeline" className="simple-card">
-          <div className="grid grid-cols-[minmax(0,15rem)_minmax(0,1fr)] gap-x-4 gap-y-1.5 max-[600px]:grid-cols-[minmax(0,8rem)_minmax(0,1fr)]">
+          <div className="grid grid-cols-[minmax(0,18rem)_minmax(0,1fr)] gap-x-4 gap-y-1.5 max-[600px]:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+            {/* MOCK-HOOK names wrap whole instead of being cut */}
             <span className="text-sm font-semibold text-text-faint">Feature</span>
             <MonthHead />
             {MK_GOALS.map((g) => (
@@ -803,7 +835,7 @@ export function MkPrdReview() {
                   .filter((f) => f.goal === g.id)
                   .map((f) => (
                     <div key={f.id} className="contents">
-                      <span className="truncate text-base">
+                      <span className="text-base">
                         <span className="mr-1 text-sm text-text-faint">{f.code}</span>
                         {f.name}
                       </span>
@@ -1034,7 +1066,7 @@ export function MkPrdReview() {
             dateField(pf)
           ) : (
             <span className="text-base font-normal text-text">
-              Jan 25 – Feb 19 · after Reply templates
+              Feb 1 – Feb 26 · after Reply templates
             </span>
           )}
         </div>
@@ -1146,38 +1178,17 @@ export function MkPrdRoadmap() {
   const p = useMemo(mkParams, []);
   const done = p.phase === 'done';
   const fs = mkFeatures(p.big === '1');
-  if (done) {
-    fs.splice(3, 0, {
-      id: 'fn',
-      code: 'F-227',
-      name: 'Bulk reply to similar requests',
-      goal: 'g1',
-      owner: 'p6',
-      start: '2027-01-25',
-      end: '2027-02-19',
-      status: 'planned',
-    });
-    const f2 = fs.find((f) => f.id === 'f2');
-    if (f2) f2.end = '2027-01-19';
-    const f5 = fs.find((f) => f.id === 'f5');
-    if (f5) Object.assign(f5, { owner: 'p3', status: 'planned' });
-  }
-  const ms = done
-    ? [
-        ...MK_MILESTONES.slice(0, 1),
-        { id: 'mn', name: 'Pricing review', date: '2027-02-08' },
-        MK_MILESTONES[1],
-      ]
-    : MK_MILESTONES;
+  if (done) mkDoneStory(fs); // MOCK-HOOK
+  const ms = MK_MILESTONES;
   return (
     <div className="simple-page" data-testid="simple-page" style={{ maxWidth: 'none' }}>
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="simple-h1">Roadmap</h1>
         <span className="simple-small">Timeline · Shared team inbox track</span>
-        {done && <Chip tone="pass">4 changes from the PRD review · Nov 23, 10:40 AM PST</Chip>}
+        {done && <Chip tone="pass">3 changes from the PRD review · Nov 23, 10:40 AM PST</Chip>}
       </header>
       <section className="simple-card">
-        <div className="grid grid-cols-[minmax(0,17rem)_minmax(0,1fr)] gap-x-4 gap-y-1.5 max-[600px]:grid-cols-[minmax(0,8rem)_minmax(0,1fr)]">
+        <div className="grid grid-cols-[minmax(0,22rem)_minmax(0,1fr)] gap-x-4 gap-y-1.5 max-[600px]:grid-cols-[minmax(0,8rem)_minmax(0,1fr)]">
           <span className="text-sm font-semibold text-text-faint">Milestones</span>
           <div className="relative h-16">
             {ms.map((m, i) => (
@@ -1209,8 +1220,9 @@ export function MkPrdRoadmap() {
                   const owned = done && f.id === 'f5';
                   return (
                     <div key={f.id} className="contents">
-                      <span className="flex min-w-0 items-center gap-2 text-base">
-                        <span className="truncate">
+                      <span className="flex min-w-0 flex-col items-start gap-0.5 text-base">
+                        {/* MOCK-HOOK names wrap whole; badges sit on their own line */}
+                        <span>
                           <span className="mr-1 text-sm text-text-faint">{f.code}</span>
                           {f.name}
                         </span>

@@ -257,7 +257,7 @@ export const MK_CHANGES: MkChange[] = [
     kind: 'removed',
     where: 'not',
     field: 'text',
-    before: 'Slack replies.',
+    before: 'Replies from chat apps.',
     by: 'p4',
     at: 'Nov 22, 3:05 PM',
   },

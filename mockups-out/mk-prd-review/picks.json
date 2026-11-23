@@ -93,7 +93,7 @@
           "recommended": false,
           "what": "A full-width timeline of the features, grouped by goal, opens the page; the prose follows as one-line parts. Owners show in the feature itself, not on the strip.",
           "plus": "The best picture of order and overlap; matches the roadmap people already know. Clicks: owner and exact dates open from the bar: add a feature 1 click and Enter, move dates 1 drag or 3 clicks, set an owner 3, add a milestone 1 and Enter (today 3+4, 4, 4 to 5, 3).",
-          "cost": "Owners and exact dates are a click away; names cut short on a phone.",
+          "cost": "Owners and exact dates are a click away; long names wrap to two lines, so a phone row runs tall beside a short bar.",
           "frames": [
             {
               "file": "frames/pr1-d-rest.html",
@@ -101,11 +101,11 @@
             },
             {
               "file": "frames/pr1-d-long-1512.html",
-              "caption": "The hard case at 1512: 20 bars, names cut where long."
+              "caption": "The hard case at 1512: 20 bars, long names wrapped whole."
             },
             {
               "file": "frames/pr1-d-phone-390.html",
-              "caption": "Phone 390: names cut to a few words beside short bars."
+              "caption": "Phone 390: names wrap to two or three lines beside short bars."
             },
             {
               "file": "frames/pr1-d-rest-dark.html",
@@ -140,11 +140,11 @@
             },
             {
               "file": "frames/pr2-a-feature-mid.html",
-              "caption": "Adding a feature: one click on '+ Add a feature' under Faster first reply, the name half typed; Enter adds it."
+              "caption": "Adding a feature: one click on '+ Add a feature' under Faster first reply, the name Bulk reply to similar requests typed; Enter adds it."
             },
             {
               "file": "frames/pr2-a-feature-added.html",
-              "caption": "The result of that Enter: Bulk reply to similar requests sits under Faster first reply with dates after Reply templates, marked Saved with Undo."
+              "caption": "The result of that Enter: F-227 Bulk reply to similar requests sits under Faster first reply, owned by Mara Quint (the PRD's owner), Feb 1 – Feb 26, after Reply templates, marked Saved with Undo."
             },
             {
               "file": "frames/pr2-a-owner-open.html",
@@ -152,11 +152,11 @@
             },
             {
               "file": "frames/pr2-a-done.html",
-              "caption": "The result after the meeting's four changes: the new feature, Assign rules a week later, Snooze owned by Dot Varga and Risks reworded, each marked Saved, and 'All changes saved' in the header."
+              "caption": "The result of the meeting: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header's count of 4 also takes in the Risks text from the first frame."
             },
             {
               "file": "frames/pr2-a-roadmap.html",
-              "caption": "The same changes on the roadmap at once: the new bar, the moved bar over its old outline, the owner set, the new Pricing review milestone."
+              "caption": "The same three changes on the roadmap at once, as its header counts: the new bar, the moved bar over its old outline, and the owner set."
             },
             {
               "file": "frames/pr2-a-long-1512.html",
@@ -181,7 +181,7 @@
           "name": "One Edit switch",
           "recommended": false,
           "what": "An Edit button in the header turns the whole page into fields at once (boxes around every text, owner and date, the add rows shown); everything saves as you type; Done returns to reading.",
-          "plus": "Unmistakable: once on, every changeable thing is a box. Inside the mode: add a feature 1 click and type; move dates 1 click per week (steppers always shown); owner 2 clicks; milestone 1 click and type.",
+          "plus": "Unmistakable: once on, every changeable thing is a box. Inside the mode: add a feature 1 click, type, Enter (today 3 steps plus 4 for dates); move dates 1 click per week, the steppers always shown (today 4); set an owner 2 clicks (today 4 to 5); add a milestone 1 click, type, Enter (today 3 clicks and typing).",
           "cost": "One extra click to enter and one to leave per meeting; while on, the page is busy with boxes and harder for the room to read; people forget to press Done.",
           "frames": [
             {
@@ -194,19 +194,19 @@
             },
             {
               "file": "frames/pr2-b-feature-mid.html",
-              "caption": "Adding a feature in edit mode: the name half typed under Faster first reply, owner lists and date steppers shown on every row."
+              "caption": "Adding a feature: in edit mode, one click on '+ Add a feature' under Faster first reply, the name Bulk reply to similar requests typed; owner lists and date steppers show on every row; Enter adds it."
             },
             {
               "file": "frames/pr2-b-owner-open.html",
-              "caption": "Setting an owner in edit mode: the owner list is already on the row; picking saves."
+              "caption": "Setting an owner in edit mode: one click on Snooze a thread's owner box opens its list, the pointer on Dot Varga; picking saves (2 clicks)."
             },
             {
               "file": "frames/pr2-b-done.html",
-              "caption": "The result after the four changes, with edit mode still on until Done."
+              "caption": "The result of the meeting, with edit mode still on until Done: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header's count of 4 also takes in the Risks text from the first frame."
             },
             {
               "file": "frames/pr2-b-roadmap.html",
-              "caption": "The same changes on the roadmap."
+              "caption": "The same three changes on the roadmap at once, as its header counts: the new bar, the moved bar over its old outline, and the owner set."
             },
             {
               "file": "frames/pr2-b-long-1512.html",
@@ -231,8 +231,8 @@
           "name": "Live side panel",
           "recommended": false,
           "what": "Section text changes in place as in a; a click on a feature row opens the feature panel at the side with every field already live (no Change links), saving as you change it; '+ Add a feature' opens the panel with the name to type.",
-          "plus": "One place for everything about a feature (goal, dependencies too); matches the rule that every feature opens the same panel. Move dates: 2 clicks (row, week step). Add a feature: 1 click and type.",
-          "cost": "Set an owner is 3 clicks (row, list, pick); the panel covers a third of the shared screen, so the room loses the rows beside it.",
+          "plus": "One place for everything about a feature (goal, dependencies too); matches the rule that every feature opens the same panel. Add a feature: 1 click, type (today 3 steps plus 4 for dates). Move dates: 2 clicks, row then a week step (today 4). Set an owner: 3 clicks, row, list, pick (today 4 to 5). Add a milestone: 1 click, type, Enter, in its row on the timeline as in a (today 3 clicks and typing).",
+          "cost": "Set an owner is 3 clicks, one more than a; the panel covers a third of the shared screen, so the room loses the rows beside it.",
           "frames": [
             {
               "file": "frames/pr2-c-rest.html",
@@ -244,19 +244,19 @@
             },
             {
               "file": "frames/pr2-c-feature-mid.html",
-              "caption": "Adding a feature: '+ Add a feature' opens the panel with the name half typed; it saves when named."
+              "caption": "Adding a feature: one click on '+ Add a feature' opens the panel, the name Bulk reply to similar requests typed; it saves when named."
             },
             {
               "file": "frames/pr2-c-owner-open.html",
-              "caption": "Setting an owner: Snooze a thread's panel is open with its owner list live (3 clicks in all)."
+              "caption": "Setting an owner: Snooze a thread's panel is open (1 click on the row), its owner list open with the pointer on Dot Varga; picking saves (3 clicks in all)."
             },
             {
               "file": "frames/pr2-c-done.html",
-              "caption": "The result after the four changes, the panel closed."
+              "caption": "The result of the meeting, the panel closed: F-227 Bulk reply to similar requests (Mara Quint, Feb 1 – Feb 26), Assign rules a week later and Snooze a thread owned by Dot Varga, each marked Saved; the header's count of 4 also takes in the Risks text from the first frame."
             },
             {
               "file": "frames/pr2-c-roadmap.html",
-              "caption": "The same changes on the roadmap."
+              "caption": "The same three changes on the roadmap at once, as its header counts: the new bar, the moved bar over its old outline, and the owner set."
             },
             {
               "file": "frames/pr2-c-long-1512.html",
@@ -299,11 +299,11 @@
             },
             {
               "file": "frames/pr3-a-open.html",
-              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar."
+              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar; 1 click resolves it."
             },
             {
               "file": "frames/pr3-a-done.html",
-              "caption": "The result: the target and owner accepted (marks gone), Assign rules flagged for Mara, the removed 'Not doing' line undone; the bar now counts 2."
+              "caption": "The result: the target and owner accepted (marks gone), Assign rules flagged for Mara, the removed 'Not doing' line undone; the bar now counts 3: the flagged one and the two still open."
             },
             {
               "file": "frames/pr3-a-long-1512.html",
@@ -333,11 +333,11 @@
             },
             {
               "file": "frames/pr3-b-open.html",
-              "caption": "Pointing at the Assign rules card lights up its row."
+              "caption": "Pointing at the Assign rules card lights up its row; 1 click on the card resolves it."
             },
             {
               "file": "frames/pr3-b-done.html",
-              "caption": "The result: cards say Accepted, Flagged or Undone."
+              "caption": "The result: each acted-on card says Accepted, Flagged or Undone; two are still open."
             },
             {
               "file": "frames/pr3-b-long-1512.html",
@@ -367,11 +367,11 @@
             },
             {
               "file": "frames/pr3-c-open.html",
-              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions."
+              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions; then 1 click per change."
             },
             {
               "file": "frames/pr3-c-done.html",
-              "caption": "The result in the compare view: each line says what was done."
+              "caption": "The result in the compare view: each acted-on line says what was done; two are still open."
             },
             {
               "file": "frames/pr3-c-long-1512.html",
@@ -401,11 +401,11 @@
             },
             {
               "file": "frames/pr3-d-open.html",
-              "caption": "The same card while pointing at one change."
+              "caption": "The same card while pointing at one change; 1 click on its sentence resolves it."
             },
             {
               "file": "frames/pr3-d-done.html",
-              "caption": "The result: each sentence says Accepted, Flagged or Undone."
+              "caption": "The result: each acted-on sentence says Accepted, Flagged or Undone; two are still open."
             },
             {
               "file": "frames/pr3-d-long-1512.html",
