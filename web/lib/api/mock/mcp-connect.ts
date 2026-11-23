@@ -30,9 +30,16 @@ export const MOCK_WHERE: Record<string, string> = {
 /** MOCK-HOOK: `?clients=none|fresh|five` picks the person's connected clients; null keeps the seed. */
 const revoked = new Set<string>(); // MOCK-HOOK: revokes made on this page load
 export const mockRevoke = (id: string) => revoked.add(id); // MOCK-HOOK
+/** MOCK-HOOK: MC3 b, a revoke waiting on Undo: counted as revoked everywhere until undone. */
+let pendingId: string | null = null; // MOCK-HOOK
+export const mockPendingId = () => pendingId; // MOCK-HOOK
+export function mockSetPending(id: string | null) {
+  pendingId = id; // MOCK-HOOK
+  window.dispatchEvent(new Event('mk-mcp-changed')); // MOCK-HOOK
+}
 export function mockClients(search: string): Client[] | null {
   const list = pick(search); // MOCK-HOOK
-  return list && list.map((c) => (revoked.has(c.id) ? { ...c, revoked_at: new Date().toISOString() } : c)); // MOCK-HOOK
+  return list && list.map((c) => (revoked.has(c.id) || c.id === pendingId ? { ...c, revoked_at: new Date().toISOString() } : c)); // MOCK-HOOK
 }
 function pick(search: string): Client[] | null {
   const k = new URLSearchParams(search).get('clients'); // MOCK-HOOK
@@ -51,8 +58,7 @@ function pick(search: string): Client[] | null {
 
 /** MOCK-HOOK: the owner's company view (from /v1/api-tokens, kind mcp_client, by person). */
 export type CompanyRow = { name: string; email: string; role: string; clients: number; used: string | null }; // MOCK-HOOK
-export const MOCK_COMPANY: CompanyRow[] = [
-  { name: 'Avery Stone', email: 'admin@example.com', role: 'Owner', clients: 2, used: ago(4) }, // MOCK-HOOK
+export const MOCK_COMPANY_OTHERS: CompanyRow[] = [
   { name: 'Priya Raman', email: 'approver@example.com', role: 'Approver', clients: 1, used: ago(60 * 2) }, // MOCK-HOOK
   { name: 'Dana Decider', email: 'dana.decider@example.com', role: 'Approver', clients: 3, used: ago(60 * 20) }, // MOCK-HOOK
   { name: 'Cory Hale', email: 'cory.hale@example.com', role: 'Commenter', clients: 1, used: ago(60 * 24 * 3) }, // MOCK-HOOK
@@ -61,3 +67,10 @@ export const MOCK_COMPANY: CompanyRow[] = [
   { name: 'Jo Tester', email: 'jo.tester@example.com', role: 'Viewer', clients: 0, used: null }, // MOCK-HOOK
   { name: 'Lee Park', email: 'lee.park@example.com', role: 'Commenter', clients: 0, used: null }, // MOCK-HOOK
 ];
+
+/** MOCK-HOOK: the company view with the signed-in owner's row read from their own client list (`?clients=`). */
+export function mockCompany(me: { name: string; email: string }, mine: Client[] | undefined): CompanyRow[] {
+  const live = (mine ?? []).filter((c) => !c.revoked_at); // MOCK-HOOK
+  const used = live.map((c) => c.last_used_at).sort().at(-1) ?? null; // MOCK-HOOK
+  return [{ name: me.name, email: me.email, role: 'Owner', clients: live.length, used }, ...MOCK_COMPANY_OTHERS]; // MOCK-HOOK
+}

@@ -341,10 +341,10 @@ function UserMenu({
   );
   const mcp = useMcpMock(); // MOCK-HOOK
   const [mcpDialog, setMcpDialog] = useState(false); // MOCK-HOOK
-  useEffect(() => {
+  useEffect(() => { // MOCK-HOOK
     if (mcp.open && button.current?.offsetParent) setMcpDialog(true); // MOCK-HOOK: only the visible menu
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MOCK-HOOK
+  }, []); // MOCK-HOOK
   const [at, setAt] = useState({ bottom: 12, left: 100 });
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -489,12 +489,12 @@ function UserMenu({
             setOpen(false); // MOCK-HOOK
             if (mcp.mc1 === 'b') { e.preventDefault(); setMcpDialog(true); } // MOCK-HOOK
           }}
-          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2" // MOCK-HOOK
         >
-          <Icon name="link" size={16} />
-          Connect an AI tool
-        </Link>
-      )}
+          <Icon name="link" size={16} /> {/* MOCK-HOOK */}
+          Connect an AI tool {/* MOCK-HOOK */}
+        </Link> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
       {MOCK_MODE && (
         <button
           type="button"

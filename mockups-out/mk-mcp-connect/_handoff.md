@@ -12,3 +12,10 @@
 `?mc1=a|b|c&mc2=a|b|c&mc3=a|b|c` plus `menu=1` (account menu open), `open=1` (MC1 b dialog), `tab=code|app|other`, `copied=1`, `phase=wait|late`, `step=1|2|3`, `revoke=1`, `as=viewer|commenter|approver`, `clients=none|fresh|five`.
 Capture: `cd web && npm run build:mock && npm run start:mock -- --port 4517`, then
 `E2E_PORT=4517 E2E_PREBUILT=1 npx playwright test e2e/mk-mcp-connect.capture.spec.ts` (needs CI unset; MK_ONLY=<prefix> for some frames).
+
+## Review round (Nov 23)
+- The company view's row for the signed-in owner now comes from their own client list (`mockCompany` in web/lib/api/mock/mcp-connect.ts), so it follows `clients=none|fresh|five`; MC3 a sorts it by name, c by last used.
+- MC3 b: a revoke waiting on Undo (`mockSetPending`) counts as revoked everywhere: the check strip reads 'Revoked' with Undo, and the MCP clients stat and list count drop at once.
+- Commands wrap only at spaces and after `/` or `.`; names wrap in full; 'Just now' replaces 'A moment ago'.
+- Dark frames for every proposal, and mc3-b-five-390. mc2-a-rest was dropped (it was the same picture as mc1-a-open).
+- Still true: the company view compares `me.role === 'owner'` (MOCK-HOOK only); the build uses can('list_api_tokens').

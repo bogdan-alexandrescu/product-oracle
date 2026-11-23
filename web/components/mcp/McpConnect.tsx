@@ -20,7 +20,7 @@ import {
   SegmentedControl,
 } from '@/components/ds'; // MOCK-HOOK
 import { api, unwrap, type McpClient } from '@/lib/api/client'; // MOCK-HOOK
-import { MOCK_COMPANY, MOCK_MCP_URL, MOCK_WHERE } from '@/lib/api/mock/mcp-connect'; // MOCK-HOOK
+import { type CompanyRow, MOCK_MCP_URL, MOCK_WHERE, mockCompany, mockPendingId, mockSetPending } from '@/lib/api/mock/mcp-connect'; // MOCK-HOOK
 import { formatDate, formatDateTime } from '@/lib/format'; // MOCK-HOOK
 import { Link, useSearchParams } from '@/lib/nav'; // MOCK-HOOK
 import { useMe } from '@/lib/me'; // MOCK-HOOK
@@ -64,7 +64,7 @@ const TABS: { value: Tab; label: string }[] = [
 /** MOCK-HOOK: relative "last used", a moment ago when under two minutes. */
 function ago(iso: string) {
   const min = Math.round((Date.now() - Date.parse(iso)) / 60_000); // MOCK-HOOK
-  if (min < 2) return 'A moment ago'; // MOCK-HOOK
+  if (min < 2) return 'Just now'; // MOCK-HOOK
   if (min < 60) return `${min} min ago`; // MOCK-HOOK
   if (min < 60 * 24) return `${Math.round(min / 60)} h ago`; // MOCK-HOOK
   return null; // MOCK-HOOK: older: the date
@@ -79,8 +79,21 @@ function CopyChip({ text, copied: start = false, testId }: { text: string; copie
   const [copied, setCopied] = useState(start); // MOCK-HOOK
   return (
     <span className="flex min-w-0 items-center gap-2" data-testid={testId}>
-      <code className="min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 font-mono text-sm break-all text-text">
-        {text}
+      <code className="min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 font-mono text-sm break-normal text-text">
+        {/* MOCK-HOOK: wrap only at spaces and after / or . so the command reads exactly */}
+        {text.split(' ').map((word, i) => (
+          <span key={i}>
+            {i > 0 && ' '}
+            <span className={word.includes('/') ? undefined : 'whitespace-nowrap'}>
+              {word.split(/(?<=[/.])(?!\/)/).map((part, j) => (
+                <span key={j}>
+                  {j > 0 && <wbr />}
+                  {part}
+                </span>
+              ))}
+            </span>
+          </span>
+        ))}
       </code>
       <Button
         icon={copied ? 'check' : undefined}
@@ -203,14 +216,24 @@ function ClientSteps({ tab, copied }: { tab: Tab; copied: boolean }) {
 function CheckStrip({ phase, clients }: { phase: string; clients?: McpClient[] }) {
   const live = clients?.filter((c) => tokenState(c) === 'active') ?? []; // MOCK-HOOK
   const newest = [...live].sort((a, b) => b.authorized_at.localeCompare(a.authorized_at))[0]; // MOCK-HOOK
+  const pending = clients?.find((c) => c.id === mockPendingId()); // MOCK-HOOK: MC3 b, waiting on Undo
+  if (pending)
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-crit-bg p-3" data-testid="mcp-check">
+        <Icon name="lock" size={16} />
+        <span className="min-w-0 font-medium">{pending.client_name}</span>
+        <Chip kind="crit">Revoked</Chip>
+        <Button variant="ghost" onClick={() => mockSetPending(null)}>
+          Undo
+        </Button>
+      </div>
+    );
   if (phase === 'late')
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-warn-bg p-3" data-testid="mcp-check">
         <Icon name="clock" size={16} />
         <span className="font-medium">Sign-in timed out</span>
-        <InfoTip label="a timed-out sign-in" align="start">
-          The sign-in waits a few minutes. Run /mcp again, choose oracle, and Approve straight away.
-        </InfoTip>
+        <span className="text-sm">Run /mcp again and Approve straight away</span> {/* MOCK-HOOK */}
         <span className="ml-auto w-fit">
           <CopyChip text="/mcp" />
         </span>
@@ -220,9 +243,9 @@ function CheckStrip({ phase, clients }: { phase: string; clients?: McpClient[] }
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-pass-bg p-3" data-testid="mcp-check">
         <Icon name="check" size={16} />
-        <span className="min-w-0 truncate font-medium">{newest.client_name}</span>
+        <span className="min-w-0 font-medium">{newest.client_name}</span>
         <Chip kind="pass">Connected</Chip>
-        <span className="text-sm text-text2">Used {(ago(newest.last_used_at) ?? 'on ' + formatDate(newest.last_used_at)).toLowerCase()}</span>
+        <span className="text-sm text-text">Used {(ago(newest.last_used_at) ?? 'on ' + formatDate(newest.last_used_at)).toLowerCase()}</span>
       </div>
     );
   return (
@@ -356,7 +379,13 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
   const m = useMcpMock(); // MOCK-HOOK
   const q = useQuery('my-oauth-clients', () => unwrap(api.GET('/v1/me/oauth-clients'))); // MOCK-HOOK
   const [confirming, setConfirming] = useState<McpClient | null>(null); // MOCK-HOOK
-  const [pending, setPending] = useState<McpClient | null>(null); // MOCK-HOOK: b, undo window
+  const [pendingId, setPendingId] = useState<string | null>(mockPendingId()); // MOCK-HOOK: b, undo window
+  useMcpChanged(() => {
+    setPendingId(mockPendingId()); // MOCK-HOOK
+    void q.reload(); // MOCK-HOOK
+  });
+  const setPending = (c: McpClient | null) => mockSetPending(c?.id ?? null); // MOCK-HOOK
+  const pending = pendingId ? { id: pendingId } : null; // MOCK-HOOK
   const [inline, setInline] = useState<string | null>(null); // MOCK-HOOK: c, inline confirm
   const [error, setError] = useState<string | null>(null); // MOCK-HOOK
   const tq = useQuery('my-tokens', () => unwrap(api.GET('/v1/me/tokens'))); // MOCK-HOOK: b lists tokens in the same list
@@ -389,11 +418,11 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
     }
   }
 
-  const nTokens = tokens ?? tq.data?.filter((t) => tokenState(t) === 'active').length ?? 0; // MOCK-HOOK
-  const tokensLink = (
+  const nTokens = tokens ?? tq.data?.filter((t) => tokenState(t) === 'active').length; // MOCK-HOOK: shown once known
+  const tokensLink = nTokens !== undefined && ( // MOCK-HOOK
     <Link href="/account#tokens-panel" className="rounded-full hover:underline" data-testid="mcp-tokens-link">
       <Chip kind="line">
-        <span className="tnum">{nTokens}</span> personal {nTokens === 1 ? 'token' : 'tokens'}
+        <span className="tnum">{nTokens}</span> personal API {nTokens === 1 ? 'token' : 'tokens'} {/* MOCK-HOOK */}
       </Chip>
     </Link>
   );
@@ -407,7 +436,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
         <ul className="grid gap-3 p-4 min-[900px]:grid-cols-2 min-[1400px]:grid-cols-3">
           {rows?.map((c) => (
             <li key={c.id} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3" data-testid="mcp-client-card">
-              <span className="truncate font-medium" title={c.client_name}>{c.client_name}</span>
+              <span className="font-medium break-words">{c.client_name}</span> {/* MOCK-HOOK: the name in full */}
               <span className="flex flex-wrap items-center gap-2 text-sm text-text2">
                 {where(c)} · <Scopes scopes={c.scopes} />
               </span>
@@ -437,17 +466,18 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
     {
       key: 'name',
       header: 'Client',
+      wrap: true, // MOCK-HOOK: the name in full
       cell: (c) => (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium" title={c.client_name}>{c.client_name}</span>
+          <span className="font-medium break-words">{c.client_name}</span>
           {m.mc3 === 'b' && <span className="text-sm text-text2">{c.client_id === 'token' ? 'Personal token' : 'MCP client'}</span>}
         </span>
       ),
     },
-    { key: 'where', header: 'Where it runs', width: '132px', hideOnPhone: true, cell: (c) => <span className="text-text2">{where(c)}</span> },
-    { key: 'scopes', header: 'Access', width: '112px', hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
-    { key: 'at', header: 'Connected', width: '120px', hideOnPhone: true, cell: (c) => when(c.authorized_at) },
-    { key: 'used', header: 'Last used', width: '116px', phoneLabel: 'Used ', cell: (c) => usedCell(c.last_used_at) },
+    { key: 'where', header: 'Where it runs', width: '140px', hideOnPhone: true, wrap: true, cell: (c) => <span className="text-text2">{where(c)}</span> }, // MOCK-HOOK
+    { key: 'scopes', header: 'Access', width: '124px', hideOnPhone: true, cell: (c) => <span className="whitespace-nowrap"><Scopes scopes={c.scopes} /></span> }, // MOCK-HOOK
+    { key: 'at', header: 'Connected', width: '112px', hideOnPhone: true, cell: (c) => when(c.authorized_at) },
+    { key: 'used', header: 'Last used', width: '124px', phoneLabel: 'Used ', cell: (c) => usedCell(c.last_used_at) },
     {
       key: 'action',
       header: <span className="sr-only">Actions</span>,
@@ -479,7 +509,7 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
   return (
     <Panel
       title={m.mc3 === 'b' ? 'What acts as you' : 'Connected clients'} // MOCK-HOOK
-      count={rows?.length}
+      count={rows?.filter((c) => c.id !== pendingId).length} // MOCK-HOOK: a revoke waiting on Undo is not counted
       testId="mcp-clients"
       tools={
         <span className="flex items-center gap-2">
@@ -524,7 +554,10 @@ export function ConnectedClients({ tokens }: { tokens?: number }) {
 export function CompanyMcp() {
   const m = useMcpMock(); // MOCK-HOOK
   const { me } = useMe(); // MOCK-HOOK
+  const q = useQuery('my-oauth-clients', () => unwrap(api.GET('/v1/me/oauth-clients'))); // MOCK-HOOK
+  useMcpChanged(q.reload); // MOCK-HOOK
   if (me?.role !== 'owner') return null; // MOCK-HOOK: owners only (the real check is can('list_api_tokens'))
+  const MOCK_COMPANY = mockCompany({ name: me.name ?? 'You', email: me.email ?? '' }, q.data); // MOCK-HOOK: your own row follows your list
   const connected = MOCK_COMPANY.filter((r) => r.clients > 0); // MOCK-HOOK
   const stat = (
     <Chip kind="line">
@@ -543,7 +576,7 @@ export function CompanyMcp() {
         </div>
       </Panel>
     );
-  const cols: Column<(typeof MOCK_COMPANY)[number]>[] = [
+  const cols: Column<CompanyRow>[] = [
     {
       key: 'who',
       header: 'Person',
@@ -558,7 +591,10 @@ export function CompanyMcp() {
     { key: 'n', header: 'Clients', width: '96px', align: 'right', cell: (r) => <span className="tnum">{r.clients}</span> },
     { key: 'used', header: 'Last used', width: '124px', phoneLabel: 'Used ', cell: (r) => (r.used ? usedCell(r.used) : <span className="text-text2">Never</span>) },
   ];
-  const rows = m.mc3 === 'c' ? [...MOCK_COMPANY].sort((a, b) => (b.used ?? '').localeCompare(a.used ?? '')) : MOCK_COMPANY; // MOCK-HOOK
+  const rows = // MOCK-HOOK: a by name, c by last used
+    m.mc3 === 'c'
+      ? [...MOCK_COMPANY].sort((a, b) => (b.used ?? '').localeCompare(a.used ?? '')) // MOCK-HOOK
+      : [...MOCK_COMPANY].sort((a, b) => a.name.localeCompare(b.name)); // MOCK-HOOK
   return (
     <Panel title="MCP across the company" testId="mcp-company" tools={stat}>
       <DataTable label="MCP across the company" columns={cols} rows={rows} rowKey={(r) => r.email} />

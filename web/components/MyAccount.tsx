@@ -42,6 +42,7 @@ import {
   type McpClient,
   type MyAccount as Account,
 } from '@/lib/api/client';
+import { mockPendingId } from '@/lib/api/mock/mcp-connect'; // MOCK-HOOK
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
@@ -91,9 +92,13 @@ export function MyAccount() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const account = accountQ.data;
-  const liveClients = clientsQ.data?.filter((c) => tokenState(c) === 'active').length;
+  const liveClients = clientsQ.data?.filter((c) => tokenState(c) === 'active' && c.id !== mockPendingId()).length; // MOCK-HOOK: a revoke waiting on Undo is not counted
   const liveTokens = tokensQ.data?.filter((t) => tokenState(t) === 'active').length;
-  useMcpChanged(() => clientsQ.reload()); // MOCK-HOOK
+  const [, mcpTick] = useState(0); // MOCK-HOOK
+  useMcpChanged(() => {
+    mcpTick((n) => n + 1); // MOCK-HOOK
+    void clientsQ.reload(); // MOCK-HOOK
+  });
   const refreshCredentials = () => Promise.all([tokensQ.reload(), clientsQ.reload()]);
 
   async function signOutEverywhere() {
