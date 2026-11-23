@@ -21,14 +21,14 @@ test.use({ viewport: { width: 1440, height: 900 } });
 
 const GOAL = 'Reliability';
 
-async function open(page: Page, email?: string) {
+async function open(page: Page, email?: string, scenario = 'goal-buckets-undated') {
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
     MOCK_SCENARIO_KEY,
-    'goal-buckets-undated',
+    scenario,
   ] as const);
   await login(page, email);
   await page.goto('/simple/priorities?tab=buckets');
-  await expect(rows(page).first()).toBeVisible();
+  await expect(page.getByTestId('plan-feature').first()).toBeVisible();
 }
 
 const bucket = (page: Page) =>
@@ -100,5 +100,29 @@ test.describe('Goal buckets: prioritize in place', () => {
     await page.keyboard.press('Alt+ArrowDown');
     await page.waitForTimeout(300);
     expect(await order(page)).toEqual(before);
+  });
+
+  test('with a dated plan, a goal card lists its features in rank order; Alt+ArrowUp moves one', async ({
+    page,
+  }) => {
+    await open(page, undefined, 'simple-plan');
+    // The goal card with the most features.
+    const cards = page.getByTestId('plan-goal');
+    const counts = await cards.evaluateAll((els) =>
+      els.map((e) => e.querySelectorAll('[data-testid=plan-feature]').length),
+    );
+    const card = cards.nth(counts.indexOf(Math.max(...counts)));
+    const list = () =>
+      card.getByTestId('plan-feature').evaluateAll((els) => els.map((e) => e.dataset.code));
+    const before = await list();
+    expect(before.length).toBeGreaterThan(1);
+    await card.getByTestId('plan-feature').nth(1).getByTestId('plan-feature-open').focus();
+    await page.keyboard.press('Alt+ArrowUp');
+    const after = [before[1], before[0], ...before.slice(2)];
+    await expect.poll(list).toEqual(after);
+    await expect(page.getByTestId('bucket-note')).toContainText('Moved');
+    await page.reload();
+    await expect(card.getByTestId('plan-feature').first()).toBeVisible();
+    await expect.poll(list).toEqual(after);
   });
 });

@@ -59,6 +59,14 @@ export function useFeatureOrder({
       ? local.codes
       : codes;
   const may = (code: string) => !!rowOf(code)?.can_reorder;
+  /** The codes in rank order; a code with no ranked row keeps its place after the ranked. */
+  const sorted = (codes: string[]): string[] => {
+    const rank = (c: string) => rowOf(c)?.rank ?? Infinity;
+    return codes
+      .map((c, i) => ({ c, i }))
+      .sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i)
+      .map((x) => x.c);
+  };
 
   /** Moves `code` to the place of `onto` in `codes` (the list as shown under `key`). */
   async function move(key: string, codes: string[], code: string, over: string) {
@@ -75,7 +83,11 @@ export function useFeatureOrder({
     const position = t.rank;
     const target = r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id };
     try {
-      const { data: out, error, response } = await api.POST('/v1/simple/changes', {
+      const {
+        data: out,
+        error,
+        response,
+      } = await api.POST('/v1/simple/changes', {
         body: {
           op: 'override_priority',
           target,
@@ -112,7 +124,7 @@ export function useFeatureOrder({
     if (onto) void move(key, codes, code, onto);
   };
 
-  return { arrange, move, keys, may, pending };
+  return { arrange, move, keys, may, pending, sorted };
 }
 
 /** The small mark on a feature whose move waits for a decider. */
@@ -129,8 +141,6 @@ export function PendingMark() {
 
 /** The feature row's code under a point. */
 export function rowAt(x: number, y: number): string | null {
-  const el = document
-    .elementFromPoint(x, y)
-    ?.closest<HTMLElement>('[data-testid=plan-feature]');
+  const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-testid=plan-feature]');
   return el?.dataset.code ?? null;
 }

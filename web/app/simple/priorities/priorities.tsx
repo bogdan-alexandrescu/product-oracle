@@ -4154,8 +4154,23 @@ function PlanBuckets({
   const year = data.today.slice(0, 4);
   const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
+  // prioritize: each goal's features in rank order, moved by drag or Alt+Arrow.
+  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError });
+  const codesOf = (g: string | null) => order.sorted(planFeatures(plan, g).map((f) => f.code));
+  const ranked = (g: string | null) => ({
+    sort: (codes: string[]) => order.arrange(g ?? '', order.sorted(codes)),
+    keys: (codes: string[], code: string) => order.keys(g ?? '', order.sorted(codes), code),
+    pending: order.pending,
+  });
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
-  const drag = useBucketDrag({ gb, writes: liftedMoves(writes, readGb) });
+  const drag = useBucketDrag({
+    gb,
+    writes: liftedMoves(writes, readGb),
+    reorder: (code, over) => {
+      const g = [...goals, null].find((x) => codesOf(x).includes(code));
+      if (g !== undefined) void order.move(g ?? '', codesOf(g), code, over);
+    },
+  });
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
   // its preview shows a code only once it has one people know.
   const draftGrip = (t: Task, from: string | null) => {
@@ -4388,6 +4403,7 @@ function PlanBuckets({
                 lifted={drag.lifted}
                 onGrip={featureGrip}
                 onOpen={setOpened}
+                ranked={ranked(g)}
                 {...taskRows(g, rec)}
               />
               {over && (
@@ -4489,6 +4505,7 @@ function PlanBuckets({
               lifted={drag.lifted}
               onGrip={featureGrip}
               onOpen={setOpened}
+              ranked={ranked(null)}
               {...taskRows(null, undefined)}
             />
           </li>
