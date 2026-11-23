@@ -14,8 +14,7 @@ import { expect, test, type Page } from './test';
  *   once, kept after a reload; fails_when=it stays or a Save is needed.
  * - buckets keys: protects=Alt+ArrowUp on a focused heading moves the goal one place.
  * - map keys and drag: protects=the same on the Goal map's goal cards, Alt+ArrowRight / Left.
- * - who: a viewer, and someone who may only propose (goal-order proposals are not built), have
- *   no handle.
+ * - who: a viewer, and a commenter (goal-order proposals are not built), have no handle.
  * no_claim=Home's Change order (goal-order specs).
  */
 
@@ -112,9 +111,9 @@ test.describe('Goals: prioritize by their header', () => {
     await expect.poll(() => mapGoals(page)).toEqual(once);
   });
 
-  // Goal-order proposals are not built: someone who may only propose gets no goal handle (handoff.md).
-  test('someone who may only propose has no goal handle on either page', async ({ page }) => {
-    await buckets(page, 'approver@example.com');
+  // Goal-order proposals are not built: a commenter gets no goal handle (handoff.md).
+  test('a commenter has no goal handle on either page', async ({ page }) => {
+    await buckets(page, 'commenter@example.com');
     await expect(page.getByTestId('goal-handle')).toHaveCount(0);
     await page.goto('/simple/goals');
     await expect(page.getByTestId('gm-grid')).toBeVisible();
