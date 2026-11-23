@@ -3,9 +3,6 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
-import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from './_milestones';
-import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from './_mk';
-import { TrackHead } from './_trackbands';
 import {
   Fragment,
   memo,
@@ -21,12 +18,16 @@ import {
   type ReactNode,
 } from 'react';
 
-import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import { InfoTip } from '@/components/ds/InfoTip';
+import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import { addMonths, calendarDay, utcDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
+import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
+import { AddRow } from './_addrow';
+import { PM_LANE } from './_board';
 import { FixButtons, fixCount, type Act } from './_card';
+import { itemName, NotInGt } from './_gtflag';
 import {
   addDays,
   barSpan,
@@ -51,9 +52,10 @@ import {
   type Roadmap,
   whereAttr,
 } from './_lib';
+import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from './_milestones';
+import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from './_mk';
 import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from './_timeline';
-import { itemName, NotInGt } from './_gtflag';
-import { joinedNames, joinedWords } from '@/lib/milestone-code';
+import { TrackHead } from './_trackbands';
 
 type Zoom = '3m' | '6m' | '1y' | 'all';
 /** Days in sight at each zoom (All fits the whole plan). */
@@ -229,7 +231,13 @@ export interface TimelineProps extends Common {
   onKeyCancel: (item: Item) => void;
   /** The item card (FloatingCard), placed by `style`; `sheet`: a phone's bottom sheet. */
   card: (item: Item, style: CSSProperties, sheet: boolean, onClose: () => void) => ReactNode;
+  /** de-r1 (RE1 A): add a feature in a lane (a goal's or a track's key) at a week's six-week span;
+   * absent, the lanes have no "+ Add" row. True once it is added or proposed. */
+  onAddAt?: (lane: string, title: string, start: string, end: string) => Promise<boolean>;
 }
+
+/** de-r1: the "+ Add" row under a lane's items. */
+const ADD_H = 28;
 
 const LABEL_W = 232;
 /** A milestone label's "+N" chip, about its width. */
@@ -473,6 +481,20 @@ function DayChart(props: TimelineProps) {
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
+  // de-r1 (RE1 A): the lanes a feature may be added to in place (a goal's, or a track's), the
+  // index of each one's last row, under which its "+ Add" row sits.
+  const addable = (key: string) =>
+    !!props.onAddAt &&
+    (data.group === 'track'
+      ? (data.tracks ?? []).some((t) => t.id === key)
+      : data.group === 'goal' && key !== 'none' && key !== 'below' && key !== PM_LANE);
+  const addAfter = new Map<number, { key: string; title: string }>();
+  rows.forEach((r, n) => {
+    if (r.kind !== 'lane' || !addable(r.key)) return;
+    let end = n + 1;
+    while (end < rows.length && rows[end].kind !== 'lane') end++;
+    addAfter.set(end - 1, { key: r.key, title: r.title });
+  });
   // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit
   // (back from the Gantt too), never stored: a new visit opens on 3 months again.
   const { me } = useMe();
@@ -1312,71 +1334,91 @@ function DayChart(props: TimelineProps) {
               style={{ left: labelW + x(d) }}
             />
           ))}
-          {rows.map((r) => {
+          {rows.map((r, n) => {
+            const add = addAfter.get(n);
+            const addRow = add && props.onAddAt && (
+              <AddRow
+                key={`add-${add.key}`}
+                lane={add.key}
+                label={add.title}
+                labelW={labelW}
+                trackW={trackW}
+                height={ADD_H}
+                x={x}
+                dayAt={(px) => addDays(t0, Math.floor(px / ppd))}
+                today={data.today}
+                onAdd={(t, s, e) => props.onAddAt!(add.key, t, s, e)}
+              />
+            );
             if (r.kind === 'lane')
               return (
-                <div
-                  key={`l-${r.key}`}
-                  data-testid="timeline-lane"
-                  className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
-                >
-                  {data.group === 'track' && r.key !== 'below' && r.key !== 'none' ? (
-                    // tb-mk: a quick add dropped on a track band's header lands on that track.
-                    <div
-                      data-add-where={
-                        props.canChange && (data.tracks ?? []).some((t) => t.id === r.key)
-                          ? whereAttr('track', r.key)
-                          : undefined
-                      }
-                      data-add-label={r.title}
-                      className="pointer-events-auto sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"
-                    >
-                      <TrackHead data={data} laneKey={r.key} title={r.title} />
-                    </div>
-                  ) : (
-                    <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
-                      {data.group === 'goal' && r.key !== 'none' && r.key !== 'below' && (
-                        <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />
-                      )}
-                      {r.title}{' '}
-                      {/* tb-mk: "No track" reads with no count, as the track bands' headers. */}
-                      {!(data.group === 'track' && r.key === 'none') && (
-                        <span className="font-normal text-text2">
-                          · {r.count} {r.count === 1 ? 'item' : 'items'}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <Fragment key={`l-${r.key}`}>
+                  <div
+                    data-testid="timeline-lane"
+                    className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
+                  >
+                    {data.group === 'track' && r.key !== 'below' && r.key !== 'none' ? (
+                      // tb-mk: a quick add dropped on a track band's header lands on that track.
+                      <div
+                        data-add-where={
+                          props.canChange && (data.tracks ?? []).some((t) => t.id === r.key)
+                            ? whereAttr('track', r.key)
+                            : undefined
+                        }
+                        data-add-label={r.title}
+                        className="pointer-events-auto sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"
+                      >
+                        <TrackHead data={data} laneKey={r.key} title={r.title} />
+                      </div>
+                    ) : (
+                      <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
+                        {data.group === 'goal' && r.key !== 'none' && r.key !== 'below' && (
+                          <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />
+                        )}
+                        {r.title}{' '}
+                        {/* tb-mk: "No track" reads with no count, as the track bands' headers. */}
+                        {!(data.group === 'track' && r.key === 'none') && (
+                          <span className="font-normal text-text2">
+                            · {r.count} {r.count === 1 ? 'item' : 'items'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {addRow}
+                </Fragment>
               );
             const i = r.item;
             const [ds, de] = moved[i.id] ?? barSpan(i);
             return (
-              <TimelineRow
-                key={i.id}
-                item={i}
-                ds={ds}
-                de={de}
-                t0={t0}
-                ppd={ppd}
-                labelW={labelW}
-                trackW={trackW}
-                sl={sl}
-                fit={fit}
-                today={data.today}
-                canChange={canChange}
-                still={fixed(i)}
-                sel={openKey === i.key}
-                live={live}
-                byId={props.byId}
-                on={on}
-                depth={r.depth ?? 0}
-              />
+              <Fragment key={i.id}>
+                <TimelineRow
+                  item={i}
+                  ds={ds}
+                  de={de}
+                  t0={t0}
+                  ppd={ppd}
+                  labelW={labelW}
+                  trackW={trackW}
+                  sl={sl}
+                  fit={fit}
+                  today={data.today}
+                  canChange={canChange}
+                  still={fixed(i)}
+                  sel={openKey === i.key}
+                  live={live}
+                  byId={props.byId}
+                  on={on}
+                  depth={r.depth ?? 0}
+                />
+                {addRow}
+              </Fragment>
             );
           })}
           {/* build-milestones-on-roadmap: the milestones over the Timeline */}
           <TimelineMilestones
             rows={rows}
+            addH={(n) => (addAfter.has(n) ? ADD_H : 0)}
             moved={moved}
             x={x}
             labelW={labelW}
@@ -1401,6 +1443,7 @@ function DayChart(props: TimelineProps) {
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
 function TimelineMilestones({
   rows,
+  addH,
   moved,
   x,
   labelW,
@@ -1410,6 +1453,8 @@ function TimelineMilestones({
   keepOff,
 }: {
   rows: Row[];
+  /** de-r1: the height of the "+ Add" row under row `n` (0: none). */
+  addH: (n: number) => number;
   moved: Record<string, [string, string]>;
   x: (d: string) => number;
   labelW: number;
@@ -1421,10 +1466,10 @@ function TimelineMilestones({
   let y = 44 + useMsBand(phone);
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
-  for (const r of rows) {
+  for (const [n, r] of rows.entries()) {
     if (r.kind === 'lane') {
       lanes.push({ key: r.key, title: r.title, y0: y, y1: y + 32 });
-      y += 32;
+      y += 32 + addH(n);
       continue;
     }
     const [s, e] = moved[r.item.id] ?? barSpan(r.item);
@@ -1439,7 +1484,7 @@ function TimelineMilestones({
       closed: closedItem(r.item),
       guess: !moved[r.item.id] && estimateOnly(r.item),
     });
-    y += ROW_H;
+    y += ROW_H + addH(n);
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
   return (

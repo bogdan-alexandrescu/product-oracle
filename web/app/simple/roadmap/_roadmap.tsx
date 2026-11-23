@@ -2690,6 +2690,7 @@ export function SimpleRoadmap() {
     at: Where,
     rmId?: string,
     trackId?: string,
+    span?: [string, string],
   ): Promise<boolean> => {
     // tb-mk: a quick add dropped on a track band is added to Next on that track (after.track_id, kept by a
     // proposal till it is accepted); an applied add the roadmap reads elsewhere is then put on it (set_track).
@@ -2704,7 +2705,12 @@ export function SimpleRoadmap() {
         op: 'add_item',
         target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } },
         before: {},
-        after: band ? { title, track_id: band.id } : { title },
+        after: {
+          title,
+          ...(band ? { track_id: band.id } : {}),
+          // de-r1: an add in place comes with the six weeks clicked.
+          ...(span ? { start_date: span[0], end_date: span[1] } : {}),
+        },
       });
       const c = r.change;
       const id = c.target.item_id;
@@ -3426,6 +3432,21 @@ export function SimpleRoadmap() {
                         dropTargets={canChange}
                         goalSuggestions={goalCounts}
                         onGoal={openGoal}
+                        onAddIn={
+                          canChange
+                            ? (h, title) =>
+                                onAdd(
+                                  title,
+                                  {
+                                    kind: 'horizon',
+                                    value: h,
+                                    label: HORIZONS.find((x) => x.key === h)?.label ?? h,
+                                  },
+                                  undefined,
+                                  addTrack ?? undefined,
+                                )
+                            : undefined
+                        }
                       />
                     ) : format === 'timeline' ? (
                       // mk-qa4-roadmap QR1 A..QR4 A: three months from just before today, the key and the broken links
@@ -3443,6 +3464,20 @@ export function SimpleRoadmap() {
                         onKeyMove={onKeyMove}
                         onKeyEnd={(item) => dates.flush(item.id)}
                         onKeyCancel={onKeyCancel(dates)}
+                        onAddAt={
+                          canChange
+                            ? (lane, title, start, end) => {
+                                const g = (goalLaned ?? data).groups.find((x) => x.key === lane);
+                                const at: Where =
+                                  (goalLaned ?? data).group === 'track'
+                                    ? { kind: 'track', value: lane, label: g?.title ?? lane }
+                                    : { kind: 'goal', value: lane, label: g?.title ?? lane };
+                                // The roadmap the track's items are on, so an add on a track never asks which.
+                                const rm = data.items.find((i) => i.track?.id === lane)?.roadmap.id;
+                                return onAdd(title, at, rm, undefined, [start, end]);
+                              }
+                            : undefined
+                        }
                         openKey={cardItem?.key ?? null}
                         onOpen={(k) => {
                           const it = k ? data.items.find((x) => x.key === k) : undefined;

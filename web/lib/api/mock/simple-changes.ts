@@ -3743,6 +3743,12 @@ function planS7(
         return json(422, { detail: 'after.track_id: a product track' });
       after.track_id = String(a.track_id);
     }
+    // additions._plan: an item may come with its dates (both, the end not first).
+    const ds = a.start_date == null ? null : String(a.start_date);
+    const de = a.end_date == null ? null : String(a.end_date);
+    if ((ds === null) !== (de === null) || (ds && de && de < ds))
+      return json(422, { detail: 'after.start_date and after.end_date: both, the end not first' });
+    if (ds && de) Object.assign(after, { start_date: ds, end_date: de });
     // An item added with its milestone (additions._plan: after.milestone {name, date}).
     const m = a.milestone as { name?: unknown; date?: unknown } | null | undefined;
     if (m && typeof m === 'object') {
@@ -4002,6 +4008,8 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
       if (onBand) added.prd_doc = ownPrd(onBand);
     }
     db.items.push(added);
+    if (a.start_date && a.end_date)
+      db.own[key] = { start: String(a.start_date), end: String(a.end_date), source: 'typed' };
     return;
   }
   const s = seed(db, keyOf(db, id)!);
