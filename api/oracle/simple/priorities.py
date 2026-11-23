@@ -187,8 +187,9 @@ async def item_order(
     link, as the rows read it: ``position``) and its feature's pin as override_priority's
     ``before.override`` wants it (``before_override``), by item id; an item linked to no
     ranked feature has neither."""
-    rank = await priorities.ranks(db, METHOD, principal)
-    pins = {str(o.feature_id): o for o in await priorities.active_overrides(db)}
+    active = await priorities.active_overrides(db)
+    rank = await priorities.ranks(db, METHOD, principal, active)
+    pins = {str(o.feature_id): o for o in active}
     out: dict[uuid.UUID, dict[str, Any]] = {}
     for e in entries:
         if (fid := link(e.row)) is not None and fid in rank:

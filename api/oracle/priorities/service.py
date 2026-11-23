@@ -328,12 +328,17 @@ async def compute(
 
 
 async def ranks(
-    db: AsyncSession, method: str, principal: Principal | None = None
+    db: AsyncSession,
+    method: str,
+    principal: Principal | None = None,
+    active: list[PriorityOverride] | None = None,
 ) -> dict[str, int]:
     """timeline-order: :func:`compute`'s rank of each feature (by entity id, overrides applied),
-    without building the ranking's models: the Simple roadmap read orders its rows by it."""
+    without building the ranking's models: the Simple roadmap read orders its rows by it.
+    ``active``: the live overrides when the caller has read them already."""
     features = await load_features(db, principal=principal)
-    active = await active_overrides(db)
+    if active is None:
+        active = await active_overrides(db)
     result = apply_overrides(rank(features, method), await _override_inputs(db, active, features))
     return {r["entity_id"]: r["rank"] for r in result["features"]}
 

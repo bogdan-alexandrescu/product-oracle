@@ -102,8 +102,7 @@ async def test_reads_take_few_statements(client):
     roadmap = await _statements(client, ROADMAP, owner)
     waiting = await _statements(client, WAITING, owner)
     print(f"statements: roadmap {roadmap}, waiting {waiting}")
-    # timeline-order: the feature order's ranking (features, edges, evidence, pins) adds 9.
-    assert roadmap <= 64, roadmap
+    assert roadmap <= 60, roadmap
     assert waiting <= 24, waiting
 
 
@@ -123,6 +122,5 @@ async def test_reads_answer_within_budget(client):
             assert r.status_code == 200, r.text
         best[url] = min(times)
         print(f"{url}: {', '.join(f'{t * 1000:.0f}' for t in times)} ms")
-    # timeline-order: the feature order's ranking adds about 0.15 s on this seed.
-    assert best[ROADMAP] < 0.45, best
+    assert best[ROADMAP] < 0.3, best
     assert best[WAITING] < 0.11, best
