@@ -265,17 +265,18 @@ test('Evidence: what a red column means and who sees the links sit behind tips',
   await behindTip(page, 'evidence-links-tip', 'Readers never see these links on the page');
 });
 
-test('Public version: what it is sits behind a tip; why this document has none stays', async ({
+test('Public version: what it is and why this document has none sit behind a tip', async ({
   page,
 }) => {
   await login(page);
   await page.goto('/documents/annual-billing/public');
-  await expect(page.getByText('Annual billing PRD is a PRD, so it has none.')).toBeVisible();
+  await expect(page.getByText('Only a roadmap has a public version')).toBeVisible();
   await behindTip(
     page,
     'public-version-tip',
     "A public version is the page anyone with a roadmap's public link reads.",
   );
+  await behindTip(page, 'public-version-tip', 'Annual billing PRD is a PRD, so it has none.');
 });
 
 test('Roadmap: how launches and changelog entries are made sit behind tips', async ({ page }) => {
