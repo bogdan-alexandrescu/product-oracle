@@ -101,7 +101,7 @@
             },
             {
               "file": "frames/pr1-d-long-1512.html",
-              "caption": "The hard case at 1512: 20 bars, long names wrapped whole."
+              "caption": "The hard case at 1512: 20 bars, every name whole on one line."
             },
             {
               "file": "frames/pr1-d-phone-390.html",
@@ -198,7 +198,7 @@
             },
             {
               "file": "frames/pr2-b-owner-open.html",
-              "caption": "Setting an owner in edit mode: one click on Snooze a thread's owner box opens its list, the pointer on Dot Varga; picking saves (2 clicks)."
+              "caption": "Setting an owner in edit mode, scrolled to Snooze a thread: one click on its owner box opens the list, the pointer on Dot Varga; picking saves (2 clicks)."
             },
             {
               "file": "frames/pr2-b-done.html",

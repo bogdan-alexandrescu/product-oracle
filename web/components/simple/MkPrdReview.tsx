@@ -166,7 +166,7 @@ function MonthHead() {
 
 /** MOCK-HOOK The meeting's result: Bulk reply added (as typed, with the PRD owner and dates after
  * Reply templates), Assign rules moved a week, Snooze a thread owned. */
-function mkDoneStory(fs: MkFeature[]) {
+function mkDoneStory(fs: MkFeature[], onlyAdded = false) {
   const inGoal = fs.filter((f) => f.goal === 'g1');
   const last = inGoal[inGoal.length - 1];
   const start = addDays(last.end, 3);
@@ -180,6 +180,7 @@ function mkDoneStory(fs: MkFeature[]) {
     end: addDays(start, 25),
     status: 'planned',
   });
+  if (onlyAdded) return;
   const f2 = fs.find((f) => f.id === 'f2');
   if (f2) f2.end = addDays(f2.end, 7);
   const f5 = fs.find((f) => f.id === 'f5');
@@ -202,6 +203,8 @@ export function MkPrdReview() {
     const fs = mkFeatures(big);
     if (phase === 'done' && d2) {
       mkDoneStory(fs); // MOCK-HOOK the result of the story
+    } else if (d2 && phase === 'open' && task === 'owner') {
+      mkDoneStory(fs, true); // MOCK-HOOK the story so far: the feature just added
     }
     return fs;
   });
