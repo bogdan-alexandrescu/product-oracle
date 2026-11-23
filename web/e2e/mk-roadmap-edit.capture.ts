@@ -11,6 +11,8 @@ const OUT = '../mockups-out/mk-roadmap-edit';
 const SIZES = { d: [1440, 900], h: [1512, 900], p: [390, 844] } as const;
 type Sz = keyof typeof SIZES;
 type Frame = { name: string; q: string; sz: Sz; theme: 'light' | 'dark' };
+// The hard case of RE2 C, RE2 D and every RE3 is drawn for a viewer: those frames sign in as the mock viewer.
+const asViewer = (f: Frame) => f.sz === 'h' && /^(re2-[cd]|re3-)/.test(f.name);
 
 function frames(): Frame[] {
   const only = (process.env.MK_ONLY ?? '').split(',').filter(Boolean);
@@ -60,19 +62,20 @@ async function replaceAsync(s: string, re: RegExp, f: (m: RegExpExecArray) => Pr
 test('capture mk-roadmap-edit frames', async ({ browser }) => {
   mkdirSync(`${OUT}/frames`, { recursive: true });
   mkdirSync(`${OUT}/assets`, { recursive: true });
-  const pages = new Map<Sz, Page>();
+  const pages = new Map<string, Page>();
   for (const f of frames()) {
-    let page = pages.get(f.sz);
+    const who = asViewer(f) ? 'viewer' : 'admin';
+    let page = pages.get(`${f.sz}-${who}`);
     if (!page) {
       const [width, height] = SIZES[f.sz];
       const ctx = await browser.newContext({ viewport: { width, height }, isMobile: f.sz === 'p', hasTouch: f.sz === 'p' });
       page = await ctx.newPage();
       await page.goto('/login?next=%2Fsimple%2Froadmap');
-      await page.getByLabel('Email').fill('admin@example.com');
+      await page.getByLabel('Email').fill(`${who}@example.com`);
       await page.getByLabel('Password').fill('demo');
       await page.getByRole('button', { name: 'Sign in' }).click();
       await page.waitForURL(/simple\/roadmap/);
-      pages.set(f.sz, page);
+      pages.set(`${f.sz}-${who}`, page);
     }
     await page.goto(`/simple/roadmap?${f.q}`);
     await page.locator('[data-testid="re-mock"]').waitFor();

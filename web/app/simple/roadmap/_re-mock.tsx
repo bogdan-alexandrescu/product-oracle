@@ -589,7 +589,7 @@ function Row({ it, c, sel, lens, target, pressed }: { it: ReItem; c: Ctx; sel: b
           <Bar it={it} c={c} selected={sel || pressed} lensDim={dim}>
             {sel && <SelectExtras c={c} />}
             {pressed && (
-              <span data-scroll-here="" style={{ position: 'absolute', left: 40, top: 8 }}>
+              <span data-scroll-here="" style={{ position: 'absolute', right: 10, top: 8 }}>
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d="M8 1v14M1 8h14" stroke="var(--text)" strokeWidth="1.6" /></svg>
               </span>
             )}
@@ -615,7 +615,14 @@ function ReadCard({ it }: { it: ReItem }) {
         {it.code} {it.name}
       </b>
       <span className="text-sm" style={{ color: 'var(--text2)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        {range(it.start, it.end)} · <Avatar name={it.owner} size={18} /> {it.owner ?? 'No owner yet'} · {it.track}
+        {/* MOCK-HOOK: each part its own item, so the dots sit evenly between them */}
+        <span>{range(it.start, it.end)}</span>
+        <span aria-hidden>·</span>
+        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          <Avatar name={it.owner} size={18} /> {it.owner ?? 'No owner yet'}
+        </span>
+        <span aria-hidden>·</span>
+        <span>{it.track}</span>
       </span>
     </div>
   );

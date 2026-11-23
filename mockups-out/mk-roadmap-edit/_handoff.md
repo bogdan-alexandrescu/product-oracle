@@ -35,3 +35,12 @@
   together at 1512; the RE2 A and B phone owner row fades at the right with an arrow; RE1 B phone shows only the ring
   filling (no title yet); RE2 D's read-only panel says "View only", who can change it, and has a close button;
   the RE3 A phone caption names only F-29 Solar panel advice, the one '!' in view.
+
+## Round 3 (Nov 23)
+
+- The six viewer hard frames (RE2 C, RE2 D, RE3 A–D `*-hard-1512`) are now captured signed in as the mock viewer,
+  Lena Ortiz (viewer@example.com), so the sidebar reads "Lena Ortiz · Viewer", not the owner. The capture picks the
+  sign-in per frame (`asViewer` in the capture script). Still a true 1512x900 viewport.
+- Captions name every feature with its code and name.
+- RE1 B hard: the move cursor sits at the bar's right end, clear of its title. RE2 C hard: the read card's dots sit
+  evenly between the dates, the owner and the track.
