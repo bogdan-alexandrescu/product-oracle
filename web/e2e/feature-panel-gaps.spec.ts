@@ -216,12 +216,7 @@ test('a task restored while its feature is in Trash says it shows when the featu
   await tap(row.getByRole('button', { name: 'Status of Draft the export help page' }));
   await tap(row.getByRole('menuitem', { name: 'Drop this task' }));
   await expect(row).toHaveCount(0);
-  await menu(page, 'Move to Trash…');
-  await tap(
-    page
-      .getByRole('alertdialog', { name: 'Move Alert history export to Trash?' })
-      .getByRole('button', { name: 'Move to Trash' }),
-  );
+  await menu(page, 'Move to Trash');
   await expect(panel(page)).toHaveCount(0);
 
   await page.goto('/settings/trash');
@@ -241,7 +236,7 @@ test('a task restored while its feature is in Trash says it shows when the featu
   );
 });
 
-test('Cut and Restore live in the ⋯ menu; Move to Trash… lists what points at the feature', async ({
+test('Cut and Restore live in the ⋯ menu; Move to Trash is one step with Undo', async ({
   page,
 }) => {
   await open(page, undefined, 'alert-export');
@@ -250,25 +245,19 @@ test('Cut and Restore live in the ⋯ menu; Move to Trash… lists what points a
   await expect(
     panel(page).getByTestId('card-status-edit').getByLabel('Status').locator('option'),
   ).toHaveText(['Planned', 'Done']);
-  await tap(panel(page).getByTestId('card-status-edit').getByRole('button', { name: 'Cancel' }));
+  await page.keyboard.press('Escape');
 
   await addTask(page, 'Draft the export help page');
   await expect(task(page, 'Draft the export help page')).toBeVisible();
 
-  // Move to Trash… always asks, one row each for what points at it; Cancel keeps it.
-  await menu(page, 'Move to Trash…');
-  const ask = page.getByRole('alertdialog', { name: 'Move Alert history export to Trash?' });
-  const rows = ask.getByTestId('confirm-row');
-  await expect(rows.filter({ hasText: 'Needed by' })).toContainText(
-    'Alert routing by team loses this link',
-  );
-  await expect(rows.filter({ hasText: 'Depends on' })).toContainText('Nothing');
-  await expect(rows.filter({ hasText: 'Milestone' })).toBeVisible();
-  await expect(rows.filter({ hasText: 'Key result' })).toBeVisible();
-  await expect(rows.filter({ hasText: 'Tasks' })).toContainText('1 task goes with it');
-  await tap(ask.getByRole('button', { name: 'Cancel' }));
-  await expect(ask).toHaveCount(0);
-  await expect(panel(page)).toBeVisible();
+  // roadmap-add: Move to Trash is one step (no dialog); the note's Undo brings it back.
+  await menu(page, 'Move to Trash');
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(panel(page)).toHaveCount(0);
+  await expect(toasts(page)).toContainText('Moved Alert history export to Trash.');
+  await tap(toasts(page).getByRole('button', { name: 'Undo' }));
+  await expect(toasts(page)).toContainText('Undone: Alert history export and its links are back.');
+  await open(page, undefined, 'alert-export');
 
   // Cut asks first, naming what needs it; then Restore sits in its place.
   await menu(page, 'Cut from the roadmap');
@@ -295,13 +284,11 @@ test('the Decider and Horizon are changed in place', async ({ page }) => {
     .getByTestId('card-decider-edit')
     .getByLabel('Decider')
     .selectOption({ label: 'Priya Raman' });
-  await tap(panel(page).getByTestId('card-decider-edit').getByRole('button', { name: 'Save' }));
   await expect(toasts(page)).toContainText('Decider changed');
   await expect(panel(page).getByTestId('card-decider')).toHaveText('Priya Raman');
 
   await tap(panel(page).getByRole('button', { name: 'Change the horizon' }));
   await panel(page).getByTestId('card-horizon-edit').getByLabel('Horizon').selectOption('later');
-  await tap(panel(page).getByTestId('card-horizon-edit').getByRole('button', { name: 'Save' }));
   await expect(toasts(page)).toContainText('Horizon changed');
   await expect(panel(page).getByTestId('card-horizon')).toHaveText('Later');
 });
@@ -312,7 +299,6 @@ test("a commenter's horizon is a proposal", async ({ page }) => {
   await tap(panel(page).getByRole('button', { name: 'Change the horizon' }));
   const other = was === 'Now' ? 'next' : 'now';
   await panel(page).getByTestId('card-horizon-edit').getByLabel('Horizon').selectOption(other);
-  await tap(panel(page).getByTestId('card-horizon-edit').getByRole('button', { name: 'Save' }));
   await expect(toasts(page)).toContainText('Horizon changed proposed');
   await expect(panel(page).getByTestId('card-horizon')).toHaveText(was);
 });

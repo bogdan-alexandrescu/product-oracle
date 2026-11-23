@@ -255,10 +255,8 @@ test('10: the Trash dialog and its note name the feature with its code', async (
   await openRoadmap(page);
   await openItem(page, 'alert-digest');
   await tap(panel(page).getByRole('button', { name: 'More actions' }));
-  await tap(panel(page).getByRole('menuitem', { name: 'Move to Trash…' }));
-  const ask = page.getByRole('alertdialog');
-  await expect(ask).toContainText(/Move F-\d+ Weekly alert digest to Trash\?/);
-  await tap(ask.getByRole('button', { name: 'Move to Trash' }));
+  await tap(panel(page).getByRole('menuitem', { name: 'Move to Trash' }));
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(page.getByTestId('toasts')).toContainText(
     /Moved F-\d+ Weekly alert digest to Trash\./,
   );

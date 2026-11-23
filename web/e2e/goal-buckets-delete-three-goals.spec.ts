@@ -187,8 +187,7 @@ test('Archive says an item left on a key result keeps another goal', async ({ pa
     await tap(draft(page, name).getByText(name, { exact: true }));
     const panel = page.getByTestId('floating-card');
     await tap(panel.getByRole('button', { name: 'More actions' }));
-    await tap(panel.getByRole('menuitem', { name: 'Move to Trash…' }));
-    await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Move to Trash' }));
+    await tap(panel.getByRole('menuitem', { name: 'Move to Trash' }));
     await expect(draft(page, name)).toHaveCount(0);
   }
 

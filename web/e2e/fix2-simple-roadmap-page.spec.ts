@@ -256,6 +256,7 @@ test.describe('desktop', () => {
     await page.getByLabel('Add an item').fill('A new idea from the test');
     const roadmap = page.getByTestId('quick-add-roadmap');
     if (await roadmap.count()) await roadmap.selectOption({ label: 'Alerts roadmap' });
+    await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
     await page.getByLabel('Add an item').press('Enter');
     const toast = page.getByRole('status').filter({ hasText: 'as a draft' });
     await expect(toast).toBeVisible();

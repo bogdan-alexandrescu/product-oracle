@@ -349,8 +349,8 @@ export function PanelFields({
   const goals: { id: string; title: string; metric?: string | null }[] = [
     ...new Map(
       [
-        ...refs(items, (i) => i.goal),
         ...(goalList.data ?? []).map((g) => ({ id: g.id, title: g.title })),
+        ...refs(items, (i) => i.goal),
       ].map((g) => [g.id, g] as const),
     ).values(),
   ];

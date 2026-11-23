@@ -82,8 +82,7 @@ for (const size of SIZES)
         await open(page, undefined, 'alert-export');
         if (scheme === 'dark')
           await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-        await menu(page, 'Move to Trash…');
-        await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Move to Trash' }));
+        await menu(page, 'Move to Trash');
         await expect(toasts(page)).toContainText('Moved Alert history export to Trash.');
         await expect(panel(page)).toHaveCount(0);
         await expect(row(page, 'alert-export')).toHaveCount(0);

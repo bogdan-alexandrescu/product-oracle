@@ -138,11 +138,13 @@ for (const phone of [false, true]) {
         const sheet = page.getByRole('dialog', { name: 'Add an item' });
         await sheet.getByLabel('Title').fill('Snooze an alert');
         await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
+        await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
         await sheet.getByRole('button', { name: 'Add', exact: true }).click();
         await expect(sheet).toBeHidden();
       } else {
         await page.getByLabel('Add an item').fill('Snooze an alert');
         await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+        await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
         await page.getByLabel('Add an item').press('Enter');
       }
       await expect(
@@ -160,7 +162,6 @@ for (const phone of [false, true]) {
       );
       expect(grow).toBeTruthy();
       await pick.selectOption({ label: grow! });
-      await tap(card.getByTestId('card-goal-edit').getByRole('button', { name: 'Save' }));
       await expect(card.getByTestId('card-goal')).toContainText('Grow retention');
       await tap(card.getByRole('button', { name: 'Change the outcome' }));
       await card
@@ -198,11 +199,13 @@ for (const phone of [false, true]) {
         const sheet = page.getByRole('dialog', { name: 'Add an item' });
         await sheet.getByLabel('Title').fill('Snooze an alert');
         await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
+        await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
         await sheet.getByRole('button', { name: 'Add', exact: true }).click();
         await expect(sheet).toBeHidden();
       } else {
         await page.getByLabel('Add an item').fill('Snooze an alert');
         await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+        await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
         await page.getByLabel('Add an item').press('Enter');
       }
       const card = panel(page);

@@ -35,6 +35,7 @@ async function sheetAdd(page: Page, title: string, where: string) {
   await sheet.getByLabel('Title').fill(title);
   await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
   await sheet.getByLabel('Where').selectOption({ label: where });
+  await sheet.getByLabel('Track').selectOption({ label: 'Usage alerts track' });
   await sheet.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(sheet).toBeHidden();
 }

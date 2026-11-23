@@ -38,6 +38,5 @@ test('an item moves onto a new track that has no PRD and no items yet', async ({
   const pick = panel(page).getByTestId('card-track-edit').getByLabel('Track');
   await expect(pick.locator('option').filter({ hasText: 'Partner care track' })).toHaveCount(1);
   await pick.selectOption({ label: 'Partner care track' });
-  await panel(page).getByTestId('card-track-edit').getByRole('button', { name: 'Save' }).click();
   await expect(panel(page).getByTestId('card-track')).toHaveText('Partner care track');
 });

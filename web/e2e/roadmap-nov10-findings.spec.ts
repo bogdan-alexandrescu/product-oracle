@@ -244,7 +244,6 @@ test.describe('Roadmap findings, Nov 10', () => {
     await panel(page)
       .getByRole('combobox', { name: 'Goal' })
       .selectOption({ label: 'Grow retention (measured by Teams active after 90 days)' });
-    await panel(page).getByRole('button', { name: 'Save' }).click();
     await expect(panel(page).getByTestId('card-goal')).toHaveText('Grow retention');
     await page.keyboard.press('Escape');
     // The PM-owned lane is no goal: no goal's measure under its name.
@@ -268,7 +267,6 @@ test.describe('Roadmap findings, Nov 10', () => {
       .getByTestId('card-track-edit')
       .getByLabel('Track')
       .selectOption({ label: 'Usage alerts track' });
-    await panel(page).getByTestId('card-track-edit').getByRole('button', { name: 'Save' }).click();
     await expect(panel(page).getByTestId('card-track')).toHaveText('Usage alerts track', {
       timeout: 1500,
     });
@@ -285,7 +283,6 @@ test.describe('Roadmap findings, Nov 10', () => {
       .getByTestId('card-track-edit')
       .getByLabel('Track')
       .selectOption({ label: 'Guided setup track' });
-    await panel(page).getByTestId('card-track-edit').getByRole('button', { name: 'Save' }).click();
     await expect(toasts(page)).toContainText('Mock failure');
     await expect(panel(page).getByTestId('card-track')).toHaveText('Usage alerts track');
   });
