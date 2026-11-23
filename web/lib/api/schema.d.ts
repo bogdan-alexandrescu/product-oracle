@@ -44479,6 +44479,8 @@ export interface components {
             code?: string | null;
             /** Code From */
             code_from?: ("feature" | "prd") | null;
+            /** Confirm Feature Id */
+            confirm_feature_id?: string | null;
             /** Title */
             title: string;
             /** Outcome */

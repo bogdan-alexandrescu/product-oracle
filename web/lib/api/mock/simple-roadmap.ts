@@ -288,6 +288,8 @@ interface SimpleDb {
   prd_milestones?: Record<string, PrdMilestone[]>;
   /** lane-gt-ui: each baseline feature's code (F-12), by id: an item reads its feature's code (server.ts). */
   feature_codes?: Record<string, string>;
+  /** gt-proposed: each item's feature still to confirm (fixes.to_confirm), by item key. */
+  feature_confirm?: Record<string, string>;
   /** Every Ground Truth feature's key by its id (changes._merge_plan reads its code from it). */
   feature_keys?: Record<string, string>;
   /** roadmap-edit-fixes: the Ground Truth features Oracle's draft may pick (additions._features: not
@@ -3054,6 +3056,7 @@ export function roadmapOut(
           : prdCode(s.section)
             ? 'prd'
             : null,
+      confirm_feature_id: db.feature_confirm?.[s.key] ?? null,
       roadmap: {
         id: stableUuid(`simple-doc/${s.roadmap}`),
         slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap,

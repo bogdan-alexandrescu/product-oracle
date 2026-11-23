@@ -938,8 +938,9 @@ export function EntityDrawer({
                   <div className="flex flex-wrap gap-2">
                     {d.status === 'proposed' && (
                       <>
+                        {/* gt-proposed: a proposed feature joins the Ground Truth with the next F-code. */}
                         <Button variant="solid" disabled={busy} onClick={() => decide('confirm')}>
-                          Confirm
+                          {d.type === 'feature' ? 'Confirm into the Ground Truth' : 'Confirm'}
                         </Button>
                         <Button disabled={busy} onClick={() => setAsking('reject')}>
                           Reject
