@@ -383,7 +383,7 @@ export function MkPrdReview() {
         <button
           type="button"
           className={
-            `rounded-md border border-line px-2 py-0.5 text-sm font-semibold hover:bg-pass-bg ${phase === 'open' && hoverChange === c.id ? 'bg-pass-bg ring-2 ring-pass' : ''}` /* MOCK-HOOK the pointer on Accept: the 1 click drawn */
+            'rounded-md border border-line px-2 py-0.5 text-sm font-semibold hover:bg-pass-bg'
           }
           onClick={() => setResolved((r) => ({ ...r, [c.id]: 'accepted' }))}
         >
@@ -391,7 +391,9 @@ export function MkPrdReview() {
         </button>
         <button
           type="button"
-          className="rounded-md border border-line px-2 py-0.5 text-sm font-semibold hover:bg-warn-bg"
+          className={
+            `rounded-md border border-line px-2 py-0.5 text-sm font-semibold hover:bg-warn-bg ${phase === 'open' && hoverChange === c.id ? 'bg-warn-bg ring-2 ring-warn' : ''}` /* MOCK-HOOK the pointer on Flag: the 1 click drawn */
+          }
           onClick={() => setResolved((r) => ({ ...r, [c.id]: 'flagged' }))}
         >
           Flag
@@ -986,11 +988,15 @@ export function MkPrdReview() {
               <span className="flex flex-wrap items-center gap-2">
                 <span
                   className={
-                    c.kind === 'removed' ? 'text-text-faint' : 'rounded bg-pass-bg/60 px-1'
+                    c.kind === 'removed' && resolved[c.id] !== 'undone' /* MOCK-HOOK undone: the line is back */
+                      ? 'text-text-faint'
+                      : 'rounded bg-pass-bg/60 px-1'
                   }
                 >
                   {c.kind === 'removed'
-                    ? 'Gone'
+                    ? resolved[c.id] === 'undone' /* MOCK-HOOK */
+                      ? `Back in ${changeWords(c).split(':')[0].replace('Removed from ', '')}: ${c.before}` // MOCK-HOOK
+                      : 'Gone'
                     : c.kind === 'added'
                       ? changeWords(c)
                       : `${changeWords(c).split(':')[0]}: ${c.after}`}

@@ -311,7 +311,7 @@
             },
             {
               "file": "frames/pr3-a-open.html",
-              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar; the pointer on Accept: 1 click resolves it."
+              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar; the pointer on Flag: 1 click resolves it."
             },
             {
               "file": "frames/pr3-a-done.html",
@@ -349,7 +349,7 @@
             },
             {
               "file": "frames/pr3-b-open.html",
-              "caption": "Pointing at the Assign rules card lights up its row; the pointer on the card's Accept: 1 click resolves it."
+              "caption": "Pointing at the Assign rules card lights up its row; the pointer on the card's Flag: 1 click resolves it."
             },
             {
               "file": "frames/pr3-b-done.html",
@@ -383,7 +383,7 @@
             },
             {
               "file": "frames/pr3-c-open.html",
-              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions; the pointer on Assign rules' Accept: 1 click per change."
+              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions; the pointer on Assign rules' Flag: 1 click per change."
             },
             {
               "file": "frames/pr3-c-done.html",
@@ -417,7 +417,7 @@
             },
             {
               "file": "frames/pr3-d-open.html",
-              "caption": "The same card while pointing at one change; the pointer on its Accept: 1 click resolves it."
+              "caption": "The same card while pointing at Assign rules; the pointer on its Flag: 1 click resolves it."
             },
             {
               "file": "frames/pr3-d-done.html",

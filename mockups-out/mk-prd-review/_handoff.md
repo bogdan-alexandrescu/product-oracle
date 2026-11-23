@@ -43,3 +43,14 @@ the roadmap result: `/simple/roadmap?mkprd=1&phase=done&pr2=a`. Every hook line 
   scrolled down keeps its scroll: its html scrolls to the same spot on load (inside the theme hook).
 - PR3 open frames draw the 1 click: the pointer sits on Accept (ringed). Undoing the removed Not doing line
   puts "Replies from chat apps." back (pr3-a-done-not, new).
+
+## Round 3 (Nov 23)
+
+- PR3 open frames (a, b, c, d) put the ringed pointer on Assign rules' Flag, the action the done frames show
+  (Flagged for Mara); captions say Flag. The real mouse rests on that Flag button in each snapshot.
+- Compare view (pr3-c-done): an undone removal reads "Back in Not doing: Replies from chat apps." beside Undone,
+  no longer "Gone".
+- 1512: not re-rendered this round. Round 2's limit stands (the live browser's gate offers only presets, none
+  1512 wide). A retry of a 1512 viewport this round could not run: after the five frames were taken the live
+  browser stopped answering (CDP connection refused on its endpoint). So *-long-1512 frames stay 1440x900
+  viewports zoomed to a 1512-wide layout.
