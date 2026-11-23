@@ -1,4 +1,4 @@
-"""A comment on a feature (#1553, migration 0134_feature_comments).
+"""A comment on a feature (#1553, migration 0135_feature_comments).
 
 A comment hangs on the feature, not on one row of it: a roadmap item's rows change from
 version to version and draft to draft, but its roadmap and ``item_key`` stay, so the comment

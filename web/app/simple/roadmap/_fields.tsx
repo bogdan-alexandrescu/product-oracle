@@ -13,6 +13,7 @@ import { LoadError, Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
 import { calendarDay } from '@/lib/dates';
 import { goalFigure } from '@/lib/format';
+import { goalTree } from '@/lib/goal-tree';
 import { useMe } from '@/lib/me';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
 import { byTrackOrder } from '@/lib/track-order';
@@ -395,7 +396,21 @@ export function PanelFields({
   ].sort(byTrackOrder);
   // prd-order: the PRD picker in the company PRD order.
   const prds = refs(items, (i) => i.prd).sort(byPrdOrderOf(prdOrderOf));
-  const goals = refs(items, (i) => i.goal);
+  // roadmap-add: any live top-level goal may be picked, one no item serves yet too (the page's own goal
+  // read, in the goals' order; Trash and archived are out of it), then the goals the items name.
+  const goalList = useQuery('simple-roadmap-goal-order', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
+  const goals: { id: string; title: string; metric?: string | null }[] = [
+    ...new Map(
+      [
+        ...goalTree((goalList.data ?? []).filter((g) => g.status === 'confirmed'))
+          .filter((n) => !n.parentId)
+          .map((n) => ({ id: n.goal.id, title: n.name })),
+        ...refs(items, (i) => i.goal),
+      ].map((g) => [g.id, g] as const),
+    ).values(),
+  ];
   // roadmap-edit-fixes: the stored key the read says names it (another PRD's feature key is
   // neither its key nor its code), else the one matching its key or code.
   // roadmap-edit-fixes round 1: every stored key that names it (the read's, and its key or code

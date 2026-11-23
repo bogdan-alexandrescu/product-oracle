@@ -441,6 +441,7 @@ import {
 import {
   bucketGoalsInOrder,
   goalBucketsDb,
+  goalInTrashByKey,
   placeBucketGoal,
   placeBucketGoals,
   routeGoalBuckets,
@@ -9804,7 +9805,13 @@ function routeBaselineFor(
       memberEmail,
       sourceItem,
       isMember: (id) => activeMember(db, id),
-      hidden: (id) => hidden.has(id),
+      // A goal in Trash is out of the entity list and reads, as the API's trash filter leaves it out.
+      hidden: (id) =>
+        hidden.has(id) ||
+        goalInTrashByKey(
+          db.simple_roadmap?.goal_buckets,
+          db.baseline.entities.find((e) => e.id === id && e.type === 'goal')?.key ?? '',
+        ),
       codesSeen: () => codesSeen(db.simple_roadmap),
       codesOf: (id) => tiedCodes(db.simple_roadmap, id, db.baseline),
       codesRead: () => codesRead(db.simple_roadmap, db.baseline),
