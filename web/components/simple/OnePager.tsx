@@ -32,6 +32,7 @@ import { api, ApiError, fixHref, unwrap, type ImportFix, type Schemas } from '@/
 import { useCompanyZone } from '@/lib/dates';
 import { DownloadNote, useDownloadNote } from '@/components/DownloadNote';
 import { DecisionNotes, LeftOutLine } from '@/components/simple/DecisionNotes';
+import { OnePagerFeatures } from '@/components/simple/OnePagerFeatures';
 import { downloadedNote } from '@/lib/export-note';
 import { useMe } from '@/lib/me';
 import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
@@ -1105,6 +1106,15 @@ export function OnePager({
                     }}
                   />
                 </div>
+              )}
+              {/* de-prd (PR2 a): the PRD's features under their goals, changed in place. */}
+              {codesQ.data && (
+                <OnePagerFeatures
+                  prd={v.document.slug}
+                  items={codesQ.data.items}
+                  canPropose={can('create_simple_change')}
+                  reload={() => Promise.all([codesQ.reload(), reloadPlan(), reloadPage()])}
+                />
               )}
               {planShown && (v.can_edit || v.can_propose) && !sessionId && (
                 // qa-simple-prd-p3-4: the plan's words come from the PRD's lines; they are changed there.
