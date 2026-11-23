@@ -564,6 +564,12 @@ def item_mark(row: Any) -> str:
 
 
 def marked(feature: Entity, kind: str, row: Any) -> bool:
+    """``row`` carries the feature's mark ``kind``. A row that is no roadmap item yet (a feature
+    about to be added to the company roadmap, oracle.simple.targets.add_to_company: every item
+    has a key, it has none) carries no mark: nothing was declined for it, and it waits for no
+    Confirm it of its own."""
+    if getattr(row, "item_key", None) is None:
+        return False
     return item_mark(row) in ((feature.attrs or {}).get(kind) or [])
 
 
