@@ -1,8 +1,8 @@
-import { expect, test, type Page } from './test';
-
 import { STALE_RULE_SCENARIO } from '../lib/api/mock/roadmap';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * The stale rule (the owner, Nov 23): confirming a proposed feature into the Ground Truth raises

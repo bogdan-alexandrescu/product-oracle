@@ -1188,7 +1188,7 @@ function nameRefs(reasons: readonly string[], names: Record<string, string>): st
 }
 
 /** What the stale rule compares: the Ground Truth's content and its links. */
-export interface TracedGraph {
+interface TracedGraph {
   entities: { id: string; type: string; key: string; title: string; [field: string]: unknown }[];
   edges: { id: string; type: string; src_id: string; dst_id: string; [field: string]: unknown }[];
 }
@@ -1199,7 +1199,7 @@ const EDGE_FIELDS = ['type', 'src_id', 'dst_id', 'attrs', 'status'];
 const DST_DOWNSTREAM = new Set(['affects', 'blocks', 'mitigates']);
 
 /** A copy of what the rule compares, taken before a write. */
-export function tracedGraph(g: { entities: readonly object[]; edges: readonly object[] }) {
+function tracedGraph(g: { entities: readonly object[]; edges: readonly object[] }) {
   return JSON.parse(JSON.stringify({ entities: g.entities, edges: g.edges })) as TracedGraph;
 }
 
@@ -1215,66 +1215,93 @@ function raised(before: Snapshot, after: Snapshot, changed: string[], join: stri
   );
 }
 
+type Meant = { id: string; verb: string };
+
+/** The verb of a changed entity, as staleness.VERBS; null when only its standing rose. */
+function entityVerb(before: Snapshot, after: Snapshot): string | null {
+  const changed = changedFields(before, after, ENTITY_FIELDS);
+  if (!changed.length || raised(before, after, changed, ['status', 'key'])) return null;
+  if (!changed.includes('status')) return 'changed';
+  if (after.status === 'rejected') return 'was rejected';
+  return before.status === 'rejected' ? 'was restored' : 'changed';
+}
+
+function entityChanges(before: TracedGraph, after: TracedGraph): Meant[] {
+  const left = new Map(after.entities.map((e) => [e.id, e]));
+  return before.entities.flatMap((b) => {
+    const e = left.get(b.id);
+    const verb = e ? entityVerb(b, e) : 'was deleted';
+    return verb ? [{ id: b.id, verb }] : [];
+  });
+}
+
+type TracedEdge = TracedGraph['edges'][number];
+/** The verb of a changed link; null when only its standing rose, or it was never in the trace. */
+function edgeVerb(b: TracedEdge | undefined, e: TracedEdge | undefined): string | null {
+  if (b?.status !== 'confirmed' && e?.status !== 'confirmed') return null;
+  if (!b) return 'gained a link';
+  if (!e) return 'lost a link';
+  const changed = changedFields(b, e, EDGE_FIELDS);
+  return !changed.length || raised(b, e, changed, ['status']) ? null : 'had a link changed';
+}
+
+function edgeChanges(before: TracedGraph, after: TracedGraph): Meant[] {
+  const was = new Map(before.edges.map((e) => [e.id, e]));
+  const now = new Map(after.edges.map((e) => [e.id, e]));
+  return [...new Set([...was.keys(), ...now.keys()])].flatMap((id) => {
+    const edge = (now.get(id) ?? was.get(id))!;
+    const verb = edge.type === 'owned_by' ? null : edgeVerb(was.get(id), now.get(id));
+    return verb ? [{ id: DST_DOWNSTREAM.has(edge.type) ? edge.dst_id : edge.src_id, verb }] : [];
+  });
+}
+
+/** Marks one Plan item for a change of meaning, and opens (or rewords) its stale alert. */
+function markItem(
+  db: RoadmapDb,
+  key: string,
+  entity: TracedGraph['entities'][number],
+  verb: string,
+): void {
+  const open = isStale({ freshness: db.freshness?.[key] });
+  const stale = (open && db.stale?.[key]) || { reasons: [], names: {} };
+  const ref = `${entity.type}:${entity.key}`;
+  stale.reasons = [...new Set([...stale.reasons, `${ref} ${verb}`])];
+  stale.names[ref] = entity.title;
+  (db.stale ??= {})[key] = stale;
+  (db.freshness ??= {})[key] = 'potentially_stale';
+  const detail = markedReason(db, key)!.detail;
+  const alert = db.alerts?.find(
+    (a) => a.item_key === key && a.kind === 'stale' && a.state !== 'resolved',
+  );
+  const title = ALERTS_APPROVED.find((i) => i.key === key)?.title ?? key;
+  if (alert) Object.assign(alert, { detail, state: 'open' });
+  else (db.alerts ??= []).push(staleAlert(db.tracks[0]!.id, key, title, detail));
+}
+
 /**
  * The stale rule, as the API marks (oracle.roadmap.staleness._by_entities): a write that changed
  * what a traced feature means marks the Plan items on it, with its reason, and opens their stale
  * alert; one that only raised its standing (or its link's) marks nothing.
  */
-export function markTraced(db: RoadmapDb, before: TracedGraph, after: TracedGraph): void {
-  const found: { id: string; verb: string }[] = [];
-  const had = new Map(before.entities.map((e) => [e.id, e]));
-  const left = new Map(after.entities.map((e) => [e.id, e]));
-  for (const e of after.entities) {
-    const b = had.get(e.id);
-    if (!b) continue;
-    const changed = changedFields(b, e, ENTITY_FIELDS);
-    if (!changed.length || raised(b, e, changed, ['status', 'key'])) continue;
-    const moved = changed.includes('status');
-    const verb =
-      moved && e.status === 'rejected'
-        ? 'was rejected'
-        : moved && e.status === 'confirmed' && b.status === 'rejected'
-          ? 'was restored'
-          : 'changed';
-    found.push({ id: e.id, verb });
-  }
-  for (const e of before.entities)
-    if (!left.has(e.id)) found.push({ id: e.id, verb: 'was deleted' });
-  const linked = new Map(before.edges.map((e) => [e.id, e]));
-  const still = new Map(after.edges.map((e) => [e.id, e]));
-  for (const id of new Set([...linked.keys(), ...still.keys()])) {
-    const [b, e] = [linked.get(id), still.get(id)];
-    // A link that was never confirmed is not in the trace: nothing was built on it.
-    if (b?.status !== 'confirmed' && e?.status !== 'confirmed') continue;
-    const now = (e ?? b)!;
-    if (now.type === 'owned_by') continue;
-    const changed = b && e ? changedFields(b, e, EDGE_FIELDS) : [];
-    if (b && e && (!changed.length || raised(b, e, changed, ['status']))) continue;
-    found.push({
-      id: DST_DOWNSTREAM.has(now.type) ? now.dst_id : now.src_id,
-      verb: !b ? 'gained a link' : !e ? 'lost a link' : 'had a link changed',
-    });
-  }
+function markTraced(db: RoadmapDb, before: TracedGraph, after: TracedGraph): void {
+  const entities = new Map([...before.entities, ...after.entities].map((e) => [e.id, e]));
+  const found = [...entityChanges(before, after), ...edgeChanges(before, after)];
   for (const [key, ids] of Object.entries(db.traces ?? {}))
-    for (const f of found) {
-      const entity = left.get(f.id) ?? had.get(f.id);
-      if (!ids.includes(f.id) || !entity) continue;
-      const open = isStale({ freshness: db.freshness?.[key] });
-      const stale = (open && db.stale?.[key]) || { reasons: [], names: {} };
-      const ref = `${entity.type}:${entity.key}`;
-      const reason = `${ref} ${f.verb}`;
-      if (!stale.reasons.includes(reason)) stale.reasons.push(reason);
-      stale.names[ref] = entity.title;
-      (db.stale ??= {})[key] = stale;
-      (db.freshness ??= {})[key] = 'potentially_stale';
-      const detail = markedReason(db, key)!.detail;
-      const alert = db.alerts?.find(
-        (a) => a.item_key === key && a.kind === 'stale' && a.state !== 'resolved',
-      );
-      const title = ALERTS_APPROVED.find((i) => i.key === key)?.title ?? key;
-      if (alert) Object.assign(alert, { detail, state: 'open' });
-      else (db.alerts ??= []).push(staleAlert(db.tracks[0]!.id, key, title, detail));
+    for (const { id, verb } of found) {
+      const entity = entities.get(id);
+      if (entity && ids.includes(id)) markItem(db, key, entity, verb);
     }
+}
+
+/** A write's marks: taken before it, applied when it succeeded (only where a Plan item is traced). */
+export function tracedWrite(
+  db: { roadmap?: RoadmapDb; baseline: Parameters<typeof tracedGraph>[0] },
+  req: Request,
+): (res: Response) => void {
+  const before = req.method !== 'GET' && db.roadmap?.traces ? tracedGraph(db.baseline) : null;
+  return (res) => {
+    if (before && db.roadmap && res.ok) markTraced(db.roadmap, before, tracedGraph(db.baseline));
+  };
 }
 
 /** The stale reason a change of meaning gave a Plan item, in words, while the item is stale. */

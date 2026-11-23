@@ -402,8 +402,7 @@ import {
   PLAN_APPROVE_STALE_SCENARIO,
   STALE_RULE_SCENARIO,
   trackRunBody,
-  markTraced,
-  tracedGraph,
+  tracedWrite,
   type RoadmapContext,
   type RoadmapDb,
 } from './roadmap';
@@ -16184,7 +16183,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     // inbox-reads: the Inbox's counts alone (as the API's GET /v1/inbox/counts) and a visit
     // recorded without the Inbox's answer (POST /v1/inbox/seen), from the Inbox's own route.
     // The stale rule: what a write changes of what a Plan item is traced to (markTraced).
-    const traced = req.method !== 'GET' && db.roadmap?.traces ? tracedGraph(db.baseline) : null;
+    const traced = tracedWrite(db, req);
     const inboxCall = (search = '') =>
       route(db, new Request(new URL(`/v1/inbox${search}`, url), { headers: req.headers }));
     let res =
@@ -16203,7 +16202,7 @@ export async function mockFetch(req: Request): Promise<Response> {
               r.ok ? reply('/v1/inbox/seen', 'post', undefined, 204) : r,
             )
           : await route(db, req);
-    if (traced && db.roadmap && res.ok) markTraced(db.roadmap, traced, tracedGraph(db.baseline));
+    traced(res);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === 'GET' && url.pathname === '/v1/simple/decisions/waiting' && res.ok)
       res = await withWaitingItems(db, req, res);
