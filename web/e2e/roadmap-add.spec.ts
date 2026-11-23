@@ -110,7 +110,7 @@ test.describe('roadmap-add', () => {
       .locator('option', { hasText: 'Faster activation' })
       .first()
       .getAttribute('value');
-    await goal.selectOption(option!);
+    await goal.selectOption(option ?? '');
     await expect(panel(page).getByTestId('card-goal')).toHaveText('Faster activation');
     await expect.poll(() => groupOf(page, 'Ledger export')).toBe('Faster activation');
   });
