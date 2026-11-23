@@ -7,6 +7,7 @@ import { SimplePage } from '@/components/simple/SimplePage';
 import { Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
 import { useQuery } from '@/lib/use-query';
+import { MkPrdReview, mkActive, mkParams } from '@/components/simple/MkPrdReview'; // MOCK-HOOK
 
 /**
  * A PRD's one-pager (#723): S5's page ("A · Paper", components/simple/OnePager), the route the
@@ -16,6 +17,11 @@ import { useQuery } from '@/lib/use-query';
  * only the PRDs that replaced it, each linking its one-pager (the API's one-pager read is a 404).
  */
 export function OnePager({ slug }: { slug: string }) {
+  if (mkActive(mkParams())) return <MkPrdReview />; // MOCK-HOOK
+  return <RealOnePager slug={slug} />; // MOCK-HOOK
+}
+
+function RealOnePager({ slug }: { slug: string }) { // MOCK-HOOK
   const q = useQuery(`simple|one-pager|${slug}`, () =>
     unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc: slug } } })),
   );

@@ -8,10 +8,12 @@ import { WithFeatureMarks } from '@/components/current-state/CurrentState';
 
 import { SIMPLE_MODE } from '../_flag';
 import { SimpleRoadmap } from './_roadmap';
+import { MkPrdRoadmap, mkParams } from '@/components/simple/MkPrdReview'; // MOCK-HOOK
 
 /** Simple S4 (#723): the company-wide roadmap (direction "A · Wall"). */
 function SimpleRoadmapPage() {
   if (!SIMPLE_MODE) notFound();
+  if (mkParams().mkprd) return <MkPrdRoadmap />; // MOCK-HOOK
   return (
     <Suspense>
       <WithFeatureMarks>
