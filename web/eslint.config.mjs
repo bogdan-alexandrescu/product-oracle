@@ -181,7 +181,7 @@ const DESIGN_SYSTEM = {
 
 // #1581: what eslint-config-next's core-web-vitals and typescript sets gave, from their own
 // plugins (docs/vite-migration/dependencies.md, Lint after eslint-config-next).
-const eslintConfig = defineConfig([
+const ALL_RULES = defineConfig([
   js.configs.recommended,
   ...tseslintConfigs.recommended,
   react.configs.flat.recommended,
@@ -213,8 +213,7 @@ const eslintConfig = defineConfig([
   },
   // #1585 phase 1, core and imports, every rule at error. Findings from before it sit in
   // eslint-suppressions.json (`npx eslint --suppress-all`) and only go down from there:
-  // `npx eslint --prune-suppressions` after a fix. Typed rules (projectService) wait for a later
-  // phase: over this tree they ran `npm run lint` out of memory even at a 4 GB heap.
+  // `npm run lint -- --prune-suppressions` after a fix. Typed rules are phase 4's, below.
   {
     plugins: { 'import-x': importX, 'unused-imports': unusedImports },
     settings: {
@@ -364,5 +363,45 @@ const eslintConfig = defineConfig([
     'playwright-report/**',
   ]),
 ]);
+
+// #1585 phase 4, the typed typescript-eslint rules ai-studio uses, at error with the same
+// suppressions baseline. They need a TypeScript program; with the rules above in the same process
+// `npm run lint` ran out of a 4 GB heap, and alone over the whole tree they needed more than 3 GB.
+// So scripts/lint.mjs lints in three processes over the same files: LINT_PASS=untyped (every rule
+// but these), then these alone in two halves, typed-app (all but e2e/) and typed-e2e (e2e/ only).
+// Without LINT_PASS (an editor, the ESLint API in lib/type-scale.test.ts and e2e/date-lint.spec.ts)
+// the untyped rules run: a file linted from text, not on disk, has no TypeScript program.
+export const TYPED_RULES = {
+  '@typescript-eslint/await-thenable': 'error',
+  '@typescript-eslint/no-floating-promises': 'error',
+  '@typescript-eslint/no-misused-promises': 'error',
+  '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+};
+const TYPED = {
+  files: ['**/*.ts', '**/*.tsx', '**/*.mts'],
+  languageOptions: {
+    parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+  },
+  rules: TYPED_RULES,
+};
+const OTHER_RULES_OFF = Object.fromEntries(
+  ALL_RULES.flatMap((config) => Object.keys(config.rules ?? {}))
+    .filter((rule) => !(rule in TYPED_RULES))
+    .map((rule) => [rule, 'off']),
+);
+// Disable comments for the rules turned off here are the untyped pass's to report.
+const typedPass = (ignores) => [
+  ...ALL_RULES,
+  TYPED,
+  { linterOptions: { reportUnusedDisableDirectives: 'off' }, rules: OTHER_RULES_OFF },
+  globalIgnores(ignores),
+];
+
+const PASSES = {
+  untyped: ALL_RULES,
+  'typed-app': typedPass(['e2e/']),
+  'typed-e2e': typedPass(['**/*', '!e2e/', '!e2e/**']),
+};
+const eslintConfig = PASSES[process.env.LINT_PASS] ?? ALL_RULES;
 
 export default eslintConfig;
