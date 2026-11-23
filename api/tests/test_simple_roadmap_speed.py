@@ -46,12 +46,14 @@ VIEWS = {
 # Each view's body on the seed as 5c6d57bed answered it (the company's id masked).
 # roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
 # timeline-order: each item's position and before_override (the bodies otherwise unchanged).
+# gt-proposed: each roadmap item's confirm_feature_id (null on this seed), after code_from; the
+# five roadmap views differ from c92397816's by that field alone, the two counts not at all.
 DIGESTS = {
-    "goal": "a3cec1340857c7903e84a9bbe48264dd67886d9265a89d131873ed82949eb750",
-    "track": "27d186e468f134121211b89ab769fe7730770376d4e69573ad0107469e44a56b",
-    "prd": "dc909431002cff804a6539a75cbd67e58cb67eeda429aa35a2a775da7682940f",
-    "one-roadmap": "3635264d3a242634d73a0bb71d100b6675d77b8a4b392b53d9b68e1a0f859b01",
-    "viewer": "45ee43133a5bea2799fb5058787abfc46d4adf22441a50dca30b3aee0c1f4105",
+    "goal": "d67e4dfb7cd7fa9062fe40f5a447300ceffbf7230d5e373b667d0751508b86cb",
+    "track": "6e674125e118231c410a426b94deaee076c9aa7b2287610ffa0875729f8c498b",
+    "prd": "72783dbad6d3fad466c873e3889d871d09ce5108c8e4278df8040bd37b7efb91",
+    "one-roadmap": "4b7156cce5ee366424d58db6ca6bb8a4dc4505cf8c65068e3f205ac4c4f08d94",
+    "viewer": "ceb7285ce0a274e8acfd5f2164af2e1c62e299c551ef345e5108724b2979c80a",
     "waiting": "6ec46197015480da730ce7e5d0b228599ec45f31eb3ddac72fe02b136eef19b6",
     "waiting-viewer": "8e3c599ef74b60ae7cc28c7bbcbee560464dfc074a18d9e9ac36e11f81feded5",
 }

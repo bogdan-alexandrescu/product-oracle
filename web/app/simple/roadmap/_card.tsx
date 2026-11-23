@@ -30,6 +30,7 @@ import { flagKey } from '@/components/simple/chat/ChatCard';
 import { ItemTalk } from '@/components/simple/chat/ItemTalk';
 import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from '@/lib/api/simple-chat';
 import { DecidedWho } from '@/components/simple/DecidedWho';
+import { FeatureComments } from '@/components/simple/FeatureComments';
 import { useMe } from '@/lib/me';
 import { useScreenSubject } from '@/lib/screen-subject';
 import { errorMessage } from '@/lib/use-query';
@@ -1679,6 +1680,7 @@ export function FloatingCard({
           </button>
         )}
       </div>
+      <FeatureComments item={item} />
       {after}
     </>
   );

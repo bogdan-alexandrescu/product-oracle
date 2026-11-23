@@ -99,7 +99,10 @@ for (const size of SIZES) {
       expect(faster).toBeTruthy();
       await pick.selectOption({ label: faster! });
       await expect(goal).toContainText('Faster activation');
-      await tap(page.getByRole('button', { name: 'Undo' }).last());
+      // roadmap-add: the pick saves at once; its own toast replaces the earlier one, so wait for it.
+      const toast = page.getByTestId('toasts').filter({ hasText: 'Goal changed' });
+      await expect(toast).toBeVisible();
+      await tap(toast.getByRole('button', { name: 'Undo' }));
       await expect(goal).toContainText('Grow retention');
       await expect(panel(page).getByTestId('card-name')).toContainText('Weekly alert summary');
     });

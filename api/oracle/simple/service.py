@@ -137,6 +137,9 @@ class Entry:
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
+    # gt-proposed: its feature still to confirm for it (oracle.baseline.fixes.to_confirm), the
+    # one Confirm into the Ground Truth confirms; None when it is in the Ground Truth or has none.
+    confirm: uuid.UUID | None = None
     # trash-features-goals: the item's goal_ids less a goal in Trash (None: row.goal_ids).
     goal_ids: list[uuid.UUID] | None = None
     # one-feature-panel: who the owner shown is (the item's own, else its track's).
@@ -728,7 +731,12 @@ async def load(
             depends_on=[str(d) for d in e.depends_on],
             status=e.status,
             draft=e.row.draft,
-            owner_id=str(e.track.owner_id) if e.track and e.track.owner_id else None,
+            # stale-flags: the owner the panel shows and set_owner writes (its own, else its
+            # track's live owner), so picking one there clears "Draft with no owner to confirm
+            # it". A light read names no members: the item's own owner stands as stored.
+            owner_id=str(e.row.owner_id)
+            if light and e.row.owner_id
+            else (str(e.owner_id) if e.owner_id and e.owner_name else None),
             blockers=e.blockers,
             milestone=(e.milestone.name or "Milestone", e.milestone.date)
             if e.milestone is not None and e.milestone.date is not None
@@ -1177,12 +1185,30 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
     key, F-12, or its PRD section's, F-06; the same as Priorities reads), else the PRD
     code of its own section; None for an item with neither (no initials outside
     Priorities)."""
+    from oracle.baseline.fixes import to_confirm
     from oracle.roadmap import codes
 
     fids = {e.row.feature_id for e in entries if e.row.feature_id}
     by_feature = await codes.feature_codes(db) if fids else {}
+    # gt-proposed: the features not yet confirmed (or confirmed while an item waits), by id.
+    open_ = (
+        {
+            f.id: f
+            for f in await db.scalars(
+                select(Entity).where(
+                    Entity.id.in_(fids),
+                    Entity.type == "feature",
+                    Entity.status.in_(("proposed", "confirmed")),
+                )
+            )
+        }
+        if fids
+        else {}
+    )
     for e in entries:
         e.code = codes.code_of(e.row, by_feature)
+        f = to_confirm(open_.get(e.row.feature_id), e.row) if e.row.feature_id else None  # type: ignore[arg-type]
+        e.confirm = f.id if f is not None else None
 
 
 async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:
@@ -1453,6 +1479,7 @@ def item_out(
         key=row.item_key,
         code=code,
         code_from=("feature" if e.code and e.code != prd else "prd") if e.code or prd else None,
+        confirm_feature_id=e.confirm,
         title=title,
         outcome=row.outcome,
         note=row.note,
@@ -1876,6 +1903,12 @@ async def _track_bands(
     return out
 
 
+def _shown_owner(e: Entry) -> str:
+    """The owner the Owner filter matches: the one item_out shows (its own, else its
+    track's), as an id; "none" with no owner."""
+    return str(e.owner_id) if e.owner_id is not None and e.owner_name else "none"
+
+
 async def build(
     db: AsyncSession,
     principal: Any,
@@ -1886,13 +1919,14 @@ async def build(
     start: date | None = None,
     end: date | None = None,
     roadmap: str | None = None,
+    owner: str | None = None,
 ) -> SimpleRoadmapOut:
     from oracle.simple import drafts
 
     # roadmap-speed: the read writes nothing, so each document's deciders, reviewers and
     # owners are read once for all its parts.
     with drafts.one_read():
-        return await _build(db, principal, group, prd, goal, track, start, end, roadmap)
+        return await _build(db, principal, group, prd, goal, track, start, end, roadmap, owner)
 
 
 async def _build(
@@ -1905,6 +1939,7 @@ async def _build(
     start: date | None,
     end: date | None,
     roadmap: str | None,
+    owner: str | None = None,
 ) -> SimpleRoadmapOut:
     from oracle.simple import drafts, key_dates
 
@@ -1935,6 +1970,7 @@ async def _build(
             )
         )
         and (not track or (e.track is not None and track == str(e.track.id)))
+        and (not owner or owner == _shown_owner(e))
         and (start is None or e.resolved.end.date >= start)
         and (end is None or e.resolved.start.date <= end)
     ]

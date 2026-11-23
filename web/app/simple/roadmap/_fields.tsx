@@ -3,21 +3,22 @@
 // save is one Simple change (Undo, the "changed by …" conflict rule; a commenter's is a
 // suggestion for an approver). Without canChange (a viewer) the fields only read.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
+import { Button, toast } from '@/components/ds';
 import { Icon } from '@/components/ds/Icon';
 import { InfoTip } from '@/components/ds/InfoTip';
-import { LoadError, Loading } from '@/components/ui';
 import { Named, NOT_IN_GT, NotInGt } from '@/components/simple/FeatureName';
-
+import { LoadError, Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
-import { goalFigure } from '@/lib/format';
 import { calendarDay } from '@/lib/dates';
+import { goalFigure } from '@/lib/format';
+import { goalTree } from '@/lib/goal-tree';
+import { useMe } from '@/lib/me';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
 import { byTrackOrder } from '@/lib/track-order';
-import { useQuery } from '@/lib/use-query';
+import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 
-import type { Act } from './_card';
 import {
   confidenceWord,
   datesFrom,
@@ -33,6 +34,8 @@ import {
   type Item,
   type Milestone,
 } from './_lib';
+
+import type { Act } from './_card';
 
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
 const TAP =
@@ -268,6 +271,58 @@ function milestoneShown(
   return served ?? '';
 }
 
+/**
+ * gt-proposed: a feature a run only proposed joins the Ground Truth from its panel, as the Ground
+ * Truth check's Confirm it does: confirmed for this item, with the next F-code; every page reads again.
+ */
+function ConfirmIntoGt({ item }: { item: Item }) {
+  const { can } = useMe();
+  const [busy, setBusy] = useState(false);
+  if (!can('confirm_entity') || !item.confirm_feature_id) return null;
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      const e = await unwrap(
+        api.POST('/v1/baseline/entities/{entity_id}/confirm', {
+          params: { path: { entity_id: item.confirm_feature_id! }, query: { item_id: item.id } },
+        }),
+      );
+      toast({
+        place: 'corner',
+        message: `Confirmed “${item.title}”${/^[A-Z]{1,3}-\d+$/.test(e.key) ? ` as ${e.key}` : ''}.`,
+      });
+      dataChanged();
+    } catch (err) {
+      toast({ place: 'corner', message: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button
+      variant="ghost"
+      data-testid="card-code-confirm"
+      disabled={busy}
+      className="h-6! px-2! text-xs!"
+      onClick={() => void confirm()}
+    >
+      Confirm into the Ground Truth
+    </Button>
+  );
+}
+
+/** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either. */
+function ownCode(item: Item): ReactNode {
+  if (!item.code || !item.confirm_feature_id) return item.code;
+  return (
+    <span className="inline-flex items-center gap-1">
+      {item.code}
+      <NotInGt className="h-5! px-2! text-xs!" />
+      <ConfirmIntoGt item={item} />
+    </span>
+  );
+}
+
 export function PanelFields({
   item,
   items,
@@ -341,7 +396,21 @@ export function PanelFields({
   ].sort(byTrackOrder);
   // prd-order: the PRD picker in the company PRD order.
   const prds = refs(items, (i) => i.prd).sort(byPrdOrderOf(prdOrderOf));
-  const goals = refs(items, (i) => i.goal);
+  // roadmap-add: any live top-level goal may be picked, one no item serves yet too (the page's own goal
+  // read, in the goals' order; Trash and archived are out of it), then the goals the items name.
+  const goalList = useQuery('simple-roadmap-goal-order', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
+  const goals: { id: string; title: string; metric?: string | null }[] = [
+    ...new Map(
+      [
+        ...goalTree((goalList.data ?? []).filter((g) => g.status === 'confirmed'))
+          .filter((n) => !n.parentId)
+          .map((n) => ({ id: n.goal.id, title: n.name })),
+        ...refs(items, (i) => i.goal),
+      ].map((g) => [g.id, g] as const),
+    ).values(),
+  ];
   // roadmap-edit-fixes: the stored key the read says names it (another PRD's feature key is
   // neither its key nor its code), else the one matching its key or code.
   // roadmap-edit-fixes round 1: every stored key that names it (the read's, and its key or code
@@ -393,9 +462,16 @@ export function PanelFields({
                   ? 'It comes from its Ground Truth feature: change it there.'
                   : "It comes from its PRD's section: change it in the PRD."}
               </InfoTip>
+              {/* gt-proposed: a code from a feature a run only proposed is still no Ground Truth one. */}
+              {item.confirm_feature_id && (
+                <>
+                  <NotInGt className="h-5! px-2! text-xs!" />
+                  <ConfirmIntoGt item={item} />
+                </>
+              )}
             </span>
           ) : (
-            (item.code ?? (
+            (ownCode(item) ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
               <span
                 className="inline-flex flex-wrap items-center gap-x-1"
@@ -407,6 +483,7 @@ export function PanelFields({
                   Roadmap items that are no feature of the Ground Truth, or one only proposed so
                   far.
                 </InfoTip>
+                {item.confirm_feature_id && <ConfirmIntoGt item={item} />}
               </span>
             ))
           )

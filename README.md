@@ -1,16 +1,56 @@
 # Product Oracle
 
-An AI head of product. This repo holds the thin MVP app that runs the PRD feedback
-loop: import a draft as version N, review it (inline comments, per-section verdicts),
-hand open feedback back to the agent track, diff versions, approve and export.
+An AI head of product. Oracle keeps a cited graph of a company's goals, features and the
+links between them (the Ground Truth), turns requests and meetings into PRDs and a
+roadmap, and runs agents that draft, check and revise that work while people review,
+comment and approve.
 
-- Design: [`docs/design.md`](docs/design.md)
-- MVP spec (the contract for this code): [`docs/mvp-app.md`](docs/mvp-app.md)
+- Design: [`docs/design.md`](docs/design.md); the first app's spec:
+  [`docs/mvp-app.md`](docs/mvp-app.md); the current design set:
+  [`docs/product-oracle-v2/`](docs/product-oracle-v2/)
+- The Ground Truth, defined once: [`docs/ground-truth.md`](docs/ground-truth.md)
 
 ```
-api/   FastAPI + async SQLAlchemy 2 + Alembic (Python 3.12, uv)
-web/   Next.js (App Router, TypeScript, Tailwind)
+api/                FastAPI + async SQLAlchemy 2 + Alembic on Postgres 16 (Python 3.12, uv)
+web/                Vite + React + TanStack Router (TypeScript, Tailwind), served by nginx
+ops/                deploy scripts (ops/deploy/), access grants, lane and workflow briefs
+docs/               design, specs, runbooks, contracts, lessons
+.github/workflows/  CI and the vulnerability scan
 ```
+
+## The product today
+
+Two modes, switched with *Simple* / *Detailed* at the top of the app.
+
+**Simple** (the plain view for most people):
+
+- **Home**
+- **One-pagers**
+- **Roadmap**, shown as Timeline, Gantt, Now / Next / Later or Waterfall
+- **Goal map**
+- **Priorities**, with Goal buckets
+- **Meetings**, **Decisions**, **Inbox**
+- **Ask Oracle**, a panel that opens beside any page
+
+**Detailed** (the full view): Home, Requests, Ground Truth, PRDs (draft versions, inline
+comments, a verdict per section, diffs, approve and export to PDF, HTML or Markdown),
+Priorities, Plan (with Launches), Runs, Inbox, Company, Settings.
+
+Simple is behind a flag, off by default: `ORACLE_SIMPLE_MODE` on the API and
+`VITE_ORACLE_SIMPLE_MODE=1` in the web build (the mock build turns it on). With it off,
+everyone lands in Detailed.
+
+**Roles**, lowest to highest: *viewer* (reads), *commenter* (comments; edits become
+proposals), *approver* (also confirms or rejects run proposals), *owner* (also accepts
+proposals, invites and manages members). The web checks them only through `can()` or an
+item's own `can_*` field.
+
+**Agents.** Agent runs execute in SwarmCloud, behind `api/oracle/swarm/`. Oracle hands
+each run a short-lived run token, and the agents call back into Oracle's MCP endpoint,
+`/mcp`, whose tools are Oracle's own API operations, limited by the caller's rights. API
+tokens can call `/mcp` too. How the two sides talk:
+[`docs/swarmcloud-interface.md`](docs/swarmcloud-interface.md). Oracle's own model jobs
+run on a pool of Claude accounts: [`docs/claude-accounts.md`](docs/claude-accounts.md).
 
 ## Run locally
 
@@ -18,107 +58,148 @@ Requires Docker (with Compose), and for development and the agent-track CLI `uv`
 Node 24.
 
 ```sh
-make up        # postgres:16 + api (:8000, runs migrations on start) + web (:3000)
-make seed      # creates the tenant and admin@example.com; prints the sign-in and a new API token
+make up        # postgres:16 + api (:8000, migrates on start) + web (:3000)
+make seed      # creates the tenant and the admin; prints the sign-in and a new API token
 open http://localhost:3000
 ```
 
-`make seed` prints the admin email and, the first time, a generated password; every run
-also mints a new API token for the agent track (send it as `Authorization: Bearer
-<token>`; the `oracle` CLI reads `ORACLE_API_TOKEN`). The token acts as the admin (their
-role, connections and sources), so per-user commands such as `oracle sync` work with it;
-tokens created without a user act with their own role. Both secrets are shown once: only
-hashes are stored. The admin's email is required, through `ARGS`
-(`make seed ARGS="--email you@yourcompany.com"`, optionally `--password ...`; see
-`python -m oracle.seed --help`): there is no default admin, and reserved example domains
-(example.com, *.test, ...) are refused outside the test build.
+The API image starts with `python -m oracle.startup`: it brings the database to the
+Alembic head (unless `ORACLE_MIGRATE_AT_START=0`), then serves.
 
-The browser only talks to the web app: nginx proxies `/v1/*` and `/healthz` to the
-API (`web/nginx/`; `vite.config.mts` in dev), so the session cookie is same-origin and needs no CORS.
+`make seed` needs the admin's email (`make seed ARGS="--email you@yourcompany.com"`,
+optionally `--password ...`; see `python -m oracle.seed --help`): there is no default
+admin, and reserved example domains (example.com, \*.test, ...) are refused outside the
+test build. It prints the password the first time and, on every run, a new API token for
+the agent track (send it as a bearer token in the Authorization header; the `oracle` CLI reads
+`ORACLE_API_TOKEN`). The token acts as the admin. Both secrets are shown once: only
+hashes are stored.
 
-### First run (about 5 minutes)
-
-The `oracle` CLI is the agent track's side of the loop; run it from `api/`.
-
-```sh
-make up && make seed                     # 1. start, seed; note the password and token
-cd api && uv sync
-export ORACLE_API_TOKEN=<token>           #    the token make seed printed
-uv run oracle push tests/fixtures/prd_v1.md       # 2. push a draft -> "Imported checkout-redesign version 1"
-```
-
-3. Open http://localhost:3000, sign in as `admin@example.com`, open *Checkout redesign
-   PRD*, version 1.
-4. Review: select some text in *5.2 Shipping step* and click *Comment*; on *3. Users*
-   click *Approve* then *Save*; on *6. Success metrics* click *Request changes*, write
-   a note, *Save*.
-5. Pull the feedback package, as the agent track would before writing the next draft:
-
-   ```sh
-   uv run oracle pull checkout-redesign --version 1 --out /tmp/oracle
-   # -> 2 open item(s), 1 locked section(s) (users); see /tmp/oracle/*.open-items.json
-   ```
-
-6. Push v2: copy `tests/fixtures/prd_v2.md`, replace the two `feedback_id` values under
-   `resolutions:` with the `id`s from `checkout-redesign-v1.open-items.json`, then
-   `uv run oracle push /tmp/oracle/prd_v2.md`.
-7. In the UI, open version 2: *Compare with v1* shows the diff; the *Resolutions* tab
-   shows how each item was handled.
-8. *Approve version*, *Confirm*, then *Export PDF* (or HTML / MD).
-
-Other targets:
-
-| Target | Does |
-|--------|------|
-| `make down` | stop the stack |
-| `make migrate` | `alembic upgrade head` inside the api container |
-| `make test` | API tests against the compose Postgres (`oracle_test` database, wiped by the tests) |
-| `make lint` | ruff (check + format) and eslint |
-| `make openapi` | regenerate `web/lib/api/openapi.json` and `schema.d.ts`; commit both |
-| `make e2e` | the end-to-end Playwright spec against the real stack (below) |
-| `make e2e-mock` | the UI Playwright suite against the in-browser mock API |
+The browser only talks to the web app: nginx proxies `/v1/*`, `/uploads/*` and
+`/healthz` to the API (`web/nginx/`; `vite.config.mts` in dev), so the session cookie is
+same-origin and needs no CORS.
 
 Without Docker for the apps: start only Postgres (`docker compose up -d postgres`), then
 
 ```sh
 cd api && uv sync && uv run alembic upgrade head && uv run python -m oracle.seed --email you@yourcompany.com
 uv run uvicorn oracle.main:app --reload          # :8000
-cd web && npm ci && npm run dev                  # :3000, proxies /v1/* to :8000
+cd web && npm ci && npm run dev                  # Vite dev server, proxies /v1/* to :8000
 ```
 
-### End-to-end test
-
-`make e2e` runs `web/e2e/real/feedback-loop.spec.ts` against the real stack: push v1
-with `oracle push`, comment and give two verdicts in the UI, `oracle pull` and check the
-open items and the locked section, push v2 with resolutions for both items, check the
-diff and the resolution report, approve v2 and export a PDF. Playwright
-(`web/playwright.real.config.ts`) starts:
-
-- the API on :8100 against `oracle_e2e`, which `web/e2e/real/reset_stack.py` drops,
-  recreates, migrates and seeds on every run (override with `E2E_DATABASE_URL`);
-- a production web build (`web/.next-e2e`) on :3200 that proxies to that API.
-
-It needs a Postgres 16 on localhost:5432 with the compose credentials; `make e2e` starts
-the compose one (`make e2e E2E_POSTGRES=` if you already run one), the API's PDF
-dependencies (Pango, see `api/Dockerfile`) and Chromium (`cd web && npx playwright
-install chromium`). Equivalent by hand:
+**No backend at all**: the mock build runs the whole UI against an in-browser fake of the
+API (`web/lib/api/mock`), Simple on; sign in as `admin@example.com` / `demo`
+([`web/README.md`](web/README.md)).
 
 ```sh
-docker compose up -d --wait postgres
-cd api && uv sync && cd ../web && npm ci && npx playwright install chromium
-npx playwright test -c playwright.real.config.ts
+cd web && npm ci
+npm run dev:mock                          # dev server
+npm run build:mock && npm run start:mock  # the build the Playwright suite uses
 ```
 
-Settings are environment variables with the `ORACLE_` prefix (see
-`api/oracle/config.py`): `ORACLE_DATABASE_URL`, `ORACLE_SECRET_KEY` (signs the session
-cookie; set it outside local dev: with `ORACLE_ENV=production`, `ORACLE_COOKIE_SECURE` or
-`ORACLE_IAP_AUDIENCES` the API refuses to start with the default or a key under 32 characters,
-e.g. `openssl rand -hex 32`), `ORACLE_ENV` (`production` on a real deployment: it refuses
-the switches meant for tests), `ORACLE_COOKIE_SECURE`, `ORACLE_CORS_ORIGINS`, `ORACLE_APP_URL`
-(where people open the web app, default `ORACLE_PUBLIC_URL`, where the app and the API
-share a host; exports turn a roadmap's links to its PRD's sections into absolute URLs
-under it), and the `ORACLE_IAP_*` settings below.
-The web app reads `API_INTERNAL_URL` (default `http://localhost:8000`) at build time.
+### The agent track's CLI
+
+The `oracle` CLI (from `api/`, `uv run oracle --help`) is the agent track's side of the
+PRD loop: `push` imports a draft as the next version, `pull` writes a version's open
+feedback, `sync` syncs your sources, `baseline` pushes or pulls the Ground Truth as YAML,
+`tick` advances runs and queued jobs, `accounts` / `account` manage the Claude account pool.
+
+```sh
+cd api && uv sync
+export ORACLE_API_TOKEN=<token>                       # the token make seed printed
+uv run oracle push tests/fixtures/prd_v1.md           # "Imported checkout-redesign version 1"
+uv run oracle pull checkout-redesign --version 1 --out "$TMPDIR/oracle"
+```
+
+## Make targets
+
+| Target | Does |
+|--------|------|
+| `make up` / `make down` / `make logs` | start, stop, follow the compose stack |
+| `make seed` | the tenant, the admin and a new API token (above) |
+| `make migrate` | `alembic upgrade head` inside the api container |
+| `make test` | API tests against the compose Postgres (`oracle_test` database, wiped by the tests) |
+| `make lint` | ruff (check + format) and the web lint |
+| `make fmt` | ruff fixes and formats the API |
+| `make openapi` | regenerate `web/lib/api/openapi.json` and `schema.d.ts`; commit both |
+| `make web-build` | the production web build |
+| `make e2e` | the end-to-end Playwright specs against the real stack (below) |
+| `make e2e-mock` | the UI Playwright suite against the mock API |
+
+## Tests
+
+- **API**: pytest under `api/tests`. Set `ORACLE_TEST_DATABASE_URL` to a Postgres 16
+  database; without it, tests that cannot reach one are skipped, not failed. Each xdist
+  worker makes its own database (`oracle_test_gw0`, ...). `make test` uses the compose one.
+  Lint: `cd api && uv run ruff check . && uv run ruff format --check .`.
+- **Web**, from `web/`:
+
+  ```sh
+  npx tsc --noEmit -p .
+  npm run lint            # ESLint in three passes (scripts/lint.mjs), with eslint-suppressions.json
+  npm run format:check    # Prettier; npm run format writes it
+  npm run test:unit       # Vitest: logic and render tests beside their module
+  npx playwright test     # the mock-backed UI suite in e2e/ (builds and serves the mock app)
+  ```
+
+  Every user-facing change has a mock-backed Playwright spec in `web/e2e`. The prose
+  guard (`e2e/prose-guard.spec.ts`) counts each page's visible text against
+  `e2e/prose-ceilings.json`; ceilings only go down (`npm run prose:ratchet`).
+- **Docs**: `python3 docs/contracts/check.py` checks the quotes, templates and YAML the
+  docs contracts pin (`--write` refreshes them).
+- **End to end**: `make e2e` runs the specs in `web/e2e/real` against the real stack.
+  One of them, `feedback-loop.spec.ts`, is the PRD loop: push v1 with `oracle push`,
+  comment and give verdicts in the UI, `oracle pull`, push v2 with resolutions, check
+  the diff, approve and export. Playwright
+  (`web/playwright.real.config.ts`) starts the API on :8100 against `oracle_e2e` (dropped,
+  migrated and seeded on every run by `web/e2e/real/reset_stack.py`; override with
+  `E2E_DATABASE_URL`) and a production web build behind nginx on :3200. It needs Postgres 16
+  on localhost:5432 with the compose credentials (`make e2e` starts the compose one;
+  `make e2e E2E_POSTGRES=` if you run your own), the API's PDF dependencies (Pango, see
+  `api/Dockerfile`) and Chromium (`cd web && npx playwright install chromium`).
+
+## CI and release
+
+`.github/workflows/ci.yml` runs on every push to `main` and by hand
+(`workflow_dispatch`, on any branch); it does **not** run on pull requests. Its jobs: the
+API suite in four shards on Postgres 16 with ruff, coverage floors, pyright against its
+baseline, the timing tests; the web job (lint, format check, tsc, Vitest, generated API
+types up to date, `docs/contracts/check.py`, the build); the real-stack `make e2e`; the
+mock Playwright suite in eight shards, with the prose guard; the timing specs.
+`.github/workflows/vulnerability-scan.yml` scans the lockfiles with OSV-Scanner on each
+push to `main`, weekly and by hand.
+
+Release: the `deploy` job in `ci.yml` runs after every test job passes on a `main` push,
+only when the repository variable `ORACLE_DEPLOY_ENABLED` is `true`. It builds and pushes
+both images, backs up the database, stages the API with no traffic, migrates in its own
+step (`python -m oracle.startup migrate`), moves the traffic, then deploys the web
+([`docs/deploy/actions-deploy.md`](docs/deploy/actions-deploy.md)). While that job is
+off, the API is deployed by hand with `ops/deploy/deploy-api.sh`, which refuses to run
+when the job is on. Access grants are applied by hand too (`ops/invite-access-grants.sh`,
+below).
+
+## Configuration
+
+Settings are environment variables with the `ORACLE_` prefix, read by
+`api/oracle/config.py` and a few modules beside it. The ones a deployment needs:
+
+| Variable | Meaning |
+|----------|---------|
+| `ORACLE_DATABASE_URL` | the Postgres database |
+| `ORACLE_SECRET_KEY` | signs the session cookie; required on a real deployment (at least 32 characters, not the default), e.g. `openssl rand -hex 32` |
+| `ORACLE_ENV` | `production` on a real deployment: it refuses the switches meant for tests |
+| `ORACLE_COOKIE_SECURE` | secure session cookie |
+| `ORACLE_CORS_ORIGINS` | origins allowed to call the API with credentials |
+| `ORACLE_PUBLIC_URL` | where agents and MCP clients reach Oracle (its `/mcp` endpoint) |
+| `ORACLE_APP_URL` | where people open the web app (default `ORACLE_PUBLIC_URL`); exports turn links into absolute URLs under it |
+| `ORACLE_SIMPLE_MODE` | turns Simple on (with the web build's `VITE_ORACLE_SIMPLE_MODE`) |
+| `ORACLE_MIGRATE_AT_START` | `0` stops a start from migrating (the deploy job migrates in its own step) |
+| `ORACLE_RUNTIME`, `ORACLE_SWARMCLOUD_*` | where agent runs execute and how Oracle signs in to SwarmCloud (`api/oracle/swarm/settings.py`) |
+| `ORACLE_LLM_*`, `ORACLE_CLAUDE_*` | Oracle's own model calls and its Claude account pool |
+| `ORACLE_IAP_*`, `ORACLE_GCP_PROJECT`, `ORACLE_MAIL_*` | Google sign-in and invites (below) |
+
+With `ORACLE_ENV=production`, `ORACLE_COOKIE_SECURE` or `ORACLE_IAP_AUDIENCES` set, the API
+refuses to start with a weak `ORACLE_SECRET_KEY`. The web build reads `API_INTERNAL_URL`
+(default `http://localhost:8000`), where nginx and the dev server send API calls.
 
 ## Google sign-in (IAP)
 
@@ -142,8 +223,9 @@ gcloud projects describe <project-id> --format='value(projectNumber)'
 gcloud compute backend-services describe <backend-service-name> --global --format='value(id)'
 ```
 
-Users are matched by lowercased email in the seeded tenant (run `make seed` first) and
-created as owners; roles come later. A present but invalid assertion is a 401. *Sign
+Users are matched by lowercased email in the seeded tenant (run `make seed` first). A new
+user gets the role of their open invite, else the company's default role for Google
+sign-in (commenter when it is not set); existing users keep their role. A present but invalid assertion is a 401. *Sign
 out* sends the browser to IAP's `?gcp-iap-mode=CLEAR_LOGIN_COOKIE`, which clears the
 IAP session.
 
@@ -177,3 +259,10 @@ applies the grants this needs (`ops/invite-access-grants.sh <project-id>
 and `roles/iam.serviceAccountTokenCreator` for it on itself. A Google Workspace admin
 then grants the service account's client id (the script prints it) domain-wide
 delegation for the `https://www.googleapis.com/auth/gmail.send` scope.
+
+## Contributing
+
+The rules live in [`CLAUDE.md`](CLAUDE.md) (router, gates),
+[`.claude/rules/oracle-product.md`](.claude/rules/oracle-product.md) (product rules) and
+[`docs/agents/lane-rules.md`](docs/agents/lane-rules.md) (how a change is built and
+checked); the incidents behind them are in [`docs/lessons/`](docs/lessons/README.md).

@@ -10,6 +10,7 @@ import { inboxCounts } from '@/lib/inbox-counts';
 import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
+import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { mockName as displayName } from './people';
 import { reply, rawReply } from './typed';
 
@@ -398,6 +399,7 @@ import {
   sectionItems,
   seedRoadmap,
   seededPlanItems,
+  PLAN_APPROVE_STALE_SCENARIO,
   trackRunBody,
   type RoadmapContext,
   type RoadmapDb,
@@ -439,6 +441,7 @@ import {
 import {
   bucketGoalsInOrder,
   goalBucketsDb,
+  goalInTrashByKey,
   placeBucketGoal,
   placeBucketGoals,
   routeGoalBuckets,
@@ -570,6 +573,7 @@ import {
   groundTruthCheck,
   GROUND_TRUTH_CONFIRM_SCENARIO,
   GROUND_TRUTH_FLAGS_SCENARIO,
+  GROUND_TRUTH_PROPOSED_SCENARIO,
   GROUND_TRUTH_SHARED_NAMED_SCENARIO,
   GROUND_TRUTH_SHARED_SCENARIO,
   itemById,
@@ -578,6 +582,8 @@ import {
   routeGroundTruthFixes,
   seedGroundTruth,
   seedGroundTruthConfirm,
+  seedGroundTruthProposed,
+  toConfirm,
   seedGroundTruthShared,
   tiedCodes,
   UNCONFIRMED,
@@ -621,7 +627,7 @@ import {
   seedStuckPrdAsk,
 } from './simple-milestones';
 import { knowPrdOrder } from './prd-rank';
-import { codedTitle, openDraft, targetRead } from './simple-roadmap';
+import { codedTitle, openDraft, roadmapId, targetRead } from './simple-roadmap';
 import {
   appliedVersionOf,
   approvedPrdToDraft,
@@ -835,6 +841,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** #1553: comments on a feature (./feature-comments.ts). */
+  feature_comments?: FeatureCommentRow[];
   /** A5: access requests (Settings › Members). */
   access_requests?: Schemas['AccessRequestOut'][];
   /** A5: the note the pending person sent with their request (the access-pending scenario). */
@@ -8713,49 +8721,79 @@ function load(): Db {
                                                                                                                                                                                                                                                                                                                         return db;
                                                                                                                                                                                                                                                                                                                       }
                                                                                                                                                                                                                                                                                                                     : scenario ===
-                                                                                                                                                                                                                                                                                                                        GROUND_TRUTH_CONFIRM_SCENARIO
+                                                                                                                                                                                                                                                                                                                        GROUND_TRUTH_PROPOSED_SCENARIO
                                                                                                                                                                                                                                                                                                                       ? () => {
-                                                                                                                                                                                                                                                                                                                          // The Ground Truth check, with a proposed feature carrying its own code and a mis-keyed one.
+                                                                                                                                                                                                                                                                                                                          // gt-proposed: a Goal map feature on a feature a run only proposed, with no code.
                                                                                                                                                                                                                                                                                                                           const db =
                                                                                                                                                                                                                                                                                                                             seed();
                                                                                                                                                                                                                                                                                                                           db.simple_roadmap =
                                                                                                                                                                                                                                                                                                                             seedSimpleRoadmap();
-                                                                                                                                                                                                                                                                                                                          seedGroundTruthConfirm(
+                                                                                                                                                                                                                                                                                                                          db.goal_map =
+                                                                                                                                                                                                                                                                                                                            seedGoalMap(
+                                                                                                                                                                                                                                                                                                                              scenario,
+                                                                                                                                                                                                                                                                                                                            );
+                                                                                                                                                                                                                                                                                                                          const onMap =
+                                                                                                                                                                                                                                                                                                                            goalMapItems(
+                                                                                                                                                                                                                                                                                                                              db.goal_map,
+                                                                                                                                                                                                                                                                                                                            );
+                                                                                                                                                                                                                                                                                                                          knowGoalMapItems(
+                                                                                                                                                                                                                                                                                                                            db.simple_roadmap,
+                                                                                                                                                                                                                                                                                                                            onMap,
+                                                                                                                                                                                                                                                                                                                          );
+                                                                                                                                                                                                                                                                                                                          seedGroundTruthProposed(
                                                                                                                                                                                                                                                                                                                             db.baseline,
                                                                                                                                                                                                                                                                                                                             db.simple_roadmap,
+                                                                                                                                                                                                                                                                                                                            onMap[2]
+                                                                                                                                                                                                                                                                                                                              .key,
+                                                                                                                                                                                                                                                                                                                            onMap[3]
+                                                                                                                                                                                                                                                                                                                              ?.key,
                                                                                                                                                                                                                                                                                                                           );
                                                                                                                                                                                                                                                                                                                           return db;
                                                                                                                                                                                                                                                                                                                         }
                                                                                                                                                                                                                                                                                                                       : scenario ===
-                                                                                                                                                                                                                                                                                                                          GROUND_TRUTH_FLAGS_SCENARIO
+                                                                                                                                                                                                                                                                                                                          GROUND_TRUTH_CONFIRM_SCENARIO
                                                                                                                                                                                                                                                                                                                         ? () => {
-                                                                                                                                                                                                                                                                                                                            // The Ground Truth check: its features in the baseline, its items on the Alerts roadmap.
+                                                                                                                                                                                                                                                                                                                            // The Ground Truth check, with a proposed feature carrying its own code and a mis-keyed one.
                                                                                                                                                                                                                                                                                                                             const db =
                                                                                                                                                                                                                                                                                                                               seed();
                                                                                                                                                                                                                                                                                                                             db.simple_roadmap =
                                                                                                                                                                                                                                                                                                                               seedSimpleRoadmap();
-                                                                                                                                                                                                                                                                                                                            seedGroundTruth(
+                                                                                                                                                                                                                                                                                                                            seedGroundTruthConfirm(
                                                                                                                                                                                                                                                                                                                               db.baseline,
                                                                                                                                                                                                                                                                                                                               db.simple_roadmap,
                                                                                                                                                                                                                                                                                                                             );
                                                                                                                                                                                                                                                                                                                             return db;
                                                                                                                                                                                                                                                                                                                           }
                                                                                                                                                                                                                                                                                                                         : scenario ===
-                                                                                                                                                                                                                                                                                                                              'strategy' ||
-                                                                                                                                                                                                                                                                                                                            scenario ===
-                                                                                                                                                                                                                                                                                                                              'strategy-no-vision'
-                                                                                                                                                                                                                                                                                                                          ? () =>
-                                                                                                                                                                                                                                                                                                                              seedStrategyScenario(
-                                                                                                                                                                                                                                                                                                                                scenario ===
-                                                                                                                                                                                                                                                                                                                                  'strategy',
-                                                                                                                                                                                                                                                                                                                              )
+                                                                                                                                                                                                                                                                                                                            GROUND_TRUTH_FLAGS_SCENARIO
+                                                                                                                                                                                                                                                                                                                          ? () => {
+                                                                                                                                                                                                                                                                                                                              // The Ground Truth check: its features in the baseline, its items on the Alerts roadmap.
+                                                                                                                                                                                                                                                                                                                              const db =
+                                                                                                                                                                                                                                                                                                                                seed();
+                                                                                                                                                                                                                                                                                                                              db.simple_roadmap =
+                                                                                                                                                                                                                                                                                                                                seedSimpleRoadmap();
+                                                                                                                                                                                                                                                                                                                              seedGroundTruth(
+                                                                                                                                                                                                                                                                                                                                db.baseline,
+                                                                                                                                                                                                                                                                                                                                db.simple_roadmap,
+                                                                                                                                                                                                                                                                                                                              );
+                                                                                                                                                                                                                                                                                                                              return db;
+                                                                                                                                                                                                                                                                                                                            }
                                                                                                                                                                                                                                                                                                                           : scenario ===
-                                                                                                                                                                                                                                                                                                                              'strategy-plan'
-                                                                                                                                                                                                                                                                                                                            ? seedStrategyPlanScenario
+                                                                                                                                                                                                                                                                                                                                'strategy' ||
+                                                                                                                                                                                                                                                                                                                              scenario ===
+                                                                                                                                                                                                                                                                                                                                'strategy-no-vision'
+                                                                                                                                                                                                                                                                                                                            ? () =>
+                                                                                                                                                                                                                                                                                                                                seedStrategyScenario(
+                                                                                                                                                                                                                                                                                                                                  scenario ===
+                                                                                                                                                                                                                                                                                                                                    'strategy',
+                                                                                                                                                                                                                                                                                                                                )
                                                                                                                                                                                                                                                                                                                             : scenario ===
-                                                                                                                                                                                                                                                                                                                                'strategy-none'
-                                                                                                                                                                                                                                                                                                                              ? seedNoStrategyScenario
-                                                                                                                                                                                                                                                                                                                              : seed,
+                                                                                                                                                                                                                                                                                                                                'strategy-plan'
+                                                                                                                                                                                                                                                                                                                              ? seedStrategyPlanScenario
+                                                                                                                                                                                                                                                                                                                              : scenario ===
+                                                                                                                                                                                                                                                                                                                                  'strategy-none'
+                                                                                                                                                                                                                                                                                                                                ? seedNoStrategyScenario
+                                                                                                                                                                                                                                                                                                                                : seed,
   );
   // The 500-item scenario's plans, known only while its items are the roadmap's.
   knowManyPlans(db.simple_roadmap);
@@ -8785,6 +8823,7 @@ function load(): Db {
   const approvedPlan = [
     'launches',
     'plan-decider',
+    PLAN_APPROVE_STALE_SCENARIO,
     'strategy-plan',
     'outcomes',
     'outcomes-long',
@@ -9766,7 +9805,13 @@ function routeBaselineFor(
       memberEmail,
       sourceItem,
       isMember: (id) => activeMember(db, id),
-      hidden: (id) => hidden.has(id),
+      // A goal in Trash is out of the entity list and reads, as the API's trash filter leaves it out.
+      hidden: (id) =>
+        hidden.has(id) ||
+        goalInTrashByKey(
+          db.simple_roadmap?.goal_buckets,
+          db.baseline.entities.find((e) => e.id === id && e.type === 'goal')?.key ?? '',
+        ),
       codesSeen: () => codesSeen(db.simple_roadmap),
       codesOf: (id) => tiedCodes(db.simple_roadmap, id, db.baseline),
       codesRead: () => codesRead(db.simple_roadmap, db.baseline),
@@ -12469,6 +12514,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === 'disabled') return json(401, { detail: 'Not authenticated' });
   const me = withMockRole(member);
+  // #1553: comments on a feature, on the roadmap item the panel shows (as its roadmap read has it).
+  const comments = await routeFeatureComments(
+    (db.feature_comments ??= []),
+    me,
+    (id) => {
+      const x = db.members.find((y) => y.id === id);
+      return x ? displayName(x.email, x.name) : 'Someone';
+    },
+    async (itemId) => {
+      const r = await route(db, new Request(new URL('/v1/simple/roadmap', url)));
+      if (!r.ok) return null;
+      const read = (await r.json()) as Schemas['SimpleRoadmapOut'];
+      const item = read.items.find((i) => i.id === itemId);
+      return item ? { roadmap_id: item.roadmap.id, key: item.key } : null;
+    },
+    req,
+    p,
+  );
+  if (comments) return comments;
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   if (
     scenario === DRIVE_PICKER_UNSET_SCENARIO &&
@@ -12539,6 +12603,15 @@ async function route(db: Db, req: Request): Promise<Response> {
           ],
           goal_map: db.goal_map,
         },
+      // #1553: a purged feature takes its comments (trash_items.before_purge).
+      onPurge: (entry) => {
+        const { type, slug } = entry.out.root;
+        if (type !== 'feature' || !db.feature_comments) return;
+        const doc = entry.roadmap ? roadmapId(entry.roadmap) : null;
+        db.feature_comments = db.feature_comments.filter(
+          (c) => c.key !== slug || (doc !== null && c.roadmap_id !== doc),
+        );
+      },
       // delete-prd-simple: the roadmap items and tracks a PRD feeds, named by Delete PRD.
       // Read from the seed when Simple has not been opened yet, never storing it (the dependents only read).
       feeds: (slugs, gone) => prdFeeds(db.simple_roadmap ?? seedSimpleRoadmap(), slugs, gone),
@@ -12645,12 +12718,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       welcome_dismissed: false,
       slack_pings: { ...SLACK_PINGS },
     });
-    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap.
+    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap
+    // (owner-filter: and an Owner pick of a person who owns nothing on it now).
     if (
       localStorage.getItem(MOCK_SCENARIO_KEY) === STALE_SIMPLE_FILTERS_SCENARIO &&
       mine.simple_filters === undefined
     )
-      mine.simple_filters = { prd: 'retired-example-prd', goal: 'retired-example-goal', track: '' };
+      mine.simple_filters = {
+        prd: 'retired-example-prd',
+        goal: 'retired-example-goal',
+        track: '',
+        owner: 'retired-example-person',
+      };
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === 'PATCH') {
       const patch = await body<Schemas['PreferencesUpdate']>();
@@ -12680,10 +12759,10 @@ async function route(db: Db, req: Request): Promise<Response> {
         mine.simple_roadmap = patch.simple_roadmap;
       }
       if (patch.simple_filters != null) {
-        // Its PRD, Goal and Track picks (preferences.SimpleFilters).
+        // Its PRD, Goal, Track and Owner picks (preferences.SimpleFilters).
         const picks = patch.simple_filters as Record<string, unknown>;
         if (
-          Object.keys(picks).some((k) => !['prd', 'goal', 'track'].includes(k)) ||
+          Object.keys(picks).some((k) => !['prd', 'goal', 'track', 'owner'].includes(k)) ||
           Object.values(picks).some(
             (v) => typeof v !== 'string' || !/^[A-Za-z0-9_.-]{0,200}$/.test(v),
           )
@@ -12693,6 +12772,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           prd: picks.prd ?? '',
           goal: picks.goal ?? '',
           track: picks.track ?? '',
+          owner: picks.owner ?? '',
         } as Schemas['SimpleFilters'];
       }
       if (patch.simple_decisions_view != null) {
@@ -13990,6 +14070,16 @@ async function route(db: Db, req: Request): Promise<Response> {
       .map((e) => [e.id, e.key]),
   );
   linkSeededFeatures(db);
+  // gt-proposed: each item's feature still to confirm (fixes.to_confirm), by item key: its panel's Confirm into the Ground Truth.
+  {
+    const byFeature = new Map(db.baseline.entities.map((e) => [e.id, e]));
+    db.simple_roadmap.feature_confirm = Object.fromEntries(
+      db.simple_roadmap.items.flatMap((x) => {
+        const e = toConfirm(byFeature.get(x.linked_feature ?? x.feature_id ?? ''), x);
+        return e ? [[x.key, e.id]] : [];
+      }),
+    );
+  }
   db.simple_roadmap.feature_keys = Object.fromEntries(
     db.baseline.entities.filter((e) => e.type === 'feature').map((e) => [e.id, e.key]),
   );
@@ -15598,6 +15688,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         : undefined;
     if (changeSet && db.simple_roadmap)
       applyPlanChanges(db.simple_roadmap, doc.slug, changeSet.changes);
+    // The owner, Nov 23 (staleness.settle_on_approval): the stale items the version keeps are settled.
+    if (doc.kind === 'roadmap') settleKept(db, doc, v, me.id);
     // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
     if (doc.kind === 'prd') {
       const row = draftDb(db).rows.find(
@@ -15674,6 +15766,63 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
     audience,
   );
+}
+
+/**
+ * staleness.settle_on_approval: each potentially stale or under-review item the approved version
+ * keeps (same key, title, outcome and horizon as the version before) is reconciled with "Kept in
+ * version N, approved <Mon D> by <name>", and its open stale alert on the roadmap's tracks resolves.
+ */
+function settleKept(db: Db, doc: DocumentRow, v: VersionRow, approverId: string) {
+  const rdb = db.roadmap;
+  const prev = docVersions(db, doc)
+    .filter((x) => x.number < v.number)
+    .at(-1);
+  if (!rdb || !prev || !v.approved_at) return;
+  const flagged = (f: unknown) => f === 'potentially_stale' || f === 'under_review';
+  const same = (
+    a: { title: string; horizon: string; outcome?: string | null },
+    b: { title: string; horizon: string; outcome?: string | null },
+  ) =>
+    a.title === b.title && a.horizon === b.horizon && (a.outcome ?? null) === (b.outcome ?? null);
+  const reason = `Kept in version ${v.number}, approved ${formatDay(v.approved_at)} by ${memberName(
+    db.members.find((m) => m.id === approverId),
+  )}`;
+  const done = new Set<string>();
+  // The version's stored items.
+  const before = new Map((rdb.items[prev.id] ?? []).map((i) => [i.item_key, i]));
+  for (const i of rdb.items[v.id] ?? []) {
+    const b = before.get(i.item_key);
+    if (!b || !flagged(i.freshness) || !same(b, i)) continue;
+    i.freshness = 'reconciled';
+    i.note = reason;
+    done.add(i.item_key);
+  }
+  // The Plan's items of a version proposed from plan changes (./plan-edits.ts), flagged by key.
+  const proposed = db.plan_edits?.versions[doc.slug]?.[v.number];
+  const base = new Map(
+    (
+      db.plan_edits?.versions[doc.slug]?.[prev.number] ??
+      seededPlanItems(doc.slug, prev.number, rdb.section_code) ??
+      []
+    ).map((i) => [i.key, i]),
+  );
+  for (const i of proposed ?? []) {
+    const b = base.get(i.key);
+    if (!b || !flagged(rdb.freshness?.[i.key]) || !same(b, i)) continue;
+    rdb.freshness[i.key] = 'reconciled';
+    done.add(i.key);
+  }
+  const ours = new Set(rdb.tracks.filter((t) => t.roadmap_id === doc.id).map((t) => t.id));
+  for (const a of rdb.alerts ?? [])
+    if (
+      a.kind === 'stale' &&
+      a.state !== 'resolved' &&
+      a.item_key &&
+      done.has(a.item_key) &&
+      ours.has(a.track_id)
+    )
+      Object.assign(a, { state: 'resolved', resolved_at: now() });
 }
 
 /** approved-roadmap-to-simple: applies a roadmap version's plan and milestones to its Simple items. */

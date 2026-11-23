@@ -24,6 +24,8 @@ import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { DatesForm, HATCH, months, movedWords } from '../meetings/$id/_draft';
 
+import { takeDraftPrds } from './_warm';
+
 export type DraftPrd = Schemas['SimpleRoadmapDraftPrd'];
 export type DraftItem = DraftPrd['items'][number];
 
@@ -95,7 +97,7 @@ export function DraftPrdsRead({
   reloadRef: MutableRefObject<(() => Promise<unknown>) | null>;
 }) {
   const q = useQuery('simple-roadmap-draft-prds', () =>
-    idle().then(() => unwrap(api.GET('/v1/simple/roadmap/draft-prds'))),
+    idle().then(() => takeDraftPrds(() => unwrap(api.GET('/v1/simple/roadmap/draft-prds')))),
   );
   const { reload } = q;
   useEffect(() => {

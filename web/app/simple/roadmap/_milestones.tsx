@@ -220,6 +220,8 @@ export interface MsCtl {
   /** milestone-rights: who may not change it proposes the card's change (or removing it) to the roadmap's decider. */
   propose: (remove: boolean) => Promise<void>;
   move: (m: GoalMilestone, date: string) => Promise<void>;
+  /** de-fix: an arrow key's nudge of its day, drawn at once; a burst sends in order and Undo goes back to before it. */
+  nudge: (m: GoalMilestone, days: number) => void;
   undo: () => Promise<void>;
   closeToast: () => void;
   /** roadmap-decide: the PRD milestone whose ask is open for its owner's Approve / Decline. */
@@ -286,6 +288,10 @@ export function useMilestones({
   // de-r2: added and removed ones show at once, before the API answers.
   const [adding, setAdding] = useState<GoalMilestone[]>([]);
   const [gone, setGone] = useState<string[]>([]);
+  const [nudged, setNudged] = useState<Record<string, string>>({});
+  const nudges = useRef<
+    Record<string, { date: string; from: string; chain: Promise<unknown>; n: number }>
+  >({});
   const lastLane = useRef<string | null>(null);
   const live = useRef<Draft | null>(null);
   useLayoutEffect(() => {
@@ -293,7 +299,9 @@ export function useMilestones({
   }, [draft]);
   if (!data) return null;
   const list = [
-    ...(data.goal_milestones ?? []).filter((m) => !gone.includes(m.id)),
+    ...(data.goal_milestones ?? [])
+      .filter((m) => !gone.includes(m.id))
+      .map((m) => (nudged[m.id] ? { ...m, date: nudged[m.id] } : m)),
     ...adding.filter((a) => !(data.goal_milestones ?? []).some((m) => m.id === a.id)),
   ];
   const num = (m: GoalMilestone) => Number(msCode(m).slice(1)) || 0;
@@ -763,6 +771,44 @@ export function useMilestones({
           words: `${words(m)} moved to ${day(date)}`,
           undo: () => patch(m.id, { date: m.date }),
         });
+    },
+    nudge: (m, days) => {
+      const was = nudges.current[m.id];
+      const from = was?.from ?? m.date;
+      if (!from) return;
+      const date = addDays(was?.date ?? from, days);
+      const n = (was?.n ?? 0) + 1;
+      const chain = (was?.chain ?? Promise.resolve()).then(() => patch(m.id, { date }));
+      nudges.current[m.id] = { date, from, chain, n };
+      setNudged((s) => ({ ...s, [m.id]: date }));
+      const last = () => nudges.current[m.id]?.n === n;
+      const clear = () => {
+        delete nudges.current[m.id];
+        setNudged((s) => {
+          const rest = { ...s };
+          delete rest[m.id];
+          return rest;
+        });
+      };
+      void chain.then(
+        async () => {
+          if (!last()) return;
+          await done({
+            words: `${words(m)} moved to ${day(date)}`,
+            undo: () => patch(m.id, { date: from }),
+          });
+          if (last()) clear();
+        },
+        async (e: unknown) => {
+          if (!last()) return;
+          clear();
+          setToast({
+            words: e instanceof Error ? e.message : 'Oracle could not move it',
+            undo: null,
+          });
+          await reload();
+        },
+      );
     },
     undo: async () => {
       const u = toast?.undo;
@@ -1865,8 +1911,7 @@ export function MsLayer(props: MsLayerProps) {
               void ms.remove(m);
             } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
               e.preventDefault();
-              const step = (e.shiftKey ? 7 : 1) * (e.key === 'ArrowLeft' ? -1 : 1);
-              void ms.move(m, addDays(m.date, step));
+              ms.nudge(m, (e.shiftKey ? 7 : 1) * (e.key === 'ArrowLeft' ? -1 : 1));
             }
           }}
           className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap"

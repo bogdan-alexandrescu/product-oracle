@@ -573,10 +573,17 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
                 else:
                     picked.append((d_by_key[entry.key], d, "draft", _change(entry)))
         fallback_prd = prd_of_roadmap(roadmap)
+        # The tracks that follow the roadmap, in views.sharing_tracks' order: an item is under
+        # the one its alerts are raised on (views.owner_of), so its panel finds them.
+        sharing = sorted(
+            (t for t in tracks if t.roadmap_document_id == roadmap.id),
+            key=lambda t: (t.created_at, t.id),
+        )
         for row, rv, origin, change in picked:
             item = _item(
                 row, rv, roadmap, origin, change, read, ctx, goals, risks, tracks_by_id,
                 milestones, withdrawn, fallback_prd, viewer_role, lead_id, now,
+                views.owner_of(row, sharing),
             )  # fmt: skip
             item.drift = drift_of(row, origin)
             items.append(item)
@@ -767,10 +774,14 @@ def _item(
     viewer_role: str,
     lead_id: uuid.UUID | None,
     now: date,
+    owner: uuid.UUID | None = None,
 ) -> PlanItem:
-    # tracks-goal: an item with no track of its own is its PRD's track's (as Simple reads it).
-    track_id = row.track_id or next(
-        (t.id for t in tracks.values() if row.prd_document_id in t.prd_ids), None
+    # The track its alerts are raised on (``owner``, views.owner_of); else (tracks-goal) its
+    # own, else its PRD's track's (as Simple reads it).
+    track_id = (
+        owner
+        or row.track_id
+        or next((t.id for t in tracks.values() if row.prd_document_id in t.prd_ids), None)
     )
     track = tracks.get(track_id) if track_id else None
     track_milestones = milestones.get(track_id, []) if track_id else []

@@ -564,7 +564,25 @@ def item_mark(row: Any) -> str:
 
 
 def marked(feature: Entity, kind: str, row: Any) -> bool:
+    """``row`` carries the feature's mark ``kind``. A row that is no roadmap item yet (a feature
+    about to be added to the company roadmap, oracle.simple.targets.add_to_company: every item
+    has a key, it has none) carries no mark: nothing was declined for it, and it waits for no
+    Confirm it of its own."""
+    if getattr(row, "item_key", None) is None:
+        return False
     return item_mark(row) in ((feature.attrs or {}).get(kind) or [])
+
+
+def to_confirm(feature: Entity | None, row: Any) -> Entity | None:
+    """In the Ground Truth, one rule (the owner, Nov 23): roadmap item ``row``'s feature still
+    to confirm for it, the one Confirm it (the check) and Confirm into the Ground Truth (Simple's
+    feature panel) confirm: one a run only proposed, or one confirmed while ``row`` waits for its
+    own Confirm it; None for none, a match the item declined, or one in the Ground Truth."""
+    if feature is None or feature.type != "feature" or marked(feature, DECLINED, row):
+        return None
+    if feature.status == "proposed":
+        return feature
+    return feature if feature.status == "confirmed" and marked(feature, UNCONFIRMED, row) else None
 
 
 def _mark(feature: Entity, kind: str, mark: str, on: bool) -> None:

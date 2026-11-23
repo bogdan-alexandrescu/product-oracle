@@ -174,3 +174,23 @@ on the Timeline for a proposer's change.
 - The roadmap read's timing (0.13 s of ranking per read); the owner may want it back (see Speed above).
 - The review's minors (no-op moves still say "Moved", the dependency snap-back with no words, the lanes spec's
   position check that passes when both are missing, the red test rewritten in the fix commit).
+# de-fix handoff (fix step on the merged branch, base d62c215)
+
+All four major findings in verdict.json are fixed. Each fix has a check that fails without it. Commits:
+- 5a36f7c **F1 lint**: `_add.tsx` is down to 349 lines; the phone sheet moved to the new `app/simple/roadmap/_add-form.tsx`. Its one no-misused-promises suppression moved with it, so the total count is unchanged. FeatureDelete's ask and Undo are now small helpers (`asked`, `undoAction`), and the cognitive-complexity error is gone. **F2 Track name**: the add bar's track select is now aria-label "New item's track" (an attribute, not visible text). The red specs are roadmap-track-order, roadmap-tracks-sheet, simple-roadmap-stale-filters and simple-roadmap-filter-review.
+- 6269a7d **F3 milestone nudge**: `ms.nudge` keeps an optimistic date per milestone and draws it at once. A burst steps from the optimistic date, sends its PATCHes one after another, and on a refusal rolls back, shows the error and reloads. Undo goes back to the date before the burst. New step in e2e/de-r2-milestones.spec.ts: three ArrowRight presses give +3 days, then Ctrl+Z. It fails on the old code (only +1).
+- b098a41 **F4 Timeline pending**: ZoomTimeline reads the page's proposed changes (`proposals`). A proposed add_item is drawn faint and dashed in its lane's "+ Add" row (`pending-add`). An item with a waiting change gets a small amber dot beside its bar (`pending-mark`, with a "Pending decision" tooltip and aria-label). In e2e/de-r1-add.spec.ts, the commenter add test is extended and there is a new commenter move test. Both failed without the code.
+
+Gates run on the final tree:
+- tsc --noEmit: pass.
+- Scoped lint (app/simple/roadmap, app/simple/goals, components/simple, mock simple-changes, the touched specs): 0 errors.
+- prettier: pass.
+- Mock build: pass.
+- Playwright, --retries=0, mock build: all de-*.spec.ts, roadmap-add, prose-guard (PROSE_BASE=d62c215), roadmap-track-order, roadmap-tracks-sheet, simple-roadmap-stale-filters and simple-roadmap-filter-review: **104 passed**.
+
+NOT RUN or not green:
+- Full `npm run lint` exited 2. Two passes finished with no rule errors; the third was killed without printing anything, most likely for memory. Count it as not run.
+- No API files were touched, so no pytest was needed. Unit tests and the full Playwright suite were not run (no time).
+
+Minors not done (this step was asked to fix the majors only): undo's setGone([]) redraw, a proposer's milestone drag, Esc on the track rename, PRIORITIZE (not built and not reachable), the onAdd suppression.
+No API, mock or migration change. Files outside the merged lanes' own files: none new, apart from `_add-form.tsx` (split out of `_add.tsx`).

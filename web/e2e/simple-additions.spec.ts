@@ -267,7 +267,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(c.getByTestId('item-merged')).toHaveText('Merged into F-79 Weekly alert digest');
       await boardCard(page, 'alert-digest').click();
       await expect(page.getByTestId('floating-card').getByTestId('card-reasons')).toContainText(
-        new RegExp(`Merged (?:F-\\d+ )?${TWIN} \\(${TWIN_KEY}\\) into it\\.`),
+        new RegExp(`Merged F-\\d+ ${TWIN} \\(${TWIN_KEY}\\) into it\\.`),
       );
       await page.getByTestId('floating-card').getByRole('button', { name: 'Close' }).click();
 

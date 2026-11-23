@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { InfoTip } from '@/components/ds';
+import { CommentCount } from '@/components/simple/FeatureComments';
 import { LINK_KINDS } from '@/lib/roadmap-links';
 
 import { AddCard } from './_addrow';
@@ -556,6 +557,7 @@ export function Board({
             className={`text-base leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
           >
             {itemName(item)}
+            <CommentCount item={item} />
           </p>
           <NotInGt item={item} className="mt-1 h-5! px-2! text-xs!" />
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">

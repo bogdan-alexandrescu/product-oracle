@@ -582,6 +582,10 @@ const itemGoalKey = (g: Goal | undefined) =>
 /** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else a key result's own key, else its name. */
 const orderKey = (g: Goal) => itemGoalKey(g) ?? (g.kr ? g.key : g.title.toLowerCase());
 
+/** A Ground Truth goal (by its key) whose bucket goal is in Trash: the entity list and reads leave it out. */
+export const goalInTrashByKey = (db: GoalBucketsDb | undefined, key: string): boolean =>
+  !!db?.goals.some((g) => g.trashed && orderKey(g) === key);
+
 /**
  * goal-order: the bucket goals the Ground Truth does not hold, each with the place stored on it, so the
  * one goal order (simple-roadmap knowCompanyGoals) ranks them as the API ranks every goal. With no

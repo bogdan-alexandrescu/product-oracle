@@ -50,7 +50,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -402,6 +402,9 @@ async def _next_code(db: AsyncSession, read_: service.Read) -> str:
     from oracle.roadmap import codes
     from oracle.simple.priorities import _short_codes
 
+    # One adder at a time takes a number: the lock lasts to the end of the write's transaction,
+    # so the next adder reads this item's code before choosing its own.
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('roadmap.next_code', 0))"))
     entries = list(read_.by_id().values())
     await service.item_codes(db, entries)
     used = [codes.shown_code(e.row.title, changes._code_of(e)) for e in entries]

@@ -17,6 +17,8 @@ import { expect, test, type Page } from './test';
  * - Escape: protects=Escape drops the open bar and adds nothing; fails_when=it is added.
  * - a commenter: protects=the same click and Enter files a proposal (no row yet); fails_when=no
  *   "+ Add" row for them, or it is added at once.
+ * - de-fix: a commenter's add shows faint in its track, and a commenter's move puts a pending mark
+ *   on the bar; fails_when=nothing on the Timeline shows the change waits.
  * - a viewer: protects=no "+ Add" anywhere; fails_when=a viewer sees one.
  */
 
@@ -101,6 +103,26 @@ test.describe('de-r1 add in place', () => {
     await expect(
       page.getByTestId('timeline-row-name').getByText(coded('Shed door alarm')),
     ).toHaveCount(0);
+    // de-fix: until its decider decides, it shows faint in the track it was added to.
+    await expect(
+      page
+        .getByRole('button', { name: 'Add to Guided setup track' })
+        .locator('xpath=..')
+        .getByTestId('pending-add')
+        .filter({ hasText: 'Shed door alarm' }),
+    ).toBeVisible();
+  });
+
+  test("a commenter's move of a bar shows a pending mark on it", async ({ page }) => {
+    await open(page, 'timeline', 'commenter@example.com');
+    const bar = page.locator('[data-testid="timeline-bar"][data-start]:not([disabled])').first();
+    const mark = bar.locator('xpath=..').getByTestId('pending-mark');
+    await expect(mark).toHaveCount(0);
+    await bar.focus();
+    await page.keyboard.press('ArrowRight');
+    await bar.blur();
+    await expect(page.getByRole('status').filter({ hasText: /Needs a decision/ })).toBeVisible();
+    await expect(mark).toBeVisible();
   });
 
   test('a viewer sees no add rows', async ({ page }) => {

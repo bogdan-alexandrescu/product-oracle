@@ -393,14 +393,14 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     # Its own feature (oracle.baseline.fixes.own_feature): a match a person declined for the
     # item is no feature of it. A proposal several items shared, confirmed from one item's
     # flag, leaves each other item waiting for its own Confirm it (the owner, Nov 13).
-    from oracle.baseline.fixes import DECLINED, UNCONFIRMED, marked
+    from oracle.baseline.fixes import DECLINED, marked, to_confirm
 
     own_of: dict[uuid.UUID, Entity | None] = {}
     waiting: set[uuid.UUID] = set()
     for i in items:
         e = by_id.get(feature_of[i.id]) if feature_of[i.id] is not None else None  # type: ignore[arg-type]
         own_of[i.id] = None if e is not None and marked(e, DECLINED, i) else e
-        if e is not None and e.id in truth_ids and marked(e, UNCONFIRMED, i):
+        if e is not None and e.id in truth_ids and to_confirm(e, i) is not None:
             waiting.add(i.id)
 
     # The feature of each item linked to none, by code: its own (F-02) or its slice's (F-15).
@@ -433,10 +433,9 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             )
             continue
         # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
+        ask = to_confirm(own, i)
         first = (
-            ("confirm_feature", str(own.id))
-            if own is not None and (own.status == "proposed" or i.id in waiting)
-            else ("add_to_ground_truth", target)
+            ("confirm_feature", str(ask.id)) if ask is not None else ("add_to_ground_truth", target)
         )
         flag(
             "unlinked_item",

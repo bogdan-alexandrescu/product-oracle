@@ -25,6 +25,67 @@ const going = (id: string, on: boolean) =>
     new CustomEvent<ItemGoingDetail>(ITEM_GOING_EVENT, { detail: { id, going: on } }),
   );
 
+type DeleteAsk = { title: string; rows?: { label: string; value: string }[]; propose?: boolean };
+
+/** pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what
+ * points at it. Who may not decide on it (`propose`) is asked to propose it, not to move it. */
+async function asked(f: DeleteAsk, parts: string): Promise<boolean> {
+  if (f.rows) {
+    const ask = f.propose
+      ? {
+          action: 'Propose',
+          title: `Propose moving ${f.title} to Trash?`,
+          message: parts,
+          rows: f.rows,
+          cancel: 'Cancel',
+        }
+      : {
+          action: 'Move to Trash',
+          title: `Move ${f.title} to Trash?`,
+          message: parts,
+          rows: f.rows,
+          destructive: true,
+          cancel: 'Cancel',
+        };
+    return confirmInPage(ask);
+  }
+  if (!parts) return true;
+  return confirmInPage({
+    action: 'Delete',
+    title: `Delete ${f.title}?`,
+    message: parts,
+    destructive: true,
+    cancel: 'Cancel',
+  });
+}
+
+/** The note's Undo: restores the feature with its links. */
+function undoAction(
+  title: string,
+  id: string,
+  now: boolean,
+  reload: () => Promise<unknown>,
+  toast: (ask: ToastAsk) => void,
+) {
+  return {
+    label: 'Undo',
+    onClick: async () => {
+      try {
+        await unwrap(
+          api.POST('/v1/simple/roadmap/items/{item_id}/restore', {
+            params: { path: { item_id: id } },
+          }),
+        );
+        toast({ message: `Undone: ${title} and its links are back.` });
+        if (now) going(id, false);
+      } catch (e) {
+        toast({ message: errorMessage(e) });
+      }
+      await reload();
+    },
+  };
+}
+
 export function useFeatureDelete(
   reload: () => Promise<unknown>,
   toast: (ask: ToastAsk) => void = dsToast,
@@ -41,38 +102,8 @@ export function useFeatureDelete(
   }): Promise<void> => {
     const parts = partsWords(f.parts?.length ?? 0, 'stay');
     const now = !!f.now && !f.propose;
-    // pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what points at it.
-    // Who may not decide on it (`propose`) is asked to propose it, not to move it.
     if (now) going(f.id, true);
-    else if (f.rows) {
-      const ask = f.propose
-        ? {
-            action: 'Propose',
-            title: `Propose moving ${f.title} to Trash?`,
-            message: parts,
-            rows: f.rows,
-            cancel: 'Cancel',
-          }
-        : {
-            action: 'Move to Trash',
-            title: `Move ${f.title} to Trash?`,
-            message: parts,
-            rows: f.rows,
-            destructive: true,
-            cancel: 'Cancel',
-          };
-      if (!(await confirmInPage(ask))) return;
-    } else if (
-      parts &&
-      !(await confirmInPage({
-        action: 'Delete',
-        title: `Delete ${f.title}?`,
-        message: parts,
-        destructive: true,
-        cancel: 'Cancel',
-      }))
-    )
-      return;
+    else if (!(await asked(f, parts))) return;
     try {
       const out = await unwrap(
         api.DELETE('/v1/simple/roadmap/items/{item_id}', { params: { path: { item_id: f.id } } }),
@@ -91,25 +122,7 @@ export function useFeatureDelete(
       }
       toast({
         message: parts ? `Moved ${f.title} to Trash. ${parts}` : `Moved ${f.title} to Trash.`,
-        action: out.can_restore
-          ? {
-              label: 'Undo',
-              onClick: async () => {
-                try {
-                  await unwrap(
-                    api.POST('/v1/simple/roadmap/items/{item_id}/restore', {
-                      params: { path: { item_id: f.id } },
-                    }),
-                  );
-                  toast({ message: `Undone: ${f.title} and its links are back.` });
-                  if (now) going(f.id, false);
-                } catch (e) {
-                  toast({ message: errorMessage(e) });
-                }
-                await reload();
-              },
-            }
-          : undefined,
+        action: out.can_restore ? undoAction(f.title, f.id, now, reload, toast) : undefined,
       });
     } catch (e) {
       if (now) going(f.id, false);

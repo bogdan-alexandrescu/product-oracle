@@ -318,6 +318,10 @@ class SimpleRoadmapItem(BaseModel):
     # every-field-editable: where a code no one gives comes from: its Ground Truth feature
     # ("feature") or its PRD section ("prd"), so set_code refuses it; null for an item's own.
     code_from: Literal["feature", "prd"] | None = None
+    # gt-proposed: its Ground Truth feature a run only proposed (or one confirmed while this item
+    # waits for its own Confirm it): Confirm into the Ground Truth confirms it for this item and
+    # gives it the next F-code; null when the item is in the Ground Truth or has no feature.
+    confirm_feature_id: uuid.UUID | None = None
     title: str
     outcome: str | None = None
     # build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row.

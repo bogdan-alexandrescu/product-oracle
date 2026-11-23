@@ -71,7 +71,7 @@ test.describe("a person's change after the version", () => {
     await expect(line).toHaveAttribute('data-matches', 'false');
     await expect(line).toContainText('Differs from roadmap version 3, approved Oct 22, 2026');
     await expect(line.getByTestId('applied-differences')).toHaveText(
-      /^(?:F-\d+ )?Trail photo tips was added after version 3$/,
+      /^F-\d+ Trail photo tips was added after version 3$/,
     );
 
     await line.getByRole('button', { name: 'Apply version 3 again' }).click();
@@ -80,7 +80,7 @@ test.describe("a person's change after the version", () => {
     ).toBeVisible();
     await expect(line.getByRole('button', { name: 'Apply version 3 again' })).toBeEnabled();
     await expect(line.getByTestId('applied-differences')).toHaveText(
-      /^(?:F-\d+ )?Trail photo tips was added after version 3$/,
+      /^F-\d+ Trail photo tips was added after version 3$/,
     );
     await expect(line.getByTestId('applied-off-plan')).toHaveText(
       'Shipped, off the plan: Offline sync. Moved to the next PRD: Trail chat.',

@@ -64,11 +64,12 @@ Test cards (protects / fails_when / no_claim):
   decider's accept keeps it the same way; fails_when=a pushed-back pin lands unconfirmed,
   a confirmed one is refused, or the change engine drops the pushback detail;
   no_claim=the rules' thresholds (tests/test_priority_overrides.py).
-- test_draft_without_owner_through_add_and_confirm: protects=an item an owner adds
-  through add_item is never flagged ``draft_without_owner`` (de-inst, owner Nov 23: a
-  decider's own addition waits on no one), with or without a track owner, in the change's
-  flags and the roadmap read, before and after confirm_item and its undo; fails_when=the
-  flag is raised for a decider's addition; no_claim=the checker's own unit test.
+- test_draft_without_owner_through_add_and_confirm: protects=an item added through
+  add_item on a roadmap whose track has no owner comes back (in the change's flags and in
+  the roadmap read) with ``draft_without_owner``; on a roadmap whose track has an owner
+  it does not; confirm_item of the ownerless draft clears the flag in its response and
+  read, and the confirm's undo brings it back; fails_when=the flag is missing, shown for
+  an owned item, or survives the confirm; no_claim=the checker's own unit test.
 """
 
 import uuid
@@ -407,7 +408,7 @@ async def test_override_priority_pushback_through_the_engine(client):
 
 
 async def test_draft_without_owner_through_add_and_confirm(client):
-    """An owner's added item, owned or not, never waits for someone to confirm it."""
+    """Adding an item with no track owner flags it as a draft without an owner."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -440,7 +441,8 @@ async def test_draft_without_owner_through_add_and_confirm(client):
 
     out = await add("payments", "Refund portal")
     item = out["change"]["target"]["item_id"]
-    assert flags_of(out, item) == [] and await flags_read(item) == []
+    assert flags_of(out, item) == ["draft_without_owner"]
+    assert await flags_read(item) == ["draft_without_owner"]
     owned = await add("billing", "Invoice export")
     oid = owned["change"]["target"]["item_id"]
     assert flags_of(owned, oid) == [] and await flags_read(oid) == []
@@ -453,4 +455,5 @@ async def test_draft_without_owner_through_add_and_confirm(client):
     assert flags_of(confirm, item) == [] and await flags_read(item) == []
     u = await client.post(f"{CHANGES}/{confirm['change']['id']}/undo", headers=ctx.as_("owner"))
     assert u.status_code == 201, u.text
-    assert flags_of(u.json(), item) == [] and await flags_read(item) == []
+    assert flags_of(u.json(), item) == ["draft_without_owner"]
+    assert await flags_read(item) == ["draft_without_owner"]

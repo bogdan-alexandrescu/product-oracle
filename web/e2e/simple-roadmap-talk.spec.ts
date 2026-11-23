@@ -188,6 +188,8 @@ for (const [phone, dark] of [
         'Tasks',
         'Flow',
         'Proposals on it',
+        // comments: the Comments section follows the picked order, at the foot of the details.
+        'Comments',
       ]);
       await tap(floating.getByRole(phone ? 'tab' : 'button', { name: 'Talk to Oracle' }));
       const c = floating;

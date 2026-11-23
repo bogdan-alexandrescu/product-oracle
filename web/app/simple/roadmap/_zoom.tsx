@@ -24,7 +24,7 @@ import { addMonths, calendarDay, utcDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
 import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
-import { AddRow } from './_addrow';
+import { AddRow, type WaitingAdd } from './_addrow';
 import { OwnerPick, useOwners, type Person } from './_owner';
 import { PM_LANE } from './_board';
 import { FixButtons, fixCount, type Act } from './_card';
@@ -48,6 +48,7 @@ import {
   estimateOnly,
   estimateWords,
   codedFlag,
+  type Change,
   type Flag,
   type Item,
   type Roadmap,
@@ -246,6 +247,32 @@ export interface TimelineProps extends Common {
   onAddAt?: (lane: string, title: string, start: string, end: string) => Promise<boolean>;
   /** timeline-order: the items whose move waits for a decider (the pending mark). */
   orderPending?: ReadonlySet<string>;
+  /** de-fix: the changes waiting for a decider (a mark on a moved bar, a faint bar for an add). */
+  proposals?: Change[];
+}
+
+/** de-fix: the items a change waiting for its decider would change. */
+const waitingIds = (proposals: Change[] = []) =>
+  new Set(proposals.filter((c) => c.op !== 'add_item').map((c) => String(c.target.item_id ?? '')));
+
+/** de-fix: the adds waiting for a decider, by the lane (a track's or a goal's key) they go in. */
+function waitingAdds(proposals: Change[] = []) {
+  const out = new Map<string, WaitingAdd[]>();
+  for (const c of proposals) {
+    if (c.op !== 'add_item') continue;
+    const a = (c.after ?? {}) as Record<string, unknown>;
+    const where = (c.target.where ?? {}) as { kind?: string; value?: string };
+    const lane = typeof a.track_id === 'string' ? a.track_id : where.value;
+    if (!lane) continue;
+    const add = {
+      id: c.id,
+      title: typeof a.title === 'string' ? a.title : '',
+      start: typeof a.start_date === 'string' ? a.start_date : undefined,
+      end: typeof a.end_date === 'string' ? a.end_date : undefined,
+    };
+    out.set(lane, [...(out.get(lane) ?? []), add]);
+  }
+  return out;
 }
 
 /** de-r1: the "+ Add" row under a lane's items. */
@@ -514,6 +541,8 @@ function DayChart(props: TimelineProps) {
   for (const r of rows)
     if (r.kind === 'lane') laneNow = r.key;
     else laneOf.set(r.item.id, laneNow);
+  const waiting = waitingIds(props.proposals);
+  const adds = waitingAdds(props.proposals);
   rows.forEach((r, n) => {
     if (r.kind !== 'lane' || !addable(r.key)) return;
     let end = n + 1;
@@ -1422,6 +1451,7 @@ function DayChart(props: TimelineProps) {
                 dayAt={(px) => addDays(t0, Math.floor(px / ppd))}
                 today={data.today}
                 onAdd={(t, s, e) => props.onAddAt!(add.key, t, s, e)}
+                waiting={adds.get(add.key)}
               />
             );
             if (r.kind === 'lane')
@@ -1490,6 +1520,7 @@ function DayChart(props: TimelineProps) {
                   people={openKey === i.key ? owners : undefined}
                   renamable={i.can_decide || canChange}
                   order={ord.order}
+                  waiting={waiting.has(i.id)}
                 />
                 {addRow}
               </Fragment>
@@ -1696,6 +1727,7 @@ const TimelineRow = memo(function TimelineRow({
   renamable,
   people,
   order,
+  waiting,
 }: {
   item: Item;
   ds: string;
@@ -1723,6 +1755,8 @@ const TimelineRow = memo(function TimelineRow({
   people?: Person[];
   /** timeline-order: the name's handle (drag, Alt+Arrow) and the pending mark. */
   order?: RowOrder;
+  /** de-fix: a change to it waits for its decider (a small mark beside the bar). */
+  waiting?: boolean;
 }) {
   const lk = lookOf(i);
   const [renaming, setRenaming] = useState(false);
@@ -1880,6 +1914,16 @@ const TimelineRow = memo(function TimelineRow({
               outlineOffset: 2,
             }}
           />
+          {waiting && (
+            <span
+              role="img"
+              aria-label="Pending decision"
+              title="Pending decision"
+              data-testid="pending-mark"
+              className="pointer-events-none absolute z-[12] size-2 rounded-full bg-warn"
+              style={{ left: Math.min(bx + bw + 3, trackW - 8), top: 13 }}
+            />
+          )}
           {onBar && (
             <span
               className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5"

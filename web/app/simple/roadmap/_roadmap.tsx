@@ -1,6 +1,5 @@
 'use client';
 
-import { Link, useSearchParams } from '@/lib/nav';
 import {
   useCallback,
   useContext,
@@ -22,6 +21,16 @@ import {
   toast as dsToast,
   type ToastAsk,
 } from '@/components/ds';
+import { InfoTip } from '@/components/ds/InfoTip';
+import { DecisionNotes, LeftOutLine } from '@/components/simple/DecisionNotes';
+import { CommentCount } from '@/components/simple/FeatureComments';
+import {
+  FeatureContextMenu,
+  ITEM_GOING_EVENT,
+  useFeatureDelete,
+  type ItemGoingDetail,
+} from '@/components/simple/FeatureDelete';
+import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import {
   GoalPanel,
   goalRows,
@@ -31,39 +40,24 @@ import {
   type GoalPanelStart,
   type GoalSuggestionsApi,
 } from '@/components/simple/GoalSuggestions';
-import { DecisionNotes, LeftOutLine } from '@/components/simple/DecisionNotes';
-import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import { StartSheet } from '@/components/simple/meetings/StartSheet';
 import { LoadError, Loading } from '@/components/ui';
 import { getBranding, logoDataUrl } from '@/lib/api/branding';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
-import { draftNext } from '@/lib/simple-home';
-import { invalidateWaiting, reloadWaiting, waitingChanged } from '@/lib/simple-waiting';
 import { CARD_CHANGED_EVENT } from '@/lib/api/simple-chat';
 import { displayZone, formatInZone } from '@/lib/dates';
 import { formatDate, formatShortDate } from '@/lib/format';
 import { goalNumbers } from '@/lib/goal-tree';
 import { keyResults, topGoalSuggestions, type KeyResults } from '@/lib/key-results';
-import { InfoTip } from '@/components/ds/InfoTip';
 import { useMe } from '@/lib/me';
+import { Link, useSearchParams } from '@/lib/nav';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
+import { draftNext } from '@/lib/simple-home';
+import { invalidateWaiting, reloadWaiting, waitingChanged } from '@/lib/simple-waiting';
 import { inTrackOrder } from '@/lib/track-order';
 import { useQuery } from '@/lib/use-query';
 
 import { QuickAdd } from './_add';
-import { RemovedButton } from './_removed';
-import { TracksButton } from './_tracks';
-import {
-  MsCard,
-  MsKey,
-  MsLayer,
-  MsProvider,
-  MsToast,
-  useMilestones,
-  useMsBand,
-  type MsLane,
-  type MsRow,
-} from './_milestones';
 import {
   Board,
   boardColumns,
@@ -78,12 +72,6 @@ import {
 } from './_board';
 import { useKeyBurst } from './_burst';
 import {
-  FeatureContextMenu,
-  ITEM_GOING_EVENT,
-  useFeatureDelete,
-  type ItemGoingDetail,
-} from '@/components/simple/FeatureDelete';
-import {
   changeRowWords,
   FlagLine,
   FixButtons,
@@ -95,6 +83,7 @@ import {
   SuggestionPopover,
   type Act,
 } from './_card';
+import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd } from './_drafts';
 import {
   boardPicture,
   chartPicture,
@@ -103,12 +92,10 @@ import {
   zoomPicture,
   type Brand,
 } from './_export';
-import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd } from './_drafts';
 import { GoalTitle } from './_goalcards';
+import { itemName, NotInGt } from './_gtflag';
 import { KeyDatesEditor } from './_keydates';
-import { FeaturePanel } from './_panel';
 import { Lanes, pmItem } from './_lanes';
-import { trackLaned } from './_trackbands';
 import {
   addDays,
   broken,
@@ -151,9 +138,34 @@ import {
   codedFlag,
   type Flag,
   type Scale as ChartScale,
+  ownerOptions,
+  ownerPick,
+  ownersSeen,
 } from './_lib';
-import { itemName, NotInGt } from './_gtflag';
+import {
+  MsCard,
+  MsKey,
+  MsLayer,
+  MsProvider,
+  MsToast,
+  useMilestones,
+  useMsBand,
+  type MsLane,
+  type MsRow,
+} from './_milestones';
+import { FeaturePanel } from './_panel';
+import { RemovedButton } from './_removed';
 import { Chart, PHASES, type Layout } from './_timeline';
+import { trackLaned } from './_trackbands';
+import { TracksButton } from './_tracks';
+import {
+  keepPlanPrds,
+  takeGoals,
+  takePlan,
+  takeProposals,
+  takeRoadmap,
+  warmRoadmapPage,
+} from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -194,6 +206,7 @@ type Filters = {
   prd: string;
   goal: string;
   track: string;
+  owner: string;
   from: string;
   to: string;
 };
@@ -203,11 +216,12 @@ const NO_FILTERS: Filters = {
   prd: '',
   goal: '',
   track: '',
+  owner: '',
   from: '',
   to: '',
 };
-type Picks = Record<'prd' | 'goal' | 'track', Set<string>>;
-const PICKS = ['prd', 'goal', 'track'] as const;
+type Picks = Record<'prd' | 'goal' | 'track' | 'owner', Set<string>>;
+const PICKS = ['prd', 'goal', 'track', 'owner'] as const;
 /** roadmap-stale-filters: the PRDs, goals and tracks a roadmap's items are on (what its filters may pick). */
 /** RP2: no draft PRDs, one shared empty list (memoised reads keep their identity). */
 const NO_DRAFTS: DraftPrd[] = [];
@@ -216,6 +230,7 @@ const picksOf = (items: Roadmap['items'], krs: KeyResults): Picks => ({
   // kr-in-goal-card: a key result's items are on its parent goal's pick.
   goal: new Set(items.flatMap((i) => (i.goal ? [krs.parentOf(i.goal.id)?.key ?? i.goal.key] : []))),
   track: new Set(items.flatMap((i) => (i.track ? [i.track.id] : []))),
+  owner: new Set(items.map(ownerPick)),
 });
 /** Saved picks with those `gone` says left blank. */
 const without = (
@@ -661,7 +676,7 @@ function GoalCounters({
         ...empty.map((g) => ({ id: g.goal.id, title: g.goal.title, card: null, empty: g })),
       ]
         .sort((a, b) => rank(a.id, a.title) - rank(b.id, b.title) || a.title.localeCompare(b.title))
-        .map((t) => (t.card ? counterCard(t.id, t.card) : emptyCard(t.empty!)))}
+        .map((t) => (t.card ? counterCard(t.id, t.card) : emptyCard(t.empty)))}
       {filteredOut && (
         <li
           data-testid="goal-counter-empty"
@@ -1059,6 +1074,7 @@ function DoneItems({
               >
                 {itemName(i)}
               </button>
+              <CommentCount item={i} />
               {i.goal && <span className="truncate text-sm text-text2">{i.goal.title}</span>}
             </li>
           ))}
@@ -1625,6 +1641,8 @@ function DecisionTray({
 
 export function SimpleRoadmap() {
   const { me, can } = useMe();
+  // simple-speed: the parts' reads start now, beside the roadmap's own (./_warm).
+  useEffect(() => warmRoadmapPage(), []);
   const phone = usePhone();
   // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
   // or to one roadmap (?roadmap=<id or slug>).
@@ -1696,7 +1714,7 @@ export function SimpleRoadmap() {
     const q: Record<string, string> = {
       group: f.group === 'milestone' || f.group === 'track' ? 'goal' : f.group,
     };
-    for (const k of ['roadmap', 'prd', 'goal', 'track', 'from', 'to'] as const)
+    for (const k of ['roadmap', 'prd', 'goal', 'track', 'owner', 'from', 'to'] as const)
       if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
@@ -1706,7 +1724,10 @@ export function SimpleRoadmap() {
   const roadmap = useQuery(
     `simple-roadmap:${JSON.stringify(qs)}`,
     () =>
-      unwrap(api.GET('/v1/simple/roadmap', { params: { query: qs as never } })).then((d) => {
+      // simple-speed: a cold load's first read was begun beside GET /v1/me (./_warm), taken once.
+      takeRoadmap(JSON.stringify(qs), () =>
+        unwrap(api.GET('/v1/simple/roadmap', { params: { query: qs as never } })),
+      ).then((d) => {
         fetched.current = new Map(d.items.map((i) => [i.id, i]));
         setRoadmapToday(d.today);
         return d;
@@ -1715,13 +1736,17 @@ export function SimpleRoadmap() {
   );
   // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
   const goalList = useQuery('simple-roadmap-goal-order', () =>
-    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+    takeGoals(() =>
+      unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+    ),
   );
   const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
   // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery('simple-proposals', () =>
-    unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+    takeProposals(() =>
+      unwrap(api.GET('/v1/simple/changes', { params: { query: { status: 'proposed' } } })),
+    ),
   );
   // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
   const drafts = useQuery(`simple-drafts:${f.roadmap ?? ''}`, () =>
@@ -1853,7 +1878,9 @@ export function SimpleRoadmap() {
   const savedPicks =
     !restored && known && (prefs.data || prefs.error) ? prefs.data?.simple_filters : undefined;
   const onRoadmap =
-    savedPicks && !f.prd && !f.goal && !f.track ? picksOf(roadmap.data!.items, krs) : null;
+    savedPicks && !f.prd && !f.goal && !f.track && !f.owner
+      ? picksOf(roadmap.data!.items, krs)
+      : null;
   // RP2: only a saved PRD pick the roadmap does not hold waits for the draft layer's read (it may be a draft PRD's).
   if (
     !restored &&
@@ -1881,6 +1908,7 @@ export function SimpleRoadmap() {
       ...f,
       goal: params.get('goal') || kept?.goal || f.goal,
       track: kept?.track || f.track,
+      owner: kept?.owner || f.owner,
     };
     if (!params.get('prd')) next.prd = kept?.prd || f.prd;
     if (
@@ -1894,7 +1922,8 @@ export function SimpleRoadmap() {
       next.roadmap !== f.roadmap ||
       next.prd !== f.prd ||
       next.goal !== f.goal ||
-      next.track !== f.track
+      next.track !== f.track ||
+      next.owner !== f.owner
     )
       setF(next);
   }
@@ -1920,7 +1949,7 @@ export function SimpleRoadmap() {
   // no longer has; a saved one is dropped (and saved back), a link's one is said so.
   const emptied =
     restored &&
-    !!(f.prd || f.goal || f.track) &&
+    !!(f.prd || f.goal || f.track || f.owner) &&
     !!roadmap.data &&
     !roadmap.loading &&
     !roadmap.data.items.length;
@@ -1972,12 +2001,12 @@ export function SimpleRoadmap() {
     setF({ ...f, roadmap: id });
     void remember({ simple_roadmap: id || 'all' }, 'Could not remember this roadmap for next time');
   };
-  const pickFilter = (k: 'prd' | 'goal' | 'track', v: string) => {
+  const pickFilter = (k: 'prd' | 'goal' | 'track' | 'owner', v: string) => {
     setRestored(true);
     const next = { ...f, [k]: v };
     setF(next);
     void remember(
-      { simple_filters: { prd: next.prd, goal: next.goal, track: next.track } },
+      { simple_filters: { prd: next.prd, goal: next.goal, track: next.track, owner: next.owner } },
       'Could not remember these filters for next time',
     );
   };
@@ -2058,12 +2087,19 @@ export function SimpleRoadmap() {
       ].sort(),
     [data],
   );
+  // simple-speed: kept for the next load, whose plans then start with the roadmap's own read.
+  const roadmapRead = !!data;
+  useEffect(() => {
+    if (roadmapRead) keepPlanPrds(planPrds);
+  }, [roadmapRead, planPrds]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(',')}`, async () =>
     (
       await Promise.allSettled(
         planPrds.map((prd) =>
-          unwrap(api.GET('/v1/simple/prds/{prd}/plan', { params: { path: { prd } } })),
+          takePlan(prd, () =>
+            unwrap(api.GET('/v1/simple/prds/{prd}/plan', { params: { path: { prd } } })),
+          ),
         ),
       )
     ).flatMap((r) => (r.status === 'fulfilled' ? [r.value] : [])),
@@ -2080,7 +2116,8 @@ export function SimpleRoadmap() {
     prd: [string, string][];
     goal: [string, string][];
     track: [string, string][];
-  }>({ of: null, prd: [], goal: [], track: [] });
+    owner: [string, string][];
+  }>({ of: null, prd: [], goal: [], track: [], owner: [] });
   if (data && seen.of !== data) {
     const add = (list: [string, string][], pairs: [string, string][]) => [
       ...new Map([...list, ...pairs]),
@@ -2101,6 +2138,7 @@ export function SimpleRoadmap() {
           i.track ? [[i.track.id, i.track.title] as [string, string]] : [],
         ),
       ),
+      owner: add(seen.owner, ownersSeen(data.items)),
     });
   }
   // kr-in-goal-card: the Goal filter lists a key result's goal, never the key result.
@@ -2125,12 +2163,12 @@ export function SimpleRoadmap() {
   const pickedDraft = f.prd ? (draftOnly.find((d) => d.prd.slug === f.prd) ?? null) : null;
   const shownDrafts = useMemo(
     () =>
-      f.goal || f.track
+      f.goal || f.track || f.owner
         ? NO_DRAFTS
         : f.prd
           ? draftList.filter((d) => d.prd.slug === f.prd)
           : draftList,
-    [draftList, f.prd, f.goal, f.track],
+    [draftList, f.prd, f.goal, f.track, f.owner],
   );
   const [draftOpen, setDraftOpen] = useState<string | null>(null);
   const openDraft = useMemo(
@@ -2192,7 +2230,7 @@ export function SimpleRoadmap() {
   const canChange = can('create_simple_change');
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
   // A milestone's joined name and its "Also:" read every milestone, so a PRD, goal or track filter never changes them.
-  const picked = !!(f.prd || f.goal || f.track);
+  const picked = !!(f.prd || f.goal || f.track || f.owner);
   const unfiltered = useQuery(`simple-roadmap-names:${picked ? JSON.stringify(wideQs) : ''}`, () =>
     picked
       ? unwrap(api.GET('/v1/simple/roadmap', { params: { query: wideQs as never } }))
@@ -2257,6 +2295,22 @@ export function SimpleRoadmap() {
     },
     [roadmap.data, goalList.data],
   );
+  /** roadmap-add: lays a panel change on its item (who decides on it) till `unlay` is called. */
+  const lay = useCallback(
+    (body: Parameters<Act>[1]): (() => void) => {
+      const id = String(body.target?.item_id ?? '');
+      const patch = latest.current.get(id)?.can_decide ? movedTo(body) : null;
+      if (!patch) return () => undefined;
+      setMoving((m) => new Map(m).set(id, patch));
+      return () =>
+        setMoving((m) => {
+          const n = new Map(m);
+          n.delete(id);
+          return n;
+        });
+    },
+    [movedTo],
+  );
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
     async (
@@ -2264,9 +2318,7 @@ export function SimpleRoadmap() {
       body: Parameters<Act>[1],
       note?: string,
     ): Promise<ChangeResult | null> => {
-      const id = String(body.target?.item_id ?? '');
-      const patch = latest.current.get(id)?.can_decide ? movedTo(body) : null;
-      if (patch) setMoving((m) => new Map(m).set(id, patch));
+      const unlay = lay(body);
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ''));
@@ -2310,15 +2362,10 @@ export function SimpleRoadmap() {
         return null;
       } finally {
         await reloadAfter();
-        if (patch)
-          setMoving((m) => {
-            const n = new Map(m);
-            n.delete(id);
-            return n;
-          });
+        unlay();
       }
     },
-    [reload, reloadAfter, movedTo],
+    [reload, reloadAfter, lay],
   );
   const act: Act = useCallback(
     async (what, body, note) => {
@@ -2564,10 +2611,12 @@ export function SimpleRoadmap() {
     if (f.prd) parts.push(`PRD: ${named(seen.prd, f.prd)}`);
     if (f.goal) parts.push(`Goal: ${named(goalOptions, f.goal)}`);
     if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
+    if (f.owner) parts.push(`Owner: ${named(ownerOptions(seen.owner), f.owner)}`);
     if (f.from) parts.push(`From ${qName(f.from)}`);
     if (f.to) parts.push(`To ${qName(f.to)}`);
     if (data?.roadmap) parts.push(`Roadmap: ${data.roadmap.title}`);
-    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push('All roadmaps'); // qa4-simple-roadmap-48
+    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.owner && !f.from && !f.to)
+      parts.push('All roadmaps'); // qa4-simple-roadmap-48
     return parts.join(' · ');
   };
 
@@ -2648,7 +2697,7 @@ export function SimpleRoadmap() {
   // Review: under a filter, Needs a decision counts the whole roadmap's broken links and dates to
   // confirm, as the side menu does.
   const counted = decisionCounts(data.items, allProposals);
-  const anyFilter = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
+  const anyFilter = !!(f.prd || f.goal || f.track || f.owner || f.from || f.to || f.roadmap);
   const allLinks = anyFilter ? wholeLinks.data?.broken_links : undefined;
   const allDates = anyFilter ? wholeLinks.data?.dates_to_confirm : undefined;
   // pre-demo QA S-6: the suggested features the tray lists for a decision count on its button too.
@@ -2682,6 +2731,7 @@ export function SimpleRoadmap() {
     !f.prd &&
     !f.goal &&
     !f.track &&
+    !f.owner &&
     !f.from &&
     !f.to &&
     !data.roadmap;
@@ -2967,12 +3017,12 @@ export function SimpleRoadmap() {
       setF({ ...f, from, to });
     }
   };
-  const filtered = !!(f.prd || f.goal || f.track || f.from || f.to);
+  const filtered = !!(f.prd || f.goal || f.track || f.owner || f.from || f.to);
   const clearFilters = () => {
     setRestored(true);
     setF({ ...NO_FILTERS, group: f.group, roadmap: f.roadmap });
     void remember(
-      { simple_filters: { prd: '', goal: '', track: '' } },
+      { simple_filters: { prd: '', goal: '', track: '', owner: '' } },
       'Could not remember these filters for next time',
     );
   };
@@ -3018,6 +3068,12 @@ export function SimpleRoadmap() {
         onChange={(track) => pickFilter('track', track)}
       />
       <Select
+        label="Owner"
+        value={f.owner}
+        options={ownerOptions(seen.owner)}
+        onChange={(owner) => pickFilter('owner', owner)}
+      />
+      <Select
         label="From"
         value={f.from}
         options={qList.map((q) => [q.start, q.label])}
@@ -3034,9 +3090,15 @@ export function SimpleRoadmap() {
     </>
   );
   // How many pickers narrow the view, on a phone's Filters button.
-  const narrowed = [data.roadmap ? 'roadmap' : '', f.prd, f.goal, f.track, f.from, f.to].filter(
-    Boolean,
-  ).length;
+  const narrowed = [
+    data.roadmap ? 'roadmap' : '',
+    f.prd,
+    f.goal,
+    f.track,
+    f.owner,
+    f.from,
+    f.to,
+  ].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
       <RemovedButton
@@ -3496,6 +3558,7 @@ export function SimpleRoadmap() {
                         onKeyMove={onKeyMove}
                         onKeyEnd={(item) => dates.flush(item.id)}
                         onKeyCancel={onKeyCancel(dates)}
+                        proposals={allProposals}
                         onAddAt={
                           canChange
                             ? (lane, title, start, end) => {

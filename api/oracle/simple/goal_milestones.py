@@ -780,7 +780,10 @@ async def _propose_prd_change(
     decides = (
         has_role(principal.role, "owner")
         or me in owners
-        or drafts.can_edit(principal, row.roadmap_id, await drafts.who(db, {row.roadmap_id}))
+        or (
+            row.roadmap_id is not None
+            and drafts.can_edit(principal, row.roadmap_id, await drafts.who(db, {row.roadmap_id}))
+        )
     )
     if decides:
         await _apply_prd(db, row, after)
