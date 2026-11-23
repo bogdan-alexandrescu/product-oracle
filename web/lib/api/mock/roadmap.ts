@@ -381,6 +381,23 @@ export function seedRoadmap(
     // The owner's report (Nov 23): the Plan's Weekly alert digest is flagged (its reasons say it
     // may be out of date) with no stale alert on its track: its panel settles it all the same.
     (db.freshness ??= {})['alert-digest'] = 'potentially_stale';
+    if (scenario === PLAN_APPROVE_STALE_SCENARIO)
+      (db.alerts ??= []).push({
+        id: stableUuid('track-alert/alert-digest/stale'),
+        track_id: track.id,
+        item_key: 'alert-digest',
+        item_title: 'Weekly alert digest',
+        kind: 'stale',
+        detail: 'PRD section Digest changed in version 2',
+        data: { freshness: 'potentially_stale' },
+        state: 'open',
+        opened_at: '2026-10-20T15:06:00Z',
+        kept_by: null,
+        kept_by_name: null,
+        kept_at: null,
+        note: null,
+        resolved_at: null,
+      });
     const rv = roadmap && latest(ctx, roadmap.id);
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
     // The stale-marks walk: an item depending on one this version has no row for (named, never its key).
@@ -393,7 +410,11 @@ export function seedRoadmap(
     // F3 "date-bases": GA's date has no basis at all (unverified), and an approver's
     // ENG-420 waits for the engineering lead.
     const ga =
-      scenario === 'plan-decider' || scenario === 'plan-timeline-edit' ? 'verified' : 'withdrawn';
+      scenario === 'plan-decider' ||
+      scenario === 'plan-timeline-edit' ||
+      scenario === PLAN_APPROVE_STALE_SCENARIO
+        ? 'verified'
+        : 'withdrawn';
     const seeds = twoWay
       ? ([
           ['ENG-412', '2026-11-30', 'verified'],
@@ -3723,6 +3744,11 @@ export const TRACK_ALERTS_HISTORY_SCENARIO = 'track-alerts-history';
 export const TRACK_ALERTS_STALE_SCENARIO = 'track-alerts-stale';
 /** As "track-alerts-stale", the PRD section Behaviour removed in version 2 (not changed). */
 export const TRACK_ALERTS_STALE_REMOVED_SCENARIO = 'track-alerts-stale-removed';
+/**
+ * The owner's decision (Nov 23): as "plan-decider" with no decider, the Weekly alert digest's
+ * stale alert open on its track; approving a version that keeps it settles it.
+ */
+export const PLAN_APPROVE_STALE_SCENARIO = 'plan-approve-stale';
 const ACTIONS_BLOCKER_ID = stableUuid('track-alert/slack-alerts/blocker');
 type StoredAlert = Omit<TrackAlertOut, 'prd' | 'actions' | 'inbox_state'>;
 /** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
