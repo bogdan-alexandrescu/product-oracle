@@ -10,12 +10,12 @@ from oracle.auth.schemas import AccessNote, AccessStateOut, Capabilities, LoginR
 from oracle.authz import has_role
 from oracle.capabilities import PER_ITEM
 from oracle.capabilities import capabilities as role_capabilities
+from oracle.company_time import company_time_zone_read
 from oracle.config import get_settings
 from oracle.members import access
 from oracle.members.leads import ENGINEERING_KINDS, decides, engineering_leads
 from oracle.routing import APIRouter
 from oracle.tenancy import tenant_session
-from oracle.tenant_settings_api import company_timezone
 
 router = APIRouter(prefix="/v1", tags=["auth"])
 
@@ -106,7 +106,7 @@ async def logout(response: Response) -> None:
 
 @router.get("/me", response_model=Me)
 async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
-    zone = (await company_timezone(db)).key
+    zone, zone_state = await company_time_zone_read(db)
     if principal.kind == "user":
         user = await db.get(User, principal.user_id)
         # An API token acting for this user also names itself.
@@ -123,6 +123,7 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
             name=user.name,
             invite_roles=list(access.invite_roles(principal)),
             company_timezone=zone,
+            company_timezone_state=zone_state,
         )
     token = await db.get(ApiToken, principal.token_id)
     return Me(
@@ -133,6 +134,7 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
         token_name=token.name,
         invite_roles=list(access.invite_roles(principal)),
         company_timezone=zone,
+        company_timezone_state=zone_state,
     )
 
 

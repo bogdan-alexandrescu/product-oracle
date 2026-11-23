@@ -72,16 +72,18 @@ const NAV_RULE = [
         message:
           'Import links and navigation from @/lib/nav (node scripts/nav-codemod.mjs re-points them).',
       })),
+      // #1585 phase 3: an allow-list, not a deny-list, so a router export added later (Navigate,
+      // useMatch, useBlocker, createLink...) cannot slip past lib/nav.ts. Allowed: what wires a
+      // route (route files, main.tsx) and the redirect a route's beforeLoad throws.
       {
         name: '@tanstack/react-router',
-        importNames: [
-          'Link',
-          'useNavigate',
-          'useParams',
-          'useRouter',
-          'useRouterState',
-          'useLocation',
-          'useSearch',
+        allowImportNames: [
+          'createFileRoute',
+          'createRootRoute',
+          'createRouter',
+          'Outlet',
+          'redirect',
+          'RouterProvider',
         ],
         message: 'Import links and navigation from @/lib/nav.',
       },
@@ -109,6 +111,70 @@ const TEXT_SIZE_RULE = {
       Literal: (node) => check(node, node.value),
       TemplateElement: (node) => check(node, node.value.raw),
     };
+  },
+};
+
+// #1585 phase 3: design-system bans. A raw element the design system (components/ds) already
+// draws is a rule of its own per element, so its suppressions read per ban and no file's
+// no-restricted-syntax override turns it off. components/ds itself is exempt: it draws them.
+// No ban for <select> or a checkbox <input>: components/ds has no part for them yet.
+const RAW_ELEMENTS = {
+  // Button and LinkButton carry the variants, the disabled look and the one focus ring.
+  'no-raw-button': {
+    name: 'button',
+    message:
+      'Use Button (or LinkButton) from @/components/ds, not a raw <button>: it carries the variants, the disabled look and the focus ring.',
+  },
+  // Dialog and Sheet carry the focus trap, Escape and the backdrop.
+  'no-raw-dialog': {
+    name: 'dialog',
+    message:
+      'Use Dialog or Sheet from @/components/ds, not a raw <dialog>: they carry the focus trap, Escape and the backdrop.',
+  },
+};
+const rawElementRule = ({ name, message }) => ({
+  meta: { type: 'problem', messages: { raw: message } },
+  create(context) {
+    return {
+      [`JSXOpeningElement[name.type='JSXIdentifier'][name.name='${name}']`]: (node) =>
+        context.report({ node, messageId: 'raw' }),
+    };
+  },
+});
+// A link inside the app is Link from @/lib/nav (client-side, no full page load), never a raw
+// <a href="/..."> (a literal or a template that starts with "/"; "//host" is another site).
+const INTERNAL_ANCHOR_RULE = {
+  meta: {
+    type: 'problem',
+    messages: {
+      internal:
+        'Use Link from @/lib/nav for a link inside the app, not a raw <a href="/...">: it navigates without reloading the page.',
+    },
+  },
+  create(context) {
+    const internal = (text) => typeof text === 'string' && /^\/(?!\/)/.test(text);
+    return {
+      "JSXOpeningElement[name.type='JSXIdentifier'][name.name='a'] > JSXAttribute[name.name='href']":
+        (node) => {
+          let value = node.value;
+          if (value?.type === 'JSXExpressionContainer') value = value.expression;
+          const text =
+            value?.type === 'Literal'
+              ? value.value
+              : value?.type === 'TemplateLiteral'
+                ? value.quasis[0].value.cooked
+                : null;
+          if (internal(text)) context.report({ node, messageId: 'internal' });
+        },
+    };
+  },
+};
+const DESIGN_SYSTEM = {
+  rules: {
+    ...Object.fromEntries(
+      Object.entries(RAW_ELEMENTS).map(([rule, spec]) => [rule, rawElementRule(spec)]),
+    ),
+    'no-internal-anchor': INTERNAL_ANCHOR_RULE,
   },
 };
 
@@ -238,6 +304,22 @@ const eslintConfig = defineConfig([
       'no-restricted-globals': ['error', 'confirm', 'alert', 'prompt'],
       'no-restricted-syntax': ['error', ...DATE_RULES],
       'no-restricted-imports': NAV_RULE,
+    },
+  },
+  {
+    plugins: { 'design-system': DESIGN_SYSTEM },
+    rules: {
+      'design-system/no-raw-button': 'error',
+      'design-system/no-raw-dialog': 'error',
+      'design-system/no-internal-anchor': 'error',
+    },
+  },
+  {
+    files: ['components/ds/**'],
+    rules: {
+      'design-system/no-raw-button': 'off',
+      'design-system/no-raw-dialog': 'off',
+      'design-system/no-internal-anchor': 'off',
     },
   },
   {

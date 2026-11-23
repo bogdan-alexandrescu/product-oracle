@@ -17,7 +17,7 @@
 import type { Schemas } from '@/lib/api/client';
 import { inWords } from '@/lib/format';
 
-import { mockSettingValue } from './connections';
+import { mockSettingValue, mockZone } from './connections';
 import { reply } from './typed';
 
 type Account = Schemas['AccountOut'];
@@ -416,7 +416,10 @@ async function handle(
       refresh_sweep: db.sweep,
       fallback: db.fallback,
       pool: poolOf(db),
-      time_zone: timeZone(),
+      // #1677: the default zone when the Company time zone cannot be read, as the API.
+      time_zone:
+        mockZone().company_timezone_state === 'unavailable' ? 'America/Los_Angeles' : timeZone(),
+      time_zone_state: mockZone().company_timezone_state,
     };
     return reply('/v1/claude-accounts', 'get', page);
   }

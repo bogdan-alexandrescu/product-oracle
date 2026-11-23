@@ -16587,6 +16587,12 @@ export interface components {
             pool: components["schemas"]["PoolOut"];
             /** Time Zone */
             time_zone: string;
+            /**
+             * Time Zone State
+             * @default fetched
+             * @enum {string}
+             */
+            time_zone_state: "fetched" | "unavailable" | "not_applicable";
         };
         /**
          * ActionIn
@@ -31633,6 +31639,12 @@ export interface components {
              * @default America/Los_Angeles
              */
             company_timezone: string;
+            /**
+             * Company Timezone State
+             * @default fetched
+             * @enum {string}
+             */
+            company_timezone_state: "fetched" | "unavailable" | "not_applicable";
         };
         /** MeasurementCreate */
         MeasurementCreate: {

@@ -28,6 +28,7 @@ from oracle.branding import router as branding_router
 from oracle.capabilities import stamp_openapi
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
+from oracle.company_time import STATE_HEADER, ZoneStateMiddleware
 from oracle.config import get_settings
 from oracle.connections.browse_github import router as github_browse_router
 from oracle.connections.browse_google import router as drive_browse_router
@@ -200,6 +201,8 @@ def create_app() -> FastAPI:
     )
     # The CSRF guard on every write the browser signs in itself (outside it: CORS).
     app.add_middleware(SameOriginMiddleware)
+    # #1677: a response names the Company time zone state its dates used.
+    app.add_middleware(ZoneStateMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -207,7 +210,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
         # e2e-pdf-export: the web reads a one-page export's overflow to tell the person.
-        expose_headers=["X-Oracle-Overflow-Pages"],
+        expose_headers=["X-Oracle-Overflow-Pages", STATE_HEADER],
     )
 
     @app.exception_handler(DraftError)
