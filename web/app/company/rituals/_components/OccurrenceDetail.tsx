@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { FindingCard } from '@/app/company/market/_components/FindingCard';
 import { MarkdownBody } from '@/components/MarkdownBody';
-import { Button, Chip, Icon, LinkButton, NotFoundPanel, Panel } from '@/components/ds';
+import { Button, Chip, Icon, InfoTip, LinkButton, NotFoundPanel, Panel } from '@/components/ds';
 import { ErrorNote, INPUT, LoadError, Loading } from '@/components/ui';
 import { ApiError, api, unwrap, type Schemas } from '@/lib/api/client';
 import { forgetReads } from '@/lib/api/shared-reads';
@@ -491,7 +491,6 @@ function SummaryCard({
     estimate &&
     (estimate.rituals.find((r) => r.ritual_id === occ.ritual_id)?.per_summary_usd ??
       estimate.per_summary_usd);
-  const cost = price !== undefined ? ` · one Oracle run, about ${formatMoney(price)}` : '';
   const makes = digest
     ? "Oracle writes this week's digest from the findings below"
     : metrics
@@ -541,9 +540,21 @@ function SummaryCard({
   // Not offered when Oracle does not write it (a digest at H11 "Watch the market" Observe).
   const button = canAsk && occ.pre_read.built_at && occ.summary_offered !== false && (
     <>
-      <p className="basis-full text-sm text-text2" data-testid="summary-what">
-        {makes}
-        {cost}.
+      {/* #1678: what it costs stays as one short line; what Oracle makes sits behind the (i). */}
+      <p
+        className="flex basis-full items-center gap-1.5 text-sm text-text2"
+        data-testid="summary-what"
+      >
+        {price !== undefined ? (
+          <>
+            {`One Oracle run, about ${formatMoney(price)}`}
+            <InfoTip label={words.title.toLowerCase()} align="start" testId="summary-what-tip">
+              {makes}.
+            </InfoTip>
+          </>
+        ) : (
+          `${makes}.`
+        )}
       </p>
       <Button variant="solid" disabled={busy} onClick={ask}>
         {words.ask}

@@ -28,17 +28,19 @@ export const needingAttention = (sources: Source[]): Source[] =>
 
 /**
  * Why a source needs attention, for who reads it: someone who may edit it reads the API's
- * message as it is, what to do; someone who may not reads the API's cause and the role that
- * can ("Over 100 channels: your role cannot edit sources; an approver or owner can. Ask an
- * owner to raise your role."), as the Inbox names it. The API lists only the caller's own
- * sources and editing one needs an approver or owner (owner 2026-11-10), so a role that cannot
- * edit cannot even its own. ``mayEdit`` comes from can() only.
+ * message as it is, what to do; someone who may not reads the API's cause ("Over 100
+ * channels"), and attentionTip names the role that can, behind an (i) (#1678). The API lists
+ * only the caller's own sources and editing one needs an approver or owner (owner 2026-11-10),
+ * so a role that cannot edit cannot even its own. ``mayEdit`` comes from can() only.
  */
 export function attentionMessage(s: Source, mayEdit: boolean): string {
   const message = s.last_error ?? '';
   if (mayEdit || !s.attention) return message;
-  const cause = s.attention.cause;
-  // A cause that holds a colon already ("... is a direct message: DMs are never ingested") ends as a sentence.
-  const join = cause.includes(':') ? '. Your' : ': your';
-  return `${cause}${join} role cannot edit sources; an approver or owner can. Ask an owner to raise your role.`;
+  return s.attention.cause;
+}
+
+/** The role that can fix it, for someone who may not edit the source; null for one who may. */
+export function attentionTip(s: Source, mayEdit: boolean): string | null {
+  if (mayEdit || !s.attention) return null;
+  return 'Your role cannot edit sources; an approver or owner can. Ask an owner to raise your role.';
 }

@@ -193,10 +193,18 @@ export function holdCount(n: number): string {
  * draft, so the header and the inspector never read as two different counts.
  */
 export function gateReason(blocking: number, open: number = blocking): string {
+  return `${gateLead(blocking, open)}: ${gateHow(blocking).toLowerCase()}`;
+}
+
+/** #1678: the gate's status line, shown under the header; gateHow sits behind its (i). */
+export function gateLead(blocking: number, open: number = blocking): string {
   const all = Math.max(open, blocking);
-  const lead =
-    all > blocking
-      ? `${criticalCount(all)} open, ${blocking} ${blocking === 1 ? 'holds' : 'hold'} the draft`
-      : holdCount(blocking);
-  return `${lead}: answer ${blocking === 1 ? 'it' : 'them'} or record a decision`;
+  return all > blocking
+    ? `${criticalCount(all)} open, ${blocking} ${blocking === 1 ? 'holds' : 'hold'} the draft`
+    : holdCount(blocking);
+}
+
+/** What lifts the gate: "Answer it or record a decision". */
+export function gateHow(blocking: number): string {
+  return `Answer ${blocking === 1 ? 'it' : 'them'} or record a decision`;
 }

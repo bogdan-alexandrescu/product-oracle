@@ -917,9 +917,17 @@ function RunInspector({ run }: { run: RunOut }) {
           {approval && (
             // qa-onboarding-13: who approves, for everyone; the owner's Approve is in the header.
             <p className="mt-1.5 text-sm text-text" data-testid="run-approval-who">
-              {can('approve_run')
-                ? `Waiting for your approval of ${usd(run.estimate_usd)}. No agent starts until you approve it.`
-                : `Waiting for an owner to approve ${usd(run.estimate_usd)}. No agent starts until then: ask an owner of your company to approve it.`}
+              {can('approve_run') ? (
+                `Waiting for your approval of ${usd(run.estimate_usd)}. No agent starts until you approve it.`
+              ) : (
+                // #1678: what to do sits behind the (i).
+                <span className="inline-flex items-center gap-1.5">
+                  {`Waiting for an owner to approve ${usd(run.estimate_usd)}.`}
+                  <InfoTip label="approval" align="start" testId="run-approval-tip">
+                    No agent starts until then: ask an owner of your company to approve it.
+                  </InfoTip>
+                </span>
+              )}
             </p>
           )}
         </InspectorSection>

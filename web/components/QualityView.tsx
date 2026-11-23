@@ -1097,7 +1097,7 @@ function RatingForm({
   const left = sections.filter((s) => !draft.sections.includes(s.section_key));
   const ready = !!draft.status && draft.rationale.trim().length > 0;
   const hint = !draft.status
-    ? 'Pick a status and add a reason to submit'
+    ? 'Pick a status and add a reason'
     : !ready
       ? 'Add a reason to submit'
       : 'Submits one rating for this criterion';

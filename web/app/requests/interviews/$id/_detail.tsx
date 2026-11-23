@@ -352,15 +352,28 @@ export function InterviewDetail({ id }: { id: string }) {
 }
 
 /** Why the transcript is empty, and what to do (qa-work-44). */
-function transcriptEmpty(iv: InterviewOut, name: string): string {
+function transcriptEmpty(iv: InterviewOut, name: string): ReactNode {
   switch (iv.status) {
     case 'draft':
       return 'No link has been made yet, so nobody has been asked.';
     case 'invited':
-      return iv.link_opened_at
-        ? `${name} opened the link but hasn't answered yet.`
-        : // qa4-docs-share-63: the link can't be shown again, so a link never sent is replaced, not sent.
-          `${name} hasn't opened the link yet.${iv.can_manage ? " If you didn't send it, make a new link." : ''}`;
+      return iv.link_opened_at ? (
+        `${name} opened the link but hasn't answered yet.`
+      ) : (
+        // qa4-docs-share-63: the link can't be shown again, so a link never sent is replaced, not sent.
+        // #1678: what to do sits behind the (i).
+        <>
+          {`${name} hasn't opened the link yet.`}
+          {iv.can_manage && (
+            <>
+              {' '}
+              <InfoTip label="an unopened link" align="start" testId="interview-transcript-tip">
+                If you didn&apos;t send it, make a new link.
+              </InfoTip>
+            </>
+          )}
+        </>
+      );
     case 'in_progress':
       return `${name} has started but hasn't answered yet.`;
     case 'expired':

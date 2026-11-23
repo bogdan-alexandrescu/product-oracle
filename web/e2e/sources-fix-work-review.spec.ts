@@ -78,7 +78,10 @@ test("fix-work review: a viewer's note says what they can't do in plain words", 
   await login(page);
   await openCoverage(page);
   const note = inspector(page).getByTestId('sync-viewer-note');
-  await expect(note).toHaveText(
+  // #1678: one short line; what a reader can do sits behind the (i).
+  await expect(note).toContainText('Read only');
+  await note.getByTestId('sync-viewer-tip').click();
+  await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveText(
     'You can read coverage, but not sync or edit sources. Ask an owner if you need to.',
   );
   await expect(note).not.toContainText(/commenter|viewer/i);

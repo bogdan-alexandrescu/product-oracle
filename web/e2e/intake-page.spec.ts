@@ -94,8 +94,10 @@ test('answer, review, ready: answer my question, review the critical one, then d
   await expect(review).toContainText('Waiting for review');
   await expect(draft(page)).toBeDisabled();
   await expect(page.getByTestId('draft-reason')).toHaveText(
-    /^\d critical questions open, 1 holds the draft: answer it or record a decision$/,
+    /^\d critical questions open, 1 holds the draft$/,
   );
+  // #1678: what lifts the gate sits behind the (i).
+  await expect(page.getByTestId('draft-reason-tip')).toBeVisible();
   const gate = inspector(page).getByTestId('ready-to-draft');
   await expect(gate).toContainText('1 critical question holds the draft');
   await expect(gate.getByTestId('blocking-gap')).toContainText('Blockers: not known yet.');

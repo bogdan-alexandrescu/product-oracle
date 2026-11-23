@@ -1270,10 +1270,15 @@ function NotAllowed({ testId, title, reason }: { testId: string; title: string; 
       >
         <Icon name="lock" size={24} />
       </span>
-      <h2 className="font-display text-lg leading-6 font-bold tracking-heading text-text">
-        {title}
-      </h2>
-      <p className="max-w-md text-base text-text2">{reason}</p>
+      {/* #1678: the reason sits behind the (i) beside the title. */}
+      <div className="flex items-center gap-1.5">
+        <h2 className="font-display text-lg leading-6 font-bold tracking-heading text-text">
+          {title}
+        </h2>
+        <InfoTip label="who can start one" testId={`${testId}-tip`}>
+          {reason}
+        </InfoTip>
+      </div>
     </div>
   );
 }

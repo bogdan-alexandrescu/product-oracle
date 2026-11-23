@@ -25,7 +25,7 @@ test('pricing owner: with none chosen, the hint names who decides instead of ask
   const pricing = page.getByTestId('pricing-owner-panel');
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeDisabled();
   await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText(
-    'Not chosen yet: the earliest owner, Avery Stone, decides until you pick someone else.',
+    'Not chosen yet: Avery Stone decides',
   );
   // Once chosen, the hint asks for another owner.
   await pricing
@@ -45,8 +45,10 @@ test('pricing owner: the only owner is told how to choose someone else', async (
   const pricing = page.getByTestId('pricing-owner-panel');
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeDisabled();
   await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText(
-    'Avery Stone is the only owner: make another member an owner to choose someone else.',
+    'Avery Stone is the only owner',
   );
+  // #1678: how to choose someone else sits behind the (i).
+  await expect(pricing.getByTestId('pricing-owner-save-reason-tip')).toBeVisible();
 });
 
 test('Connections: the Slack card says what the app does once installed, beside Not installed', async ({

@@ -10,6 +10,7 @@ import {
   Chip,
   DataTable,
   FilterChips,
+  InfoTip,
   Notice,
   Page,
   PageHeader,
@@ -590,8 +591,14 @@ export function CompositionView({ doc }: { doc: string }) {
         {/* qa-docs-49: one plain banner; a PRD without a composition says it in its own notice. */}
         {data && !mayConfirm && !(tab === 'modules' && data.legacy && data.recommendation) && (
           <Notice testId="read-only">
-            You can look at this composition and preview a recommendation. Only an approver can
-            change or publish it.
+            {/* #1678: what a reader can do sits behind the (i). */}
+            <span className="inline-flex items-center gap-1.5">
+              Read only
+              <InfoTip label="read only" align="start" testId="read-only-tip">
+                You can look at this composition and preview a recommendation. Only an approver can
+                change or publish it.
+              </InfoTip>
+            </span>
           </Notice>
         )}
         {result && (

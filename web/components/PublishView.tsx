@@ -1088,9 +1088,10 @@ export function PublishView({ doc }: { doc: string }) {
                   title="Section review"
                   count={`${sections.length - unreviewed}/${sections.length}`}
                 >
-                  <span className="text-sm text-text2">
-                    Sections, not checks: publishing does not wait for them
-                  </span>
+                  {/* #1678: why the review does not hold publishing sits behind the (i). */}
+                  <InfoTip label="section review" align="start" testId="section-review-tip">
+                    Sections, not checks: publishing does not wait for them.
+                  </InfoTip>
                 </SubHead>
                 <ReviewRow
                   reviewed={sections.length - unreviewed}

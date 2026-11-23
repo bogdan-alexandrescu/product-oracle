@@ -1030,11 +1030,9 @@ export function PublicCheck({ doc }: { doc: string }) {
             Only a roadmap has a public version
             {/* #1590: what a public version is sits behind the (i). */}
             <InfoTip label="a public version" align="start" testId="public-version-tip">
-              A public version is the page anyone with a roadmap&apos;s public link reads.
+              A public version is the page anyone with a roadmap&apos;s public link reads.{' '}
+              {docQ.data.title} is a {what}, so it has none.
             </InfoTip>
-          </p>
-          <p className="max-w-prose text-base text-text2">
-            {docQ.data.title} is a {what}, so it has none.
           </p>
           <LinkButton href={`/documents/${doc}`} icon="back">
             Back to the {what}

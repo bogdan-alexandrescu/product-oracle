@@ -95,8 +95,10 @@ test('qa-settings-13: every section enables Save only after a change, with the h
   const pricing = page.getByTestId('pricing-owner-panel');
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeDisabled();
   await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText(
-    'Avery Stone is the only owner: make another member an owner to choose someone else.',
+    'Avery Stone is the only owner',
   );
+  // #1678: how to choose someone else sits behind the (i).
+  await expect(pricing.getByTestId('pricing-owner-save-reason-tip')).toBeVisible();
 
   // Time zone: waits for a pick, then for another one.
   const panel = timezone(page);
@@ -139,7 +141,7 @@ test("qa-settings-13: the pricing owner's Save waits for another owner", async (
   await expect(field.locator('option:checked')).toHaveText('Avery Stone');
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeDisabled();
   await expect(pricing.getByTestId('pricing-owner-save-reason')).toHaveText(
-    'Not chosen yet: the earliest owner, Avery Stone, decides until you pick someone else.',
+    'Not chosen yet: Avery Stone decides',
   );
   await field.selectOption({ label: 'Riley Park' });
   await expect(pricing.getByRole('button', { name: 'Save' })).toBeEnabled();

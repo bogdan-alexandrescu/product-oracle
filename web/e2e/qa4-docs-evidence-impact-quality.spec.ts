@@ -128,9 +128,14 @@ test.describe('desktop', () => {
   }) => {
     await openImpact(page);
     await expect(
-      page.getByText(
-        /Preview: v2 marks nothing stale\. \d+ outputs? (was|were) already marked stale by an earlier change\./,
-      ),
+      page.getByText(/Preview: v2 marks nothing stale\. \d+ outputs? (is|are) already stale\./),
+    ).toBeVisible();
+    // #1678: that an earlier change marked it sits behind the (i).
+    await page.getByTestId('impact-intro-tip').filter({ visible: true }).first().click();
+    await expect(
+      page
+        .getByRole('tooltip')
+        .filter({ hasText: 'marked stale by an earlier change', visible: true }),
     ).toBeVisible();
     await expect(page.getByText('nothing has been marked stale')).toHaveCount(0);
   });

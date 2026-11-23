@@ -344,14 +344,17 @@ function intro(report: Report, source: ImpactSource, subject: SubjectWords): Rea
   // qa4-docs-9: the preview marks nothing, but an output an earlier change already marked
   // stale shows as such here; say so rather than "nothing has been marked stale".
   const already = report.affected.filter((o) => o.freshness === 'potentially_stale').length;
+  // #1678: the status stays; that an earlier change marked them sits behind the (i).
   const lead = already
-    ? `Preview: ${n ? `v${n}` : 'this change'} marks nothing stale. ${already === 1 ? '1 output was' : `${already} outputs were`} already marked stale by an earlier change.`
+    ? `Preview: ${n ? `v${n}` : 'this change'} marks nothing stale. ${already === 1 ? '1 output is' : `${already} outputs are`} already stale.`
     : 'Preview: nothing has been marked stale.';
   // #1590: how to read the board sits behind the (i).
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <span>{lead}</span>
       <InfoTip label="the lines and columns" align="start" testId="impact-intro-tip">
+        {already > 0 &&
+          `${already === 1 ? 'It was' : 'They were'} marked stale by an earlier change. `}
         The lines show what each output was built from in earlier versions
         {n ? `; v${n} changed the sections in the middle column` : ''}.
       </InfoTip>

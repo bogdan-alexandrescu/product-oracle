@@ -110,8 +110,11 @@ test('ST-7: a viewer reads the role that can fix a source over the channel cap, 
   await openSources(page);
   const row = page.getByRole('listitem', { name: 'Legacy all-hands chat' });
   // Review r2 of PR 1286: a viewer edits no source, its own either; editing needs an approver or owner (owner 2026-11-10).
-  await expect(row.getByTestId('last-error')).toHaveText(
-    'Over 100 channels: your role cannot edit sources; an approver or owner can. Ask an owner to raise your role.',
+  // #1678: the cause stays; the role that can fix it sits behind the (i).
+  await expect(row.getByTestId('last-error')).toHaveText('Over 100 channels');
+  await row.getByTestId('last-error-tip').click();
+  await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveText(
+    'Your role cannot edit sources; an approver or owner can. Ask an owner to raise your role.',
   );
   await expect(row.getByRole('button', { name: 'Edit Legacy all-hands chat' })).toHaveCount(0);
 });
