@@ -86,7 +86,7 @@ for (const phone of [false, true]) {
         await switchTo(page, 'commenter@example.com');
         await page.goto(URL);
         await expect(page.getByRole('heading', { level: 1, name: 'Guided setup' })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Remind' })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Remind', exact: true })).toHaveCount(0);
         await expect(page.getByRole('button', { name: 'Send for approval…' })).toHaveCount(0);
       });
     });
