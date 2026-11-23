@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 /**
  * Whole words in narrow table columns (priorities-words): a name wraps between its words, and a
@@ -124,9 +125,28 @@ export function useWidth(): [(el: HTMLElement | null) => void, number | null] {
   const [width, setWidth] = useState<number | null>(null);
   useEffect(() => {
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e.contentRect.width)));
+    // Rendered before the frame paints: when the fonts swap and the table's columns move, the
+    // words are fitted to the new width in that same frame, never cut for one (priorities-words).
+    const ro = new ResizeObserver(([e]) =>
+      flushSync(() => setWidth(Math.floor(e.contentRect.width))),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, [el]);
+  // And read again after each of the owner's renders, before it paints: a render that moves the
+  // columns (the fonts loaded, a wider Goal column, words fitted anew) fits the words to the width
+  // it leaves in the same task, not in the frame after. Read once per render, not keyed: a render
+  // keyed only on the fonts and the Goal column still left a word cut (priorities-words).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    const edges = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'] as const;
+    const box = edges.reduce((n, k) => n + (parseFloat(cs[k]) || 0), 0);
+    // A measurement of the laid-out element, the same value the observer sets; a same value
+    // renders nothing.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWidth(Math.floor(el.getBoundingClientRect().width - box));
+  });
   return [setEl, width];
 }

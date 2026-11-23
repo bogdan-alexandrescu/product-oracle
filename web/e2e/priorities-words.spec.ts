@@ -136,63 +136,93 @@ test.describe('phone', () => {
   });
 });
 
+/**
+ * Opens Priorities with the font files held back, checks the Goal column's words in the
+ * fallback fonts (`fallback`: @font-face rules that replace them), then once the fonts load.
+ */
+async function beforeFonts(page: Page, fallback?: string) {
+  await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [
+    MOCK_SCENARIO_KEY,
+    LONG_WORDS_SCENARIO,
+  ] as const);
+  await login(page, 'approver@example.com');
+  // From here the font files are held back, so the table is laid out in the fallback fonts.
+  // Where the fallback's system font (Arial) is installed, no font event comes and no
+  // fonts.load() settles until the page's own fonts load; this container has no Arial, so its
+  // fallback faces fail at once, and both are made to wait as they would.
+  await page.addInitScript(() => {
+    const add = FontFaceSet.prototype.addEventListener;
+    FontFaceSet.prototype.addEventListener = function (
+      this: FontFaceSet,
+      type: string,
+      fn: EventListenerOrEventListenerObject,
+      o?: boolean | AddEventListenerOptions,
+    ) {
+      const call = (e: Event) => (typeof fn === 'function' ? fn.call(this, e) : fn.handleEvent(e));
+      add.call(
+        this,
+        type,
+        type === 'loadingdone' ? (e: Event) => void this.ready.then(() => call(e)) : fn,
+        o,
+      );
+    };
+    const load = FontFaceSet.prototype.load;
+    FontFaceSet.prototype.load = function (this: FontFaceSet, font: string, text?: string) {
+      const loading = load.call(this, font, text).catch(() => []);
+      return new Promise((r) => setTimeout(r, 50)).then(() => this.ready).then(() => loading);
+    };
+  });
+  if (fallback)
+    await page.addInitScript((css) => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.append(style);
+      });
+    }, fallback);
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(/\.woff2?(\?|$)/, async (route) => {
+    await held;
+    await route.continue().catch(() => undefined);
+  });
+  await page.goto('/priorities', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('tr[data-testid^="priority-row-"]')).toHaveCount(8);
+  await expect(
+    page.locator('[data-testid="row-goals"]', { hasText: 'Internationalization' }).first(),
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.fonts.status), 'the fonts are still loading').toBe(
+    'loading',
+  );
+  await expect
+    .poll(() => cutWords(page), { message: 'a word is cut before the fonts load' })
+    .toEqual([]);
+  release();
+  await page.evaluate(() => document.fonts.ready);
+  expect(await cutWords(page), 'a word is cut once the fonts load').toEqual([]);
+}
+
+/*
+ * words-cut: fallback faces whose code tag is wider at 14 px than at 13 px, and "Conversion"
+ * just fits beside a tag measured at 13 px but not beside the 14 px tag drawn ("Conversio / n"
+ * on CI's fallback fonts after the type scale). Liberation fonts come with Playwright's
+ * dependencies; their sizes are set so this holds with whole-pixel glyphs and without.
+ */
+const TIGHT_FALLBACK =
+  "@font-face { font-family: 'Inter Tight Fallback'; src: local('Liberation Sans'); size-adjust: 108%; } @font-face { font-family: 'DM Mono Fallback'; src: local('Liberation Mono'); size-adjust: 107%; }";
+
 test.describe('before the fonts load', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("priorities-words: no word in the Goal column breaks inside itself while the page's fonts are still loading", async ({
     page,
   }) => {
-    await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [
-      MOCK_SCENARIO_KEY,
-      LONG_WORDS_SCENARIO,
-    ] as const);
-    await login(page, 'approver@example.com');
-    // From here the font files are held back, so the table is laid out in the fallback fonts.
-    // Where the fallback's system font (Arial) is installed, no font event comes and no
-    // fonts.load() settles until the page's own fonts load; this container has no Arial, so its
-    // fallback faces fail at once, and both are made to wait as they would.
-    await page.addInitScript(() => {
-      const add = FontFaceSet.prototype.addEventListener;
-      FontFaceSet.prototype.addEventListener = function (
-        this: FontFaceSet,
-        type: string,
-        fn: EventListenerOrEventListenerObject,
-        o?: boolean | AddEventListenerOptions,
-      ) {
-        const call = (e: Event) =>
-          typeof fn === 'function' ? fn.call(this, e) : fn.handleEvent(e);
-        add.call(
-          this,
-          type,
-          type === 'loadingdone' ? (e: Event) => void this.ready.then(() => call(e)) : fn,
-          o,
-        );
-      };
-      const load = FontFaceSet.prototype.load;
-      FontFaceSet.prototype.load = function (this: FontFaceSet, font: string, text?: string) {
-        const loading = load.call(this, font, text).catch(() => []);
-        return new Promise((r) => setTimeout(r, 50)).then(() => this.ready).then(() => loading);
-      };
-    });
-    let release!: () => void;
-    const held = new Promise<void>((r) => (release = r));
-    await page.route(/\.woff2?(\?|$)/, async (route) => {
-      await held;
-      await route.continue().catch(() => undefined);
-    });
-    await page.goto('/priorities', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('tr[data-testid^="priority-row-"]')).toHaveCount(8);
-    await expect(
-      page.locator('[data-testid="row-goals"]', { hasText: 'Internationalization' }).first(),
-    ).toBeVisible();
-    expect(await page.evaluate(() => document.fonts.status), 'the fonts are still loading').toBe(
-      'loading',
-    );
-    await expect
-      .poll(() => cutWords(page), { message: 'a word is cut before the fonts load' })
-      .toEqual([]);
-    release();
-    await page.evaluate(() => document.fonts.ready);
-    expect(await cutWords(page), 'a word is cut once the fonts load').toEqual([]);
+    await beforeFonts(page);
+  });
+
+  test('priorities-words: no word in the Goal column breaks inside itself in fallback fonts that leave a name just room beside its code', async ({
+    page,
+  }) => {
+    await beforeFonts(page, TIGHT_FALLBACK);
   });
 });
