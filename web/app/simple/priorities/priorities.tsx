@@ -43,6 +43,7 @@ import { LoadError, Loading } from '@/components/ui';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { FeaturePanel, useItemChanged } from '../roadmap/_panel';
+import { PendingMark, useFeatureOrder } from './feature-order';
 import { FeatureMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { Named, NotInGt } from '@/components/simple/FeatureName';
 import {
@@ -3587,7 +3588,16 @@ function UndatedBuckets({
   const reloadAll = () => sendCardChanged();
   const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
-  const drag = useBucketDrag({ gb, writes: liftedMoves(writes, read) });
+  // prioritize: a feature's place in its bucket is its rank, moved by drag or Alt+Arrow.
+  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError });
+  const drag = useBucketDrag({
+    gb,
+    writes: liftedMoves(writes, read),
+    reorder: (code, over) => {
+      const b = buckets.find((x) => x.codes.includes(code));
+      if (b) void order.move(b.key, b.codes, code, over);
+    },
+  });
   const tasks = useBucketTasks({
     rows: data.rows,
     plan: null,
@@ -3852,7 +3862,7 @@ function UndatedBuckets({
                       Nothing this quarter
                     </li>
                   )}
-                  {b.codes.map((c) => {
+                  {order.arrange(b.key, b.codes).map((c) => {
                     const r = rowOf.get(c);
                     const name = r?.title ?? c;
                     const t = r ? tasks.taskOf(r.code, r.title) : undefined;
@@ -3895,7 +3905,15 @@ function UndatedBuckets({
                         }
                         actions={tasks.actions(t)}
                         // panel-menu: a part names the feature it is part of, as on the ranked rows.
-                        partOf={r && <PartOf r={r} />}
+                        partOf={
+                          r && (
+                            <>
+                              <PartOf r={r} />
+                              {order.pending(c) && <PendingMark />}
+                            </>
+                          )
+                        }
+                        onKeys={order.keys(b.key, b.codes, c)}
                         onRename={t && add ? (n) => tasks.rename(t, n) : undefined}
                         onDelete={t && add ? () => tasks.remove(t) : undefined}
                       />

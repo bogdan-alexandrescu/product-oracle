@@ -471,6 +471,7 @@ export function TaskRow({
   partOf,
   onRename,
   onDelete,
+  onKeys,
 }: {
   code: string;
   name: string;
@@ -493,6 +494,8 @@ export function TaskRow({
   onRename?: (name: string) => void;
   /** de-gm: Delete on its name moves it to Trash, with Undo. */
   onDelete?: () => void;
+  /** prioritize: keys on the focused row (Alt+Arrow moves it one place). */
+  onKeys?: (e: React.KeyboardEvent) => void;
 }) {
   // qa-nov17 G8: the milestone by its code and name as the roadmap reads it ("M6 Beta").
   const coded = useCodedMilestone();
@@ -507,6 +510,7 @@ export function TaskRow({
       data-testid="plan-feature"
       data-code={code}
       data-lifted={lifted ? '' : undefined}
+      onKeyDown={onKeys}
       className={`relative flex items-center gap-2 border-b border-line py-[5px] text-base leading-[22px] max-sm:flex-wrap max-sm:gap-y-1 ${lifted ? '[&>*]:opacity-30' : ''}`}
     >
       {grip && (
