@@ -1484,6 +1484,8 @@ function createTarget(
   const now = iso(mockNowMs());
   const spec = TARGETS[body.op];
   const target: Values = { ...body.target };
+  // codes-at-write (changes_router.create_simple_change): the codes this write gave.
+  const numbered: Record<string, string> = {};
   if (target.item_id && !keyOf(db, target.item_id))
     return json(404, { detail: 'No such roadmap item' });
   // A feature ask is filed directly by every commenter and up (targets.py _who).
@@ -1500,10 +1502,12 @@ function createTarget(
       return json(403, { detail: 'Only an owner can add a feature to the company roadmap' });
     const key =
       body.op === 'override_priority'
-        ? addToCompany(db, target.feature_id, readerDb(db, ctx))
+        ? addToCompany(db, target.feature_id, readerDb(db, ctx), {
+            next: () => nextCode(db),
+            codes: numbered,
+          })
         : featureItem(db, target.feature_id);
     if (!key) return json(404, { detail: 'No such feature' });
-    if (typeof key === 'object') return json(422, { detail: key.refused });
     target.item_id = db.ids[key];
   }
   if (spec.adds) target[spec.id] = crypto.randomUUID();
@@ -1648,7 +1652,18 @@ function createTarget(
     session!.last_change_at = now;
   }
   (db.changes ??= []).push(change);
-  return reply('/v1/simple/changes', 'post', { change: view(db, ctx, change), flags: [] }, 201);
+  return reply(
+    '/v1/simple/changes',
+    'post',
+    {
+      change: {
+        ...view(db, ctx, change),
+        numbered: Object.keys(numbered).length ? numbered : null,
+      },
+      flags: [],
+    },
+    201,
+  );
 }
 
 /** qa-nov17 G2: a milestone the panel offers, by id, with its roadmap: a goal's own (goal_milestones), or the

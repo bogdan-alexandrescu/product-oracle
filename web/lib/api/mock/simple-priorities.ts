@@ -26,6 +26,7 @@ import {
   type SimpleDb,
 } from './simple-roadmap';
 import { flowFor } from './simple-visuals';
+import { shownCode } from './item-code';
 import { madeOrder } from './made-order';
 import { MOCK_SCENARIO_KEY, stableUuid } from './ids';
 import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from './one-roadmap';
@@ -408,7 +409,8 @@ export function addToCompany(
   db: SimpleDb,
   fid: string,
   seen: SimpleDb = db,
-): string | { refused: string } | undefined {
+  gave?: { next: () => string; codes: Record<string, string> },
+): string | undefined {
   const base = featureItem(db, fid);
   const src = base ? db.items.find((s) => s.key === base) : undefined;
   if (!base || !src) return undefined;
@@ -429,31 +431,29 @@ export function addToCompany(
     kept.trace_feature = undefined;
     return kept.key;
   }
-  // every-field (targets.add_to_company): its code is no other item's own, a title's (its slices share it), in set_code's words.
+  // codes-at-write (targets.add_to_company, codes.check_flush): when another item there shows the
+  // feature's code (its own title's, or another item of the feature), the item gets the next free
+  // number at once; nothing is refused.
   const code =
     (src.feature_id && db.feature_codes?.[src.feature_id]) ||
     codedTitle(src.title, prdCode(src.section))[0];
-  const other = code
-    ? seen.items.find(
-        (x) =>
-          x.roadmap === slug &&
-          !x.trashed &&
-          x.key !== base &&
-          x.feature !== base &&
-          !(x.feature_id && seen.feature_codes?.[x.feature_id]) &&
-          !prdCode(x.section) &&
-          codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase(),
-      )
-    : undefined;
-  if (code && other)
-    return {
-      refused: `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}`,
-    };
+  const shown = (x: SeedItem) =>
+    featureOf(seen, x.key) === base ? code : shownCode(x, (id) => seen.feature_codes?.[id] ?? null);
+  const taken =
+    !!code &&
+    seen.items.some(
+      (x) =>
+        x.roadmap === slug &&
+        !x.trashed &&
+        x.key !== base &&
+        shown(x)?.toUpperCase() === code.toUpperCase(),
+    );
+  const number = taken && gave ? gave.next() : null;
   let key = base;
   for (let n = 2; db.ids[key]; n++) key = `${base}-${n}`;
   const row: SeedItem = {
     key,
-    title: src.title,
+    title: number ? `${number} ${codedTitle(src.title, null)[1]}` : src.title,
     horizon: 'later',
     roadmap: slug,
     feature: base,
@@ -463,6 +463,7 @@ export function addToCompany(
   };
   db.items.push(row);
   db.ids[key] = stableUuid(`simple-item/${key}`);
+  if (number && gave) gave.codes[db.ids[key]] = number;
   return key;
 }
 

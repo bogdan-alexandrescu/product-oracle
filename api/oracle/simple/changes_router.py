@@ -154,7 +154,7 @@ async def create_simple_change(
         out = await _run(db, changes.create(db, principal, body))
         await _in_meeting(db, principal, out, body.session_id)
     # codes-at-write: the codes this write gave, so the page shows them at once.
-    out.change.numbered = db.sync_session.info.pop(codes.NUMBERED, {})
+    out.change.numbered = db.sync_session.info.pop(codes.NUMBERED, None)
     await _with_visual(db, principal, out.change)
     return out
 
