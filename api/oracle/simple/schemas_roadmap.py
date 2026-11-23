@@ -376,6 +376,11 @@ class SimpleRoadmapItem(BaseModel):
     # and its feature's key, say), by item id: the panel's x drops them all.
     depends_keys_of: dict[str, list[str]] = {}
     suggested_depends: list[str] = []
+    # timeline-order: the item's place in the one feature order (its feature's Priorities rank,
+    # whole numbers; null: no ranked feature) and its feature's pin as override_priority's
+    # ``before.override`` wants it (null: none).
+    position: int | None = None
+    before_override: dict[str, Any] | None = None
     can_decide: bool = False
     deciders: list[str] = []
     reasons: list[str] = []

@@ -42,12 +42,13 @@ VIEWS = {
 }
 # Each view's body on the seed as 5c6d57bed answered it (the company's id masked).
 # roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
+# timeline-order: each item's position and before_override (the bodies otherwise unchanged).
 DIGESTS = {
-    "goal": "1e37021e8b0542f7d314557c34e23401255db8407ae013fe67577d126bec891b",
-    "track": "a93a51a4ef0a5f5c918f198e79007bb0b288f73ff14cda26fd99c13dc6aabbc5",
-    "prd": "f56ca97c00059db531a4978da7ece2e387365fd405585445fb601dac1c4cba53",
-    "one-roadmap": "2c728178828c7d74a525071458012f4437d398f7e1c5ed69ad7af020c623751d",
-    "viewer": "ae631f6d6a89f26223af12a8838369dc43ec96a60be1a89e2f70919c2ffeeed8",
+    "goal": "a3cec1340857c7903e84a9bbe48264dd67886d9265a89d131873ed82949eb750",
+    "track": "27d186e468f134121211b89ab769fe7730770376d4e69573ad0107469e44a56b",
+    "prd": "dc909431002cff804a6539a75cbd67e58cb67eeda429aa35a2a775da7682940f",
+    "one-roadmap": "3635264d3a242634d73a0bb71d100b6675d77b8a4b392b53d9b68e1a0f859b01",
+    "viewer": "45ee43133a5bea2799fb5058787abfc46d4adf22441a50dca30b3aee0c1f4105",
     "waiting": "6ec46197015480da730ce7e5d0b228599ec45f31eb3ddac72fe02b136eef19b6",
     "waiting-viewer": "8e3c599ef74b60ae7cc28c7bbcbee560464dfc074a18d9e9ac36e11f81feded5",
 }
@@ -101,7 +102,8 @@ async def test_reads_take_few_statements(client):
     roadmap = await _statements(client, ROADMAP, owner)
     waiting = await _statements(client, WAITING, owner)
     print(f"statements: roadmap {roadmap}, waiting {waiting}")
-    assert roadmap <= 60, roadmap
+    # timeline-order: the feature order's ranking (features, edges, evidence, pins) adds 9.
+    assert roadmap <= 64, roadmap
     assert waiting <= 24, waiting
 
 
@@ -121,5 +123,6 @@ async def test_reads_answer_within_budget(client):
             assert r.status_code == 200, r.text
         best[url] = min(times)
         print(f"{url}: {', '.join(f'{t * 1000:.0f}' for t in times)} ms")
-    assert best[ROADMAP] < 0.3, best
+    # timeline-order: the feature order's ranking adds about 0.15 s on this seed.
+    assert best[ROADMAP] < 0.45, best
     assert best[WAITING] < 0.11, best

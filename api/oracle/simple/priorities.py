@@ -180,6 +180,23 @@ def link(row: Any) -> str | None:
     return None
 
 
+async def item_order(
+    db: AsyncSession, principal: Any, entries: list[service.Entry]
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """timeline-order: each item's place in the one feature order (its feature's rank, by its
+    link, as the rows read it: ``position``) and its feature's pin as override_priority's
+    ``before.override`` wants it (``before_override``), by item id; an item linked to no
+    ranked feature has neither."""
+    rank = await priorities.ranks(db, METHOD, principal)
+    pins = {str(o.feature_id): o for o in await priorities.active_overrides(db)}
+    out: dict[uuid.UUID, dict[str, Any]] = {}
+    for e in entries:
+        if (fid := link(e.row)) is not None and fid in rank:
+            snap = targets._snap(pins.get(fid))
+            out[e.row.id] = {"position": rank[fid], "before_override": snap}
+    return out
+
+
 def _items_of(read_: service.Read) -> dict[str, list[service.Entry]]:
     """qa-prio-twins: feature id -> its open items (by their link), on every roadmap."""
     out: dict[str, list[service.Entry]] = {}

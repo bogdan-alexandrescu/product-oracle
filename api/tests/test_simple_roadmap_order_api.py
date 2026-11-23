@@ -66,8 +66,9 @@ async def test_decider_move_is_final_and_renumbers(client):
     assert now["pay-4"] == was["pay-2"]
     assert now["pay-2"] == was["pay-2"] + 1 and now["pay-3"] == was["pay-3"] + 1
     assert now["pay-1"] == was["pay-1"]
-    assert sorted(now.values()) == sorted(was.values())
-    ranks = {r["code"]: r["rank"] for r in (await w.read(client, "viewer"))["rows"]}
+    rows = (await w.read(client, "viewer"))["rows"]
+    assert sorted(r["rank"] for r in rows) == list(range(1, len(rows) + 1))
+    ranks = {r["code"]: r["rank"] for r in rows}
     assert now == {k: ranks[k] for k in ORDERED}
     after = await items(client, w.ctx)
     assert after["pay-4"]["before_override"]["position"] == was["pay-2"]

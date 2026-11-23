@@ -1957,6 +1957,10 @@ async def _build(
 
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
+    from oracle.simple import priorities
+
+    for item_id, order in (await priorities.item_order(db, principal, shown)).items():
+        extra.setdefault(item_id, {}).update(order)
     from oracle.simple import meetings
 
     left_out: list = []

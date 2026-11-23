@@ -44565,6 +44565,12 @@ export interface components {
              * @default []
              */
             suggested_depends: string[];
+            /** Position */
+            position?: number | null;
+            /** Before Override */
+            before_override?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Can Decide
              * @default false
