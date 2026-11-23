@@ -382,7 +382,9 @@ export function MkPrdReview() {
       <span className={`inline-flex items-center gap-1 ${compact ? '' : 'ml-2'}`}>
         <button
           type="button"
-          className="rounded-md border border-line px-2 py-0.5 text-sm font-semibold hover:bg-pass-bg"
+          className={
+            `rounded-md border border-line px-2 py-0.5 text-sm font-semibold hover:bg-pass-bg ${phase === 'open' && hoverChange === c.id ? 'bg-pass-bg ring-2 ring-pass' : ''}` /* MOCK-HOOK the pointer on Accept: the 1 click drawn */
+          }
           onClick={() => setResolved((r) => ({ ...r, [c.id]: 'accepted' }))}
         >
           Accept
@@ -589,18 +591,23 @@ export function MkPrdReview() {
     const changedText = d3 && s.key === 'problem' && m;
     const body =
       open || (mode === 'b' && editAll) ? (
-        <textarea
-          aria-label={s.title}
-          defaultValue={s.text}
-          autoFocus={open}
-          onBlur={(e) => {
-            const v = e.target.value;
-            setSections((ss) => ss.map((x) => (x.key === s.key ? { ...x, text: v } : x)));
-            if (open) saved(`sec:${s.key}`);
-          }}
-          rows={phase === 'mid' && open ? 3 : 2}
-          className="w-full resize-y rounded-md border-2 border-accent bg-surface px-3 py-2 text-base leading-6"
-        />
+        <>
+          <textarea
+            aria-label={s.title}
+            defaultValue={s.text}
+            autoFocus={open}
+            onBlur={(e) => {
+              const v = e.target.value;
+              setSections((ss) => ss.map((x) => (x.key === s.key ? { ...x, text: v } : x)));
+              if (open) saved(`sec:${s.key}`);
+            }}
+            rows={phase === 'mid' && open ? 3 : 2}
+            className="w-full resize-y rounded-md border-2 border-accent bg-surface px-3 py-2 text-base leading-6"
+          />
+          {!open && isSaved(`sec:${s.key}`) && (
+            <span className="text-xs font-semibold text-pass">Saved · Undo</span> // MOCK-HOOK b's box shows its Saved mark
+          )}
+        </>
       ) : (
         <Editable
           mode={mode === 'c' ? 'a' : fieldMode}
