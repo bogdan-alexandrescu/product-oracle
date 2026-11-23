@@ -729,8 +729,11 @@ async def load(
             status=e.status,
             draft=e.row.draft,
             # stale-flags: the owner the panel shows and set_owner writes (its own, else its
-            # track's), so picking one there clears "Draft with no owner to confirm it".
-            owner_id=str(e.owner_id) if e.owner_id else None,
+            # track's live owner), so picking one there clears "Draft with no owner to confirm
+            # it". A light read names no members: the item's own owner stands as stored.
+            owner_id=str(e.row.owner_id)
+            if light and e.row.owner_id
+            else (str(e.owner_id) if e.owner_id and e.owner_name else None),
             blockers=e.blockers,
             milestone=(e.milestone.name or "Milestone", e.milestone.date)
             if e.milestone is not None and e.milestone.date is not None
