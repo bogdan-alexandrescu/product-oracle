@@ -14,6 +14,8 @@ Test cards (protects / fails_when / no_claim):
 - test_owner_set_in_the_panel_clears_the_draft_flag: protects=``draft_without_owner`` reads
   the owner the panel shows and ``set_owner`` writes (the item's own, else its track's), so
   picking one clears the flag at once; fails_when=the rule reads only the track's owner.
+- test_a_draft_whose_track_owner_left_is_flagged: protects=a draft whose panel reads no owner
+  (its track's owner was removed) keeps the flag; fails_when=the rule reads the stored id.
 """
 
 from sqlalchemy import select, update
@@ -205,3 +207,30 @@ async def test_owner_set_in_the_panel_clears_the_draft_flag(client):
     it = await item_of(client, ctx, "decider", a)
     assert it["own_owner_id"] == approver and it["owner"]["id"] == approver
     assert "draft_without_owner" not in kinds(it)
+
+
+async def test_a_draft_whose_track_owner_left_is_flagged(client):
+    """stale-flags: protects=a draft whose only owner is its track's, a member since removed,
+    reads no owner in its panel and keeps "Draft with no owner to confirm it" (its Pick an
+    owner leads to that panel); fails_when=the flag reads the stored track owner id."""
+    import uuid
+    from datetime import UTC, datetime
+
+    from oracle.auth.models import User
+
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, track_owner="approver", ops=["fp"])
+    a = w.ids["fp-a"]
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(RoadmapItem).where(RoadmapItem.id == uuid.UUID(a)).values(draft=True)
+        )
+        await s.execute(
+            update(User)
+            .where(User.id == ctx.users["approver"].id)
+            .values(disabled_at=datetime.now(UTC))
+        )
+        await s.commit()
+    it = await item_of(client, ctx, "decider", a)
+    assert it["owner"] is None
+    assert "draft_without_owner" in [f["kind"] for f in it["flags"]]
