@@ -31,10 +31,21 @@ owner 3 clicks with Save; add a milestone 4 clicks with Save.
   real toast with Undo shows; other fields and the flags are kept in the panel's own state.
 - Capture: serve the mock build on :4173 (`cd web && npm run build:mock && npm run start:mock -- --port 4173`),
   then `swarm-test-browsers npx playwright test -c scripts/mk-panel-edit/capture.config.ts frames`
-  (`ONLY=pe2-b` for one proposal). The repo's own Playwright was used because the shared live
+  (`ONLY=pe2-b` for one proposal, `ONLY=viewers` for the viewer frames alone). The repo's own Playwright was used because the shared live
   browser cannot be set to 1512 wide. Each frame starts from the same seeded mock data.
 
 ## Not done
 
 - No Playwright spec or gate run: this branch is a throwaway mock-up, never merged.
 - Flags other than dates are not saved through the mock API (state in the panel only).
+
+## Round 2
+
+- The 1512 frames are rendered at a true 1512x900 viewport (Playwright's `setViewportSize`, no zoom).
+- A feature typed under Needed by and a new milestone are now made through the mock's real calls
+  (`add_item`, `set_depends`, `move_dates`; `POST /v1/simple/roadmap/milestones`, `set_milestone`), so the
+  Roadmap draws the new row after Alert rules engine and the milestone on the Milestones strip.
+- The panel has a height cap, so its body scrolls; the add frames scroll it to Needed by after the earlier toast is dismissed.
+- Every frame of a story keeps the open Roadmap row where it was at rest (banners added after a change no longer move it).
+- `&hard=1` also gives the open Roadmap row the panel's long name (MOCK-HOOK in `web/lib/api/mock/simple-roadmap.ts`).
+- Viewer frames are signed in as Lena Ortiz, a viewer (`viewer@example.com`).

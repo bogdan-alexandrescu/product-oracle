@@ -353,10 +353,14 @@ async function viewers(browser: Browser) {
     ...['a', 'b', 'c'].map((o) => [`pe2-${o}`, `pe1=a&pe2=${o}&pe3=a`] as [string, string]),
     ...['a', 'b', 'c'].map((f) => [`pe3-${f}`, `pe1=a&pe2=a&pe3=${f}`] as [string, string]),
   ];
+  // The viewer's own session: the admin's seeded data would sign the admin back in.
+  const kept = seed;
+  seed = '';
   for (const [k, qs] of runs) {
-    if (!want(k)) continue;
+    if (process.env.ONLY !== 'viewers' && !want(k)) continue;
     await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
     await snap(page, `${k}-viewer-1512`, W.w, W.h);
   }
+  seed = kept;
   await ctx.close();
 }

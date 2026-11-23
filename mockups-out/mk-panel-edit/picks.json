@@ -43,23 +43,27 @@
             },
             {
               "file": "frames/pe1-a-milestone-added.html",
-              "caption": "Enter: the new milestone is set on the feature and marked as changed. 2 clicks."
+              "caption": "Enter: the new milestone is set on the feature and marked as changed. 2 clicks. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
             },
             {
               "file": "frames/pe1-a-add.html",
-              "caption": "+ Add under Needed by: typing the new feature, Alert sound picker."
+              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sound picker typed in its field."
             },
             {
               "file": "frames/pe1-a-added.html",
-              "caption": "Enter, and the panel scrolled down to Needed by: it joins Needed by, placed after this feature by its link, with no drag. 1 click, against 2 and a drag today."
+              "caption": "Enter: it joins Needed by, placed after this feature by its link, with no drag. 1 click, against 2 and a drag today. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-a-hard-1512.html",
-              "caption": "At 1512, a long name: it wraps in full in its field, and the 8 dependencies follow below with their remove buttons."
+              "caption": "At 1512, a long name: it wraps in full in its field, and the 8 dependencies follow below with their remove buttons. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe1-a-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe1-a-viewer-1512.html",
-              "caption": "A viewer at 1512: plain text and the flags' words, no lines and no buttons; the (i) says who can change it."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: plain text and the flags' words, no lines and no buttons; the (i) says who can change it."
             },
             {
               "file": "frames/pe1-a-mid-390.html",
@@ -109,23 +113,27 @@
             },
             {
               "file": "frames/pe1-b-milestone-added.html",
-              "caption": "Enter: the milestone is set and marked. 2 clicks."
+              "caption": "Enter: the milestone is set and marked. 2 clicks. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
             },
             {
               "file": "frames/pe1-b-add.html",
-              "caption": "+ Add under Needed by: typing Alert sound picker."
+              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sound picker typed in its field."
             },
             {
               "file": "frames/pe1-b-added.html",
-              "caption": "Enter, and the panel scrolled down to Needed by: it joins Needed by, placed after this feature, no drag."
+              "caption": "Enter: it joins Needed by, placed after this feature, no drag. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-b-hard-1512.html",
-              "caption": "At 1512, a long name wraps in full at the top, the same way as in A, minus the lines."
+              "caption": "At 1512, a long name wraps in full at the top, the same way as in A, minus the lines. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe1-b-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe1-b-viewer-1512.html",
-              "caption": "A viewer at 1512: the same plain text and the flags' words, no buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the same plain text and the flags' words, no buttons."
             },
             {
               "file": "frames/pe1-b-rest-390.html",
@@ -170,20 +178,32 @@
               "caption": "Use these under Oracle's dates: the dates change and the flag is gone."
             },
             {
+              "file": "frames/pe1-c-milestone.html",
+              "caption": "Edit, then Milestone: a new one typed at the foot of the list."
+            },
+            {
+              "file": "frames/pe1-c-milestone-added.html",
+              "caption": "Enter, then Done: the milestone is set and marked. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
+            },
+            {
               "file": "frames/pe1-c-add.html",
-              "caption": "Edit again, + Add under Needed by, typing Alert sound picker."
+              "caption": "The earlier toast gone: Edit again, the panel scrolled to Needed by, + Add opened and Alert sound picker typed."
             },
             {
               "file": "frames/pe1-c-added.html",
-              "caption": "Enter, then Done: it joins Needed by, placed after this feature; one Saved toast. 3 clicks."
+              "caption": "Enter, then Done: it joins Needed by, placed after this feature; one Saved toast. 3 clicks. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-c-hard-1512.html",
-              "caption": "At 1512 in Edit mode: the long name wraps in full, but in a narrow box beside Done; 8 dependencies below."
+              "caption": "At 1512 in Edit mode: the long name wraps in full, but in a narrow box beside Done; 8 dependencies below. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe1-c-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe1-c-viewer-1512.html",
-              "caption": "A viewer at 1512: no Edit button, plain text and the flags' words."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: no Edit button, plain text and the flags' words."
             },
             {
               "file": "frames/pe1-c-mid-390.html",
@@ -228,20 +248,32 @@
               "caption": "Then 'owner mira' in the line and Enter: Mira Okafor owns it and the owner flag is gone."
             },
             {
+              "file": "frames/pe1-d-milestone.html",
+              "caption": "Milestone opened: a new one typed at the foot of the list."
+            },
+            {
+              "file": "frames/pe1-d-milestone-added.html",
+              "caption": "Enter: the milestone is set and marked. On the Roadmap, Pilot with 3 teams now shows on the Milestones strip at Dec 18."
+            },
+            {
               "file": "frames/pe1-d-add.html",
-              "caption": "+ Add under Needed by: typing Alert sound picker."
+              "caption": "The earlier toast gone and the panel scrolled to Needed by: + Add opened, Alert sound picker typed in its field."
             },
             {
               "file": "frames/pe1-d-added.html",
-              "caption": "Enter, and the panel scrolled down to Needed by: it joins Needed by, placed after this feature."
+              "caption": "Enter: it joins Needed by, placed after this feature. It shows with the words Not in the Ground Truth, as it has no code yet. On the Roadmap it gets its own row, Alert sound picker, a draft whose dates start the day after Alert rules engine ends."
             },
             {
               "file": "frames/pe1-d-hard-1512.html",
-              "caption": "At 1512, a long name wraps in full in its field."
+              "caption": "At 1512, a long name wraps in full in its field. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe1-d-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe1-d-viewer-1512.html",
-              "caption": "A viewer at 1512: no change line, no letters, no buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: no change line, no letters, no buttons."
             },
             {
               "file": "frames/pe1-d-mid-390.html",
@@ -296,11 +328,15 @@
             },
             {
               "file": "frames/pe2-a-hard-1512.html",
-              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies."
+              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe2-a-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe2-a-viewer-1512.html",
-              "caption": "A viewer at 1512: the same order, every value plain, the flags' words without buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the same order, every value plain, the flags' words without buttons."
             },
             {
               "file": "frames/pe2-a-rest-390.html",
@@ -346,11 +382,15 @@
             },
             {
               "file": "frames/pe2-b-hard-1512.html",
-              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies."
+              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe2-b-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe2-b-viewer-1512.html",
-              "caption": "A viewer at 1512: the same order, every value plain, the flags' words without buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the same order, every value plain, the flags' words without buttons."
             },
             {
               "file": "frames/pe2-b-rest-390.html",
@@ -396,11 +436,15 @@
             },
             {
               "file": "frames/pe2-c-hard-1512.html",
-              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies."
+              "caption": "At 1512 with a long name, wrapped in full, and 8 dependencies. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe2-c-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe2-c-viewer-1512.html",
-              "caption": "A viewer at 1512: the same order, every value plain, the flags' words without buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the same order, every value plain, the flags' words without buttons."
             },
             {
               "file": "frames/pe2-c-rest-390.html",
@@ -451,11 +495,15 @@
             },
             {
               "file": "frames/pe3-a-hard-1512.html",
-              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on."
+              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe3-a-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe3-a-viewer-1512.html",
-              "caption": "A viewer at 1512: the flags' words show, with no buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the flags' words show, with no buttons."
             },
             {
               "file": "frames/pe3-a-rest-390.html",
@@ -497,11 +545,15 @@
             },
             {
               "file": "frames/pe3-b-hard-1512.html",
-              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on."
+              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe3-b-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe3-b-viewer-1512.html",
-              "caption": "A viewer at 1512: the flags' words show, with no buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the flags' words show, with no buttons."
             },
             {
               "file": "frames/pe3-b-rest-390.html",
@@ -547,11 +599,15 @@
             },
             {
               "file": "frames/pe3-c-hard-1512.html",
-              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on."
+              "caption": "At 1512, a long name and 8 dependencies, with its two flags still to act on. The open Roadmap row carries the same long name."
+            },
+            {
+              "file": "frames/pe3-c-hard-1512-dark.html",
+              "caption": "The same long name at 1512, in dark."
             },
             {
               "file": "frames/pe3-c-viewer-1512.html",
-              "caption": "A viewer at 1512: the flags' words show, with no buttons."
+              "caption": "Signed in as Lena Ortiz, a viewer at 1512: the flags' words show, with no buttons."
             },
             {
               "file": "frames/pe3-c-rest-390.html",
