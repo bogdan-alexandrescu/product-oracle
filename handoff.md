@@ -1,3 +1,54 @@
+# prioritize handoff (owner's Nov 23 order: prioritize in place)
+
+Built on d62c215d5 (the direct-edit merge below). Parts 1 to 3 are built; part 4 is NOT built.
+
+## Built
+- Part 1, Goal buckets: drag a feature within its bucket (grip) or Alt+ArrowUp/Down on it; stored as the
+  Priorities order (override_priority, the same op as the Priorities list's move, so one order). A proposer
+  files a proposal and sees the pending mark; a viewer has no grip. Spec: web/e2e/prioritize-buckets.spec.ts.
+- Part 2, goals: drag a goal's heading (or Alt+Arrow) on Goal buckets and on the Goal map; stored as the goal
+  order (storeGoalOrder, attrs.position) that every page reads. Spec: web/e2e/prioritize-goals.spec.ts.
+- Part 3, Goal map: drag a chip within its cell (or Alt+ArrowUp/Down); the same feature order as part 1.
+  Spec: web/e2e/prioritize-map.spec.ts.
+
+## NOT built
+- Part 4, Roadmap timeline (rows in priority order, drag a row by its name, Alt+Arrow, Gantt and Now / Next /
+  Later following the order). Nothing of it is in the code, so nothing half-built is reachable: rows still follow
+  start date. Why: the Simple `reorder` op sets one item's position and the Simple roadmap read does not carry
+  position; renumbering a track's neighbours in one request needs a keyed form of the op (as shift_dependents
+  is keyed: changes.py KEYED, drafts._keys, _current, _touched, simulate, undo), its mock twin in
+  simple-changes.ts, a red-first pytest with the rights check, `make openapi`, then the timeline. Not safe to
+  finish in the fix step's time. Next step: add `position` to SimpleRoadmapItem, a keyed reorder (after =
+  {item_id: {position}} for the track's renumbered rows, undone together), then sort in _timeline/_lanes/_board.
+- Goal-order proposals: a commenter (commenter@example.com in the mock) gets no goal handle on Goal buckets or
+  the Goal map, so no proposal and no pending mark for a goal move. Needs a change op for the goal order (with a
+  server rights check and pytest) and the mark on the goal heading. The spec covers what is built: "a commenter
+  has no goal handle on either page". Seen while fixing: an approver (approver@example.com) may edit goals, so
+  moves them at once on Goal buckets (can_edit and update_entity), but has no goal handle on the Goal map, whose
+  rule reads the map's own can_edit; left as is (not a review finding), for the owner to decide.
+
+## Fix step (review verdict NOT_YET, three findings)
+- blocker, part 4: recorded above as not built (owner may send it to its own step).
+- major, sleeps: prioritize-goals waits for the second save's toast (the first gone, a new one shown) before
+  the reload; the viewer tests in prioritize-buckets and prioritize-map check no move note and no pending mark
+  instead of waiting 300 ms.
+- major, goal commenter case: the spec test above and this note.
+- minors left as they were (the brief: fix blockers and majors only).
+
+## Gates for the fix step (at 39f190f; mock build, E2E_PREBUILT=1, --retries=0)
+- Lane specs prioritize-buckets/goals/map: 13 passed.
+- prio*.spec.ts (22 files): 156 passed. goal-*.spec.ts (31 files): 196 passed.
+- simple-roadmap-*.spec.ts (39 files): 384 passed, 9 skipped, 2 failed: simple-roadmap-filter-review.spec.ts:107
+  and simple-roadmap-stale-filters.spec.ts:60, both the duplicate 'Track' select (strict mode, 2 elements) in
+  _add.tsx from before this lane, which the parallel fix step is fixing.
+- Prose guard (PROSE_BASE=dbf36d4): 33 passed. tsc --noEmit: exit 0. format:check: exit 0.
+- FULL `npm run lint` (about 10 minutes): exit 2 at 844c446. One error was this lane's (an unneeded `!` in
+  prioritize-goals.spec.ts), fixed in 39f190f; eslint on the three specs now exits 0. Two errors are left, neither
+  in a file this lane changed: app/simple/roadmap/_add.tsx max-lines (472 > 400; the fix step's file) and
+  components/simple/FeatureDelete.tsx:41 cognitive complexity 19 > 15 (from the direct-edit merge). Lint also says
+  some suppressions are unused (`--prune-suppressions`); eslint-suppressions.json was not touched.
+- No pytest: no API change.
+
 # de-merge handoff (five builders joined)
 
 Branch: r1's branch (360c6dbdb) + merges, in order, of de-inst (origin/swarm/task_4bd93d60f5a446978cac @ 0be201584),
