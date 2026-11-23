@@ -3855,11 +3855,8 @@ function UndatedBuckets({
               ) : (
                 <>
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3
-                      className="min-w-0 flex-1 font-semibold"
-                      {...(rec ? goalDrag.handle(rec.id, b.title) : {})}
-                    >
-                      {b.title}
+                    <h3 className="min-w-0 flex-1 font-semibold">
+                      <span {...(rec ? goalDrag.handle(rec.id, b.title) : {})}>{b.title}</span>
                     </h3>
                     <span className="tabular-nums">
                       {weeksWords(b.weeks)} · <span data-testid="bucket-share">{percent[k]}%</span>
@@ -4404,11 +4401,10 @@ function PlanBuckets({
                   {/* On a phone the count takes its own line under the heading, so the name keeps its room. */}
                   <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
-                    <h3
-                      className="min-w-0 flex-1 text-xl font-[650] leading-7"
-                      {...(rec ? goalDrag.handle(rec.id, goalLabel(g).name) : {})}
-                    >
-                      {goalLabel(g).name}
+                    <h3 className="min-w-0 flex-1 text-xl font-[650] leading-7">
+                      <span {...(rec ? goalDrag.handle(rec.id, goalLabel(g).name) : {})}>
+                        {goalLabel(g).name}
+                      </span>
                     </h3>
                     {code && <CodeTag code={code} />}
                     <span
