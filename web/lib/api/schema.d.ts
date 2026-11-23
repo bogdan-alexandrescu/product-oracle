@@ -13956,6 +13956,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/items/{item_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Feature Comments */
+        get: operations["list_feature_comments"];
+        put?: never;
+        /** Add Feature Comment */
+        post: operations["add_feature_comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/items/{item_id}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Feature Comment */
+        delete: operations["delete_feature_comment"];
+        options?: never;
+        head?: never;
+        /** Edit Feature Comment */
+        patch: operations["edit_feature_comment"];
+        trace?: never;
+    };
+    "/v1/simple/comment-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Feature Comment Counts
+         * @description How many comments each feature has (only those with one), by roadmap and key.
+         */
+        get: operations["list_feature_comment_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/goal-suggestions": {
         parameters: {
             query?: never;
@@ -20530,6 +20586,28 @@ export interface components {
              */
             unmapped: string[];
         };
+        /** CommentAuthor */
+        CommentAuthor: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** CommentCount */
+        CommentCount: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Key */
+            key: string;
+            /** Count */
+            count: number;
+        };
         /** CommentCreate */
         CommentCreate: {
             /** Section Key */
@@ -20540,43 +20618,10 @@ export interface components {
             /** Severity */
             severity?: ("critical" | "major" | "minor") | null;
         };
-        /** CommentOut */
-        CommentOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Version Id
-             * Format: uuid
-             */
-            version_id: string;
-            /** Section Key */
-            section_key: string;
-            anchor?: components["schemas"]["TextQuoteSelector"] | null;
+        /** CommentIn */
+        CommentIn: {
             /** Body */
             body: string;
-            /** Author Id */
-            author_id?: string | null;
-            /** Parent Id */
-            parent_id?: string | null;
-            /** Resolved At */
-            resolved_at?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Replies
-             * @default []
-             */
-            replies: components["schemas"]["CommentOut"][];
-            /** Feedback Item Id */
-            feedback_item_id?: string | null;
-            /** Layer */
-            layer?: ("brief" | "detail") | null;
         };
         /** CommentPatch */
         CommentPatch: {
@@ -50063,6 +50108,28 @@ export interface components {
             refresh: components["schemas"]["RefreshResult"];
             account: components["schemas"]["AccountOut"];
         };
+        /** CommentOut */
+        oracle__comments__router__CommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            author: components["schemas"]["CommentAuthor"];
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Edited At */
+            edited_at?: string | null;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Delete */
+            can_delete: boolean;
+        };
         /** AuthorizeOut */
         oracle__connections__router__AuthorizeOut: {
             /** Url */
@@ -50142,6 +50209,44 @@ export interface components {
              * Format: uuid
              */
             into_id: string;
+        };
+        /** CommentOut */
+        oracle__review__schemas__CommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Section Key */
+            section_key: string;
+            anchor?: components["schemas"]["TextQuoteSelector"] | null;
+            /** Body */
+            body: string;
+            /** Author Id */
+            author_id?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Replies
+             * @default []
+             */
+            replies: components["schemas"]["oracle__review__schemas__CommentOut"][];
+            /** Feedback Item Id */
+            feedback_item_id?: string | null;
+            /** Layer */
+            layer?: ("brief" | "detail") | null;
         };
         /** RefreshOut */
         oracle__simple__schemas__RefreshOut: {
@@ -51941,7 +52046,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommentOut"][];
+                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"][];
                 };
             };
             /** @description Validation Error */
@@ -51977,7 +52082,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommentOut"];
+                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -52048,7 +52153,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommentOut"];
+                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -52083,7 +52188,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommentOut"];
+                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -77534,6 +77639,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feature_comments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__comments__router__CommentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_feature_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__comments__router__CommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_feature_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_feature_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__comments__router__CommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feature_comment_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentCount"][];
                 };
             };
         };

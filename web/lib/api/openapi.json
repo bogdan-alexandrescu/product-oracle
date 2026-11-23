@@ -2009,7 +2009,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CommentOut"
+                  "$ref": "#/components/schemas/oracle__review__schemas__CommentOut"
                 }
               }
             }
@@ -2070,7 +2070,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/CommentOut"
+                    "$ref": "#/components/schemas/oracle__review__schemas__CommentOut"
                   },
                   "title": "Response List Comments"
                 }
@@ -2205,7 +2205,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CommentOut"
+                  "$ref": "#/components/schemas/oracle__review__schemas__CommentOut"
                 }
               }
             }
@@ -2267,7 +2267,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CommentOut"
+                  "$ref": "#/components/schemas/oracle__review__schemas__CommentOut"
                 }
               }
             }
@@ -47274,6 +47274,285 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/roadmap/items/{item_id}/comments": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Feature Comments",
+        "operationId": "list_feature_comments",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/oracle__comments__router__CommentOut"
+                  },
+                  "title": "Response List Feature Comments"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      },
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Add Feature Comment",
+        "operationId": "add_feature_comment",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/oracle__comments__router__CommentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "viewer"
+      }
+    },
+    "/v1/simple/roadmap/items/{item_id}/comments/{comment_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Edit Feature Comment",
+        "operationId": "edit_feature_comment",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/oracle__comments__router__CommentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
+      },
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Feature Comment",
+        "operationId": "delete_feature_comment",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/comment-counts": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Feature Comment Counts",
+        "description": "How many comments each feature has (only those with one), by roadmap and key.",
+        "operationId": "list_feature_comment_counts",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CommentCount"
+                  },
+                  "type": "array",
+                  "title": "Response List Feature Comment Counts"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/goal-suggestions": {
       "get": {
         "tags": [
@@ -66592,6 +66871,49 @@
         ],
         "title": "CodeMapUse"
       },
+      "CommentAuthor": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CommentAuthor"
+      },
+      "CommentCount": {
+        "properties": {
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap_id",
+          "key",
+          "count"
+        ],
+        "title": "CommentCount"
+      },
       "CommentCreate": {
         "properties": {
           "section_key": {
@@ -66631,122 +66953,19 @@
         ],
         "title": "CommentCreate"
       },
-      "CommentOut": {
+      "CommentIn": {
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "version_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Version Id"
-          },
-          "section_key": {
-            "type": "string",
-            "title": "Section Key"
-          },
-          "anchor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TextQuoteSelector"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "body": {
             "type": "string",
+            "maxLength": 2000,
             "title": "Body"
-          },
-          "author_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Author Id"
-          },
-          "parent_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
-          },
-          "resolved_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resolved At"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "replies": {
-            "items": {
-              "$ref": "#/components/schemas/CommentOut"
-            },
-            "type": "array",
-            "title": "Replies",
-            "default": []
-          },
-          "feedback_item_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Feedback Item Id"
-          },
-          "layer": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "brief",
-                  "detail"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Layer"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "version_id",
-          "section_key",
-          "body",
-          "created_at"
+          "body"
         ],
-        "title": "CommentOut"
+        "title": "CommentIn"
       },
       "CommentPatch": {
         "properties": {
@@ -147243,6 +147462,57 @@
         ],
         "title": "RefreshOut"
       },
+      "oracle__comments__router__CommentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "author": {
+            "$ref": "#/components/schemas/CommentAuthor"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "title": "Can Delete"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "body",
+          "created_at",
+          "can_edit",
+          "can_delete"
+        ],
+        "title": "CommentOut"
+      },
       "oracle__connections__router__AuthorizeOut": {
         "properties": {
           "url": {
@@ -147577,6 +147847,123 @@
           "into_id"
         ],
         "title": "MergeIn"
+      },
+      "oracle__review__schemas__CommentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TextQuoteSelector"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "replies": {
+            "items": {
+              "$ref": "#/components/schemas/oracle__review__schemas__CommentOut"
+            },
+            "type": "array",
+            "title": "Replies",
+            "default": []
+          },
+          "feedback_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Item Id"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "detail"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version_id",
+          "section_key",
+          "body",
+          "created_at"
+        ],
+        "title": "CommentOut"
       },
       "oracle__simple__schemas__RefreshOut": {
         "properties": {
