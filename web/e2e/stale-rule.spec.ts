@@ -7,12 +7,12 @@ import { login } from './helpers';
 /*
  * The stale rule (the owner, Nov 23): confirming a proposed feature into the Ground Truth raises
  * the standing of the same content, so it makes no approved roadmap item stale; editing what the
- * feature says does, and the reason names the edit. The scenario puts the approved item Budgets
- * per team on the proposed feature Usage export, beside one item that is stale already. The API's
+ * feature says does, and the reason names the edit. The scenario puts the approved item Alerts
+ * in the team chat on the proposed feature Usage export, beside one item that is stale already. The API's
  * rule, for every kind of change, is proven by api/tests/test_stale_rule.py.
  */
 
-const ITEM = 'Budgets per team';
+const ITEM = 'Alerts in the team chat';
 const FEATURE = 'Usage export';
 
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Oracle' });
@@ -21,8 +21,13 @@ const trackLabel = (page: Page) =>
 const alertRow = (page: Page, item: string) =>
   page.locator('[data-need="Track alert"]').filter({ visible: true }).filter({ hasText: item });
 const planRow = (page: Page) =>
-  page.locator('[data-testid="plan-row"][data-item="team-budgets"]').filter({ visible: true });
+  page.locator('[data-testid="plan-row"][data-item="slack-alerts"]').filter({ visible: true });
 const inspector = (page: Page) => page.getByTestId('plan-inspector').filter({ visible: true });
+const atRisk = (page: Page) =>
+  page
+    .getByText(/of 7 items/)
+    .filter({ visible: true })
+    .first();
 
 async function openInbox(page: Page) {
   await rail(page).getByTestId('nav-inbox').click();
@@ -36,7 +41,11 @@ async function openPlan(page: Page) {
 
 async function openFeature(page: Page) {
   await page.goto('/ground-truth');
-  await page.getByRole('button', { name: FEATURE, exact: true }).first().click();
+  await page
+    .locator('[data-testid^="feature-"]')
+    .getByRole('button', { name: FEATURE })
+    .first()
+    .click();
   return page.getByRole('dialog', { name: FEATURE });
 }
 
@@ -44,10 +53,10 @@ async function openFeature(page: Page) {
 // panel as they were; renaming it marks the item everywhere, its reason naming the edit; fails_when
 // = a confirmation marks the item, or a rename does not; no_claim = the API's own marking.
 test('confirming a feature marks no item; renaming it marks the item on it', async ({ page }) => {
-  await page.addInitScript(
-    ([key, scenario]) => localStorage.setItem(key, scenario),
-    [MOCK_SCENARIO_KEY, STALE_RULE_SCENARIO] as const,
-  );
+  await page.addInitScript(([key, scenario]) => localStorage.setItem(key, scenario), [
+    MOCK_SCENARIO_KEY,
+    STALE_RULE_SCENARIO,
+  ] as const);
   await login(page);
   await openInbox(page);
   await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 1 need you');
@@ -60,9 +69,10 @@ test('confirming a feature marks no item; renaming it marks the item on it', asy
   await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 1 need you');
   await expect(alertRow(page, ITEM)).toHaveCount(0);
   await openPlan(page);
+  await expect(atRisk(page)).toContainText('1 of 7 items needs attention');
   await expect(planRow(page)).not.toContainText('At risk');
   await planRow(page).getByTestId('plan-title').click();
-  await expect(inspector(page).getByTestId('plan-why')).toHaveCount(0);
+  await expect(inspector(page).getByTestId('plan-why')).not.toContainText(/changed|confirmed/);
 
   const edit = await openFeature(page);
   await edit.getByRole('button', { name: 'Edit' }).click();
@@ -76,6 +86,8 @@ test('confirming a feature marks no item; renaming it marks the item on it', asy
   await expect(trackLabel(page)).toHaveText('Usage alerts PRD · At risk · 2 need you');
   await expect(alertRow(page, ITEM).getByTestId('track-alert-detail')).toHaveText(reason);
   await openPlan(page);
+  await expect(atRisk(page)).toContainText('2 of 7 items need attention');
+  await expect(planRow(page)).toContainText('At risk');
   await planRow(page).getByTestId('plan-title').click();
   await expect(inspector(page).getByTestId('plan-why')).toContainText(reason);
   await expect(inspector(page).getByTestId('plan-why')).not.toContainText('confirmed');

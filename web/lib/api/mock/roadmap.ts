@@ -386,7 +386,7 @@ export function seedRoadmap(
     // may be out of date) with no stale alert on its track: its panel settles it all the same.
     (db.freshness ??= {})['alert-digest'] = 'potentially_stale';
     if (scenario === STALE_RULE_SCENARIO) {
-      db.traces = { 'team-budgets': opts.proposed ? [opts.proposed] : [] };
+      db.traces = { 'slack-alerts': opts.proposed ? [opts.proposed] : [] };
       db.alerts = [
         staleAlert(
           track.id,
@@ -3458,7 +3458,13 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas['PlanO
       goal_ids: goalIds(s.goals),
       feature: s.feature ? entityRef('feature', s.feature) : null,
       requirements: (s.requirements ?? []).map((r) => entityRef('requirement', r)),
-      state: origin === 'draft' ? 'proposed' : (s.state ?? 'planned'),
+      // As oracle.plan.service.item_state: an item with a reason is at risk.
+      state:
+        origin === 'draft'
+          ? 'proposed'
+          : markedReason(db, s.key) && !['done', 'slipped'].includes(s.state ?? 'planned')
+            ? 'at_risk'
+            : (s.state ?? 'planned'),
       // As the API: a reconciled item is not stale (staleness.is_stale).
       reasons:
         origin === 'draft'
@@ -3903,7 +3909,7 @@ export const TRACK_ALERTS_HISTORY_SCENARIO = 'track-alerts-history';
  */
 export const TRACK_ALERTS_STALE_SCENARIO = 'track-alerts-stale';
 /**
- * The stale rule (the owner, Nov 23): the approved item Budgets per team is on the Ground Truth's
+ * The stale rule (the owner, Nov 23): the approved item Alerts in the team chat is on the Ground Truth's
  * proposed feature Usage export (confirming it marks nothing; renaming it does), and the track has
  * one stale alert already, on the Weekly alert digest.
  */

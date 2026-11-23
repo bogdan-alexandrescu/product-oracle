@@ -122,9 +122,7 @@ test('Why it needs you says what changed in words', async ({ page }) => {
   await row(page, 'Weekly alert digest').getByTestId('plan-title').click();
   const why = inspector(page).getByTestId('plan-why');
   // The stale rule: the product's confirmation is no reason of its own, so it is not named.
-  await expect(why).toContainText(
-    'The feature and 2 goals changed; 11 Ground Truth items changed',
-  );
+  await expect(why).toContainText('The feature and 2 goals changed; 11 Ground Truth items changed');
   await expect(why).not.toContainText('confirmed');
   await expect(why).not.toContainText('feature:');
   await expect(why).not.toContainText('goal:');
