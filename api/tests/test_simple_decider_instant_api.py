@@ -111,3 +111,33 @@ async def test_viewer_change_is_refused(client):
     assert item(await view(client, w, "decider"), "edit_title-a")["title"] == TITLE
     listed = await client.get(CHANGES, headers=w.ctx.as_("decider"))
     assert listed.json() == []
+
+
+async def test_a_decider_dates_a_prd_milestone_without_asking_its_owner(client):
+    """de-inst: who may decide the roadmap changes a PRD's milestone date at once; a
+    commenter's same change asks the PRD's owner; a viewer is refused."""
+    from oracle.models import User
+    from oracle.tenancy import tenant_session
+    from tests.baseline_helpers import make_ctx
+    from tests.test_milestone_kinds_api import read
+    from tests.test_simple_goal_milestones_api import MILESTONES, by_code, seed_prd_roadmap
+
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        prd_owner = User(email="prdowner@example.com", name="Priya Owner", password_hash="x",
+                         role="approver")  # fmt: skip
+        s.add(prd_owner)
+        await s.commit()
+    await seed_prd_roadmap(ctx, prd_owner.id)
+    m1 = by_code(await read(client, ctx, "owner"))["M1"]
+    url = f"{MILESTONES}/{m1['id']}"
+    r = await client.patch(url, json={"date": "2026-12-04"}, headers=ctx.as_("viewer"))
+    assert r.status_code == 403, r.text
+    r = await client.patch(url, json={"date": "2026-12-18"}, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    seen = by_code(await read(client, ctx, "viewer"))["M1"]
+    assert seen["date"] == "2026-12-18" and seen["pending"] is None
+    r = await client.patch(url, json={"date": "2026-12-11"}, headers=ctx.as_("commenter"))
+    assert r.status_code == 200, r.text
+    assert r.json()["pending"] is not None
+    assert by_code(await read(client, ctx, "viewer"))["M1"]["date"] == "2026-12-18"
