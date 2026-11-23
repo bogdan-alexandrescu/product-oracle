@@ -188,6 +188,8 @@ test.describe('desktop', () => {
     const field = page.getByLabel('Add an item');
     await field.fill('Alert digest for admins');
     await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+    // roadmap-add: the add bar asks which track the new item goes on.
+    await page.getByTestId('quick-add-track').selectOption({ label: 'Usage alerts track' });
     await field.press('Enter');
     await expect(
       page.getByRole('status').filter({ hasText: 'Added Alert digest for admins as a draft' }),
