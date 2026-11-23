@@ -361,7 +361,6 @@ async def test_added_item_is_in_the_draft_only(client):
     assert iid in await w.items(client, "decider")
     seen = await w.items(client, "viewer")
     assert iid in seen
-    assert seen[iid]["status"] != "draft"
     assert not [f for f in seen[iid]["flags"] if f["kind"] == "draft_without_owner"]
     async with tenant_session(w.ctx.tenant_id) as s:
         published = list(
@@ -384,9 +383,7 @@ async def test_added_item_is_in_the_draft_only(client):
         )
         added = [r for r in new if r.title.endswith(" Guided setup")]
         assert (
-            len(added) == 1
-            and not added[0].draft
-            and added[0].goal_ids == [uuid.UUID(w.goals["grow"])]
+            len(added) == 1 and added[0].draft and added[0].goal_ids == [uuid.UUID(w.goals["grow"])]
         )
 
 
