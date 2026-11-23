@@ -459,6 +459,42 @@ function Rename({
   );
 }
 
+/** de-gm: a milestone's date; who may change it clicks it and picks another, saved at once with Undo (Esc keeps it). */
+function MilestoneDay({ m, c }: { m: M; c: Ctx }) {
+  const [open, setOpen] = useState(false);
+  if (!m.can_change) return <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>;
+  if (open)
+    return (
+      <input
+        type="date"
+        autoFocus
+        aria-label={`Date of ${m.name}`}
+        data-testid="gm-strip-date-input"
+        defaultValue={m.due_on ?? ''}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+          else if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        onBlur={(e) => {
+          setOpen(false);
+          const to = e.currentTarget.value;
+          if (to && to !== m.due_on) void c.act.redate(m, to);
+        }}
+        className="rounded-md border border-accent bg-surface px-1 text-xs outline-none"
+      />
+    );
+  return (
+    <Button
+      variant="ghost"
+      data-testid="gm-strip-date"
+      className="h-auto px-0.5 text-xs font-normal whitespace-nowrap"
+      onClick={() => setOpen(true)}
+    >
+      {day(m.due_on) || '+'}
+    </Button>
+  );
+}
+
 /** A feature's status mark; its ⋯ menu takes the same place on hover or focus, and while its menu is open.
  * The open menu is read from state, not CSS :has(): a :has() rule is global and made every style
  * recalculation on the 500-item Roadmap's drag ten times slower (dod-perf). */
@@ -895,6 +931,34 @@ function useActs(
     },
     // de-gm: Move to Trash at once (its chip hidden before the call returns), with Undo in the note.
     trashFeature: (f: Chip) => remove({ id: f.id, title: named(f), now: true }),
+    /** de-gm: a milestone's date in one step, the strip showing it at once, with Undo. */
+    redate: async (m: M, to: string) => {
+      const patch = (date: string | null) =>
+        unwrap(
+          api.PATCH('/v1/simple/roadmap/milestones/{milestone_id}', {
+            params: { path: { milestone_id: m.id } },
+            body: { date },
+          }),
+        );
+      setMap({
+        ...map,
+        milestones: map.milestones.map((x) => (x.id === m.id ? { ...x, due_on: to } : x)),
+      });
+      try {
+        await patch(to);
+        await reload();
+        toast({
+          message: `Moved ${mWords(m, { mcode })} to ${day(to)}`,
+          action: {
+            label: 'Undo',
+            onClick: () => void patch(m.due_on ?? null).then(reload, failed),
+          },
+        });
+      } catch (e) {
+        failed(e);
+        await reload();
+      }
+    },
     trashMilestone: async (m: M) => {
       try {
         await unwrap(
@@ -1132,11 +1196,12 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                         className="line-clamp-2 min-w-0 break-words"
                         title={m.name}
                         data-testid="gm-strip-name"
+                        onDoubleClick={() => m.can_change && c.setRenaming(m.id)}
                       >
                         {m.name}
                       </span>
                     )}
-                    <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
+                    <MilestoneDay m={m} c={c} />
                     {m.threshold === null && (
                       <Status
                         s="no_gate"

@@ -146,4 +146,27 @@ test.describe('Goal map: features edited in place', () => {
       c.getByTestId('gm-chip-pending').filter({ hasText: 'Example proposed digest' }),
     ).toHaveAttribute('data-proposed', '1');
   });
+
+  test('a milestone renames in place and changes its date in one step', async ({ page }) => {
+    await open(page);
+    const strip = (name: string) =>
+      page.getByTestId('gm-strip-milestone').filter({ hasText: name });
+    await strip('Annual plans live').getByTestId('gm-strip-name').dblclick();
+    await page.getByTestId('gm-rename').fill('Example yearly plans');
+    await page.getByTestId('gm-rename').press('Enter');
+    await expect(strip('Example yearly plans')).toBeVisible();
+    await strip('Example yearly plans').getByTestId('gm-strip-date').click();
+    await page.getByTestId('gm-strip-date-input').fill('2027-01-15');
+    await page.getByTestId('gm-strip-date-input').press('Enter');
+    await expect(strip('Example yearly plans').getByTestId('gm-strip-date')).toHaveText('Jan 15');
+    await expect(toast(page, /to Jan 15/)).toBeVisible();
+    await page.reload();
+    await expect(strip('Example yearly plans').getByTestId('gm-strip-date')).toHaveText('Jan 15');
+  });
+
+  test('a viewer cannot change a milestone date', async ({ page }) => {
+    await open(page, 'viewer@example.com');
+    await expect(page.getByTestId('gm-strip-milestone').first()).toBeVisible();
+    await expect(page.getByTestId('gm-strip-date')).toHaveCount(0);
+  });
 });
