@@ -14,7 +14,7 @@ import {
 
 import { api, type Me, type Schemas } from '@/lib/api/client';
 import type { operations } from '@/lib/api/schema';
-import { DEFAULT_ZONE, setDisplayZone } from '@/lib/zone';
+import { DEFAULT_ZONE, setDisplayZone, type ZoneState } from '@/lib/zone';
 
 export type Role = Me['role'];
 /** An API operation (its operationId), as GET /v1/me/capabilities names it. */
@@ -65,6 +65,8 @@ const MeContext = createContext<MeState | null>(null);
  * its dates again when GET /v1/me answers with a zone other than the default.
  */
 export const CompanyZoneContext = createContext<string>(DEFAULT_ZONE);
+/** #1677: how that zone was read; CompanyDate says so beside a date when it was not. */
+export const CompanyZoneStateContext = createContext<ZoneState>('fetched');
 
 /**
  * Loads GET /v1/me for the whole app. Pair it with <MeSync /> (inside a Suspense
@@ -155,7 +157,11 @@ export function MeProvider({ children }: { children: ReactNode }) {
   setDisplayZone(zone);
   return (
     <MeContext.Provider value={value}>
-      <CompanyZoneContext.Provider value={zone}>{children}</CompanyZoneContext.Provider>
+      <CompanyZoneContext.Provider value={zone}>
+        <CompanyZoneStateContext.Provider value={state.me?.company_timezone_state ?? 'fetched'}>
+          {children}
+        </CompanyZoneStateContext.Provider>
+      </CompanyZoneContext.Provider>
     </MeContext.Provider>
   );
 }

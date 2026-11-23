@@ -56,7 +56,7 @@ from oracle.claude_accounts.oauth import (
 )
 from oracle.claude_accounts.sweep import get_token_endpoint, liveness, refresher_for
 from oracle.claude_accounts.sweep import sweep as run_sweep
-from oracle.company_time import company_time_zone
+from oracle.company_time import ZoneState, company_time_zone_read
 from oracle.errors import exception_text
 from oracle.routing import APIRouter
 
@@ -158,6 +158,8 @@ class AccountsPage(BaseModel):
     pool: PoolOut
     # The company's time zone, which a person reads these times in.
     time_zone: str
+    # #1677: fetched, or unavailable when the settings could not be read (the default).
+    time_zone_state: ZoneState = "fetched"
 
 
 class AuthorizeIn(Strict):
@@ -363,6 +365,7 @@ async def list_claude_accounts(principal: Member, db: TenantDB) -> AccountsPage:
     listing = await store.list_reporting(db)
     now = datetime.now(UTC)
     spare = await fallback.describe(db)
+    zone = await company_time_zone_read(db)
     holder = has_role(principal.role, "owner")  # type: ignore[arg-type]
     return AccountsPage(
         accounts=[account_out(a, now=now, holder=holder) for a in listing.accounts],
@@ -373,7 +376,8 @@ async def list_claude_accounts(principal: Member, db: TenantDB) -> AccountsPage:
         if spare is None
         else FallbackOut(kind=spare.kind, label=spare.label, updated_at=spare.updated_at),  # type: ignore[arg-type]
         pool=pool_out(listing.accounts, has_fallback=spare is not None, now=now),
-        time_zone=await company_time_zone(db),
+        time_zone=zone.zone,
+        time_zone_state=zone.state,
     )
 
 

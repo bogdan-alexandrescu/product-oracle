@@ -55231,6 +55231,16 @@
           "time_zone": {
             "type": "string",
             "title": "Time Zone"
+          },
+          "time_zone_state": {
+            "type": "string",
+            "enum": [
+              "fetched",
+              "unavailable",
+              "not_applicable"
+            ],
+            "title": "Time Zone State",
+            "default": "fetched"
           }
         },
         "type": "object",
@@ -96657,6 +96667,16 @@
             "type": "string",
             "title": "Company Timezone",
             "default": "America/Los_Angeles"
+          },
+          "company_timezone_state": {
+            "type": "string",
+            "enum": [
+              "fetched",
+              "unavailable",
+              "not_applicable"
+            ],
+            "title": "Company Timezone State",
+            "default": "fetched"
           }
         },
         "type": "object",

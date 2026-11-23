@@ -16,3 +16,11 @@ export const displayZone = (): string => current;
 export function setDisplayZone(zone: string | null | undefined): void {
   current = zone || DEFAULT_ZONE;
 }
+
+/**
+ * #1677: how GET /v1/me read the Company time zone: fetched, unavailable (its settings
+ * could not be read, so the default is used) or not_applicable (no company).
+ */
+export type ZoneState = 'fetched' | 'unavailable' | 'not_applicable';
+/** #1677: the tip beside a date when the Company time zone could not be read. */
+export const ZONE_UNAVAILABLE = 'Company time zone not available · Pacific is used';

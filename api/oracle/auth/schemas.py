@@ -6,6 +6,7 @@ from pydantic import Field
 
 from oracle.auth.models import Role
 from oracle.base_model import BaseModel
+from oracle.company_time import ZoneState
 from oracle.rituals.schedule import DEFAULT_ZONE
 
 
@@ -54,6 +55,9 @@ class Me(BaseModel):
     # #401: the Company time zone (an IANA name) every screen shows dates and times in;
     # every member reads it here (Settings' own GET is for owners).
     company_timezone: str = DEFAULT_ZONE
+    # #1677: fetched, or unavailable when the settings could not be read (the default zone
+    # is then used); not_applicable without a company.
+    company_timezone_state: ZoneState = "fetched"
 
 
 AccessStateName = Literal[
