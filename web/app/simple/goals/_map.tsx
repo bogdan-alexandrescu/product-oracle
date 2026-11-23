@@ -20,6 +20,9 @@ import {
   type ItemGoingDetail,
 } from '@/components/simple/FeatureDelete';
 import { FeatureName } from '@/components/simple/FeatureName';
+import { useGoalDrag } from '@/components/simple/GoalDrag';
+import { storeGoalOrder } from '@/components/simple/GoalOrder';
+import { useMe } from '@/lib/me';
 import { NewPrdSheet, useCanStartPrd } from '@/components/simple/NewPrd';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from '@/lib/api/mock/goal-map';
@@ -211,6 +214,8 @@ interface Ctx {
   /** de-gm: chips dragged to another cell, shown there before the API answers (by ringOf). */
   shifted: Map<string, { goal: string; track: string | null }>;
   dropOn: (key: string, goal: string, track: string | null) => void;
+  /** prioritize: the goals in the order shown, reordered by their header. */
+  goalDrag: ReturnType<typeof useGoalDrag>;
 }
 
 interface Ghost {
@@ -1096,7 +1101,9 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
 /* ---------- The grid ---------- */
 
 function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrLine[]>; c: Ctx }) {
-  const goals = c.map.goals;
+  const goals = c.goalDrag.shown
+    .map((id) => c.map.goals.find((g) => g.id === id))
+    .filter((g): g is GmGoal => !!g);
   const all = [...c.map.milestones].sort(byDate);
   const order = new Map(all.map((m, i) => [m.id, i]));
   // A cell's chips in milestone order (No milestone last), so a moved chip lands in its place.
@@ -1126,6 +1133,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
             key={g.id}
             data-goal={g.id}
             data-testid="gm-goal"
+            {...c.goalDrag.target(g.id)}
             className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3"
           >
             {/* One row when it fits; else the target wraps beside the (i) and ⋯ (floated top right, so never pushed
@@ -1156,6 +1164,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
               <Rename id={g.id} was={g.name} c={c} className="text-base" />
             ) : (
               <span
+                {...c.goalDrag.handle(g.id, g.name)}
                 className="line-clamp-2 min-h-[2.5em] text-base leading-[1.25] font-semibold"
                 title={g.name}
               >
@@ -1571,6 +1580,7 @@ function AttachDrawer({
 /* ---------- The page ---------- */
 
 export function GoalMapPage() {
+  const { can } = useMe();
   const q = useQuery('simple-goal-map', () => unwrap(api.GET('/v1/simple/goal-map')));
   // kr-in-goal-map: the goals' parents, read before the map is drawn so no key result shows as a goal.
   const goalList = useQuery('simple-goal-map-goal-tree', () =>
@@ -1758,6 +1768,31 @@ export function GoalMapPage() {
     setMoved,
     folded?.top ?? ((id) => id),
   );
+  // prioritize: a goal's header dragged onto another goal (or Alt+Arrow) moves it in the goal order.
+  const goalDrag = useGoalDrag({
+    ids: map?.goals.map((g) => g.id) ?? [],
+    all: [
+      ...(map?.goals.map((g) => g.id) ?? []),
+      ...(goalList.data ?? [])
+        .map((g) => g.id)
+        .filter((id) => !map?.goals.some((g) => g.id === id)),
+    ],
+    may: () => !!map?.can_edit && can('update_entity'),
+    saved: async ({ before, after }) => {
+      await refresh();
+      toast({
+        message: 'Goal order saved. Every page shows the new order.',
+        action: {
+          label: 'Undo',
+          onClick: () =>
+            void storeGoalOrder(before, new Map(after.map((id, i) => [id, i + 1])))
+              .then(refresh)
+              .catch((e: unknown) => toast({ message: errorMessage(e) })),
+        },
+      });
+    },
+    failed: (e) => toast({ message: errorMessage(e) }),
+  });
 
   if (!map || !roadmap.data)
     return (
@@ -1815,6 +1850,7 @@ export function GoalMapPage() {
         );
     },
     shifted,
+    goalDrag,
     // de-gm: a chip dropped on another cell takes that cell's track, then (on its next open milestone) its goal.
     dropOn: (key, goal, track) => {
       const f = chips.find((x) => ringOf(x.id, x.goal) === key);

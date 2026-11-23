@@ -44,6 +44,7 @@ import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { FeaturePanel, useItemChanged } from '../roadmap/_panel';
 import { PendingMark, useFeatureOrder } from './feature-order';
+import { useGoalDrag } from '@/components/simple/GoalDrag';
 import { FeatureMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { Named, NotInGt } from '@/components/simple/FeatureName';
 import {
@@ -66,6 +67,7 @@ import {
   useGoalBuckets,
   type GoalFeatures,
   type Note,
+  nextNoteId,
 } from './goal-buckets';
 import { useBucketDrag } from './goal-drag';
 import {
@@ -3559,6 +3561,36 @@ function Buckets({
   return <UndatedBuckets data={data} suggestions={suggestions} kr={kr} />;
 }
 
+/** prioritize: the goal header drag of a buckets view, over the goals it shows (rights.order). */
+function useBucketGoalDrag(
+  gb: Schemas['GoalBucketsOut'] | undefined,
+  ids: (string | undefined)[],
+  rights: ReturnType<typeof useBucketRights>,
+  saved: (o: { before: string[]; after: string[] }) => Promise<void>,
+  failed: (e: unknown) => void,
+) {
+  const goals = gb?.goals ?? [];
+  return useGoalDrag({
+    ids: ids.filter((x): x is string => !!x),
+    all: [...goals].sort((a, b) => a.order - b.order).map((g) => g.id),
+    may: (id) => rights.order(goals.find((g) => g.id === id)),
+    saved,
+    failed,
+  });
+}
+
+/** The items in the order of `ids` (by `idOf`); one with no id keeps its place after them. */
+function inOrder<T>(items: T[], idOf: (x: T) => string | undefined, ids: string[]): T[] {
+  const at = (x: T) => {
+    const i = ids.indexOf(idOf(x) ?? '');
+    return i < 0 ? ids.length : i;
+  };
+  return items
+    .map((x, i) => ({ x, i }))
+    .sort((a, b) => at(a.x) - at(b.x) || a.i - b.i)
+    .map((y) => y.x);
+}
+
 const sameGoal = (a: string, b: string) =>
   goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
 
@@ -3695,9 +3727,25 @@ function UndatedBuckets({
   });
   const total = all.reduce((n, b) => n + b.weeks, 0);
   // An empty "No goal" bucket warns about nothing: it is left out.
-  const buckets: Bucket[] = all
+  const unsorted: Bucket[] = all
     .filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0))
     .map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
+  // prioritize: a goal's header dragged onto another goal (or Alt+Arrow) moves it in the goal order.
+  const goalDrag = useBucketGoalDrag(
+    gb,
+    unsorted.map((b) => goalOf(b)?.id),
+    rights,
+    async (o) => {
+      await reloadAll();
+      setNote({
+        id: nextNoteId(),
+        text: <>Goal order saved. Every page shows the new order.</>,
+        order: o,
+      });
+    },
+    (e) => setError(errorMessage(e)),
+  );
+  const buckets = inOrder(unsorted, (b) => goalOf(b)?.id, goalDrag.shown);
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? '' : weeksWords(r.effort));
   const acts = useGoalActs({
@@ -3781,6 +3829,7 @@ function UndatedBuckets({
               data-key={b.key}
               data-goal-id={rec?.id}
               data-drop={over ? '' : undefined}
+              {...goalDrag.target(rec?.id)}
               className={`group/bucket relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? 'border-2 border-accent bg-accent-soft' : b.no_goal ? 'border-warn' : 'border-line'}`}
             >
               {rec && editingGoal === rec.id ? (
@@ -3805,7 +3854,12 @@ function UndatedBuckets({
               ) : (
                 <>
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
+                    <h3
+                      className="min-w-0 flex-1 font-semibold"
+                      {...(rec ? goalDrag.handle(rec.id, b.title) : {})}
+                    >
+                      {b.title}
+                    </h3>
                     <span className="tabular-nums">
                       {weeksWords(b.weeks)} · <span data-testid="bucket-share">{percent[k]}%</span>
                     </span>
@@ -4162,6 +4216,22 @@ function PlanBuckets({
     keys: (codes: string[], code: string) => order.keys(g ?? '', order.sorted(codes), code),
     pending: order.pending,
   });
+  // prioritize: a goal's header dragged onto another goal (or Alt+Arrow) moves it in the goal order.
+  const goalDrag = useBucketGoalDrag(
+    gb,
+    goals.map((g) => goalOf(g)?.id),
+    rights,
+    async (o) => {
+      await reloadAll();
+      setNote({
+        id: nextNoteId(),
+        text: <>Goal order saved. Every page shows the new order.</>,
+        order: o,
+      });
+    },
+    (e) => setError(errorMessage(e)),
+  );
+  const shownGoals = inOrder(goals, (g) => goalOf(g)?.id, goalDrag.shown);
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
   const drag = useBucketDrag({
     gb,
@@ -4292,7 +4362,7 @@ function PlanBuckets({
       {tasks.failed}
       {/* Two columns only where a feature's row fits a card (31rem); beside a 768 px window's sidebar one, as on a phone. */}
       <ul className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-4">
-        {goals.map((g) => {
+        {shownGoals.map((g) => {
           const state = suggestionGoal(suggestions, g);
           const code = codeOf(g);
           const rec = goalOf(g);
@@ -4306,6 +4376,7 @@ function PlanBuckets({
               data-goal={g}
               data-goal-id={rec?.id}
               data-drop={over ? '' : undefined}
+              {...goalDrag.target(rec?.id)}
               className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-4 ${over ? 'border-2 border-accent bg-accent-soft' : incomplete ? 'border-warn' : 'border-line'}`}
             >
               {rec && editing === rec.id ? (
@@ -4332,7 +4403,10 @@ function PlanBuckets({
                   {/* On a phone the count takes its own line under the heading, so the name keeps its room. */}
                   <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
-                    <h3 className="min-w-0 flex-1 text-xl font-[650] leading-7">
+                    <h3
+                      className="min-w-0 flex-1 text-xl font-[650] leading-7"
+                      {...(rec ? goalDrag.handle(rec.id, goalLabel(g).name) : {})}
+                    >
                       {goalLabel(g).name}
                     </h3>
                     {code && <CodeTag code={code} />}
