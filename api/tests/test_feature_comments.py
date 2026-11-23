@@ -19,12 +19,16 @@ Test cards (protects / fails_when / no_claim):
   and key): a new row of it shows it, Trash hides it and restore brings it back, and the
   counts list it only while it has one; fails_when=it stays on one row, shows while in
   Trash, or is lost on restore; no_claim=purge.
+- test_a_purged_feature_takes_its_comments: protects=purging a feature from Trash drops
+  its comments, so a new feature later given the same key starts with none and no count;
+  fails_when=the new feature shows the purged one's comments or count; no_claim=the web.
 """
 
 import pytest
 
 from oracle import company_time
 from oracle.tenancy import tenant_session
+from oracle.trash import service as trash_service
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_roadmap_api import NOW, Seed
 
@@ -156,3 +160,20 @@ async def test_comments_follow_the_feature(client):
     r = await client.post(f"{ITEMS}/{a}/restore", headers=owner)
     assert r.status_code == 200, r.text
     assert [x["id"] for x in await read(client, ctx, a)][0] == c["id"]
+
+
+async def test_a_purged_feature_takes_its_comments(client):
+    """A purged feature's comments go with it: a new feature with its key starts empty."""
+    ctx, a, _, (pv, _, rv) = await world()
+    await add(client, ctx, a, "viewer", "Gone with it")
+    assert (await client.delete(f"{ITEMS}/{a}", headers=ctx.as_("owner"))).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        for entry in await trash_service.list_entries(s):
+            await trash_service.purge_entry(s, None, entry)
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as s:
+        fresh = await Seed(s).item(rv, pv, "alerts", position=0)
+        await s.commit()
+    assert await read(client, ctx, str(fresh.id)) == []
+    r = await client.get(COUNTS, headers=ctx.as_("viewer"))
+    assert r.status_code == 200 and r.json() == []
