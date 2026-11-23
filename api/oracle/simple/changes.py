@@ -1188,7 +1188,7 @@ async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str 
     code comes from its feature or PRD section keeps that one (422)."""
     from oracle.simple.priorities import FEATURE_CODE
 
-    if _code_of(entry):
+    if _inherited(entry):
         raise ChangeError(422, "Its code comes from its Ground Truth feature or its PRD")
     if raw is None or not str(raw).strip():
         return None
@@ -1210,7 +1210,7 @@ async def _not_taken(
 
     await service.item_codes(db, list(by_id.values()))
     for d in by_id.values():
-        if d is entry or d.row.id == entry.row.id or (own_only and _code_of(d)):
+        if d is entry or d.row.id == entry.row.id or (own_only and _inherited(d)):
             continue
         shown = codes.shown_code(d.row.title, _code_of(d))
         if shown and shown.upper() == code.upper():
@@ -1229,7 +1229,7 @@ async def _title_code(db: AsyncSession, entry: Any, title: str, read_: Any) -> N
     """every-field: a title leading with a code other than the item's own ("F-31 Alerts",
     any code the read takes from a title: service.coded_title) gives the item that code: it is
     checked as set_code checks it, in its words. ``entry`` None: an item being added."""
-    if entry is not None and _code_of(entry):
+    if entry is not None and _inherited(entry):
         return  # its feature's or PRD's code stays its code; the title is only words
     lead = service.coded_title(title, None)[0]
     if lead and (entry is None or lead != service.coded_title(entry.row.title, None)[0]):
@@ -1251,6 +1251,14 @@ def _with_code(code: str, name: str) -> str:
 
 def _code_of(e: Any) -> str | None:
     return e.code or service._prd_code(e.row.prd_section_key)
+
+
+def _inherited(e: Any) -> str | None:
+    """unique-codes: the code ``e`` takes from its feature or PRD section, None when its title
+    gives it its own (oracle.roadmap.codes.code_of)."""
+    from oracle.roadmap import codes
+
+    return None if codes.title_code(e.row.title) else _code_of(e)
 
 
 def _named(e: Any) -> str:

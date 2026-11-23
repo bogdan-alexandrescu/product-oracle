@@ -1260,6 +1260,8 @@ export const MOCK_SIMPLE_MODE_KEY = 'po-mock-simple-mode';
 export const KEY_RENEWED_SCENARIO = 'key-renewed';
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = 'stored-refusals';
+/** unique-codes (Nov 23): two roadmap items of one Ground Truth feature, each with its own code. */
+export const UNIQUE_CODES_SCENARIO = 'unique-codes';
 /** Pass F F-63: the Drive picker config answers as the API does when it is not set up, once; Try again then opens it. */
 export const DRIVE_PICKER_UNSET_SCENARIO = 'drive-picker-unset';
 /** Pass F F-61: GET /v1/sources fails, so Settings › Connections cannot tell which sources use a connection. */
@@ -13996,6 +13998,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  // unique-codes (Nov 23): two items of one feature (F-01), the second with a code of its own.
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === UNIQUE_CODES_SCENARIO) {
+    const it = db.simple_roadmap.items.find((x) => x.key === 'setup-import');
+    if (it && !it.gt_key) Object.assign(it, { gt_key: 'F-01', title: 'F-88 Sample data import' });
+  }
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).

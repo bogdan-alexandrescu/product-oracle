@@ -54,6 +54,7 @@ from oracle.errors import exception_text
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap import company
+from oracle.roadmap.codes import title_code
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.routing import APIRouter
 from oracle.simple import additions, changes, drafts, key_dates, service, targets
@@ -944,6 +945,9 @@ async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> Simp
     short = await _short_codes(db)
     for f, r in zip(features, rows, strict=True):
         r.short_code = short.get(f.key, f.key)
+        # unique-codes (Nov 23): an item's own code (its title's) before its feature's.
+        if r.item_id is not None and (own := title_code(by_id[r.item_id].row.title)):
+            r.short_code = own
         r.own_key = r.short_code if FEATURE_CODE.fullmatch(r.short_code) else None
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)

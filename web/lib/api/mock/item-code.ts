@@ -14,8 +14,8 @@ export function codedTitle(title: string, code: string | null): [string | null, 
   return [m[1], m[2].trim()];
 }
 
-/** oracle.roadmap.codes.shown: the code a person sees on an item: its Ground Truth feature's
- * (``featureCode``), else its PRD section's, else the one its title leads with. */
+/** oracle.roadmap.codes.shown: the code a person sees on an item: unique-codes (Nov 23), its own, the one its title
+ * leads with; else its Ground Truth feature's (``featureCode``), else its PRD section's. */
 export function shownCode(
   item: CodedItem,
   featureCode: (id: string) => string | null | undefined,
@@ -43,4 +43,17 @@ export function shownTitle(
 type CodedItem = { title: string; feature_id?: string | null; section?: string | null };
 
 const ownCode = (item: CodedItem, featureCode: (id: string) => string | null | undefined) =>
+  codedTitle(item.title, null)[0] || inheritedCode(item, featureCode);
+
+/** oracle.roadmap.codes.inherited: the code an item takes from its feature, else its PRD section; null when neither. */
+export const inheritedCode = (
+  item: CodedItem,
+  featureCode: (id: string) => string | null | undefined,
+): string | null =>
   (item.feature_id ? featureCode(item.feature_id) : null) || prdCode(item.section) || null;
+
+/** changes._inherited: the code ``item`` takes from its feature or PRD section, null when its title gives it its own. */
+export const takenFrom = (
+  item: CodedItem,
+  featureCode: (id: string) => string | null | undefined,
+): string | null => (codedTitle(item.title, null)[0] ? null : inheritedCode(item, featureCode));

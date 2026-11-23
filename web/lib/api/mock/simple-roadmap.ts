@@ -44,7 +44,7 @@ import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visua
 import { reply } from './typed';
 
 import type { OnePagerDb } from './simple-one-pager';
-
+export { takenFrom } from './item-code';
 import {
   PLAN_PRD_SLUG,
   planGoalNames,
@@ -2967,7 +2967,9 @@ export function roadmapOut(
   // qa-nov17: a parent, part or kept item reads its display code as service.load's Entry.code does: its
   // Ground Truth feature's (Setup checklist: F-01), else its PRD section's.
   const shownCode = (x: SeedItem) =>
-    (x.feature_id && db.feature_codes?.[x.feature_id]) || prdCode(x.section);
+    codedTitle(x.title, null)[0] ||
+    (x.feature_id && db.feature_codes?.[x.feature_id]) ||
+    prdCode(x.section);
   // additions._parts: a parent or a part by its display code ("" when none) and name; one in Trash by its name only.
   const partRef = (x: SeedItem, inTrash = false) => ({
     id: db.ids[x.key] ?? reader.full.ids[x.key],
@@ -3013,7 +3015,10 @@ export function roadmapOut(
   const depOf = (k: string) => (all.has(k) ? k : dependencyOf(seeds, k)?.key);
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
-    const [code, title] = codedTitle(s.title, prdCode(s.section));
+    // unique-codes (Nov 23): its own code, its title's, before its feature's or PRD section's.
+    const ownLead = codedTitle(s.title, null)[0];
+    const [code, title] = codedTitle(s.title, ownLead ?? prdCode(s.section));
+    const featureCode = s.feature_id ? db.feature_codes?.[s.feature_id] : undefined;
     const rm = ROADMAPS[s.roadmap];
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, '-'));
     const open = itemSuggestion(db, db.ids[s.key]);
@@ -3035,17 +3040,21 @@ export function roadmapOut(
             ? 'dependencies'
             : (r.basis ?? null)
           : null,
-      // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
-      code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
+      // Its own code (its title's), else its feature's (F-12), else its PRD section's, as service.load's Entry.code.
+      code: ownLead || featureCode || code,
       // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.
-      code_from:
-        s.feature_id &&
-        db.feature_codes?.[s.feature_id] &&
-        db.feature_codes[s.feature_id] !== prdCode(s.section)
+      code_from: ownLead
+        ? null
+        : featureCode && featureCode !== prdCode(s.section)
           ? 'feature'
           : prdCode(s.section)
             ? 'prd'
             : null,
+      // unique-codes (service.item_codes): the Ground Truth feature an item with its own code is part of.
+      feature_name:
+        ownLead && featureCode && featureCode !== ownLead
+          ? `${featureCode} ${db.feature_titles?.[s.feature_id!] ?? ''}`.trim()
+          : null,
       confirm_feature_id: db.feature_confirm?.[s.key] ?? null,
       roadmap: {
         id: stableUuid(`simple-doc/${s.roadmap}`),

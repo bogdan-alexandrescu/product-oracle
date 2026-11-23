@@ -514,10 +514,10 @@ async def _feature(tenant_id, key: str = "F-31") -> str:
 
 
 async def test_an_added_item_never_takes_the_code_another_item_shows(client, owner, runtime):  # noqa: F811
-    """protects=(every-field) the code a person sees on an item is its feature's (it wins over
-    its title's), then its PRD section's, then its title's: Edit plan's Add an item that would
-    show a code a live item shows by its feature is refused (422), whether the code is in the
-    added title or comes from the added item's picked feature (which wins over its title's);
+    """protects=(every-field, unique-codes) the code a person sees on an item is its title's
+    own, then its feature's, then its PRD section's: Edit plan's Add an item that would
+    show a code a live item shows by its feature is refused (422); an added title's own code
+    is the one it shows, whatever its picked feature;
     one linked after it was added is refused at propose (409); fails_when=two items show F-31;
     no_claim=the Simple paths (their own tests)."""
     tenant_id, auth = owner
@@ -534,7 +534,8 @@ async def test_an_added_item_never_takes_the_code_another_item_shows(client, own
     )
     assert r.status_code == 422, r.text
     assert r.json()["detail"] == taken
-    # The picked feature's code is the one it shows, not its title's F-99.
+    # unique-codes (the owner, Nov 23): its title's own code F-99 is the one it shows, not its
+    # picked feature's F-31: no clash.
     async with tenant_session(tenant_id) as s:
         row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
         row.feature_id = None
@@ -542,8 +543,8 @@ async def test_an_added_item_never_takes_the_code_another_item_shows(client, own
         await s.commit()
     r = await patch(client, auth, out, [{"op": "add", "title": "F-99 Launch flow",
                                          "horizon": "next", "feature_id": fid}])  # fmt: skip
-    assert r.status_code == 422, r.text
-    assert r.json()["detail"] == taken
+    assert r.status_code == 200, r.text
+    out = r.json()
     r = await patch(
         client, auth, out, [{"op": "add", "title": "F-32 Night digest", "horizon": "next"}]
     )
