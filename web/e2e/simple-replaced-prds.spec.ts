@@ -362,7 +362,10 @@ test('a feature added after a replace stays on the Roadmap and the Ranked tab', 
   await expect(tray).toHaveCount(0);
   await expect(
     // roadmap-add: a new item is given its code at creation, shown with its name.
-    page.getByText(/^F-\d+ Quiet hours for alerts$/).filter({ visible: true }).first(),
+    page
+      .getByText(/^F-\d+ Quiet hours for alerts$/)
+      .filter({ visible: true })
+      .first(),
   ).toBeVisible();
 
   await page.goto('/simple/priorities?tab=ranked');
