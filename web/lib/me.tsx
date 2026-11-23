@@ -1,6 +1,5 @@
 'use client';
 
-import { usePathname } from '@/lib/nav';
 import {
   createContext,
   useCallback,
@@ -14,6 +13,7 @@ import {
 
 import { api, type Me, type Schemas } from '@/lib/api/client';
 import type { operations } from '@/lib/api/schema';
+import { usePathname } from '@/lib/nav';
 import { DEFAULT_ZONE, setDisplayZone, type ZoneState } from '@/lib/zone';
 
 export type Role = Me['role'];
@@ -78,9 +78,17 @@ export function MeProvider({ children }: { children: ReactNode }) {
     loading: true,
   });
   const seq = useRef(0);
+  // simple-speed: the first read of the capabilities starts with the first GET /v1/me, not
+  // after it has answered; the effect below takes it for the principal that read names.
+  const early = useRef<Promise<Schemas['Capabilities'] | null> | null>(null);
 
   const refresh = useCallback(async () => {
     const call = ++seq.current;
+    if (call === 1)
+      early.current = api
+        .GET('/v1/me/capabilities')
+        .then((res) => res.data ?? null)
+        .catch(() => null);
     const res = await api.GET('/v1/me').catch(() => undefined);
     // Only the latest call wins, so a slow answer never overwrites a newer one. Every page is
     // drawn in the browser (#1581): no server copy to hydrate first, the answer lands at once.
@@ -104,13 +112,16 @@ export function MeProvider({ children }: { children: ReactNode }) {
     if (!capsKey) return;
     let alive = true;
     const failed = (error: string) => alive && setCapsFailed({ key: capsKey, error });
-    api
-      .GET('/v1/me/capabilities')
-      .then((res) => {
+    const read = () => api.GET('/v1/me/capabilities').then((res) => res.data ?? null);
+    // The read begun with the first GET /v1/me, once; one that did not answer is read again.
+    const first = early.current;
+    early.current = null;
+    (first ? first.then((caps) => caps ?? read()) : read())
+      .then((data) => {
         if (!alive) return;
-        if (res.data) {
+        if (data) {
           setCapsFailed(null);
-          setCaps({ key: capsKey, caps: res.data });
+          setCaps({ key: capsKey, caps: data });
         } else failed('Oracle could not read what your role may do.');
       })
       .catch(() => failed('Oracle could not read what your role may do.'));
