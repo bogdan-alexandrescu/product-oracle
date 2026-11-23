@@ -19,6 +19,7 @@ import {
 } from 'react';
 
 import { InfoTip } from '@/components/ds/InfoTip';
+import { CommentCount } from '@/components/simple/FeatureComments';
 import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import { addMonths, calendarDay, utcDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
@@ -1852,6 +1853,8 @@ const TimelineRow = memo(function TimelineRow({
                 </span>
               )}
             </span>
+            {/* timeline-order (owner, Nov 23): the comment count the Now / Next / Later cards show. */}
+            <CommentCount item={i} />
             {lk.chip && (
               <span
                 data-testid="draft-tag"
