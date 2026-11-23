@@ -8,6 +8,7 @@ world: tests.test_simple_key_dates_api's ``payments`` plus ``growth`` (company-w
 no_claim).
 """
 
+import uuid
 from datetime import date
 
 from oracle.tenancy import tenant_session
@@ -195,17 +196,36 @@ async def test_prd_goal_and_track_are_remembered_per_person(client):
     fails_when=only the Roadmap filter is remembered (review minor 4), one person's picks
     show for another, or junk is stored; no_claim=that the web applies them (the spec)."""
     w = await world()
-    picks = {"prd": "payments-prd", "goal": "G1", "track": w.roadmap_id}
+    picks = {"prd": "payments-prd", "goal": "G1", "track": w.roadmap_id, "owner": ""}
     r = await client.patch(PREFS, json={"simple_filters": picks}, headers=w.ctx.as_("viewer"))
     assert r.status_code == 200, r.text
     assert r.json()["simple_filters"] == picks
     assert (await client.get(PREFS, headers=w.ctx.as_("owner"))).json()["simple_filters"] is None
     r = await client.patch(PREFS, json={"simple_filters": {"prd": "", "goal": "G1", "track": ""}},
                            headers=w.ctx.as_("viewer"))  # fmt: skip
-    assert r.json()["simple_filters"] == {"prd": "", "goal": "G1", "track": ""}
+    assert r.json()["simple_filters"] == {"prd": "", "goal": "G1", "track": "", "owner": ""}
     for junk in ({"prd": "x" * 300}, {"group": "goal"}, {"goal": "G1;drop"}):
         r = await client.patch(PREFS, json={"simple_filters": junk}, headers=w.ctx.as_("viewer"))
         assert r.status_code == 422, (junk, r.text)
+
+
+async def test_owner_pick_is_remembered_with_the_others(client):
+    """protects=``simple_filters.owner`` (the Simple roadmap's Owner pick: a person's id, or
+    "none" for No owner) is kept per person beside PRD, Goal and Track, and junk is 422;
+    fails_when=the Owner pick is refused or dropped, so a reload forgets it; no_claim=that the
+    web filters by it or drops a stale one (the spec)."""
+    w = await world()
+    person = str(uuid.uuid4())
+    for owner in (person, "none"):
+        picks = {"prd": "", "goal": "", "track": "", "owner": owner}
+        r = await client.patch(PREFS, json={"simple_filters": picks}, headers=w.ctx.as_("viewer"))
+        assert r.status_code == 200, r.text
+        assert r.json()["simple_filters"] == picks
+        got = (await client.get(PREFS, headers=w.ctx.as_("viewer"))).json()["simple_filters"]
+        assert got == picks
+    r = await client.patch(PREFS, json={"simple_filters": {"owner": "a b"}},
+                           headers=w.ctx.as_("viewer"))  # fmt: skip
+    assert r.status_code == 422, r.text
 
 
 async def test_a_working_draft_belongs_to_one_roadmap(client):
