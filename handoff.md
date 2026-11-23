@@ -158,3 +158,19 @@ on the Timeline for a proposer's change.
 - Playwright (mock build, E2E_PREBUILT=1, --retries=0, trace off): timeline-order, prioritize-goals/map/buckets,
   simple-roadmap-lanes: 25 passed, 1 skipped (a fixme since removed). prio*.spec.ts and goal-*.spec.ts: 352 passed,
   1 skipped, BEFORE the goalRank mock fix; prioritize-goals after it: 6 passed. Later runs are listed below.
+- Final runs, at the goals spec's poll fix (mock build, E2E_PREBUILT=1, --retries=0, trace off, workers 4):
+  prio*.spec.ts and goal-*.spec.ts: 352 passed, 1 failed: the new Goal buckets check read the buckets before they
+  drew their goal ids; it now polls (expect.poll), then lane specs prioritize-goals/map/buckets and timeline-order
+  with --repeat-each=2: 36 passed. Planted: without the goalRank id match the Goal buckets check fails.
+  simple-roadmap-*.spec.ts (39 files, two runs): 384 passed, 9 skipped, 2 failed: filter-review:107 and
+  stale-filters:60, the duplicate 'Track' select from before this lane (as the review found).
+  prose-guard (PROSE_BASE=43c7420ba): 33 passed. tsc --noEmit: 0. format:check: 0.
+- NOT run: the FULL `npm run lint` (about 10 minutes, past a foreground command's limit). eslint on each changed web
+  file: no errors; lib/api/mock/simple-roadmap.ts exits 2 only for "suppressions left that do not occur anymore",
+  as it did before this step. eslint-suppressions.json not touched. The review measured the full lint at exit 2 on
+  the two older errors only (_add.tsx max-lines, FeatureDelete.tsx complexity).
+
+### Left
+- The roadmap read's timing (0.13 s of ranking per read); the owner may want it back (see Speed above).
+- The review's minors (no-op moves still say "Moved", the dependency snap-back with no words, the lanes spec's
+  position check that passes when both are missing, the red test rewritten in the fix commit).
