@@ -97,6 +97,14 @@ test.describe('milestones on the band', () => {
     await page.keyboard.press('ArrowRight');
     await expect(toast(page)).toContainText(`${M1} moved to Nov 21`);
     await expect(label(page, `${M1} · Nov 21,`)).toBeVisible();
+    // de-fix: a quick burst of three moves it three days, drawn at once; Undo goes back to before the burst.
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(label(page, `${M1} · Nov 24,`)).toBeVisible();
+    await expect(toast(page)).toContainText(`${M1} moved to Nov 24`);
+    await page.keyboard.press('Control+z');
+    await expect(label(page, `${M1} · Nov 21,`)).toBeVisible();
   });
 
   test('its card saves each field at once: a rename on Enter, a status on its pick', async ({
