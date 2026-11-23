@@ -511,6 +511,7 @@ function Group({ g, c, sel, lens }: { g: { key: string; items: ReItem[] }; c: Ct
       {addRow && <AddRow c={c} open={first && (c.st === 'open' || c.st === 'mid')} hard={c.st === 'hard' && g.key === RE_GOALS[2]} />}
       {c.dec === 're1' && c.v === 'b' && first && (c.st === 'open' || c.st === 'mid') && <DrawRow c={c} />}
       {c.dec === 're1' && c.v === 'c' && first && (c.st === 'open') && <PlusGap />}
+      {c.dec === 're1' && c.v === 'c' && first && c.st === 'mid' && <GuessFix />}
     </>
   );
 }
@@ -676,6 +677,25 @@ function PlusGap() {
   );
 }
 
+/** RE1 C after Enter: the new bar landed on guessed dates and is dragged to the right ones. */
+function GuessFix() {
+  return (
+    <>
+      <div className="text-base" style={{ padding: '0 12px', height: ROW, display: 'flex', alignItems: 'center', borderRight: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
+        Paper bill reminders
+      </div>
+      <div style={{ position: 'relative', height: ROW, borderBottom: '1px solid var(--line)' }}>
+        <div aria-hidden style={{ position: 'absolute', top: 5, bottom: 5, left: `${pct('2027-01-11')}%`, width: `${pct('2027-02-05') - pct('2027-01-11')}%`, border: '1.5px dashed var(--line-strong)', borderRadius: 8 }} />
+        <div style={{ position: 'absolute', inset: 0, filter: 'drop-shadow(0 6px 10px rgba(0,0,0,.25))' }}>
+          <Bar it={{ ...RE_ITEMS[3], id: 'n1', code: 'F-31', name: 'Paper bill reminders', kind: 'est', start: '2026-12-07', end: '2027-02-05' }} c={{ dec: 're2', v: 'a', st: 'mid', viewer: false }} selected>
+            <DateTip text="Dec 7 – Feb 5" left="50%" top={-30} />
+          </Bar>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ——— the top of the page ———
 
 function Header({ c, view, counts }: { c: Ctx; view: string; counts: { changed: number; decide: number; drafts: number } }) {
@@ -799,22 +819,22 @@ function Sw({ bg, bd, dash }: { bg: string; bd?: string; dash?: boolean }) {
 }
 
 /** RE1 D: the one add bar at the top, with where and when picked in it (no drag). */
-function AddBar({ c }: { c: Ctx }) {
+function AddBar({ c, phone }: { c: Ctx; phone: boolean }) {
   if (c.dec !== 're1' || c.v !== 'd' || c.viewer) return null;
   const typed = c.st === 'rest' ? '' : 'Paper bill reminders';
   return (
-    <div style={{ ...card, borderStyle: 'dashed', padding: 10, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, position: 'relative' }}>
+    <div style={{ ...card, borderStyle: 'dashed', padding: 10, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 14, position: 'relative' }}>
       <div className="text-base" style={{ display: 'flex', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
         <span style={{ padding: '4px 12px', background: c.st === 'ms' ? 'var(--surface)' : 'var(--accent)', color: c.st === 'ms' ? 'var(--text)' : 'var(--on-accent)' }}>Feature</span>
         <span style={{ padding: '4px 12px', borderLeft: '1px solid var(--line)', background: c.st === 'ms' ? 'var(--accent)' : 'var(--surface)', color: c.st === 'ms' ? 'var(--on-accent)' : 'var(--text)' }}>Milestone</span>
       </div>
-      <span style={{ flex: 1 }}>
+      <span style={{ flex: 1, minWidth: phone ? '100%' : undefined }}>
         {typed || c.st === 'ms' ? <TitleInput value={c.st === 'ms' ? 'Pilot with 500 homes' : typed} w={260} /> : <span className="text-base" style={{ color: 'var(--text-faint)', border: '1px solid var(--line)', borderRadius: 8, padding: '4px 10px', display: 'block' }}>Title</span>}
       </span>
       {c.st !== 'ms' && <span className="text-base" style={c.st === 'mid' ? btnOn : btn}>{c.st === 'rest' ? 'Track' : 'Billing track'} ▾</span>}
       <span className="text-base" style={c.st === 'open' ? btnOn : btn}>{c.st === 'rest' ? 'Dates' : c.st === 'ms' ? 'Mar 8' : 'Dec 7 – Jan 29'} ▾</span>
       <span className="text-base" style={btnOn}>Add</span>
-      {c.st === 'open' && <MiniCal />}
+      {c.st === 'open' && !phone && <MiniCal />}
       {c.st === 'mid' && (
         <div style={{ ...pop, right: 230, top: 50 }}>
           <div className="text-base" style={{ display: 'grid', gap: 2, minWidth: 210 }}>
@@ -876,7 +896,7 @@ function Nnl({ c, items, phone }: { c: Ctx; items: ReItem[]; phone: boolean }) {
                   {its.map((it) => (
                     <NnlCard key={it.id} it={it} c={c} />
                   ))}
-                  {c.dec === 're1' && !c.viewer && <NnlAdd c={c} open={h === 'next' && (c.st === 'open' || c.st === 'mid')} />}
+                  {c.dec === 're1' && !c.viewer && <NnlAdd c={c} open={c.v !== 'd' && h === 'next' && (c.st === 'open' || c.st === 'mid')} />}
                 </div>
               );
             })}
@@ -1031,7 +1051,7 @@ export function ReMock() {
   return (
     <div data-testid="re-mock" className="text-base" style={{ padding: phone ? '12px 12px 260px' : '20px 24px 80px', color: 'var(--text)' }}>
       <Header c={c} view={view} counts={counts} />
-      <AddBar c={c} />
+      <AddBar c={c} phone={phone} />
       {view === 'nnl' ? (
         <Nnl c={c} items={shownItems} phone={phone} />
       ) : (
