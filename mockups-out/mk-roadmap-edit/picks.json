@@ -89,7 +89,7 @@
             },
             {
               "file": "re1-b-open-390.html",
-              "caption": "Phone 390: drawing does not work by touch; holding a finger on an empty spot in Next fills the ring, then opens the title field. The only hint is behind the (i) by the views."
+              "caption": "Phone 390: drawing does not work by touch; a finger held on an empty spot in Next fills a ring, and the title field opens only once the ring is full. The only hint is behind the (i) by the views."
             },
             {
               "file": "re1-b-open-390-dark.html",
@@ -232,7 +232,7 @@
             },
             {
               "file": "re2-a-open-390.html",
-              "caption": "Phone 390: tapping a card opens a sheet: name, dates a week at a time, owner and track, each saving as it is tapped."
+              "caption": "Phone 390: tapping a card opens a sheet: name, dates a week at a time, owner and track, each saving as it is tapped. The owner row fades at the right edge with an arrow: it scrolls to more people."
             },
             {
               "file": "re2-a-open-390-dark.html",
@@ -354,7 +354,7 @@
             },
             {
               "file": "re2-d-hard-1512.html",
-              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: F-42's panel opens to read only, with no fields to type in."
+              "caption": "Hard case, a viewer who may not edit, 60 items in 1512: F-42's panel opens to read only, says 'View only' and who can change it, and has only a close button, no fields to type in."
             },
             {
               "file": "re2-d-open-390.html",
@@ -409,7 +409,7 @@
             },
             {
               "file": "re3-a-rest-390.html",
-              "caption": "Phone 390: F-17 and F-29 carry the '!' on the card; F-14 and F-26 say 'was …' with the dot."
+              "caption": "Phone 390: F-29 Solar panel advice carries the '!' on its card; F-14 and F-26 say 'was …' with the dot."
             },
             {
               "file": "re3-a-rest-390-dark.html",

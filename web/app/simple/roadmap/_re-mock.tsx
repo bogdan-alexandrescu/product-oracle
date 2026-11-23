@@ -515,7 +515,7 @@ function Group({ g, c, sel, lens }: { g: { key: string; items: ReItem[] }; c: Ct
       >
         {g.key}
         <span className="text-sm" style={{ color: 'var(--text2)', fontWeight: 400 }}>
-          {shown.length} items
+          {shown.length + (c.dec === 're1' && c.v === 'c' && first && c.st === 'mid' ? 1 : 0)} items
         </span>
       </div>
       {shown.map((it, i) => (
@@ -788,6 +788,7 @@ function Header({ c, view, counts }: { c: Ctx; view: string; counts: { changed: 
           </span>
         </span>
       )}
+      <span style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
       {re3 === 'a' && (
         <span style={{ position: 'relative' }}>
           <span className="text-base" style={c.st === 'open' ? btnOn : btn}>
@@ -818,6 +819,7 @@ function Header({ c, view, counts }: { c: Ctx; view: string; counts: { changed: 
           Needs a decision · {counts.decide}
         </span>
       )}
+      </span>
       {(re3 === 'c' || re3 === 'd') && (
         <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <Tip text="What the marks mean" />
@@ -995,11 +997,20 @@ function NnlAdd({ c, open }: { c: Ctx; open: boolean }) {
       <>
       {c.v === 'c' && <div style={{ height: 2, background: 'var(--accent)', position: 'relative' }}><span style={{ position: 'absolute', left: -6, top: -11, width: 24, height: 24, borderRadius: 12, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center' }}>+</span></div>}
       <div style={{ border: '1.5px solid var(--accent)', borderRadius: 8, padding: 8, display: 'grid', gap: 6, background: 'var(--accent-soft)', position: 'relative' }}>
+        {c.v === 'b' && c.st === 'open' ? (
+          // The hold is still filling the ring: the title field opens only once it is full.
+          <div style={{ height: 52, position: 'relative' }}>
+            <span aria-hidden style={{ position: 'absolute', left: '50%', top: 6, marginLeft: -20, width: 40, height: 40, borderRadius: 20, background: 'conic-gradient(var(--accent) 0 75%, color-mix(in srgb, var(--accent) 25%, transparent) 75% 100%)', WebkitMask: 'radial-gradient(circle, transparent 14px, #000 15px)', mask: 'radial-gradient(circle, transparent 14px, #000 15px)' }} />
+          </div>
+        ) : (
+          <>
         {c.v === 'b' && (
           <span aria-hidden style={{ position: 'absolute', right: 14, top: 8, width: 40, height: 40, borderRadius: 20, background: 'conic-gradient(var(--accent) 0 75%, color-mix(in srgb, var(--accent) 25%, transparent) 75% 100%)', WebkitMask: 'radial-gradient(circle, transparent 14px, #000 15px)', mask: 'radial-gradient(circle, transparent 14px, #000 15px)' }} />
         )}
         <TitleInput value="Paper bill reminders" w={160} />
         <span className="text-sm" style={{ color: 'var(--text2)' }}>Next · Cut bill shocks</span>
+          </>
+        )}
       </div>
       </>
     );
@@ -1066,12 +1077,18 @@ function PhoneSheet({ c }: { c: Ctx }) {
         <span style={{ flex: 1, textAlign: 'center' }}>{range(it.start, it.end)}</span>
         <span style={btn}>+1 wk</span>
       </div>
-      <div className="text-base" style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
-        {RE_PEOPLE.slice(0, 4).map((p) => (
-          <span key={p} style={{ ...(p === it.owner ? btnOn : btn), display: 'flex', gap: 6, alignItems: 'center' }}>
-            <Avatar name={p} size={18} /> {p.split(' ')[0]}
-          </span>
-        ))}
+      <div style={{ position: 'relative', minWidth: 0 }}>
+        <div className="text-base" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingRight: 40 }}>
+          {RE_PEOPLE.slice(0, 4).map((p) => (
+            <span key={p} style={{ ...(p === it.owner ? btnOn : btn), display: 'flex', gap: 6, alignItems: 'center', flex: 'none' }}>
+              <Avatar name={p} size={18} /> {p.split(' ')[0]}
+            </span>
+          ))}
+        </div>
+        {/* The row scrolls: a fade and an arrow say there is more to the right. */}
+        <span aria-label="More people" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 56, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', background: 'linear-gradient(to right, transparent, var(--surface) 60%)', color: 'var(--text2)', fontSize: 20, pointerEvents: 'none' }}>
+          ›
+        </span>
       </div>
       <div className="text-base" style={{ display: 'flex', gap: 6 }}>
         {RE_TRACKS.map((t) => (
@@ -1132,9 +1149,15 @@ function ReadPanel() {
   );
   return (
     <aside style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 420, background: 'var(--surface)', borderLeft: '1px solid var(--line)', boxShadow: 'var(--tip-shadow)', padding: 24, display: 'grid', gap: 16, alignContent: 'start', zIndex: 45 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="text-sm" style={{ ...btn, color: 'var(--text2)' }}>🔒 View only</span>
+        <span style={{ flex: 1 }} />
+        <span className="text-base" aria-label="Close" style={{ ...btn, padding: '2px 10px' }}>✕</span>
+      </div>
       <div className="text-2xl" style={{ fontWeight: 700 }}>
         {it.code} {it.name}
       </div>
+      <span className="text-sm" style={{ color: 'var(--text2)' }}>{"You can read this feature. The roadmap's owner, Mara Quill, can change it."}</span>
       {field('Dates', range(it.start, it.end))}
       {field('Owner', <><Avatar name={it.owner} size={20} /> {it.owner ?? 'No owner yet'}</>)}
       {field('Track', it.track)}

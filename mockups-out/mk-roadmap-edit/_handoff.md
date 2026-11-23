@@ -25,3 +25,13 @@
   respond to real drags. Building the picked proposals is the follow-up.
 - Recommended: RE1 A Click the spot, RE2 A Grab the bar, RE3 A Ghost of the approved (an independent check agreed;
   RE2 B Edit switch and RE3 B Review lens were close seconds).
+
+## Round 2 (Nov 23)
+
+- Hard-case frames (`*-hard-1512`) are now captured at a true 1512x900 viewport (set in Playwright, not zoomed);
+  all twelve were re-shot so every one matches.
+- `MK_FRAMES=re1-c-mid,re2-d-hard-1512` re-shoots exact frames.
+- Fixed from the re-review: RE1 C mid counts the added row ("Billing track 5 items"); RE3 A keeps its two counts
+  together at 1512; the RE2 A and B phone owner row fades at the right with an arrow; RE1 B phone shows only the ring
+  filling (no title yet); RE2 D's read-only panel says "View only", who can change it, and has a close button;
+  the RE3 A phone caption names only F-29 Solar panel advice, the one '!' in view.

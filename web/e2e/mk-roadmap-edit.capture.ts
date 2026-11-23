@@ -1,5 +1,6 @@
 // MOCK-HOOK: mk-roadmap-edit only (never merged). Snapshots each mock-up frame as a static html file
-// (stylesheets inlined, scripts removed, fonts copied to assets/) plus a PNG. MK_ONLY=re1-a,re2 limits it.
+// (stylesheets inlined, scripts removed, fonts copied to assets/) plus a PNG. MK_ONLY=re1-a,re2 limits it;
+// MK_FRAMES=re1-c-mid,re2-d-hard-1512 picks exact frames.
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -7,7 +8,7 @@ import { basename } from 'node:path';
 import { test, type Page } from '@playwright/test';
 
 const OUT = '../mockups-out/mk-roadmap-edit';
-const SIZES = { d: [1440, 900], h: [1512, 982], p: [390, 844] } as const;
+const SIZES = { d: [1440, 900], h: [1512, 900], p: [390, 844] } as const;
 type Sz = keyof typeof SIZES;
 type Frame = { name: string; q: string; sz: Sz; theme: 'light' | 'dark' };
 
@@ -26,7 +27,8 @@ function frames(): Frame[] {
       out.push({ name: `${key}-rest-dark`, q: `${dec}=${v}&st=rest`, sz: 'd', theme: 'dark' });
       out.push({ name: `${key}-${pst}-390-dark`, q: `${dec}=${v}&st=${pst}`, sz: 'p', theme: 'dark' });
     }
-  return out;
+  const names = (process.env.MK_FRAMES ?? '').split(',').filter(Boolean);
+  return names.length ? out.filter((f) => names.includes(f.name)) : out;
 }
 
 const assets = new Map<string, string>();
