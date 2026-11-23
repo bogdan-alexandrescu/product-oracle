@@ -380,6 +380,45 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
   simple.ids[CONFIRM_ITEM] = stableUuid(`simple-item/${CONFIRM_ITEM}`);
 }
 
+/** gt-proposed: ground-truth-confirm plus Account discovery, a roadmap item on a feature a run only proposed, with no code. */
+export const GROUND_TRUTH_PROPOSED_SCENARIO = 'ground-truth-proposed';
+const PROPOSED_ITEM = 'gt-account-discovery';
+
+/** The ground-truth-proposed scenario: Account discovery, a run's proposal with no code of its own, on a planned roadmap item
+ * the check reads by its feature (toConfirm), not by the scenario's list. */
+export function seedGroundTruthProposed(baseline: BaselineState, simple: SimpleDb): void {
+  seedGroundTruthConfirm(baseline, simple);
+  const template = baseline.entities.find((e) => e.type === 'feature')!;
+  const id = featureId('account-discovery');
+  baseline.entities.push({
+    ...template,
+    id,
+    key: 'account-discovery',
+    title: 'Account discovery',
+    body: null,
+    attrs: {},
+    parent_id: null,
+    locked: false,
+    locked_by: null,
+    locked_at: null,
+    status: 'proposed',
+    origin: 'agent',
+  });
+  simple.items.push({
+    key: PROPOSED_ITEM,
+    title: 'Account discovery',
+    horizon: 'next',
+    roadmap: ROADMAP_SLUG,
+    track: 'alerts',
+    confidence: 'medium',
+    start: 30,
+    end: 70,
+    source: 'typed',
+    feature_id: id,
+  });
+  simple.ids[PROPOSED_ITEM] = stableUuid(`simple-item/${PROPOSED_ITEM}`);
+}
+
 /** The ground-truth-shared scenario's roadmap items, both on the proposed Community alerts. */
 const SHARED_ITEMS = ['gt-chat-alerts', 'gt-forum-alerts'];
 
@@ -438,6 +477,16 @@ type MockItem = SimpleDb['items'][number];
 const markOf = (s: Pick<MockItem, 'roadmap' | 'key'>) => `${s.roadmap}/${s.key}`;
 export const marked = (e: Entity, kind: string, s: MockItem) =>
   ((e.attrs?.[kind] as string[] | undefined) ?? []).includes(markOf(s));
+/**
+ * In the Ground Truth, one rule (fixes.to_confirm): an item's feature still to confirm for it, the one
+ * Confirm it (the check) and Confirm into the Ground Truth (Simple's feature panel) confirm: one a run only
+ * proposed, or one confirmed while the item waits for its own Confirm it; none for a match it declined.
+ */
+export function toConfirm(e: Entity | undefined, s: MockItem): Entity | undefined {
+  if (!e || e.type !== 'feature' || marked(e, DECLINED, s)) return undefined;
+  if (e.status === 'proposed') return e;
+  return e.status === 'confirmed' && marked(e, UNCONFIRMED, s) ? e : undefined;
+}
 export function mark(e: Entity, kind: string, s: MockItem, on: boolean): void {
   const { [kind]: had, ...rest } = (e.attrs ?? {}) as Record<string, unknown>;
   const marks = [
@@ -613,9 +662,15 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
   const ids: Record<string, string> = simple?.ids ?? {};
-  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM, ...SHARED_ITEMS]
-    .map((key) => simple?.items.find((x) => x.key === key))
-    .filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  // gt-proposed: and every other roadmap item whose feature is still to confirm (toConfirm), as check.py reads every item.
+  const listed = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM, ...SHARED_ITEMS];
+  const items = [
+    ...listed.map((key) => simple?.items.find((x) => x.key === key)),
+    ...(simple?.items ?? []).filter(
+      (x) =>
+        !listed.includes(x.key) && toConfirm(byId.get(x.linked_feature ?? x.feature_id ?? ''), x),
+    ),
+  ].filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
   const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
   // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
@@ -663,7 +718,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
     // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link); a match the
     // item declined is none, and an item on a shared proposal confirmed from another item's flag waits.
     const linked = was && marked(was, DECLINED, s) ? undefined : was;
-    const waits = linked?.status === 'confirmed' && marked(linked, UNCONFIRMED, s);
+    const waits = linked?.status === 'confirmed' && !!toConfirm(linked, s);
     if ((linked?.status === 'confirmed' && !waits) || (!linked && byCode(s))) continue;
     const id = ids[s.key];
     const [code, parent] = codeOf(s);
@@ -685,9 +740,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
       flag(
         'unlinked_item',
         [
-          linked && (linked.status === 'proposed' || waits)
-            ? ['confirm_feature', linked.id]
-            : ['add_to_ground_truth', id],
+          toConfirm(linked, s) ? ['confirm_feature', linked!.id] : ['add_to_ground_truth', id],
           ['link_to_feature', id],
         ],
         {

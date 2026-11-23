@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 
+import { toast } from '@/components/ds';
 import { Icon } from '@/components/ds/Icon';
 import { InfoTip } from '@/components/ds/InfoTip';
 import { LoadError, Loading } from '@/components/ui';
@@ -15,7 +16,8 @@ import { goalFigure } from '@/lib/format';
 import { calendarDay } from '@/lib/dates';
 import { byPrdOrderOf, usePrdOrder } from '@/lib/prd-order';
 import { byTrackOrder } from '@/lib/track-order';
-import { useQuery } from '@/lib/use-query';
+import { useMe } from '@/lib/me';
+import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 
 import type { Act } from './_card';
 import {
@@ -252,6 +254,46 @@ function milestoneShown(
   return served ?? '';
 }
 
+/**
+ * gt-proposed: a feature a run only proposed joins the Ground Truth from its panel, as the Ground
+ * Truth check's Confirm it does: confirmed for this item, with the next F-code; every page reads again.
+ */
+function ConfirmIntoGt({ item }: { item: Item }) {
+  const { can } = useMe();
+  const [busy, setBusy] = useState(false);
+  if (!can('confirm_entity') || !item.confirm_feature_id) return null;
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      const e = await unwrap(
+        api.POST('/v1/baseline/entities/{entity_id}/confirm', {
+          params: { path: { entity_id: item.confirm_feature_id! }, query: { item_id: item.id } },
+        }),
+      );
+      toast({
+        place: 'corner',
+        message: `Confirmed “${item.title}”${/^[A-Z]{1,3}-\d+$/.test(e.key) ? ` as ${e.key}` : ''}.`,
+      });
+      dataChanged();
+    } catch (err) {
+      toast({ place: 'corner', message: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      data-testid="card-code-confirm"
+      disabled={busy}
+      className="text-left text-accent-ink hover:underline disabled:opacity-50"
+      onClick={() => void confirm()}
+    >
+      Confirm into the Ground Truth
+    </button>
+  );
+}
+
 export function PanelFields({
   item,
   items,
@@ -391,6 +433,7 @@ export function PanelFields({
                   Roadmap items that are no feature of the Ground Truth, or one only proposed so
                   far.
                 </InfoTip>
+                {item.confirm_feature_id && <ConfirmIntoGt item={item} />}
               </span>
             ))
           )

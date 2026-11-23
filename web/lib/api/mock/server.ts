@@ -570,6 +570,7 @@ import {
   groundTruthCheck,
   GROUND_TRUTH_CONFIRM_SCENARIO,
   GROUND_TRUTH_FLAGS_SCENARIO,
+  GROUND_TRUTH_PROPOSED_SCENARIO,
   GROUND_TRUTH_SHARED_NAMED_SCENARIO,
   GROUND_TRUTH_SHARED_SCENARIO,
   itemById,
@@ -578,6 +579,8 @@ import {
   routeGroundTruthFixes,
   seedGroundTruth,
   seedGroundTruthConfirm,
+  seedGroundTruthProposed,
+  toConfirm,
   seedGroundTruthShared,
   tiedCodes,
   UNCONFIRMED,
@@ -8712,6 +8715,14 @@ function load(): Db {
                                                                                                                                                                                                                                                                                                                         );
                                                                                                                                                                                                                                                                                                                         return db;
                                                                                                                                                                                                                                                                                                                       }
+                                                                                                                                                                                                                                                                                                                    : scenario === GROUND_TRUTH_PROPOSED_SCENARIO
+                                                                                                                                                                                                                                                                                                                      ? () => {
+                                                                                                                                                                                                                                                                                                                          // gt-proposed: a roadmap item on a feature a run only proposed, with no code.
+                                                                                                                                                                                                                                                                                                                          const db = seed();
+                                                                                                                                                                                                                                                                                                                          db.simple_roadmap = seedSimpleRoadmap();
+                                                                                                                                                                                                                                                                                                                          seedGroundTruthProposed(db.baseline, db.simple_roadmap);
+                                                                                                                                                                                                                                                                                                                          return db;
+                                                                                                                                                                                                                                                                                                                        }
                                                                                                                                                                                                                                                                                                                     : scenario ===
                                                                                                                                                                                                                                                                                                                         GROUND_TRUTH_CONFIRM_SCENARIO
                                                                                                                                                                                                                                                                                                                       ? () => {
@@ -13990,6 +14001,16 @@ async function route(db: Db, req: Request): Promise<Response> {
       .map((e) => [e.id, e.key]),
   );
   linkSeededFeatures(db);
+  // gt-proposed: each item's feature still to confirm (fixes.to_confirm), by item key: its panel's Confirm into the Ground Truth.
+  {
+    const byFeature = new Map(db.baseline.entities.map((e) => [e.id, e]));
+    db.simple_roadmap.feature_confirm = Object.fromEntries(
+      db.simple_roadmap.items.flatMap((x) => {
+        const e = toConfirm(byFeature.get(x.linked_feature ?? x.feature_id ?? ''), x);
+        return e ? [[x.key, e.id]] : [];
+      }),
+    );
+  }
   db.simple_roadmap.feature_keys = Object.fromEntries(
     db.baseline.entities.filter((e) => e.type === 'feature').map((e) => [e.id, e.key]),
   );
