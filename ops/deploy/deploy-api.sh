@@ -6,6 +6,9 @@
 #   ORACLE_GCP_PROJECT=<project-id> ORACLE_GCP_REGION=<region> \
 #     ops/deploy/deploy-api.sh <image> <NAME=value,...> [more gcloud run deploy flags]
 #
+# The variables may also be given as gcloud does, ^<delim>^NAME=value<delim>..., for values
+# that hold commas (for example '^##^ORACLE_IAP_BACKENDS=["a-be","b-be"]##ORACLE_ENV=prod').
+#
 # - Once Actions deploys are on (the repository variable ORACLE_DEPLOY_ENABLED is 'true'), or
 #   when gh can not tell, it deploys nothing and prints the traffic-only rollback: main is
 #   deployed by the job, and a laptop only moves traffic back to an earlier revision.
@@ -41,12 +44,21 @@ if [ "$enabled" = true ]; then
   exit 1
 fi
 
-case ",$env_vars" in
-  ,^*)
-    echo "Give the variables as NAME=value,...; the ^delimiter^ form is not read here."
+# gcloud's alternate-delimiter form, ^<delim>^NAME=value<delim>..., is read as gcloud reads it
+# (for values with commas, such as a JSON list) and passed through unchanged.
+delim=,
+list=$env_vars
+if [ "${env_vars:0:1}" = "^" ]; then
+  rest=${env_vars:1}
+  delim=${rest%%^*}
+  if [ "$delim" = "$rest" ] || [ -z "$delim" ]; then
+    echo "Give the variables as NAME=value,... or ^<delimiter>^NAME=value<delimiter>..."
     exit 2
-    ;;
-  *,ORACLE_MIGRATE_AT_START=*)
+  fi
+  list=${rest#*^}
+fi
+case "$delim$list" in
+  *"${delim}ORACLE_MIGRATE_AT_START="*)
     echo "ORACLE_MIGRATE_AT_START is read from the serving revision; leave it out of the arguments."
     exit 2
     ;;
@@ -61,7 +73,7 @@ if [ -z "$keep" ]; then
   echo "The serving revision does not set ORACLE_MIGRATE_AT_START (it migrates at start); the new one does not either."
 else
   echo "Keeping ORACLE_MIGRATE_AT_START=$keep from the serving revision."
-  env_vars="$env_vars,ORACLE_MIGRATE_AT_START=$keep"
+  env_vars="$env_vars${delim}ORACLE_MIGRATE_AT_START=$keep"
 fi
 
 gcloud run deploy "$service" --image="$image" --project="$project" --region="$region" \
