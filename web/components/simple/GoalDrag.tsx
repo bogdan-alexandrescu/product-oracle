@@ -58,9 +58,8 @@ export function useGoalDrag({
           'data-testid': 'goal-handle',
           draggable: true,
           tabIndex: 0,
-          role: 'button',
-          title: 'Drag to reorder goals',
-          'aria-label': `Reorder ${name}`,
+          // Its heading role and name stay: the tip says how it moves.
+          title: `Drag ${name} to reorder goals`,
           onDragStart: (e: DragEvent) => {
             e.dataTransfer.setData('text/plain', id);
             e.dataTransfer.effectAllowed = 'move';
