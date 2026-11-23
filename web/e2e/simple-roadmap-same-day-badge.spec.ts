@@ -57,6 +57,8 @@ async function addOn(page: Page, name: string, date: string) {
   await page.mouse.move(at.x, at.y);
   await page.mouse.click(at.x, at.y);
   // tb-mk: + Milestone asks for the kind first (Delivery, what a new one was before kinds).
+  // de-r2: a click on the band opens its name first; ⋯ opens the kind picker.
+  await page.getByTestId('ms-quick-more').click();
   await page.getByTestId('ms-kind-picker').getByRole('option', { name: 'Delivery' }).click();
   await card(page).getByLabel('Name').fill(name);
   await card(page).getByLabel('Date').fill(date);
@@ -112,7 +114,8 @@ for (const [zoom, name] of [
     await expect(entries).toHaveCount(2);
     await entries.filter({ hasText: 'Setup checks for new teams' }).click();
     await expect(card(page).getByLabel('Name')).toHaveValue('Setup checks for new teams');
-    await card(page).getByRole('button', { name: 'Cancel' }).click();
+    // de-r2: a card the reader changes saves each field at once; it closes with Close.
+    await card(page).getByRole('button', { name: 'Close' }).click();
     await expect(card(page)).toBeHidden();
     await next.click();
     await expect(page.getByTestId('ms-prd-card')).toBeVisible();

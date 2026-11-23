@@ -71,7 +71,8 @@ test("a goal's On the roadmap switch takes its target-date milestone off the Mil
   await page.locator(`[data-testid="ms-diamond"][data-kind="goal"][data-day="2027-02-12"]`).click();
   await expect(page.getByTestId('ms-card')).toHaveAttribute('data-rights', 'change');
   await expect(page.getByTestId('ms-card').getByLabel('Date')).toHaveCount(0);
-  await page.getByTestId('ms-card').getByRole('button', { name: 'Cancel' }).click();
+  // de-r2: a card the reader changes saves each field at once; it closes with Close.
+  await page.getByTestId('ms-card').getByRole('button', { name: 'Close' }).click();
 
   await setOnRoadmap(page, TITLE, false);
   await roadmap(page);

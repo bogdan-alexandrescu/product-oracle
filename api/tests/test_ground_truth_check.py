@@ -735,6 +735,7 @@ async def test_an_unlinked_item_still_saves(client):
         await s.commit()
     out = await _check(client, w.ctx)
     names = [f["item"]["name"] for f in _of(out, "unlinked_item")]
+    # de-inst: the check reads the live roadmap, the item with the code it was given.
     assert "F-1 Guided setup" in names
 
 

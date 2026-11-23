@@ -26,7 +26,7 @@ export function TrackPick({
   const pick = (
     <select
       ref={pickRef}
-      aria-label={sheet ? undefined : 'Track'}
+      aria-label={sheet ? undefined : "New item's track"}
       data-testid="quick-add-track"
       value={value}
       onChange={(e) => onChange(e.target.value)}

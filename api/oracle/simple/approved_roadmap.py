@@ -526,6 +526,14 @@ async def lines(
             )
         )
     }
+    # de-inst (the owner, Nov 23): what the roadmap's open drafts hold is a decider's applied
+    # change, final at once and needing no approval, so it never reads as a difference: the
+    # version of record is the approved version with those changes.
+    from oracle.simple import drafts
+
+    open_ = [d for d in await drafts.open_drafts(db) if d.document_id in wanted]
+    decided = {k for d in open_ for k in (d.overlay or {})}
+    draft_ids = {d.id for d in open_}
     out: list[SimpleAppliedVersion] = []
     for doc in roadmaps:
         n = wanted.get(doc.id)
@@ -536,6 +544,13 @@ async def lines(
         differences: list[str] = []
         for e in by_doc.get(doc.id, []):
             a = e.row.applied or {}
+            row = e.row
+            if row.simple_draft_id in draft_ids:
+                continue
+            if str(row.id) in decided:
+                row = await db.get(RoadmapItem, row.id) or row
+                if e.status == "cut" or a.get("version") != n:
+                    continue
             if a.get("version") != n:
                 # A cut item the version does not list is off the plan, as the version has it.
                 if e.status != "cut":
@@ -547,7 +562,7 @@ async def lines(
             if "start" not in a or not (a.get("start") or a.get("end")):
                 continue
             was = (_iso(a.get("start")), _iso(a.get("end")))
-            now = (e.row.start_date, e.row.end_date)
+            now = (row.start_date, row.end_date)
             if now != was:
                 differences.append(_difference(e.row.title, now, was, n))
         differences += await _not_added_rows(db, version)

@@ -661,10 +661,13 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
     for link, item in links:
         # QA goal map codes: its name as the roadmap reads it, without a leading code of its
         # own (the card shows the code before it: "F-07 Crawl", never "F-07 F-07 Crawl").
-        code, title = service.coded_title(item.title, codes.code_of(item, by_feature))
         # panel-menu: a feature merged into another (as the reader's draft has it, as the
         # roadmap reads it) is no longer one of the map's.
         mine_ = (overlays.get(item.roadmap_document_id) or {}).get(str(link.item_id)) or {}
+        # de-inst: its name as the working draft has it (a decider's rename, live at once).
+        code, title = service.coded_title(
+            mine_.get("title") or item.title, codes.code_of(item, by_feature)
+        )
         if mine_.get("merged_into", item.merged_into):
             continue
         f = feats.get(link.item_id)

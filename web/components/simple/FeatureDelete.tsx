@@ -25,25 +25,11 @@ const going = (id: string, on: boolean) =>
     new CustomEvent<ItemGoingDetail>(ITEM_GOING_EVENT, { detail: { id, going: on } }),
   );
 
-type Gone = {
-  id: string;
-  title: string;
-  parts?: readonly unknown[];
-  rows?: { label: string; value: string }[];
-  propose?: boolean;
-  deciders?: string[];
-  now?: boolean;
-};
-/** roadmap-add: a `now` row hidden at once comes back when it did not go (or on Undo). */
-const back = (id: string, now: boolean) => now && going(id, false);
-/** Whether it goes ahead: `now` at once (hidden on every view), else after the ask it needs. */
-async function goAhead(f: Gone, parts: string, now: boolean): Promise<boolean> {
-  // pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what points at it.
-  // Who may not decide on it (`propose`) is asked to propose it, not to move it.
-  if (now) {
-    going(f.id, true);
-    return true;
-  }
+type DeleteAsk = { title: string; rows?: { label: string; value: string }[]; propose?: boolean };
+
+/** pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what
+ * points at it. Who may not decide on it (`propose`) is asked to propose it, not to move it. */
+async function asked(f: DeleteAsk, parts: string): Promise<boolean> {
   if (f.rows) {
     const ask = f.propose
       ? {
@@ -63,16 +49,41 @@ async function goAhead(f: Gone, parts: string, now: boolean): Promise<boolean> {
         };
     return confirmInPage(ask);
   }
-  return (
-    !parts ||
-    (await confirmInPage({
-      action: 'Delete',
-      title: `Delete ${f.title}?`,
-      message: parts,
-      destructive: true,
-      cancel: 'Cancel',
-    }))
-  );
+  if (!parts) return true;
+  return confirmInPage({
+    action: 'Delete',
+    title: `Delete ${f.title}?`,
+    message: parts,
+    destructive: true,
+    cancel: 'Cancel',
+  });
+}
+
+/** The note's Undo: restores the feature with its links. */
+function undoAction(
+  title: string,
+  id: string,
+  now: boolean,
+  reload: () => Promise<unknown>,
+  toast: (ask: ToastAsk) => void,
+) {
+  return {
+    label: 'Undo',
+    onClick: async () => {
+      try {
+        await unwrap(
+          api.POST('/v1/simple/roadmap/items/{item_id}/restore', {
+            params: { path: { item_id: id } },
+          }),
+        );
+        toast({ message: `Undone: ${title} and its links are back.` });
+        if (now) going(id, false);
+      } catch (e) {
+        toast({ message: errorMessage(e) });
+      }
+      await reload();
+    },
+  };
 }
 
 export function useFeatureDelete(
@@ -80,17 +91,26 @@ export function useFeatureDelete(
   toast: (ask: ToastAsk) => void = dsToast,
   onGone?: (id: string) => void,
 ) {
-  return async (f: Gone): Promise<void> => {
+  return async (f: {
+    id: string;
+    title: string;
+    parts?: readonly unknown[];
+    rows?: { label: string; value: string }[];
+    propose?: boolean;
+    deciders?: string[];
+    now?: boolean;
+  }): Promise<void> => {
     const parts = partsWords(f.parts?.length ?? 0, 'stay');
     const now = !!f.now && !f.propose;
-    if (!(await goAhead(f, parts, now))) return;
+    if (now) going(f.id, true);
+    else if (!(await asked(f, parts))) return;
     try {
       const out = await unwrap(
         api.DELETE('/v1/simple/roadmap/items/{item_id}', { params: { path: { item_id: f.id } } }),
       );
       // In Trash: its panel, if open, closes with it.
       if (out.entry) onGone?.(f.id);
-      else back(f.id, now);
+      else if (now) going(f.id, false);
       await reload();
       if (!out.entry) {
         toast({
@@ -102,28 +122,10 @@ export function useFeatureDelete(
       }
       toast({
         message: parts ? `Moved ${f.title} to Trash. ${parts}` : `Moved ${f.title} to Trash.`,
-        action: out.can_restore
-          ? {
-              label: 'Undo',
-              onClick: async () => {
-                try {
-                  await unwrap(
-                    api.POST('/v1/simple/roadmap/items/{item_id}/restore', {
-                      params: { path: { item_id: f.id } },
-                    }),
-                  );
-                  toast({ message: `Undone: ${f.title} and its links are back.` });
-                  back(f.id, now);
-                } catch (e) {
-                  toast({ message: errorMessage(e) });
-                }
-                await reload();
-              },
-            }
-          : undefined,
+        action: out.can_restore ? undoAction(f.title, f.id, now, reload, toast) : undefined,
       });
     } catch (e) {
-      back(f.id, now);
+      if (now) going(f.id, false);
       toast({ message: errorMessage(e) });
     }
   };

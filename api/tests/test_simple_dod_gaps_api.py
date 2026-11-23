@@ -48,14 +48,15 @@ Change engine ops (docs Part 1, Group 2 and Group 4):
   published row is written, or a stale remove lands; no_claim=undo after the draft is
   submitted.
 - test_remove_key_date_waits_in_the_working_draft: protects=an applied remove_key_date is
-  in the working draft only: the published row (every stored column) stays and a viewer
-  still reads the key date until the decider submits and approves the draft, then it is
-  gone for everyone; fails_when=the remove deletes the published row early or approval
+  in the working draft: the published row (every stored column) stays until the decider
+  submits and approves the draft, while every reader reads it gone at once (de-inst);
+  fails_when=the remove deletes the published row early or approval
   does not publish it; no_claim=required reviewers (test_simple_drafts_api).
 - test_draft_flag_ops_wait_in_the_working_draft[keep_both|confirm_item]: protects=on a
   published draft item, an applied keep_both / confirm_item is in the working draft only:
-  the published row (every stored column) and a viewer's roadmap are unchanged until the
-  decider submits and approves the draft, whose new version holds the new value;
+  the published row (every stored column) is unchanged until the decider submits and
+  approves the draft (a viewer reads the change at once, de-inst), whose new version
+  holds the new value;
   fails_when=the op writes the published row, or approval does not publish it;
   no_claim=a draft item added in the working draft (test_simple_additions_api).
 - test_draft_flag_ops_refuse_a_stale_before[keep_both|confirm_item]: protects=a keep_both
@@ -327,13 +328,13 @@ async def test_remove_key_date_waits_in_the_working_draft(client):
     assert r.json()["change"]["status"] == "applied"
     assert len(r.json()["change"]["draft_ids"]) == 1
     assert await read_key_dates(client, w, "decider") == []
-    # Nothing published moved: the row and a viewer's read are as they were.
+    # Nothing published moved; de-inst (owner, Nov 23): a viewer reads the removal at once.
     assert await key_date_row(w, kd) == published
-    assert await read_key_dates(client, w, "viewer") == seen
+    assert await read_key_dates(client, w, "viewer") == []
     [d] = (await client.get(DRAFTS, headers=w.ctx.as_("decider"))).json()
     r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
-    assert await read_key_dates(client, w, "viewer") == seen
+    assert await read_key_dates(client, w, "viewer") == []
     if r.json()["status"] != "approved":
         r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
         assert r.status_code == 200, r.text
@@ -379,7 +380,8 @@ async def test_draft_flag_ops_wait_in_the_working_draft(client, op):
     working = await snapshot(w, op)
     assert working != published and working["a"][field] == value
     assert await snapshot(w, op, published=True) == published
-    assert (await client.get(ROADMAP, headers=w.ctx.as_("viewer"))).json()["items"] == seen
+    # de-inst (owner, Nov 23): a viewer reads the decider's change at once.
+    assert (await client.get(ROADMAP, headers=w.ctx.as_("viewer"))).json()["items"] != seen
     rows = (await client.get(DRAFTS, headers=w.ctx.as_("owner"))).json()
     assert len(rows) == 1, rows
     d = rows[0]

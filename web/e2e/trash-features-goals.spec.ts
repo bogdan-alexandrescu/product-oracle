@@ -377,13 +377,13 @@ test('a feature added in the draft and restored while the draft is in review sta
   await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(title);
 
-  // A viewer reads the published roadmap: it is not there.
+  // A viewer reads it at once too (de-inst, owner Nov 23: a restore is live for every reader).
   await signOut(page);
   await login(page, 'vic.moss@example.com');
   await page.goto('/simple/roadmap');
   await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(other.title);
-  await expect(roadmap).not.toContainText(title);
+  await expect(roadmap).toContainText(title);
 
   // Approved on Home, it is on the roadmap.
   await approveOnHome(page);
@@ -458,13 +458,13 @@ test('a feature added in the draft and restored after the draft was approved wit
   await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(title);
 
-  // A viewer reads the published roadmap: it is not there.
+  // A viewer reads it at once too (de-inst, owner Nov 23: a restore is live for every reader).
   await signOut(page);
   await login(page, 'vic.moss@example.com');
   await page.goto('/simple/roadmap');
   await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(other.title);
-  await expect(roadmap).not.toContainText(title);
+  await expect(roadmap).toContainText(title);
 
   // The owner approves the new draft with it and, once the reviewer approves it on Home, it is on the roadmap.
   await signOut(page);
@@ -560,13 +560,13 @@ for (const then of ['working', 'in review'] as const) {
     // Still one draft for the owner to approve (when it was working), with the feature in it.
     if (then === 'working') await ownerApproves(page);
 
-    // A viewer reads the published roadmap: it is not there.
+    // A viewer reads it at once too (de-inst, owner Nov 23: a restore is live for every reader).
     await signOut(page);
     await login(page, 'vic.moss@example.com');
     await page.goto('/simple/roadmap');
     await expect(page.getByTestId('simple-chart')).toBeVisible();
     await expect(roadmap).toContainText(first.title);
-    await expect(roadmap).not.toContainText(title);
+    await expect(roadmap).toContainText(title);
 
     // Approved on Home, exactly one row of it is on the roadmap.
     await approveOnHome(page);

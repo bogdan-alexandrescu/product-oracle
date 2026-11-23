@@ -730,11 +730,9 @@ async def _proposals(db: AsyncSession, doc_ids: set[uuid.UUID]) -> dict[uuid.UUI
 
 
 async def changes_in_review(db: AsyncSession, document_id: uuid.UUID) -> int:
-    """The banner's count for one document: its open drafts' changes and open proposals."""
-    ds = [d for d in await open_drafts(db) if d.document_id == document_id]
-    return sum((await counts(db, ds)).values()) + (await _proposals(db, {document_id})).get(
-        document_id, 0
-    )
+    """The banner's count for one document: its open proposals. de-inst: a draft's changes
+    are a decider's, live and final, so they are never counted as waiting."""
+    return (await _proposals(db, {document_id})).get(document_id, 0)
 
 
 @dataclass
@@ -778,17 +776,17 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
     by_doc: dict[uuid.UUID, int] = {}
     seen_docs: set[uuid.UUID] = set()
     for d in ds:
+        # de-inst (the owner, Nov 23): a decider's applied change is the live roadmap every
+        # reader reads at once; only who sees the draft itself (its list, its controls) and
+        # the proposals counted below still depend on the reader.
+        overlays[d.document_id] = dict(d.overlay or {})
         if sees(principal, d, w):
-            overlays[d.document_id] = dict(d.overlay or {})
             seen_docs.add(d.document_id)
             visible.append(
                 SimpleDraftBrief(
                     id=d.id, document_id=d.document_id, status=d.status, changes=n[d.id]
                 )
             )  # type: ignore[arg-type]
-        else:
-            hidden += n[d.id]
-            by_doc[d.document_id] = by_doc.get(d.document_id, 0) + n[d.id]
     me = _me(principal)
     for doc, k in proposals.items():
         if doc in seen_docs:
@@ -823,8 +821,8 @@ async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict
 
     history = await company.history_ids(db)
     ds = [d for d in await open_drafts(db) if d.document_id not in history]
-    w = await who(db, {d.document_id for d in ds})
-    return {d.document_id: dict(d.overlay or {}) for d in ds if sees(principal, d, w)}
+    # de-inst: every reader reads the open drafts (a decider's changes are live at once).
+    return {d.document_id: dict(d.overlay or {}) for d in ds}
 
 
 def _withdrawn():

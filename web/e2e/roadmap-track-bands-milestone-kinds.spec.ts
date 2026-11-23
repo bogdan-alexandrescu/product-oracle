@@ -242,6 +242,8 @@ test.describe('Roadmap: track bands and milestone kinds', () => {
     await page.mouse.move(at.x, at.y);
     await expect(page.getByTestId('ms-ghost-words')).toBeVisible();
     await page.mouse.click(at.x, at.y);
+    // de-r2: a click on the band opens its name first; ⋯ opens the kind picker.
+    await page.getByTestId('ms-quick-more').click();
     const picker = page.getByTestId('ms-kind-picker');
     await expect(picker).toBeVisible();
     await expect(page.getByTestId('ms-card')).toHaveCount(0);
@@ -635,7 +637,7 @@ test.describe('Roadmap milestones on touch', () => {
     await expect(
       c.getByTestId('ms-status-why').locator('xpath=..').getByRole('tooltip'),
     ).toBeHidden();
-    await c.getByRole('button', { name: 'Cancel' }).tap();
+    await c.getByRole('button', { name: 'Close' }).tap();
     await expect(c).toBeHidden();
     // + Milestone: the picker's (i) names what each kind means.
     await page.getByTestId('zoom-6m').tap();
@@ -652,6 +654,8 @@ test.describe('Roadmap milestones on touch', () => {
       from + (Math.min(box.x + box.width, seen.right) - from) * 0.6,
       box.y + box.height / 2,
     );
+    // de-r2: a tap on the band opens its name first; ⋯ opens the kind picker.
+    await page.getByTestId('ms-quick-more').tap();
     const picker = page.getByTestId('ms-kind-picker');
     await expect(picker).toBeVisible();
     await picker.getByTestId('ms-kind-tip').tap();
