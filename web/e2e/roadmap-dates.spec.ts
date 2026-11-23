@@ -134,14 +134,12 @@ test.describe('desktop', () => {
     await expect(panel(page)).toContainText('Oracle suggests Apr 1 – Apr 28, 2027');
   });
 
-  test("dates an owner accepted into the working draft stay a viewer's estimate till it publishes", async ({
-    page,
-  }) => {
-    // protects (review of the join): the viewer, who reads the published roadmap, still sees
-    // Health log estimated Apr 1 – Apr 28, 2027 once the owner accepted those dates into the draft;
-    // fails_when: the viewer's row falls back to Later's window (the mock read open suggestions only)
+  test('dates an owner accepted are live for a viewer at once (de-inst)', async ({ page }) => {
+    // protects (de-inst, the owner Nov 23): a decider's accepted dates are the live roadmap, so the
+    // viewer sees Health log at Apr 1 – Apr 28, 2027 at once, with no publish step;
+    // fails_when: the viewer's row falls back to Later's window or still reads it as a mere estimate
     await openRoadmap(page);
-    const words = 'No dates yet · estimated Apr 1 – Apr 28, 2027';
+    const words = 'Apr 1 – Apr 28, 2027';
     await page.getByTestId('format-timeline').click();
     await row(page.locator('body'), 'setup-health-log')
       .getByRole('button', { name: /^F-\d+ Health log$/ })
@@ -157,13 +155,12 @@ test.describe('desktop', () => {
     await expect(page.getByTestId('simple-roadmap')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('format-timeline').click();
     await expect(row(page.locator('body'), 'setup-health-log')).toContainText(words);
+    await expect(row(page.locator('body'), 'setup-health-log')).not.toContainText('No dates yet');
     // fails_when: the viewer's panel reads "Later · no dates yet" (the accepted dates are no suggestion)
     await row(page.locator('body'), 'setup-health-log')
       .getByRole('button', { name: /^F-\d+ Health log$/ })
       .click();
-    await expect(panel(page).getByTestId('card-dates')).toContainText(
-      "Apr 1 – Apr 28, 2027 · Oracle's estimate",
-    );
+    await expect(panel(page).getByTestId('card-dates')).toContainText(words);
     await expect(panel(page).getByTestId('card-dates')).not.toContainText('no dates yet');
   });
 });

@@ -123,12 +123,10 @@ test.describe('desktop', () => {
     // Its tile leads to them.
     await suggestedTile.getByRole('button').click();
     await expect(tray(page).getByRole('heading', { name: 'Suggested features' })).toBeInViewport();
-    // The unowned draft: its owner is picked in its panel.
-    const flag = tray(page).getByTestId('tray-flag').filter({ hasText: 'Team invite nudges' });
-    await expect(flag).toContainText('Draft with no owner');
-    await flag.getByRole('button', { name: 'Pick an owner' }).click();
-    await expect(tray(page)).toHaveCount(0);
-    await expect(card(page)).toContainText('Team invite nudges');
+    // de-inst (the owner, Nov 23): a decider's own draft waits on no one, so it carries no flag.
+    await expect(
+      tray(page).getByTestId('tray-flag').filter({ hasText: 'Team invite nudges' }),
+    ).toHaveCount(0);
     await page.keyboard.press('Escape');
     // A broken link's title opens its panel.
     await button.click();
