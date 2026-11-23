@@ -160,6 +160,8 @@ test('frames', async ({ page }) => {
     await typeEnds(page);
     await saveEnds(page, m);
     await snap(page, `${k}-saved-dark`, D.w, D.h);
+    await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
+    await snap(page, `${k}-viewer-1512`, W.w, W.h);
   }
   {
     const k = 'pe1-a';
@@ -185,6 +187,8 @@ test('frames', async ({ page }) => {
     await snap(page, `${k}-changed`, D.w, D.h);
     await open(page, `${qs}&hard=1`, W.w, W.h);
     await snap(page, `${k}-hard-1512`, W.w, W.h);
+    await open(page, `${qs}&hard=1&viewer=1`, W.w, W.h);
+    await snap(page, `${k}-viewer-1512`, W.w, W.h);
     await open(page, qs, P.w, P.h);
     await snap(page, `${k}-rest-390`, P.w, P.h);
     await open(page, qs, D.w, D.h, 'dark');

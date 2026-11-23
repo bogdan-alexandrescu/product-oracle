@@ -88,6 +88,10 @@
               "caption": "At 1512 with a long name and 8 dependencies: reads like A, minus the lines."
             },
             {
+              "file": "frames/pe1-b-viewer-1512.html",
+              "caption": "A viewer at 1512: the same plain text, with no hover box and no pencil."
+            },
+            {
               "file": "frames/pe1-b-mid-390.html",
               "caption": "On a phone: with no hover, the panel gives no sign of which values open."
             },
@@ -124,6 +128,10 @@
             {
               "file": "frames/pe1-c-hard-1512.html",
               "caption": "At 1512 in Edit mode: the long name is cut off in its box; 8 dependencies below."
+            },
+            {
+              "file": "frames/pe1-c-viewer-1512.html",
+              "caption": "A viewer at 1512: no Edit button, plain text."
             },
             {
               "file": "frames/pe1-c-mid-390.html",
@@ -168,6 +176,10 @@
               "caption": "At 1512 with a long name and 8 dependencies."
             },
             {
+              "file": "frames/pe1-d-viewer-1512.html",
+              "caption": "A viewer at 1512: no change line and no letters."
+            },
+            {
               "file": "frames/pe1-d-mid-390.html",
               "caption": "On a phone the letters are no use; the values are tapped as in B."
             },
@@ -192,7 +204,7 @@
           "what": "One list in four short groups: Plan (starts, ends, status, confidence, milestone), People (owner, decider), Goal (goal, measure, target) and Links (depends on, needed by). At rest a value has a dashed line under it; on hover it gets a box; once changed, its row gets a blue bar at the left and the value turns blue and bold.",
           "why": "Dates and owner, the things changed most in a roadmap review, come first, and the groups make the panel easier to scan than today's flat list of 20 rows. The blue bar shows what was just changed without a new word on screen.",
           "plus": "Same shape as today's panel, so it is familiar; every field always shown, nothing hidden.",
-          "cost": "Longest of the three: Links can fall below the fold on a laptop.",
+          "cost": "Add a feature 1 click; move its dates 1 click; set its owner 2 clicks; add a milestone 2 clicks (with PE1 A). Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Longest of the three: Links can fall below the fold on a laptop.",
           "frames": [
             {
               "file": "frames/pe2-a-rest.html",
@@ -211,6 +223,10 @@
               "caption": "At 1512 with a long name and 8 dependencies: the groups keep the list readable."
             },
             {
+              "file": "frames/pe2-a-viewer-1512.html",
+              "caption": "A viewer at 1512: the groups stay, every value plain, no dashed lines."
+            },
+            {
               "file": "frames/pe2-a-rest-390.html",
               "caption": "On a phone the groups stack in the sheet."
             },
@@ -226,7 +242,7 @@
           "recommended": false,
           "what": "A card on top holds what changes most, large: the dates as one line, then owner and status. Below it, folding sections: Goal and milestone (open), More (confidence, decider, measure; folded) and Links with their count. A changed value gets a soft blue fill.",
           "plus": "The plan reads in one glance; the panel is short until a section is opened.",
-          "cost": "Folded fields are one more click to reach, and the panel's shape differs from the other pages' lists.",
+          "cost": "Add a feature 1 click; move its dates 1 click; set its owner 2 clicks; add a milestone 2 clicks (with PE1 A). Fields in a folded section (confidence, decider, measure) take 1 more click. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Folded fields are one more click to reach, and the panel's shape differs from the other pages' lists.",
           "frames": [
             {
               "file": "frames/pe2-b-rest.html",
@@ -245,6 +261,10 @@
               "caption": "At 1512: 8 dependencies sit in the Links section, the card stays on top."
             },
             {
+              "file": "frames/pe2-b-viewer-1512.html",
+              "caption": "A viewer at 1512: the card and sections stay, every value plain."
+            },
+            {
               "file": "frames/pe2-b-rest-390.html",
               "caption": "On a phone the card fills the top of the sheet."
             },
@@ -260,7 +280,7 @@
           "recommended": false,
           "what": "Each field is a small tile with its label above the value, two to a row: starts and ends, owner and status, milestone and confidence, then goal across, then target and decider, then the links. A changed tile gets a blue border and a tick by its label.",
           "plus": "Short and even; each tile is a clear thing to click, and a changed one stands out.",
-          "cost": "Long values (a target, a long owner name) are cut off in a half-width tile; boxes everywhere make the panel busier than Simple's lists.",
+          "cost": "Add a feature 1 click; move its dates 1 click; set its owner 2 clicks; add a milestone 2 clicks (with PE1 A). Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. Long values (a target, a long owner name) are cut off in a half-width tile; boxes everywhere make the panel busier than Simple's lists.",
           "frames": [
             {
               "file": "frames/pe2-c-rest.html",
@@ -277,6 +297,10 @@
             {
               "file": "frames/pe2-c-hard-1512.html",
               "caption": "At 1512 with a long name and 8 dependencies in the links tile."
+            },
+            {
+              "file": "frames/pe2-c-viewer-1512.html",
+              "caption": "A viewer at 1512: the tiles stay, every value plain."
             },
             {
               "file": "frames/pe2-c-rest-390.html",
@@ -303,7 +327,7 @@
           "what": "Each flag sits under the field it is about: the owner flag under Owner with Mira Okafor and Jonah Reyes as buttons, Oracle's dates under Ends, the early start under Needed by. The count on top says how many are left.",
           "why": "The fix is shown with the value it changes, so a person sees what they are changing; one click clears it, no separate trip to Pick an owner.",
           "plus": "One click per flag; the panel keeps one reading order.",
-          "cost": "A flag low in the panel (links) can be below the fold; the count on top is the only sign of it.",
+          "cost": "Set its owner 1 click when the draft flag suggests someone; add a feature 1 click; move its dates 1 click (or Use these); add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. A flag low in the panel (links) can be below the fold; the count on top is the only sign of it.",
           "frames": [
             {
               "file": "frames/pe3-a-rest.html",
@@ -337,7 +361,7 @@
           "recommended": false,
           "what": "All the flags are listed together in an amber box at the top of the panel, each with its buttons; the fields below are left plain.",
           "plus": "Everything that needs the person is in one place, first; easiest to clear in a review.",
-          "cost": "The fix is apart from the value it changes; with many flags the box pushes the fields down.",
+          "cost": "Set its owner 1 click from the box; add a feature 1 click; move its dates 1 click (or Use these); add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. The fix is apart from the value it changes; with many flags the box pushes the fields down.",
           "frames": [
             {
               "file": "frames/pe3-b-rest.html",
@@ -371,7 +395,7 @@
           "recommended": false,
           "what": "The count on top is a button: it opens the first flag with its fix; acting on it brings the next one, until none are left.",
           "plus": "A calm panel until the person chooses to fix; one thing to decide at a time.",
-          "cost": "One more click to start, and flags are easy to leave unseen.",
+          "cost": "Set its owner 2 clicks (the count, then the person); add a feature 1 click; move its dates 1 click; add a milestone 2 clicks. Today: add a feature 2 clicks and a drag; move its dates 3 clicks with Save; set its owner 3 clicks with Save; add a milestone 4 clicks with Save. One more click to start, and flags are easy to leave unseen.",
           "frames": [
             {
               "file": "frames/pe3-c-rest.html",
