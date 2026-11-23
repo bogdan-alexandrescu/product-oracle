@@ -172,7 +172,7 @@
             },
             {
               "file": "frames/pr2-a-phone-390.html",
-              "caption": "Phone 390: the owner list opens in the row, as on desktop."
+              "caption": "Phone 390, scrolled to F-205 Snooze a thread: its owner list opens in the row, as on desktop, the pointer on Dot Varga."
             },
             {
               "file": "frames/pr2-a-done-dark.html",
@@ -210,7 +210,7 @@
             },
             {
               "file": "frames/pr2-b-done-risks.html",
-              "caption": "Further down the same page: Risks reworded in its box, which saves as you type; the fourth change the header counts."
+              "caption": "Further down the same page: Risks reworded in its box, which saves as you type, Saved · Undo under it; the fourth change the header counts."
             },
             {
               "file": "frames/pr2-b-roadmap.html",
@@ -311,11 +311,15 @@
             },
             {
               "file": "frames/pr3-a-open.html",
-              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar; 1 click resolves it."
+              "caption": "Pointing at Assign rules: Accept, Flag and Undo show on its row, its old Dec 22 end struck through and outlined behind the bar; the pointer on Accept: 1 click resolves it."
             },
             {
               "file": "frames/pr3-a-done.html",
-              "caption": "The result: the target and owner accepted (marks gone), Assign rules flagged for Mara, the removed 'Not doing' line undone; the bar now counts 3: the flagged one and the two still open."
+              "caption": "The result: the target and owner accepted (marks gone), Assign rules flagged for Mara; the bar now counts 3: the flagged one and the two still open."
+            },
+            {
+              "file": "frames/pr3-a-done-not.html",
+              "caption": "Further down the same page: the removed Not doing line undone, 'Replies from chat apps.' back at the end of it, no mark; the Problem rewording still marked, still open."
             },
             {
               "file": "frames/pr3-a-long-1512.html",
@@ -345,11 +349,11 @@
             },
             {
               "file": "frames/pr3-b-open.html",
-              "caption": "Pointing at the Assign rules card lights up its row; 1 click on the card resolves it."
+              "caption": "Pointing at the Assign rules card lights up its row; the pointer on the card's Accept: 1 click resolves it."
             },
             {
               "file": "frames/pr3-b-done.html",
-              "caption": "The result: each acted-on card says Accepted, Flagged or Undone; two are still open."
+              "caption": "The result: each acted-on card says Accepted, Flagged or Undone, down to the removed Not doing line, Undone; two are still open."
             },
             {
               "file": "frames/pr3-b-long-1512.html",
@@ -379,7 +383,7 @@
             },
             {
               "file": "frames/pr3-c-open.html",
-              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions; then 1 click per change."
+              "caption": "After one click on 'Version 3 beside now': six lines, old beside new, each with its actions; the pointer on Assign rules' Accept: 1 click per change."
             },
             {
               "file": "frames/pr3-c-done.html",
@@ -413,7 +417,7 @@
             },
             {
               "file": "frames/pr3-d-open.html",
-              "caption": "The same card while pointing at one change; 1 click on its sentence resolves it."
+              "caption": "The same card while pointing at one change; the pointer on its Accept: 1 click resolves it."
             },
             {
               "file": "frames/pr3-d-done.html",

@@ -30,3 +30,16 @@ the roadmap result: `/simple/roadmap?mkprd=1&phase=done&pr2=a`. Every hook line 
   adds a milestone, so its header counts the 3 changes it marks.
 - Owner lists are drawn open as a list (a native list can't be snapshotted open), the pointer on Dot Varga.
 - Still true: the live browser has no 1512 preset, so *-long-1512 frames remain 1440 px PNGs of a 1512 layout.
+
+## Round 2 (Nov 23)
+
+- No true 1512 capture is possible here. The task's only browser is the platform's live browser, which a
+  person watches. Its gate refuses every viewport override: `Emulation.setDeviceMetricsOverride` ("the device
+  is the gate's, by preset name"), `Browser.setWindowBounds` (no new contexts with their own viewport), and the
+  Playwright MCP resize. It only offers presets, and none of them is 1512 wide. Our own `chromium.launch()`
+  fails by design. So the *-long-1512 frames were not re-rendered: each is still a 1440x900 viewport zoomed to
+  a 1512-wide layout.
+- Frames were re-snapshotted with dev-browser on the live browser (desktop 1440x900, phone-390). A frame
+  scrolled down keeps its scroll: its html scrolls to the same spot on load (inside the theme hook).
+- PR3 open frames draw the 1 click: the pointer sits on Accept (ringed). Undoing the removed Not doing line
+  puts "Replies from chat apps." back (pr3-a-done-not, new).

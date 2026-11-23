@@ -629,6 +629,9 @@ export function MkPrdReview() {
           ) : (
             s.text
           )}
+          {d3 && s.key === 'not' && resolved.c6 === 'undone' && (
+            <span> {MK_CHANGES.find((c) => c.id === 'c6')?.before}</span> // MOCK-HOOK undoing the removal puts the line back
+          )}
           {removed && d3 === 'a' && (
             <span className="ml-1 rounded bg-crit-bg px-0.5 text-crit line-through">
               {removed.before}
