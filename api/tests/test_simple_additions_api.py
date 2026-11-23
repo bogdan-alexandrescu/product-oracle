@@ -17,6 +17,15 @@ Test cards (protects / fails_when / no_claim):
   accepts, the new item reads that track (not the roadmap's first); an unknown, trashed or
   history track is 422; fails_when=the track is dropped or the item lands on the first
   track; no_claim=the web's quick add.
+- test_added_item_lands_on_its_picked_track: protects=an owner's add naming a track
+  (the quick add's track, a track row it was dropped on, the Track filter) applies on that
+  track and files it under that track's PRD, not the roadmap's first track and its PRD;
+  fails_when=the item lands on the first track or keeps the first track's PRD;
+  no_claim=the web's quick add.
+- test_added_item_gets_the_next_free_code: protects=a new item gets the next free feature
+  code at once (the highest F-number any item uses, plus one), never one in use, and a
+  title typed with its own code keeps it; fails_when=a new item has no code or reuses one;
+  no_claim=renumbering existing items (never done).
 - test_set_goals_moves_an_item_to_another_goal: protects=set_goals makes the goal an item
   serves another (the bucket a just-added task is dragged to): applied for the owner with
   Undo, which puts its goal back; a stale ``before``, an unknown goal or a viewer is
@@ -233,6 +242,49 @@ async def test_proposed_add_item_carries_its_track(client):
     assert r.status_code == 200, r.text
     item = (await w.items(client, "decider"))[c["target"]["item_id"]]
     assert item["track"]["id"] == band_id and item["title"] == "Ledger export"
+
+
+async def test_added_item_lands_on_its_picked_track(client):
+    """An applied add naming a track sits on that track, under that track's PRD."""
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        rm = await s.get(Document, uuid.UUID(w.roadmap_id))
+        ledger = await seed.doc("ledger-prd")
+        band = await seed.track(await seed.version(ledger), rm, title="Ledger band")
+        await s.commit()
+        band_id = str(band.id)
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "add_item", "target": {"roadmap_id": w.roadmap_id,
+                                     "where": {"kind": "horizon", "value": "next"}},
+        "before": {}, "after": {"title": "Ledger export", "track_id": band_id}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    c = r.json()["change"]
+    assert c["status"] == "applied"
+    item = (await w.items(client))[c["target"]["item_id"]]
+    assert item["track"]["id"] == band_id
+    assert item["prd"]["slug"] == "ledger-prd"
+
+
+async def test_added_item_gets_the_next_free_code(client):
+    """A new item reads the next free feature code at once; a typed code is kept."""
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        a = await s.get(RoadmapItem, uuid.UUID(w.ids["import-a"]))
+        b = await s.get(RoadmapItem, uuid.UUID(w.ids["import-b"]))
+        a.title, b.title = "F-7 Bulk import", "F-12 Import history"
+        await s.commit()
+    first = (await w.add(client, "owner", "Guided setup"))["change"]["target"]["item_id"]
+    second = (await w.add(client, "owner", "Night digest"))["change"]["target"]["item_id"]
+    typed = (await w.add(client, "owner", "F-40 Typed one"))["change"]["target"]["item_id"]
+    items = await w.items(client)
+    assert (items[first]["code"], items[first]["title"]) == ("F-13", "Guided setup")
+    assert (items[second]["code"], items[second]["title"]) == ("F-14", "Night digest")
+    assert (items[typed]["code"], items[typed]["title"]) == ("F-40", "Typed one")
+    nxt = (await w.add(client, "owner", "After typed"))["change"]["target"]["item_id"]
+    assert (await w.items(client))[nxt]["code"] == "F-41"
+    codes = [i["code"] for i in (await w.items(client)).values() if i["code"]]
+    assert len(codes) == len(set(codes))
 
 
 async def test_set_goals_moves_an_item_to_another_goal(client):
