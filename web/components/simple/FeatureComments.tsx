@@ -249,7 +249,7 @@ export function CommentCount({ item }: { item: CommentedItem }) {
       data-testid="comment-count"
       aria-label={`${n} comment${n === 1 ? '' : 's'}`}
       title={`${n} comment${n === 1 ? '' : 's'}`}
-      className="inline-flex items-center gap-0.5 text-xs text-text2"
+      className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-xs text-text2"
     >
       <svg
         aria-hidden
