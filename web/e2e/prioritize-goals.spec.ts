@@ -14,7 +14,8 @@ import { expect, test, type Page } from './test';
  *   once, kept after a reload; fails_when=it stays or a Save is needed.
  * - buckets keys: protects=Alt+ArrowUp on a focused heading moves the goal one place.
  * - map keys and drag: protects=the same on the Goal map's goal cards, Alt+ArrowRight / Left.
- * - who: a viewer (and someone who may not edit goals) has no handle.
+ * - who: a viewer, and someone who may only propose (goal-order proposals are not built), have
+ *   no handle.
  * no_claim=Home's Change order (goal-order specs).
  */
 
@@ -94,11 +95,14 @@ test.describe('Goals: prioritize by their header', () => {
     await page.keyboard.press('Alt+ArrowRight');
     const once = swap(before, 0);
     await expect.poll(() => mapGoals(page)).toEqual(once);
-    await expect(page.getByRole('status').filter({ hasText: 'Goal order saved' })).toBeVisible();
+    const saved = page.getByRole('status').filter({ hasText: 'Goal order saved' });
+    await expect(saved).toBeVisible();
+    // Each save draws a new toast: the first one gone and a toast shown again is the second saved.
+    const first = await saved.elementHandle();
     await handle(once[1]).dragTo(handle(once[0]));
     await expect.poll(() => mapGoals(page)).toEqual(before);
-    // The same note shows once for both moves: give the second its writes before the reload.
-    await page.waitForTimeout(2000);
+    await first!.waitForElementState('hidden');
+    await expect(saved).toBeVisible();
     await page.reload();
     await expect(page.getByTestId('gm-grid')).toBeVisible();
     await expect.poll(() => mapGoals(page)).toEqual(before);
@@ -106,6 +110,15 @@ test.describe('Goals: prioritize by their header', () => {
     await handle(before[0]).focus();
     await page.keyboard.press('Alt+ArrowRight');
     await expect.poll(() => mapGoals(page)).toEqual(once);
+  });
+
+  // Goal-order proposals are not built: someone who may only propose gets no goal handle (handoff.md).
+  test('someone who may only propose has no goal handle on either page', async ({ page }) => {
+    await buckets(page, 'approver@example.com');
+    await expect(page.getByTestId('goal-handle')).toHaveCount(0);
+    await page.goto('/simple/goals');
+    await expect(page.getByTestId('gm-grid')).toBeVisible();
+    await expect(page.getByTestId('goal-handle')).toHaveCount(0);
   });
 
   test('a viewer has no goal handle on either page', async ({ page }) => {
