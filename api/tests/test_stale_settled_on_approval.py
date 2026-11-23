@@ -349,7 +349,9 @@ async def test_approving_takes_the_kept_items_stale_alert_out_of_the_inbox(
             return {
                 a.item_key
                 for a in await s.scalars(
-                    select(alerts.TrackAlert).where(alerts.TrackAlert.state == "open")
+                    select(alerts.TrackAlert).where(
+                        alerts.TrackAlert.state == "open", alerts.TrackAlert.kind == "stale"
+                    )
                 )
             }
 
