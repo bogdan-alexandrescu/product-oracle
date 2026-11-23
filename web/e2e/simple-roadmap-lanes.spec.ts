@@ -165,6 +165,10 @@ for (const scheme of ['light', 'dark'] as const) {
         Number(await f03.getAttribute('data-position')),
         Number(await f06.getAttribute('data-position')),
       ];
+      // Both carry a place (a missing one reads as 0 and would pass the comparison).
+      expect(p03).toBeGreaterThan(0);
+      expect(p06).toBeGreaterThan(0);
+      expect(p03).not.toBe(p06);
       const [y03, y06] = [(await f03.boundingBox())!.y, (await f06.boundingBox())!.y];
       expect(p03 < p06).toBe(y03 < y06);
       // The Timeline's axis: months, Today (its line and its day in the key).

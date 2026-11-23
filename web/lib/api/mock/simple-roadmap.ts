@@ -56,12 +56,6 @@ import {
 import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { featureKeyOf, startEffort, withOrder } from './simple-priorities';
 import { byPrdRank, prdRanker } from './prd-rank';
-import {
-  basePlan as fitBasePlan,
-  PLAN_TARGET as FIT_PLAN_TARGET,
-  schedule as fitSchedule,
-} from './fit-date-engine';
-import { reply } from './typed';
 
 export { codedTitle, prdCode, shownCode, shownName } from './item-code';
 
