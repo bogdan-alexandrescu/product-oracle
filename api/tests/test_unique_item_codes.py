@@ -7,21 +7,38 @@ item; the migration gives every item sharing a code (or with none) its own, the 
 start keeping it, the others the next free numbers, audited. Invented example data only.
 """
 
+import asyncio
+import importlib.util
 import uuid
 from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from oracle import company_time
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session, unscoped_session
+from tests.conftest import API_DIR
+from tests.migration_db import upgrade
+from tests.test_migrations import SCRATCH_URL, _cfg, _run, scratch_db  # noqa: F401
 from tests.test_simple_changes_api import make_people
 from tests.test_simple_goal_milestones_api import CHANGES
 from tests.test_simple_roadmap_api import NOW, Seed, by_key, get
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
+
+REVISION = "0136_unique_item_codes"
+
+
+def migration():
+    """Migration 0136 itself: the renumbering is frozen inside it (it imports no app code)."""
+    path = API_DIR / "migrations" / "versions" / f"{REVISION}.py"
+    spec = importlib.util.spec_from_file_location(REVISION, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture(autouse=True)
@@ -114,7 +131,11 @@ def _at(day: int) -> datetime:
 async def test_the_migration_gives_every_item_its_own_code(client):
     """Each group sharing a code keeps it on its earliest start; the others take the next free
     numbers in date order, as do items with none; unique codes stay; audited; twice is once."""
-    from oracle.roadmap.renumber import ACTION, renumber
+    mig = migration()
+    ACTION = mig.ACTION
+
+    def renumber(session):
+        return mig.renumber(session.connection())
 
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
@@ -196,3 +217,86 @@ async def test_the_migration_gives_every_item_its_own_code(client):
         again = await s.run_sync(renumber)
         await s.commit()
     assert again == []
+
+
+def test_the_alembic_step_gives_every_item_its_own_code(scratch_db):  # noqa: F811
+    """Upgrading 0135 -> 0136 on a database with shared codes renumbers them and audits each;
+    running the step's logic again changes nothing."""
+    # protects=the real alembic step (not only its function): earliest start keeps the shared
+    # code, the others take the next free numbers, an item with none too, one audit row each;
+    # fails_when=the step imports app code, renumbers a unique code, or a rerun changes rows;
+    # no_claim=the downgrade (it does nothing).
+    cfg = _cfg()
+    upgrade(cfg, "0135_feature_comments")
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    version, feature = uuid.uuid4(), uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+    _run(
+        "INSERT INTO documents (id, tenant_id, slug, title, status, kind, visibility)"
+        " VALUES (:d, :t, 'plan', 'Plan', 'approved', 'roadmap', 'company')",
+        d=doc,
+        t=tenant,
+    )
+    _run(
+        "INSERT INTO document_versions (id, tenant_id, document_id, number, markdown,"
+        " content_hash) VALUES (:v, :t, :d, 1, '# plan', 'h1')",
+        v=version,
+        t=tenant,
+        d=doc,
+    )
+    _run(
+        "INSERT INTO entities (id, tenant_id, type, key, title, status, origin)"
+        " VALUES (:f, :t, 'feature', 'F-51', 'Alert routing', 'confirmed', 'user')",
+        f=feature,
+        t=tenant,
+    )
+    rows = [  # key, title, feature, start
+        ("a", "Routing rules", feature, date(2026, 12, 1)),
+        ("b", "Routing by team", feature, date(2026, 11, 2)),
+        ("c", "F-37a Exports", None, None),
+        ("d", "Loose ends", None, date(2026, 11, 20)),
+    ]
+    for key, title, feat, start in rows:
+        _run(
+            "INSERT INTO roadmap_items (id, tenant_id, roadmap_document_id,"
+            " roadmap_version_id, item_key, position, title, horizon, feature_id,"
+            " start_date, created_at) VALUES (gen_random_uuid(), :t, :d, :v, :k, 0, :title,"
+            " 'now', :f, :s, now())",
+            t=tenant,
+            d=doc,
+            v=version,
+            k=key,
+            title=title,
+            f=feat,
+            s=start,
+        )
+
+    def titles():
+        return dict(_run("SELECT item_key, title FROM roadmap_items"))
+
+    def audits():
+        return sorted(
+            (r[0]["item_key"], r[0]["old"], r[0]["new"])
+            for r in _run("SELECT data FROM audit_events WHERE action = :a", a=migration().ACTION)
+        )
+
+    upgrade(cfg, REVISION)
+    assert titles() == {
+        "a": "F-53 Routing rules",  # Dec 1: the later of the two sharing F-51, numbered after d
+        "b": "Routing by team",  # Nov 2: keeps F-51, from its feature
+        "c": "F-37a Exports",
+        "d": "F-52 Loose ends",  # none, Nov 20: the next free number
+    }
+    assert audits() == [("a", "F-51", "F-53"), ("d", None, "F-52")]
+
+    # The step's logic again, on the upgraded database: nothing changes.
+    async def again():
+        engine = create_async_engine(SCRATCH_URL)
+        async with engine.begin() as conn:
+            made = await conn.run_sync(migration().renumber)
+        await engine.dispose()
+        return made
+
+    assert asyncio.run(again()) == []
+    assert titles()["a"] == "F-53 Routing rules"
+    assert len(audits()) == 2
