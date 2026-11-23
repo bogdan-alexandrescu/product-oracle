@@ -20586,28 +20586,6 @@ export interface components {
              */
             unmapped: string[];
         };
-        /** CommentAuthor */
-        CommentAuthor: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-        };
-        /** CommentCount */
-        CommentCount: {
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /** Key */
-            key: string;
-            /** Count */
-            count: number;
-        };
         /** CommentCreate */
         CommentCreate: {
             /** Section Key */
@@ -20618,10 +20596,43 @@ export interface components {
             /** Severity */
             severity?: ("critical" | "major" | "minor") | null;
         };
-        /** CommentIn */
-        CommentIn: {
+        /** CommentOut */
+        CommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Section Key */
+            section_key: string;
+            anchor?: components["schemas"]["TextQuoteSelector"] | null;
             /** Body */
             body: string;
+            /** Author Id */
+            author_id?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Replies
+             * @default []
+             */
+            replies: components["schemas"]["CommentOut"][];
+            /** Feedback Item Id */
+            feedback_item_id?: string | null;
+            /** Layer */
+            layer?: ("brief" | "detail") | null;
         };
         /** CommentPatch */
         CommentPatch: {
@@ -25124,6 +25135,55 @@ export interface components {
              * @enum {string}
              */
             answer: "still_runs" | "changed" | "no_longer_runs";
+        };
+        /** FeatureCommentAuthor */
+        FeatureCommentAuthor: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** FeatureCommentCount */
+        FeatureCommentCount: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Key */
+            key: string;
+            /** Count */
+            count: number;
+        };
+        /** FeatureCommentIn */
+        FeatureCommentIn: {
+            /** Body */
+            body: string;
+        };
+        /** FeatureCommentOut */
+        FeatureCommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            author: components["schemas"]["FeatureCommentAuthor"];
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Edited At */
+            edited_at?: string | null;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Delete */
+            can_delete: boolean;
         };
         /** FeatureMoveIn */
         FeatureMoveIn: {
@@ -50108,28 +50168,6 @@ export interface components {
             refresh: components["schemas"]["RefreshResult"];
             account: components["schemas"]["AccountOut"];
         };
-        /** CommentOut */
-        oracle__comments__router__CommentOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            author: components["schemas"]["CommentAuthor"];
-            /** Body */
-            body: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Edited At */
-            edited_at?: string | null;
-            /** Can Edit */
-            can_edit: boolean;
-            /** Can Delete */
-            can_delete: boolean;
-        };
         /** AuthorizeOut */
         oracle__connections__router__AuthorizeOut: {
             /** Url */
@@ -50209,44 +50247,6 @@ export interface components {
              * Format: uuid
              */
             into_id: string;
-        };
-        /** CommentOut */
-        oracle__review__schemas__CommentOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Version Id
-             * Format: uuid
-             */
-            version_id: string;
-            /** Section Key */
-            section_key: string;
-            anchor?: components["schemas"]["TextQuoteSelector"] | null;
-            /** Body */
-            body: string;
-            /** Author Id */
-            author_id?: string | null;
-            /** Parent Id */
-            parent_id?: string | null;
-            /** Resolved At */
-            resolved_at?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Replies
-             * @default []
-             */
-            replies: components["schemas"]["oracle__review__schemas__CommentOut"][];
-            /** Feedback Item Id */
-            feedback_item_id?: string | null;
-            /** Layer */
-            layer?: ("brief" | "detail") | null;
         };
         /** RefreshOut */
         oracle__simple__schemas__RefreshOut: {
@@ -52046,7 +52046,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"][];
+                    "application/json": components["schemas"]["CommentOut"][];
                 };
             };
             /** @description Validation Error */
@@ -52082,7 +52082,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"];
+                    "application/json": components["schemas"]["CommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -52153,7 +52153,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"];
+                    "application/json": components["schemas"]["CommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -52188,7 +52188,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__review__schemas__CommentOut"];
+                    "application/json": components["schemas"]["CommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -77660,7 +77660,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__comments__router__CommentOut"][];
+                    "application/json": components["schemas"]["FeatureCommentOut"][];
                 };
             };
             /** @description Validation Error */
@@ -77685,7 +77685,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CommentIn"];
+                "application/json": components["schemas"]["FeatureCommentIn"];
             };
         };
         responses: {
@@ -77695,7 +77695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__comments__router__CommentOut"];
+                    "application/json": components["schemas"]["FeatureCommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -77751,7 +77751,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CommentIn"];
+                "application/json": components["schemas"]["FeatureCommentIn"];
             };
         };
         responses: {
@@ -77761,7 +77761,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__comments__router__CommentOut"];
+                    "application/json": components["schemas"]["FeatureCommentOut"];
                 };
             };
             /** @description Validation Error */
@@ -77790,7 +77790,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommentCount"][];
+                    "application/json": components["schemas"]["FeatureCommentCount"][];
                 };
             };
         };

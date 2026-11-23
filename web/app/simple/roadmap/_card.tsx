@@ -21,6 +21,7 @@ import {
 } from '@/components/ds';
 import { useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { FeatureName } from '@/components/simple/FeatureName';
+import { CommentCount, FeatureComments } from '@/components/simple/FeatureComments';
 import { InfoTip } from '@/components/ds/InfoTip';
 import { LoadError, Loading } from '@/components/ui';
 import { useFitViewport } from '@/lib/fit-viewport';
@@ -1679,6 +1680,7 @@ export function FloatingCard({
           </button>
         )}
       </div>
+      <FeatureComments item={item} />
       {after}
     </>
   );

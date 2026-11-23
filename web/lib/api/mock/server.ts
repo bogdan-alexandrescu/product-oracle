@@ -11,6 +11,7 @@ import { sortGoals } from '@/lib/goal-order';
 import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { mockName as displayName } from './people';
+import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { reply, rawReply } from './typed';
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from './ids';
@@ -835,6 +836,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** #1553: comments on a feature (./feature-comments.ts). */
+  feature_comments?: FeatureCommentRow[];
   /** A5: access requests (Settings › Members). */
   access_requests?: Schemas['AccessRequestOut'][];
   /** A5: the note the pending person sent with their request (the access-pending scenario). */
@@ -12469,6 +12472,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === 'disabled') return json(401, { detail: 'Not authenticated' });
   const me = withMockRole(member);
+  // #1553: comments on a feature, on the roadmap item the panel shows (as its roadmap read has it).
+  const comments = await routeFeatureComments(
+    (db.feature_comments ??= []),
+    me,
+    (id) => {
+      const x = db.members.find((y) => y.id === id);
+      return x ? displayName(x.email, x.name) : 'Someone';
+    },
+    async (itemId) => {
+      const r = await route(db, new Request(new URL('/v1/simple/roadmap', url)));
+      if (!r.ok) return null;
+      const read = (await r.json()) as Schemas['SimpleRoadmapOut'];
+      const item = read.items.find((i) => i.id === itemId);
+      return item ? { roadmap_id: item.roadmap.id, key: item.key } : null;
+    },
+    req,
+    p,
+  );
+  if (comments) return comments;
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   if (
     scenario === DRIVE_PICKER_UNSET_SCENARIO &&

@@ -1,5 +1,6 @@
 'use client';
 
+import { CommentCount } from '@/components/simple/FeatureComments';
 import {
   useEffect,
   useLayoutEffect,
@@ -547,7 +548,7 @@ export function Board({
             data-testid="board-card-name"
             className={`text-base leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
           >
-            {itemName(item)}
+            {itemName(item)} <CommentCount item={item} />
           </p>
           <NotInGt item={item} className="mt-1 h-5! px-2! text-xs!" />
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">

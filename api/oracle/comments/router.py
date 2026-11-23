@@ -30,7 +30,7 @@ router = APIRouter(prefix="/v1/simple", tags=["simple"], dependencies=[Depends(s
 Reader = Annotated[Principal, Depends(_people("viewer"))]
 
 
-class CommentIn(BaseModel):
+class FeatureCommentIn(BaseModel):
     body: str = Field(max_length=MAX_BODY)
 
     @field_validator("body")
@@ -42,14 +42,14 @@ class CommentIn(BaseModel):
         return v
 
 
-class CommentAuthor(BaseModel):
+class FeatureCommentAuthor(BaseModel):
     id: uuid.UUID
     name: str
 
 
-class CommentOut(BaseModel):
+class FeatureCommentOut(BaseModel):
     id: uuid.UUID
-    author: CommentAuthor
+    author: FeatureCommentAuthor
     body: str
     created_at: datetime
     edited_at: datetime | None = None
@@ -57,7 +57,7 @@ class CommentOut(BaseModel):
     can_delete: bool
 
 
-class CommentCount(BaseModel):
+class FeatureCommentCount(BaseModel):
     roadmap_id: uuid.UUID
     key: str
     count: int
@@ -86,11 +86,11 @@ async def _comment(db, item_id: uuid.UUID, comment_id: uuid.UUID) -> FeatureComm
     return c
 
 
-def _out(c: FeatureComment, author: User | None, principal: Principal) -> CommentOut:
+def _out(c: FeatureComment, author: User | None, principal: Principal) -> FeatureCommentOut:
     mine = principal.user_id is not None and c.author_id == principal.user_id
-    return CommentOut(
+    return FeatureCommentOut(
         id=c.id,
-        author=CommentAuthor(
+        author=FeatureCommentAuthor(
             id=c.author_id, name=display_name(author.email, author.name) if author else "Someone"
         ),
         body=c.body,
@@ -105,10 +105,10 @@ async def _author(db, c: FeatureComment) -> User | None:
     return await db.get(User, c.author_id)
 
 
-@router.get("/roadmap/items/{item_id}/comments", response_model=list[CommentOut])
+@router.get("/roadmap/items/{item_id}/comments", response_model=list[FeatureCommentOut])
 async def list_feature_comments(
     item_id: uuid.UUID, principal: Reader, db: TenantDB
-) -> list[CommentOut]:
+) -> list[FeatureCommentOut]:
     roadmap_id, key = await _feature(db, item_id)
     rows = (
         await db.execute(
@@ -127,12 +127,12 @@ async def list_feature_comments(
 
 @router.post(
     "/roadmap/items/{item_id}/comments",
-    response_model=CommentOut,
+    response_model=FeatureCommentOut,
     status_code=status.HTTP_201_CREATED,
 )
 async def add_feature_comment(
-    item_id: uuid.UUID, body: CommentIn, principal: Reader, db: TenantDB
-) -> CommentOut:
+    item_id: uuid.UUID, body: FeatureCommentIn, principal: Reader, db: TenantDB
+) -> FeatureCommentOut:
     if principal.user_id is None or principal.read_only:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only a person can comment")
     roadmap_id, key = await _feature(db, item_id)
@@ -145,10 +145,14 @@ async def add_feature_comment(
     return _out(c, await _author(db, c), principal)
 
 
-@router.patch("/roadmap/items/{item_id}/comments/{comment_id}", response_model=CommentOut)
+@router.patch("/roadmap/items/{item_id}/comments/{comment_id}", response_model=FeatureCommentOut)
 async def edit_feature_comment(
-    item_id: uuid.UUID, comment_id: uuid.UUID, body: CommentIn, principal: Reader, db: TenantDB
-) -> CommentOut:
+    item_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    body: FeatureCommentIn,
+    principal: Reader,
+    db: TenantDB,
+) -> FeatureCommentOut:
     c = await _comment(db, item_id, comment_id)
     if principal.read_only or c.author_id != principal.user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only its author can edit a comment")
@@ -173,8 +177,8 @@ async def delete_feature_comment(
     await db.commit()
 
 
-@router.get("/comment-counts", response_model=list[CommentCount])
-async def list_feature_comment_counts(principal: Reader, db: TenantDB) -> list[CommentCount]:
+@router.get("/comment-counts", response_model=list[FeatureCommentCount])
+async def list_feature_comment_counts(principal: Reader, db: TenantDB) -> list[FeatureCommentCount]:
     """How many comments each feature has (only those with one), by roadmap and key."""
     rows = (
         await db.execute(
@@ -183,4 +187,4 @@ async def list_feature_comment_counts(principal: Reader, db: TenantDB) -> list[C
             .group_by(FeatureComment.roadmap_document_id, FeatureComment.item_key)
         )
     ).all()
-    return [CommentCount(roadmap_id=r, key=k, count=n) for r, k, n in rows]
+    return [FeatureCommentCount(roadmap_id=r, key=k, count=n) for r, k, n in rows]
