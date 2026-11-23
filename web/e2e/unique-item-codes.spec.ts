@@ -37,13 +37,13 @@ test('two items of one feature read two codes, on the Roadmap and in the panel',
   await expect(row(page, 'setup-import')).toContainText('F-88');
   await expect(row(page, 'setup-import')).not.toContainText('F-01');
   await openRoadmapItem(page, 'setup-import');
-  await expect(panel(page).getByTestId('card-code')).toContainText('F-88');
-  await expect(panel(page).getByTestId('card-code')).not.toContainText('F-01');
+  // Its own code first; the feature's name is behind the (i) beside it.
+  await expect(panel(page).getByTestId('card-code')).toHaveText(/^F-88(?!\d)/);
   await panel(page).getByRole('button', { name: 'About its feature' }).click();
   await expect(panel(page).getByText(/Part of the Ground Truth feature F-01 /)).toBeVisible();
   await page.keyboard.press('Escape');
   await openRoadmapItem(page, 'setup-checklist');
-  await expect(panel(page).getByTestId('card-code')).toContainText('F-01');
+  await expect(panel(page).getByTestId('card-code')).toHaveText(/^F-01(?!\d)/);
 });
 
 test('a code another item reads is refused, naming that item', async ({ page }) => {
