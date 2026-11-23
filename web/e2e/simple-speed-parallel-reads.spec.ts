@@ -100,3 +100,37 @@ test('what the role may do is read while GET /v1/me is still on its way, once', 
   for (const call of ['GET /v1/me/capabilities', ...COLD])
     expect([call, count(seen, call)]).toEqual([call, 1]);
 });
+
+// Review: what "Needs a decision" counts (the proposed changes, Oracle's open suggestions).
+const DECIDE = [
+  'GET /v1/simple/changes?status=proposed',
+  'GET /v1/simple/goal-suggestions?status=open',
+];
+
+test("Needs a decision's reads start with the roadmap's own on a cold load, so its count comes with it", async ({
+  page,
+}) => {
+  await login(page);
+  await slow(page, '/v1/me');
+  await page.goto('/simple/roadmap');
+  // Before GET /v1/me has answered, the count's reads are made beside the roadmap's.
+  await expect
+    .poll(
+      async () => {
+        const made = await calls(page);
+        return DECIDE.filter((c) => !made.includes(c));
+      },
+      { timeout: SLOW_MS - 2000 },
+    )
+    .toEqual([]);
+  await expect(page.getByTestId('simple-nav-skeleton')).toBeVisible();
+  // Once the page is drawn the count is there, and the page made neither read again (the
+  // rail's own count of suggestions may read them once more after GET /v1/me, as before).
+  await expect(page.getByTestId('needs-decision')).toHaveText(/·\s*\d+/, {
+    timeout: SLOW_MS + 15_000,
+  });
+  await page.waitForTimeout(2500);
+  const seen = await calls(page);
+  expect(count(seen, DECIDE[0])).toBe(1);
+  expect(count(seen, DECIDE[1])).toBeLessThanOrEqual(2);
+});
