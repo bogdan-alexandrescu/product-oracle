@@ -325,7 +325,7 @@ export function PePanel({
           ? 'border-line-strong bg-surface'
           : isOpen
             ? 'border-accent bg-surface'
-            : `border-transparent hover:border-line data-[hover=true]:border-line ${model === 'a' ? 'border-b-line border-dashed' : ''}`
+            : `border-transparent hover:border-line-strong hover:bg-surface2 data-[hover=true]:border-line-strong data-[hover=true]:bg-surface2 ${model === 'a' ? 'border-b-line border-dashed' : ''}`
       } ${k === 'title' ? 'text-lg font-[650] leading-6' : ''} ${valueCls}`;
       if (model === 'a' || model === 'c' || isOpen)
         return (
@@ -364,7 +364,7 @@ export function PePanel({
               ? 'mx-0 w-full border-line-strong bg-surface'
               : isOpen
                 ? 'border-accent bg-surface'
-                : `border-transparent hover:border-line data-[hover=true]:border-line ${model === 'a' ? 'border-b-line border-dashed' : ''}`
+                : `border-transparent hover:border-line-strong hover:bg-surface2 data-[hover=true]:border-line-strong data-[hover=true]:bg-surface2 ${model === 'a' ? 'border-b-line border-dashed' : ''}`
           } ${k === 'title' ? 'text-lg font-[650] leading-6' : ''}`}
         >
           <span className={`min-w-0 flex-1 break-words ${valueCls}`}>{shown}</span>

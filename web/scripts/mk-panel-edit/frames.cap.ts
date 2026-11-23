@@ -38,6 +38,7 @@ async function open(page: Page, qs: string, w: number, h: number, theme = 'light
   );
   await page.goto(`/simple/roadmap?${qs}&item=${itemId}`);
   await page.locator('[data-testid="floating-card"][data-pe]').waitFor({ timeout: 15000 });
+  await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
   await page.waitForTimeout(500);
 }
 

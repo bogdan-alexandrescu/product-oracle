@@ -779,6 +779,7 @@
   .grid-cols-\[minmax\(0\,1fr\)_340px\] { grid-template-columns: minmax(0px, 1fr) 340px; }
   .grid-cols-\[minmax\(0\,1fr\)_380px\] { grid-template-columns: minmax(0px, 1fr) 380px; }
   .grid-cols-\[minmax\(0\,1fr\)_auto\] { grid-template-columns: minmax(0px, 1fr) auto; }
+  .grid-cols-\[minmax\(0\,1fr\)_auto_minmax\(0\,1fr\)\] { grid-template-columns: minmax(0px, 1fr) auto minmax(0px, 1fr); }
   .grid-cols-\[minmax\(0\,2fr\)_minmax\(0\,1fr\)\] { grid-template-columns: minmax(0px, 2fr) minmax(0px, 1fr); }
   .grid-cols-\[minmax\(0\,14rem\)_minmax\(0\,1fr\)\] { grid-template-columns: minmax(0px, 14rem) minmax(0px, 1fr); }
   .grid-cols-\[minmax\(0\,14rem\)_minmax\(0\,1fr\)_auto_auto\] { grid-template-columns: minmax(0px, 14rem) minmax(0px, 1fr) auto auto; }
@@ -1652,7 +1653,6 @@
   .hover\:z-20:hover { z-index: 20; }
   .hover\:z-30:hover, .hover\:z-\[30\]:hover { z-index: 30; }
   .hover\:border-accent:hover { border-color: var(--accent); }
-  .hover\:border-line:hover { border-color: var(--line); }
   .hover\:border-line-strong:hover { border-color: var(--line-strong); }
   .hover\:bg-\[\#f1f5f9\]:hover { background-color: rgb(241, 245, 249); }
   .hover\:bg-\[var\(--simple-edited\)\]:hover { background-color: var(--simple-edited); }
@@ -1798,7 +1798,8 @@
   .aria-\[current\=page\]\:before\:content-\[\'\'\][aria-current="page"]::before { --tw-content: ""; content: var(--tw-content); }
   .aria-\[current\=true\]\:border-accent[aria-current="true"], .data-\[drop-target\=true\]\:border-accent[data-drop-target="true"] { border-color: var(--accent); }
   .data-\[drop-target\=true\]\:bg-accent-soft[data-drop-target="true"] { background-color: var(--accent-soft); }
-  .data-\[hover\=true\]\:border-line[data-hover="true"] { border-color: var(--line); }
+  .data-\[hover\=true\]\:border-line-strong[data-hover="true"] { border-color: var(--line-strong); }
+  .data-\[hover\=true\]\:bg-surface2[data-hover="true"] { background-color: var(--surface2); }
   .data-\[open\=true\]\:ring-2[data-open="true"] { --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor); box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow); }
   .data-\[open\=true\]\:ring-accent[data-open="true"] { --tw-ring-color: var(--accent); }
   .data-\[picked\=true\]\:shadow-tip[data-picked="true"] { --tw-shadow: var(--tip-shadow); box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow); }
