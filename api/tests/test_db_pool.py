@@ -63,6 +63,7 @@ async def test_a_connection_just_used_is_not_pinged(monkeypatch):
 
 async def test_an_idle_connection_is_pinged(monkeypatch):
     """A connection that sat idle is pinged before it is handed out."""
+    await get_engine().dispose()  # one connection in the pool: the one this test uses
     await _one()
     pings = _count_pings(monkeypatch)
     later = oracle_db.time.time() + get_settings().db_ping_after_idle_seconds + 1
@@ -76,6 +77,7 @@ async def test_an_idle_connection_is_pinged(monkeypatch):
 
 async def test_a_dead_idle_connection_is_replaced(monkeypatch):
     """An idle connection that died is replaced before the query runs."""
+    await get_engine().dispose()  # one connection in the pool: the one this test uses
     await _one()
     engine = get_engine().sync_engine
     later = oracle_db.time.time() + get_settings().db_ping_after_idle_seconds + 1
