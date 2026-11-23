@@ -71,6 +71,7 @@ test.describe('Goal buckets: prioritize in place', () => {
     await page.keyboard.press('Alt+ArrowDown');
     const after = [before[1], before[0], ...before.slice(2)];
     await expect.poll(() => order(page)).toEqual(after);
+    await expect(page.getByTestId('bucket-note')).toContainText('Moved');
     await page.reload();
     await expect(rows(page).first()).toBeVisible();
     await expect.poll(() => order(page)).toEqual(after);
@@ -84,6 +85,7 @@ test.describe('Goal buckets: prioritize in place', () => {
     await rows(page).nth(1).getByTestId('plan-feature-open').focus();
     await page.keyboard.press('Alt+ArrowUp');
     await expect(rows(page).nth(1).getByTestId('order-pending')).toBeVisible();
+    await expect(page.getByTestId('bucket-note')).toContainText('Proposed moving');
     await page.reload();
     await expect(rows(page).first()).toBeVisible();
     expect(await order(page)).toEqual(before);
