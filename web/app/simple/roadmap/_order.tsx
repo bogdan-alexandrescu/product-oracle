@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 
 import type { Schemas } from '@/lib/api/client';
 
@@ -75,60 +75,71 @@ export function useRowOrder({
     lanes.set(lane, shown);
     return shown;
   };
-  const may = (i: Item) => canChange && i.position != null && !closedItem(i);
+  // The handle's object stays the same until who may move or which moves wait changes, so a memoised row redraws
+  // only when its own props do (a bar drag redraws the bar in hand, not every row).
+  const actRef = useRef(act);
+  useEffect(() => {
+    actRef.current = act;
+  }, [act]);
+  const waiting = [...(proposed ?? [])].sort().join('\n');
 
-  async function move(lane: string, i: Item, onto: Item) {
-    const shown = lanes.get(lane) ?? [];
-    if (i.id === onto.id || !may(i) || onto.position == null || !shown.includes(onto)) return;
-    const next = shown.filter((x) => x.id !== i.id);
-    const at = next.indexOf(onto) + (shown.indexOf(i) < shown.indexOf(onto) ? 1 : 0);
-    next.splice(at, 0, i);
-    if (i.can_decide) setLocal({ lane, ids: next.map((x) => x.id) });
-    const words = `${itemName(i)} to rank ${onto.position}`;
-    try {
-      await act(
-        { applied: `Moved ${words}`, proposed: `move ${words}` },
-        {
-          op: 'override_priority',
-          target: { item_id: i.id },
-          before: { override: i.before_override ?? null },
-          after: { position: onto.position, reason: REASON },
-          reason: REASON,
-        },
-      );
-    } finally {
-      setLocal(null);
-    }
-  }
+  const order = useMemo<RowOrder>(() => {
+    const may = (i: Item) => canChange && i.position != null && !closedItem(i);
+    const held = new Set(waiting.split('\n'));
 
-  const order: RowOrder = {
-    may,
-    pending: (i) => !!proposed?.has(i.id),
-    drag: (lane, i) => ({
-      draggable: true,
-      onDragStart: (e) => {
-        e.dataTransfer.setData('text/x-timeline-row', `${lane}|${i.id}`);
-        e.dataTransfer.effectAllowed = 'move';
-      },
-      onDragOver: (e) => {
-        if (e.dataTransfer.types.includes('text/x-timeline-row')) e.preventDefault();
-      },
-      onDrop: (e) => {
-        const [from, id] = e.dataTransfer.getData('text/x-timeline-row').split('|');
-        const it = (lanes.get(lane) ?? []).find((x) => x.id === id);
-        if (from !== lane || !it) return;
-        e.preventDefault();
-        void move(lane, it, i);
-      },
-    }),
-    keys: (lane, i) => (e) => {
-      if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !may(i)) return;
-      e.preventDefault();
-      e.stopPropagation();
+    async function move(lane: string, i: Item, onto: Item) {
       const shown = lanes.get(lane) ?? [];
-      const onto = shown[shown.indexOf(i) + (e.key === 'ArrowUp' ? -1 : 1)];
-      if (onto) void move(lane, i, onto);
-    },
-  };
+      if (i.id === onto.id || !may(i) || onto.position == null || !shown.includes(onto)) return;
+      const next = shown.filter((x) => x.id !== i.id);
+      const at = next.indexOf(onto) + (shown.indexOf(i) < shown.indexOf(onto) ? 1 : 0);
+      next.splice(at, 0, i);
+      if (i.can_decide) setLocal({ lane, ids: next.map((x) => x.id) });
+      const words = `${itemName(i)} to rank ${onto.position}`;
+      try {
+        await actRef.current(
+          { applied: `Moved ${words}`, proposed: `move ${words}` },
+          {
+            op: 'override_priority',
+            target: { item_id: i.id },
+            before: { override: i.before_override ?? null },
+            after: { position: onto.position, reason: REASON },
+            reason: REASON,
+          },
+        );
+      } finally {
+        setLocal(null);
+      }
+    }
+
+    return {
+      may,
+      pending: (i) => held.has(i.id),
+      drag: (lane, i) => ({
+        draggable: true,
+        onDragStart: (e) => {
+          e.dataTransfer.setData('text/x-timeline-row', `${lane}|${i.id}`);
+          e.dataTransfer.effectAllowed = 'move';
+        },
+        onDragOver: (e) => {
+          if (e.dataTransfer.types.includes('text/x-timeline-row')) e.preventDefault();
+        },
+        onDrop: (e) => {
+          const [from, id] = e.dataTransfer.getData('text/x-timeline-row').split('|');
+          const it = (lanes.get(lane) ?? []).find((x) => x.id === id);
+          if (from !== lane || !it) return;
+          e.preventDefault();
+          void move(lane, it, i);
+        },
+      }),
+      keys: (lane, i) => (e) => {
+        if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !may(i)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const shown = lanes.get(lane) ?? [];
+        const onto = shown[shown.indexOf(i) + (e.key === 'ArrowUp' ? -1 : 1)];
+        if (onto) void move(lane, i, onto);
+      },
+    };
+  }, [canChange, lanes, waiting]);
   return { arrange, order, local };
 }
