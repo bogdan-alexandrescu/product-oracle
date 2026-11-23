@@ -25,8 +25,9 @@ import { addMonths, calendarDay, utcDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
 import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
+import { PendingMark } from '../priorities/feature-order';
+
 import { AddRow, type WaitingAdd } from './_addrow';
-import { OwnerPick, useOwners, type Person } from './_owner';
 import { PM_LANE } from './_board';
 import { FixButtons, fixCount, type Act } from './_card';
 import { itemName, NotInGt } from './_gtflag';
@@ -57,9 +58,9 @@ import {
 } from './_lib';
 import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from './_milestones';
 import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from './_mk';
-import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from './_timeline';
-import { PendingMark } from '../priorities/feature-order';
 import { inOrder, useRowOrder, type RowOrder } from './_order';
+import { OwnerPick, useOwners, type Person } from './_owner';
+import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from './_timeline';
 import { TrackHead } from './_trackbands';
 
 type Zoom = '3m' | '6m' | '1y' | 'all';
