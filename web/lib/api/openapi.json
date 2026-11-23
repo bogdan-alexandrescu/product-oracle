@@ -132126,6 +132126,17 @@
             ],
             "title": "Confirm Feature Id"
           },
+          "feature_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Name"
+          },
           "title": {
             "type": "string",
             "title": "Title"
