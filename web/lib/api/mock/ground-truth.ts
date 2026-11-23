@@ -380,13 +380,17 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
   simple.ids[CONFIRM_ITEM] = stableUuid(`simple-item/${CONFIRM_ITEM}`);
 }
 
-/** gt-proposed: ground-truth-confirm plus Account discovery, a roadmap item on a feature a run only proposed, with no code. */
+/** gt-proposed: ground-truth-confirm plus Account discovery, a Goal map feature on a feature a run only proposed, with no code. */
 export const GROUND_TRUTH_PROPOSED_SCENARIO = 'ground-truth-proposed';
-const PROPOSED_ITEM = 'gt-account-discovery';
 
-/** The ground-truth-proposed scenario: Account discovery, a run's proposal with no code of its own, on a planned roadmap item
- * the check reads by its feature (toConfirm), not by the scenario's list. */
-export function seedGroundTruthProposed(baseline: BaselineState, simple: SimpleDb): void {
+/** The ground-truth-proposed scenario: the Goal map feature `mapItem` (its roadmap item's key) becomes Account discovery, from
+ * no PRD section, on a run's proposal with no code of its own; the check reads it by its feature (toConfirm), not by the
+ * scenario's list. */
+export function seedGroundTruthProposed(
+  baseline: BaselineState,
+  simple: SimpleDb,
+  mapItem: string,
+): void {
   seedGroundTruthConfirm(baseline, simple);
   const template = baseline.entities.find((e) => e.type === 'feature')!;
   const id = featureId('account-discovery');
@@ -404,19 +408,12 @@ export function seedGroundTruthProposed(baseline: BaselineState, simple: SimpleD
     status: 'proposed',
     origin: 'agent',
   });
-  simple.items.push({
-    key: PROPOSED_ITEM,
-    title: 'Account discovery',
-    horizon: 'next',
-    roadmap: ROADMAP_SLUG,
-    track: 'alerts',
-    confidence: 'medium',
-    start: 30,
-    end: 70,
-    source: 'typed',
-    feature_id: id,
-  });
-  simple.ids[PROPOSED_ITEM] = stableUuid(`simple-item/${PROPOSED_ITEM}`);
+  const it = simple.items.find((x) => x.key === mapItem);
+  if (!it) return;
+  it.title = 'Account discovery';
+  it.feature_id = id;
+  delete it.section;
+  delete it.heading;
 }
 
 /** The ground-truth-shared scenario's roadmap items, both on the proposed Community alerts. */
