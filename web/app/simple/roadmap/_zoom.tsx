@@ -489,6 +489,12 @@ function DayChart(props: TimelineProps) {
       ? (data.tracks ?? []).some((t) => t.id === key)
       : data.group === 'goal' && key !== 'none' && key !== 'below' && key !== PM_LANE);
   const addAfter = new Map<number, { key: string; title: string }>();
+  // de-r1: each item row's lane (a drag reads it to tell a move into another track).
+  const laneOf = new Map<string, string>();
+  let laneNow = '';
+  for (const r of rows)
+    if (r.kind === 'lane') laneNow = r.key;
+    else laneOf.set(r.item.id, laneNow);
   rows.forEach((r, n) => {
     if (r.kind !== 'lane' || !addable(r.key)) return;
     let end = n + 1;
@@ -776,10 +782,29 @@ function DayChart(props: TimelineProps) {
   // and a viewer's bars, do not move.
   const { canChange, moved, onMove, onKeyMove, onKeyEnd, onKeyCancel } = props;
   const fixed = (i: Item) => !canChange || closedItem(i) || planned(i);
+  // de-r1 (RE2 A): on track bands, a bar dragged up or down onto another track's rows moves
+  // there. The track whose rows (its header, items and "+ Add" row, data-lane) hold `y`, when
+  // it is a track other than the item's own.
+  const retrackable = data.group === 'track';
+  const trackAt = (y: number, i: Item): string | null => {
+    for (const el of box.current?.querySelectorAll<HTMLElement>('[data-lane]') ?? []) {
+      const r = el.getBoundingClientRect();
+      if (y < r.top || y >= r.bottom) continue;
+      const k = el.dataset.lane!;
+      return k !== laneOf.get(i.id) && (data.tracks ?? []).some((t) => t.id === k) ? k : null;
+    }
+    return null;
+  };
+  const markTrack = (k: string | null) => {
+    for (const el of box.current?.querySelectorAll<HTMLElement>('[data-lane-head]') ?? [])
+      el.toggleAttribute('data-drop-target', el.dataset.laneHead === k);
+  };
   const drag = useRef<{
     item: Item;
     mode: 'move' | 'start' | 'end';
     x0: number;
+    /** de-r1 (RE2 A): where the press began down the page, for a drag into another track. */
+    y0: number;
     start: string;
     end: string;
     moved: boolean;
@@ -809,6 +834,7 @@ function DayChart(props: TimelineProps) {
       item: i,
       mode,
       x0: e.clientX,
+      y0: e.clientY,
       start,
       end,
       moved: false,
@@ -835,12 +861,15 @@ function DayChart(props: TimelineProps) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointer) return;
     const dx = e.clientX - d.x0;
+    const dy = e.clientY - d.y0;
     if (!d.armed) {
       // A finger that moves before the long press is not a drag.
       if (Math.abs(dx) > 8) stopDrag();
       return;
     }
-    if (!d.moved && Math.abs(dx) < DRAG_PX) return;
+    if (!d.moved && Math.abs(dx) < DRAG_PX && Math.abs(dy) < DRAG_PX) return;
+    // de-r1: the track band under the pointer, marked while the bar is over it.
+    if (retrackable) markTrack(trackAt(e.clientY, d.item));
     e.preventDefault();
     d.moved = true;
     // The bar follows the pointer once a frame, however many moves the frame had (as the Gantt).
@@ -856,6 +885,7 @@ function DayChart(props: TimelineProps) {
   };
   /** The drag over: no bar in hand, no live dates. */
   const stopDrag = () => {
+    markTrack(null);
     if (drag.current?.timer) clearTimeout(drag.current.timer);
     if (drag.current?.frame != null) cancelAnimationFrame(drag.current.frame);
     drag.current = null;
@@ -865,11 +895,20 @@ function DayChart(props: TimelineProps) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointer) return;
     const [s, en] = dragTo(e.clientX - d.x0)!;
+    const to = retrackable && d.moved ? trackAt(e.clientY, d.item) : null;
     stopDrag();
     if (!d.moved) return;
     // A drag is no click: the click that follows the release opens nothing.
     clicked.current = true;
     if (s !== d.start || en !== d.end) onMove(d.item, s, en);
+    // de-r1 (RE2 A): dropped on another track's band, it moves there (the panel's Track change).
+    if (to)
+      void props.act('Track changed', {
+        op: 'set_track',
+        target: { item_id: d.item.id },
+        before: { track_id: d.item.track?.id ?? null },
+        after: { track_id: to },
+      });
   };
   // A cancelled drag (the browser took the pointer) moves nothing, and no click follows it to swallow.
   const onCancel = (e: ReactPointerEvent) => {
@@ -894,6 +933,7 @@ function DayChart(props: TimelineProps) {
     onOpen,
     sl,
     visible,
+    act: props.act,
   });
   useLayoutEffect(() => {
     latest.current = {
@@ -907,6 +947,7 @@ function DayChart(props: TimelineProps) {
       onOpen,
       sl,
       visible,
+      act: props.act,
     };
   });
   const on = useMemo<RowMoves>(
@@ -929,6 +970,13 @@ function DayChart(props: TimelineProps) {
       keyMove: (i, dir, month) => latest.current.keyMove(i, dir, month),
       keyCancel: (i) => latest.current.onKeyCancel(i),
       keyEnd: (i) => latest.current.onKeyEnd(i),
+      rename: (i, title) =>
+        void latest.current.act('Renamed', {
+          op: 'edit_title',
+          target: { item_id: i.id },
+          before: { title: i.title },
+          after: { title },
+        }),
     }),
     [],
   );
@@ -1355,7 +1403,9 @@ function DayChart(props: TimelineProps) {
                 <Fragment key={`l-${r.key}`}>
                   <div
                     data-testid="timeline-lane"
-                    className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
+                    data-lane={r.key}
+                    data-lane-head={r.key}
+                    className="data-[drop-target]:bg-accent-soft pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
                   >
                     {data.group === 'track' && r.key !== 'below' && r.key !== 'none' ? (
                       // tb-mk: a quick add dropped on a track band's header lands on that track.
@@ -1410,6 +1460,8 @@ function DayChart(props: TimelineProps) {
                   byId={props.byId}
                   on={on}
                   depth={r.depth ?? 0}
+                  lane={laneOf.get(i.id) ?? ''}
+                  renamable={i.can_decide || canChange}
                 />
                 {addRow}
               </Fragment>
@@ -1542,7 +1594,53 @@ type RowMoves = {
   keyMove: (i: Item, dir: 1 | -1, month: boolean) => void;
   keyCancel: (i: Item) => void;
   keyEnd: (i: Item) => void;
+  /** de-r1: a new title typed in place (the panel's Name change). */
+  rename: (i: Item, title: string) => void;
 };
+
+/** de-r1 (RE2 A): the row's name as a field: Enter saves, Escape cancels, a blur saves a change. */
+function RenameField({
+  item,
+  width,
+  done,
+}: {
+  item: Item;
+  width: number;
+  done: (title: string | null) => void;
+}) {
+  const [v, setV] = useState(item.title);
+  const gone = useRef(false);
+  const finish = (save: boolean) => {
+    if (gone.current) return;
+    gone.current = true;
+    const t = v.trim();
+    done(save && t && t !== item.title ? t : null);
+  };
+  return (
+    <input
+      autoFocus
+      data-testid="timeline-row-rename"
+      aria-label={`Name of ${itemName(item)}`}
+      value={v}
+      maxLength={200}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(false);
+        }
+      }}
+      onBlur={() => finish(true)}
+      className="pointer-events-auto sticky left-0 z-[12] flex-none border-r border-accent bg-surface px-3 text-sm outline-none"
+      style={{ width }}
+    />
+  );
+}
 
 /** One item's row of the day chart: its name and its bar. A drag redraws only the bar in
  * hand (memo, as the Gantt's Bar), not the 500 rows. */
@@ -1564,6 +1662,8 @@ const TimelineRow = memo(function TimelineRow({
   byId,
   on,
   depth,
+  lane,
+  renamable,
 }: {
   item: Item;
   ds: string;
@@ -1583,8 +1683,13 @@ const TimelineRow = memo(function TimelineRow({
   on: RowMoves;
   /** feature-parts: how deep a part it is (0: a feature of its own). */
   depth: number;
+  /** de-r1: the lane the row sits in (a drag into another track reads it). */
+  lane: string;
+  /** de-r1 (RE2 A): a click on the open row's name renames it in place. */
+  renamable: boolean;
 }) {
   const lk = lookOf(i);
+  const [renaming, setRenaming] = useState(false);
   const live = useSyncExternalStore(
     store.watch,
     () => {
@@ -1611,6 +1716,7 @@ const TimelineRow = memo(function TimelineRow({
     <div
       data-testid="timeline-row"
       data-item={i.key}
+      data-lane={lane}
       data-depth={depth || undefined}
       data-open={sel || undefined}
       // A row out of sight is not painted (content-visibility), so a drag's frame repaints the
@@ -1631,52 +1737,66 @@ const TimelineRow = memo(function TimelineRow({
         className={`pointer-events-none relative flex border-b border-line/60 ${sel ? 'bg-accent-soft/50' : ''}`}
         style={{ height: ROW_H }}
       >
-        <button
-          type="button"
-          onClick={() => on.name(i, sel, bx, bw)}
-          className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 overflow-hidden border-r border-line px-3 text-left text-sm ${sel ? 'bg-accent-soft' : 'bg-surface'} hover:underline`}
-          style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
-          title={itemName(i)}
-        >
-          {/* feature-parts: a part drawn as a branch of its parent's tree. */}
-          {depth > 0 && (
-            <span aria-hidden className="flex-none text-text2">
-              └
-            </span>
-          )}
-          {/* QA Nov 12 #1: the code before the name (F-06 Weekly alert digest), cut as the name was. */}
-          {/* QA Nov 14 #1: the name has the row first, whole; the tags after it are cut instead. */}
-          {/* qa-nov17 #8: its flags stay whole ("Draft", "Not in GT"); a long name is cut instead, whole in the row's title. */}
-          <span
-            data-testid="timeline-row-name"
-            className="max-w-full min-w-0 shrink truncate"
-            style={lk.name}
+        {renaming ? (
+          <RenameField
+            item={i}
+            width={labelW}
+            done={(title) => {
+              setRenaming(false);
+              if (title) on.rename(i, title);
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            data-testid="timeline-row-label"
+            onClick={() =>
+              sel && renamable && !still ? setRenaming(true) : on.name(i, sel, bx, bw)
+            }
+            className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 overflow-hidden border-r border-line px-3 text-left text-sm ${sel ? 'bg-accent-soft' : 'bg-surface'} hover:underline`}
+            style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
+            title={itemName(i)}
           >
-            {itemName(i)}
-            {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
-            {i.merged_into && (
-              <span data-testid="row-merged" className="ml-1 text-text2">
-                · Merged into {mergedName(i, (id) => byId.get(id))}
+            {/* feature-parts: a part drawn as a branch of its parent's tree. */}
+            {depth > 0 && (
+              <span aria-hidden className="flex-none text-text2">
+                └
               </span>
             )}
-          </span>
-          {lk.chip && (
+            {/* QA Nov 12 #1: the code before the name (F-06 Weekly alert digest), cut as the name was. */}
+            {/* QA Nov 14 #1: the name has the row first, whole; the tags after it are cut instead. */}
+            {/* qa-nov17 #8: its flags stay whole ("Draft", "Not in GT"); a long name is cut instead, whole in the row's title. */}
             <span
-              data-testid="draft-tag"
-              title={lk.chip}
-              className="flex-none rounded-full bg-surface2 px-1.5 text-xs text-text2"
+              data-testid="timeline-row-name"
+              className="max-w-full min-w-0 shrink truncate"
+              style={lk.name}
             >
-              {lk.chip}
+              {itemName(i)}
+              {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
+              {i.merged_into && (
+                <span data-testid="row-merged" className="ml-1 text-text2">
+                  · Merged into {mergedName(i, (id) => byId.get(id))}
+                </span>
+              )}
             </span>
-          )}
-          {lk.mark && (
-            <span className="flex-none text-crit" aria-label="Broken link">
-              ⚠
-            </span>
-          )}
-          {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
-          <NotInGt item={i} short className="h-[18px]! px-1.5! text-xs!" />
-        </button>
+            {lk.chip && (
+              <span
+                data-testid="draft-tag"
+                title={lk.chip}
+                className="flex-none rounded-full bg-surface2 px-1.5 text-xs text-text2"
+              >
+                {lk.chip}
+              </span>
+            )}
+            {lk.mark && (
+              <span className="flex-none text-crit" aria-label="Broken link">
+                ⚠
+              </span>
+            )}
+            {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
+            <NotInGt item={i} short className="h-[18px]! px-1.5! text-xs!" />
+          </button>
+        )}
         <div className="relative" style={{ width: trackW }}>
           <div
             aria-hidden
