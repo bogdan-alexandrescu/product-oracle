@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY, UNIQUE_CODES_SCENARIO } from '../lib/api/mock/server';
+
 import { login, openRoadmapItem } from './helpers';
 import { expect, test, type Page } from './test';
 
@@ -56,7 +57,9 @@ test('a code another item reads is refused, naming that item', async ({ page }) 
   await panel(page).getByLabel('Code').fill('F-01');
   await panel(page).getByTestId('card-code-edit').getByRole('button', { name: 'Save' }).click();
   await expect(
-    page.getByRole('status').filter({ hasText: /F-01 is already the code of F-01 Setup checklist/ }),
+    page
+      .getByRole('status')
+      .filter({ hasText: /F-01 is already the code of F-01 Setup checklist/ }),
   ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(row(page, 'setup-import')).toContainText('F-88');
