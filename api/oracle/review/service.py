@@ -1246,7 +1246,7 @@ async def approve_version(
                 if settled
                 else []
             )
-            await views.monitor_owners(session, document.id, rows, principal)
+            await views.monitor_owners(session, version.document_id, rows, principal)
         # H6: approving a roadmap version plans a launch per item in Now, owned by the
         # approver (none for items that already have one).
         from oracle.launches import service as launches_service
