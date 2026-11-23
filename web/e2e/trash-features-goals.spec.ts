@@ -370,7 +370,7 @@ test('a feature added in the draft and restored while the draft is in review sta
 
   await page.goto('/settings/trash');
   const row = page.getByTestId('trash-entry').filter({ hasText: title });
-  await row.getByRole('button', { name: new RegExp(`^Restore (?:F-\\d+ )?${title}$`) }).click();
+  await row.getByRole('button', { name: new RegExp(`^Restore F-\\d+ ${title}$`) }).click();
   await expect(row).toHaveCount(0);
   // Back in the draft, which its owner reads.
   await page.goto('/simple/roadmap');
@@ -451,7 +451,7 @@ test('a feature added in the draft and restored after the draft was approved wit
   await page.goto('/settings/trash');
   const row = page.getByTestId('trash-entry').filter({ hasText: title });
   await expect(row).toHaveCount(1);
-  await row.getByRole('button', { name: new RegExp(`^Restore (?:F-\\d+ )?${title}$`) }).click();
+  await row.getByRole('button', { name: new RegExp(`^Restore F-\\d+ ${title}$`) }).click();
   await expect(row).toHaveCount(0);
   // In the roadmap's new working draft, which its owner reads.
   await page.goto('/simple/roadmap');
@@ -550,7 +550,7 @@ for (const then of ['working', 'in review'] as const) {
 
     await page.goto('/settings/trash');
     const row = page.getByTestId('trash-entry').filter({ hasText: title });
-    await row.getByRole('button', { name: new RegExp(`^Restore (?:F-\\d+ )?${title}$`) }).click();
+    await row.getByRole('button', { name: new RegExp(`^Restore F-\\d+ ${title}$`) }).click();
     await expect(row).toHaveCount(0);
     const roadmap = page.getByTestId('simple-roadmap');
     const rows = page.locator(`[data-testid="timeline-row"][data-item="${added.key}"]`);
