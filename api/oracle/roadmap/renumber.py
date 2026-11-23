@@ -7,8 +7,11 @@ earliest created) keeps it, and each other item, in date order, takes the next f
 number (oracle.roadmap.codes.next_number, the rule a new item's code comes from), written as
 its title's lead ("F-64 Alert routing"), the item's own code. An item with no code at all gets
 the next free number too. An item whose code is already unique is never renumbered. Each
-change is audited (old code -> new code). Safe to run twice: a second run finds nothing to
-change. Sync on purpose: migration 0136 runs it.
+change is audited (old code -> new code). An item's code is read as it was shown before
+(:func:`renumber`'s ``before``: its feature's, else its PRD section's, else its title's lead);
+an item whose title leads with another code than that one gets that code as its lead, so it
+shows the code and name it showed ("F-31 F-99 Launch flow"). Safe to run twice: a second run
+finds nothing to change. Sync on purpose: migration 0136 runs it.
 """
 
 import uuid
@@ -39,6 +42,22 @@ def renumber(session: Session) -> list[dict[str, Any]]:
     from oracle.roadmap.models import RoadmapItem
 
     by_feature = codes._feature_codes_sync(session)
+    # Items an earlier run numbered: their title's lead is their own code.
+    a = AuditEvent.__table__
+    numbered = {
+        (tid, d["roadmap_document_id"], d["item_key"]): d["new"]
+        for tid, d in session.execute(select(a.c.tenant_id, a.c.data).where(a.c.action == ACTION))
+    }
+
+    def before(r: Any) -> str | None:
+        """The code ``r`` showed before every item had its own: its feature's, else its PRD
+        section's, else its title's lead; its own once a run numbered it."""
+        lead = codes.title_code(r.title)
+        if lead is not None and numbered.get((r.tenant_id, str(r.roadmap_document_id),
+                                              r.item_key)) == lead:  # fmt: skip
+            return lead
+        return codes.inherited(r, by_feature) or lead
+
     # The columns it reads, by name: a later column added to the table is never selected.
     t = RoadmapItem.__table__
     rows = list(
@@ -82,10 +101,19 @@ def renumber(session: Session) -> list[dict[str, Any]]:
             else ("s", r.simple_draft_id)
         )
 
+    # A title leading with another code than the one its item shows takes that code as its
+    # lead: the item shows the code and name it showed, under the own-code-first read.
+    titles = {r.id: r.title for r in rows}
+    for r in rows:
+        code, lead = before(r), codes.title_code(r.title)
+        if code and lead and lead.upper() != code.upper():
+            titles[r.id] = f"{code} {r.title[: TITLE_MAX - len(code) - 1]}"
+            session.execute(update(t).where(t.c.id == r.id).values(title=titles[r.id]))
+
     made: list[dict[str, Any]] = []
     for tenant in sorted({r.tenant_id for r in rows}, key=str):
         mine = [r for r in rows if r.tenant_id == tenant]
-        used = [codes.shown(r, by_feature) for r in mine]
+        used = [before(r) for r in mine]
         used += [k for tid, k in features if tid == tenant]
         used += [by_feature.get(r.feature_id) for r in mine if r.feature_id is not None]
         # One item, every live row of it (its versions and drafts), read as its latest row;
@@ -110,17 +138,17 @@ def renumber(session: Session) -> list[dict[str, Any]]:
         to_number: list[tuple[uuid.UUID, str]] = []
         kept: set[tuple[tuple[str, Any], str]] = set()
         for k in sorted(latest, key=order):
-            code = codes.shown(latest[k], by_feature)
+            code = before(latest[k])
             if code is None or any((p, code.upper()) in kept for p in plans[k]):
                 to_number.append(k)
             else:
                 kept |= {(p, code.upper()) for p in plans[k]}
         for k in sorted(to_number, key=order):
             row = latest[k]
-            old = codes.shown(row, by_feature)
+            old = before(row)
             new = codes.next_number(used)
             used.append(new)
-            name = _name(row.title)[: TITLE_MAX - len(new) - 1]
+            name = _name(titles[row.id])[: TITLE_MAX - len(new) - 1]
             title = f"{new} {name}"
             ids = [r.id for r in items[k]]
             session.execute(update(t).where(t.c.id.in_(ids)).values(title=title))
