@@ -773,9 +773,16 @@ async def _propose_prd_change(
     if "name" in fields:
         before["name"], after["name"] = row.name, (body.name or "").strip()
     # milestone-rename: the PRD's owner (or a company owner) renames its milestone directly;
-    # the PRD's stored plan takes the name, so a later read keeps it.
+    # the PRD's stored plan takes the name, so a later read keeps it. de-inst (the owner,
+    # Nov 23): who may decide the roadmap also dates it at once, without asking the PRD's
+    # owner; everyone else's change stays a proposal to the PRD's owner.
     me = _me(principal)
-    if fields == {"name"} and (has_role(principal.role, "owner") or me in owners):
+    decides = (
+        has_role(principal.role, "owner")
+        or me in owners
+        or drafts.can_edit(principal, row.roadmap_id, await drafts.who(db, {row.roadmap_id}))
+    )
+    if decides:
         await _apply_prd(db, row, after)
         await db.flush()
         await audit.record(db, principal, "goal_milestone.edit", "track_milestone", row.id,
