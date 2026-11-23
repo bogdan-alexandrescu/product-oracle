@@ -183,6 +183,10 @@ export function ConsentScreen() {
               {pending === 'deny' ? 'Denying…' : 'Deny'}
             </Button>
           </div>
+          {/* MOCK-HOOK: MC3, the way back to the connected clients */}
+          <a href="/account?mc1=a#connect" className="text-center text-sm text-accent-ink hover:underline" data-testid="consent-manage">{/* MOCK-HOOK */}
+            Your connected clients{/* MOCK-HOOK */}
+          </a>{/* MOCK-HOOK */}
         </div>
       )}
     </AuthCard>

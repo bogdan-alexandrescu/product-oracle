@@ -1,5 +1,6 @@
 'use client';
 
+import { CompanyMcp, ConnectedClients, ConnectGuide, useMcpMock } from '@/components/mcp/McpConnect'; // MOCK-HOOK
 import { Link, useSearchParams } from '@/lib/nav';
 import { useId, useState, type FormEvent } from 'react';
 
@@ -58,6 +59,7 @@ async function loadAll(): Promise<Data> {
 export function ConnectionsSettings() {
   const params = useSearchParams();
   const q = useQuery('connections', loadAll);
+  const mcp = useMcpMock(); // MOCK-HOOK
   const connected = params.get('connected');
   const callbackError = params.get('error');
 
@@ -105,6 +107,9 @@ export function ConnectionsSettings() {
       />
 
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
+        {mcp.on && mcp.mc1 === 'c' && <ConnectGuide />} {/* MOCK-HOOK: MC1 c, all of it in Settings > Connections */}
+        {mcp.on && mcp.mc1 === 'c' && <ConnectedClients />} {/* MOCK-HOOK */}
+        {mcp.on && mcp.mc1 !== 'b' && <CompanyMcp />} {/* MOCK-HOOK: the owner's company view */}
         {connected && !callbackError && (
           <Notice tone="pass">{nameOf(connected)} is connected.</Notice>
         )}

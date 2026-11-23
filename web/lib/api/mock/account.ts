@@ -5,6 +5,7 @@
  */
 import type { Schemas } from '@/lib/api/client';
 import { reply } from './typed';
+import { mockClients } from './mcp-connect'; // MOCK-HOOK
 
 type Role = Schemas['MemberOut']['role'];
 type Member = Schemas['MemberOut'];
@@ -372,8 +373,11 @@ export async function accountRoute(
     }
   }
   if (p[2] === 'oauth-clients') {
+    const mk = mockClients(typeof location === 'undefined' ? '' : location.search); // MOCK-HOOK
+    if (!p[3] && m === 'GET' && mk) return reply('/v1/me/oauth-clients', 'get', mk); // MOCK-HOOK
     if (!p[3] && m === 'GET')
       return reply('/v1/me/oauth-clients', 'get', mine('mcp_client').map(grantOut));
+    if (mk && m === 'DELETE') return reply('/v1/me/oauth-clients/{grant_id}', 'delete', undefined, 204); // MOCK-HOOK
     const grant = mine('mcp_client').find((t) => t.id === p[3]);
     if (!grant) return json(404, { detail: `MCP client grant ${p[3]} not found` });
     if (m === 'DELETE') {

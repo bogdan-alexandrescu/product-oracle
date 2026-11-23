@@ -15,6 +15,7 @@ import {
   tokenState,
   when,
 } from '@/components/ApiTokensSettings';
+import { ConnectedClients, ConnectGuide, useMcpMock } from '@/components/mcp/McpConnect'; // MOCK-HOOK
 import { ROLE_LABEL } from '@/components/MembersSettings';
 import { Field, INPUT } from '@/app/settings/_components/fields';
 import {
@@ -80,6 +81,7 @@ function ActiveOfTotal({ rows }: { rows?: Pick<ApiToken, 'revoked_at' | 'expires
 /** My account: every signed-in member's own sign-in, password, personal tokens, MCP clients, Slack pings. */
 export function MyAccount() {
   const router = useRouter();
+  const mcp = useMcpMock(); // MOCK-HOOK
   const { clear } = useMe();
   const accountQ = useQuery('my-account', () => unwrap(api.GET('/v1/me/account')));
   const tokensQ = useQuery('my-tokens', () => unwrap(api.GET('/v1/me/tokens')));
@@ -156,9 +158,11 @@ export function MyAccount() {
       />
       <Split inspector={inspector}>
         {accountQ.error && <Notice tone="error">{accountQ.error}</Notice>}
+        {mcp.on && mcp.mc1 === 'a' && <ConnectGuide />} {/* MOCK-HOOK */}
+        {mcp.on && mcp.mc1 === 'a' && <ConnectedClients tokens={liveTokens} />} {/* MOCK-HOOK */}
         {account && <PasswordPanel account={account} onChanged={refreshCredentials} />}
         <TokensPanel query={tokensQ} />
-        <ClientsPanel query={clientsQ} />
+        {!(mcp.on && mcp.mc1 === 'a') && <ClientsPanel query={clientsQ} />} {/* MOCK-HOOK */}
         <SlackPingsPanel />
       </Split>
       <ConfirmDialog

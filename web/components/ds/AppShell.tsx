@@ -1,5 +1,6 @@
 'use client';
 
+import { ConnectDialog, useMcpMock } from '@/components/mcp/McpConnect'; // MOCK-HOOK
 import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 import {
   Suspense,
@@ -335,7 +336,11 @@ function UserMenu({
   const pathname = usePathname();
   const { me, clear } = useMe();
   const [theme, setTheme] = useTheme();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(
+    () => typeof location !== 'undefined' && new URLSearchParams(location.search).get('menu') === '1', // MOCK-HOOK
+  );
+  const mcp = useMcpMock(); // MOCK-HOOK
+  const [mcpDialog, setMcpDialog] = useState(mcp.open); // MOCK-HOOK
   const [at, setAt] = useState({ bottom: 12, left: 100 });
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -472,6 +477,21 @@ function UserMenu({
           My account
         </Link>
       )}
+      {me?.kind === 'user' && mcp.on && mcp.mc1 !== 'c' && ( // MOCK-HOOK: MC1 a (a page section) and b (a dialog)
+        <Link
+          href={`/account${typeof location === 'undefined' ? '' : location.search.replace('menu=1', 'menu=0')}#connect`} // MOCK-HOOK
+          data-testid="nav-connect-mcp" // MOCK-HOOK
+          onClick={(e) => {
+            setOpen(false); // MOCK-HOOK
+            if (mcp.mc1 === 'b') { e.preventDefault(); setMcpDialog(true); } // MOCK-HOOK
+          }}
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
+        >
+          <Icon name="link" size={16} />
+          Connect an AI tool
+        </Link>
+      )}
+      {mcpDialog && <ConnectDialog onClose={() => setMcpDialog(false)} />} {/* MOCK-HOOK */}
       {MOCK_MODE && (
         <button
           type="button"

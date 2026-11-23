@@ -45,7 +45,7 @@ export async function consentMockFetch(req: Request): Promise<Response> {
   if (url.pathname === '/oauth/authorize/request') {
     return reply('/oauth/authorize/request', 'get', {
       client_id: MOCK_CONSENT.client_id,
-      client_name: MOCK_CONSENT.client_name,
+      client_name: new URLSearchParams(location.search).get('client') ?? MOCK_CONSENT.client_name, // MOCK-HOOK
       redirect_uri: MOCK_CONSENT.redirect_uri,
       redirect_host: new URL(MOCK_CONSENT.redirect_uri).host,
       scopes: [
