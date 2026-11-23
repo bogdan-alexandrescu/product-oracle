@@ -138,14 +138,13 @@ on the Timeline for a proposer's change.
   about 1,600 entities on the seed), or a stored live ranking.
 - Row order handle: useRowOrder returns its handle from useMemo, rebuilt only when canChange or the set of pending
   moves changes (act through a ref), so a bar drag no longer redraws every row. No spec measures redraws.
-- Goals spec: the Goal buckets check was put back and FAILS: in the Goal map's mock scenario (GM_TRACKS_SCENARIO)
-  Goal buckets lists the goals in another order before any move (map: booked demos, failed payments,
-  activations, revenue; buckets: activations, revenue, failed payments, booked demos). The mock's goal buckets
-  order goals by simple-roadmap companyGoals (goalRank of the title's key) while the Goal map reads the
-  positions stored on its own goals. Not fixed (time); NOT reachable as a claim: the goals test no longer says
-  Goal buckets follows, and the check waits as `test.fixme('Goal buckets reads the goal order the Goal map
-  sets')` in web/e2e/prioritize-goals.spec.ts. Next: make the mock goal buckets read the goal entities'
-  attrs.position as the API's sort_goals does, then drop the fixme.
+- Goals spec: the Goal buckets check is back as its own test ('Goal buckets reads the goal order the Goal map
+  sets', web/e2e/prioritize-goals.spec.ts): after a Goal map move it opens Goal buckets and reads the two goals
+  in the same order. It failed at first: a mock defect, not the page. In the Goal map's scenario the items name
+  their goal by id, so the mock's Priorities buckets (keyed by it) found no place in goalRank and kept the seed's
+  order (Goal buckets: activations, revenue, failed payments, booked demos; Goal map: booked demos, failed
+  payments, activations, revenue). The API orders buckets by its goal entities, so the mock's goalRank now
+  matches a goal by id as well as by key (web/lib/api/mock/simple-roadmap.ts). The test passes with it.
 - Minors left as they were (the brief: blockers and majors only), including the full lint's two older errors.
 
 ### Gates (this fix step)
@@ -157,5 +156,5 @@ on the Timeline for a proposer's change.
   test_reads_take_few_statements passes at 60 (58).
 - tsc --noEmit: 0. eslint on the changed files: 0. Prettier on the changed files: clean.
 - Playwright (mock build, E2E_PREBUILT=1, --retries=0, trace off): timeline-order, prioritize-goals/map/buckets,
-  simple-roadmap-lanes: 25 passed, 1 skipped (the fixme). prio*.spec.ts and goal-*.spec.ts: 352 passed,
-  1 skipped.
+  simple-roadmap-lanes: 25 passed, 1 skipped (a fixme since removed). prio*.spec.ts and goal-*.spec.ts: 352 passed,
+  1 skipped, BEFORE the goalRank mock fix; prioritize-goals after it: 6 passed. Later runs are listed below.
