@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Schemas } from '@/lib/api/client';
 
-import { DragGhost, featureOf, type useBucketWrites } from './goal-buckets';
 import { rowAt } from './feature-order';
+import { DragGhost, featureOf, type useBucketWrites } from './goal-buckets';
 import { type planFeatures, weeksWords } from './plan-buckets';
 
 type Buckets = Schemas['GoalBucketsOut'];

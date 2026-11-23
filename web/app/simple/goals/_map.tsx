@@ -22,13 +22,13 @@ import {
 import { FeatureName } from '@/components/simple/FeatureName';
 import { useGoalDrag } from '@/components/simple/GoalDrag';
 import { storeGoalOrder } from '@/components/simple/GoalOrder';
-import { useMe } from '@/lib/me';
 import { NewPrdSheet, useCanStartPrd } from '@/components/simple/NewPrd';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from '@/lib/api/mock/goal-map';
 import { CURRENCY_SIGNS, goalFigure } from '@/lib/format';
 import { joinTwins } from '@/lib/goal-map-twins';
 import { keyResults, type KeyResults } from '@/lib/key-results';
+import { useMe } from '@/lib/me';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { ChangeFailed, propose, resultWords, undo, type ChangeResult } from '../roadmap/_lib';

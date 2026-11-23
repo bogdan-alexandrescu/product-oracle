@@ -43,8 +43,6 @@ import { LoadError, Loading } from '@/components/ui';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { FeaturePanel, useItemChanged } from '../roadmap/_panel';
-import { PendingMark, useFeatureOrder } from './feature-order';
-import { useGoalDrag } from '@/components/simple/GoalDrag';
 import { FeatureMenu, useFeatureDelete } from '@/components/simple/FeatureDelete';
 import { Named, NotInGt } from '@/components/simple/FeatureName';
 import {
@@ -68,6 +66,9 @@ import {
   type GoalFeatures,
   type Note,
   nextNoteId,
+  PendingMark,
+  useFeatureOrder,
+  useGoalDrag,
 } from './goal-buckets';
 import { useBucketDrag } from './goal-drag';
 import {
@@ -3621,7 +3622,7 @@ function UndatedBuckets({
   const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
   // prioritize: a feature's place in its bucket is its rank, moved by drag or Alt+Arrow.
-  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError });
+  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError, noteId: nextNoteId });
   const drag = useBucketDrag({
     gb,
     writes: liftedMoves(writes, read),
@@ -4209,7 +4210,7 @@ function PlanBuckets({
   const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // prioritize: each goal's features in rank order, moved by drag or Alt+Arrow.
-  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError });
+  const order = useFeatureOrder({ data, reload: reloadAll, setNote, setError, noteId: nextNoteId });
   const codesOf = (g: string | null) => order.sorted(planFeatures(plan, g).map((f) => f.code));
   const ranked = (g: string | null) => ({
     sort: (codes: string[]) => order.arrange(g ?? '', order.sorted(codes)),

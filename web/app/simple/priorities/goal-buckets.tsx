@@ -1528,6 +1528,9 @@ export function useBucketWrites(
 }
 
 export { BTN, andList, dayOf, featureOf, count };
+// prioritize: the in-place order of features and of goals, for the buckets' pages.
+export { PendingMark, useFeatureOrder } from './feature-order';
+export { useGoalDrag } from '@/components/simple/GoalDrag';
 
 /** Who may do what (can(), never a role name). */
 export function useBucketRights(gb: Buckets | undefined) {

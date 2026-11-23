@@ -1,10 +1,8 @@
 'use client';
 
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { api, type Schemas } from '@/lib/api/client';
-
-import { nextNoteId, type Note } from './goal-buckets';
 
 type Row = Schemas['SimplePriorityRow'];
 type Out = Schemas['SimplePrioritiesOut'];
@@ -18,7 +16,7 @@ function refusal(error: unknown, response: Response): string {
   return typeof detail === 'string'
     ? detail
     : detail && typeof detail === 'object' && 'message' in detail
-      ? String((detail as { message: unknown }).message)
+      ? String(detail.message)
       : response.statusText || 'Could not move it';
 }
 
@@ -34,10 +32,13 @@ export function useFeatureOrder({
   reload,
   setNote,
   setError,
+  noteId,
 }: {
   data: Out;
   reload: () => Promise<void> | void;
-  setNote: (n: Note | null) => void;
+  setNote: (n: { id: number; text: ReactNode; changes?: string[] } | null) => void;
+  /** The note's own id (goal-buckets' nextNoteId). */
+  noteId: () => number;
   setError: (e: string | null) => void;
 }) {
   const [local, setLocal] = useState<{ key: string; codes: string[] } | null>(null);
@@ -100,7 +101,7 @@ export function useFeatureOrder({
       setError(null);
       await reload();
       setNote({
-        id: nextNoteId(),
+        id: noteId(),
         text: (
           <>
             {r.applies ? 'Moved' : 'Proposed moving'} {r.title} to rank {position}
