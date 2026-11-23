@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from '@/lib/nav';
 import {
   createContext,
   useCallback,
@@ -13,7 +14,6 @@ import {
 
 import { api, type Me, type Schemas } from '@/lib/api/client';
 import type { operations } from '@/lib/api/schema';
-import { usePathname } from '@/lib/nav';
 import { DEFAULT_ZONE, setDisplayZone, type ZoneState } from '@/lib/zone';
 
 export type Role = Me['role'];
