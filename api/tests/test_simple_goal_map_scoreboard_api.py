@@ -214,7 +214,8 @@ async def test_goals_left_off_the_map(client):
 
 
 async def test_unplaced_reads_as_the_reader(client):
-    """An unplaced feature's name reads a person's own draft, never another's."""
+    """de-inst (owner, Nov 23): an unplaced feature's name reads the working draft (an
+    owner's rename, live for every reader at once)."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         from oracle.simple import drafts
@@ -233,9 +234,7 @@ async def test_unplaced_reads_as_the_reader(client):
         {"id": ids["f3"], "name": "Rep leaderboard, renamed", "goal": None, "code": ""}
     ]
     theirs = await read(client, ctx, "viewer")
-    assert theirs["unplaced"] == [
-        {"id": ids["f3"], "name": "Rep leaderboard", "goal": None, "code": ""}
-    ]
+    assert theirs["unplaced"] == mine["unplaced"]
 
 
 async def test_pick_an_unknown_metric_is_404(client):
