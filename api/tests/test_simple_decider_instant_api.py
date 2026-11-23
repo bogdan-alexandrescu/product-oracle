@@ -141,3 +141,28 @@ async def test_a_decider_dates_a_prd_milestone_without_asking_its_owner(client):
     assert r.status_code == 200, r.text
     assert r.json()["pending"] is not None
     assert by_code(await read(client, ctx, "viewer"))["M1"]["date"] == "2026-12-18"
+
+
+async def test_the_approved_version_line_follows_a_deciders_change(client):
+    """de-inst: after an owner moves an item's dates in Simple, the header still says the
+    roadmap matches its approved version (the decider's change needs no approval); a
+    commenter's proposal changes nothing on it."""
+    from tests.test_approved_roadmap_to_simple_api import approve, by_key
+    from tests.test_approved_roadmap_to_simple_api import read as read_rm
+    from tests.test_approved_roadmap_to_simple_api import world as rm_world
+
+    ctx, _ = await rm_world(person_dates=False)
+    await approve(client, ctx)
+    item_ = by_key(await read_rm(client, ctx))["trip-reports"]
+    body = {"op": "move_dates", "target": {"item_id": item_["id"]},
+            "before": {"start_date": item_["start"]["date"], "end_date": item_["end"]["date"]},
+            "after": {"start_date": "2027-01-04", "end_date": "2027-01-29"}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=ctx.as_("commenter"))
+    assert r.status_code == 201 and r.json()["change"]["status"] == "proposed", r.text
+    r = await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    for who in ("owner", "viewer"):
+        out = await read_rm(client, ctx, who)
+        assert by_key(out)["trip-reports"]["end"]["date"] == "2027-01-29", who
+        [line] = out["applied_versions"]
+        assert line["matches"] is True and line["differences"] == [], (who, line)
