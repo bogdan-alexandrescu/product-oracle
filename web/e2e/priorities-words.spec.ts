@@ -199,10 +199,6 @@ async function beforeFonts(page: Page, fallback?: string) {
     .toEqual([]);
   release();
   await page.evaluate(() => document.fonts.ready);
-  // The next frame drawn in the loaded fonts: the one a person sees.
-  await page.evaluate(
-    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
-  );
   expect(await cutWords(page), 'a word is cut once the fonts load').toEqual([]);
 }
 
