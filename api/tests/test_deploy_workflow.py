@@ -330,8 +330,9 @@ def test_laptop_deploy_reads_the_alternate_delimiter_form(tmp_path):
     plain = _fake(tmp_path / "plain", serving)
     r = _laptop(plain)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1,ORACLE_MIGRATE_AT_START=0 " in _calls(
-        plain
+    deploy = [c for c in _calls(plain).splitlines() if c.startswith("gcloud run deploy")]
+    assert deploy[0].endswith(
+        "--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1,ORACLE_MIGRATE_AT_START=0"
     )
 
 
