@@ -104,6 +104,7 @@ import {
   type Brand,
 } from './_export';
 import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd } from './_drafts';
+import { GoalTitle } from './_goalcards';
 import { KeyDatesEditor } from './_keydates';
 import { FeaturePanel } from './_panel';
 import { Lanes, pmItem } from './_lanes';
@@ -602,7 +603,7 @@ function GoalCounters({
         data-testid="goal-counter-title"
       >
         <GoalNum n={numberOf(id, g.title)} />
-        {g.title}
+        <GoalTitle id={id} title={g.title} />
       </p>
       {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that.
           QA Nov 14 #8: no metric line that only repeats the title. */}
@@ -636,7 +637,7 @@ function GoalCounters({
     >
       <p className="truncate text-base font-semibold" title={g.goal.title}>
         <GoalNum n={numberOf(g.goal.id, g.goal.title)} />
-        {g.goal.title}
+        <GoalTitle id={g.goal.id} title={g.goal.title} />
       </p>
       <p className="truncate text-sm text-text2">
         {g.empty ? 'No items yet' : 'No items in these filters'}
