@@ -1,14 +1,17 @@
 'use client';
 
 import { createFileRoute } from '@tanstack/react-router';
-import { notFound } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { WithFeatureMarks } from '@/components/current-state/CurrentState';
+import { MkPrdRoadmap, mkParams } from '@/components/simple/MkPrdReview'; // MOCK-HOOK
+import { notFound } from '@/lib/nav';
+
 
 import { SIMPLE_MODE } from '../_flag';
+
 import { SimpleRoadmap } from './_roadmap';
-import { MkPrdRoadmap, mkParams } from '@/components/simple/MkPrdReview'; // MOCK-HOOK
+
 
 /** Simple S4 (#723): the company-wide roadmap (direction "A · Wall"). */
 function SimpleRoadmapPage() {

@@ -14,7 +14,7 @@
           "recommended": true,
           "what": "The page opens on the goals, each with its measure from start to target, and under each goal its features as one row each: code and name, owner, dates and a small bar on a shared Dec to Mar scale. The prose (problem, who has it, not doing, risks) folds to one line per part below, then the timeline with its milestones.",
           "why": "A review meeting argues about what is built for which goal and by when; this answers that in the first screen and puts prose a glance away, not a scroll away. It also gives every editable thing (owner, dates, target) one fixed column, which PR2 needs.",
-          "plus": "What, why and when on one screen; 20 features still read as three short groups; same rows on the phone.",
+          "plus": "What, why and when on one screen; 20 features still read as three short groups; same rows on the phone. Clicks with PR2's Click to type: add a feature 1 click and Enter, move dates 2 clicks, set an owner 2, add a milestone 1 click and Enter (today 3 steps plus 4 for dates, 4, 4 to 5, 3 and typing); every value has its own column to click.",
           "cost": "The prose sits lower than today's paper order; the problem statement is not the first thing read.",
           "frames": [
             {
@@ -40,7 +40,7 @@
           "name": "Paper as today",
           "recommended": false,
           "what": "Keep today's document order: problem, who has it, what we will build as a bulleted list (each line naming its goal, owner and dates), outcomes, not doing, risks, then the timeline.",
-          "plus": "Reads like the PRD people wrote; nothing new to learn; the problem comes first.",
+          "plus": "Reads like the PRD people wrote; nothing new to learn; the problem comes first. Clicks: owner and dates sit inside a sentence, so each takes 1 more click to open the line: add a feature 2 clicks and Enter, move dates 3, set an owner 3, add a milestone 1 and Enter (today 3+4, 4, 4 to 5, 3).",
           "cost": "Owners and dates hide inside sentences; goals and features are two lists far apart; on a shared screen the room scrolls to find a feature.",
           "frames": [
             {
@@ -66,7 +66,7 @@
           "name": "Feature table",
           "recommended": false,
           "what": "Problem and who has it fold to two lines at the top, then one table of every feature with its goal, owner and dates, status and milestone, then the rest of the prose.",
-          "plus": "The densest view: 20 features fit about one screen; good for checking each row.",
+          "plus": "The densest view: 20 features fit about one screen; good for checking each row. Clicks as Goals first: add a feature 1 click and Enter, move dates 2 clicks, set an owner 2, add a milestone 1 click and Enter (today 3 steps plus 4 for dates, 4, 4 to 5, 3 and typing); the goal is one more pick when adding (2 clicks).",
           "cost": "Goals become a column, so the room no longer sees which goal a group serves; no picture of time.",
           "frames": [
             {
@@ -92,7 +92,7 @@
           "name": "Timeline first",
           "recommended": false,
           "what": "A full-width timeline of the features, grouped by goal, opens the page; the prose follows as one-line parts. Owners show in the feature itself, not on the strip.",
-          "plus": "The best picture of order and overlap; matches the roadmap people already know.",
+          "plus": "The best picture of order and overlap; matches the roadmap people already know. Clicks: owner and exact dates open from the bar: add a feature 1 click and Enter, move dates 1 drag or 3 clicks, set an owner 3, add a milestone 1 and Enter (today 3+4, 4, 4 to 5, 3).",
           "cost": "Owners and exact dates are a click away; names cut short on a phone.",
           "frames": [
             {
@@ -290,7 +290,7 @@
           "recommended": true,
           "what": "Each changed thing is marked where it lives: a coloured edge on its row, a New, Changed or Removed tag, the old value struck through beside the new one, and on a moved feature its old dates as an outline behind the bar. Pointing at a mark shows Accept, Flag and Undo on that row. A tick limits the list to changed features.",
           "why": "The reviewer reads the PRD and the delta at once, in the same rows they would change, so nothing is drawn twice and each action sits on the thing it changes.",
-          "plus": "Delta and page are one; 1 click per change; works the same on the phone.",
+          "plus": "Delta and page are one; 1 click per change; works the same on the phone. Edit clicks unchanged from PR2 (add a feature 1 click and Enter, move dates 2 clicks, set an owner 2, add a milestone 1 click and Enter (today 3 steps plus 4 for dates, 4, 4 to 5, 3 and typing)); each change found is resolved in 1 click on its row (point, then Accept, Flag or Undo).",
           "cost": "With many changes the page gets busy; there is no single list to walk through in order.",
           "frames": [
             {
@@ -324,7 +324,7 @@
           "name": "Changes column",
           "recommended": false,
           "what": "A column beside the page lists each change as a card (what, who, when) with Accept, Flag and Undo; pointing at a card lights up its row on the page, which keeps a coloured edge.",
-          "plus": "One list to walk through in order; who and when on every change; close to today's Changes and proposals margin.",
+          "plus": "One list to walk through in order; who and when on every change; close to today's Changes and proposals margin. Edit clicks unchanged from PR2 (add a feature 1 click and Enter, move dates 2 clicks, set an owner 2, add a milestone 1 click and Enter (today 3 steps plus 4 for dates, 4, 4 to 5, 3 and typing)); resolving a change is 1 click on its card.",
           "cost": "Every change is drawn twice (card and row); the column narrows the page; it drops below the page on a phone.",
           "frames": [
             {
@@ -358,7 +358,7 @@
           "name": "Versions side by side",
           "recommended": false,
           "what": "A switch in the bar, Now or 'Version 3 beside now', puts the two versions in two columns, one line per change, old on the left in red, new on the right in green, actions on the right.",
-          "plus": "The plainest before and after; good for a careful pass before approval.",
+          "plus": "The plainest before and after; good for a careful pass before approval. Edit clicks unchanged from PR2 (add a feature 1 click and Enter, move dates 2 clicks, set an owner 2, add a milestone 1 click and Enter (today 3 steps plus 4 for dates, 4, 4 to 5, 3 and typing)); resolving needs 1 click to open the compare view, then 1 per change.",
           "cost": "A separate view from the page people change; one more click to open; two columns crowd a phone.",
           "frames": [
             {
@@ -392,7 +392,7 @@
           "name": "What changed card",
           "recommended": false,
           "what": "A card at the top says what changed in plain sentences, each with Accept, Flag and Undo; the page below carries no marks.",
-          "plus": "The quickest read of the delta for the room; the page stays clean.",
+          "plus": "The quickest read of the delta for the room; the page stays clean. Edit clicks unchanged from PR2 (add a feature 1 click and Enter, move dates 2 clicks, set an owner 2, add a milestone 1 click and Enter (today 3 steps plus 4 for dates, 4, 4 to 5, 3 and typing)); resolving is 1 click per sentence in the card.",
           "cost": "The change and the thing it changes are apart; the reader scrolls to see a change in context.",
           "frames": [
             {

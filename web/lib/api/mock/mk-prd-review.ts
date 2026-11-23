@@ -38,9 +38,27 @@ export const MK_PEOPLE: MkPerson[] = [
 
 export const MK_GOALS: MkGoal[] = [
   // MOCK-HOOK
-  { id: 'g1', name: 'Faster first reply', measure: 'Median time to first reply', start: '9 h', target: '2 h' },
-  { id: 'g2', name: 'Fewer lost requests', measure: 'Requests with no reply after 3 days', start: '12%', target: '3%' },
-  { id: 'g3', name: 'More teams on paid plans', measure: 'Teams paying after the trial', start: '18%', target: '26%' },
+  {
+    id: 'g1',
+    name: 'Faster first reply',
+    measure: 'Median time to first reply',
+    start: '9 h',
+    target: '2 h',
+  },
+  {
+    id: 'g2',
+    name: 'Fewer lost requests',
+    measure: 'Requests with no reply after 3 days',
+    start: '12%',
+    target: '3%',
+  },
+  {
+    id: 'g3',
+    name: 'More teams on paid plans',
+    measure: 'Teams paying after the trial',
+    start: '18%',
+    target: '26%',
+  },
 ];
 
 export const MK_MILESTONES = [
@@ -50,12 +68,72 @@ export const MK_MILESTONES = [
 
 const BASE: MkFeature[] = [
   // MOCK-HOOK the six features a normal one-pager carries
-  { id: 'f1', code: 'F-201', name: 'One shared inbox per team', goal: 'g1', owner: 'p1', start: '2026-11-30', end: '2026-12-18', status: 'building', milestone: 'm1' },
-  { id: 'f2', code: 'F-202', name: 'Assign rules by topic', goal: 'g1', owner: 'p2', start: '2026-12-07', end: '2027-01-12', status: 'planned', milestone: 'm1' },
-  { id: 'f3', code: 'F-203', name: 'Reply templates', goal: 'g1', owner: 'p3', start: '2027-01-04', end: '2027-01-29', status: 'planned', milestone: 'm2' },
-  { id: 'f4', code: 'F-204', name: 'Overdue nudges', goal: 'g2', owner: 'p4', start: '2026-12-14', end: '2027-01-22', status: 'planned', milestone: 'm1' },
-  { id: 'f5', code: 'F-205', name: 'Snooze a thread', goal: 'g2', owner: null, start: '2027-01-18', end: '2027-02-12', status: 'draft', milestone: 'm2' },
-  { id: 'f6', code: 'F-206', name: 'Seat upgrade from the inbox', goal: 'g3', owner: 'p5', start: '2027-01-25', end: '2027-02-26', status: 'planned', milestone: 'm2' },
+  {
+    id: 'f1',
+    code: 'F-201',
+    name: 'One shared inbox per team',
+    goal: 'g1',
+    owner: 'p1',
+    start: '2026-11-30',
+    end: '2026-12-18',
+    status: 'building',
+    milestone: 'm1',
+  },
+  {
+    id: 'f2',
+    code: 'F-202',
+    name: 'Assign rules by topic',
+    goal: 'g1',
+    owner: 'p2',
+    start: '2026-12-07',
+    end: '2027-01-12',
+    status: 'planned',
+    milestone: 'm1',
+  },
+  {
+    id: 'f3',
+    code: 'F-203',
+    name: 'Reply templates',
+    goal: 'g1',
+    owner: 'p3',
+    start: '2027-01-04',
+    end: '2027-01-29',
+    status: 'planned',
+    milestone: 'm2',
+  },
+  {
+    id: 'f4',
+    code: 'F-204',
+    name: 'Overdue nudges',
+    goal: 'g2',
+    owner: 'p4',
+    start: '2026-12-14',
+    end: '2027-01-22',
+    status: 'planned',
+    milestone: 'm1',
+  },
+  {
+    id: 'f5',
+    code: 'F-205',
+    name: 'Snooze a thread',
+    goal: 'g2',
+    owner: null,
+    start: '2027-01-18',
+    end: '2027-02-12',
+    status: 'draft',
+    milestone: 'm2',
+  },
+  {
+    id: 'f6',
+    code: 'F-206',
+    name: 'Seat upgrade from the inbox',
+    goal: 'g3',
+    owner: 'p5',
+    start: '2027-01-25',
+    end: '2027-02-26',
+    status: 'planned',
+    milestone: 'm2',
+  },
 ];
 
 const MORE: [string, string][] = [
@@ -99,10 +177,26 @@ export function mkFeatures(big: boolean): MkFeature[] {
 
 export const MK_SECTIONS = [
   // MOCK-HOOK the PRD's prose, one line each when folded
-  { key: 'problem', title: 'Problem', text: 'Small support teams answer customers from personal mailboxes. Requests get lost between people, and the first reply takes most of a working day.' },
-  { key: 'who', title: 'Who has it', text: 'Teams of 3 to 15 people at Lanternfish customers who answer customer email together, most of them on the trial.' },
-  { key: 'not', title: 'Not doing', text: 'Live chat. Phone calls. A public help centre. Reports beyond the admin usage report.' },
-  { key: 'risks', title: 'Risks and open decisions', text: 'Assign rules may need a topic list from each team before beta. Open: do snoozed threads count as lost after 3 days?' },
+  {
+    key: 'problem',
+    title: 'Problem',
+    text: 'Small support teams answer customers from personal mailboxes. Requests get lost between people, and the first reply takes most of a working day.',
+  },
+  {
+    key: 'who',
+    title: 'Who has it',
+    text: 'Teams of 3 to 15 people at Lanternfish customers who answer customer email together, most of them on the trial.',
+  },
+  {
+    key: 'not',
+    title: 'Not doing',
+    text: 'Live chat. Phone calls. A public help centre. Reports beyond the admin usage report.',
+  },
+  {
+    key: 'risks',
+    title: 'Risks and open decisions',
+    text: 'Assign rules may need a topic list from each team before beta. Open: do snoozed threads count as lost after 3 days?',
+  },
 ];
 
 export const MK_PRD = {
@@ -118,9 +212,53 @@ export const MK_PRD = {
 export const MK_CHANGES: MkChange[] = [
   // MOCK-HOOK six changes since version 3
   { id: 'c1', kind: 'added', where: 'f5', by: 'p3', at: 'Nov 20, 4:12 PM' },
-  { id: 'c2', kind: 'changed', where: 'f2', field: 'dates', before: 'Dec 7 – Dec 22', after: 'Dec 7 – Jan 12', by: 'p2', at: 'Nov 21, 10:03 AM' },
-  { id: 'c3', kind: 'changed', where: 'f4', field: 'owner', before: 'Kemi Adeyo', after: 'Theo Brandt', by: 'p1', at: 'Nov 21, 2:40 PM' },
-  { id: 'c4', kind: 'changed', where: 'g1', field: 'target', before: '3 h', after: '2 h', by: 'p1', at: 'Nov 22, 9:15 AM' },
-  { id: 'c5', kind: 'changed', where: 'problem', field: 'text', before: 'Requests get lost between people.', after: 'Requests get lost between people, and the first reply takes most of a working day.', by: 'p6', at: 'Nov 22, 11:30 AM' },
-  { id: 'c6', kind: 'removed', where: 'not', field: 'text', before: 'Slack replies.', by: 'p4', at: 'Nov 22, 3:05 PM' },
+  {
+    id: 'c2',
+    kind: 'changed',
+    where: 'f2',
+    field: 'dates',
+    before: 'Dec 7 – Dec 22',
+    after: 'Dec 7 – Jan 12',
+    by: 'p2',
+    at: 'Nov 21, 10:03 AM',
+  },
+  {
+    id: 'c3',
+    kind: 'changed',
+    where: 'f4',
+    field: 'owner',
+    before: 'Kemi Adeyo',
+    after: 'Theo Brandt',
+    by: 'p1',
+    at: 'Nov 21, 2:40 PM',
+  },
+  {
+    id: 'c4',
+    kind: 'changed',
+    where: 'g1',
+    field: 'target',
+    before: '3 h',
+    after: '2 h',
+    by: 'p1',
+    at: 'Nov 22, 9:15 AM',
+  },
+  {
+    id: 'c5',
+    kind: 'changed',
+    where: 'problem',
+    field: 'text',
+    before: 'Requests get lost between people.',
+    after: 'Requests get lost between people, and the first reply takes most of a working day.',
+    by: 'p6',
+    at: 'Nov 22, 11:30 AM',
+  },
+  {
+    id: 'c6',
+    kind: 'removed',
+    where: 'not',
+    field: 'text',
+    before: 'Slack replies.',
+    by: 'p4',
+    at: 'Nov 22, 3:05 PM',
+  },
 ];

@@ -1,13 +1,12 @@
 'use client';
 
-import { Link } from '@/lib/nav';
-
+import { MkPrdReview, mkActive, mkParams } from '@/components/simple/MkPrdReview'; // MOCK-HOOK
 import { OnePager as Paper } from '@/components/simple/OnePager';
 import { SimplePage } from '@/components/simple/SimplePage';
 import { Loading } from '@/components/ui';
 import { api, unwrap } from '@/lib/api/client';
+import { Link } from '@/lib/nav';
 import { useQuery } from '@/lib/use-query';
-import { MkPrdReview, mkActive, mkParams } from '@/components/simple/MkPrdReview'; // MOCK-HOOK
 
 /**
  * A PRD's one-pager (#723): S5's page ("A · Paper", components/simple/OnePager), the route the
@@ -21,7 +20,8 @@ export function OnePager({ slug }: { slug: string }) {
   return <RealOnePager slug={slug} />; // MOCK-HOOK
 }
 
-function RealOnePager({ slug }: { slug: string }) { // MOCK-HOOK
+function RealOnePager({ slug }: { slug: string }) {
+  // MOCK-HOOK
   const q = useQuery(`simple|one-pager|${slug}`, () =>
     unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc: slug } } })),
   );
