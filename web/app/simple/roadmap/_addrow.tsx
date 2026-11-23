@@ -19,6 +19,9 @@ export const addSpan = (start: string): [string, string] => [
   addDays(start, ADD_WEEKS * 7 - 1),
 ];
 
+/** de-fix: an add someone proposed in the lane, drawn faint until its decider decides. */
+export type WaitingAdd = { id: string; title: string; start?: string; end?: string };
+
 export type AddAt = (title: string, start: string, end: string) => Promise<boolean>;
 
 /**
@@ -37,6 +40,7 @@ export function AddRow({
   x,
   today,
   onAdd,
+  waiting,
 }: {
   lane: string;
   label: string;
@@ -48,6 +52,7 @@ export function AddRow({
   x: (day: string) => number;
   today: string;
   onAdd: AddAt;
+  waiting?: WaitingAdd[];
 }) {
   const [start, setStart] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -93,6 +98,20 @@ export function AddRow({
         style={{ width: trackW }}
         onClick={place}
       >
+        {waiting?.map((w) => {
+          const [from, to] = w.start && w.end ? [w.start, w.end] : addSpan(mondayOf(today));
+          return (
+            <div
+              key={w.id}
+              data-testid="pending-add"
+              title="Pending decision"
+              className="pointer-events-none absolute top-1 bottom-1 flex items-center truncate rounded-md border border-dashed border-line-strong bg-surface2 px-2 text-sm text-text2 opacity-60"
+              style={{ left: x(from), width: Math.max(80, x(to) - x(from)) }}
+            >
+              {w.title}
+            </div>
+          );
+        })}
         {span && (
           <div
             data-testid="add-row-bar"

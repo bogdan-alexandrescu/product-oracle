@@ -3491,6 +3491,7 @@ export function SimpleRoadmap() {
                         onKeyMove={onKeyMove}
                         onKeyEnd={(item) => dates.flush(item.id)}
                         onKeyCancel={onKeyCancel(dates)}
+                        proposals={allProposals}
                         onAddAt={
                           canChange
                             ? (lane, title, start, end) => {
