@@ -227,6 +227,13 @@ NOT_OFFERED: frozenset[str] = frozenset(
         # offered until allowed by name. The Goal ladder's card places, tidy up and link moves, and
         # the PRD order's moves and restore, too; and a feature let go of a milestone
         # (goal-map-editing).
+        # A feature's comments (list, add, edit, delete, the counts): people's own words, never
+        # read or written by the chats, as the other comment routes.
+        "add_feature_comment",
+        "delete_feature_comment",
+        "edit_feature_comment",
+        "list_feature_comment_counts",
+        "list_feature_comments",
         "carry_over_old_milestones",
         "detach_feature_link",
         "drop_old_milestone",
