@@ -2,10 +2,12 @@
 
 Test cards (protects / fails_when / no_claim):
 
-- test_the_pool_keeps_a_page_loads_connections: protects=the pool keeps at least 15
-  connections and opens none beyond them, so a page load's burst of requests does not make
-  and drop ten connections each time; fails_when=the pool is SQLAlchemy's default again
-  (5 kept, 10 overflow); no_claim=the database's own max_connections.
+- test_the_pool_keeps_a_page_loads_connections: protects=the pool keeps some connections
+  between page loads, and every instance of a release (old and new revisions side by side)
+  at its pool's ceiling still fits the database's connection limit beside the start-up
+  migrations and the scheduler; fails_when=each process may hold more than its share (15
+  kept: 3 instances hold 45 of about 50 for good, and a release runs out of connections), or
+  held connections are never recycled; no_claim=the database's own max_connections.
 - test_a_connection_just_used_is_not_pinged: protects=three sessions in a row ping nothing
   (a ping is three round trips before the first query); fails_when=every checkout pings
   again (pool_pre_ping); no_claim=connections idle past the setting.
@@ -47,9 +49,13 @@ def _count_pings(monkeypatch) -> list[int]:
 async def test_the_pool_keeps_a_page_loads_connections():
     """The pool keeps a page load's connections instead of making them anew each time."""
     pool = get_engine().sync_engine.pool
-    assert pool.size() >= 15, pool.status()
-    assert pool._max_overflow == 0, pool.status()
-    assert get_settings().db_pool_size == pool.size()
+    settings = get_settings()
+    assert settings.db_pool_size == pool.size() == 5, pool.status()
+    assert pool._max_overflow == settings.db_max_overflow == 2, pool.status()
+    assert pool._recycle == settings.db_pool_recycle_seconds == 300, pool.status()
+    # About 50 connections, 3 reserved for superusers; up to 3 instances, 6 while a release
+    # runs old and new side by side; one for the start-up migrations, one for the scheduler.
+    assert 6 * (pool.size() + pool._max_overflow) + 1 + 1 <= 50 - 3
 
 
 async def test_a_connection_just_used_is_not_pinged(monkeypatch):
