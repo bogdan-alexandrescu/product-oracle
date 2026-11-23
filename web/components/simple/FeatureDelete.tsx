@@ -14,7 +14,17 @@ import { deciderWords, partsWords } from '@/app/simple/roadmap/_lib';
  * on the feature (its own `can_decide`, or a Priorities row's `applies`). `onGone`: the feature
  * went to Trash (the page closes its panel). panel-menu: a feature with `parts` asks first, naming
  * how many stay on the roadmap (Delete or Cancel), and says it again once done.
+ * roadmap-add: `now` (the panel's Move to Trash, by who decides) asks nothing: it goes at once,
+ * its row hidden on every view (ITEM_GOING_EVENT) before the call returns, with Undo in the note.
  */
+export const ITEM_GOING_EVENT = 'simple:item-going';
+export type ItemGoingDetail = { id: string; going: boolean };
+const going = (id: string, on: boolean) =>
+  typeof window !== 'undefined' &&
+  window.dispatchEvent(
+    new CustomEvent<ItemGoingDetail>(ITEM_GOING_EVENT, { detail: { id, going: on } }),
+  );
+
 export function useFeatureDelete(
   reload: () => Promise<unknown>,
   toast: (ask: ToastAsk) => void = dsToast,
@@ -27,11 +37,14 @@ export function useFeatureDelete(
     rows?: { label: string; value: string }[];
     propose?: boolean;
     deciders?: string[];
+    now?: boolean;
   }): Promise<void> => {
     const parts = partsWords(f.parts?.length ?? 0, 'stay');
+    const now = !!f.now && !f.propose;
     // pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what points at it.
     // Who may not decide on it (`propose`) is asked to propose it, not to move it.
-    if (f.rows) {
+    if (now) going(f.id, true);
+    else if (f.rows) {
       const ask = f.propose
         ? {
             action: 'Propose',
@@ -66,6 +79,7 @@ export function useFeatureDelete(
       );
       // In Trash: its panel, if open, closes with it.
       if (out.entry) onGone?.(f.id);
+      else if (now) going(f.id, false);
       await reload();
       if (!out.entry) {
         toast({
@@ -88,6 +102,7 @@ export function useFeatureDelete(
                     }),
                   );
                   toast({ message: `Undone: ${f.title} and its links are back.` });
+                  if (now) going(f.id, false);
                 } catch (e) {
                   toast({ message: errorMessage(e) });
                 }
@@ -97,6 +112,7 @@ export function useFeatureDelete(
           : undefined,
       });
     } catch (e) {
+      if (now) going(f.id, false);
       toast({ message: errorMessage(e) });
     }
   };

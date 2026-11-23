@@ -1230,8 +1230,9 @@ export function FloatingCard({
                     () => void cutIt(),
                   )}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
+              {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
               {menuItem(
-                item.can_decide ? 'Move to Trash…' : 'Propose: move to Trash…',
+                item.can_decide ? 'Move to Trash' : 'Propose: move to Trash…',
                 () =>
                   void remove({
                     id: item.id,
@@ -1240,6 +1241,7 @@ export function FloatingCard({
                     rows: pointsAt(item, items),
                     propose: !item.can_decide,
                     deciders: item.deciders,
+                    now: item.can_decide,
                   }),
                 true,
               )}
