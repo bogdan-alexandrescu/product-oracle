@@ -32,3 +32,9 @@ onAddAt / onAddIn; the Delete-key effect), web/lib/api/mock/simple-changes.ts (a
 end_date, as additions._plan does).
 Open: a just-added draft's bar did not move with a horizontal mouse drag in a test (re-track of the same bar works);
 not looked into. Check it first if you pick this up.
+
+Regression check (existing specs, --retries=0, at fa3875522): roadmap-add, roadmap-edit-fixes(-2), qa-nov17-roadmap-layout,
+qa4r-timeline, fix2-simple-roadmap-board, roadmap-track-bands-milestone-kinds, panel-menu, board-quarters,
+fix4-simple-roadmap-chart, roadmap-dates, qa4-simple-roadmap, panel-menu-tree, roadmap-decide: 177 passed.
+roadmap-track-order.spec.ts:66 fails, and fails the same way with the base's files (7f932ba): pre-existing (the
+Track filter locator also reads a second select). The other ~50 specs that read the Timeline/board were not run.
