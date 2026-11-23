@@ -287,6 +287,21 @@ async def test_added_item_gets_the_next_free_code(client):
     assert len(codes) == len(set(codes))
 
 
+async def test_two_adds_at_the_same_moment_get_different_codes(client):
+    """Two people adding at once each get their own next code, never the same F-number."""
+    import asyncio
+
+    w = await World().build()
+    # Opens the working draft first: its own first-add race is separate.
+    await w.add(client, "owner", "Opens the working draft")
+    people = ["owner", "decider"]  # each has their own editing session
+    out = await asyncio.gather(*(w.add(client, p, f"Parallel {p}") for p in people))
+    got = []
+    for p, o in zip(people, out, strict=True):
+        got.append((await w.items(client, p))[o["change"]["target"]["item_id"]]["code"])
+    assert all(got) and len(set(got)) == len(people), got
+
+
 async def test_set_goals_moves_an_item_to_another_goal(client):
     """Moving a Simple item's goal applies, and undo restores the original goal."""
     w = await World().build()
