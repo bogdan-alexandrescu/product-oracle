@@ -153,13 +153,14 @@ async def plan_in_play(
 
 
 def _items(read_: service.Read) -> dict[str, service.Entry]:
-    """Feature id -> its item: the earliest horizon, then the lowest key (cut and draft items
-    never: a draft is not ranked yet)."""
+    """Feature id -> its item: an open one before a Done one (prio-ux #1738), then the earliest
+    horizon, then the lowest key (cut and draft items never: a draft is not ranked yet)."""
     out: dict[str, service.Entry] = {}
 
     def key(e: service.Entry) -> tuple:
         h = e.horizon
-        return (HORIZONS.index(h) if h in HORIZONS else len(HORIZONS), e.row.item_key)
+        return (e.status == "done", HORIZONS.index(h) if h in HORIZONS else len(HORIZONS),
+                e.row.item_key)  # fmt: skip
 
     for e in read_.entries:
         if e.row.feature_id is None or e.status == "cut" or e.row.draft:
@@ -417,7 +418,7 @@ def _unranked(read_: service.Read, ranked: set[str]) -> list[SimplePriorityUnran
 
     out = []
     for e in sorted(read_.entries, key=key):
-        if e.status in ("cut", "merged") or e.row.draft:
+        if e.status in ("cut", "merged", "done") or e.row.draft:
             continue
         if e.row.feature_id is not None and str(e.row.feature_id) in ranked:
             continue
@@ -886,7 +887,10 @@ async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> Simp
     trashed = await _trashed_without_live(
         db, {f.entity_id for f in ranking.features if f.entity_id not in items}
     )
-    features = [f for f in ranking.features if f.entity_id not in trashed]
+    # prio-ux (#1738): finished work is not ranked: a feature whose items are all Done leaves
+    # the rows (and so the Line, the value / effort chart and the goal buckets).
+    finished = {fid for fid, e in items.items() if e.status == "done"}
+    features = [f for f in ranking.features if f.entity_id not in trashed | finished]
     # prio-company (Nov 4): an owner moves every row; a feature not on the company roadmap
     # their move adds there (targets.add_to_company). Anyone else moves what is on it.
     owner = has_role(principal.role, "owner")
