@@ -34,6 +34,7 @@ import {
   roadmapName,
   useRoadmapDocs,
 } from './_edit-plan';
+import { AtRiskItems } from './_at-risk';
 import { PlanInspector } from './_inspector';
 import { wantedRow, type PlanItem } from './_lib';
 import { MissingItem } from './_missing-item';
@@ -293,10 +294,8 @@ function PlanPage() {
                 <Chip kind="acc" data-testid="plan-count-prds">
                   {counts.prds} {counts.prds === 1 ? 'PRD' : 'PRDs'}
                 </Chip>
-                {counts.at_risk > 0 && (
-                  <Chip kind="crit" data-testid="plan-count-at-risk">
-                    {counts.at_risk} at risk
-                  </Chip>
+                {counts.at_risk > 0 && data && (
+                  <AtRiskItems count={counts.at_risk} items={data.items} onSelect={onSelect} />
                 )}
                 {counts.proposed > 0 && (
                   <Chip kind="warn" data-testid="plan-count-proposed">

@@ -1,6 +1,5 @@
 'use client';
 
-import { Link, usePathname, useRouter } from '@/lib/nav';
 import { useId, useState, type ComponentProps, type ReactNode } from 'react';
 
 import {
@@ -16,7 +15,16 @@ import {
   type Column,
   type IconName,
 } from '@/components/ds';
+import { BUILD_PARAM } from '@/components/NextDraft';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
+import {
+  alertSentence,
+  inboxTracks,
+  planHref,
+  reopenTrackAlert,
+  type InboxTrack,
+  type TrackAlertOut,
+} from '@/lib/api/track-alerts';
 import {
   addDays,
   displayZone,
@@ -28,25 +36,11 @@ import {
 import { formatAge, formatDate, formatDateTime, formatMoney, plural } from '@/lib/format';
 import { runLabel } from '@/lib/labels';
 import { useMe, type Operation } from '@/lib/me';
+import { Link, usePathname, useRouter } from '@/lib/nav';
+import { sectionHref } from '@/lib/section-link';
 import { lostItems, needingAttention, needsPerson } from '@/lib/source-attention';
 import { errorMessage } from '@/lib/use-query';
-import { BUILD_PARAM } from '@/components/NextDraft';
-import { sectionHref } from '@/lib/section-link';
-import {
-  acceptTrackAlertDate,
-  alertSentence,
-  firstSafeAction,
-  HEALTH_WORD,
-  inboxTracks,
-  keepTrackAlert,
-  planHref,
-  reopenTrackAlert,
-  reviewHref as alertReviewHref,
-  type InboxTrack,
-  type TrackAlertOut,
-} from '@/lib/api/track-alerts';
 
-import { InboxActions, SuggestionPeek, type OnActed } from './_actions';
 import {
   CANCEL_AGAIN_CONFIRM,
   briefsCheck,
@@ -63,6 +57,15 @@ import {
   type InboxOut,
   type RunSummary,
 } from '../runs/_lib';
+
+import { InboxActions, SuggestionPeek, type OnActed } from './_actions';
+import {
+  AlertItem,
+  AlertSummary,
+  alertTitle,
+  TrackAlertActions,
+  trackStatus,
+} from './_track-alert';
 
 /** One row of B1's "Needs you" table: kind, item, context, age, the action. Inbox and Home draw the same rows. */
 export type Need = {
@@ -97,6 +100,8 @@ export type Need = {
   children?: Need[];
   /** The parent's key, on a child row. */
   childOf?: string;
+  /** inbox-ux (#1786): a child row's own kind cell (a track alert's kind), in place of the bare rule. */
+  kindCell?: ReactNode;
   /** B-22: how many items the row stands for (a group of checkpoints counts each of its runs). */
   size?: number;
   /** B-22: its children stay folded until "Show runs" opens them. */
@@ -133,7 +138,9 @@ const BASE_COLUMNS: Column<Need>[] = [
     // A child row's kind cell is empty: the left rule ties it to its parent.
     className: 'max-[600px]:has-[[data-child-rule]]:hidden',
     cell: (n) =>
-      n.childOf ? (
+      n.childOf && n.kindCell ? (
+        <span className="ml-2 flex min-w-0">{n.kindCell}</span>
+      ) : n.childOf ? (
         <span
           data-child-rule
           aria-hidden
@@ -2953,8 +2960,6 @@ const ALERT_KIND: Record<TrackAlertOut['kind'], string> = {
   prd_moved: 'PRD moved on',
 };
 
-const alertTitle = (a: TrackAlertOut) => a.item_title ?? a.item_key ?? a.prd.title;
-
 /**
  * F2: the Inbox's track rows. A track with open alerts is one row, "<PRD> · At risk · N need
  * you" with Open in Plan, and (on the Inbox, not Home) up to three alerts under it, each with
@@ -2972,29 +2977,15 @@ export function trackNeeds(
   for (const t of tracks) {
     const need = t.counts.open + t.counts.new;
     if (need > 0) {
-      const label = `${t.prd.title} · ${(t.health && HEALTH_WORD[t.health]) || 'At risk'} · ${need} need you`;
+      const label = `${t.prd.title} · ${trackStatus(t.health)} · ${need} need you`;
       const kinds = [...new Set(t.alerts.map((a) => ALERT_KIND[a.kind]))].join(', ');
       const children: Need[] = t.alerts.map((a) => ({
         key: `track-alert-${a.id}`,
         icon: 'flag',
         kind: 'Track alert',
-        item: (
-          <>
-            <span className="truncate" data-testid="child-title" title={alertTitle(a)}>
-              {alertTitle(a)}
-            </span>
-            <Chip kind="warn">{ALERT_KIND[a.kind]}</Chip>
-          </>
-        ),
-        context: (
-          <span
-            className="block truncate text-sm text-text2"
-            title={alertSentence(a)}
-            data-testid="track-alert-detail"
-          >
-            {alertSentence(a)}
-          </span>
-        ),
+        item: <AlertItem a={a} />,
+        kindCell: <Chip kind="warn">{ALERT_KIND[a.kind]}</Chip>,
+        context: <AlertSummary a={a} />,
         action: <TrackAlertActions key={`${a.id}-${a.state}`} a={a} busy={busy} act={act} />,
       }));
       if (t.more > 0 || t.counts.kept > 0) {
@@ -3104,111 +3095,4 @@ export function trackNeeds(
     }
   }
   return out;
-}
-
-/** A track alert's first safe action (Accept new date, Review or Keep watching, with an optional note) and Open. */
-function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | null; act: Act }) {
-  const [keeping, setKeeping] = useState(false);
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const fieldId = useId();
-  const title = alertTitle(a);
-  const first = firstSafeAction(a);
-  const run = (key: string, call: () => Promise<unknown>) => {
-    setError(null);
-    void act(key, () => call().catch((e) => setError(errorMessage(e))));
-  };
-  const errorLine = error && (
-    <span
-      role="alert"
-      className="basis-full text-right text-sm text-crit max-[600px]:text-left"
-      data-testid="child-error"
-    >
-      {error}
-    </span>
-  );
-  if (keeping) {
-    return (
-      <form
-        data-child-actions
-        data-testid="track-keep-field"
-        className="flex w-full flex-col items-stretch gap-1.5 py-1 text-left whitespace-normal"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(`keep-${a.id}`, () => keepTrackAlert(a.id, note.trim() || null));
-        }}
-      >
-        <label htmlFor={fieldId} className="text-sm leading-4 font-semibold text-text2">
-          Note (optional)
-        </label>
-        <input
-          id={fieldId}
-          autoFocus
-          value={note}
-          maxLength={500}
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => e.key === 'Escape' && setKeeping(false)}
-          className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
-        />
-        {errorLine}
-        <span className="flex justify-end gap-1.5 max-[600px]:flex-col">
-          <Button type="submit" disabled={busy !== null} className="max-[600px]:w-full">
-            Keep watching
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={busy !== null}
-            onClick={() => setKeeping(false)}
-            className="max-[600px]:w-full"
-          >
-            Cancel
-          </Button>
-        </span>
-      </form>
-    );
-  }
-  return (
-    <span
-      data-child-actions
-      className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full"
-    >
-      {first === 'accept_date' && (
-        <Button
-          disabled={busy !== null}
-          aria-label={`Accept new date for ${title}`}
-          onClick={() => run(`accept-${a.id}`, () => acceptTrackAlertDate(a.id))}
-        >
-          Accept new date
-        </Button>
-      )}
-      {first === 'review' && (
-        <LinkButton href={alertReviewHref(a)} aria-label={`Review ${title}`}>
-          Review
-        </LinkButton>
-      )}
-      {first === 'keep' && (
-        <Button
-          disabled={busy !== null}
-          aria-label={`Keep watching ${title}`}
-          onClick={() => setKeeping(true)}
-        >
-          Keep watching
-        </Button>
-      )}
-      {first !== 'keep' && a.actions.includes('keep') && (
-        <Button
-          variant="ghost"
-          disabled={busy !== null}
-          aria-label={`Keep watching ${title}`}
-          onClick={() => setKeeping(true)}
-        >
-          Keep watching
-        </Button>
-      )}
-      <LinkButton href={planHref(a)} aria-label={`Open ${title}`}>
-        Open
-      </LinkButton>
-      {errorLine}
-    </span>
-  );
 }

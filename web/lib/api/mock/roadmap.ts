@@ -23,7 +23,7 @@ import type {
 
 import { companyDayIso } from './connections';
 import { mockUuid, seeded, stableUuid } from './ids';
-import { prdCode } from './item-code';
+import { codedTitle, prdCode } from './item-code';
 import type { PlanEditItem, PlanEditsDb } from './plan-edits';
 import { diffItems, snapshot } from './roadmap-diff';
 import itemsFixture from './roadmap-items.json';
@@ -322,7 +322,7 @@ export function seedRoadmap(
   const trails = scenario === APPROVED_ROADMAP_SCENARIO;
   const sameKey = scenario === PLAN_SAME_KEY_SCENARIO;
   const sectionCode =
-    scenario === PLAN_SECTION_CODE_SCENARIO
+    scenario === PLAN_SECTION_CODE_SCENARIO || scenario === INBOX_UX_SCENARIO
       ? 'plain'
       : scenario === PLAN_SECTION_LINKED_SCENARIO || scenario === PLAN_SECTION_FEATURE_SCENARIO
         ? 'linked'
@@ -396,6 +396,21 @@ export function seedRoadmap(
         ),
       ];
     }
+    if (scenario === INBOX_UX_SCENARIO)
+      db.alerts = [
+        staleAlert(
+          track.id,
+          'alert-routing',
+          'F-31 Alert routing by team',
+          '5 Ground Truth items changed; PRD section Behaviour changed in version 2',
+        ),
+        staleAlert(
+          track.id,
+          'alert-digest',
+          'Weekly alert digest',
+          'PRD section Digest changed in version 2',
+        ),
+      ];
     if (scenario === PLAN_APPROVE_STALE_SCENARIO)
       (db.alerts ??= []).push({
         id: stableUuid('track-alert/alert-digest/stale'),
@@ -3941,6 +3956,11 @@ export const TRACK_ALERTS_STALE_SCENARIO = 'track-alerts-stale';
  * one stale alert already, on the Weekly alert digest.
  */
 export const STALE_RULE_SCENARIO = 'stale-rule';
+/**
+ * inbox-ux (#1786): the approved plan with its coded item (as "plan-section-code") and two stale
+ * alerts: F-31 Alert routing by team, with two reasons, and the Weekly alert digest, which has no code.
+ */
+export const INBOX_UX_SCENARIO = 'inbox-ux';
 /** As "track-alerts-stale", the PRD section Behaviour removed in version 2 (not changed). */
 export const TRACK_ALERTS_STALE_REMOVED_SCENARIO = 'track-alerts-stale-removed';
 /**
@@ -4179,8 +4199,13 @@ function alertOut(
     ctx.onlyLead && actions.includes('ask') && ctx.onlyLead.user_id !== ctx.userId
       ? ctx.onlyLead
       : null;
+  // inbox-ux (#1786): as alerts.out, the item's code (codes.code_of: its title's, else its PRD section's).
+  const item = a.item_key
+    ? alertsApproved(db.section_code).find((i) => i.key === a.item_key)
+    : null;
   return {
     ...a,
+    item_code: item ? codedTitle(item.title, prdCode(item.section))[0] : null,
     prd: { slug: prd?.slug ?? '', title: prd?.title ?? '' },
     actions,
     inbox_state: inbox,
