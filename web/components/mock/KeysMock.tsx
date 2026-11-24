@@ -179,7 +179,7 @@ export function KeysMock() {
     setQ(p('q'));
     setNudge(p('nudge') === '1');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, sp.toString()]);
+  }, [sp.toString()]);
 
   useEffect(() => {
     if (!on) return;
