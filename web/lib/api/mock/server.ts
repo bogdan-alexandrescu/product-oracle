@@ -9837,6 +9837,37 @@ export function resetMockData() {
   localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
 
+/**
+ * The consent screen's Approve, in the mock: the grant the client's code exchange makes
+ * (the real API issues it at POST /oauth/token), so it shows under Connected clients.
+ */
+export function mockGrantClient(
+  email: string,
+  client: { id: string; name: string },
+  write: boolean,
+) {
+  const db = load();
+  const member = db.members.find((x) => x.email === email);
+  if (!member) return;
+  const now = new Date().toISOString();
+  (db.account ??= seedAccount(db.members, uuid)).tokens.push({
+    id: uuid(),
+    name: client.name,
+    kind: 'mcp_client',
+    role: write ? member.role : 'viewer',
+    user_id: member.id,
+    owner_email: member.email,
+    scopes: write ? ['oracle:read', 'oracle:write'] : ['oracle:read'],
+    created_at: now,
+    last_used_at: now,
+    revoked_at: null,
+    expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    run_id: null,
+    client_id: client.id,
+  });
+  save(db);
+}
+
 // ---------------------------------------------------------------- domain helpers
 
 /** A document as GET /v1/documents/{doc} returns it (DocumentOut). */

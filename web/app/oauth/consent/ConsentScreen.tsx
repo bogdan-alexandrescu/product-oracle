@@ -1,15 +1,15 @@
 'use client';
 
 import createClient from 'openapi-fetch';
-import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 import { useEffect, useState } from 'react';
 
 import { AuthCard } from '@/app/login/_components/AuthCard';
-import { Button, Chip, InfoTip, Label, Notice } from '@/components/ds';
 import { scopeLabel } from '@/components/account/scopes';
+import { Button, Chip, InfoTip, Label, Notice } from '@/components/ds';
 import { Loading } from '@/components/ui';
 import { ApiError, MOCK_MODE, unwrap, type Schemas } from '@/lib/api/client';
 import type { paths } from '@/lib/api/schema';
+import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 
 import { consentMockFetch } from './mock';
 
@@ -183,6 +183,13 @@ export function ConsentScreen() {
               {pending === 'deny' ? 'Denying…' : 'Deny'}
             </Button>
           </div>
+          <Link
+            href="/account#connect"
+            className="text-center text-sm text-accent-ink hover:underline"
+            data-testid="consent-manage"
+          >
+            Your connected clients
+          </Link>
         </div>
       )}
     </AuthCard>

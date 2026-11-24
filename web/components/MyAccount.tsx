@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from '@/lib/nav';
 import { useState, type FormEvent } from 'react';
 
+import { Field, INPUT } from '@/app/settings/_components/fields';
 import { ActedCell, SETTLING, useActed } from '@/components/account/acted';
 import { ConfirmDialog } from '@/components/account/ConfirmDialog';
 import { scopeLabel } from '@/components/account/scopes';
@@ -15,8 +15,6 @@ import {
   tokenState,
   when,
 } from '@/components/ApiTokensSettings';
-import { ROLE_LABEL } from '@/components/MembersSettings';
-import { Field, INPUT } from '@/app/settings/_components/fields';
 import {
   Button,
   Chip,
@@ -33,16 +31,19 @@ import {
   SegmentedControl,
   Split,
 } from '@/components/ds';
+import { ConnectedClients } from '@/components/mcp/McpClients';
+import { ConnectGuide } from '@/components/mcp/McpConnect';
+import { ROLE_LABEL } from '@/components/MembersSettings';
 import {
   api,
   ApiError,
   unwrap,
   type ApiToken,
-  type McpClient,
   type MyAccount as Account,
 } from '@/lib/api/client';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
+import { useRouter } from '@/lib/nav';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 /** "Password" or "Google". */
@@ -156,9 +157,10 @@ export function MyAccount() {
       />
       <Split inspector={inspector}>
         {accountQ.error && <Notice tone="error">{accountQ.error}</Notice>}
+        <ConnectGuide url={account?.mcp_url} query={clientsQ} />
+        <ConnectedClients query={clientsQ} tokens={liveTokens} />
         {account && <PasswordPanel account={account} onChanged={refreshCredentials} />}
         <TokensPanel query={tokensQ} />
-        <ClientsPanel query={clientsQ} />
         <SlackPingsPanel />
       </Split>
       <ConfirmDialog
@@ -718,141 +720,6 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
             text: 'Approvals given through it stop counting; yours given in person stand.',
           },
           { icon: 'doc', text: "It stays listed as revoked; it can't be turned back on." },
-        ]}
-      />
-    </Panel>
-  );
-}
-
-function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]>> }) {
-  const [confirming, setConfirming] = useState<McpClient | null>(null);
-  const [revoking, setRevoking] = useState(false);
-  const [confirmError, setConfirmError] = useState<string | null>(null);
-  const acts = useActed();
-
-  async function revoke(c: McpClient) {
-    setRevoking(true);
-    setConfirmError(null);
-    try {
-      await unwrap(
-        api.DELETE('/v1/me/oauth-clients/{grant_id}', { params: { path: { grant_id: c.id } } }),
-      );
-      const at = new Date().toISOString();
-      query.setData((prev) =>
-        prev?.map((x) => (x.id === c.id ? { ...x, revoked_at: x.revoked_at ?? at } : x)),
-      );
-      setConfirming(null);
-      acts.mark({ key: c.id, outcome: 'Revoked' });
-    } catch (e) {
-      setConfirmError(errorMessage(e));
-    } finally {
-      setRevoking(false);
-    }
-  }
-
-  const rows = query.data ? [...query.data].reverse() : undefined;
-  const columns: Column<McpClient>[] = [
-    {
-      key: 'name',
-      header: 'Client',
-      cell: (c) => (
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium" title={c.client_name}>
-            {c.client_name}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: 'scopes',
-      header: 'What it can do',
-      width: '128px',
-      hideOnPhone: true,
-      wrap: true,
-      cell: (c) => <Scopes scopes={c.scopes} />,
-    },
-    {
-      key: 'authorized',
-      header: 'Authorized',
-      width: '124px',
-      hideOnPhone: true,
-      cell: (c) => when(c.authorized_at),
-    },
-    {
-      key: 'used',
-      header: 'Last used',
-      width: '124px',
-      phoneLabel: 'Used ',
-      cell: (c) => when(c.last_used_at),
-    },
-    { key: 'status', header: 'Status', width: '140px', cell: (c) => <TokenStatus t={c} /> },
-    {
-      key: 'action',
-      header: <span className="sr-only">Actions</span>,
-      width: '96px',
-      align: 'right',
-      phone: 'action',
-      wrap: true,
-      cell: (c) =>
-        acts.acted?.key === c.id ? (
-          <ActedCell acted={acts.acted} onUndo={acts.undo} />
-        ) : tokenState(c) === 'active' ? (
-          <Button
-            aria-label={`Revoke ${c.client_name}`}
-            onClick={() => {
-              setConfirmError(null);
-              setConfirming(c);
-            }}
-          >
-            Revoke
-          </Button>
-        ) : null,
-    },
-  ];
-
-  return (
-    <Panel
-      title="MCP clients"
-      count={<ActiveOfTotal rows={query.data} />}
-      testId="clients-panel"
-      tools={
-        <InfoTip label="MCP clients" align="end">
-          AI tools and apps you let use Oracle as you. Revoking one ends its access at once.
-        </InfoTip>
-      }
-    >
-      {query.error ? (
-        <div className="p-4">
-          <Notice tone="error">{query.error}</Notice>
-        </div>
-      ) : (
-        <div className={SETTLING}>
-          <DataTable
-            label="MCP clients"
-            columns={columns}
-            rows={rows}
-            loading={!rows}
-            rowKey={(c) => c.id}
-            rowProps={(c) => ({ 'data-testid': 'my-client-row', ...acts.rowAttrs(c.id) })}
-            empty="No MCP clients"
-          />
-        </div>
-      )}
-      <ConfirmDialog
-        open={!!confirming}
-        title="Revoke this MCP client?"
-        subject={confirming?.client_name}
-        testId="revoke-client-dialog"
-        confirmLabel="Revoke"
-        pendingLabel="Revoking…"
-        pending={revoking}
-        error={confirmError}
-        onClose={() => setConfirming(null)}
-        onConfirm={() => confirming && revoke(confirming)}
-        consequences={[
-          { icon: 'lock', text: 'Its access and refresh tokens stop working at once.' },
-          { icon: 'check', text: 'Approvals made through it stop counting.' },
-          { icon: 'link', text: 'To use it again, authorize it again from the client.' },
         ]}
       />
     </Panel>
