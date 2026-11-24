@@ -24,3 +24,10 @@ export const MK_MINE: MkHistoryLine[] = [ // MOCK-HOOK
   { who: 'Avery Stone', what: 'Moved F-131 Self-serve plan downgrade with prorated credit for annual teams to Trash', when: '10:58 AM', undo: true }, // MOCK-HOOK
   { who: 'Avery Stone', what: 'Cut F-64 In-app tour from the roadmap', when: '9:15 AM', undo: true }, // MOCK-HOOK
 ]; // MOCK-HOOK
+
+/** A commenter's own proposals today (UT3 b's hard case): each waits for the owner; Withdraw takes it back. */ // MOCK-HOOK
+export const MK_ASKED: MkHistoryLine[] = [ // MOCK-HOOK
+  { who: 'Theo Lindqvist', what: 'Proposed: move F-112 Seat-based invoices to rank 2', when: '11:42 AM', undo: true }, // MOCK-HOOK
+  { who: 'Theo Lindqvist', what: 'Proposed: set F-88 Quiet hours for alerts to Done', when: '11:31 AM', undo: true }, // MOCK-HOOK
+  { who: 'Theo Lindqvist', what: 'Proposed: cut F-64 In-app tour from the roadmap', when: '9:15 AM', undo: true }, // MOCK-HOOK
+]; // MOCK-HOOK
