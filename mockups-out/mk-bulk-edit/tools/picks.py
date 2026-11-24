@@ -155,7 +155,7 @@ D.append({
         ('result', 'Applied: a toast "2 changed, 1 sent to Avery Stone to approve" with Undo; Weekly alert digest reads "Rosa Lind, waiting for Avery Stone". The dashed note in the left menu gives the clicks.'),
         ('result-dark', 'The same result in dark mode.'),
         ('hard-1512', 'Hard case, 1512 wide, signed in as Mei Arden, a commenter: every box stays (all can be proposed), the bar says her changes go to Avery Stone, the button says "Propose 4 changes".'),
-        ('phone', 'Phone 390: the result as a toast, with rows 2 and 3 above it.'),
+        ('phone', 'Phone 390: the result as a toast at the bottom; rows 1 to 3 above it.'),
         ('phone-dark', 'The same phone frame in dark mode.'),
      ])},
     {'letter': 'C', 'name': 'Apply, then report', 'recommended': False,
