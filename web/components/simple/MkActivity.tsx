@@ -95,7 +95,7 @@ function Comment({ e, ma2 }: { e: MkEvent; ma2: string }) {
 }
 
 function Undo({ id, open, busy, label = 'Undo' }: { id: string; open?: boolean; busy?: boolean; label?: string }) {
-  if (id !== 'e2' && id !== 'Dates') return null;
+  if ((id !== 'e2' && id !== 'Dates') || mkParam('role') === 'commenter') return null;
   return (
     <>
       <button type="button" className="h-6 shrink-0 self-start rounded px-1.5 text-xs font-semibold text-accent-ink hover:bg-surface2">
