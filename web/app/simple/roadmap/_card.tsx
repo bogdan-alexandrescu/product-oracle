@@ -1340,10 +1340,11 @@ export function FloatingCard({
       {cut && !mkCutToast && ( // MOCK-HOOK: the cut's toast is its one Undo while it shows
         <CutBy
           id={item.id}
-          onRestore={canChange ? () => void restore() : undefined}
+          onRestore={canChange && mkParam('ut3') !== 'a' ? () => void restore() : undefined} // MOCK-HOOK: UT3 a: History's Undo on the cut line is its one way back
           restoreLabel={item.can_decide ? 'Restore' : 'Propose: restore'}
         />
       )}
+      <MkHistory canUndo={item.can_decide} /> {/* MOCK-HOOK: UT3 a: History sits right under the status and the cut line */}
       {pick && (
         <PickFeature
           key={pick}
@@ -1579,7 +1580,6 @@ export function FloatingCard({
             </section>
           )}
           {flowPart}
-          <MkHistory canUndo={item.can_decide} /> {/* MOCK-HOOK */}
           <Part title="Proposals on it">
             {waiting.length > 0 && (
               <ul className="mt-1 space-y-1" data-testid="card-talk-proposals">
@@ -1620,9 +1620,7 @@ export function FloatingCard({
                       />
                     )}
                     <span className="min-w-0 flex-1">
-                      {opWords(c.op)}
-                      {mkParam('ut2') && c.op === 'set_status' && (c.after?.shipped || c.after?.cut) ? ` to ${c.after.shipped ? 'Done' : 'Cut'}` : ''}{' '}{/* MOCK-HOOK: the proposal names its new value */}
-                      · <span className="text-text2">{c.by_name}</span>
+                      {opWords(c.op)}{mkParam('ut2') && c.op === 'set_status' && (c.after?.shipped || c.after?.cut) ? ` to ${c.after.shipped ? 'Done' : 'Cut'}` : ''} · <span className="text-text2">{c.by_name}</span> {/* MOCK-HOOK: the proposal names its new value */}
                       {c.from_meeting && (
                         <span
                           className="block text-sm text-text2"

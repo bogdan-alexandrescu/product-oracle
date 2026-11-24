@@ -60,7 +60,7 @@ for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(TEXT), ...Obje
       } // MOCK-HOOK
       if (focus) { // MOCK-HOOK
         document.querySelectorAll<HTMLElement>('button').forEach((e) => { e.style.outline = ''; e.style.outlineOffset = ''; }); // MOCK-HOOK
-        const b = [...document.querySelectorAll<HTMLElement>(focus)].find((e) => /^(Undo|Restore|Withdraw)(?! whole)/.test(e.textContent?.trim() ?? '')); // MOCK-HOOK
+        const b = [...document.querySelectorAll<HTMLElement>(focus)].find((e) => /^(Undo|Restore|Withdraw)(?! whole| my last)/.test(e.textContent?.trim() ?? '')); // MOCK-HOOK
         if (!b) return false; // MOCK-HOOK
         b.style.outline = '2px solid #1d6fb8'; // MOCK-HOOK
         b.style.outlineOffset = '2px'; // MOCK-HOOK

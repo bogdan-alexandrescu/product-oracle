@@ -68,18 +68,26 @@ export function useMkCutToast(title: string) { // MOCK-HOOK
   return !!mkParam('ut2') && all.some((e) => !e.kind && live(e) && e.action?.label === 'Undo' && typeof e.message === 'string' && e.message.startsWith('Cut ') && e.message.includes(title)); // MOCK-HOOK
 } // MOCK-HOOK
 const undo = (e: Entry) => { e.done = 'undone'; emit(); e.action?.onClick(); }; // MOCK-HOOK
+/** The draft banner's 'Undo my last change': the newest of the mock-ups' quick changes still in the draft; false when none. */ // MOCK-HOOK
+export function mkUndoLast() { // MOCK-HOOK
+  const e = [...log].reverse().find((x) => x.quick && !x.done); // MOCK-HOOK
+  if (!e) return false; // MOCK-HOOK
+  undo(e); // MOCK-HOOK
+  return true; // MOCK-HOOK
+} // MOCK-HOOK
+const nb = (m: string) => m.replace(/\bF-(\d+) /g, 'F\u2011$1\u00a0').replace(/\bIn-app\b/g, 'In\u2011app'); // MOCK-HOOK: a code never breaks across lines
 
 const CARD = 'pointer-events-auto rounded-panel border border-line bg-hero text-base text-hero-text shadow-tip'; // MOCK-HOOK
 const BTN = 'h-8 flex-none rounded-lg px-2.5 text-sm font-semibold text-hero-text underline-offset-2 hover:bg-hero-2 hover:underline'; // MOCK-HOOK
 const KBD = 'rounded border border-hero-line px-1 text-xs text-hero-text2'; // MOCK-HOOK
 
-function Line({ e, kbd, bar }: { e: Entry; kbd?: boolean; bar?: boolean }) { // MOCK-HOOK
+function Line({ e, kbd, bar, onDone }: { e: Entry; kbd?: boolean; bar?: boolean; onDone?: () => void }) { // MOCK-HOOK
   const left = mkParam('hold') ? 0.62 : Math.max(0, 1 - (Date.now() - e.at) / LIFE); // MOCK-HOOK
   return ( // MOCK-HOOK
     <div className="relative flex min-w-0 items-center gap-3 px-4 py-2.5" data-mk-line=""> {/* MOCK-HOOK */}
-      <span className="min-w-0 flex-1 break-words">{e.message}</span> {/* MOCK-HOOK */}
+      <span className="min-w-0 flex-1 break-words">{typeof e.message === 'string' ? nb(e.message) : e.message}</span> {/* MOCK-HOOK */}
       {e.action && ( // MOCK-HOOK
-        <button type="button" className={BTN} aria-keyshortcuts={kbd ? 'Control+Z' : undefined} onClick={() => undo(e)}> {/* MOCK-HOOK */}
+        <button type="button" className={BTN} aria-keyshortcuts={kbd ? 'Control+Z' : undefined} onClick={() => { undo(e); onDone?.(); }}> {/* MOCK-HOOK: UT1 c: the open list closes once a change in it is undone */}
           {e.action.label} {kbd && e.action.label === 'Undo' && <kbd className={`${KBD} max-[600px]:hidden`}>Ctrl Z</kbd>} {/* MOCK-HOOK */}
         </button> // MOCK-HOOK
       )} {/* MOCK-HOOK */}
@@ -119,11 +127,12 @@ function useClear(key: number) { // MOCK-HOOK: as today's clearSpot: at the bott
       const r = !phone && card && card.width && card.left > window.innerWidth / 2 ? Math.round(window.innerWidth - card.left + 16) : 16; // MOCK-HOOK
       setRight((o) => (o === r ? o : r)); // MOCK-HOOK
       if (r !== 16 && Math.abs(window.innerWidth - box.right - r) > 2) return; // MOCK-HOOK: measure again once it has moved
-      const low = Math.max(0, window.innerHeight - (phone ? 80 : 16) - box.height); // MOCK-HOOK
+      const low = Math.max(0, window.innerHeight - (phone ? 80 : 10) - box.height); // MOCK-HOOK
+      if (phone) { setTop((o) => (o === null ? o : null)); return; } // MOCK-HOOK: on a phone it keeps the bottom, over the lower screen
       const high = phone ? 72 : 16; // MOCK-HOOK
       const els = controls(); // MOCK-HOOK
-      let best = low, most = hits(low, box, els); // MOCK-HOOK
-      for (let t = high; t < low && most > 0; t += 8) { const n = hits(t, box, els); if (n < most) { most = n; best = t; } } // MOCK-HOOK
+      let best = low, most = hits(low, box, els); // MOCK-HOOK: it stays at the bottom unless a real button is under it, so it never leaps across the page over chart chips
+      for (let t = high; t < low && most >= 20; t += 8) { const n = hits(t, box, els); if (n < most) { most = n; best = t; } } // MOCK-HOOK
       setTop((o) => (o === best ? o : best)); // MOCK-HOOK
     }; // MOCK-HOOK
     check(); // MOCK-HOOK
@@ -179,7 +188,7 @@ export function MkToastHost() { // MOCK-HOOK
     const top3 = stack.slice(-3); // MOCK-HOOK
     const more = stack.length - top3.length; // MOCK-HOOK
     body = ( // MOCK-HOOK
-      <div data-mk-stack="" className={corner} style={at} role="region" aria-label="Changes you can undo"> {/* MOCK-HOOK */}
+      <div data-mk-stack="" className={corner} style={{ maxWidth: 680, ...at }} role="region" aria-label="Changes you can undo"> {/* MOCK-HOOK: wide enough that each change keeps one line, so the stack stays low */}
         {more > 0 && (open ? stack.slice(0, more) : []).map((e) => ( // MOCK-HOOK
           <div key={e.id} className={`${CARD} flex items-center opacity-90`}><Line e={e} bar /><Dismiss on={() => undo({ ...e, action: undefined })} /></div> // MOCK-HOOK
         ))} {/* MOCK-HOOK */}
@@ -204,7 +213,7 @@ export function MkToastHost() { // MOCK-HOOK
           <div className="flex items-center"><Line e={newest} kbd bar /><Dismiss on={() => { shown.forEach((e) => (e.done = 'undone')); setOpen(false); }} /></div> {/* MOCK-HOOK */}
           {earlier.length > 0 && ( // MOCK-HOOK
             <div className="border-t border-hero-line"> {/* MOCK-HOOK */}
-              {open && earlier.map((e) => <Line key={e.id} e={e} />)} {/* MOCK-HOOK */}
+              {open && earlier.map((e) => <Line key={e.id} e={e} onDone={() => setOpen(false)} />)} {/* MOCK-HOOK */}
               <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-1 px-4 py-1.5 text-sm font-semibold text-hero-text2 hover:text-hero-text"> {/* MOCK-HOOK */}
                 <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} /> {open ? 'Hide' : `${earlier.length} earlier ${earlier.length === 1 ? 'change' : 'changes'}`} {/* MOCK-HOOK */}
               </button> {/* MOCK-HOOK */}

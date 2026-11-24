@@ -11,7 +11,7 @@ export type MkHistoryLine = { // MOCK-HOOK
 
 export const MK_HISTORY: MkHistoryLine[] = [ // MOCK-HOOK
   { who: 'Jordan Park', what: 'set the status to At risk', when: 'Nov 23, 4:12 PM', undo: true }, // MOCK-HOOK
-  { who: 'Mina Okafor', what: 'added the dependency on F-70 Alert rules engine', when: 'Nov 21, 10:03 AM', undo: true }, // MOCK-HOOK
+  { who: 'Mina Okafor', what: 'added the dependency on Alert rules engine', when: 'Nov 21, 10:03 AM', undo: true }, // MOCK-HOOK
   { who: 'Avery Stone', what: 'moved it to Oct 31 – Dec 10', when: 'Nov 18, 9:40 AM', undo: true }, // MOCK-HOOK
   { who: 'Avery Stone', what: 'added it to Usage alerts track', when: 'Nov 2, 11:20 AM' }, // MOCK-HOOK
 ]; // MOCK-HOOK

@@ -119,12 +119,12 @@ for (const [name, w, h, dark] of [['ut3-a-story', 1440, 900, false], ['ut3-a-ope
     await open(page, 'ut3=a', w, h); // MOCK-HOOK
     if (dark) await theme(page, 'dark'); // MOCK-HOOK
     await ut3cut(page); // MOCK-HOOK
-    await hist(page).evaluate((e) => e.scrollIntoView({ block: 'end' })); // MOCK-HOOK
+    await hist(page).evaluate((e) => e.scrollIntoView({ block: 'center' })); // MOCK-HOOK: the cut line and the closed History row both in view
     await page.waitForTimeout(500); // MOCK-HOOK
     if (!dark) await snap(page, 'ut3-a-rest'); // MOCK-HOOK
     await hist(page).click(); // MOCK-HOOK
     await page.waitForTimeout(500); // MOCK-HOOK
-    await hist(page).evaluate((e) => e.scrollIntoView({ block: 'start' })); // MOCK-HOOK
+    await hist(page).evaluate((e) => e.scrollIntoView({ block: 'nearest' })); // MOCK-HOOK: the page stays put; the list opens under the cut line
     await page.waitForTimeout(500); // MOCK-HOOK
     if (dark) { await snap(page, 'ut3-a-open-dark'); return; } // MOCK-HOOK
     await snap(page, 'ut3-a-open'); // MOCK-HOOK
