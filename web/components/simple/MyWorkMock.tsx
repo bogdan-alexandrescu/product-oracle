@@ -6,15 +6,22 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { FeaturePanel } from '@/app/simple/roadmap/_panel';
 import { Icon, InfoTip, Page, PageHeader, type IconName } from '@/components/ds';
+import { decideLate, mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import { OpenFeatureContext, useOpenFeature } from '@/components/simple/OpenFeature';
 import { usePhone } from '@/components/simple/PrdTimeline';
 import { SimplePage } from '@/components/simple/SimplePage';
-import { FeaturePanel } from '@/app/simple/roadmap/_panel';
-import { OpenFeatureContext, useOpenFeature } from '@/components/simple/OpenFeature';
-import { MW_FORTY, MW_ITEMS, MW_UNOWNED, type MwItem, type MwKind } from '@/lib/api/mock/my-work';
-import { Link } from '@/lib/nav';
-import { decideLate, mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import {
+  MW_FORTY,
+  MW_ITEMS,
+  MW_MORE_DECISIONS,
+  MW_UNOWNED,
+  type MwItem,
+  type MwKind,
+} from '@/lib/api/mock/my-work'; // MOCK-HOOK
 import { useMe } from '@/lib/me';
+import { Link } from '@/lib/nav';
 
 const KIND_ICON: Record<MwKind, IconName> = {
   feature: 'roadmap', // MOCK-HOOK
@@ -53,6 +60,9 @@ function Row({
   act,
   decided,
   onDecide,
+  proposeOnly,
+  noKind,
+  onRoadmap,
 }: {
   item: MwItem;
   compact?: boolean;
@@ -60,6 +70,12 @@ function Row({
   act: string | null;
   decided?: string;
   onDecide?: (answer: string) => void;
+  /** MOCK-HOOK: a commenter proposes instead of deciding. */
+  proposeOnly?: boolean;
+  /** MOCK-HOOK: the group heading already says the kind. */
+  noKind?: boolean;
+  /** MOCK-HOOK: on the Roadmap already. */
+  onRoadmap?: boolean;
 }) {
   const open = useOpenFeature(); // MOCK-HOOK
   const [another, setAnother] = useState(act === 'open' || act === 'mid'); // MOCK-HOOK
@@ -67,17 +83,17 @@ function Row({
     act === 'mid' ? (item.options?.[0] ?? null) : null,
   ); // MOCK-HOOK
   const hot = mw('hot') === item.id; // MOCK-HOOK
-  const late = item.when === 0; // MOCK-HOOK
+  const late = item.when === 0 && !decided; // MOCK-HOOK
   const title = (
     <>
       {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
       {item.name}
     </>
   ); // MOCK-HOOK
-  const opens = item.code && item.kind !== 'proposal'; // MOCK-HOOK
+  const opens = item.code && item.kind === 'feature'; // MOCK-HOOK
   const status = late ? (
     <span className="simple-status simple-status-risk">Late</span>
-  ) : item.risk ? (
+  ) : item.risk && !decided ? (
     <span className="simple-status simple-status-risk">At risk</span>
   ) : null; // MOCK-HOOK
   if (compact)
@@ -125,7 +141,10 @@ function Row({
           <span className="font-[650]">{title}</span>
         )}
         <span className="simple-meta">
-          {KIND_WORDS[item.kind]} · {item.track}
+          {noKind
+            ? ''
+            : `${item.kind === 'decision' && (!canAct || proposeOnly) ? 'Asked of you' : KIND_WORDS[item.kind]} · `}
+          {item.track}
           {item.due ? ` · due ${item.due}` : ''}
           {item.blocks ? ` · Blocks ${item.blocks}` : ''}
           {item.waits ? ` · waits on ${item.waits}` : ''} {status}
@@ -161,7 +180,36 @@ function Row({
           </span>
         )}
       </div>
-      {canAct && !decided && (
+      {!canAct && !decided && item.kind === 'feature' && (
+        <div className="simple-actions">
+          <button
+            type="button"
+            className="simple-button"
+            onClick={() => open?.({ code: item.code!, name: item.name })}
+          >
+            Open
+          </button>
+        </div>
+      )}
+      {canAct && proposeOnly && !decided && item.kind === 'decision' && (
+        <div className="simple-actions">
+          <button type="button" className="simple-button">
+            Propose an answer
+          </button>
+        </div>
+      )}
+      {canAct && proposeOnly && !decided && item.kind === 'feature' && (
+        <div className="simple-actions">
+          <button
+            type="button"
+            className="simple-button"
+            onClick={() => open?.({ code: item.code!, name: item.name })}
+          >
+            Open to propose
+          </button>
+        </div>
+      )}
+      {canAct && !proposeOnly && !decided && !(onRoadmap && item.kind === 'milestone') && (
         <div className="simple-actions">
           {item.kind === 'decision' ? (
             another ? (
@@ -246,23 +294,25 @@ function Empty({ canAct, onTaken }: { canAct: boolean; onTaken: (xs: MwItem[]) =
   const why: Record<string, string> = {
     u1: 'You wrote its one-pager', // MOCK-HOOK
     u2: 'You decided its last two questions', // MOCK-HOOK
-    u3: 'It is in the Usage alerts track, which you run', // MOCK-HOOK
+    u3: 'It waits on F-101 One-tap sign-up link, which you own', // MOCK-HOOK
   };
   return (
     <div className="flex flex-col gap-4" data-testid="mw-empty">
-      <p className="simple-small flex items-center gap-2">
-        Nothing is yours yet.
-        {v === 'c' && canAct && (
-          <Link href="/simple/roadmap" className="simple-link">
-            Set owners on the Roadmap
-          </Link>
-        )}
-        <InfoTip label="Nothing is yours yet" align="start">
-          {canAct
-            ? 'Features and milestones you own, decisions you make and proposals you made show here.'
-            : 'You can read every page. An owner or approver can make you the owner of a feature.'}
-        </InfoTip>
-      </p>
+      {!taken.length && (
+        <p className="simple-small flex items-center gap-2">
+          Nothing is yours yet.
+          {v === 'c' && canAct && (
+            <Link href="/simple/roadmap" className="simple-link">
+              Set owners on the Roadmap
+            </Link>
+          )}
+          <InfoTip label="Nothing is yours yet" align="start">
+            {canAct
+              ? 'Features and milestones you own, decisions you make and proposals you made show here.'
+              : 'You can read every page. An owner or approver can make you the owner of a feature.'}
+          </InfoTip>
+        </p>
+      )}
       {canAct && v !== 'c' && !shown && (
         <div>
           <button
@@ -354,6 +404,7 @@ function Empty({ canAct, onTaken }: { canAct: boolean; onTaken: (xs: MwItem[]) =
 export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'roadmap' }) {
   const { can } = useMe(); // MOCK-HOOK
   const canAct = can('create_simple_change'); // MOCK-HOOK
+  const proposeOnly = canAct && !can('accept_simple_change'); // MOCK-HOOK: a commenter
   const c = mw('case'); // MOCK-HOOK
   const v2 = mw('mw2') ?? 'a'; // MOCK-HOOK
   const v3 = mw('mw3') ?? 'a'; // MOCK-HOOK
@@ -373,7 +424,7 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
   ); // MOCK-HOOK
   const [taken, setTaken] = useState<MwItem[] | null>(null); // MOCK-HOOK
   const [decided, setDecided] = useState<Record<string, string>>(
-    act === 'done' ? { d1: '8:00 for everyone' } : {},
+    act === 'done' ? { d1: 'Noon' } : {},
   ); // MOCK-HOOK
   const [tile, setTile] = useState<MwKind | null>(
     (mw('tile') as MwKind) ?? (act ? 'decision' : null),
@@ -397,10 +448,21 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
       canAct={canAct}
       act={i.id === 'd1' ? act : null}
       decided={decided[i.id]}
-      onDecide={(a) => (setDecided({ ...decided, [i.id]: a }), i.when === 0 && decideLate())}
+      proposeOnly={proposeOnly}
+      noKind={v2 === 'b' || (v2 === 'c' && !!tile)}
+      onRoadmap={place === 'roadmap'}
+      onDecide={(a) => (setDecided({ ...decided, [i.id]: a }), decideLate(i.when === 0))}
     />
   ); // MOCK-HOOK
   if (items.length === 0) return <Empty canAct={canAct} onTaken={setTaken} />; // MOCK-HOOK
+  // MOCK-HOOK: Decisions' other waiting decisions (no due date) are counted here and linked.
+  const extraDec = base === MW_ITEMS && !taken && place === 'page' ? MW_MORE_DECISIONS : 0; // MOCK-HOOK
+  const decLeft = (taken ?? base).filter((i) => i.kind === 'decision' && !decided[i.id]).length; // MOCK-HOOK
+  const moreDec = extraDec ? (
+    <Link href="/simple/decisions" className="simple-more" data-testid="mw-more-decisions">
+      {extraDec} more decisions with no due date · Decisions
+    </Link>
+  ) : null; // MOCK-HOOK
 
   // MW3: forty items. a: five per group then "Show N more"; b: one line each and a find box; c: ten a page.
   const cap = (xs: MwItem[]) => (forty && v3 === 'a' && !more ? xs.slice(0, 5) : xs); // MOCK-HOOK
@@ -416,12 +478,23 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
 
   const summary = (
     <p className="simple-meta tnum" data-testid="mw-summary">
-      {left.length} {left.length === 1 ? 'item' : 'items'} ·{' '}
-      {left.filter((i) => i.when === 0).length} late · {left.filter((i) => i.risk).length} at risk{' '}
+      {left.length + extraDec} {left.length + extraDec === 1 ? 'item' : 'items'} ·{' '}
+      {left.filter((i) => i.when === 0).length} late ·{' '}
+      {left.filter((i) => i.risk && i.when !== 0).length} at risk{' '}
       <InfoTip label="What is here" align="start">
         Features and milestones you own, decisions you make and proposals you made. Late and at risk
         first.
       </InfoTip>
+      {!canAct && (
+        <span className="simple-status ml-2" data-testid="mw-role">
+          You can read; ask an owner to change
+        </span>
+      )}
+      {proposeOnly && (
+        <span className="simple-status ml-2" data-testid="mw-role">
+          You propose; an approver decides
+        </span>
+      )}
     </p>
   ); // MOCK-HOOK
 
@@ -466,9 +539,15 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
       const xs = sorted(found.filter((i) => i.kind === k)); // MOCK-HOOK
       if (!xs.length) return null; // MOCK-HOOK
       return (
-        <Group key={k} id={k} title={t} n={xs.filter((i) => !decided[i.id]).length}>
+        <Group
+          key={k}
+          id={k}
+          title={t}
+          n={xs.filter((i) => !decided[i.id]).length + (k === 'decision' ? extraDec : 0)}
+        >
           <ul>{cap(xs).map(row)}</ul>
           {moreLine(xs)}
+          {k === 'decision' && moreDec}
         </Group>
       ); // MOCK-HOOK
     });
@@ -477,10 +556,7 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
     const xs = tile ? sorted(found.filter((i) => i.kind === tile)) : []; // MOCK-HOOK
     body = (
       <>
-        <ul
-          className="grid gap-3 max-[600px]:gap-2"
-          style={{ gridTemplateColumns: `repeat(${kinds.length}, minmax(0, 1fr))` }}
-        >
+        <ul className="grid grid-cols-4 gap-3 max-[600px]:grid-cols-2 max-[600px]:gap-2">
           {kinds.map((k) => (
             <li key={k}>
               <button
@@ -488,10 +564,10 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
                 aria-pressed={tile === k}
                 data-testid={`mw-tile-${k}`}
                 onClick={() => setTile(tile === k ? null : k)}
-                className={`flex h-full w-full flex-col rounded-xl px-4 py-3 text-left max-[600px]:px-2.5 max-[600px]:py-2 ${tile === k ? 'bg-accent-soft ring-2 ring-accent' : 'bg-surface2 hover:bg-accent-soft'}`}
+                className={`flex h-full w-full flex-col rounded-xl px-4 py-3 text-left max-[600px]:px-3 max-[600px]:py-2 ${tile === k ? 'bg-accent-soft ring-2 ring-accent' : 'bg-surface2 hover:bg-accent-soft'}`}
               >
                 <span className="simple-number tnum max-[600px]:text-xl! max-[600px]:leading-7!">
-                  {left.filter((i) => i.kind === k).length}
+                  {left.filter((i) => i.kind === k).length + (k === 'decision' ? extraDec : 0)}
                 </span>
                 <span className="simple-small max-[600px]:text-sm! max-[600px]:leading-4">
                   {TILE_WORDS[k]}
@@ -500,20 +576,23 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
             </li>
           ))}
         </ul>
+        {!tile && <p className="simple-meta">Pick a count to see its list.</p>}
         {tile && (
           <Group
             id={tile}
             title={TILE_WORDS[tile][0].toUpperCase() + TILE_WORDS[tile].slice(1)}
-            n={xs.filter((i) => !decided[i.id]).length}
+            n={xs.filter((i) => !decided[i.id]).length + (tile === 'decision' ? extraDec : 0)}
           >
             <ul>{cap(xs).map(row)}</ul>
             {moreLine(xs)}
+            {tile === 'decision' && moreDec}
           </Group>
         )}
       </>
     ); // MOCK-HOOK
   } else {
-    body = [0, 1, 2, 3, 4].map((w) => {
+    body = [0, 1, 2, 3, 4, 5].map((w) => {
+      if (w === 5) return <div key={5}>{moreDec}</div>; // MOCK-HOOK
       const xs = sorted(found.filter((i) => rank(i) === w)); // MOCK-HOOK
       if (!xs.length) return null; // MOCK-HOOK
       return (
@@ -561,9 +640,46 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
         {summary}
         {pager}
       </div>
+      {place === 'roadmap' && (
+        <p className="simple-meta" data-testid="mw-decisions-elsewhere">
+          Decisions you make are not in Mine:{' '}
+          <Link href="/simple/decisions" className="simple-link">
+            {decLeft + MW_MORE_DECISIONS} on Decisions
+          </Link>
+        </p>
+      )}
       {findBox}
       {body}
       {pager && <div className="self-end">{pager}</div>}
+      {v3 === 'b' && mw('pick') === 'done' && canAct && (
+        <section className="simple-card" aria-label="Oracle suggests" data-testid="mw-suggest-left">
+          <h2 className="simple-h2">✦ Oracle suggests · 1 more</h2>
+          <ul className="mt-3">
+            <li className="simple-row">
+              <span className="simple-ico">
+                <Icon name="roadmap" size={18} stroke={1.7} />
+              </span>
+              <div className="simple-rb">
+                <span className="font-[650]">
+                  <span className="simple-code mr-1.5">{MW_UNOWNED[1].code}</span>
+                  {MW_UNOWNED[1].name}
+                </span>
+                <span className="simple-meta">You decided its last two questions</span>
+              </div>
+              <div className="simple-actions">
+                <div className="flex gap-2">
+                  <button type="button" className="simple-button simple-button-primary">
+                    Confirm
+                  </button>
+                  <button type="button" className="simple-button">
+                    Not this
+                  </button>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+      )}
     </div>
   ); // MOCK-HOOK
 }
@@ -588,6 +704,7 @@ export function MyWorkPage({ detailed }: { detailed?: boolean }) {
         />
       )}
       <MyWorkBody />
+      <CostBand />
     </OpenFeatureContext.Provider>
   ); // MOCK-HOOK
   if (detailed)
@@ -621,6 +738,38 @@ export function MyWorkHome({ place = 'home' }: { place?: 'home' | 'roadmap' }) {
         />
       )}
       <MyWorkBody place={place} />
+      <CostBand />
     </OpenFeatureContext.Provider>
+  ); // MOCK-HOOK
+}
+
+// MOCK-HOOK: each proposal's cost, drawn on its result frame (&cost=1).
+const COSTS: Record<string, string> = {
+  'mw1-a':
+    'Cost: 1 click to My work, 1 more to open a feature · today: no list; open each feature on the Roadmap',
+  'mw1-b': 'Cost: 0 clicks for the top four on Home, 1 to open a feature · Home grows by one card',
+  'mw1-c': 'Cost: 2 clicks to Mine, 1 more to open a feature · decisions take a second page',
+  'mw2-a':
+    'Cost: Another answer in 3 clicks on the row · today: Decisions page, find it, then 3 clicks',
+  'mw2-b': 'Cost: 3 clicks, as in a · a late feature can sit below on-time decisions',
+  'mw2-c': 'Cost: 4 clicks: a tile first, then 3 · late items of other kinds stay hidden',
+  'mw3-a':
+    'Cost: 4 clicks to own two (Pick, Take it, Take it, Done) · today: 10 steps on the Roadmap',
+  'mw3-b': 'Cost: 4 clicks to own two · only Oracle’s three show',
+  'mw3-c': 'Cost: 5 steps to own one, 10 for two · as today',
+};
+export function CostBand() {
+  if (mw('cost') !== '1') return null; // MOCK-HOOK
+  const d = ['mw3', 'mw2', 'mw1'].find((k) => mw(k)); // MOCK-HOOK
+  const text = d ? COSTS[`${d}-${mw(d)}`] : undefined; // MOCK-HOOK
+  if (!text) return null; // MOCK-HOOK
+  return (
+    <div
+      role="note"
+      data-testid="mw-cost"
+      className="fixed inset-x-0 bottom-0 z-[100] bg-text px-4 py-2 text-center text-sm font-semibold text-surface"
+    >
+      {text}
+    </div>
   ); // MOCK-HOOK
 }

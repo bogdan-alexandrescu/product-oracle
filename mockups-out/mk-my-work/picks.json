@@ -1,355 +1,355 @@
 {
- "title": "My work: what I own or decide",
- "subtitle": "Mock-ups for the owner to pick from: where My work lives, what it groups, and how it handles nothing, forty items and a viewer. Invented company, people and features.",
- "decisions": [
-  {
-   "code": "MW1",
-   "name": "Where My work lives",
-   "question": "Where does a person find their own work, in Simple and in Detailed?",
-   "common": "The same list of features and milestones I own, decisions I make and proposals I made, late and at risk first. Every feature row opens the one feature panel. The yellow count is late or at risk only, like the rail's other counts.",
-   "proposals": [
+  "title": "My work: what I own or decide",
+  "subtitle": "Mock-ups for the owner to pick from: where My work lives, what it groups, and how it handles nothing, forty items and a viewer. Invented company, people and features.",
+  "decisions": [
     {
-     "letter": "a",
-     "name": "Its own page",
-     "recommended": true,
-     "what": "A My work entry under Home in the Simple rail, with a yellow count of late or at-risk items, and the same entry under Home in Detailed's rail. On a phone it takes One-pagers' place in the tab bar (One-pagers moves to More).",
-     "why": "One place holds everything I own or decide, whatever the kind, and the rail count tells me when something slips without opening it. Home stays as it is.",
-     "plus": "Same entry and page in Simple and Detailed; the page has room for forty items.",
-     "cost": "1 click from anywhere to see all my work; 2 to open a feature's panel. Today: no way to see it, only by opening each feature's panel on the Roadmap.",
-     "frames": [
-      {
-       "file": "mw1-a-rest.html",
-       "caption": "At rest: Home as today, with My work under Home in the rail and 3 late or at risk."
-      },
-      {
-       "file": "mw1-a-open.html",
-       "caption": "My work opened from the rail: late or at risk first, then this week, next week, later."
-      },
-      {
-       "file": "mw1-a-mid.html",
-       "caption": "Pointer on F-101 One-tap sign-up link."
-      },
-      {
-       "file": "mw1-a-result.html",
-       "caption": "Result: the one feature panel opens on F-101, with its Owner and Decider. Cost: 2 clicks from anywhere."
-      },
-      {
-       "file": "mw1-a-hard-1512.html",
-       "caption": "Hard case, Detailed at 1512: My work sits under Home in Detailed's rail and opens the same list."
-      },
-      {
-       "file": "mw1-a-phone.html",
-       "caption": "Phone 390: My work is a tab; rows put their button under the text."
-      }
-     ]
+      "code": "MW1",
+      "name": "Where My work lives",
+      "question": "Where does a person find their own work, in Simple and in Detailed?",
+      "common": "The same list of features and milestones I own, decisions I make and proposals I made, late and at risk first. Every feature row opens the one feature panel. The yellow count is late or at risk only, like the rail's other counts. A decision row carries its code, as on Decisions (Q5 Reminder default time).",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Its own page",
+          "recommended": true,
+          "what": "A My work entry under Home in the Simple rail, with a yellow count of late or at-risk items, and the same entry under Home in Detailed's rail. On a phone it takes One-pagers' place in the tab bar (One-pagers moves to More).",
+          "why": "One place holds everything I own or decide, whatever the kind, and the rail count tells me when something slips without opening it. Home stays as it is.",
+          "plus": "Same entry and page in Simple and Detailed; the page has room for forty items.",
+          "cost": "1 click from anywhere to see all my work; 2 to open a feature's panel. Today: no way to see it, only by opening each feature's panel on the Roadmap.",
+          "frames": [
+            {
+              "file": "mw1-a-rest.html",
+              "caption": "At rest: Home as today, with My work under Home in the rail and 3 late or at risk."
+            },
+            {
+              "file": "mw1-a-open.html",
+              "caption": "My work opened from the rail: late or at risk first, then this week, next week, later."
+            },
+            {
+              "file": "mw1-a-mid.html",
+              "caption": "Pointer on F-101 One-tap sign-up link."
+            },
+            {
+              "file": "mw1-a-result.html",
+              "caption": "Result: the one feature panel opens on F-101 One-tap sign-up link and agrees with the row: Owner Avery Stone, Guided setup track, Oct 24 – Nov 20. The band at the bottom shows the cost."
+            },
+            {
+              "file": "mw1-a-hard-1512.html",
+              "caption": "Hard case, Detailed at 1512: My work sits under Home in Detailed's rail with the same 3 late or at risk, and opens the same list."
+            },
+            {
+              "file": "mw1-a-phone.html",
+              "caption": "Phone 390: My work is a tab with its 3; rows put their button under the text. (Dark: mw1-a-phone-dark.png.)"
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "A Home section",
+          "recommended": false,
+          "what": "A Yours card at the top of Home, Simple and Detailed: the first four items, then Show N more. Decisions stay in Home's existing decisions card, so Yours lists features, milestones and proposals only.",
+          "plus": "No new page or rail entry; people already start on Home.",
+          "cost": "0 clicks to see the top four on Home, 1 more for the rest, 1 to open a panel. Home grows by one card, and pushes goals down.",
+          "frames": [
+            {
+              "file": "mw1-b-rest.html",
+              "caption": "At rest: Yours sits under the greeting, above the goals; four items and Show 5 more."
+            },
+            {
+              "file": "mw1-b-open.html",
+              "caption": "Show 5 more opened: the card lists all nine."
+            },
+            {
+              "file": "mw1-b-mid.html",
+              "caption": "Pointer on F-101 One-tap sign-up link."
+            },
+            {
+              "file": "mw1-b-result.html",
+              "caption": "Result: the feature panel opens over Home on F-101, owned by Avery Stone, due Nov 20 as the row says. The band shows the cost."
+            },
+            {
+              "file": "mw1-b-hard-1512.html",
+              "caption": "Hard case, Detailed Home at 1512: the same Yours card sits under the title, above Set up."
+            },
+            {
+              "file": "mw1-b-phone.html",
+              "caption": "Phone 390: Yours comes before the goals, so the goals start further down."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Mine on the Roadmap",
+          "recommended": false,
+          "what": "A Mine button beside Key dates on the Roadmap shows only the features and milestones I own, by due date. Decisions stay on Decisions and proposals in the Inbox. No new entry in Detailed.",
+          "plus": "No new page; it reuses the Roadmap that people already use to plan.",
+          "cost": "2 clicks to see my features (Roadmap, Mine); decisions take another page; 3 to open a panel. Today: no Mine at all.",
+          "frames": [
+            {
+              "file": "mw1-c-rest.html",
+              "caption": "At rest: the Roadmap as today, with Mine · 7 beside Key dates."
+            },
+            {
+              "file": "mw1-c-open.html",
+              "caption": "Mine on: the view tabs give way to my seven features and milestones by due date, and one line says the 34 decisions I make are on Decisions."
+            },
+            {
+              "file": "mw1-c-mid.html",
+              "caption": "Pointer on F-101 One-tap sign-up link."
+            },
+            {
+              "file": "mw1-c-result.html",
+              "caption": "Result: the feature panel opens over the Roadmap on F-101, owned by Avery Stone. The band shows the cost."
+            },
+            {
+              "file": "mw1-c-hard-1512.html",
+              "caption": "Hard case at 1512, Mine on: my decisions are not in Mine; the line sends me to Decisions, a second page to check."
+            },
+            {
+              "file": "mw1-c-phone.html",
+              "caption": "Phone 390, Mine on: the Mine switch sits above my items, in place of the timeline."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "b",
-     "name": "A Home section",
-     "recommended": false,
-     "what": "A Yours card at the top of Home, Simple and Detailed: the first four items, then Show N more. Decisions stay in Home's existing decisions card, so Yours lists features, milestones and proposals only.",
-     "plus": "No new page or rail entry; people already start on Home.",
-     "cost": "0 clicks to see the top four on Home, 1 more for the rest, 1 to open a panel. Home grows by one card, and pushes goals down.",
-     "frames": [
-      {
-       "file": "mw1-b-rest.html",
-       "caption": "At rest: Yours sits under the greeting, above the goals; four items and Show 5 more."
-      },
-      {
-       "file": "mw1-b-open.html",
-       "caption": "Show 5 more opened: the card lists all nine."
-      },
-      {
-       "file": "mw1-b-mid.html",
-       "caption": "Pointer on F-101 One-tap sign-up link."
-      },
-      {
-       "file": "mw1-b-result.html",
-       "caption": "Result: the feature panel opens over Home. Cost: 1 click from Home."
-      },
-      {
-       "file": "mw1-b-hard-1512.html",
-       "caption": "Hard case, Detailed Home at 1512: the same Yours card sits under the title, above Set up."
-      },
-      {
-       "file": "mw1-b-phone.html",
-       "caption": "Phone 390: Yours comes before the goals, so the goals start further down."
-      }
-     ]
+      "code": "MW2",
+      "name": "What it groups",
+      "question": "How does My work group my items, and what can I do on a row in one step?",
+      "common": "Same items and the same one-step actions: a decision row (with its code) offers Decide as recommended or Another answer (as Home does today); a feature opens its panel; a proposal shows its replies; a milestone opens on the Roadmap. My work lists the 3 decisions with a due date and counts and links the 31 others on Decisions, so both say 34. A decided row stays with Undo, loses its Late tag, and every count drops at once: its group, the page, My work's and Decisions' rail counts. A commenter proposes instead of deciding; a viewer only opens.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "By due date",
+          "recommended": true,
+          "what": "One list in groups by when: Late or at risk, This week, Next week, Later, No date. Each row says what it is (Feature you own, You decide, Your proposal, Milestone you own).",
+          "why": "It answers the question a person opens it with, what needs me first, and puts overdue and at-risk items on top whatever their kind, as the issue asks.",
+          "plus": "One scan from top to bottom; nothing late hides in a lower group.",
+          "cost": "Decide as recommended: 1 click on the row. Another answer: 3 clicks (Another answer, pick, Decide). Today: Decisions page, find it, then the same 1 to 3 clicks.",
+          "frames": [
+            {
+              "file": "mw2-a-rest.html",
+              "caption": "At rest: Late or at risk first, mixed kinds, each row with its one action."
+            },
+            {
+              "file": "mw2-a-open.html",
+              "caption": "Another answer opened on Q5 Reminder default time: its other answers as chips."
+            },
+            {
+              "file": "mw2-a-mid.html",
+              "caption": "Noon picked; Decide is ready."
+            },
+            {
+              "file": "mw2-a-result.html",
+              "caption": "Result: decided Noon, with Undo and no Late tag; Late or at risk drops to 2, the page 43 to 42, My work's rail count 3 to 2, Decisions 34 to 33. The band shows the cost."
+            },
+            {
+              "file": "mw2-a-hard-1512.html",
+              "caption": "Hard case, forty items at 1512: 10 late and 5 at risk make the group's 15; each group shows five, then Show N more."
+            },
+            {
+              "file": "mw2-a-phone.html",
+              "caption": "Phone 390: the buttons sit under each row."
+            },
+            {
+              "file": "mw2-a-commenter.html",
+              "caption": "A commenter: decisions offer Propose an answer, features Open to propose; a status says an approver decides."
+            },
+            {
+              "file": "mw2-a-viewer.html",
+              "caption": "A viewer: the same items, features open to read, no other buttons; a status says to ask an owner to change."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "By what I do",
+          "recommended": false,
+          "what": "Four lists by kind: Waiting for your decision, Features you own, Milestones coming up, Proposals you made; late and at risk first inside each.",
+          "plus": "Clear which hat I am wearing; easy to skip a whole kind.",
+          "cost": "Same clicks per row as a; a late feature can sit below three on-time decisions.",
+          "frames": [
+            {
+              "file": "mw2-b-rest.html",
+              "caption": "At rest: decisions first (three with a due date, and the 31 more on Decisions), then features, milestones, proposals."
+            },
+            {
+              "file": "mw2-b-open.html",
+              "caption": "Another answer opened on Q5 Reminder default time."
+            },
+            {
+              "file": "mw2-b-mid.html",
+              "caption": "Noon picked; Decide is ready."
+            },
+            {
+              "file": "mw2-b-result.html",
+              "caption": "Result: decided, with Undo; Waiting for your decision drops 34 to 33, as Decisions in the rail does. The band shows the cost."
+            },
+            {
+              "file": "mw2-b-hard-1512.html",
+              "caption": "Hard case, forty items at 1512: the late features start below all the decisions."
+            },
+            {
+              "file": "mw2-b-phone.html",
+              "caption": "Phone 390: the four lists in a column."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Counts first",
+          "recommended": false,
+          "what": "Four count tiles, like Home's summary: decisions to make, features you own, milestones coming up, proposals you made. Picking a tile lists that kind under it.",
+          "plus": "The whole picture in one line; the page stays short with forty items.",
+          "cost": "1 extra click on a tile before any row; 4 clicks to decide another answer. Late items of other kinds stay hidden until their tile is picked.",
+          "frames": [
+            {
+              "file": "mw2-c-rest.html",
+              "caption": "At rest: four counts, 34 decisions to make first, and a line to pick one."
+            },
+            {
+              "file": "mw2-c-open.html",
+              "caption": "Decisions to make picked: its three dated decisions list under the tiles, then the 31 more on Decisions."
+            },
+            {
+              "file": "mw2-c-mid.html",
+              "caption": "Noon picked; Decide is ready."
+            },
+            {
+              "file": "mw2-c-result.html",
+              "caption": "Result: decided, with Undo; the tile and Decisions in the rail drop 34 to 33. The band shows the cost."
+            },
+            {
+              "file": "mw2-c-hard-1512.html",
+              "caption": "Hard case, forty items at 1512: tiles stay one line; features you own lists five, then Show 21 more."
+            },
+            {
+              "file": "mw2-c-phone.html",
+              "caption": "Phone 390: four tiles two by two, the picked list under them."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "c",
-     "name": "Mine on the Roadmap",
-     "recommended": false,
-     "what": "A Mine button beside Key dates on the Roadmap shows only the features and milestones I own, by due date. Decisions stay on Decisions and proposals in the Inbox. No new entry in Detailed.",
-     "plus": "No new page; it reuses the Roadmap that people already use to plan.",
-     "cost": "2 clicks to see my features (Roadmap, Mine); decisions take another page; 3 to open a panel. Today: no Mine at all.",
-     "frames": [
-      {
-       "file": "mw1-c-rest.html",
-       "caption": "At rest: the Roadmap as today, with Mine · 7 beside Key dates."
-      },
-      {
-       "file": "mw1-c-open.html",
-       "caption": "Mine on: the timeline gives way to my seven features and milestones, by due date."
-      },
-      {
-       "file": "mw1-c-mid.html",
-       "caption": "Pointer on F-101 One-tap sign-up link."
-      },
-      {
-       "file": "mw1-c-result.html",
-       "caption": "Result: the feature panel opens over the Roadmap. Cost: 3 clicks from Home."
-      },
-      {
-       "file": "mw1-c-hard-1512.html",
-       "caption": "Hard case at 1512: the decisions I make are not in Mine; they stay on Decisions, a second page to check."
-      },
-      {
-       "file": "mw1-c-phone.html",
-       "caption": "Phone 390: Mine on, my items in place of the timeline."
-      }
-     ]
+      "code": "MW3",
+      "name": "Nothing, forty, a viewer",
+      "question": "What does My work show when I own nothing, when I own forty items, and to a viewer?",
+      "common": "The same page and grouping (MW1 a, MW2 a). One short line and an (i) when nothing is mine. A viewer who owns nothing sees that line and its (i), with no button or link, in every proposal; it is drawn once, in a.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Take from No owner",
+          "recommended": true,
+          "what": "Empty: Pick features to own opens the features with no owner yet, each with Take it; Done puts them in My work. Forty: five per group, then Show N more. Viewer: the line and its (i) only.",
+          "why": "Most features read No owner yet today; this turns the empty page into the one-click way to own one, which the issue asks for, and keeps long lists short without a new control.",
+          "plus": "Owning a feature drops from 5 steps to 1 click each.",
+          "cost": "Own two features: 4 clicks (Pick, Take it, Take it, Done). Today: 5 steps each on the Roadmap, 10 for two.",
+          "frames": [
+            {
+              "file": "mw3-a-rest.html",
+              "caption": "At rest, nothing is mine: one line, its (i), and Pick features to own."
+            },
+            {
+              "file": "mw3-a-open.html",
+              "caption": "Pick features to own opened: the six features with no owner yet."
+            },
+            {
+              "file": "mw3-a-mid.html",
+              "caption": "F-102 and F-104 taken: the empty line goes, Done counts 2 taken."
+            },
+            {
+              "file": "mw3-a-result.html",
+              "caption": "Result: both are in My work, by due date; nothing is late, so the rail shows no count. The band shows the cost."
+            },
+            {
+              "file": "mw3-a-hard-1512.html",
+              "caption": "Hard case, forty items at 1512: five per group, Show 10 more."
+            },
+            {
+              "file": "mw3-a-viewer.html",
+              "caption": "A viewer who owns nothing: the line and its (i), no button."
+            },
+            {
+              "file": "mw3-a-phone.html",
+              "caption": "Phone 390 with forty items: five per group keeps the page short."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Oracle suggests",
+          "recommended": false,
+          "what": "Empty: Suggest what I could own asks Oracle for three features with a reason each (you wrote its one-pager, you run its track); Confirm or Not this, as for Oracle's other suggestions. Forty: one line per item and a Find box.",
+          "plus": "Suggestions come with a reason; forty items fit on two screens.",
+          "cost": "Own two: 4 clicks (Suggest, Confirm, Confirm, Done); only Oracle's three show. Forty: typing to find.",
+          "frames": [
+            {
+              "file": "mw3-b-rest.html",
+              "caption": "At rest, nothing is mine: one line and Suggest what I could own."
+            },
+            {
+              "file": "mw3-b-open.html",
+              "caption": "Oracle suggests three features, each with its reason."
+            },
+            {
+              "file": "mw3-b-mid.html",
+              "caption": "Two confirmed; the third still offers Confirm or Not this."
+            },
+            {
+              "file": "mw3-b-result.html",
+              "caption": "Result: the two confirmed are in My work; Oracle's third suggestion, F-103 Lead list ranking, stays below with Confirm or Not this. The band shows the cost."
+            },
+            {
+              "file": "mw3-b-hard-1512.html",
+              "caption": "Hard case, forty items at 1512: one line each, with Find in my work. The cost: decision rows lose their buttons, so deciding takes the Decisions page."
+            },
+            {
+              "file": "mw3-b-find.html",
+              "caption": "Find in my work with alert typed: four rows left."
+            },
+            {
+              "file": "mw3-b-phone.html",
+              "caption": "Phone 390 with forty items: one-line rows wrap long names."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Point to the Roadmap",
+          "recommended": false,
+          "what": "Empty: one line with a link, Set owners on the Roadmap; owners are set in each feature's panel as today. Forty: ten a page with Back and Next 10.",
+          "plus": "Nothing new to build for owning; one way to set an owner.",
+          "cost": "Own one feature: 5 steps (link, find it on the Roadmap, open it, Owner Change, pick); 10 for two. Forty: 4 pages.",
+          "frames": [
+            {
+              "file": "mw3-c-rest.html",
+              "caption": "At rest, nothing is mine: one line and Set owners on the Roadmap."
+            },
+            {
+              "file": "mw3-c-open.html",
+              "caption": "The link opens the Roadmap as it is today; the person finds a feature."
+            },
+            {
+              "file": "mw3-c-mid.html",
+              "caption": "F-102 Rep call script hints' panel open on the Roadmap, Avery Stone picked in Owner."
+            },
+            {
+              "file": "mw3-c-result.html",
+              "caption": "Result: back on My work, F-102 is mine, Guided setup track, due Dec 9. The band shows the cost."
+            },
+            {
+              "file": "mw3-c-hard-1512.html",
+              "caption": "Hard case, forty items at 1512: ten a page, 1 to 10 of 40, Next 10."
+            },
+            {
+              "file": "mw3-c-phone.html",
+              "caption": "Phone 390 with forty items: ten a page."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "code": "MW2",
-   "name": "What it groups",
-   "question": "How does My work group my items, and what can I do on a row in one step?",
-   "common": "Same items and the same one-step actions: a decision row offers Decide as recommended or Another answer (as Home does today); a feature opens its panel; a proposal shows its replies; a milestone opens on the Roadmap. A decided row stays with Undo and every count drops at once.",
-   "proposals": [
-    {
-     "letter": "a",
-     "name": "By due date",
-     "recommended": true,
-     "what": "One list in groups by when: Late or at risk, This week, Next week, Later, No date. Each row says what it is (Feature you own, You decide, Your proposal, Milestone you own).",
-     "why": "It answers the question a person opens it with, what needs me first, and puts overdue and at-risk items on top whatever their kind, as the issue asks.",
-     "plus": "One scan from top to bottom; nothing late hides in a lower group.",
-     "cost": "Decide as recommended: 1 click on the row. Another answer: 3 clicks (Another answer, pick, Decide). Today: Decisions page, find it, then the same 1 to 3 clicks.",
-     "frames": [
-      {
-       "file": "mw2-a-rest.html",
-       "caption": "At rest: Late or at risk first, mixed kinds, each row with its one action."
-      },
-      {
-       "file": "mw2-a-open.html",
-       "caption": "Another answer opened on Reminder default time: its other answers as chips."
-      },
-      {
-       "file": "mw2-a-mid.html",
-       "caption": "8:00 for everyone picked; Decide is ready."
-      },
-      {
-       "file": "mw2-a-result.html",
-       "caption": "Result: decided, with Undo; the rail count drops from 3 to 2 and the page's from 12 to 11. Cost: 3 clicks."
-      },
-      {
-       "file": "mw2-a-hard-1512.html",
-       "caption": "Hard case, forty items at 1512: each group shows five, then Show N more."
-      },
-      {
-       "file": "mw2-a-phone.html",
-       "caption": "Phone 390: the buttons sit under each row."
-      }
-     ]
-    },
-    {
-     "letter": "b",
-     "name": "By what I do",
-     "recommended": false,
-     "what": "Four lists by kind: Waiting for your decision, Features you own, Milestones coming up, Proposals you made; late and at risk first inside each.",
-     "plus": "Clear which hat I am wearing; easy to skip a whole kind.",
-     "cost": "Same clicks per row as a; a late feature can sit below three on-time decisions.",
-     "frames": [
-      {
-       "file": "mw2-b-rest.html",
-       "caption": "At rest: decisions first, then features, milestones, proposals."
-      },
-      {
-       "file": "mw2-b-open.html",
-       "caption": "Another answer opened on Reminder default time."
-      },
-      {
-       "file": "mw2-b-mid.html",
-       "caption": "8:00 for everyone picked."
-      },
-      {
-       "file": "mw2-b-result.html",
-       "caption": "Result: decided, with Undo; Waiting for your decision drops to 2. Cost: 3 clicks."
-      },
-      {
-       "file": "mw2-b-hard-1512.html",
-       "caption": "Hard case, forty items at 1512: the late features start below all the decisions."
-      },
-      {
-       "file": "mw2-b-phone.html",
-       "caption": "Phone 390: the four lists in a column."
-      }
-     ]
-    },
-    {
-     "letter": "c",
-     "name": "Counts first",
-     "recommended": false,
-     "what": "Four count tiles, like Home's summary: decisions to make, features you own, milestones coming up, proposals you made. Picking a tile lists that kind under it.",
-     "plus": "The whole picture in one line; the page stays short with forty items.",
-     "cost": "1 extra click on a tile before any row; 4 clicks to decide another answer. Late items of other kinds stay hidden until their tile is picked.",
-     "frames": [
-      {
-       "file": "mw2-c-rest.html",
-       "caption": "At rest: four counts and no list yet."
-      },
-      {
-       "file": "mw2-c-open.html",
-       "caption": "Decisions to make picked: its three decisions list under the tiles."
-      },
-      {
-       "file": "mw2-c-mid.html",
-       "caption": "Another answer opened and 8:00 for everyone picked."
-      },
-      {
-       "file": "mw2-c-result.html",
-       "caption": "Result: decided, with Undo; the tile drops from 3 to 2. Cost: 4 clicks."
-      },
-      {
-       "file": "mw2-c-hard-1512.html",
-       "caption": "Hard case, forty items at 1512: tiles stay one line; features you own lists five, then Show more."
-      },
-      {
-       "file": "mw2-c-phone.html",
-       "caption": "Phone 390: four small tiles in a row, the picked list under them."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "code": "MW3",
-   "name": "Nothing, forty, a viewer",
-   "question": "What does My work show when I own nothing, when I own forty items, and to a viewer?",
-   "common": "The same page and grouping (MW1 a, MW2 a). One short line and an (i) when nothing is mine; a viewer sees no buttons, as everywhere in Simple.",
-   "proposals": [
-    {
-     "letter": "a",
-     "name": "Take from No owner",
-     "recommended": true,
-     "what": "Empty: Pick features to own opens the features with no owner yet, each with Take it; Done puts them in My work. Forty: five per group, then Show N more. Viewer: the line and its (i) only.",
-     "why": "Most features read No owner yet today; this turns the empty page into the one-click way to own one, which the issue asks for, and keeps long lists short without a new control.",
-     "plus": "Owning a feature drops from 5 steps to 1 click each.",
-     "cost": "Own two features: 4 clicks (Pick, Take it, Take it, Done). Today: 5 steps each on the Roadmap, 10 for two.",
-     "frames": [
-      {
-       "file": "mw3-a-rest.html",
-       "caption": "At rest, nothing is mine: one line, its (i), and Pick features to own."
-      },
-      {
-       "file": "mw3-a-open.html",
-       "caption": "Pick features to own opened: the six features with no owner yet."
-      },
-      {
-       "file": "mw3-a-mid.html",
-       "caption": "F-102 and F-104 taken; Done counts 2 taken."
-      },
-      {
-       "file": "mw3-a-result.html",
-       "caption": "Result: both are in My work, by due date. Cost: 4 clicks for two."
-      },
-      {
-       "file": "mw3-a-hard-1512.html",
-       "caption": "Hard case, forty items at 1512: five per group, Show 10 more."
-      },
-      {
-       "file": "mw3-a-viewer.html",
-       "caption": "A viewer who owns nothing: the line and its (i), no button."
-      },
-      {
-       "file": "mw3-a-phone.html",
-       "caption": "Phone 390 with forty items: five per group keeps the page short."
-      }
-     ]
-    },
-    {
-     "letter": "b",
-     "name": "Oracle suggests",
-     "recommended": false,
-     "what": "Empty: Suggest what I could own asks Oracle for three features with a reason each (you wrote its one-pager, you run its track); Confirm or Not this, as for Oracle's other suggestions. Forty: one line per item and a Find box.",
-     "plus": "Suggestions come with a reason; forty items fit on two screens.",
-     "cost": "Own two: 4 clicks (Suggest, Confirm, Confirm, Done); only Oracle's three show. Forty: typing to find.",
-     "frames": [
-      {
-       "file": "mw3-b-rest.html",
-       "caption": "At rest, nothing is mine: one line and Suggest what I could own."
-      },
-      {
-       "file": "mw3-b-open.html",
-       "caption": "Oracle suggests three features, each with its reason."
-      },
-      {
-       "file": "mw3-b-mid.html",
-       "caption": "Two confirmed; the third still offers Confirm or Not this."
-      },
-      {
-       "file": "mw3-b-result.html",
-       "caption": "Result: the two confirmed are in My work. Cost: 4 clicks for two."
-      },
-      {
-       "file": "mw3-b-hard-1512.html",
-       "caption": "Hard case, forty items at 1512: one line each, with Find in my work."
-      },
-      {
-       "file": "mw3-b-find.html",
-       "caption": "Find in my work with alert typed: four rows left."
-      },
-      {
-       "file": "mw3-b-viewer.html",
-       "caption": "A viewer who owns nothing: the line and its (i), no button."
-      },
-      {
-       "file": "mw3-b-phone.html",
-       "caption": "Phone 390 with forty items: one-line rows wrap long names."
-      }
-     ]
-    },
-    {
-     "letter": "c",
-     "name": "Point to the Roadmap",
-     "recommended": false,
-     "what": "Empty: one line with a link, Set owners on the Roadmap; owners are set in each feature's panel as today. Forty: ten a page with Back and Next 10.",
-     "plus": "Nothing new to build for owning; one way to set an owner.",
-     "cost": "Own one feature: 5 steps (link, find it on the Roadmap, open it, Owner Change, pick); 10 for two. Forty: 4 pages.",
-     "frames": [
-      {
-       "file": "mw3-c-rest.html",
-       "caption": "At rest, nothing is mine: one line and Set owners on the Roadmap."
-      },
-      {
-       "file": "mw3-c-open.html",
-       "caption": "The link opens the Roadmap as it is today; the person finds a feature."
-      },
-      {
-       "file": "mw3-c-mid.html",
-       "caption": "F-102's panel open, its Owner being changed."
-      },
-      {
-       "file": "mw3-c-result.html",
-       "caption": "Result: back on My work, F-102 is mine. Cost: 5 steps for one feature."
-      },
-      {
-       "file": "mw3-c-hard-1512.html",
-       "caption": "Hard case, forty items at 1512: ten a page, 1 to 10 of 40, Next 10."
-      },
-      {
-       "file": "mw3-c-viewer.html",
-       "caption": "A viewer who owns nothing: the line and its (i), no link."
-      },
-      {
-       "file": "mw3-c-phone.html",
-       "caption": "Phone 390 with forty items: ten a page."
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }

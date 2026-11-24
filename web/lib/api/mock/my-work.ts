@@ -28,12 +28,13 @@ export const MW_ITEMS: MwItem[] = [
   {
     id: 'd1',
     kind: 'decision',
+    code: 'Q5',
     name: 'Reminder default time',
     track: 'Guided setup track',
     due: 'Nov 18',
     when: 0,
     rec: "9:00 in each person's zone",
-    options: ['8:00 for everyone', 'Let each person pick'],
+    options: ['Noon', 'Let each person pick'],
     blocks: 'F-03 Health log',
   }, // MOCK-HOOK
   {
@@ -50,7 +51,7 @@ export const MW_ITEMS: MwItem[] = [
     kind: 'feature',
     code: 'F-106',
     name: 'Trial reminder texts',
-    track: 'Usage alerts track',
+    track: 'Guided setup track',
     due: 'Nov 27',
     when: 1,
     risk: true,
@@ -58,13 +59,14 @@ export const MW_ITEMS: MwItem[] = [
   {
     id: 'd2',
     kind: 'decision',
+    code: 'Q6',
     name: 'Invite limit on the free plan',
     track: 'Guided setup track',
     due: 'Nov 28',
     when: 1,
     rec: '5 invites',
     options: ['3 invites', 'No limit'],
-    blocks: 'F-111 Team invite at sign-up',
+    blocks: 'F-05 Invite teammates',
   }, // MOCK-HOOK
   {
     id: 'p1',
@@ -87,13 +89,14 @@ export const MW_ITEMS: MwItem[] = [
   {
     id: 'd3',
     kind: 'decision',
-    name: 'Trial length for teams',
-    track: 'Pricing track',
-    due: 'Dec 2',
+    code: 'Q8',
+    name: 'Sign-in choice: Google at launch',
+    track: 'Guided setup track',
+    due: 'Dec 1',
     when: 2,
-    rec: '14 days',
-    options: ['7 days', '30 days'],
-    blocks: 'F-110 Annual plan offer',
+    rec: 'Yes, at launch',
+    options: ['After launch'],
+    blocks: 'F-01 Sign in',
   }, // MOCK-HOOK
   {
     id: 'f3',
@@ -136,7 +139,7 @@ export const MW_ITEMS: MwItem[] = [
     kind: 'feature',
     code: 'F-03',
     name: 'Health log',
-    track: 'Usage alerts track',
+    track: 'Guided setup track',
     due: null,
     when: 4,
   }, // MOCK-HOOK
@@ -149,7 +152,7 @@ export const MW_UNOWNED: MwItem[] = [
     kind: 'feature',
     code: 'F-102',
     name: 'Rep call script hints',
-    track: 'Sales track',
+    track: 'Guided setup track',
     due: 'Dec 9',
     when: 3,
   }, // MOCK-HOOK
@@ -158,7 +161,7 @@ export const MW_UNOWNED: MwItem[] = [
     kind: 'feature',
     code: 'F-103',
     name: 'Lead list ranking',
-    track: 'Sales track',
+    track: 'Guided setup track',
     due: 'Dec 11',
     when: 3,
   }, // MOCK-HOOK
@@ -167,7 +170,7 @@ export const MW_UNOWNED: MwItem[] = [
     kind: 'feature',
     code: 'F-104',
     name: 'Complaint early warning',
-    track: 'Usage alerts track',
+    track: 'Guided setup track',
     due: 'Nov 30',
     when: 2,
   }, // MOCK-HOOK
@@ -176,7 +179,7 @@ export const MW_UNOWNED: MwItem[] = [
     kind: 'feature',
     code: 'F-105',
     name: 'Refund in one step',
-    track: 'Pricing track',
+    track: 'Guided setup track',
     due: null,
     when: 4,
   }, // MOCK-HOOK
@@ -185,7 +188,7 @@ export const MW_UNOWNED: MwItem[] = [
     kind: 'feature',
     code: 'F-107',
     name: 'Partner referral channel',
-    track: 'Sales track',
+    track: 'Guided setup track',
     due: 'Jan 12',
     when: 3,
   }, // MOCK-HOOK
@@ -194,7 +197,7 @@ export const MW_UNOWNED: MwItem[] = [
     kind: 'feature',
     code: 'F-110',
     name: 'Annual plan offer',
-    track: 'Pricing track',
+    track: 'Guided setup track',
     due: 'Dec 18',
     when: 3,
   }, // MOCK-HOOK
@@ -252,7 +255,7 @@ export const MW_FORTY: MwItem[] = [
   ...FORTY_NAMES.map((name, i) => ({
     id: `x${i}`, // MOCK-HOOK
     kind: (i % 9 === 4 ? 'milestone' : i % 7 === 3 ? 'decision' : 'feature') as MwKind, // MOCK-HOOK
-    code: i % 9 === 4 ? undefined : `F-${140 + i}`, // MOCK-HOOK
+    code: i % 9 === 4 ? undefined : i % 7 === 3 ? `Q${40 + i}` : `F-${140 + i}`, // MOCK-HOOK
     name, // MOCK-HOOK
     track: ['Usage alerts track', 'Pricing track', 'Guided setup track', 'Sales track'][i % 4], // MOCK-HOOK
     due: DAYS[i % DAYS.length], // MOCK-HOOK
@@ -262,3 +265,66 @@ export const MW_FORTY: MwItem[] = [
     options: i % 7 === 3 ? ['Not yet', 'Later this year'] : undefined, // MOCK-HOOK
   })),
 ].slice(0, 40); // MOCK-HOOK
+
+// MOCK-HOOK: the decisions waiting for Avery Stone on Decisions (34) that have no due date and
+// so are not listed on My work; My work links to them.
+export const MW_MORE_DECISIONS = 31; // MOCK-HOOK
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; // MOCK-HOOK
+/** MOCK-HOOK: "Nov 20" -> 2026-11-20 (Jan to Mar fall in 2027). */
+function isoOf(d: string): string {
+  const [m, day] = d.split(' '); // MOCK-HOOK
+  const mi = MONTHS.indexOf(m); // MOCK-HOOK
+  return `${mi < 3 ? 2027 : 2026}-${String(mi + 1).padStart(2, '0')}-${day.padStart(2, '0')}`; // MOCK-HOOK
+}
+function minus28(iso: string): string {
+  const t = new Date(`${iso}T12:00:00Z`); // MOCK-HOOK
+  t.setUTCDate(t.getUTCDate() - 27); // MOCK-HOOK
+  return t.toISOString().slice(0, 10); // MOCK-HOOK
+}
+
+/** MOCK-HOOK: which unowned features this frame has made mine (MW3 results). */
+function takenNow(): string[] {
+  if (typeof window === 'undefined') return []; // MOCK-HOOK
+  const q = new URLSearchParams(window.location.search); // MOCK-HOOK
+  if (q.get('case') === 'one') return ['u1']; // MOCK-HOOK
+  if (q.get('pick') === 'done') return ['u1', 'u3']; // MOCK-HOOK
+  return []; // MOCK-HOOK
+}
+
+/**
+ * MOCK-HOOK: the mock roadmap's item as My work's row says it: Avery Stone owns it, on the row's
+ * track, due the row's day (a four-week span to it). Only while a My work switch is on.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mwRoadmapItem<T extends { code?: string | null; title: string; [k: string]: any }>(
+  i: T,
+  meId: string,
+): T {
+  const mine = [...MW_ITEMS, ...MW_UNOWNED.filter((u) => takenNow().includes(u.id))].find(
+    (x) => x.kind === 'feature' && x.code && x.code === i.code,
+  ); // MOCK-HOOK
+  const row = mine ?? MW_UNOWNED.find((x) => x.code === i.code); // MOCK-HOOK
+  if (!row) return i; // MOCK-HOOK
+  const out = { ...i, title: row.name } as T & Record<string, unknown>; // MOCK-HOOK
+  if (mine) {
+    (out as Record<string, unknown>).owner = { id: meId, name: 'Avery Stone' }; // MOCK-HOOK
+    (out as Record<string, unknown>).own_owner_id = meId; // MOCK-HOOK
+  }
+  if (row.due && i.start && i.end) {
+    const end = isoOf(row.due); // MOCK-HOOK
+    (out as Record<string, unknown>).start = {
+      ...i.start,
+      date: minus28(end),
+      source: 'accepted',
+      estimated: false,
+    }; // MOCK-HOOK
+    (out as Record<string, unknown>).end = {
+      ...i.end,
+      date: end,
+      source: 'accepted',
+      estimated: false,
+    }; // MOCK-HOOK
+  }
+  return out; // MOCK-HOOK
+}

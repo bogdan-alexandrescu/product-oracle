@@ -3329,7 +3329,12 @@ export function SimpleRoadmap() {
               </header>
               {mw('mw1') === 'c' && mw('mine') === '1' && (
                 <div data-mw-mine="" className="simple-card">
-                  <style>{'[data-mw-mine] ~ * { display: none !important; }'}</style>
+                  <style>{'[data-mw-mine] ~ * { display: none !important; } [data-testid=format-switch] { display: none !important; }'}</style>
+                  {phone && (
+                    <Button data-testid="mw-mine-phone" aria-pressed="true" className="mb-3 border-accent bg-accent-soft text-accent-ink" onClick={() => { const u = new URL(window.location.href); u.searchParams.set('mine', '0'); window.location.assign(u.toString()); }}>
+                      ✓ Mine · 7
+                    </Button>
+                  )}
                   <MyWorkHome place="roadmap" />
                 </div>
               )} {/* MOCK-HOOK */}

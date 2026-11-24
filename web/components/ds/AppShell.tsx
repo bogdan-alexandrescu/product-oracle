@@ -1,6 +1,6 @@
 'use client';
 
-import { myWorkEntry } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import { myWorkEntry, myWorkLate } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 import {
   Suspense,
@@ -761,7 +761,7 @@ function Navs() {
             d={d}
             pathname={pathname}
             home={home}
-            badge={d.label === 'Inbox' ? inbox : undefined}
+            badge={d.label === 'Inbox' ? inbox : d.label === 'My work' ? myWorkLate() : undefined} // MOCK-HOOK
           />
         ))}
         <span className="flex-1" />

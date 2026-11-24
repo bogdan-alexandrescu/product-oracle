@@ -1,6 +1,6 @@
 'use client';
 
-import { myWorkEntry, useMyWorkLate } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import { myWorkEntry, useMyWorkDecided, useMyWorkLate } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { Link, usePathname, useRouter } from '@/lib/nav';
 import {
   useCallback,
@@ -377,6 +377,7 @@ export function useSimpleShown(): boolean {
  */
 export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet') => ReactNode }) {
   const mwLate = useMyWorkLate(); // MOCK-HOOK
+  const mwDecided = useMyWorkDecided(); // MOCK-HOOK
   const pathname = usePathname();
   const router = useRouter();
   const { me, role, capsReady, capsError, simpleMode } = useMe();
@@ -449,7 +450,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
   const moreDests = SIMPLE_DESTINATIONS.filter((d) => !TABS.includes(d.label));
   const moreActive = moreDests.some((d) => isActive(pathname, d));
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
-  const countOf = (d: Dest) => counts?.[d.label] ?? 0;
+  const countOf = (d: Dest) => d.label === 'My work' ? mwLate : Math.max(0, (counts?.[d.label] ?? 0) - (d.label === 'Decisions' ? mwDecided : 0)); // MOCK-HOOK
   // simple-home-qa-nov12 #17: More carries the Inbox's own count, so it is the number the Inbox says
   // (what of it the Roadmap tab counts too is counted there as well).
   const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
@@ -509,7 +510,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
         </Link>
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {
-          const n = d.label === 'My work' ? mwLate : (counts?.[d.label] ?? 0); // MOCK-HOOK
+          const n = countOf(d); // MOCK-HOOK
           const failed = failedOf(d.label);
           const words = failed
             ? failedWords(countWords(d.label, n, counts), n)

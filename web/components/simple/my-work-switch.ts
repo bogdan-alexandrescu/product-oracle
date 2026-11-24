@@ -18,7 +18,7 @@ export function myWorkEntry(): boolean {
 /** MOCK-HOOK: the rail's yellow count: late or at risk only, as the rail counts what waits. */
 export function myWorkLate(): number {
   const c = mw('case'); // MOCK-HOOK
-  if (c === 'none' || c === 'one') return 0; // MOCK-HOOK
+  if (c === 'none' || c === 'one' || mw('pick') === 'done') return 0; // MOCK-HOOK
   return (c === 'forty' ? MW_FORTY : MW_ITEMS).filter((i) => i.when === 0 || i.risk).length; // MOCK-HOOK
 }
 
@@ -30,15 +30,26 @@ export function myWorkCount(): number {
 
 // MOCK-HOOK: late items decided on My work this visit, so the rail's count drops at once.
 let decidedLate = 0; // MOCK-HOOK
+let decidedAny = 0; // MOCK-HOOK
 const subs = new Set<() => void>(); // MOCK-HOOK
-export function decideLate() {
-  decidedLate += 1; // MOCK-HOOK
+export function decideLate(late = true) {
+  if (late) decidedLate += 1; // MOCK-HOOK
+  decidedAny += 1; // MOCK-HOOK
   subs.forEach((f) => f()); // MOCK-HOOK
 }
 export function useMyWorkLate(): number {
   return useSyncExternalStore(
     (f) => (subs.add(f), () => void subs.delete(f)),
-    () => myWorkLate() - decidedLate,
+    () => myWorkLate() - decidedLate - (mw('act') === 'done' ? 1 : 0),
+    () => 0,
+  ); // MOCK-HOOK
+}
+
+/** MOCK-HOOK: decisions made on My work this visit (act=done counts one), for Decisions' count. */
+export function useMyWorkDecided(): number {
+  return useSyncExternalStore(
+    (f) => (subs.add(f), () => void subs.delete(f)),
+    () => decidedAny + (mw('act') === 'done' ? 1 : 0),
     () => 0,
   ); // MOCK-HOOK
 }

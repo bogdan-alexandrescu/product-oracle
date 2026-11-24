@@ -29,8 +29,10 @@ import {
 import { unitOk } from './goal-units';
 import { newCompany, seeded, stableUuid } from './ids';
 import { codedTitle, inheritedCode, prdCode, shownCode } from './item-code';
+import { mwRoadmapItem } from './my-work'; // MOCK-HOOK
+import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
+import { byPrdRank, prdRanker } from './prd-rank';
 import { withRoadmapCodes } from './roadmap-codes';
-import { plainFlow } from './simple-visuals';
 import {
   calendarDay,
   milestoneOut,
@@ -40,11 +42,6 @@ import {
   type MockMilestone,
   type OldCtx,
 } from './simple-milestones';
-import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
-import { reply } from './typed';
-
-import type { OnePagerDb } from './simple-one-pager';
-
 import {
   PLAN_PRD_SLUG,
   planGoalNames,
@@ -53,9 +50,12 @@ import {
   planSpan,
   type PlanDb,
 } from './simple-plan';
-import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
 import { featureKeyOf, startEffort, withOrder } from './simple-priorities';
-import { byPrdRank, prdRanker } from './prd-rank';
+import { bundleFlow, flowFor, flowsOfBets, type VisualsDb, plainFlow  } from './simple-visuals';
+import { reply } from './typed';
+
+import type { OnePagerDb } from './simple-one-pager';
+
 
 export { codedTitle, prdCode, shownCode, shownName, takenFrom } from './item-code';
 
@@ -4123,7 +4123,7 @@ export async function routeSimpleRoadmap(
   if (!p[3] && m === 'GET') {
     if (q.get('roadmap') && !readableRoadmap(q.get('roadmap'), me.role))
       return json(404, { detail: 'No such roadmap' });
-    const out = readRoadmap(db, me.role, q, me);
+    const out = mwPatch(readRoadmap(db, me.role, q, me), me); // MOCK-HOOK
     return out
       ? reply('/v1/simple/roadmap', 'get', out)
       : json(422, { detail: 'group: goal, track or prd' });
@@ -4486,4 +4486,15 @@ export function draftPrds(d: MockDraft): Schemas['SimpleDraftPrd'][] {
       key_dates: 0,
     }))
     .sort((a, b) => byRank(a.prd, b.prd));
+}
+
+/** MOCK-HOOK: My work mock-ups (#1798): the features on My work read as Avery Stone's, with the row's track and dates. */
+function mwPatch(
+  out: Schemas['SimpleRoadmapOut'] | null,
+  me: Who,
+): Schemas['SimpleRoadmapOut'] | null {
+  if (!out || typeof window === 'undefined') return out; // MOCK-HOOK
+  if (/[?&]mw[123]=/.test(window.location.search)) sessionStorage.setItem('mw-mock', '1'); // MOCK-HOOK
+  if (sessionStorage.getItem('mw-mock') !== '1') return out; // MOCK-HOOK
+  return { ...out, items: out.items.map((i) => mwRoadmapItem(i, me.id)) }; // MOCK-HOOK
 }
