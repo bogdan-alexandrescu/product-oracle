@@ -60,11 +60,11 @@
           "frames": [
             {
               "file": "ut1-b-rest.html",
-              "caption": "One real change: a single toast with Undo"
+              "caption": "One real change: the dependency of F-63 Welcome video on F-64 In-app tour is removed; one toast with Undo, and the draft banner counts 1 change"
             },
             {
               "file": "ut1-b-open.html",
-              "caption": "Three fast changes: three toasts stacked in the corner, each with its own Undo, clear of the broken links' buttons"
+              "caption": "Two more changes come fast: three toasts stacked in the corner, each with its own Undo; the banner counts 3 changes and offers Undo whole draft"
             },
             {
               "file": "ut1-b-open-dark.html",
@@ -76,7 +76,7 @@
             },
             {
               "file": "ut1-b-result.html",
-              "caption": "Undo pressed: the dependency is back in the broken links list; its toast closes and Undone joins the stack. Cost: 1 click"
+              "caption": "Undo pressed: the dependency is back (3 broken links again), its toast closes and Undone joins the stack; the banner counts 2 changes. Cost: 1 click"
             },
             {
               "file": "ut1-b-hard.html",
@@ -88,7 +88,7 @@
             },
             {
               "file": "ut1-b-phone-390.html",
-              "caption": "Phone 390: three full-width toasts take most of the lower screen"
+              "caption": "Phone 390, the same three changes: three full-width toasts take most of the lower screen"
             }
           ]
         },
@@ -103,11 +103,11 @@
           "frames": [
             {
               "file": "ut1-c-rest.html",
-              "caption": "One real change: the dependency of Welcome video on In-app tour is removed; one toast with Undo and Ctrl Z"
+              "caption": "One real change: the dependency of F-63 Welcome video on F-64 In-app tour is removed; one toast with Undo and Ctrl Z, and the draft banner counts 1 change"
             },
             {
               "file": "ut1-c-open.html",
-              "caption": "Two more changes come fast: the toast shows the newest, and '2 earlier changes' is opened to list them, each with Undo; it sits clear of the broken links' buttons"
+              "caption": "Two more changes come fast: the toast shows the newest, and '2 earlier changes' is opened to list them, each with Undo; the banner counts 3 changes"
             },
             {
               "file": "ut1-c-open-dark.html",
@@ -119,7 +119,7 @@
             },
             {
               "file": "ut1-c-result.html",
-              "caption": "Undo pressed: the dependency is back (its Bring it back and Remove the dependency buttons return), the toast says Undone. Cost: 2 clicks"
+              "caption": "Undo pressed: the dependency is back (3 broken links, its Bring it back and Remove the dependency buttons return), the toast says Undone and keeps the other two; the banner counts 2 changes. Cost: 2 clicks"
             },
             {
               "file": "ut1-c-hard.html",
@@ -131,11 +131,11 @@
             },
             {
               "file": "ut1-c-phone-390.html",
-              "caption": "Phone 390: one full-width toast above the tab bar, '2 earlier changes' under it"
+              "caption": "Phone 390, the same three changes: one full-width toast, '2 earlier changes' under it"
             },
             {
               "file": "ut1-c-detailed.html",
-              "caption": "Detailed: the same toast on the Plan page, three changes, earlier ones open"
+              "caption": "Detailed: the same three changes on the Plan page, the earlier ones open"
             }
           ]
         },
@@ -187,7 +187,7 @@
       "code": "UT2",
       "name": "Which changes get one",
       "question": "Which changes get an Undo toast, and what does Undo mean for a commenter's proposal?",
-      "common": "Owners and approvers change Simple at once; a commenter's change becomes a proposal that waits in Needs a decision, as today. Deleting a PRD keeps its confirm in every proposal. The frames make real changes in the feature panel of F-79 Weekly alert digest: its status, then Cut from its menu, then a commenter's status change.",
+      "common": "Owners and approvers change Simple at once; a commenter's change becomes a proposal that waits in Needs a decision, as today. Deleting a PRD keeps its confirm in every proposal. The frames make real changes in the feature panel of F-79 Weekly alert digest: its status, then Cut from its menu, then a commenter's status change. While a cut's toast shows, the panel's 'Cut on … by …' bar waits, so one Undo shows; when the toast is gone, that bar's Restore brings it back.",
       "proposals": [
         {
           "letter": "a",
@@ -200,7 +200,7 @@
           "frames": [
             {
               "file": "ut2-a-rest.html",
-              "caption": "The owner sets F-79 Weekly alert digest to Done in its panel: the toast says Status changed, with Undo"
+              "caption": "The owner sets F-79 Weekly alert digest's confidence to Low in its panel: the toast says Confidence changed, with Undo"
             },
             {
               "file": "ut2-a-open.html",
@@ -208,11 +208,11 @@
             },
             {
               "file": "ut2-a-mid.html",
-              "caption": "Cut pressed: no confirm; the feature is cut at once and the toast offers Undo. Cost: 1 click (today 2)"
+              "caption": "Cut pressed: no confirm; F-79 is cut at once and the toast, left of the panel, offers Undo. The panel's Restore bar waits until the toast is gone, so one Undo shows. Cost: 1 click (today 2)"
             },
             {
               "file": "ut2-a-result.html",
-              "caption": "Undo pressed: F-79 is back on the roadmap with its status, the toast says Undone"
+              "caption": "Undo pressed: the panel closed, F-79 Weekly alert digest is back on the timeline, the toast says Undone"
             },
             {
               "file": "ut2-a-hard.html",
@@ -246,7 +246,7 @@
           "frames": [
             {
               "file": "ut2-b-rest.html",
-              "caption": "The owner sets the status to Done: only a Saved tick beside the field, no toast"
+              "caption": "The owner sets the confidence to Low: only a Saved tick beside the field, no toast"
             },
             {
               "file": "ut2-b-open.html",
@@ -254,11 +254,11 @@
             },
             {
               "file": "ut2-b-mid.html",
-              "caption": "Cut pressed: no confirm; the toast offers Undo because a cut is hard to redo"
+              "caption": "Cut pressed: no confirm; the toast, left of the panel, offers Undo because a cut is hard to redo; the Restore bar waits until it is gone"
             },
             {
               "file": "ut2-b-result.html",
-              "caption": "Undo pressed: F-79 is back on the roadmap"
+              "caption": "Undo pressed: the panel closed, F-79 Weekly alert digest is back on the timeline"
             },
             {
               "file": "ut2-b-hard.html",
@@ -288,7 +288,7 @@
           "frames": [
             {
               "file": "ut2-c-rest.html",
-              "caption": "The owner sets the status to Done: the toast offers Undo"
+              "caption": "The owner sets the confidence to Low: the toast offers Undo"
             },
             {
               "file": "ut2-c-open.html",
@@ -296,11 +296,11 @@
             },
             {
               "file": "ut2-c-mid.html",
-              "caption": "Cut pressed: no confirm; the keyboard is on the toast's Undo, the same word a commenter will see"
+              "caption": "Cut pressed: no confirm; the keyboard is on the toast's Undo, the same word a commenter will see; the Restore bar waits until the toast is gone"
             },
             {
               "file": "ut2-c-result.html",
-              "caption": "Undo pressed: F-79 is back on the roadmap"
+              "caption": "Undo pressed: the panel closed, F-79 Weekly alert digest is back on the timeline"
             },
             {
               "file": "ut2-c-hard.html",
@@ -377,11 +377,11 @@
           "what": "The feature panel, the one every page opens, gets a History section near its foot: each change to the feature, newest first, who made it and when, with Undo on each. A commenter sees Propose undo instead. On a phone it sits in the panel sheet as a closed section.",
           "why": "It lives where the feature already is on every page (Roadmap, Goal map, Priorities, Home), covers changes by anyone and not only this visit, and needs no new page or button in the app's frame.",
           "plus": "Shows who changed what, so a person can see why something moved before taking it back.",
-          "cost": "Open the feature (1), History (1), Undo (1): 3 clicks, any time. Today: redo by hand, or Removed for a cut (2).",
+          "cost": "Open the feature (1), History (1), Undo (1): 3 clicks, any time. Today: redo by hand, or Removed for a cut (2). Detailed gets no History of its own: a Detailed person switches to Simple (the Simple and Detailed switch in the side bar) and opens the feature there, one more click; the owner to agree.",
           "frames": [
             {
               "file": "ut3-a-rest.html",
-              "caption": "The toast has run out after the cut; the panel shows F-79 as cut, History closed at its foot"
+              "caption": "The owner cut F-79 Weekly alert digest and its toast has run out: the panel shows it cut, History closed at its foot"
             },
             {
               "file": "ut3-a-open.html",
@@ -389,7 +389,7 @@
             },
             {
               "file": "ut3-a-open-dark.html",
-              "caption": "Dark: the cut feature’s panel with Restore at its top; History sits further down the panel"
+              "caption": "The same open History in dark"
             },
             {
               "file": "ut3-a-mid.html",
@@ -397,19 +397,19 @@
             },
             {
               "file": "ut3-a-result.html",
-              "caption": "Undo pressed: F-79 is back on the timeline and the toast says Undone. Cost: 3 clicks"
+              "caption": "Undo pressed: the panel closed, F-79 is back on the timeline and the toast says Undone. Cost: 3 clicks"
             },
             {
               "file": "ut3-a-hard.html",
-              "caption": "A commenter's view of the same History: Propose undo on each line"
+              "caption": "A commenter opens F-79's History: Propose undo on each line"
             },
             {
               "file": "ut3-a-hard-1512.html",
-              "caption": "The same in a 1512-wide window"
+              "caption": "The same commenter's History in a 1512-wide window"
             },
             {
               "file": "ut3-a-phone-390.html",
-              "caption": "Phone 390 with the panel open: History is a section of the panel sheet"
+              "caption": "Phone 390 after the same cut: History is a section of the panel sheet"
             }
           ]
         },

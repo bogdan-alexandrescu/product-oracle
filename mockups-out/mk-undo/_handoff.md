@@ -44,3 +44,11 @@ Runner: `web/mk-snap/` (every line marked MOCK-HOOK): `ut1.spec.ts`, `ut2.spec.t
 - UT3 a has no Detailed frame (History lives in the Simple panel only); UT1 c and UT2 a have one.
 - The cut's toast Undo still sits beside the panel's 'Cut on … by …' Restore bar in UT2 a/b/c mid (not reworked this round).
 - 'Not in GT' chip and its end dot on the timeline (built text), 'In-app tour' uncoded in the built Removed list.
+
+## Round 4
+Runner `web/mk-snap/r4.spec.ts` (MOCK-HOOK): UT1 b/c stories live from the open frames' start (rest, open, mid, result, phone, c Detailed),
+UT2 a/b/c stories live (confidence to Low, menu, cut, Undo; panel closed and F-79 in view), UT3 a story live (cut, History, Undo; dark;
+commenter hard and 1512; phone). `snap.ts` pins the clock (every banner: 4:15 AM). One Undo per cut: while the cut's toast shows, the
+panel's 'Cut on … · Restore' bar waits (`useMkCutToast`). Proposal toasts read 'Proposed a status change'; marks name the new value.
+Still open: 'In-app tour' uncoded in built text; 'Not in GT' over the end dot; UT2 phone toasts over b's banner spot. UT3 a in
+Detailed: stated in its cost, owner asked.

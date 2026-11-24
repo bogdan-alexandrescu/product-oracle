@@ -1,5 +1,6 @@
 // MOCK-HOOK: mk-undo round 4: UT1 b/c stories from the same start as their open frames, UT2 a/b/c cut stories live, UT3 a live.
 import { expect, test, type Page } from '@playwright/test'; // MOCK-HOOK
+
 import { signIn, snap, theme } from './snap'; // MOCK-HOOK
 
 const A = ['Removed the dependency of F-63 Welcome video on F-64 In-app tour', 'Undo']; // the real change's own toast text // MOCK-HOOK
@@ -20,17 +21,6 @@ async function real(page: Page) { // MOCK-HOOK: the one real change: the broken 
   await page.locator('[data-testid="draft-count"]').waitFor(); // MOCK-HOOK
   await page.evaluate(() => scrollTo(0, 0)); // MOCK-HOOK
   await page.waitForTimeout(800); // MOCK-HOOK
-} // MOCK-HOOK
-async function scrollTo(page: Page, sel: string, off: number) { // MOCK-HOOK: the page's own scroller, so sel sits off px from the top
-  await page.evaluate(({ sel, off }) => { // MOCK-HOOK
-    const b = document.querySelector(sel); // MOCK-HOOK
-    if (!b) return; // MOCK-HOOK
-    let sc: Element | null = b.parentElement; // MOCK-HOOK
-    while (sc && !(/auto|scroll/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement; // MOCK-HOOK
-    const dy = b.getBoundingClientRect().top - off; // MOCK-HOOK
-    if (sc) sc.scrollTop += dy; else window.scrollBy(0, dy); // MOCK-HOOK
-  }, { sel, off }); // MOCK-HOOK
-  await page.waitForTimeout(700); // MOCK-HOOK
 } // MOCK-HOOK
 
 for (const v of ['b', 'c']) { // MOCK-HOOK
@@ -73,7 +63,7 @@ const F79 = async (page: Page) => { // MOCK-HOOK
   await page.getByRole('button', { name: 'Change the status' }).waitFor(); // MOCK-HOOK
   await page.waitForTimeout(600); // MOCK-HOOK
 }; // MOCK-HOOK
-async function cut(page: Page, confirm: boolean) { // MOCK-HOOK
+async function cut(page: Page) { // MOCK-HOOK
   await page.getByRole('button', { name: 'More actions' }).last().click(); // MOCK-HOOK
   await page.getByRole('menuitem', { name: 'Cut from the roadmap' }).waitFor(); // MOCK-HOOK
 } // MOCK-HOOK
@@ -99,7 +89,7 @@ for (const v of ['a', 'b', 'c']) // MOCK-HOOK
     await page.waitForTimeout(1500); // MOCK-HOOK
     await snap(page, `ut2-${v}-rest`); // MOCK-HOOK
     await page.evaluate(() => (window as unknown as { __mk: { clear: () => void } }).__mk.clear()); // MOCK-HOOK: that toast has run out
-    await cut(page, false); // MOCK-HOOK
+    await cut(page); // MOCK-HOOK
     await snap(page, `ut2-${v}-open`); // MOCK-HOOK
     await page.getByRole('menuitem', { name: 'Cut from the roadmap' }).click(); // MOCK-HOOK
     await page.waitForTimeout(1500); // MOCK-HOOK
@@ -114,7 +104,7 @@ for (const v of ['a', 'b', 'c']) // MOCK-HOOK
 
 async function ut3cut(page: Page) { // MOCK-HOOK: the owner cuts F-79 from its panel (today's confirm), then the toast runs out
   await F79(page); // MOCK-HOOK
-  await cut(page, true); // MOCK-HOOK
+  await cut(page); // MOCK-HOOK
   await page.getByRole('menuitem', { name: 'Cut from the roadmap' }).click(); // MOCK-HOOK
   await page.waitForTimeout(800); // MOCK-HOOK
   const ok = page.getByRole('button', { name: /^Cut/ }).last(); // MOCK-HOOK
