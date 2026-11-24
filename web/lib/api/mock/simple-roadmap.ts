@@ -1032,18 +1032,25 @@ type StoredTask = {
   due_date: string | null;
   item_id: string;
   at: string;
+  tracker_ref?: string | null;
+  tracker_url?: string | null;
+  tracker_error?: string | null;
 };
 const storedTasks = (db: SimpleDb): StoredTask[] =>
   Object.entries(db.targets ?? {})
     .filter(([, v]) => v.kind === 'item_task')
     .map(([id, v]) => ({ ...(v as Omit<StoredTask, 'id'>), id }))
     .sort((a, b) => (a.at < b.at ? -1 : 1));
-const taskOut = (t: StoredTask): Schemas['SimpleItemTask'] => ({
+export const taskOut = (t: StoredTask): Schemas['SimpleItemTask'] => ({
   id: t.id,
   title: t.title,
   status: t.status,
   owner: t.owner_id ? { id: t.owner_id, name: t.owner_name ?? 'someone' } : null,
   due_date: t.due_date,
+  // task-push (#1816): its tracker record and the last push's failure (service.task_out).
+  tracker_ref: t.tracker_ref ?? null,
+  tracker_url: t.tracker_url ?? null,
+  tracker_error: t.tracker_error ?? null,
 });
 /** walkc-roadmap-tasks: an item's tasks, not dropped, in the order they were added. */
 export const itemTasks = (db: SimpleDb, itemId: string): Schemas['SimpleItemTask'][] =>

@@ -461,6 +461,7 @@ import {
   simpleInboxRows,
   type SimpleChangesCtx,
 } from './simple-changes';
+import { retryTask, seedTrackedTask } from './task-push';
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from './currentstate';
 import {
   featureKeyOf,
@@ -14068,6 +14069,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const nudges = db.simple_roadmap.items.find((x) => x.key === 'setup-ideas');
     if (invites && nudges) nudges.looks_like = [invites.id];
   }
+  // task-push (#1816): the "task-tracker" scenario's task already linked to its tracker record.
+  if (freshRoadmap) seedTrackedTask(db.simple_roadmap, db.simple_roadmap.ids['alert-export']);
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
@@ -14174,6 +14177,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       )
     )
       return json(422, { detail: 'after.feature_id: a feature' });
+  }
+  // task-push (#1816): Retry a task's push to the connected tracker.
+  if (p[1] === 'simple' && p[2] === 'tasks' && p[4] === 'tracker-push' && m === 'POST') {
+    if (!atLeast(me.role, 'commenter')) return forbidden('commenter');
+    return retryTask(db.simple_roadmap, p[3], me);
   }
   const simpleRoles = Object.fromEntries(
     db.members.filter((x) => x.status !== 'disabled').map((x) => [x.id, x.role]),
