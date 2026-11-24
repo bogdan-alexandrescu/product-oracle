@@ -18,16 +18,25 @@ Test cards (protects / fails_when / no_claim):
   a stop sent back first keeps "Approved after a change" with its last step naming the
   count; fails_when=the date edits recorded at approval are not counted; no_claim=how the
   dates are changed (tests.test_eng_dates_*).
+- test_run_notes_name_their_codes: protects=#1866: beside each stop's and step's note the
+  read sends the goals, features and milestones whose codes the note writes, each with its
+  code and name, for the caller's own company; a code that names nothing is not sent, nor is
+  another company's goal or feature of that code; the note text is sent as written;
+  fails_when=``codes`` is missing, names an unknown code, or reads another company's names;
+  no_claim=how the page shows them (web/e2e/run-note-codes.spec.ts).
 """
 
 import datetime as dt
 
 from sqlalchemy import event, select
 
+from oracle.baseline.models import Entity
 from oracle.db import get_engine
+from oracle.roadmap.models import TrackMilestone
 from oracle.docs.models import Document
 from oracle.runs.models import Checkpoint, Run
 from oracle.tenancy import tenant_session
+from tests.baseline_helpers import make_ctx
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_meetings_api import PRD, world
 
@@ -191,3 +200,50 @@ async def test_dates_stop_says_how_many_dates_changed(client):
     (stop_,) = back
     assert (stop_["outcome"], stop_["dates_changed"]) == ("Approved after a change", 1)
     assert [t["what"] for t in stop_["trail"]] == ["Sent back", "Approved with one date changed"]
+
+
+async def test_run_notes_name_their_codes(client):
+    """A run note's codes come back with their names, the company's own only."""
+    w = await world()
+    other = await make_ctx("Other Example Co")
+    async with tenant_session(other.tenant_id) as s:
+        s.add_all([
+            Entity(type="goal", key="G-7", title="Other goal", status="confirmed", origin="user"),
+            Entity(type="feature", key="F-205", title="Other feature", status="confirmed",
+                   origin="user"),
+        ])  # fmt: skip
+        await s.commit()
+    owner, lead = w.ctx.users["owner"], w.ctx.users["approver"]
+    note = "Hold G-2 until F-104 has a date; M7 after. F-999, G-7 and F-205 wait."
+    async with tenant_session(w.ctx.tenant_id) as s:
+        s.add_all([
+            Entity(type="goal", key="G-2", title="Faster first alert", status="confirmed",
+                   origin="user"),
+            Entity(type="feature", key="F-104", title="Quiet hours", status="confirmed",
+                   origin="user"),
+            TrackMilestone(name="Pilot teams live", code="M7"),
+        ])  # fmt: skip
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        run = Run(flow="baseline_to_prd", document_id=prd.id, created_by=owner.id, status="running")
+        s.add(run)
+        await s.flush()
+        for days, status, attempt in ((0, "changes_requested", 1), (1, "approved", 2)):
+            s.add(Checkpoint(
+                run_id=run.id, kind="eng_review", status=status, approver_role="approver",
+                decided_by=lead.id, decided_at=AT + dt.timedelta(days=days),
+                note=note if status == "approved" else "F-104 needs a zone.",
+                payload={"segment_seq": 1, "attempt": attempt,
+                         "decided": {"role": "approver", "by": str(lead.id)}},
+            ))  # fmt: skip
+        await s.commit()
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    (stop,) = r.json()["runs"][0]["stops"]
+    assert stop["note"] == note
+    assert [(c["code"], c["name"], c["kind"]) for c in stop["codes"]] == [
+        ("G-2", "Faster first alert", "goal"),
+        ("F-104", "Quiet hours", "feature"),
+        ("M7", "Pilot teams live", "milestone"),
+    ]
+    assert [[c["code"] for c in t["codes"]] for t in stop["trail"]] == [["F-104"], [
+        "G-2", "F-104", "M7"]]  # fmt: skip
