@@ -103,11 +103,16 @@ function hits(top: number, box: DOMRect, els: [DOMRect, number][]) { // MOCK-HOO
 const controls = () => [...document.querySelectorAll(CONTROLS)].filter((el) => !el.closest('[data-testid="toasts"]')).map((el) => [el.getBoundingClientRect(), inChart(el) ? 1 : 20] as [DOMRect, number]).filter(([r]) => r.width > 1 && r.bottom > 0 && r.top < window.innerHeight); // MOCK-HOOK
 function useClear(key: number) { // MOCK-HOOK: as today's clearSpot: at the bottom when clear, else the first spot from the top that covers no control
   const [top, setTop] = useState<number | null>(null); // MOCK-HOOK
+  const [right, setRight] = useState(16); // MOCK-HOOK: on a desktop, left of an open feature panel, as clearOfDialogs
   useEffect(() => { // MOCK-HOOK
     const check = () => { // MOCK-HOOK
       const box = document.querySelector('[data-mk-stack]')?.getBoundingClientRect(); // MOCK-HOOK
       if (!box || !box.height) return; // MOCK-HOOK
       const phone = window.innerWidth <= 600; // MOCK-HOOK
+      const card = document.querySelector('[data-testid="floating-card"]')?.getBoundingClientRect(); // MOCK-HOOK
+      const r = !phone && card && card.width && card.left > window.innerWidth / 2 ? Math.round(window.innerWidth - card.left + 16) : 16; // MOCK-HOOK
+      setRight((o) => (o === r ? o : r)); // MOCK-HOOK
+      if (r !== 16 && Math.abs(window.innerWidth - box.right - r) > 2) return; // MOCK-HOOK: measure again once it has moved
       const low = Math.max(0, window.innerHeight - (phone ? 80 : 16) - box.height); // MOCK-HOOK
       const high = phone ? 72 : 16; // MOCK-HOOK
       const els = controls(); // MOCK-HOOK
@@ -119,7 +124,7 @@ function useClear(key: number) { // MOCK-HOOK: as today's clearSpot: at the bott
     const t = window.setInterval(check, 300); // MOCK-HOOK
     return () => window.clearInterval(t); // MOCK-HOOK
   }, [key]); // MOCK-HOOK
-  return top; // MOCK-HOOK
+  return [top, right] as const; // MOCK-HOOK
 } // MOCK-HOOK
 
 /** Replaces ToastHost while a mock-up switch is on. */ // MOCK-HOOK
@@ -144,15 +149,15 @@ export function MkToastHost() { // MOCK-HOOK
     const r = t.anchor ? document.querySelector(t.anchor)?.getBoundingClientRect() : null; // MOCK-HOOK
     if (!r) return null; // MOCK-HOOK
     return ( // MOCK-HOOK
-      <span key={t.id} role="status" className="pointer-events-auto fixed z-[61] inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-pass shadow-sm" style={{ left: r.right + 6, top: r.top + r.height / 2 - 11 }}> {/* MOCK-HOOK */}
-        <Icon name="check" size={16} /> {t.message} {/* MOCK-HOOK */}
+      <span key={t.id} role="status" className="pointer-events-auto fixed z-[61] inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-pass shadow-sm" style={r.right + 190 > window.innerWidth ? { left: r.right + 4, top: r.top + r.height / 2 - 11 } : { left: r.right + 6, top: r.top + r.height / 2 - 11 }}> {/* MOCK-HOOK */}
+        {r.right + 190 <= window.innerWidth && <Icon name="check" size={16} />} {t.message} {/* MOCK-HOOK: a phone drops the tick icon so it fits the row */}
         {t.action && <button type="button" className="ml-1 font-semibold text-accent-ink underline underline-offset-2" onClick={() => undo(t)}>{t.action.label}</button>} {/* MOCK-HOOK */}
       </span> // MOCK-HOOK
     ); // MOCK-HOOK
   }); // MOCK-HOOK
   const newest = shown.at(-1); // MOCK-HOOK
-  const top = useClear(shown.length + (open ? 100 : 0)); // MOCK-HOOK: as today's toast, never over a control
-  const at = top === null ? undefined : { top }; // MOCK-HOOK
+  const [top, right] = useClear(shown.length + (open ? 100 : 0)); // MOCK-HOOK: as today's toast, never over a control
+  const at = { ...(top === null ? {} : { top }), ...(right === 16 ? {} : { right }) }; // MOCK-HOOK
   const corner = (top === null ? 'bottom-4 max-[600px]:bottom-20 ' : '') + 'pointer-events-none fixed right-4 z-[60] flex max-w-[min(560px,calc(100vw-24px))] flex-col items-end gap-2 max-[600px]:left-3 max-[600px]:right-3 max-[600px]:items-stretch'; // MOCK-HOOK
   let body = null; // MOCK-HOOK
   if (newest && v === 'a') // MOCK-HOOK
@@ -314,11 +319,11 @@ export function mkUt2( // MOCK-HOOK
     mkPush({ message: 'Saved', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]` }); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
+  const said = message.replace(/ in Needs a decision\.?$/, ''); // MOCK-HOOK: a commenter has no Needs a decision
   if ((mk === 'a' || mk === 'c') && !applied) { // MOCK-HOOK
-    push({ message, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
+    push({ message: said, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
-  const said = message.replace(/ in Needs a decision\.?$/, ''); // MOCK-HOOK: a commenter has no Needs a decision
   if (mk === 'b' && !applied) { // MOCK-HOOK: b: no toast for a small change; the mark beside the field says Proposed, with Withdraw
     const f = body.op === 'set_status' ? 'status' : body.op === 'set_dates' ? 'dates' : 'confidence'; // MOCK-HOOK
     mkPush({ message: 'Proposed', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]`, action: { label: 'Withdraw', onClick: () => void wd(r.change.id).then(() => (mkPush({ message: 'Withdrawn', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]` }), reload())) } }); // MOCK-HOOK
@@ -326,7 +331,7 @@ export function mkUt2( // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK
   if (mk === 'd' && !applied) { // MOCK-HOOK: d: a plain toast that names the panel's own Proposals on it, where Withdraw is
-    push({ message: `${said} · Withdraw it under Proposals on it, below` }); // MOCK-HOOK
+    push({ message: `${said} · Withdraw it under Proposals on it` }); // MOCK-HOOK
     reload(); // MOCK-HOOK
     return true; // MOCK-HOOK
   } // MOCK-HOOK

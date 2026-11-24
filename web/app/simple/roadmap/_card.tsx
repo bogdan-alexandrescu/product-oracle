@@ -41,6 +41,7 @@ import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
 import { MkHistory, mkParam } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { withdraw as mkWithdraw } from './_tracks'; // MOCK-HOOK
 import {
   closedItem,
   milestoneInk,
@@ -1628,6 +1629,9 @@ export function FloatingCard({
                         </span>
                       )}
                     </span>
+                    {mkParam('ut2') === 'd' && !c.can_decide && ( // MOCK-HOOK: UT2 d: a commenter withdraws their own proposal here
+                      <Button variant="ghost" onClick={() => void mkWithdraw(c.id)}>Withdraw</Button> // MOCK-HOOK
+                    )} {/* MOCK-HOOK */}
                     {c.can_decide && (
                       <>
                         <Button onClick={() => onDecide(c, 'accept')}>Accept</Button>
