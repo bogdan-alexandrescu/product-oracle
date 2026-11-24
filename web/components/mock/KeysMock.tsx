@@ -457,18 +457,19 @@ export function KeysMock() {
   }
   let phoneEl: ReactNode = null;
   const panel = document.querySelector('[data-testid=item-panel]');
-  if (phone && panel && ks3 !== 'b') {
-    const r = panel.getBoundingClientRect();
+  const close = [...document.querySelectorAll('button[aria-label=Close]')].find((x) => x.getBoundingClientRect().width > 0);
+  if (phone && panel && close && ks3 !== 'b') {
+    const r = close.getBoundingClientRect();
     if (ks3 === 'a') {
       phoneEl = (
-        <div className="fixed z-[70] flex items-center gap-1" style={{ right: window.innerWidth - r.right + 88, top: r.top + 10 }}>
-          <button type="button" aria-label="Previous feature" className="grid size-9 place-items-center rounded-button border border-line bg-surface text-text">‹</button>
-          <button type="button" aria-label="Next feature" className="grid size-9 place-items-center rounded-button border border-line bg-surface text-text">›</button>
+        <div className="fixed z-[70] flex items-center gap-1" style={{ right: window.innerWidth - r.left + 40, top: r.top + r.height / 2 - 18 }}>
+          <button type="button" aria-label="Previous feature" className="grid size-9 place-items-center rounded-button border border-line bg-surface text-lg text-text">‹</button>
+          <button type="button" aria-label="Next feature" className="grid size-9 place-items-center rounded-button border border-line bg-surface text-lg text-text">›</button>
         </div>
       );
     } else if (ks3 === 'c' && p('swipe') === '1') {
       phoneEl = (
-        <div className="pointer-events-none fixed z-[70] flex items-center justify-center" style={{ left: r.left, top: r.top + r.height / 2 - 40, width: r.width }}>
+        <div className="pointer-events-none fixed inset-x-0 z-[70] flex items-center justify-center" style={{ top: r.top + 230 }}>
           <div className="flex items-center gap-2 rounded-full bg-tip px-3 py-1.5 text-sm text-tip-text shadow-tip">
             <span aria-hidden>←</span> Next feature <span aria-hidden>→</span>
           </div>
