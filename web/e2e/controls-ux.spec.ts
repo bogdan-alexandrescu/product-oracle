@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from './test';
  * protects = every enabled control shows the hand and a disabled one not-allowed (globals.css
  * base layer); a ds Button's hover changes its outline and fill (Button.tsx); a row's "More"
  * menu and an (i) are at least 24x24.
- * fails_when = buttons fall back to the reset's arrow; the secondary hover only tints the fill;
+ * fails_when = buttons fall back to the reset's arrow; the secondary or .simple-button hover only tints the fill;
  * Goal map's "More for" menus are 24x16 again.
  */
 const cursor = (l: Locator) => l.evaluate((el) => getComputedStyle(el).cursor);
@@ -73,6 +73,25 @@ test('enabled controls show the hand on every page; a disabled one shows not-all
 test('a header button visibly changes outline and fill on hover', async ({ page }) => {
   await open(page, '/simple/roadmap', page.getByTestId('simple-roadmap'));
   const btn = page.getByTestId('key-dates-open');
+  await expect(btn).toBeVisible();
+  const look = () =>
+    btn.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { border: s.borderTopColor, fill: s.backgroundColor };
+    });
+  const rest = await look();
+  await btn.hover();
+  await expect.poll(async () => (await look()).border).not.toBe(rest.border);
+  await expect.poll(async () => (await look()).fill).not.toBe(rest.fill);
+});
+
+test('an outline Simple button visibly changes outline and fill on hover', async ({ page }) => {
+  await page.goto('/simple');
+  const btn = page
+    .locator(
+      '.simple-button:not(.simple-button-primary):not(.simple-button-quiet):not(:disabled):not(.invisible):visible',
+    )
+    .first();
   await expect(btn).toBeVisible();
   const look = () =>
     btn.evaluate((el) => {
