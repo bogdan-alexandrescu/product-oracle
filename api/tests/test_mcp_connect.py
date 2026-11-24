@@ -7,13 +7,12 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 
-from oracle.auth.models import User
 from oracle.auth.service import hash_token
 from oracle.mcp.oauth.models import OAuthClient, OAuthToken
-from oracle.seed import seed
 from oracle.tenancy import tenant_session, unscoped_session
+from tests.conftest import make_tenant
 from tests.test_mcp import mcp_client, user_with_role
-from tests.test_oauth import BASE, PASSWORD, full_flow, register
+from tests.test_oauth import BASE, full_flow, register
 
 OTHER = "https://app.example.org/callback"
 
@@ -94,12 +93,11 @@ async def test_last_used_is_stored_when_a_token_is_used_on_mcp(client):
 
 async def _other_company_grant() -> None:
     """A second company with one connected client: never counted in the first."""
-    r = await seed(tenant_name="Other Co", email="owner@example.net", password=PASSWORD)
-    async with tenant_session(r.tenant_id) as s:
-        user = await s.scalar(select(User))
-        assert user is not None
+    tenant_id = await make_tenant("Other Co")
+    user = await user_with_role(tenant_id, "owner", "owner@example.net")
+    async with tenant_session(tenant_id) as s:
         c = OAuthClient(
-            tenant_id=r.tenant_id,
+            tenant_id=tenant_id,
             client_id=f"pocl_{uuid.uuid4().hex}",
             name="Other Agent",
             redirect_uris=[OTHER],
@@ -109,7 +107,7 @@ async def _other_company_grant() -> None:
         now = datetime.now(UTC)
         s.add(
             OAuthToken(
-                tenant_id=r.tenant_id,
+                tenant_id=tenant_id,
                 access_hash=hash_token(f"poa_{uuid.uuid4().hex}"),
                 refresh_hash=hash_token(f"por_{uuid.uuid4().hex}"),
                 client_id=c.id,

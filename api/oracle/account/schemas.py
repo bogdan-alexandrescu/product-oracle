@@ -36,6 +36,8 @@ class MyAccountOut(BaseModel):
     # AC1: the credential can only read (oracle:read), so it changes nothing, your name
     # included; the page shows those controls disabled with the reason.
     read_only: bool = False
+    # The MCP address an AI tool connects to (<public address>/mcp).
+    mcp_url: str
 
 
 class PasswordChange(BaseModel):
@@ -75,8 +77,10 @@ class McpClientOut(BaseModel):
     client_name: str
     scopes: list[str]
     authorized_at: datetime
-    # When it last refreshed its access token (access tokens record no use).
+    # When it last refreshed its access token or used one on /mcp.
     last_used_at: datetime
+    # Where it runs: "Your computer" (a loopback redirect address) or the site's host.
+    runs_on: str
     expires_at: datetime
     revoked_at: datetime | None = None
 

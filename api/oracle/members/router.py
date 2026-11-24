@@ -31,6 +31,8 @@ from oracle.members.schemas import (
     InviteCreate,
     InviteOut,
     InviteStatus,
+    McpPeopleOut,
+    McpPersonOut,
     MemberDetailOut,
     MemberOut,
     MemberPatch,
@@ -86,6 +88,32 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
     disabled (a removed member: kept so history keeps their name), their last sign-in
     when known, and how many credentials still act for them."""
     return await service.members_out(db, await service.list_members(db))
+
+
+@router.get("/mcp-people", response_model=McpPeopleOut)
+async def list_mcp_people(db: TenantDB) -> McpPeopleOut:
+    """MCP across the company, for owners: each active member, their role, how many MCP
+    clients they have connected (live grants) and the newest last-used time, and how
+    many of them have one connected."""
+    live: dict[uuid.UUID, list[tokens.Grant]] = {}
+    for g in await tokens.grants(db):
+        if g.live:
+            live.setdefault(g.user_id, []).append(g)
+    people = [
+        McpPersonOut(
+            user_id=u.id,
+            email=u.email,
+            name=u.name,
+            role=u.role,
+            clients=len(live.get(u.id, [])),
+            last_used_at=max((g.last_used_at for g in live.get(u.id, [])), default=None),
+        )
+        for u in await service.list_members(db)
+        if u.disabled_at is None
+    ]
+    return McpPeopleOut(
+        connected=sum(1 for p in people if p.clients), total=len(people), people=people
+    )
 
 
 @router.patch(

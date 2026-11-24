@@ -444,3 +444,24 @@ class MemberDetailOut(MemberOut):
 
 
 MemberPatch.model_rebuild()
+
+
+class McpPersonOut(BaseModel):
+    """One member and the MCP clients they have connected (live grants only)."""
+
+    user_id: uuid.UUID
+    email: str
+    name: str | None = None
+    role: Role
+    clients: int
+    # The newest use of any of their live clients; null when none.
+    last_used_at: datetime | None = None
+
+
+class McpPeopleOut(BaseModel):
+    """MCP across the company: ``connected`` of ``total`` active members have a live
+    client; one row per active member."""
+
+    connected: int
+    total: int
+    people: list[McpPersonOut]
