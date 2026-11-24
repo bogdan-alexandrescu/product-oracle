@@ -123,7 +123,7 @@ async def test_the_next_free_number_is_one_rule():
 
 
 def test_the_migration_chains_on_the_single_head():
-    """Migration 0136 chains on 0135 (feature comments) and is the one head."""
+    """Migration 0136 chains on 0135 (feature comments); the one head is 0137 (stale by meaning)."""
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -131,7 +131,7 @@ def test_the_migration_chains_on_the_single_head():
 
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision("0136_unique_item_codes").down_revision == "0135_feature_comments"
-    assert script.get_heads() == ["0136_unique_item_codes"]
+    assert script.get_heads() == ["0137_stale_by_meaning"]
 
 
 def _at(day: int) -> datetime:
