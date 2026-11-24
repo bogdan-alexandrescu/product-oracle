@@ -16,6 +16,8 @@ from oracle.v2.models import ChangeEvent
 from tests.day_helpers import company_today
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
     PRD,
     ROADMAP,
     approved_prd,
@@ -75,7 +77,7 @@ async def test_an_accepted_prd_starts_a_track(client, owner, runtime):  # noqa: 
     assert overview["counts"]["items"] == 2
     assert overview["health"] == "on_track", overview
     assert overview["next_milestone"]["name"] == "Beta"
-    assert overview["next_milestone"]["target_date"] == "2026-11-30"
+    assert overview["next_milestone"]["target_date"] == ENG_412_DAY
     assert overview["engineering_known"] is False
 
 
@@ -179,7 +181,8 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     """A schedule basis linked to a tracker record must agree with its target date."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
-    day = (TODAY + timedelta(days=10)).isoformat()
+    # Days after ENG-412's, so the date-ordered list keeps ENG-412 first.
+    day = (ENG_412_ON + timedelta(days=4)).isoformat()
     body = {"kind": "commitment", "reference": "Q1 launch", "supports_date": day, "prd": PRD}
     viewer = await as_user(tenant_id, "viewer")
     assert (await client.post("/v1/schedule-bases", json=body, headers=viewer)).status_code == 403
@@ -246,8 +249,9 @@ async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F
     assert resp.status_code == 201, resp.text
 
     records = [
-        # Payment (now, Beta 2026-11-30 from ENG-412): the tracker says later than that.
-        {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+        # Payment (now, Beta on ENG-412's day): the tracker says later than that.
+        {"external_ref": "ENG-412", "state": "in_progress",
+         "target_date": (ENG_412_ON + timedelta(days=20)).isoformat(),
          "track_id": track["id"], "item_key": "payment-step"},
         # Shipping is in next, but engineering already started: drift the other way.
         {"external_ref": "ENG-413", "state": "in_progress", "track_id": track["id"],

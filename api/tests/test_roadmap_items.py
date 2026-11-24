@@ -14,7 +14,9 @@ from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
     ITEMS,
+    OTHER_DAY,
     PLAN_TABLES,
     PRD,
     ROADMAP,
@@ -76,7 +78,7 @@ async def test_run_items_are_traced_to_the_approved_prd(client, owner, runtime):
     assert pay["economics"]["baseline"] == {"effort": 2, "confidence": 0.8}
     assert pay["economics"]["priority_score"] == 4.2
     # The date rests on the verified ENG-412 estimate.
-    assert pay["milestone"]["date"] == "2026-11-30"
+    assert pay["milestone"]["date"] == ENG_412_DAY
     assert len(pay["milestone"]["basis_ids"]) == 1
     assert ship["depends_on"] == ["payment-step"] and ship["blockers"] == []
 
@@ -147,27 +149,28 @@ async def test_a_manual_import_refuses_unverified_dates_and_pins_approved_versio
     await built_roadmap(client, auth, runtime)
     put = f"/v1/roadmaps/{ROADMAP}/versions/1/items"
 
-    # Never an invented date: no verified basis supports 2026-12-15.
-    guess = ITEMS.replace("date: 2026-11-30", "date: 2026-12-15")
+    # Never an invented date: no verified basis supports OTHER_DAY.
+    assert f"date: {ENG_412_DAY}" in ITEMS
+    guess = ITEMS.replace(f"date: {ENG_412_DAY}", f"date: {OTHER_DAY}")
     resp = await client.put(put, json={"yaml": guess}, headers=auth)
     assert resp.status_code == 422, resp.text
     assert [p["code"] for p in resp.json()["detail"]["problems"]] == ["unverified_date"]
     # Nothing replaced.
     assert (await client.get(URL, headers=auth)).json()["items"][0]["milestone"]["date"] == (
-        "2026-11-30"
+        ENG_412_DAY
     )
 
     # A capacity plan verified for that date makes it acceptable.
-    await basis(tenant_id, "CAP-Q4", date(2026, 12, 15), kind="capacity")
+    await basis(tenant_id, "CAP-Q4", date.fromisoformat(OTHER_DAY), kind="capacity")
     ok = guess.replace("ENG-412 estimate", "CAP-Q4 capacity plan")
     resp = await client.put(put, json={"yaml": ok}, headers=auth)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["items"][0]["milestone"]["date"] == "2026-12-15"
+    assert resp.json()["items"][0]["milestone"]["date"] == OTHER_DAY
     assert resp.json()["problems"] == [] and resp.json()["refused_dates"] == []
 
     # Horizons only: no date needed.
     undated = ITEMS.replace(
-        "milestone: {name: Beta, date: 2026-11-30, date_source: ENG-412 estimate}",
+        f"milestone: {{name: Beta, date: {ENG_412_DAY}, date_source: ENG-412 estimate}}",
         "milestone: Beta",
     )
     resp = await client.put(put, json={"yaml": undated}, headers=auth)
@@ -271,7 +274,7 @@ async def test_items_need_a_roadmap_built_from_a_prd_version(client, owner):  # 
     # (Undated: with no PRD, a date in the text is refused, round 3.)
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
-        content=HAND_MD.replace("Beta by 2026-11-30.", "Beta first.").encode(),
+        content=HAND_MD.replace(f"Beta by {ENG_412_DAY}.", "Beta first.").encode(),
         headers={**auth, "Content-Type": "text/markdown"},
     )
     assert resp.status_code == 201, resp.text
@@ -353,7 +356,7 @@ async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owne
     assert pay["freshness"] == "potentially_stale"
     assert pay["stale_reasons"] == ["the schedule basis ENG-412 was withdrawn"]
     # Version 1's row is never rewritten, but its date is withheld when read (O4) ...
-    assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == "2026-11-30"
+    assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == ENG_412_DAY
     # ... and a version carried forward does not inherit a date nothing supports. (Its
     # text may not write the withdrawn date either: round 3, O4 'document dates'.)
     resp = await client.post(
@@ -366,10 +369,10 @@ async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owne
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
         content=HAND_MD.replace("payment first", "payment now")
-        .replace("Beta by 2026-11-30.", "Beta when re-estimated.")
+        .replace(f"Beta by {ENG_412_DAY}.", "Beta when re-estimated.")
         .encode(),
         headers={**auth, "Content-Type": "text/markdown"},
     )
     assert resp.status_code in (200, 201), resp.text
     pay = (await client.get(URL, headers=auth)).json()["items"][0]
-    assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == "2026-11-30"
+    assert pay["milestone"]["date"] is None and pay["milestone"]["refused_date"] == ENG_412_DAY

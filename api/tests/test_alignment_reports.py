@@ -38,6 +38,8 @@ from tests.day_helpers import company_today
 from tests.roadmap_helpers import other_company
 from tests.test_mcp import mcp_client, run_token, text_of
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
     PRD,
     ROADMAP,
     approved_prd,
@@ -51,6 +53,8 @@ LA = ZoneInfo("America/Los_Angeles")
 TOKEN = "xoxb-fake-bot-token-0123456789"
 SETTING = "/v1/settings/alignment_report"
 CHANNEL = {"id": "C0PLAN", "name": "plan"}
+# Engineering's target for the payment step, 20 days past Beta (ENG-412's day).
+SLIP_DAY = (ENG_412_ON + timedelta(days=20)).isoformat()
 
 
 def la(*args: int) -> datetime:
@@ -173,7 +177,7 @@ async def a_track(client, auth, runtime) -> dict:
     await built_roadmap(client, auth, runtime)
     (track,) = (await client.get("/v1/tracks", headers=auth)).json()
     records = [
-        {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+        {"external_ref": "ENG-412", "state": "in_progress", "target_date": SLIP_DAY,
          "track_id": track["id"], "item_key": "payment-step"},
         {"external_ref": "ENG-413", "state": "in_progress", "track_id": track["id"],
          "item_key": "shipping-step"},
@@ -702,7 +706,7 @@ async def test_health_a_week_ago_comes_from_monitoring(client, owner, runtime, a
     resp = await client.post(
         "/v1/tracker/records",
         json={"tracker": "jira", "records": [
-            {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+            {"external_ref": "ENG-412", "state": "in_progress", "target_date": SLIP_DAY,
              "track_id": track["id"], "item_key": "payment-step"}]},
         headers=auth,
     )  # fmt: skip
@@ -1407,11 +1411,11 @@ async def test_an_off_track_track_leaves_its_milestone_at_risk_only_when_an_item
     t = await part()
     assert t["health"] == "off_track"
     assert {n["kind"] for n in t["needs_attention"]} == {"blocked"}
-    assert t["next_milestone"]["name"] == "Beta" and t["next_milestone"]["date"] == "2026-11-30"
+    assert t["next_milestone"]["name"] == "Beta" and t["next_milestone"]["date"] == ENG_412_DAY
     assert t["next_milestone"]["at_risk"] is False
 
-    # Engineering now targets Dec 20 for the payment step, past Beta's Nov 30: at risk.
-    record = {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+    # Engineering now targets 20 days later for the payment step, past Beta's day: at risk.
+    record = {"external_ref": "ENG-412", "state": "in_progress", "target_date": SLIP_DAY,
               "track_id": track["id"], "item_key": "payment-step"}  # fmt: skip
     resp = await client.post(
         "/v1/tracker/records", json={"tracker": "jira", "records": [record]}, headers=auth

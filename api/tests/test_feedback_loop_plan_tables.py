@@ -5,12 +5,17 @@ and a draft that lacks them or gives other dates is refused with the same proble
 with them imports. Against Postgres with the FakeRuntime. Invented data only.
 """
 
+from datetime import timedelta
+
 from sqlalchemy import select
 
+from oracle.company_time import calendar_day_with_year
 from oracle.docs.models import Document, DocumentVersion
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_ON,
+    ENG_412_WORDS,
     ITEMS,
     PLAN_TABLES,
     PRD,
@@ -69,9 +74,9 @@ async def test_the_loop_writer_is_given_the_roadmaps_plan_tables(client, owner, 
     prompt = runtime.submitted[-1].steps[-1].prompt
     assert "--- plan tables ---" in prompt
     # The roadmap's items with the PRD's engineering dates, month first.
-    assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in prompt
+    assert f"| payment-step | Payment step |  | {ENG_412_WORDS} | estimate | planned |" in prompt
     assert "| shipping-step | Shipping step |  |  | no date yet | planned |" in prompt
-    assert "| Beta | Nov 30, 2026 | Payment step |  |" in prompt
+    assert f"| Beta | {ENG_412_WORDS} | Payment step |  |" in prompt
     assert "roadmap_items.yaml" not in prompt
 
 
@@ -87,7 +92,10 @@ async def test_a_loop_draft_without_the_plan_tables_is_refused(client, owner, ru
 async def test_a_loop_draft_with_another_date_is_refused(client, owner, runtime):  # noqa: F811
     """A loop draft that moves a milestone date off the roadmap's own date is refused."""
     tenant_id, auth = owner
-    moved = NEXT_MD.replace("| Beta | Nov 30, 2026 |", "| Beta | Dec 11, 2026 |")
+    old = f"| Beta | {ENG_412_WORDS} |"
+    assert old in NEXT_MD
+    later = calendar_day_with_year(ENG_412_ON + timedelta(days=11))
+    moved = NEXT_MD.replace(old, f"| Beta | {later} |")
     run = await _loop(client, auth, runtime, moved)
     assert _codes(run) == ["plan_date_differs"]
     assert await _versions(tenant_id) == [1]
@@ -167,7 +175,7 @@ async def test_the_loop_brief_shows_a_shipped_row_with_its_status(client, owner,
     run = await _loop_after_shipped(client, auth, runtime, None)
     prompt = runtime.submitted[-1].steps[-1].prompt
     assert SHIPPED_ROW in prompt
-    assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in prompt
+    assert f"| payment-step | Payment step |  | {ENG_412_WORDS} | estimate | planned |" in prompt
     # The fake runtime's draft copies the brief's tables, the shipped row too: imported.
     assert run["segments"][0]["draft_import"]["version"] == 2, run
 

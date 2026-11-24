@@ -7,7 +7,7 @@ does not prove.
 """
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select, update
@@ -31,6 +31,8 @@ from oracle.tenancy import tenant_session
 from tests.day_helpers import company_today
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
     PRD,
     ROADMAP,
     approved_prd,
@@ -43,8 +45,13 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 from tests.test_tracks import track_of
 
 TODAY = company_today()
-BETA = "2026-11-30"
-SLIPPED = "2026-12-09"
+BETA = ENG_412_DAY
+SLIPPED = (ENG_412_ON + timedelta(days=9)).isoformat()
+
+
+def after_beta(days: int) -> str:
+    """The ISO day `days` after Beta (ENG-412's day)."""
+    return (ENG_412_ON + timedelta(days=days)).isoformat()
 
 
 def record(track_id: str, target: str | None = SLIPPED, **kw) -> dict:
@@ -72,7 +79,7 @@ async def eng_412(client, auth) -> str:
 
 
 async def tracked(client, auth, runtime, *, milestone: bool = True) -> dict:  # noqa: F811
-    """The PRD, its roadmap and its track; the payment step's Beta date (2026-11-30)
+    """The PRD, its roadmap and its track; the payment step's Beta date (ENG_412_DAY)
     rests on ENG-412, and a planned Now track milestone lists it at that date."""
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -162,7 +169,7 @@ async def test_a_kept_alert_waits_until_the_facts_change(client, owner, runtime)
         "kept"
     ]
     # Moved again: a new alert opens, the kept one resolves.
-    await importing(client, auth, record(track["id"], "2026-12-20"))
+    await importing(client, auth, record(track["id"], after_beta(20)))
     states = {a["id"]: a["state"] for a in await alerts_of(client, auth, "all")
               if a["kind"] == "date_slip"}  # fmt: skip
     assert states.pop(slip["id"]) == "resolved"
@@ -347,12 +354,12 @@ async def test_the_item_history_shows_the_newest_imports_only(
     monkeypatch.setattr(plan_service, "TRACKER_HISTORY_LIMIT", 2)
     tenant_id, auth = owner
     track, _ = await slipped(client, auth, runtime)
-    for day in ("2026-12-10", "2026-12-11", "2026-12-12"):
+    for day in (after_beta(10), after_beta(11), after_beta(12)):
         await importing(client, auth, record(track["id"], day))
     body = await item_history(client, auth)
     assert [changed(e) for e in body["tracker_events"]] == [
-        [("target_date", "2026-12-10", "2026-12-11")],
-        [("target_date", "2026-12-11", "2026-12-12")],
+        [("target_date", after_beta(10), after_beta(11))],
+        [("target_date", after_beta(11), after_beta(12))],
     ]
     assert body["tracker_events_older"] == 2
     monkeypatch.undo()
@@ -576,13 +583,13 @@ async def test_accept_refuses_a_moved_record_and_the_wrong_people(client, owner,
         await s.execute(
             update(TrackerRecord)
             .where(TrackerRecord.external_ref == "ENG-405")
-            .values(target_date=date(2026, 12, 15))
+            .values(target_date=ENG_412_ON + timedelta(days=15))
         )
         await s.commit()
     resp = await client.post(url, headers=approver)
     assert resp.status_code == 409 and "changed" in resp.json()["detail"]
     (fresh,) = [a for a in await alerts_of(client, auth) if a["kind"] == "date_slip"]
-    assert fresh["id"] != slip["id"] and fresh["data"]["tracker_date"] == "2026-12-15"
+    assert fresh["id"] != slip["id"] and fresh["data"]["tracker_date"] == after_beta(15)
     # With no lead named, an approver's accept succeeds.
     resp = await client.post(f"/v1/track-alerts/{fresh['id']}/accept-date", headers=approver)
     assert resp.status_code == 200, resp.text
