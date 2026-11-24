@@ -52,3 +52,12 @@
 - Owner names and date chips stay on one line; the sheet hides the bar, has no header X, and its buttons sit on the sheet's bottom edge.
 - BE3 A's "Not changed" says the reason inline; its frames scroll to the locked row.
 - Not changed: the Detailed page keeps its own example plan (different names, ENG refs) and its own open-row tint, said in the caption instead. `SimpleShell.tsx` lint now reports cognitive complexity 18 (the mock-up hook); this branch is never merged.
+
+## Review round 4, what changed
+
+- BE3 frames that are not the hard case sign in as Lena Vos, Approver (`?be3=` without `&role=commenter`, in `SimpleShell.tsx`). The approver for Weekly alert digest stays Avery Stone, so nobody sends a change to themself. The hard frames still sign in as Mei Arden, Commenter.
+- Avatar initials come from the person's name in the mock-ups (`AppShell.tsx` MOCK-HOOK): AS, LV, MA.
+- A status tick sits beside the status pill (`BulkTick` in `priorities.tsx`). An owner tick sits after the new owner, a date tick inside the End chip.
+- BE2 A's button counts only the features that change ("Change 3"). A row that was picked but did not change keeps its owner line. Dates read "+2 weeks".
+- On a phone, the floating bar (Detailed and the board) sits right on the bottom tabs with a solid back. BE1 B's "Done picking" has a gap above row 1.
+- Every frame was re-snapped. To snap again, run `python3 spec.py` in `tools/`; it regenerates `spec.json`, which is not committed.
