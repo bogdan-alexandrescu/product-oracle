@@ -166,9 +166,8 @@ import {
   takeRoadmap,
   warmRoadmapPage,
 } from './_warm';
-import { MyWorkBody } from '@/components/simple/MyWorkMock'; // MOCK-HOOK
+import { MyWorkHome } from '@/components/simple/MyWorkMock'; // MOCK-HOOK
 import { mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
-import { OpenFeatureContext as MwOpen } from '@/components/simple/OpenFeature'; // MOCK-HOOK
 import { ConflictPanel, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -3331,9 +3330,7 @@ export function SimpleRoadmap() {
               {mw('mw1') === 'c' && mw('mine') === '1' && (
                 <div data-mw-mine="" className="simple-card">
                   <style>{'[data-mw-mine] ~ * { display: none !important; }'}</style>
-                  <MwOpen.Provider value={(x) => { const it = data.items.find((i) => i.code === x.code); if (it) openCard(it.id); }}>
-                    <MyWorkBody place="roadmap" />
-                  </MwOpen.Provider>
+                  <MyWorkHome place="roadmap" />
                 </div>
               )} {/* MOCK-HOOK */}
               <DraftPrdsRead

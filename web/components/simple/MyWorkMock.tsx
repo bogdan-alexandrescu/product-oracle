@@ -399,7 +399,10 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
     <p className="simple-meta tnum" data-testid="mw-summary">
       {left.length} {left.length === 1 ? 'item' : 'items'} ·{' '}
       {left.filter((i) => i.when === 0).length} late ·{' '}
-      {left.filter((i) => i.risk).length} at risk
+      {left.filter((i) => i.risk).length} at risk{' '}
+      <InfoTip label="What is here" align="start">
+        Features and milestones you own, decisions you make and proposals you made. Late and at risk first.
+      </InfoTip>
     </p>
   ); // MOCK-HOOK
 
@@ -551,7 +554,7 @@ export function MyWorkPage({ detailed }: { detailed?: boolean }) {
   if (detailed)
     return (
       <Page>
-        <PageHeader title="My work" info={info} />
+        <PageHeader title="My work" />
         <div data-mode="simple" className="simple-mode">{inner}</div>
       </Page>
     ); // MOCK-HOOK
@@ -563,7 +566,7 @@ export function MyWorkPage({ detailed }: { detailed?: boolean }) {
 }
 
 /** MOCK-HOOK: Home's "Yours" section (MW1 b) with the one feature panel. */
-export function MyWorkHome() {
+export function MyWorkHome({ place = 'home' }: { place?: 'home' | 'roadmap' }) {
   const [feature, setFeature] = useState<{ code: string; name: string } | null>(
     mw('panel') ? { code: 'F-101', name: 'One-tap sign-up link' } : null,
   ); // MOCK-HOOK
@@ -580,7 +583,7 @@ export function MyWorkHome() {
           onClose={() => setFeature(null)}
         />
       )}
-      <MyWorkBody place="home" />
+      <MyWorkBody place={place} />
     </OpenFeatureContext.Provider>
   ); // MOCK-HOOK
 }
