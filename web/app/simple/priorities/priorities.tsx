@@ -870,9 +870,17 @@ function YourList({
   // qa-simple-plan-34: a look-alike's link (?show=<its item or feature>) marks its row and brings it into view.
   const show = useSearchParams().get('show');
   const shown = (r: Row) => !!show && (r.feature_id === show || r.item_id === show);
+  // prio-ux: once per link, when its row is on the page, a frame after the router's own scroll to the top.
+  const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (show) document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: 'center' });
-  }, [show]);
+    if (!show || scrolledFor.current === show) return;
+    if (!document.querySelector('[data-shown="true"]')) return;
+    scrolledFor.current = show;
+    const frame = requestAnimationFrame(() =>
+      document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: 'center' }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [show, rows]);
 
   // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
   // neighbour by rank: the keys move by rank (data.rows), a drag stays on its side of the line.
