@@ -8,7 +8,7 @@
 
 import { createContext, useContext, useEffect, useRef, type RefObject } from 'react';
 
-import { useRouter, useSearchParams } from '@/lib/nav';
+import { useRouter } from '@/lib/nav';
 
 type Linked = { id: string; code?: string | null; key?: string | null };
 
@@ -60,7 +60,6 @@ export function onPageOpen(run: () => void): () => void {
 export function useFeatureUrl(f: Linked, onClose: () => void): void {
   const router = useRouter();
   const linked = useContext(InLinked);
-  const param = useSearchParams().get('feature');
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;
@@ -86,18 +85,16 @@ export function useFeatureUrl(f: Linked, onClose: () => void): void {
       settle(go);
     };
   }, [id, code, key, router, linked]);
-  // Only a move of the address (Back, Forward) closes it, never its own code changing.
-  const named = useRef(false);
-  const before = useRef(param);
+  // Back or Forward to an address that names another feature, or none, closes it (never its own
+  // code changing, nor a page's own address change: only the browser's history moves).
   useEffect(() => {
-    const moved = before.current !== param;
-    before.current = param;
-    if (param && namesFeature(param, { id, code, key })) named.current = true;
-    else if (named.current && moved) {
-      named.current = false;
-      close.current();
-    }
-  }, [param, id, code, key]);
+    const moved = () => {
+      const v = new URL(window.location.href).searchParams.get('feature');
+      if (!v || !namesFeature(v, { id, code, key })) close.current();
+    };
+    window.addEventListener('popstate', moved);
+    return () => window.removeEventListener('popstate', moved);
+  }, [id, code, key]);
 }
 
 /** Whether a panel shown now names ?feature=<value>. */
