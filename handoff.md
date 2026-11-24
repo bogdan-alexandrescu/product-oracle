@@ -1,3 +1,37 @@
+# task-push handoff (#1816, fix round 1: review NOT_YET, two blockers)
+
+## Fixed (exactly the two blockers in verdict.json)
+- Head pins: `api/tests/test_migrations.py:196` (and 'task-push' added to its 'renumbered on merge' list),
+  `test_stale_settled_on_approval.py:178`, `test_unique_item_codes.py:134` and
+  `test_stale_by_meaning_migration.py:61` now pin `0139_task_tracker_push_error`. The down_revision check at
+  `test_stale_settled_on_approval.py:177` is unchanged (0138).
+- Read digests re-pinned in `api/tests/test_simple_read_speed.py` (roadmap, roadmap-viewer) and
+  `api/tests/test_simple_roadmap_speed.py` (goal, track, prd, one-roadmap, viewer). Each JSON body from base
+  4ecbc5620 was diffed against the head body (all keys, all list items). The only change in each of the 7 reads
+  is three keys added to each of the seed's 268 tasks: `.items[].tasks[].tracker_ref`, `tracker_url` and
+  `tracker_error`, all null. Nothing else is added, removed or changed. The other digests match at both commits.
+  Full diff: `read-digest-json-diff.txt` in the artifacts.
+
+## Gates
+- Whole API suite (`-m "not timing"`, split into 8 groups of files, run with -n 4 or -n 6): every group green, 0 failures
+  (1080+1355+1388+1512+1659+1414+1457+1413 passed). The first try at groups 02 and 03 hit Postgres's 'out of shared
+  memory' lock table, an environment limit, not the code. Both were rerun with max_locks_per_transaction=1024 and passed.
+- ruff check and format: clean. tests/test_frozen_migrations.py passed (in the 36 targeted tests).
+- Timing tests in the touched files: one failure, `test_simple_roadmap_speed::test_reads_answer_within_budget`
+  (0.37 s). It fails at base 4ecbc5620 in the same environment, and is slower there (0.42 s). This is environment
+  noise, as the review also found. The rest of the `-m timing` suite was not rerun for lack of time. The review ran
+  405 of 409, and every failure it found was environment noise.
+- pyright: NOT RUN. Pyright is not installed here (no web/node_modules). This round changes only test strings and
+  comments under api/tests, and the CI job checks api/oracle, so its count cannot move. It stays at the review's 1269
+  (the same as the baseline).
+- Web: no change this round (the review's tsc, lint, format and Playwright runs still stand).
+
+## Left (minors from the review, not in scope for this round)
+- Inline push inside the request transaction: move it to a background job when a real connector lands
+  (owner question open).
+- A stale tracker_push_error is kept after two-way sync is turned off, so Retry seems to do nothing.
+- The mock pushes on the undo of an add (harmless).
+
 # codes-at-write handoff (PR #1811, fix round 3)
 
 ## Write paths that number an item at write (file:line, at this branch)
