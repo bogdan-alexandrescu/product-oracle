@@ -193,6 +193,10 @@ export function useMkStatus(title: string): string | null {
   useSt();
   return mkStatus(title);
 }
+/** The panel's Status word, redrawn when a suggestion is accepted anywhere. */
+export function MkStatusWord({ title, word }: { title: string; word: string }) {
+  return <>{useMkStatus(title) ?? word}</>;
+}
 
 function openSuggestion(title: string, s: St): MkSuggest | undefined {
   const list = mkParam('data') === 'many' ? MK_SUGGESTS_MANY : MK_SUGGESTS;
@@ -226,7 +230,7 @@ function Picker({ title }: { title: string }) {
             <Chip kind={STATE_KIND[c.state]} className="!h-5 !px-1.5 !text-xs">
               {STATE_WORD[c.state]}
             </Chip>
-            <span className="min-w-0 flex-1 truncate text-sm">
+            <span className="min-w-0 flex-1 text-sm leading-5">
               <span className="font-semibold">#{c.n}</span> {c.title}
             </span>
             <Button
@@ -570,7 +574,7 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
   if (lp1 === 'c') {
     const shown = prs.slice(0, 2);
     return (
-      <span className="flex flex-none items-center gap-1" data-testid="mk-row-chips">
+      <span className="flex flex-wrap items-center gap-1" data-testid="mk-row-chips">
         {shown.map((p) => (
           <Chip key={p.n} kind={STATE_KIND[p.state]} className="!h-6 !px-2 !text-xs">
             #{p.n} {STATE_WORD[p.state]}
@@ -620,7 +624,7 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
             <span
               role="dialog"
               aria-label="Oracle's status suggestion"
-              className="absolute top-8 left-0 z-30 block w-[300px] rounded-xl border border-line bg-surface p-3 text-left shadow-tip"
+              className="absolute top-8 left-0 z-30 block w-[300px] max-sm:fixed max-sm:top-1/3 max-sm:right-3 max-sm:left-3 max-sm:w-auto rounded-xl border border-line bg-surface p-3 text-left shadow-tip"
             >
               <span className="block text-sm font-semibold">
                 Oracle suggests {sug.to} <span className="font-normal text-text2">· {sug.why}</span>

@@ -107,7 +107,7 @@
       },
       {
        "file": "frames/lp1-c-done.html",
-       "caption": "They press Enter: #503 joins the list, and the row shows it too. Cost: 2 clicks + paste, after copying in GitHub."
+       "caption": "They press Enter: #503 joins the panel's list; on the row it only adds to \"+1\", and the name wraps. Cost: 2 clicks + paste, after copying in GitHub."
       },
       {
        "file": "frames/lp1-c-hard.html",
@@ -167,7 +167,7 @@
    "code": "LP2",
    "name": "The status suggestion",
    "question": "Where does Oracle's suggested status show, and how does the owner accept or dismiss it?",
-   "common": "A pull request never changes status by itself: when all of a feature's linked pull requests merge Oracle suggests Done (one opening suggests In progress), and a person accepts or dismisses; a commenter proposes. Shown with LP1 A's field and chip.",
+   "common": "A pull request never changes status by itself: when all of a feature's linked pull requests merge Oracle suggests Done (one opening suggests In progress), and a person accepts or dismisses; a commenter proposes. Shown with LP1 A's field and chip. The Inbox and rail counts are not redrawn in these mock-ups; built, every count moves at once.",
    "proposals": [
     {
      "letter": "A",
@@ -199,7 +199,7 @@
       },
       {
        "file": "frames/lp2-a-hard.html",
-       "caption": "A commenter: the mark and box show \"Propose Done\" and no Dismiss; it becomes a proposal for the decider."
+       "caption": "A commenter: the panel's box offers \"Propose Done\" and no Dismiss; it becomes a proposal for the decider."
       },
       {
        "file": "frames/lp2-a-hard-1512.html",
@@ -294,7 +294,7 @@
    "code": "LP3",
    "name": "Set-up and broken links",
    "question": "How does an owner see that GitHub is not connected or a link no longer resolves, and fix it?",
-   "common": "No prose: a state chip and an (i). Connect GitHub shows only to those who may connect it; a viewer sees the state only.",
+   "common": "No prose: a state chip and an (i). Inbox counts are not redrawn in these mock-ups. Connect GitHub shows only to those who may connect it; a viewer sees the state only.",
    "proposals": [
     {
      "letter": "A",

@@ -40,7 +40,7 @@ import type { Act } from './_card';
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
 const TAP =
   'max-sm:min-h-11 max-sm:min-w-11 max-sm:inline-flex max-sm:items-center max-sm:justify-center';
-import { MkPanelRows, mkStatus } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
+import { MkPanelRows, MkStatusWord } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 /** roadmap-edit-fixes round 1: a dependency's x, a 24 px target of its own (a bare 16 px icon on the line's baseline was missed). */
 const REMOVE =
@@ -596,7 +596,7 @@ export function PanelFields({
         label="Status"
         testId="card-status"
         canChange={canChange}
-        value={mkStatus(item.title) ?? statusWord(item.status)} // MOCK-HOOK
+        value={<MkStatusWord title={item.title} word={statusWord(item.status)} />} // MOCK-HOOK
         editor={(done) => (
           <Pick
             label="Status"
