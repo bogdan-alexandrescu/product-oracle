@@ -109,7 +109,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
   const viewer = p.role === 'viewer'; // MOCK-HOOK
   const ids = Object.keys(m.st);
   // The built role rules: a viewer reads only; a commenter's changes go to owners as proposals. MOCK-HOOK
-  const may = (i: IkItem) => (viewer ? i.main === 'Review' : !(commenter && i.ownerOnly));
+  const may = (i: IkItem) => (viewer ? i.main === 'Review' && !i.ownerOnly : !(commenter && i.ownerOnly));
   const mine = (id: string) => !byId[id] || may(byId[id]); // MOCK-HOOK
   const all = ids.filter((id) => m.st[id] === tab).sort((a, b) => Number(!!m.back[b]) - Number(!!m.back[a])).map((id) => byId[id]);
   const shown = all.filter((i) => may(i));
