@@ -150,6 +150,7 @@
   .right-\[9px\] { right: 9px; }
   .right-\[calc\(100\%\+6px\)\] { right: calc(100% + 6px); }
   .right-\[var\(--backdrop-room\,0px\)\] { right: var(--backdrop-room,0px); }
+  .-bottom-5 { bottom: calc(var(--spacing) * -5); }
   .bottom-0 { bottom: 0px; }
   .bottom-1 { bottom: var(--spacing); }
   .bottom-4 { bottom: calc(var(--spacing) * 4); }
@@ -290,6 +291,7 @@
   .mr-px { margin-right: 1px; }
   .-mb-2 { margin-bottom: calc(var(--spacing) * -2); }
   .-mb-4 { margin-bottom: calc(var(--spacing) * -4); }
+  .-mb-5 { margin-bottom: calc(var(--spacing) * -5); }
   .-mb-px { margin-bottom: -1px; }
   .mb-0\.5 { margin-bottom: calc(var(--spacing) * .5); }
   .mb-1 { margin-bottom: var(--spacing); }
@@ -2173,7 +2175,7 @@
   .max-sm\:top-1\.5 { top: calc(var(--spacing) * 1.5); }
   .max-sm\:right-1\.5 { right: calc(var(--spacing) * 1.5); }
   .max-sm\:bottom-16 { bottom: calc(var(--spacing) * 16); }
-  .max-sm\:bottom-\[9\.5rem\] { bottom: 9.5rem; }
+  .max-sm\:bottom-\[calc\(9\.5rem\+var\(--phone-tab-bar\)\)\] { bottom: calc(9.5rem + var(--phone-tab-bar)); }
   .max-sm\:bottom-\[calc\(76px\+env\(safe-area-inset-bottom\)\)\] { bottom: calc(76px + env(safe-area-inset-bottom)); }
   .max-sm\:order-last { order: 9999; }
   .max-sm\:col-span-2 { grid-column: span 2 / span 2; }

@@ -42,7 +42,7 @@
 ## Review round 1 (verdict NOT_YET), what changed
 
 - Commenter frames (BE3 hard) are signed in as Mei Arden, Commenter; the bar says "Your changes go to Avery Stone to approve".
-- Board phone bar sits above the bottom tabs.
+- The phone bar sits above the bottom tabs on the board and on Priorities (all its fields show at 390).
 - Each proposal's result frame carries a dashed note with its clicks against today.
 - Dark copies of every result and phone frame (19 new).
 - Detailed rest scrolls to the plan table.

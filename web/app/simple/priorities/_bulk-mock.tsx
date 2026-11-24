@@ -608,7 +608,7 @@ export function BulkBar() {
       {res && (
         <div
           data-testid="bulk-result"
-          className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 shadow-lg md:left-[calc(240px+1rem)]"
+          className="fixed inset-x-3 bottom-4 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 shadow-lg md:left-[calc(240px+1rem)]"
         >
           <span className="font-semibold">{res.words}:</span>
           {(
@@ -658,7 +658,7 @@ export function BulkBar() {
       {n > 0 && b.open !== 'sheet' && (
         <div
           data-testid="bulk-bar"
-          className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-4 max-sm:gap-2 max-sm:px-3 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
+          className="fixed inset-x-3 bottom-4 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-4 max-sm:gap-2 max-sm:px-3 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
         >
           <span className="font-semibold max-sm:col-span-2" data-testid="bulk-count">
             {n} picked
@@ -691,7 +691,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'a' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[9.5rem] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(9.5rem+var(--phone-tab-bar))] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                     {has && (
@@ -712,7 +712,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'c' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[9.5rem] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(9.5rem+var(--phone-tab-bar))] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                   </div>
