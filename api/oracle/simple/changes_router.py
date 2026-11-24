@@ -44,7 +44,7 @@ from oracle.errors import exception_text
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.roadmap import codes
 from oracle.routing import APIRouter
-from oracle.simple import changes, drafts, one_pager
+from oracle.simple import changes, drafts, one_pager, task_push
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
     ChangeStatus,
@@ -56,6 +56,7 @@ from oracle.simple.schemas import (
     SimpleChangeResult,
     SimpleDecisionIn,
     SimpleDraftOut,
+    SimpleItemTask,
     SimpleResumeOut,
     SimpleSessionIn,
     SimpleSessionOut,
@@ -172,6 +173,17 @@ async def _with_visual(db, principal, change) -> None:
     except Exception:  # the change is saved; its visual is best effort
         log.warning("simple: queueing the visual of change %s failed", change.id, exc_info=True)
         await db.rollback()
+
+
+@router.post("/tasks/{task_id}/tracker-push", response_model=SimpleItemTask,
+             name="push_simple_task_to_tracker")  # fmt: skip
+async def push_simple_task_to_tracker(
+    task_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleItemTask:
+    """task-push (#1816): Retry a task's push to the connected tracker. The task as the
+    roadmap read shows it, with the push's outcome (``tracker_error`` None once it lands).
+    Whoever changes the task directly may (403 otherwise); 404 for no such task."""
+    return await _run(db, task_push.retry(db, principal, task_id))
 
 
 @router.post("/changes/{change_id}/undo", response_model=SimpleChangeResult,
