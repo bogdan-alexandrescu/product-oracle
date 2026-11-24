@@ -83,7 +83,7 @@ type Story = {
   pre?: (page: Page) => Promise<void>; // between open and mid (e.g. a tip)
   mid?: (page: Page) => Promise<void>;
   cost: string;
-  hardOpen?: boolean;
+  drv?: string; // the feature the story opens
 };
 const GM = '[data-testid="gm-goal"]:has-text("Paid conversions")';
 const RM = '[data-testid="goal-counter"]:has-text("Paid conversions")';
@@ -96,9 +96,9 @@ const STORIES: Story[] = [
   { id: 'pc2-a', path: '/simple/goals?pc2=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, pre: async (p) => { await p.locator('[data-testid="pm-pop"] [data-testid="pm-why"]').click(); }, cost: '1 click, then the (i) for why: 2 clicks. Today: the word "at risk" only.' },
   { id: 'pc2-b', path: '/simple/goals?pc2=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, pre: async (p) => { await p.locator('[data-testid="pm-pop"] [data-testid="pm-why"]').click(); }, cost: '0 clicks to read the range on the card; 2 clicks for why. Today: the word "at risk" only.' },
   { id: 'pc2-c', path: '/simple/goals?pc2=c', card: GM, opener: `${GM} [data-testid="pm-goal"] button`, cost: '1 click on the tick to read any date at all, 1 more for the feature. Today: the word "at risk" only.' },
-  { id: 'pc3-a', path: '/simple/goals?pc3=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, cost: '1 click shows all four milestones, 1 more opens the feature. No scrolling at 1512 or 390.' },
-  { id: 'pc3-b', path: '/simple/goals?pc3=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, cost: '1 click; each of the 20 features is a tick, the one that sets the date is thick and named.' },
-  { id: 'pc3-c', path: '/simple/goals?pc3=c', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, mid: async (p) => { await p.locator('[data-testid="pm-all"]').click(); await mark(p, '[data-testid="pm-ranked"] [data-testid="pm-driver"]'); }, cost: '1 click, 1 to show all 20, 1 to open the feature: 3 clicks.' },
+  { id: 'pc3-a', path: '/simple/goals?pc3=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, drv: '[data-testid="pm-pop"] [data-testid="pm-milestone"]:has-text("M4") [data-testid="pm-driver"]', cost: '1 click shows all four milestones, 1 more opens the feature. No scrolling at 1512 or 390.' },
+  { id: 'pc3-b', path: '/simple/goals?pc3=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, drv: '[data-testid="pm-pop"] [data-testid="pm-milestone"]:has-text("M4") [data-testid="pm-driver"]', cost: '1 click; each of the 20 features is a tick, the one that sets the date is thick and named.' },
+  { id: 'pc3-c', path: '/simple/goals?pc3=c', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, mid: async (p) => { await p.locator('[data-testid="pm-all"]').click(); await mark(p, '[data-testid="pm-ranked"] [data-testid="pm-driver"]:has-text("Partner referral")'); }, drv: '[data-testid="pm-ranked"] [data-testid="pm-driver"]:has-text("Partner referral")', cost: '1 click, 1 to show all 20, 1 to open the feature: 3 clicks.' },
 ];
 
 async function go(page: Page, url: string, size: { width: number; height: number }, card: string) {
@@ -125,7 +125,7 @@ test('mk-predicted frames', async ({ page }) => {
     await snap(page, `${s.id}-open`);
     // mid-interaction: the pointer on the feature that sets the date
     if (s.mid) await s.mid(page);
-    else await mark(page, POPD);
+    else await mark(page, s.drv ?? POPD);
     await snap(page, `${s.id}-mid`);
     // the result: that feature's own panel
     await page.goto(s.path + big + `&mkcost=${encodeURIComponent(s.cost)}`);
@@ -133,7 +133,7 @@ test('mk-predicted frames', async ({ page }) => {
     await page.waitForTimeout(1200);
     await page.locator(s.opener).first().click();
     if (s.mid) await page.locator('[data-testid="pm-all"]').click();
-    await page.locator(s.mid ? '[data-testid="pm-ranked"] [data-testid="pm-driver"]' : POPD).first().click();
+    await page.locator(s.drv ?? POPD).first().click();
     await page.waitForTimeout(1500);
     await snap(page, `${s.id}-result`);
     // the hard case at the owner's window: twenty features, four milestones, light and dark

@@ -4,7 +4,7 @@
 // URL switches: ?pc1=a|b|c (form and place), ?pc2=a|b|c (what "predicted" says), ?pc3=a|b|c (the hard case),
 // &mkdata=big (twenty features, four milestones), &mkcost=<text> (the cost badge on a frame).
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { InfoTip } from '@/components/ds';
 import { predictedFor, type PmGoal, type PmMilestone } from '@/lib/api/mock/predicted-mk';
@@ -106,8 +106,17 @@ function Pop({ onClose, children, title }: { onClose: () => void; children: Reac
     window.addEventListener('mousedown', d);
     return () => (window.removeEventListener('keydown', k), window.removeEventListener('mousedown', d));
   }, [onClose]);
+  // Fixed to the page, under its control and inside the window, so a scrolling grid never clips it.
+  const [at, setAt] = useState<CSSProperties>({ visibility: 'hidden' });
+  useLayoutEffect(() => {
+    const a = ref.current?.parentElement?.getBoundingClientRect();
+    if (!a || window.innerWidth <= 600) return setAt({});
+    const w = 380;
+    const left = Math.max(8, Math.min(a.left, window.innerWidth - w - 16));
+    setAt({ position: 'fixed', top: a.bottom + 4, left, maxHeight: window.innerHeight - a.bottom - 12, overflowY: 'auto' });
+  }, []);
   return (
-    <div ref={ref} role="dialog" aria-label={title} data-testid="pm-pop" className="absolute top-full left-0 z-30 mt-1 flex w-[380px] flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-lg max-[600px]:fixed max-[600px]:inset-x-2 max-[600px]:top-auto max-[600px]:bottom-[72px] max-[600px]:max-h-[62vh] max-[600px]:w-auto max-[600px]:overflow-y-auto">
+    <div ref={ref} role="dialog" aria-label={title} data-testid="pm-pop" style={at} className="z-30 flex w-[380px] flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-lg max-[600px]:fixed max-[600px]:inset-x-2 max-[600px]:top-auto max-[600px]:bottom-[72px] max-[600px]:max-h-[62vh] max-[600px]:w-auto max-[600px]:overflow-y-auto">
       <div className="flex items-center justify-between gap-2">
         <b className="text-base">{title}</b>
         <button type="button" aria-label="Close" onClick={onClose} className="rounded-md px-1.5 text-text2 hover:bg-surface2">✕</button>
@@ -358,7 +367,7 @@ export function MkCost() {
   const c = mkParam('mkcost');
   if (!c) return null;
   return (
-    <div data-testid="mk-cost" className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 max-w-[300px] rounded-lg border-2 border-accent bg-surface px-3 py-2 text-sm shadow-lg">
+    <div data-testid="mk-cost" className="pointer-events-none fixed bottom-3 left-3 z-50 max-w-[210px] rounded-lg border-2 border-accent bg-surface px-3 py-2 text-sm shadow-lg">
       <b className="text-accent-ink">Cost</b> · {c}
     </div>
   );

@@ -108,7 +108,7 @@ const big: PmGoal = {
     { code: 'M7', name: '10 paid conversions per rep', planned: '2026-12-31', predicted: '2027-01-20', driver: 'Invoice in the buyer’s own currency' },
     { code: 'M9', name: '12 paid conversions per rep in every region and on every plan', planned: '2027-02-26', predicted: '2027-03-09', driver: 'Sales-assisted trial for teams over fifty seats' },
   ],
-  features: BIG_NAMES.map((name, i) => ({ code: `F-${120 + i}`, name, end: BIG_ENDS[i], ms: BIG_MS[i] })),
+  features: BIG_NAMES.map((name, i) => ({ code: ['F-108', 'F-107', 'F-104', 'F-105', 'F-106'][i] ?? `F-${115 + i}`, name, end: BIG_ENDS[i], ms: BIG_MS[i] })),
 };
 
 /** A goal's planned and predicted dates; `big` turns the paid conversions goal into the hard case. */
