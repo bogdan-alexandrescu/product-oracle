@@ -210,6 +210,9 @@ export function bulkRow(b: Bulk | null, r: R, i: number) {
     props: {
       'data-picked': on ? 'true' : undefined,
       onMouseEnter: () => b.setHover(i),
+      onMouseDown: (e: React.MouseEvent) => {
+        if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
+      },
       onClickCapture: (e: React.MouseEvent) => {
         if (!clickPicks) return;
         if (b.be1 === 'c' && !(e.ctrlKey || e.metaKey || e.shiftKey)) return;
@@ -266,7 +269,7 @@ export function BulkChips({ r }: { r: R }) {
   const got = b.applied[r.feature_id];
   const rt = b.right(r);
   const on = b.picked.has(r.feature_id);
-  const preview = on && b.be2 === 'c' && b.open && b.open !== 'sheet' ? b.draft : null;
+  const preview = on && b.be2 === 'c' && Object.values(b.draft).some(Boolean) ? b.draft : null;
   const d = got ?? preview;
   const out: ReactNode[] = [];
   if (b.long || on || got) {
@@ -294,7 +297,7 @@ export function BulkChips({ r }: { r: R }) {
   if (d?.shift && !got?.proposed)
     out.push(
       <span key="d" className={`${chip} bg-[var(--simple-edited)] text-text`}>
-        <s className="mr-1 text-text2">{day(r.end_date)}</s>
+        {!got && <s className="mr-1 text-text2">{day(r.end_date)}</s>}
         {day(r.end_date, d.shift)}
       </span>,
     );
@@ -397,7 +400,10 @@ function FieldPick({ f, b }: { f: Field; b: Bulk }) {
               type="button"
               data-testid={`bulk-shift-${w}`}
               className={`${btn} ${b.draft.shift === w ? '!border-accent !bg-accent-soft' : ''}`}
-              onClick={() => b.setDraft({ ...b.draft, shift: w })}
+              onClick={() => {
+                b.setDraft({ ...b.draft, shift: w });
+                if (b.be2 === 'c') b.setOpen(null);
+              }}
             >
               {w > 0 ? '+' : '−'}
               {Math.abs(w)} {Math.abs(w) === 1 ? 'week' : 'weeks'}
@@ -416,7 +422,10 @@ function FieldPick({ f, b }: { f: Field; b: Bulk }) {
             type="button"
             data-testid={`bulk-opt-${o}`}
             className={`flex items-center justify-between rounded-md px-3 py-2 text-left hover:bg-surface2 ${on ? 'bg-accent-soft font-semibold' : ''}`}
-            onClick={() => b.setDraft({ ...b.draft, [f]: o })}
+            onClick={() => {
+              b.setDraft({ ...b.draft, [f]: o });
+              if (b.be2 === 'c') b.setOpen(null);
+            }}
           >
             {o}
             {on && <span aria-hidden>✓</span>}
@@ -580,17 +589,17 @@ export function BulkBar() {
       {n > 0 && (
         <div
           data-testid="bulk-bar"
-          className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&>*]:shrink-0 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
+          className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-4 max-sm:gap-2 max-sm:px-3 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
         >
-          <span className="font-semibold" data-testid="bulk-count">
+          <span className="font-semibold max-sm:col-span-2" data-testid="bulk-count">
             {n} picked
           </span>
-          <button type="button" className="text-accent underline" onClick={() => b.setPicked(new Set())}>
+          <button type="button" className="text-accent underline max-sm:col-span-2 max-sm:text-right" onClick={() => b.setPicked(new Set())}>
             Clear
           </button>
-          <span className="mx-1 h-6 w-px bg-line" aria-hidden />
+          <span className="mx-1 h-6 w-px bg-line max-sm:hidden" aria-hidden />
           {b.be2 === 'b' ? (
-            <button type="button" className={primary} data-testid="bulk-edit" onClick={() => b.setOpen('sheet')}>
+            <button type="button" className={`${primary} max-sm:col-span-4`} data-testid="bulk-edit" onClick={() => b.setOpen('sheet')}>
               Edit {n} features
             </button>
           ) : (
@@ -600,7 +609,7 @@ export function BulkBar() {
                   type="button"
                   data-testid={`bulk-field-${f}`}
                   aria-expanded={b.open === f}
-                  className={`${btn} ${b.open === f || (b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] ? '!border-accent !bg-accent-soft' : ''}`}
+                  className={`${btn} max-sm:w-full max-sm:px-1 ${b.open === f || (b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] ? '!border-accent !bg-accent-soft' : ''}`}
                   onClick={() => b.setOpen(b.open === f ? null : f)}
                 >
                   {label} ▾
@@ -608,7 +617,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'a' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[5.5rem] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[9.5rem] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                     {has && (
@@ -629,7 +638,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'c' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[5.5rem] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[9.5rem] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                   </div>
@@ -638,7 +647,7 @@ export function BulkBar() {
             ))
           )}
           {b.be2 === 'c' && has && (
-            <button type="button" className={`${primary} ml-auto`} data-testid="bulk-apply" onClick={b.apply}>
+            <button type="button" className={`${primary} ml-auto max-sm:col-span-4`} data-testid="bulk-apply" onClick={b.apply}>
               {applyWords(b)}
             </button>
           )}

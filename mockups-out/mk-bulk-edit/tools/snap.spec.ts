@@ -71,6 +71,7 @@ test('snap', async ({ browser }) => {
     await page.locator('[data-testid="prio-row"]').first().waitFor();
     await page.waitForTimeout(800);
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), f.theme);
+    try {
     for (const [kind, sel, mods] of f.do) {
       if (kind === 'scroll') await page.evaluate((y) => window.scrollTo(0, Number(y)), sel);
       else {
@@ -80,6 +81,11 @@ test('snap', async ({ browser }) => {
         else if (kind === 'hover') await loc.hover({ timeout: 8000 });
       }
       await page.waitForTimeout(300);
+    }
+    } catch (e) {
+      console.log('FAIL', f.file, String(e).slice(0, 200));
+      await ctx.close();
+      continue;
     }
     await page.waitForTimeout(500);
     let html = await page.evaluate(CLONE, [f.w, f.h] as [number, number]);
