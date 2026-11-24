@@ -10,7 +10,8 @@ The baseline (.github/scripts/pyright-baseline.json) counts errors by file, rule
 no line numbers, so moving code does not churn it. `check` fails when any (file, rule, message)
 has more errors than the baseline allows. `update` only lowers or drops counts, never adds: the
 baseline burns down and never grows. To accept a new error, fix it or add a
-`# pyright: ignore[rule]` comment that a reviewer reads.
+`# pyright: ignore[rule]` comment that a reviewer reads. `check` also fails when a baseline
+count is stale, that is above what pyright finds (#1711): fixed errors are taken off at once.
 """
 
 from __future__ import annotations
@@ -74,7 +75,7 @@ def check(found: Counter[Key], baseline: Counter[Key]) -> int:
             "`python3 .github/scripts/pyright_baseline.py update pyright.json` and commit it."
         )
     if not new:
-        return 0
+        return 1 if fixed else 0
     print(f"{sum(new.values())} new pyright errors (not in the baseline):")
     for (f, r, m), n in sorted(new.items()):
         print(f"  {f}: [{r}] {m}" + (f" (x{n})" if n > 1 else ""))

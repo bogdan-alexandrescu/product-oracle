@@ -7,8 +7,9 @@
 
 coverage.json is `coverage json` over the combined data of every api shard. The floor
 (api/coverage-floor.json, a percentage with one decimal) ratchets: `update` raises it to the
-measured total rounded down to 0.1 and never lowers it. `check` prints the floor `update` would
-write when the total has risen, so the next burn-up commit can take it.
+measured total rounded down to 0.1 and never lowers it. `check` fails when the total is more
+than STALE points above the floor (#1711): the floor follows the total, so a drop cannot hide
+in the gap. CI uploads coverage.json, so `update` can run on the downloaded copy.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FLOOR = ROOT / "api" / "coverage-floor.json"
+STALE = 1.0
 
 
 def total(report: dict) -> float:
@@ -52,6 +54,9 @@ def check(percent: float, floor: float) -> int:
             f"The floor can rise to {raised(floor, percent):.1f}%: run "
             "`python3 .github/scripts/coverage_floor.py update api/coverage.json` and commit it."
         )
+    if percent - floor > STALE + 1e-9:
+        print(f"The floor is more than {STALE:.0f} point under the total: raise it (above).")
+        return 1
     return 0
 
 
