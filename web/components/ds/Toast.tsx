@@ -138,7 +138,7 @@ export function clearToast(message: string) {
 export function ToastHost() {
   if (mkOn()) return <MkToastHost />; // MOCK-HOOK
   return <RealToastHost />; // MOCK-HOOK
-}
+} // MOCK-HOOK
 function RealToastHost() { // MOCK-HOOK
   const [shown, setShown] = useState<Shown | null>(null);
   const next = useRef(0);

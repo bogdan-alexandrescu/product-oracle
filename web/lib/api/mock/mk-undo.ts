@@ -1,5 +1,5 @@
 // MOCK-HOOK (mk-undo mock-ups only, never merged): invented history lines for the Undo mock-ups'
-// History states (UT3). Invented people and text only.
+// History states (UT3). Invented people and text only. // MOCK-HOOK
 
 export type MkHistoryLine = { // MOCK-HOOK
   who: string; // MOCK-HOOK
@@ -17,7 +17,7 @@ export const MK_HISTORY: MkHistoryLine[] = [ // MOCK-HOOK
   { who: 'Avery Stone', what: 'added it to Usage alerts track', when: 'Nov 2, 11:20 AM' }, // MOCK-HOOK
 ]; // MOCK-HOOK
 
-/** Changes made today on other pages (UT3 b's "Your changes" list). */
+/** Changes made today on other pages (UT3 b's "Your changes" list). */ // MOCK-HOOK
 export const MK_MINE: MkHistoryLine[] = [ // MOCK-HOOK
   { who: 'Avery Stone', what: 'Moved F-112 Seat-based invoices to rank 2 in Priorities', when: '11:42 AM', undo: true }, // MOCK-HOOK
   { who: 'Avery Stone', what: 'Set F-88 Quiet hours for alerts to Done', when: '11:31 AM', undo: true }, // MOCK-HOOK

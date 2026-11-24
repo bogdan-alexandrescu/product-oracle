@@ -1,4 +1,4 @@
-'use client';
+'use client'; // MOCK-HOOK
 // MOCK-HOOK: the whole file. mk-undo mock-ups (#1804, decisions UT1..UT3), local only, never merged.
 // ?ut1=a|b|c|d  the toast (a newest wins, b stack of three, c one toast that counts, d strip under the title)  // MOCK-HOOK
 // ?ut2=a|b|c|d  which changes get one, and a commenter's proposal  // MOCK-HOOK
@@ -74,7 +74,7 @@ function Dismiss({ on }: { on: () => void }) { // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** Replaces ToastHost while a mock-up switch is on. */
+/** Replaces ToastHost while a mock-up switch is on. */ // MOCK-HOOK
 export function MkToastHost() { // MOCK-HOOK
   const all = useLog(); // MOCK-HOOK
   const [open, setOpen] = useState(mkParam('open') === '1'); // MOCK-HOOK
@@ -174,7 +174,7 @@ export function MkToastHost() { // MOCK-HOOK
 } // MOCK-HOOK
 
 let histOpen = false; // MOCK-HOOK
-/** UT3 a: the History section at the foot of the one feature panel. */
+/** UT3 a: the History section at the foot of the one feature panel. */ // MOCK-HOOK
 export function MkHistory({ canUndo }: { canUndo: boolean }) { // MOCK-HOOK
   const [lines, setLines] = useState(() => MK_HISTORY.map((l) => ({ ...l }))); // MOCK-HOOK
   const [open, setOpen0] = useState(histOpen || mkParam('hist') === '1'); // MOCK-HOOK
@@ -213,7 +213,7 @@ export function MkHistory({ canUndo }: { canUndo: boolean }) { // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** UT3 b: "Your changes" beside the account: every change you made today, on any page. */
+/** UT3 b: "Your changes" beside the account: every change you made today, on any page. */ // MOCK-HOOK
 function MkMine() { // MOCK-HOOK
   const [open, setOpen] = useState(mkParam('mine') === '1'); // MOCK-HOOK
   const [gone, setGone] = useState<string[]>([]); // MOCK-HOOK
@@ -239,7 +239,7 @@ function MkMine() { // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** UT2: what a change's toast offers, per proposal; true when it was handled here. */
+/** UT2: what a change's toast offers, per proposal; true when it was handled here. */ // MOCK-HOOK
 export function mkUt2( // MOCK-HOOK
   r: { change: { id: string; status: string } }, // MOCK-HOOK
   body: { op: string; after?: unknown }, // MOCK-HOOK
