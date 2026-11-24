@@ -11,6 +11,7 @@ TYPE = ['type', 'Ask two beta teams first']
 T1 = '&today=' + quote('1 click on the name')
 TR = '&today=' + quote('1 click in the rail')
 F = []
+THIRD = ['eval', "() => document.querySelectorAll('[data-testid=prio-title]')[2].click()"]
 
 
 def f(file, path, steps=(), width=1440, theme='light', role=''):
@@ -70,12 +71,21 @@ for o in 'abc':
     f(f'ks3-{o}-result', P + f'?ks3={o}&row=2', [['key', 'Enter'], NOTES, TYPE, ['type', ' jk'], last])
     hard = {
         'a': [['key', 'Shift+J'], ['type', 'jk']],
-        'b': [['key', 'Shift+J'], ['type', 'Ready sooner'], ['press', 'Control+Enter']],
+        'b': [['key', 'Shift+J'], ['type', 'Ready sooner']],
         'c': [['key', 'Shift+J'], ['type', 'Ready sooner'], ['press', 'Tab'], ['press', '?']],
     }[o]
     f(f'ks3-{o}-hard-1512', P + f'?ks3={o}&row=3', hard, width=1512, theme='dark')
 for o in 'abc':
-    f(f'ks3-{o}-phone-390', P + f'?ks3={o}' + ('&swipe=1' if o == 'c' else ''), [['click', '[data-testid=prio-title]']], width=390)
+    f(f'ks3-{o}-phone-390', P + f'?ks3={o}' + ('&swipe=1' if o == 'c' else ''), [THIRD], width=390)
+
+# phone 390 for KS1 and KS2, the viewer and commenter frames, and Detailed's focus look
+for o in 'abcd':
+    f(f'ks1-{o}-phone-390', P + f'?ks1={o}&open=1', width=390)
+    f(f'ks2-{o}-phone-390', P + f'?ks2={o}&row=0' + ('&nudge=1' if o == 'c' else ''), width=390)
+f('ks1-b-viewer', P + '?ks1=b&row=0&open=1', role='viewer')
+f('ks1-b-commenter', P + '?ks1=b&row=0&open=1', role='commenter')
+f('ks2-a-viewer', P + '?ks2=a&row=1&tip=grip&hover=1', role='viewer')
+f('ks2-a-detailed', D + '?ks2=a&row=0')
 
 json.dump(F, open('frames.json', 'w'), indent=1)
 print(len(F))

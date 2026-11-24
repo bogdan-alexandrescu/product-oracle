@@ -1,12 +1,12 @@
 {
  "title": "App-wide keyboard shortcuts and a help sheet",
- "subtitle": "Issue #1795 · mock-ups on Priorities in Simple and Detailed, light and dark, 1440, 1512 and phone 390 · invented data",
+ "subtitle": "Issue #1795 · mock-ups on Priorities in Simple and Detailed, light and dark, 1440, 1512 and phone 390, as owner, commenter and viewer · invented data · the dashed Cost strip is a mock-up note counting every key pressed",
  "decisions": [
   {
    "code": "KS1",
    "name": "The keys and the help sheet",
    "question": "Which keys does Oracle use, and how does the ? sheet lay them out?",
-   "common": "Every proposal moves through rows with a key, opens the one feature panel with Enter, closes the top panel with Esc, moves a row with a key held with Shift (a commenter's move becomes a proposal, as dragging does today), and opens a sheet of keys from a Keys line above Ask Oracle. The sheet lists this page first. Keys are off on a phone and while typing (KS3). The version viewer's keys move onto the same layer unchanged.",
+   "common": "Every proposal moves through rows with a key, opens the one feature panel with Enter, closes the top panel with Esc, moves a row with a key held with Shift (a commenter's move becomes a proposal, as dragging does today), and opens a sheet of keys from a Keys line: above Ask Oracle in Simple's rail, above Settings in Detailed's. The sheet lists this page first. A viewer sees move and add struck out as view only; a commenter's move reads Suggest a move. On a phone the Keys line sits in More only when a keyboard is plugged in, and keys are off while typing (KS3). The version viewer's keys move onto the same layer unchanged.",
    "proposals": [
     {
      "letter": "A",
@@ -26,7 +26,7 @@
       },
       {
        "file": "ks1-a-mid.html",
-       "caption": "Card closed, j pressed twice: the focus is on Weekly alert digest. The strip at the bottom counts the keys."
+       "caption": "Card closed, j pressed twice: the focus is on Weekly alert digest. The dashed strip at the top counts every key pressed."
       },
       {
        "file": "ks1-a-result.html",
@@ -34,7 +34,11 @@
       },
       {
        "file": "ks1-a-hard-1512.html",
-       "caption": "The hard case, Detailed at 1512 in dark: the rail has 10 pages, so Settings gets no number, and adding a page renumbers the rest."
+       "caption": "The hard case, Detailed at 1512 in dark: the Keys line sits above Settings; the rail has 10 pages, so Settings gets no number, and adding a page renumbers the rest."
+      },
+      {
+       "file": "ks1-a-phone-390.html",
+       "caption": "Phone 390 with a keyboard: the card drops to one column and scrolls."
       }
      ]
     },
@@ -65,7 +69,19 @@
       },
       {
        "file": "ks1-b-hard-1512.html",
-       "caption": "The hard case, Detailed at 1512 in dark: every one of the 10 Detailed pages gets its own letter, and the list scrolls under the search box."
+       "caption": "The hard case, Detailed at 1512 in dark: opened from the Keys line above Settings, every Detailed page gets a letter, but some are hard to guess (g u Runs, g l Plan, g f PRDs, g t Ground Truth), and g c Company sits beside c for Add."
+      },
+      {
+       "file": "ks1-b-viewer.html",
+       "caption": "A viewer opens the sheet: moving rows and adding are struck out as view only; the rest works."
+      },
+      {
+       "file": "ks1-b-commenter.html",
+       "caption": "A commenter opens the sheet: the move keys read Suggest a move, as dragging does today."
+      },
+      {
+       "file": "ks1-b-phone-390.html",
+       "caption": "Phone 390 with a keyboard: the sheet fills the screen, search box first."
       }
      ]
     },
@@ -75,7 +91,7 @@
      "recommended": false,
      "what": "Every key is held with Alt or Ctrl: Alt and the arrows step through rows, Alt Enter opens, Alt Shift and the arrows move a row, Ctrl Alt and a number opens a page, Ctrl / opens the sheet. The sheet is a large table with every page's keys open at once.",
      "plus": "A stray letter never fires anything, so it is the safest for people who type a lot or use a screen reader.",
-     "cost": "Open the third feature: Alt ↓, Alt ↓, Alt Enter, 6 keys held in pairs, against 1 click. Go to Roadmap: Ctrl Alt 3, 3 keys at once.",
+     "cost": "Open the third feature: 6 keys (Alt ↓, Alt ↓, Alt Enter, held in pairs) against 1 click. Go to Roadmap: 3 keys (Ctrl Alt 3, held together).",
      "frames": [
       {
        "file": "ks1-c-rest.html",
@@ -91,11 +107,15 @@
       },
       {
        "file": "ks1-c-result.html",
-       "caption": "Alt Enter opens Weekly alert digest in the feature panel: 6 key presses against 1 click."
+       "caption": "Alt Enter opens Weekly alert digest in the feature panel: 6 keys against 1 click."
       },
       {
        "file": "ks1-c-hard-1512.html",
-       "caption": "The hard case, Detailed at 1512 in dark: the table needs most of the screen, and Ctrl Alt with a number is AltGr on many European keyboards."
+       "caption": "The hard case, Detailed at 1512 in dark: the Keys line above Settings shows Ctrl /, which wraps in the narrow rail; the table needs most of the screen, and Ctrl Alt with a number is AltGr on many European keyboards."
+      },
+      {
+       "file": "ks1-c-phone-390.html",
+       "caption": "Phone 390 with a keyboard: the three columns stack into one long list."
       }
      ]
     },
@@ -125,7 +145,11 @@
       },
       {
        "file": "ks1-d-hard-1512.html",
-       "caption": "The hard case, Detailed at 1512 in dark: typing \"pl\" leaves Go to Plan (6) and Switch to Simple; Plan's key is a number that changes when the rail changes."
+       "caption": "The hard case, Detailed at 1512 in dark, Ask Oracle docked on the right as at this width today: typing \"pl\" leaves Go to Plan (6) and Switch to Simple; Plan's key is a number that changes when the rail changes."
+      },
+      {
+       "file": "ks1-d-phone-390.html",
+       "caption": "Phone 390 with a keyboard: the list sits at the top, full width."
       }
      ]
     }
@@ -135,7 +159,7 @@
    "code": "KS2",
    "name": "Teaching the keys, showing the focus",
    "question": "How does a person learn the keys in place, and how does the focused row look?",
-   "common": "Every proposal uses the keys of KS1 B, shows one focused row at a time on Priorities (and the same on list rows and timeline rows elsewhere), keeps the ? sheet, and adds no paragraph of help.",
+   "common": "Every proposal uses the keys of KS1 B, shows one focused row at a time on Priorities in Simple and Detailed (and the same on list rows and timeline rows elsewhere), keeps the ? sheet, and adds no paragraph of help. On a phone no key hints show; with a keyboard plugged in, the focus look appears.",
    "proposals": [
     {
      "letter": "A",
@@ -152,7 +176,7 @@
       },
       {
        "file": "ks2-a-open.html",
-       "caption": "Hovering Roadmap in the rail: its tooltip shows g then r."
+       "caption": "Hovering Roadmap in the rail: its tooltip, just under it, shows g then r."
       },
       {
        "file": "ks2-a-mid.html",
@@ -160,11 +184,23 @@
       },
       {
        "file": "ks2-a-result.html",
-       "caption": "Enter opens it in the feature panel; hovering Close shows Esc. 3 keys against 1 click."
+       "caption": "Enter opens it in the feature panel; hovering Close shows Esc under it. 3 keys against 1 click."
       },
       {
        "file": "ks2-a-hard-1512.html",
        "caption": "The hard case, a commenter at 1512 in dark: the grip's tooltip reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal."
+      },
+      {
+       "file": "ks2-a-viewer.html",
+       "caption": "A viewer's rows have no grip; the tip under the row says view only, with no key; j, k and Enter still work."
+      },
+      {
+       "file": "ks2-a-detailed.html",
+       "caption": "Detailed: the focused row takes the table's own selected look, the same row the panel shows."
+      },
+      {
+       "file": "ks2-a-phone-390.html",
+       "caption": "Phone 390: no tooltips; with a keyboard the first row shows the blue bar."
       }
      ]
     },
@@ -182,7 +218,7 @@
       },
       {
        "file": "ks2-b-open.html",
-       "caption": "Hovering Weekly alert digest: key chips appear at the end of its row."
+       "caption": "Hovering Weekly alert digest: key chips appear in the free right end of its second line."
       },
       {
        "file": "ks2-b-mid.html",
@@ -194,7 +230,11 @@
       },
       {
        "file": "ks2-b-hard-1512.html",
-       "caption": "The hard case, long names at 1512 in dark: the chips cover the goal, value and score of the row they sit on."
+       "caption": "The hard case, long names at 1512 in dark: a one-line row has no free end, so the chips cover its value and score."
+      },
+      {
+       "file": "ks2-b-phone-390.html",
+       "caption": "Phone 390: no hover, so no chips; with a keyboard the first row shows the ring."
       }
      ]
     },
@@ -220,11 +260,15 @@
       },
       {
        "file": "ks2-c-result.html",
-       "caption": "Got it closes the card for good; the focus stays on the first row."
+       "caption": "Got it: the card is gone and the focus stays on the first row."
       },
       {
        "file": "ks2-c-hard-1512.html",
        "caption": "The hard case at 1512 in dark: with the feature panel open the card sits on top of the panel's last lines."
+      },
+      {
+       "file": "ks2-c-phone-390.html",
+       "caption": "Phone 390: no card on a phone; with a keyboard the first row fills light blue."
       }
      ]
     },
@@ -242,7 +286,7 @@
       },
       {
        "file": "ks2-d-open.html",
-       "caption": "Pressing ? opens the sheet over the page; the bar stays."
+       "caption": "Pressing ? opens the sheet; the bar hides while it is open, so no key shows twice."
       },
       {
        "file": "ks2-d-mid.html",
@@ -255,6 +299,10 @@
       {
        "file": "ks2-d-hard-1512.html",
        "caption": "The hard case, long names at 1512 in dark: the bar covers the foot of the panel and the last row, and adds text to every page."
+      },
+      {
+       "file": "ks2-d-phone-390.html",
+       "caption": "Phone 390: no bar on a phone; with a keyboard the first row gets the grey fill."
       }
      ]
     }
@@ -289,7 +337,7 @@
       },
       {
        "file": "ks3-a-result.html",
-       "caption": "Esc leaves the field; the text waits with Save and Cancel, and the panel stays open."
+       "caption": "Esc (1 key) leaves the field; the text waits with Save and Cancel, and the panel stays open. A second Esc would close it."
       },
       {
        "file": "ks3-a-hard-1512.html",
@@ -297,7 +345,7 @@
       },
       {
        "file": "ks3-a-phone-390.html",
-       "caption": "Phone 390: no keys; the feature panel has previous and next buttons beside its menu."
+       "caption": "Phone 390, Weekly alert digest open: no keys; thumb-sized previous and next buttons sit beside the panel's menu and cut the title short."
       }
      ]
     },
@@ -307,7 +355,7 @@
      "recommended": false,
      "what": "Plain keys type in a field, as in A. Ctrl Enter, already the save key in Oracle's comment and answer boxes, saves the field and opens the next feature in the panel, so a person can fill one field down the whole list. In a dialog Ctrl Enter confirms it. Phones are unchanged.",
      "plus": "The quickest way to fill notes, owners or reasons for many features in a row.",
-     "cost": "Fill notes for the next feature: type, then 2 keys (Ctrl Enter) against Save, a click on the next row and Change: 3 clicks.",
+     "cost": "Fill notes for the next feature: type, then 2 keys (Ctrl Enter) against Save, a click on the next row and Change: 3 clicks. Confirm a dialog: 2 keys (Ctrl Enter).",
      "frames": [
       {
        "file": "ks3-b-rest.html",
@@ -323,15 +371,15 @@
       },
       {
        "file": "ks3-b-result.html",
-       "caption": "Ctrl Enter saves the note (the saved toast shows) and opens the next feature, Mobile alert push."
+       "caption": "Ctrl Enter (2 keys) saves the note (the saved toast shows) and opens the next feature, Mobile alert push."
       },
       {
        "file": "ks3-b-hard-1512.html",
-       "caption": "The hard case, a dialog at 1512 in dark: Shift J, a reason, then Ctrl Enter moves Mobile alert push to rank 5 at once."
+       "caption": "The hard case, a dialog at 1512 in dark: Shift J (2 keys) opens Move Mobile alert push to rank 5, a reason is typed; Ctrl Enter next would confirm it."
       },
       {
        "file": "ks3-b-phone-390.html",
-       "caption": "Phone 390: nothing changes; the panel is as today."
+       "caption": "Phone 390, Weekly alert digest open: nothing changes; the panel is as today."
       }
      ]
     },
@@ -349,7 +397,7 @@
       },
       {
        "file": "ks3-c-open.html",
-       "caption": "Change on Notes opens the field; a tag under it shows the keys are off while typing."
+       "caption": "Change on Notes opens the field; a tag just below it shows the keys are off while typing; it sits on the Cancel link, so it would need a line of its own."
       },
       {
        "file": "ks3-c-mid.html",
@@ -361,11 +409,11 @@
       },
       {
        "file": "ks3-c-hard-1512.html",
-       "caption": "The hard case, a dialog at 1512 in dark: Tab to its buttons, then ? shows only this box's keys: Enter, Esc, Tab."
+       "caption": "The hard case, a dialog at 1512 in dark: Tab to its buttons, then ? shows only this box's keys in a card beside it: Enter, Esc, Tab."
       },
       {
        "file": "ks3-c-phone-390.html",
-       "caption": "Phone 390: a swipe hint over the panel; sliding sideways goes to the next feature."
+       "caption": "Phone 390, Weekly alert digest open: a swipe hint at the foot of the panel, over the Confidence line until it fades; sliding sideways goes to the next feature."
       }
      ]
     }

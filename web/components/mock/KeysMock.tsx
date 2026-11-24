@@ -169,6 +169,8 @@ export function KeysMock() {
   const [nudge, setNudge] = useState(p('nudge') === '1');
   const [typing, setTyping] = useState(false);
   const detailed = !pathname.startsWith('/simple');
+  // MOCK-HOOK: the mock's acting role (the product would read can() for move and add).
+  const role = typeof localStorage === 'undefined' ? '' : localStorage.getItem('po-mock-role') || '';
   useTick();
 
   useEffect(() => {
@@ -197,7 +199,8 @@ export function KeysMock() {
     }
   });
 
-  const rows = typeof document === 'undefined' ? [] : [...document.querySelectorAll('[data-testid=prio-row]')];
+  const rowSel = detailed ? 'main table:first-of-type tbody tr' : '[data-testid=prio-row]'; // MOCK-HOOK: Detailed's ranked table
+  const rows = typeof document === 'undefined' ? [] : [...document.querySelectorAll(rowSel)];
   useEffect(() => {
     rows.forEach((r, i) => {
       if (i === row) r.setAttribute('data-kfocus', '1');
@@ -212,7 +215,9 @@ export function KeysMock() {
     if (!on) return;
     const onFocus = () => {
       const a = document.activeElement as HTMLElement | null;
-      setTyping(!!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable) && !a.closest('[data-keys-sheet]'));
+      const t = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable) && !a.closest('[data-keys-sheet]');
+      setTyping(t);
+      if (t && a?.closest('[data-testid=item-panel]')) setTrail([]); // MOCK-HOOK: cost counts only the costed step
     };
     document.addEventListener('focusin', onFocus);
     document.addEventListener('focusout', () => setTimeout(onFocus, 0));
@@ -221,7 +226,7 @@ export function KeysMock() {
       const a = document.activeElement as HTMLElement | null;
       const inField = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable);
       const inDialog = !!a?.closest('[role=dialog],[role=alertdialog]') && !a?.closest('[data-keys-sheet]');
-      const list = [...document.querySelectorAll('[data-testid=prio-row]')];
+      const list = [...document.querySelectorAll(rowSel)];
       if (ks3 === 'b' && inField && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         // KS3 b: Ctrl+Enter saves the field (as forms do today) and goes on to the next feature.
         const box = a!.closest('[data-testid=item-panel],[role=dialog]');
@@ -242,7 +247,7 @@ export function KeysMock() {
       }
       const mod = ks1 === 'c';
       const nice: Record<string, string> = { ArrowDown: '↓', ArrowUp: '↑' };
-      const push = (k: string) => setTrail((t) => [...t, (e.altKey ? 'Alt ' : '') + (nice[k] || k)].slice(-8));
+      const push = (k: string) => setTrail((t) => [...t, ...(e.altKey ? ['Alt'] : []), nice[k] || k].slice(-8));
       if (inField) return;
       if ((e.ctrlKey || e.metaKey) && !(ks1 === 'c' && (e.key === '/' || e.altKey))) return;
       if (open && document.activeElement?.closest('[data-keys-sheet]')) {
@@ -330,7 +335,7 @@ export function KeysMock() {
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('focusin', onFocus);
     };
-  }, [on, ks1, ks3, open, pending, pages]);
+  }, [on, ks1, ks3, open, pending, pages, rowSel]);
 
   if (!on) return null;
   const phone = typeof window !== 'undefined' && window.innerWidth <= 600;
@@ -348,13 +353,15 @@ export function KeysMock() {
 
   // ---------- the tooltip with its key (KS2 a, and the rail tip every proposal of KS1 shares)
   let tipEl: ReactNode = null;
-  const tipAt = (r: DOMRect | null, label: string, k: Key | null, side: 'right' | 'below' | 'left' = 'right') => {
+  const tipAt = (r: DOMRect | null, label: string, k: Key | null, side: 'right' | 'below' | 'left' | 'belowRight' = 'right') => {
     if (!r) return null;
     const style =
       side === 'right'
         ? { left: r.right + 8, top: r.top + r.height / 2 - 16 }
         : side === 'left'
           ? { right: window.innerWidth - r.left + 8, top: r.top + r.height / 2 - 16 }
+          : side === 'belowRight'
+          ? { right: window.innerWidth - r.right, top: r.bottom + 6 }
           : { left: r.left, top: r.bottom + 6 };
     return (
       <div
@@ -369,13 +376,16 @@ export function KeysMock() {
   };
   if (!phone && (ks2 === 'a' || p('tip'))) {
     if (tip === 'rail') {
-      tipEl = tipAt(rectOf(navLink('Roadmap')), 'Roadmap', goKey('Roadmap'));
+      tipEl = tipAt(rectOf(navLink('Roadmap')), 'Roadmap', goKey('Roadmap'), 'below');
     } else if (tip === 'row' && rows[hover]) {
       tipEl = tipAt(rectOf(rows[hover].querySelector('[data-testid=prio-title]')), 'Open', { keys: ['Enter'], label: '' }, 'below');
     } else if (tip === 'close') {
-      tipEl = tipAt(rectOf(document.querySelector('[data-testid=item-panel] button[aria-label=Close]')), 'Close', { keys: ['Esc'], label: '' }, 'left');
+      tipEl = tipAt(rectOf(document.querySelector('[data-testid=item-panel] button[aria-label=Close]')), 'Close', { keys: ['Esc'], label: '' }, 'belowRight');
     } else if (tip === 'grip' && rows[hover]) {
-      tipEl = tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), 'Suggest a move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'below');
+      tipEl =
+        role === 'viewer'
+          ? tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), 'View only: no moving', null, 'below')
+          : tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), role === 'commenter' ? 'Suggest a move' : 'Move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'below');
     }
   }
 
@@ -384,7 +394,7 @@ export function KeysMock() {
   if (ks2 === 'b' && !phone && rows[hover]) {
     const r = rows[hover].getBoundingClientRect();
     chips = (
-      <div className="pointer-events-none fixed z-[60] flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1 shadow-tip" style={{ right: window.innerWidth - r.right + 44, top: r.top + r.height / 2 - 16 }}>
+      <div className="pointer-events-none fixed z-[60] flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1 shadow-tip" style={{ right: window.innerWidth - r.right + 12, top: r.bottom - 38 }}>
         <K>Enter</K>
         <span className="text-sm text-text2">open</span>
         <K>Shift J</K>
@@ -397,7 +407,7 @@ export function KeysMock() {
   // ---------- KS2 c: the first-use nudge
   const nudgeEl =
     ks2 === 'c' && nudge && !phone ? (
-      <div data-testid="keys-nudge" className="fixed right-6 bottom-6 z-[60] w-[300px] rounded-xl border border-line bg-surface p-3 shadow-tip">
+      <div data-testid="keys-nudge" className="fixed right-6 bottom-6 z-[60] w-[300px] max-[600px]:right-3 max-[600px]:bottom-[calc(var(--phone-tab-bar)+12px)] max-[600px]:left-3 max-[600px]:w-auto rounded-xl border border-line bg-surface p-3 shadow-tip">
         <div className="flex items-center gap-2">
           <span aria-hidden className="text-accent">⌨</span>
           <span className="font-semibold text-text">Try the keys</span>
@@ -409,7 +419,7 @@ export function KeysMock() {
         </div>
         <div className="mt-3 flex justify-end gap-2">
           <button type="button" className="rounded-button px-2.5 py-1 text-sm text-text2 hover:bg-surface2" onClick={() => setNudge(false)}>Not now</button>
-          <button type="button" className="rounded-button bg-accent px-2.5 py-1 text-sm font-semibold text-on-accent" onClick={() => setNudge(false)}>Got it</button>
+          <button type="button" className="rounded-button bg-accent px-2.5 py-1 text-sm font-semibold text-on-accent" onClick={() => { setNudge(false); setTrail([]); }}>Got it</button>
         </div>
       </div>
     ) : null;
@@ -432,7 +442,7 @@ export function KeysMock() {
         { keys: ['?'], label: 'All keys' },
       ];
   const bar =
-    ks2 === 'd' && !phone ? (
+    ks2 === 'd' && !phone && !open ? (
       <div data-testid="keys-bar" className="fixed right-0 bottom-0 left-[232px] z-[45] flex items-center gap-5 border-t border-line bg-surface px-6 py-2 text-sm text-text2">
         {barKeys.map((k) => (
           <span key={k.label} className="inline-flex items-center gap-1.5">
@@ -450,7 +460,7 @@ export function KeysMock() {
   if (ks3 === 'c' && (typing || p('paused') === '1') && field) {
     const r = field.getBoundingClientRect();
     typingEl = (
-      <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2 py-0.5 text-xs text-text2" style={{ right: window.innerWidth - r.right + 18, top: r.bottom - 28 }}>
+      <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2 py-0.5 text-xs text-text2" style={{ right: window.innerWidth - r.right, top: r.bottom + 6 }}>
         <span aria-hidden>⌨</span>Keys off while typing
       </div>
     );
@@ -462,14 +472,14 @@ export function KeysMock() {
     const r = close.getBoundingClientRect();
     if (ks3 === 'a') {
       phoneEl = (
-        <div className="fixed z-[70] flex items-center gap-1" style={{ right: window.innerWidth - r.left + 40, top: r.top + r.height / 2 - 18 }}>
-          <button type="button" aria-label="Previous feature" className="grid size-9 place-items-center rounded-button border border-line bg-surface text-lg text-text">‹</button>
-          <button type="button" aria-label="Next feature" className="grid size-9 place-items-center rounded-button border border-line bg-surface text-lg text-text">›</button>
+        <div className="fixed z-[70] flex items-center gap-1" style={{ right: window.innerWidth - r.left + 40, top: r.top + r.height / 2 - 22 }}>
+          <button type="button" aria-label="Previous feature" className="grid size-11 place-items-center rounded-button border border-line bg-surface text-lg text-text">‹</button>
+          <button type="button" aria-label="Next feature" className="grid size-11 place-items-center rounded-button border border-line bg-surface text-lg text-text">›</button>
         </div>
       );
     } else if (ks3 === 'c' && p('swipe') === '1') {
       phoneEl = (
-        <div className="pointer-events-none fixed inset-x-0 z-[70] flex items-center justify-center" style={{ top: r.top + 230 }}>
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[70] flex items-center justify-center">
           <div className="flex items-center gap-2 rounded-full bg-tip px-3 py-1.5 text-sm text-tip-text shadow-tip">
             <span aria-hidden>←</span> Next feature <span aria-hidden>→</span>
           </div>
@@ -486,12 +496,20 @@ export function KeysMock() {
     { name: 'Everywhere', keys: g.every, open: true },
     ...g.others.map((o) => ({ ...o, open: ks1 === 'c' || !!q })),
   ];
-  const Row = ({ k, active }: { k: Key; active?: boolean }) => (
-    <li className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1 ${active ? 'bg-accent-soft' : ''}`}>
-      <span className="text-text">{k.label}</span>
-      <Keys k={k} />
-    </li>
-  );
+  // MOCK-HOOK: a viewer sees move and add as not for them; a commenter's move is a suggestion.
+  const edits = (k: Key) => /^(Move the row|Add on this page|Add an item)/.test(k.label);
+  const Row = ({ k, active }: { k: Key; active?: boolean }) =>
+    role === 'viewer' && edits(k) ? (
+      <li className="flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-text-faint">
+        <span className="line-through">{k.label}</span>
+        <span className="text-xs">View only</span>
+      </li>
+    ) : (
+      <li className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1 ${active ? 'bg-accent-soft' : ''}`}>
+        <span className="text-text">{role === 'commenter' && k.label.startsWith('Move the row') ? k.label.replace('Move the row', 'Suggest a move') : k.label}</span>
+        <Keys k={k} />
+      </li>
+    );
   const dialogKeys: Key[] = [
     { keys: ['Enter'], label: 'Confirm' },
     { keys: ['Esc'], label: 'Cancel' },
@@ -499,10 +517,11 @@ export function KeysMock() {
   ];
   const inDialogNow = !!document.querySelector('[role=alertdialog],[role=dialog]:not([data-keys-sheet])');
   let sheet: ReactNode = null;
-  if (open && !phone) {
+  const dlg = rectOf([...document.querySelectorAll('[role=alertdialog],[role=dialog]:not([data-keys-sheet])')].find((x) => x.getBoundingClientRect().width > 0));
+  if (open) {
     if (ks3 === 'c' && inDialogNow) {
       sheet = (
-        <div data-keys-sheet role="dialog" aria-label="Keys" className="fixed top-1/2 left-1/2 z-[80] w-[360px] -translate-x-1/2 translate-y-[120px] rounded-xl border border-line bg-surface p-4 shadow-tip">
+        <div data-keys-sheet role="dialog" aria-label="Keys" className="fixed z-[80] w-[300px] rounded-xl border border-line bg-surface p-4 shadow-tip" style={dlg ? { left: dlg.right + 16, top: dlg.top } : undefined}>
           <h2 className="mb-2 font-semibold text-text">Keys · this box</h2>
           <ul className="text-sm">{dialogKeys.map((k) => <Row key={k.label} k={k} />)}</ul>
         </div>
@@ -510,12 +529,12 @@ export function KeysMock() {
     } else if (ks1 === 'a') {
       sheet = (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/30">
-          <div data-keys-sheet role="dialog" aria-label="Keys" className="w-[620px] rounded-xl border border-line bg-surface p-5 shadow-tip">
+          <div data-keys-sheet role="dialog" aria-label="Keys" className="w-[620px] rounded-xl border max-[600px]:max-h-[90vh] max-[600px]:w-[calc(100vw-24px)] max-[600px]:overflow-y-auto border-line bg-surface p-5 shadow-tip">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text">Keys</h2>
               <button type="button" aria-label="Close" className="text-text2">✕</button>
             </div>
-            <div className="grid grid-cols-2 gap-6 text-sm">
+            <div className="grid grid-cols-2 gap-6 text-sm max-[600px]:grid-cols-1">
               <section>
                 <h3 className="mb-1 font-semibold text-text2">{groups[0].name}</h3>
                 <ul>{g.page.map((k) => <Row key={k.label} k={k} />)}</ul>
@@ -532,7 +551,7 @@ export function KeysMock() {
       );
     } else if (ks1 === 'b') {
       sheet = (
-        <div data-keys-sheet role="dialog" aria-label="Keys" className="fixed top-3 right-3 bottom-3 z-[80] flex w-[400px] flex-col rounded-xl border border-line bg-surface shadow-tip">
+        <div data-keys-sheet role="dialog" aria-label="Keys" className="fixed top-3 right-3 bottom-3 z-[80] flex w-[400px] flex-col max-[600px]:left-3 max-[600px]:w-auto rounded-xl border border-line bg-surface shadow-tip">
           <div className="flex items-center justify-between px-4 pt-4">
             <h2 className="text-lg font-semibold text-text">Keys</h2>
             <button type="button" aria-label="Close" className="text-text2" onClick={() => setOpen(false)}>✕</button>
@@ -560,12 +579,12 @@ export function KeysMock() {
     } else if (ks1 === 'c') {
       sheet = (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/30">
-          <div data-keys-sheet role="dialog" aria-label="Keys" className="max-h-[86vh] w-[960px] overflow-y-auto rounded-xl border border-line bg-surface p-5 shadow-tip">
+          <div data-keys-sheet role="dialog" aria-label="Keys" className="max-h-[86vh] w-[960px] overflow-y-auto max-[600px]:w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-5 shadow-tip">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text">Keys</h2>
               <button type="button" aria-label="Close" className="text-text2">✕</button>
             </div>
-            <div className="columns-3 gap-6 text-sm">
+            <div className="columns-3 gap-6 text-sm max-[600px]:columns-1">
               {groups.map((gr) => (
                 <section key={gr.name} className="mb-4 break-inside-avoid">
                   <h3 className="mb-1 font-semibold text-text2">{gr.name}</h3>
@@ -582,7 +601,7 @@ export function KeysMock() {
       const hits = all.filter((k) => match(k) && !seen.has(k.label) && seen.add(k.label)).slice(0, 12);
       sheet = (
         <div className="fixed inset-0 z-[80] bg-black/30">
-          <div data-keys-sheet role="dialog" aria-label="Keys" className="mx-auto mt-[12vh] w-[640px] rounded-xl border border-line bg-surface shadow-tip">
+          <div data-keys-sheet role="dialog" aria-label="Keys" className="mx-auto mt-[12vh] w-[640px] rounded-xl max-[600px]:mt-3 max-[600px]:w-[calc(100vw-24px)] border border-line bg-surface shadow-tip">
             <input autoFocus aria-label="Find a key or an action" placeholder="Find a key or an action" value={q} onChange={(e) => { setQ(e.target.value); setSel(0); }}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') setSel((x) => Math.min(hits.length - 1, x + 1));
@@ -624,8 +643,15 @@ export function KeysMock() {
   // ---------- the rail's way in to the sheet (every KS1 proposal)
   const ask = [...document.querySelectorAll('nav a, nav button')].find((a) => (a.textContent || '').trim() === 'Ask Oracle');
   const ar = rectOf(ask);
+  const set = detailed ? [...document.querySelectorAll('nav a')].find((a) => (a.textContent || '').trim() === 'Settings') : null;
+  const sr = rectOf(set);
   const railKey =
-    ks1 && ar && !phone && ks2 !== 'd' ? (
+    detailed && sr && ks1 && !phone && ks2 !== 'd' ? (
+      <button type="button" onClick={() => setOpen(true)} className="fixed z-[46] flex flex-col items-center gap-0.5 rounded-button py-1 text-sm text-rail-text" style={{ left: sr.left, top: sr.top - 64, width: sr.width }}>
+        <span aria-hidden>⌨</span>
+        <span className="inline-flex items-center gap-1">Keys <K>{ks1 === 'c' ? 'Ctrl /' : '?'}</K></span>
+      </button>
+    ) : ks1 && ar && !phone && ks2 !== 'd' ? (
       <button type="button" onClick={() => setOpen(true)} className="fixed z-[46] flex items-center gap-2 rounded-button px-3 py-1 text-sm text-text2 hover:bg-surface2" style={{ left: ar.left, top: ar.top - 40, width: ar.width }}>
         <span aria-hidden>⌨</span>
         <span>Keys</span>
@@ -635,8 +661,8 @@ export function KeysMock() {
 
   // ---------- the cost strip (a mock-up note, not product UI)
   const cost =
-    trail.length > 0 || today ? (
-      <div data-mock-note className="fixed bottom-3 left-1/2 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-full border-2 border-dashed border-accent bg-surface px-3 py-1 text-sm text-text shadow-tip">
+    (trail.length > 0 || today) && !phone ? (
+      <div data-mock-note className="fixed top-2 left-1/2 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-full border-2 border-dashed border-accent bg-surface px-3 py-1 text-sm text-text shadow-tip">
         <span className="font-semibold">Cost</span>
         {trail.map((t, i) => <K key={i} on>{t}</K>)}
         <span>{trail.length} {trail.length === 1 ? 'key' : 'keys'}</span>

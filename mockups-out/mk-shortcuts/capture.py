@@ -5,6 +5,7 @@ Each frame: {"file", "path", "width" (1440|1512|390), "theme", "role", "steps": 
 """
 
 import json
+import re
 import os
 import sys
 
@@ -65,7 +66,7 @@ def main():
     try:
         login(page)
         for f in frames:
-            if only and not f['file'].startswith(only):
+            if only and not re.search(only, f['file']):
                 continue
             theme = f.get('theme', 'light')
             role = f.get('role', '')
