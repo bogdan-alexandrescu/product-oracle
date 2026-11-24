@@ -448,6 +448,7 @@ class _SlowRuntime(FakeRuntime):
 # protects=walk-brief item 1: Continue on New PRD answers without waiting on SwarmCloud;
 # the read's run is submitted after the response; fails_when=POST /v1/intakes awaits the
 # submission (25-28 s on production); no_claim=how long SwarmCloud itself takes.
+@pytest.mark.timing
 async def test_create_answers_before_the_read_is_submitted(client):
     """Creating an intake answers fast even while its read is still being submitted."""
     ctx = await company()

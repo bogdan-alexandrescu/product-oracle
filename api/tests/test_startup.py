@@ -492,6 +492,7 @@ def test_head_check_runs_outside_the_importing_process(at_head, served, monkeypa
     assert len(served) == 1
 
 
+@pytest.mark.timing
 def test_a_failed_import_does_not_wait_on_the_check():
     """A failed app import does not wait on the slow head check to finish."""
     code = (

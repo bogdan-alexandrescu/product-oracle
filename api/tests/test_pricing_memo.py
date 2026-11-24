@@ -139,6 +139,7 @@ def test_the_warnings_uncited_price_research_plan_and_levels():
     assert _check(memo_md("m"), "recommend") == []
 
 
+@pytest.mark.timing
 def test_a_long_run_of_digits_is_parsed_in_linear_time():
     """protects=50,000 digits with no unit in an option section are checked in well under
     100 ms, and the prices found are the ones found before; fails_when=the price pattern
