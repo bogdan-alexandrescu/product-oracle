@@ -63,7 +63,7 @@ export function WatchHeadMk({ itemKey, title, code }: { itemKey: string; title: 
         <Svg d={BELL} fill={on ? 'currentColor' : 'none'} /> {on ? 'Watching' : 'Watch'} {/* MOCK-HOOK */}
       </button> {/* MOCK-HOOK */}
       {u.said && on && !open && ( // MOCK-HOOK
-        <div role="status" data-mk="toast" className="fixed left-1/2 -translate-x-1/2 bottom-20 z-[60] flex items-center gap-3 rounded-lg bg-tip px-4 py-3 text-sm text-tip-text shadow-tip"> {/* MOCK-HOOK */}
+        <div role="status" data-mk="toast" className="fixed left-4 bottom-[172px] z-[60] flex w-[200px] flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-tip px-3 py-2 text-sm text-tip-text shadow-tip"> {/* MOCK-HOOK */}
           <span>✓ {u.said}</span> {/* MOCK-HOOK */}
           <button type="button" className="font-semibold underline" onClick={() => setWatched(itemKey, false)}>Undo</button> {/* MOCK-HOOK */}
         </div> // MOCK-HOOK
