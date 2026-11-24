@@ -226,7 +226,7 @@ function openSuggestion(title: string, s: St): MkSuggest | undefined {
   return g;
 }
 
-function Picker({ title }: { title: string }) {
+function Picker({ title, onClose }: { title: string; onClose?: () => void }) {
   const s = useSt();
   const rights = useRights();
   const shown = MK_CANDIDATES.filter(
@@ -238,14 +238,21 @@ function Picker({ title }: { title: string }) {
       className="mt-1.5 rounded-xl border border-line bg-surface p-2 shadow-tip"
       data-testid="mk-picker"
     >
-      <input
-        autoFocus
-        aria-label="Find a pull request"
-        placeholder={`Find in ${MK_REPO}`}
-        value={s.query}
-        onChange={(e) => set(() => ({ query: e.target.value, step: 'mid' }))}
-        className="block h-8 w-full rounded-lg border border-line-strong bg-surface px-2 text-sm text-text"
-      />
+      <span className="flex items-center gap-1.5">
+        <input
+          autoFocus
+          aria-label="Find a pull request"
+          placeholder={`Find in ${MK_REPO}`}
+          value={s.query}
+          onChange={(e) => set(() => ({ query: e.target.value, step: 'mid' }))}
+          className="block h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-text"
+        />
+        {onClose && (
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
+      </span>
       <ul className="mt-1.5 max-h-56 overflow-auto">
         {shown.map((c) => (
           <li key={c.n} className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-surface2">
@@ -717,6 +724,7 @@ export function MkRowChip({
 export function MkPageStrip() {
   const s = useSt();
   const rights = useRights();
+  const [relink, setRelink] = useState(false);
   if (mkParam('lp3') !== 'd') return null;
   const gone = mkParam('link') === 'gone' && !s.removed.includes(MK_GONE.n);
   if (s.connected && !gone) return null;
@@ -769,7 +777,17 @@ export function MkPageStrip() {
                 {rights.decide ? 'Remove the link' : 'Propose removing it'}
               </Button>
             )}
+            {rights.propose && !relink && (
+              <button type="button" className={LINK} onClick={() => setRelink(true)}>
+                {rights.decide ? 'Relink' : 'Propose a relink'}
+              </button>
+            )}
           </li>
+          {relink && (
+            <li className="max-w-xl">
+              <Picker title={DIGEST} onClose={() => setRelink(false)} />
+            </li>
+          )}
         </ul>
       )}
     </div>
@@ -939,9 +957,7 @@ export function MkInboxRows() {
           rights.propose ? (
             <>
               {s.step === 'open' || s.step === 'mid' ? (
-                <span className="w-full">
-                  <Picker title={DIGEST} />
-                </span>
+                <span className="text-sm text-text2">Relinking…</span>
               ) : (
                 <>
                   <Button onClick={() => set(() => ({ step: 'open' }))}>
@@ -964,6 +980,19 @@ export function MkInboxRows() {
             <OwnerCan what="fix it" />
           ),
         ),
+      );
+    if (
+      lp3 === 'c' &&
+      rights.propose &&
+      (s.step === 'open' || s.step === 'mid') &&
+      !s.removed.includes(MK_GONE.n)
+    )
+      rows.push(
+        <div key="gone-pick" className="border-t border-line px-4 py-2">
+          <div className="ml-auto max-w-xl">
+            <Picker title={DIGEST} onClose={() => set(() => ({ step: 'rest', query: '' }))} />
+          </div>
+        </div>,
       );
   }
   if (!rows.length) return null;

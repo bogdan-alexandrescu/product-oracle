@@ -397,7 +397,7 @@
             },
             {
               "file": "frames/lp3-c-open.html",
-              "caption": "The owner clicks Relink: the repo search opens in the row."
+              "caption": "They click Relink: the search opens on its own line under the row, with Cancel."
             },
             {
               "file": "frames/lp3-c-mid.html",
@@ -437,7 +437,7 @@
           "letter": "D",
           "name": "Strip on Priorities",
           "recommended": false,
-          "what": "A warning strip at the top of Priorities: \"GitHub not connected\" with Connect, or \"1 pull request link can't be found\" with Show, which lists each with Remove.",
+          "what": "A warning strip at the top of Priorities: \"GitHub not connected\" with Connect, or \"1 pull request link can't be found\" with Show, which lists each with Remove. Relink opens the same search in the strip.",
           "plus": "Impossible to miss on the page that ranks the work.",
           "cost": "2 clicks; today no links to break.",
           "frames": [
@@ -467,7 +467,7 @@
             },
             {
               "file": "frames/lp3-d-phone-390.html",
-              "caption": "Phone: the strip on one line above the list."
+              "caption": "Phone: the strip opened above the list, with Remove the link and Relink."
             }
           ]
         }

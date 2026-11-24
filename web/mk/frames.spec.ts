@@ -345,7 +345,12 @@ const STORIES: Story[] = [
       await s('done', 'Cost: 2 clicks, at the top of Priorities · today: no links to break');
     },
     hard: { url: `${PRIO}?lp3=d&host=off`, role: 'viewer', prep: async () => {} },
-    phone: { url: `${PRIO}?lp3=d&link=gone`, prep: async () => {} },
+    phone: {
+      url: `${PRIO}?lp3=d&link=gone`,
+      prep: async (p) => {
+        await p.getByTestId('mk-strip').getByRole('button', { name: 'Show' }).click();
+      },
+    },
   },
 ];
 
