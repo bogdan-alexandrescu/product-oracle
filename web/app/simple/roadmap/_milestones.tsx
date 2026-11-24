@@ -2704,7 +2704,7 @@ export function MsCard() {
                 ) : null
               }
             >
-              <MkStatusMark status={status} size={12} />
+              <MkStatusMark status={mkMsStatus(d.code) ?? status} size={12} />{/* MOCK-HOOK */}
               <select
                 aria-label="Status"
                 value={k.status_set ?? ''}

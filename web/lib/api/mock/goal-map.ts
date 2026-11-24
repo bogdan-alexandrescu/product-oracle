@@ -1194,6 +1194,9 @@ export async function routeGoalMap(
   goalTrashed: (id: string) => boolean = () => false,
 ): Promise<Response | null> {
   if (p[1] !== 'simple' || p[2] !== 'goal-map') return null;
+  const mkSig = typeof window === 'undefined' ? '' : (window.location.search.match(/pc[123]=|mkdata=big/g) ?? []).join(); // MOCK-HOOK
+  const mkDb = db as { mk_sig?: string }; // MOCK-HOOK
+  if (mkSig && mkDb.mk_sig !== mkSig) (db.goal_map = seedGoalMap(scenario)), (mkDb.mk_sig = mkSig); // MOCK-HOOK: the mock-up's switches pick its data set
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === 'owner' || me.role === 'approver';
   // goal-ladder place_card: each person's own places of cards, for features on the map and (Free
