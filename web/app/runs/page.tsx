@@ -82,7 +82,7 @@ function RunsPage() {
   // #1789: newest Updated first, as the column reads.
   const runs = (q.data ?? [])
     .filter((r) => r.status !== 'draft')
-    .sort((a, b) => updatedAt(b).localeCompare(updatedAt(a)));
+    .sort((a, b) => Date.parse(updatedAt(b)) - Date.parse(updatedAt(a)));
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
