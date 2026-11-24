@@ -116,7 +116,7 @@ function RoleAccess() {
 /** The handful of tools most people need, by their MCP tool name (one per API action). */
 export const MOST_USED: readonly [string, string][] = [
   ['get_simple_roadmap', 'Read the roadmap'],
-  ['propose_change', 'Change a roadmap item'],
+  ['create_simple_change', 'Change a roadmap item'],
   ['create_bucket_goal', 'Add a goal'],
   ['edit_goal', 'Edit a goal'],
   ['create_goal_milestone', 'Add a milestone'],
@@ -270,6 +270,7 @@ function CheckStrip({ query }: { query: ClientsQuery }) {
       >
         <Icon name="clock" size={16} />
         <span className="font-medium">Sign-in timed out</span>
+        <span className="text-sm">Run /mcp again and Approve straight away</span>
         <span className="ml-auto w-fit">
           <CopyChip text="/mcp" />
         </span>
@@ -285,7 +286,7 @@ function CheckStrip({ query }: { query: ClientsQuery }) {
         <span className="min-w-0 font-medium">{newest.client_name}</span>
         <Chip kind="pass">Connected</Chip>
         <span className="text-sm text-text">
-          Used {(ago(newest.last_used_at) ?? 'on ' + formatDate(newest.last_used_at)).toLowerCase()}
+          Used {ago(newest.last_used_at)?.toLowerCase() ?? `on ${formatDate(newest.last_used_at)}`}
         </span>
       </div>
     );
@@ -309,6 +310,8 @@ export function ConnectGuide({ url, query }: { url?: string; query: ClientsQuery
   const [tab, setTab] = useState<Tab>('code');
   return (
     <Panel
+      id="connect"
+      className="scroll-mt-16"
       title="Connect an AI tool"
       testId="mcp-guide"
       tools={
@@ -317,10 +320,7 @@ export function ConnectGuide({ url, query }: { url?: string; query: ClientsQuery
         </InfoTip>
       }
     >
-      <div
-        id="connect"
-        className="grid scroll-mt-4 gap-5 p-4 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-      >
+      <div className="grid gap-5 p-4 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <span className="inline-flex items-center gap-1 text-sm font-semibold text-text2">

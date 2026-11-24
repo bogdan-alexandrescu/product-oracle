@@ -566,6 +566,8 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
 
   return (
     <Panel
+      id="tokens-panel"
+      className="scroll-mt-16"
       title="Personal API tokens"
       count={<ActiveOfTotal rows={query.data} />}
       testId="tokens-panel"
