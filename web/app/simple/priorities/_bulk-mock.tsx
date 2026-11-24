@@ -183,7 +183,8 @@ function draftWords(d: Draft): string {
   if (d.owner) w.push(`owner ${d.owner}`);
   if (d.shift) w.push(`dates ${d.shift > 0 ? '+' : ''}${d.shift} weeks`);
   if (d.track) w.push(`moved to ${d.track}`);
-  return w.join(', ') || 'no change';
+  const t = w.join(', ') || 'no change';
+  return t[0].toUpperCase() + t.slice(1);
 }
 
 /** The row's name (the hard case's long names). */
@@ -283,14 +284,14 @@ export function BulkChips({ r }: { r: R }) {
       </span>,
     );
   }
-  if (d?.status)
+  if (d?.status && !got?.proposed)
     out.push(
       <span key="s" className={`${chip} bg-[var(--simple-edited)] uppercase text-text`}>
         {!got && <s className="mr-1 text-text2">{statusOf(r)}</s>}
         {d.status}
       </span>,
     );
-  if (d?.shift)
+  if (d?.shift && !got?.proposed)
     out.push(
       <span key="d" className={`${chip} bg-[var(--simple-edited)] text-text`}>
         <s className="mr-1 text-text2">{day(r.end_date)}</s>
@@ -300,7 +301,7 @@ export function BulkChips({ r }: { r: R }) {
   if (got?.proposed)
     out.push(
       <span key="p" className={`${chip} border border-dashed border-accent text-accent`}>
-        Waiting for {BULK_APPROVER}
+        {got.status ?? got.owner ?? `${got.shift} weeks`}, waiting for {BULK_APPROVER}
       </span>,
     );
   if (on && b.mixed && rt !== 'edit' && !got && b.be3 !== 'c')
@@ -435,11 +436,14 @@ function Preview({ b, max }: { b: Bulk; max: number }) {
         {bulkTitle(b, r)} {r.own_key && <span className="text-text2">{r.own_key}</span>}
       </span>
       <span className="text-text2">
-        {b.draft.status && (
-          <>
-            <s>{statusOf(r)}</s> → <b className="text-text">{b.draft.status}</b>{' '}
-          </>
-        )}
+        {b.draft.status &&
+          (statusOf(r) === b.draft.status ? (
+            <i>already {b.draft.status}</i>
+          ) : (
+            <>
+              <s>{statusOf(r)}</s> → <b className="text-text">{b.draft.status}</b>{' '}
+            </>
+          ))}
         {b.draft.owner && (
           <>
             <s>{ownerOf(r) || 'No owner'}</s> → <b className="text-text">{b.draft.owner}</b>{' '}
@@ -576,7 +580,7 @@ export function BulkBar() {
       {n > 0 && (
         <div
           data-testid="bulk-bar"
-          className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
+          className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[&>*]:shrink-0 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
         >
           <span className="font-semibold" data-testid="bulk-count">
             {n} picked
@@ -604,7 +608,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'a' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-24 max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[5.5rem] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                     {has && (
@@ -625,7 +629,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'c' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-24 max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[5.5rem] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                   </div>
