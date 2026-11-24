@@ -1,14 +1,16 @@
 """every-field: one code, one item. The code an item shows (:func:`shown_code`) is its
 feature's, else its PRD section's, else the one its title leads with ("F-31 Launch flow").
 The one check every write of a roadmap item passes through: before each flush, a roadmap item
-added, renamed, given another feature or brought back from Trash that would newly show a code
-another live item of the same plan (its version, its draft) shows is refused with 409, in
-set_code's words ("F-31 is already the code of F-31 Alert routing by team"); a copy of an
-item that showed the code already on the version or draft it is copied from (its source,
-:func:`copied_from`) is no new claim, and a row with no source claims every code. Items of
-one feature (its slices) share its code. The paths that can say more check first in their
-own words (oracle.simple.changes._not_taken, oracle.roadmap.changeset, Apply approved roadmap
-in oracle.simple.approved_roadmap, Restore in oracle.simple.trash_items)."""
+added, renamed, given another feature or brought back from Trash that would newly show, as its
+own (its title's), a code another live item of the same plan shows (its version, its draft, the
+working draft opened on its version) is refused with 409, in set_code's words ("F-31 is already
+the code of F-31 Alert routing by team"); one that takes it from its feature or PRD section
+gets the next free number at once instead (codes-at-write, Nov 23: the first item of a feature
+on a plan keeps its code). A copy of an item that showed the code already on the version or
+draft it is copied from (its source, :func:`copied_from`) is no new claim and keeps it, and a
+row with no source claims every code. The paths that can say more check a typed code first in
+their own words (oracle.simple.changes._not_taken, oracle.roadmap.changeset, Apply approved
+roadmap in oracle.simple.approved_roadmap, Restore in oracle.simple.trash_items)."""
 
 import re
 import uuid
@@ -216,28 +218,17 @@ def clash(
     title: str | None = None,
 ) -> Any:
     """The first of ``others`` (items: ``item_key``, ``title``, ``feature_id``,
-    ``prd_section_key``) that shows ``code``, other than the item ``key`` and the slices of
-    its feature: an item of the same feature, or, when the item's feature or PRD section
-    (``feature_id``, ``section``) gives it ``code``, an item whose own feature or PRD section
-    gives it ``code`` too, unless the two are linked to different features."""
-    own = inherited(SimpleNamespace(feature_id=feature_id, prd_section_key=section), by_feature)
-    # unique-codes (Nov 23): an item's own code (its title's) is its alone, whatever its
-    # feature; only two items that both take it from their feature or section still share it.
-    part = (own or "").upper() == code.upper() and not title_code(title)
+    ``prd_section_key``) that shows ``code``, other than the item ``key``, when ``code`` is the
+    item's own (its title's): a typed code that is taken. An item that takes ``code`` from its
+    feature or PRD section (``feature_id``, ``section``) is never refused: codes-at-write
+    (Nov 23) gives it the next free number at write when another item shows it
+    (:func:`check_flush`)."""
+    del feature_id, section
+    if not title_code(title):
+        return None
     for o in others:
-        if o.item_key == key:
-            continue
-        if (shown(o, by_feature) or "").upper() != code.upper():
-            continue
-        if not part or title_code(o.title):
+        if o.item_key != key and (shown(o, by_feature) or "").upper() == code.upper():
             return o
-        if feature_id is not None and o.feature_id == feature_id:
-            continue
-        if (inherited(o, by_feature) or "").upper() == code.upper() and (
-            feature_id is None or o.feature_id is None
-        ):
-            continue  # a slice of the same feature, by its code
-        return o
     return None
 
 
@@ -288,8 +279,14 @@ def _claims(
 
 
 def check_flush(session: Session) -> None:
-    """Raises :class:`CodeTaken` when a roadmap item about to be written newly shows a code
-    another live item of its plan shows (what this flush writes counts as written)."""
+    """Raises :class:`CodeTaken` when a roadmap item about to be written newly shows, as its
+    own (its title's), a code another live item of its plan shows (what this flush writes
+    counts as written). codes-at-write (the owner, Nov 23: "Number them at write"): an item
+    that would newly show a code it takes from its feature or PRD section, which another item
+    of its plan shows already, gets the next free number at once (:func:`_number`), so no
+    write makes a pair and none is refused. The first item of a feature on a plan keeps the
+    feature's code; a copy (:func:`copied_from`) keeps its code; a row in Trash or on an older
+    version is never written here."""
     from oracle.roadmap.models import RoadmapItem
     from oracle.simple.priorities import prd_code
 
@@ -309,30 +306,266 @@ def check_flush(session: Session) -> None:
     stored_rows = _stored(session, [o for o in rows if o in session.new])
     pending = [o for o in session.new if isinstance(o, RoadmapItem)]
     gone = set(session.deleted)
+    claims = [
+        (row, code)
+        for row in rows
+        if (code := shown(row, by_feature)) is not None
+        and _claims(session, row, code, by_feature, stored_rows)
+    ]
+    if not claims:
+        return
+    # A typed code first, checked against every item of the plan, this write's too (it is
+    # refused when taken); then the codes taken from a feature, in the order written: the
+    # first item of a feature keeps its code, a later one is numbered.
+    claims.sort(key=lambda rc: title_code(rc[0].title) is None)
+    waiting = {id(r) for r, _ in claims}
+    if any(title_code(r.title) is None for r, _ in claims):
+        # Before reading the plan: a write that may number an item waits for any other
+        # (oracle.simple.additions._next_code's lock), so two writes never both keep one code.
+        lock(session)
     by_owner: dict[tuple[str, Any], list[Any]] = {}
-    for row in rows:
-        code = shown(row, by_feature)
-        if code is None or not _claims(session, row, code, by_feature, stored_rows):
-            continue
+    numbering = _Numbering(session, by_feature)
+    for row, code in claims:
         owner = _owner(row)
         if owner not in by_owner:
-            col, value = owner  # type: ignore[misc]
-            with session.no_autoflush:
-                stored = list(
-                    session.scalars(
-                        select(RoadmapItem).where(
-                            getattr(RoadmapItem, col) == value, RoadmapItem.deleted_at.is_(None)
-                        )
+            by_owner[owner] = _plan(session, owner, pending, gone)  # type: ignore[arg-type]
+        waiting.discard(id(row))
+        typed = title_code(row.title) is not None
+        others = [o for o in by_owner[owner] if o is not row and (typed or id(o) not in waiting)]
+        if typed:
+            hit = clash(code, row.item_key, row.feature_id, others, by_feature,
+                        row.prd_section_key, row.title)  # fmt: skip
+            if hit is not None:
+                raise CodeTaken(code, named(hit, by_feature))
+            continue
+        # Its draft's plan: the rows of the version it was opened on count too.
+        others += _base_rows(session, row, owner, by_owner)  # type: ignore[arg-type]
+        # A version's plan: the rows of the working draft opened on it count too.
+        others += _draft_rows(session, row, owner, by_owner, pending, gone)  # type: ignore[arg-type]
+        if any(
+            o.item_key != row.item_key and (shown(o, by_feature) or "").upper() == code.upper()
+            for o in others
+        ):
+            numbering.give(row, code)
+
+
+def claim(session: Session, ids: list[Any]) -> None:
+    """codes-at-write for rows written past the flush (Restore's UPDATE in
+    oracle.trash.service.restore_entry): each live row of ``ids`` that shows a code it takes
+    from its feature or PRD section, which another item of its plan shows, gets the next free
+    number now, as :func:`check_flush` gives it."""
+    from oracle.roadmap.models import RoadmapItem
+
+    if not ids:
+        return
+    with session.no_autoflush:
+        rows = list(
+            session.scalars(
+                select(RoadmapItem)
+                .where(RoadmapItem.id.in_(ids), RoadmapItem.deleted_at.is_(None))
+                .execution_options(populate_existing=True)
+            )
+        )
+    rows = [o for o in rows if _owner(o) is not None and not title_code(o.title)]
+    if not rows:
+        return
+    by_feature = _feature_codes_sync(session)
+    claims = [(o, c) for o in rows if (c := inherited(o, by_feature)) is not None]
+    if not claims:
+        return
+    lock(session)
+    by_owner: dict[tuple[str, Any], list[Any]] = {}
+    numbering = _Numbering(session, by_feature)
+    for row, code in claims:
+        owner = _owner(row)
+        if owner is None:
+            continue
+        if owner not in by_owner:
+            by_owner[owner] = _plan(session, owner, [], set())
+        others = [o for o in by_owner[owner] if o is not row]
+        others += _base_rows(session, row, owner, by_owner)
+        others += _draft_rows(session, row, owner, by_owner, [], set())
+        if any(
+            o.item_key != row.item_key and (shown(o, by_feature) or "").upper() == code.upper()
+            for o in others
+        ):
+            numbering.give(row, code)
+
+
+def lock(session: Session) -> None:
+    """The one lock every numbering takes (oracle.simple.additions._next_code's): held to the
+    end of the write's transaction."""
+    from sqlalchemy import text
+
+    with session.no_autoflush:
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended('roadmap.next_code', 0))")
+        )
+
+
+def _plan(session: Session, owner: tuple[str, Any], pending: list[Any], gone: set) -> list[Any]:
+    """The live rows of one version or draft, stored and about to be written."""
+    from oracle.roadmap.models import RoadmapItem
+
+    col, value = owner
+    with session.no_autoflush:
+        stored = list(
+            session.scalars(
+                select(RoadmapItem).where(
+                    getattr(RoadmapItem, col) == value, RoadmapItem.deleted_at.is_(None)
+                )
+            )
+        )
+    seen = {id(o) for o in stored}
+    live = [*stored, *(o for o in pending if _owner(o) == owner and id(o) not in seen)]
+    return [o for o in live if o not in gone and o.deleted_at is None]
+
+
+def _base_rows(
+    session: Session, row: Any, owner: tuple[str, Any], by_owner: dict[tuple[str, Any], list]
+) -> list[Any]:
+    """A Simple draft's row: the live rows of the version its draft was opened on whose items
+    the draft does not hold itself; [] for a row of a version or a draft roadmap."""
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.models import SimpleDraft
+
+    if owner[0] != "simple_draft_id":
+        return []
+    with session.no_autoflush:
+        draft = session.get(SimpleDraft, owner[1])
+        if draft is None or draft.base_version_id is None:
+            return []
+        base = ("roadmap_version_id", draft.base_version_id)
+        if base not in by_owner:
+            by_owner[base] = list(
+                session.scalars(
+                    select(RoadmapItem).where(
+                        RoadmapItem.roadmap_version_id == draft.base_version_id,
+                        RoadmapItem.deleted_at.is_(None),
                     )
                 )
-            seen = {id(o) for o in stored}
-            live = [*stored, *(o for o in pending if _owner(o) == owner and id(o) not in seen)]
-            by_owner[owner] = [o for o in live if o not in gone and o.deleted_at is None]
-        others = [o for o in by_owner[owner] if o is not row]
-        hit = clash(code, row.item_key, row.feature_id, others, by_feature,
-                    row.prd_section_key, row.title)  # fmt: skip
-        if hit is not None:
-            raise CodeTaken(code, named(hit, by_feature))
+            )
+    mine = {o.item_key for o in by_owner[owner]}
+    return [o for o in by_owner[base] if o.item_key not in mine and o is not row]
+
+
+def _draft_rows(
+    session: Session,
+    row: Any,
+    owner: tuple[str, Any],
+    by_owner: dict[tuple[str, Any], list],
+    pending: list[Any],
+    gone: set,
+) -> list[Any]:
+    """A version's row: the live rows of the working Simple drafts opened on that version (a
+    PRD import's slices, as the Roadmap read shows them beside it); [] for any other row."""
+    from oracle.simple.models import SimpleDraft
+
+    if owner[0] != "roadmap_version_id":
+        return []
+    with session.no_autoflush:
+        drafts = list(
+            session.scalars(
+                select(SimpleDraft.id).where(
+                    SimpleDraft.base_version_id == owner[1], SimpleDraft.status == "working"
+                )
+            )
+        )
+    out: list[Any] = []
+    for d in drafts:
+        key = ("simple_draft_id", d)
+        if key not in by_owner:
+            by_owner[key] = _plan(session, key, pending, gone)
+        out += [o for o in by_owner[key] if o is not row]
+    return out
+
+
+# The audit action of a numbering, the migration's (0136_unique_item_codes).
+RENUMBERED = "roadmap.item.code_renumbered"
+# The longest title (oracle.simple.changes.TITLE_MAX).
+_TITLE_MAX = 200
+
+
+class _Numbering:
+    """The next free numbers of one write (:func:`next_number` over every code in use: any
+    item's title on any roadmap, version, draft or Trash, every feature's code and key),
+    read once, after :func:`lock`."""
+
+    def __init__(self, session: Session, by_feature: dict[uuid.UUID, str]) -> None:
+        self.session, self.by_feature = session, by_feature
+        self.used: list[str | None] | None = None
+
+    def _read(self) -> list[str | None]:
+        from oracle.baseline.models import Entity
+        from oracle.roadmap.models import RoadmapItem
+        from oracle.simple.priorities import prd_code
+        from oracle.trash.filter import INCLUDE_TRASHED
+
+        s = self.session
+        with s.no_autoflush:
+            titles = s.scalars(
+                select(RoadmapItem.title)
+                .where(RoadmapItem.title.op("~")(r"^F-[0-9]+[a-j]?\s"))
+                .execution_options(**{INCLUDE_TRASHED: True})
+            ).all()
+            keys = s.scalars(select(Entity.key).where(Entity.type == "feature")).all()
+            sections = s.scalars(
+                select(RoadmapItem.prd_section_key)
+                .where(RoadmapItem.prd_section_key.is_not(None))
+                .distinct()
+                .execution_options(**{INCLUDE_TRASHED: True})
+            ).all()
+        used: list[str | None] = [title_code(t) for t in titles]
+        used += [title_code(o.title) for o in (*s.new, *s.dirty) if isinstance(o, RoadmapItem)]
+        used += [*keys, *self.by_feature.values(), *(prd_code(k) for k in sections)]
+        return used
+
+    def give(self, row: Any, code: str) -> None:
+        """Gives ``row`` the next free number as its title's lead ("F-63 Night digest", the
+        name cut to fit, as the migration does) and audits it."""
+
+        if self.used is None:
+            self.used = self._read()
+        new = next_number(self.used)
+        self.used.append(new)
+        name = " ".join((row.title or "").split())[: _TITLE_MAX - len(new) - 1]
+        row.title = f"{new} {name}"
+        if row.id is None:
+            row.id = uuid.uuid4()
+        numbered(self.session, row, code, new, name)
+
+
+def numbered(session: Session, row: Any, old: str | None, new: str, name: str) -> None:
+    """Audits that ``row`` was given ``new`` as it was written (its title now leads with it)
+    and keeps it for the write's response (:data:`NUMBERED`)."""
+    from oracle.models import AuditEvent
+
+    session.add(
+        AuditEvent(
+            tenant_id=row.tenant_id,
+            actor="system",
+            action=RENUMBERED,
+            entity="roadmap_item",
+            entity_id=row.id,
+            data={
+                "roadmap_document_id": str(row.roadmap_document_id),
+                "item_key": row.item_key,
+                "title": name,
+                "old": old,
+                "new": new,
+                # Numbered when written, not by the migration: another item of its plan
+                # showed the code it takes from its feature or PRD section.
+                "at": "write",
+                "why": "shared",
+            },
+        )
+    )
+    session.info.setdefault(NUMBERED, {})[str(row.id)] = new
+
+
+# session.info's key: the items this session's writes numbered (item id -> code), for the
+# write's response (oracle.simple.changes_router).
+NUMBERED = "codes_numbered"
 
 
 def _changed(row: Any) -> bool:

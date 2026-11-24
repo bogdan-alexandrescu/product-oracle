@@ -10,7 +10,7 @@
  * and Home leave it out without knowing about Trash.
  */
 import type { Schemas } from '@/lib/api/client';
-import { linkOf, reopenDraftOnly, type SimpleDb } from './simple-roadmap';
+import { claimBack, linkOf, reopenDraftOnly, type SimpleDb } from './simple-roadmap';
 import { reply } from './typed';
 
 type Role = Schemas['Me']['role'];
@@ -314,10 +314,14 @@ export function restoreFromTrash(
     if (root.slug && rm)
       reopenDraftOnly(simple as SimpleDb, root.slug, rm, by ?? entry.out.deleted_by ?? '');
   }
-  if (root.type === 'feature')
-    simple?.items
-      .filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap))
-      .forEach((s) => (s.trashed = false));
+  if (root.type === 'feature') {
+    const back = (simple?.items ?? []).filter(
+      (s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap),
+    );
+    back.forEach((s) => (s.trashed = false));
+    // codes-at-write (codes.claim): numbered once back when its feature's code is shown meanwhile.
+    if (simple && 'ids' in simple) claimBack(simple as SimpleDb, back as SimpleDb['items']);
+  }
   if (root.type === 'goal')
     simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
   // trash_items._parent_back: a restored part stays under its parent while that parent is on the

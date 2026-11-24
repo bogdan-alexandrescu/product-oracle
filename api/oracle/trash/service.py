@@ -901,6 +901,11 @@ async def restore_entry(
         from oracle.simple import meetings
 
         await meetings.restore_agenda_item(db, entry)
+    from oracle.roadmap import codes
+
+    # codes-at-write: the items coming back, numbered once back when their feature's code is
+    # shown by another item meanwhile (the UPDATE below passes no flush check).
+    back = await trash_items.coming_back(db, entry)
     for model in _models():
         await db.execute(
             update(model)
@@ -908,6 +913,7 @@ async def restore_entry(
             .values(deleted_at=None, deleted_by=None, deleted_reason=None, trash_entry_id=None)
             .execution_options(synchronize_session=False)
         )
+    await db.run_sync(codes.claim, back)
     from oracle.roadmap import alerts
 
     await _track_items_back(db, entry)

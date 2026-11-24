@@ -26,6 +26,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import select, update
 
+from oracle import company_time
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
@@ -130,7 +131,7 @@ async def test_approving_a_version_settles_what_it_keeps(client, owner, runtime)
                 select(AuditEvent).where(AuditEvent.action == "roadmap.items.reconcile")
             )
         )
-    assert pay.note == f"Kept in version 2, approved {when:%b} {when.day} by {name}"
+    assert pay.note == f"Kept in version 2, approved {company_time.day_in_words(when)} by {name}"
     assert pay.reconciled_at is not None and pay.reconciled_by is not None
     assert pay.reconciled_version_id is not None
     assert ship.freshness == "potentially_stale"

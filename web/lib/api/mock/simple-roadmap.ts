@@ -28,7 +28,7 @@ import {
 } from './fit-date-engine';
 import { unitOk } from './goal-units';
 import { newCompany, seeded, stableUuid } from './ids';
-import { codedTitle, prdCode } from './item-code';
+import { codedTitle, inheritedCode, prdCode, shownCode } from './item-code';
 import { withRoadmapCodes } from './roadmap-codes';
 import { plainFlow } from './simple-visuals';
 import {
@@ -2890,6 +2890,42 @@ function readerView(
 
 /** fix4 qa-simple-roadmap-9: the items one reader reads (the API's drafts.overlays_for): a
  * change's stale check and a fix's plan read them, so a commenter acts on what they see. */
+/** additions._next_code: the highest F-number any item or Ground Truth feature uses, plus one. */
+export function nextCode(db: SimpleDb): string {
+  const used = [
+    ...db.items.map((x) => shownCode(x, (id) => db.feature_codes?.[id])),
+    ...Object.values(db.feature_codes ?? {}),
+  ];
+  const nums = used.flatMap((u) => {
+    const m = /^F-(\d+)[a-j]?$/.exec((u ?? '').split('.')[0]);
+    return m ? [Number(m[1])] : [];
+  });
+  return `F-${Math.max(0, ...nums) + 1}`;
+}
+
+/** codes.claim (trash/service.restore_entry): each item back from Trash that shows a code it takes
+ * from its feature or PRD section, which another live item of its roadmap shows, gets the next free
+ * number now. */
+export function claimBack(db: SimpleDb, back: SeedItem[]): void {
+  const featureCode = (id: string) => db.feature_codes?.[id];
+  for (const s of back) {
+    if (s.trashed || codedTitle(s.title, null)[0]) continue;
+    const code = inheritedCode(s, featureCode)?.toUpperCase();
+    if (
+      code &&
+      db.items.some(
+        (x) =>
+          x.key !== s.key &&
+          x.roadmap === s.roadmap &&
+          !x.trashed &&
+          !x.merged_into &&
+          shownCode(x, featureCode)?.toUpperCase() === code,
+      )
+    )
+      s.title = `${nextCode(db)} ${s.title}`;
+  }
+}
+
 export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb {
   return readerView(db, me).db;
 }
@@ -3847,16 +3883,28 @@ function json(status: number, body: unknown): Response {
 export function matchesOf(db: SimpleDb, keys: string[]): Schemas['SimpleMatch'][] {
   return (
     keys
-      .map((k) => db.items.find((x) => x.key === k))
-      .filter((x): x is SeedItem => !!x && !closed(x) && !ofReplacedPrd(db, x))
+      .map((k) => db.items.find((x) => x.key === k) ?? k)
+      .filter((x): x is SeedItem | string =>
+        typeof x === 'string' ? !!db.feature_titles?.[x] : !closed(x) && !ofReplacedPrd(db, x),
+      )
       .slice(0, 2)
-      // Its display code (F-06) or none, never its key, as additions.reconcile.
-      .map((x) => ({
-        kind: 'item' as const,
-        id: db.ids[x.key],
-        code: prdCode(x.section) ?? '',
-        title: x.title,
-      }))
+      // Its display code (F-06) or none, never its key, as additions.reconcile; a key no item has
+      // is a Ground Truth feature's id (additions.reconcile's features).
+      .map((x) =>
+        typeof x === 'string'
+          ? {
+              kind: 'feature' as const,
+              id: x,
+              code: db.feature_codes?.[x] ?? '',
+              title: db.feature_titles![x],
+            }
+          : {
+              kind: 'item' as const,
+              id: db.ids[x.key],
+              code: prdCode(x.section) ?? '',
+              title: x.title,
+            },
+      )
   );
 }
 
