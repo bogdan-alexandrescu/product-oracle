@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { Button, Chip, InfoTip, InspectorSection } from '@/components/ds';
+import { Notice } from '@/components/ds/Layout';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { formatDateTime } from '@/lib/format';
 import { errorMessage } from '@/lib/use-query';
@@ -75,14 +76,17 @@ export function RevokeBadge({ failures, email }: { failures: RevokeFailure[]; em
 /** The list of what Oracle could not revoke, each with the Inbox's Retry and Dismiss. */
 export function RevokeFailuresSection({
   failures,
+  loadError = null,
   onChanged,
 }: {
   failures: RevokeFailure[];
+  /** #1713: the read of these items failed; access may still be held, so it is never shown as none. */
+  loadError?: string | null;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  if (!failures.length) return null;
+  if (!failures.length && !loadError) return null;
   async function act(id: string, what: 'retry' | 'dismiss') {
     setBusy(id);
     setError(null);
@@ -104,6 +108,20 @@ export function RevokeFailuresSection({
   }
   return (
     <InspectorSection label="Couldn't revoke" testId={REVOKE_FAILURES}>
+      {loadError && (
+        <Notice
+          tone="error"
+          testId="revoke-failures-error"
+          action={<Button onClick={onChanged}>Try again</Button>}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            Could not check what Oracle could not revoke.
+            <InfoTip label="the error" align="start">
+              {loadError}
+            </InfoTip>
+          </span>
+        </Notice>
+      )}
       <ul aria-label="Couldn't revoke" className="-my-1 flex flex-col">
         {failures.map((f) => (
           <li

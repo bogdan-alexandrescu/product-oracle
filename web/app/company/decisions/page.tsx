@@ -23,7 +23,7 @@ import {
   Sheet,
   Split,
 } from '@/components/ds';
-import { ErrorNote, INPUT } from '@/components/ui';
+import { ErrorNote, INPUT, LoadError } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import type { paths } from '@/lib/api/schema';
 import { useMe } from '@/lib/me';
@@ -389,6 +389,9 @@ function Decisions() {
       onChanged={changed}
       autoDecide={params.get('act') === 'decide'}
     />
+  ) : selectedKey && detailQ.error ? (
+    // #1713: a failed read of the picked decision says so, never looks like nothing picked.
+    <LoadError what="the decision" error={detailQ.error} onRetry={() => void detailQ.reload()} />
   ) : null;
   // qa4-company-15: beside the list the inspector's column stays while nothing is open, so the
   // filter chips keep their place when a kind with no decisions is picked. At 1100 px and
@@ -649,7 +652,7 @@ function Decisions() {
       </Split>
       {phone && (
         <Sheet
-          open={sheetOpen && !!detail}
+          open={sheetOpen && !!inspector}
           title="Decision"
           onClose={() => setSheetOpen(false)}
           testId="decision-sheet"

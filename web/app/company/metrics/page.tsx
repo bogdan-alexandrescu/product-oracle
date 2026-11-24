@@ -249,6 +249,9 @@ function Metrics() {
       }}
       onChanged={changed}
     />
+  ) : selectedId && detailQ.error ? (
+    // #1713: a failed read of the picked metric says so, never looks like nothing picked.
+    <LoadError what="the metric" error={detailQ.error} onRetry={() => void detailQ.reload()} />
   ) : null;
 
   return (
@@ -339,7 +342,7 @@ function Metrics() {
       </Split>
       {phone && (
         <Sheet
-          open={sheetOpen && !!detail}
+          open={sheetOpen && !!inspector}
           title="Metric"
           onClose={() => setSheetOpen(false)}
           testId="metric-sheet"
