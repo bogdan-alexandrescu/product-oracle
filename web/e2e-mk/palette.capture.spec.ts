@@ -162,6 +162,7 @@ for (const o of ['a', 'b', 'c']) {
       await snap(page, `cp2-${o}-tab`, D);
     }
     // hard case: a commenter, at 1512
+    await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
     await page.context().clearCookies();
     await start(page, COMMENTER, `/simple?${q}`, W);
     await key(page);
