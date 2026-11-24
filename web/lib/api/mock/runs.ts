@@ -4190,7 +4190,10 @@ export function seedRuns(ctx: Omit<RunsContext, 'db'>): RunsDb {
   return db;
 }
 
-/** #1789: three ended code map runs, one per repo, finished in another order than started. */
+/**
+ * #1789: three ended code map runs, one per repo, finished in another order than started; api's
+ * stamp carries a fraction and ends half a second after docs', so text order is not time order.
+ */
 export const RUNS_CODE_MAPS_SCENARIO = 'runs-code-maps';
 
 function seedCodeMapRuns(ctx: Omit<RunsContext, 'db'>, db: RunsDb) {
@@ -4201,7 +4204,7 @@ function seedCodeMapRuns(ctx: Omit<RunsContext, 'db'>, db: RunsDb) {
   db.repos = {};
   for (const [repo, started, finished] of [
     ['example-org/web', '2026-11-16T09:00:00Z', '2026-11-22T10:00:00Z'],
-    ['example-org/api', '2026-11-17T09:00:00Z', '2026-11-17T10:00:00Z'],
+    ['example-org/api', '2026-11-17T09:00:00Z', '2026-11-18T10:00:00.500Z'],
     ['example-org/docs', '2026-11-18T09:00:00Z', '2026-11-18T10:00:00Z'],
   ]) {
     const run: RunOut = {
