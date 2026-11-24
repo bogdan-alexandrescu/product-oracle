@@ -6,7 +6,7 @@
       "code": "UT1",
       "name": "The toast",
       "question": "Where does the Undo toast sit, how long does it stay, and what happens when several changes come fast?",
-      "common": "Every proposal says the change in a few words with an Undo button, is read out politely by a screen reader (it never takes the focus), holds while hovered or focused, and is fed by the real changes: the frames remove a real dependency and move a real feature on Simple's Roadmap, and Undo really puts them back. Today one toast shows for 10 seconds and a new change replaces it, so an earlier Undo is lost.",
+      "common": "Every proposal says the change in a few words with an Undo button, is read out politely by a screen reader (it never takes the focus), holds while hovered or focused, and is fed by the real changes: the frames remove a real dependency and move a real feature on Simple's Roadmap, and Undo really puts them back. Today one toast shows for 10 seconds and a new change replaces it, so an earlier Undo is lost. The working draft banner's own button, 'Undo my last change', is a different tool: it takes back your newest change in the draft at any time, toast or not, while a toast's Undo takes back the one change it names, while it shows.",
       "proposals": [
         {
           "letter": "a",
@@ -54,7 +54,7 @@
           "letter": "b",
           "name": "Stack of three",
           "recommended": false,
-          "what": "Each change gets its own toast in the bottom-right corner, newest at the bottom, each with its own Undo and its own 8-second bar. At most three show; older ones fold into a '2 more' button that opens them.",
+          "what": "Each change gets its own toast in the bottom-right corner, newest at the bottom, each with its own Undo and its own 8-second bar. At most three show; older ones fold into a '2 more' button that opens them. An undone change leaves the stack; the banner's count drops.",
           "plus": "Every recent change is one click away without opening anything.",
           "cost": "Undo any of the last three: 1 click. Undo a fourth or older: 2 clicks (N more, Undo). Covers up to three toasts' height of the page's corner.",
           "frames": [
@@ -64,7 +64,7 @@
             },
             {
               "file": "ut1-b-open.html",
-              "caption": "Two more changes come fast: three toasts stacked in the corner, each with its own Undo; the banner counts 3 changes and offers Undo whole draft"
+              "caption": "Two more changes come fast: three toasts stacked in the corner, each with its own Undo; the banner counts 3 changes and offers Undo my last change"
             },
             {
               "file": "ut1-b-open-dark.html",
@@ -76,7 +76,7 @@
             },
             {
               "file": "ut1-b-result.html",
-              "caption": "Undo pressed: the dependency is back (3 broken links again), its toast closes and Undone joins the stack; the banner counts 2 changes. Cost: 1 click"
+              "caption": "Undo pressed: the dependency is back (3 broken links again), its toast leaves the stack and the other two stay in the corner; the banner counts 2 changes and Undo my last change stays on. Cost: 1 click"
             },
             {
               "file": "ut1-b-hard.html",
@@ -88,7 +88,7 @@
             },
             {
               "file": "ut1-b-phone-390.html",
-              "caption": "Phone 390, the same three changes: three full-width toasts take most of the lower screen"
+              "caption": "Phone 390, the same three changes: three full-width toasts over the lower screen, above the tab bar"
             }
           ]
         },
@@ -96,7 +96,7 @@
           "letter": "c",
           "name": "One toast that counts",
           "recommended": true,
-          "what": "One toast in the bottom-right corner shows the newest change with Undo and Ctrl Z. Changes made while it is up fold into a line under it, '2 earlier changes', that opens a list with an Undo for each. 8 seconds, restarted by each new change.",
+          "what": "One toast in the bottom-right corner shows the newest change with Undo and Ctrl Z. Changes made while it is up fold into a line under it, '2 earlier changes', that opens a list with an Undo for each. 8 seconds, restarted by each new change. Undo in the open list closes it again.",
           "why": "It keeps today's single toast and place, so the page is never covered by a stack, yet no change made in a fast run is lost: each stays one or two clicks away until the toast closes, and the item's history after that (UT3).",
           "plus": "Ctrl Z and the screen reader both reach the newest change first; one line of height at rest.",
           "cost": "Undo the newest: 1 click or Ctrl Z. Undo an earlier one: 2 clicks (earlier changes, Undo). Today: an earlier one is lost.",
@@ -119,7 +119,7 @@
             },
             {
               "file": "ut1-c-result.html",
-              "caption": "Undo pressed: the dependency is back (3 broken links, its Bring it back and Remove the dependency buttons return), the toast says Undone and keeps the other two; the banner counts 2 changes. Cost: 2 clicks"
+              "caption": "Undo pressed: the dependency is back (3 broken links, its Bring it back and Remove the dependency buttons return); the toast stays in the corner, says Undone and folds the other two into 2 earlier changes; the banner counts 2 changes. Cost: 2 clicks"
             },
             {
               "file": "ut1-c-hard.html",
@@ -368,24 +368,24 @@
       "code": "UT3",
       "name": "After the toast",
       "question": "Once the toast is gone, where does a person still undo a change?",
-      "common": "Each Undo puts the old state back through the API and writes one history line. The frames cut F-79 Weekly alert digest from its panel, let the toast run out, then take the cut back. Today the only way back after the toast is Removed (for a cut) and Trash (for a delete); the working draft's Undo takes back the whole draft.",
+      "common": "Each Undo puts the old state back through the API and writes one history line. The frames cut F-79 Weekly alert digest from its panel, let the toast run out, then take the cut back. Today the only way back after the toast is Removed (for a cut) and Trash (for a delete); the working draft banner's 'Undo my last change' takes back only your newest change.",
       "proposals": [
         {
           "letter": "a",
           "name": "History in the panel",
           "recommended": true,
-          "what": "The feature panel, the one every page opens, gets a History section near its foot: each change to the feature, newest first, who made it and when, with Undo on each. A commenter sees Propose undo instead. On a phone it sits in the panel sheet as a closed section.",
+          "what": "The feature panel, the one every page opens, gets a History section right under its status line: each change to the feature, newest first, who made it and when, with Undo on each. A commenter sees Propose undo instead. On a phone it sits in the panel sheet as a closed section. For a cut, History's Undo replaces the Restore in the panel's 'Cut on … by …' line, so one cut has one Undo.",
           "why": "It lives where the feature already is on every page (Roadmap, Goal map, Priorities, Home), covers changes by anyone and not only this visit, and needs no new page or button in the app's frame.",
           "plus": "Shows who changed what, so a person can see why something moved before taking it back.",
           "cost": "Open the feature (1), History (1), Undo (1): 3 clicks, any time. Today: redo by hand, or Removed for a cut (2). Detailed gets no History of its own: a Detailed person switches to Simple (the Simple and Detailed switch in the side bar) and opens the feature there, one more click; the owner to agree.",
           "frames": [
             {
               "file": "ut3-a-rest.html",
-              "caption": "The owner cut F-79 Weekly alert digest and its toast has run out: the panel shows it cut, History closed at its foot"
+              "caption": "The owner cut F-79 Weekly alert digest and its toast has run out: the panel reads Cut on Nov 24 by Avery Stone, with History closed right under it"
             },
             {
               "file": "ut3-a-open.html",
-              "caption": "History opened: the cut just now, then earlier changes by Jordan Park, Mina Okafor and Avery Stone, each with Undo"
+              "caption": "History opened under the cut line: the cut just now, then earlier changes by Jordan Park, Mina Okafor and Avery Stone, each with Undo; the cut line has no Restore of its own"
             },
             {
               "file": "ut3-a-open-dark.html",

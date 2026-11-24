@@ -81,10 +81,10 @@ const CARD = 'pointer-events-auto rounded-panel border border-line bg-hero text-
 const BTN = 'h-8 flex-none rounded-lg px-2.5 text-sm font-semibold text-hero-text underline-offset-2 hover:bg-hero-2 hover:underline'; // MOCK-HOOK
 const KBD = 'rounded border border-hero-line px-1 text-xs text-hero-text2'; // MOCK-HOOK
 
-function Line({ e, kbd, bar, onDone }: { e: Entry; kbd?: boolean; bar?: boolean; onDone?: () => void }) { // MOCK-HOOK
+function Line({ e, kbd, bar, onDone, tight }: { e: Entry; kbd?: boolean; bar?: boolean; onDone?: () => void; tight?: boolean }) { // MOCK-HOOK
   const left = mkParam('hold') ? 0.62 : Math.max(0, 1 - (Date.now() - e.at) / LIFE); // MOCK-HOOK
   return ( // MOCK-HOOK
-    <div className="relative flex min-w-0 items-center gap-3 px-4 py-2.5" data-mk-line=""> {/* MOCK-HOOK */}
+    <div className={`relative flex min-w-0 items-center gap-3 px-4 ${tight ? 'py-1' : 'py-2.5'}`} data-mk-line=""> {/* MOCK-HOOK */}
       <span className="min-w-0 flex-1 break-words">{typeof e.message === 'string' ? nb(e.message) : e.message}</span> {/* MOCK-HOOK */}
       {e.action && ( // MOCK-HOOK
         <button type="button" className={BTN} aria-keyshortcuts={kbd ? 'Control+Z' : undefined} onClick={() => { undo(e); onDone?.(); }}> {/* MOCK-HOOK: UT1 c: the open list closes once a change in it is undone */}
@@ -184,7 +184,7 @@ export function MkToastHost() { // MOCK-HOOK
       </div> // MOCK-HOOK
     ); // MOCK-HOOK
   if (newest && v === 'b') { // MOCK-HOOK
-    const stack = shown; // MOCK-HOOK: every live change counts, so 'N more' is six less the three shown
+    const stack = shown.filter((e) => e.action || shown.length === 1); // MOCK-HOOK: b: an undone toast just leaves the stack (the banner's count drops): every live change counts, so 'N more' is six less the three shown
     const top3 = stack.slice(-3); // MOCK-HOOK
     const more = stack.length - top3.length; // MOCK-HOOK
     body = ( // MOCK-HOOK
@@ -213,7 +213,7 @@ export function MkToastHost() { // MOCK-HOOK
           <div className="flex items-center"><Line e={newest} kbd bar /><Dismiss on={() => { shown.forEach((e) => (e.done = 'undone')); setOpen(false); }} /></div> {/* MOCK-HOOK */}
           {earlier.length > 0 && ( // MOCK-HOOK
             <div className="border-t border-hero-line"> {/* MOCK-HOOK */}
-              {open && earlier.map((e) => <Line key={e.id} e={e} onDone={() => setOpen(false)} />)} {/* MOCK-HOOK */}
+              {open && earlier.map((e) => <Line key={e.id} e={e} tight onDone={() => setOpen(false)} />)} {/* MOCK-HOOK */}
               <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-1 px-4 py-1.5 text-sm font-semibold text-hero-text2 hover:text-hero-text"> {/* MOCK-HOOK */}
                 <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} /> {open ? 'Hide' : `${earlier.length} earlier ${earlier.length === 1 ? 'change' : 'changes'}`} {/* MOCK-HOOK */}
               </button> {/* MOCK-HOOK */}
