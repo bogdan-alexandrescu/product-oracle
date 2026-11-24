@@ -32,3 +32,4 @@ for (const v of ['a', 'b', 'c', 'd']) // MOCK-HOOK
       await snap(page, name); // MOCK-HOOK
     }); // MOCK-HOOK
   } // MOCK-HOOK
+

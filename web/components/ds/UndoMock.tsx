@@ -157,7 +157,7 @@ export function MkToastHost() { // MOCK-HOOK
   }); // MOCK-HOOK
   const newest = shown.at(-1); // MOCK-HOOK
   const [top, right] = useClear(shown.length + (open ? 100 : 0)); // MOCK-HOOK: as today's toast, never over a control
-  const at = { ...(top === null ? {} : { top }), ...(right === 16 ? {} : { right }) }; // MOCK-HOOK
+  const at = { ...(top === null ? {} : { top }), ...(right === 16 ? {} : { right, maxWidth: 480 }) }; // MOCK-HOOK: beside a panel it keeps off the names column
   const corner = (top === null ? 'bottom-4 max-[600px]:bottom-20 ' : '') + 'pointer-events-none fixed right-4 z-[60] flex max-w-[min(560px,calc(100vw-24px))] flex-col items-end gap-2 max-[600px]:left-3 max-[600px]:right-3 max-[600px]:items-stretch'; // MOCK-HOOK
   let body = null; // MOCK-HOOK
   if (newest && v === 'a') // MOCK-HOOK
