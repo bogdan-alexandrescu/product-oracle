@@ -1,5 +1,5 @@
 import json
-props=json.load(open('/cache/att_29c1f97ad092422dbc96/tmp/cap/props.json'))
+props=json.load(open('/cache/att_ac3bd35d49af4f9081a8/tmp/cap/props.json'))
 def P(code,L,name,rec,what,plus,cost,why=None):
     d={'letter':L.upper(),'name':name,'recommended':rec,'what':what}
     if rec: d['why']=why
@@ -30,6 +30,6 @@ out={'title':'Saved and shared views for roadmap and priority filters','subtitle
   P('sv3','c','On the tabs',False,'With views as tabs (SV1 A), ⋯ on the picked tab offers Rename, Make it the default, Copy link and Remove; tabs reorder by drag; the +N more list has drag handles. Removal shows Undo in a toast.','Direct: change the tab you see. Only fits if SV1 picks tabs.','Rename: 3 steps. Reorder: drag. Remove: 2 clicks, Undo in the toast. Long names are cut short in tabs. Today: no views to manage; filters are re-picked each visit.'),
  ]},
 ]}
-json.dump(out,open('/workspace/att_29c1f97ad092422dbc96/work/repo/mockups-out/mk-saved-views/picks.json','w'),indent=1,ensure_ascii=False)
+json.dump(out,open('/workspace/att_ac3bd35d49af4f9081a8/work/repo/mockups-out/mk-saved-views/picks.json','w'),indent=1,ensure_ascii=False)
 for d in out['decisions']: assert sum(p['recommended'] for p in d['proposals'])==1
 print('ok')

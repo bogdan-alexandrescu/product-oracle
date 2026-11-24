@@ -1,6 +1,6 @@
 import json, sys, os, urllib.request, urllib.parse
 from swarm_browser import live
-OUT = '/workspace/att_29c1f97ad092422dbc96/work/repo/mockups-out/mk-saved-views'
+OUT = '/workspace/att_ac3bd35d49af4f9081a8/work/repo/mockups-out/mk-saved-views'
 BASE = 'http://127.0.0.1:3100'
 SNAP = open(os.path.join(os.path.dirname(__file__), 'snap.js')).read()
 frames = json.load(open(sys.argv[1]))
@@ -48,5 +48,5 @@ for fr in frames:
             open(f'{OUT}/assets/{b}', 'wb').write(data); fontsdone.add(b)
         except Exception as e: print('font fail', u, e)
     pg.screenshot(path=f'{OUT}/frames/{name}.png', full_page=True, clip={'x':0,'y':0,'width':w,'height':h})
-    print('ok', name, w, h, theme)
+    print('ok', name, w, h, theme, 'scrollW', fh.evaluate('document.documentElement.scrollWidth'))
 pg.close(); pw.stop()

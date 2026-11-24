@@ -29,3 +29,17 @@
 - Not drawn: a default being changed (reorder is drawn in sv3-a-open). For the owner: the built page's "Not in GT" badge
   is overdrawn by a dependency line and abbreviates Ground Truth; that is the built page, not this lane.
 - Gates: tsc passed. Lint, Playwright and the prose guard not run (mock-ups only).
+
+# Status (review round 2 fixes, Nov 24, 2026)
+- SV3 C phone: light and dark PNGs captured; on the phone a tab name is capped shorter (8rem) so the picked tab and its ⋯
+  fit whole after the strip scrolls to it. SV3 B phone dark PNG captured.
+- SV1 B View button on the phone: capped at the row width, the name cut with an ellipsis (full name stays in the sheet).
+  Measured document scrollWidth 375 (page fits 390) on sv3-a, sv3-b and sv3-c phone frames.
+- Phone tab strip (SV1 A, SV3 C): fades out over its last 1.5rem, so no sliver of the next tab shows before + Save view.
+- A saved view with Drafts only (cur=new, added=) now narrows the timeline to its 2 items (MOCK-HOOK in `_roadmap.tsx` data);
+  re-snapped sv1-a..d-result and sv2-a/c/d-result, light and dark.
+- Tools now use this workspace's paths; frames.json is built by `tools/gen.py` into $TMPDIR/cap.
+- For the owner (built page, not this lane): "Not in GT" overdrawn by a dependency line; at the side-list width (SV1 C)
+  the "M6 Beta" chip covers the start of "Board meeting".
+- Gates: tsc passed; eslint on the two touched files shows 2 old import-order errors on `_roadmap.tsx` line 3 (from round 1's
+  MOCK-HOOK import), none new. Playwright and the prose guard not run (mock-ups only).

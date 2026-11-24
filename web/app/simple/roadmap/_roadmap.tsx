@@ -2044,7 +2044,12 @@ export function SimpleRoadmap() {
   }, [roadmap.data, moving, trashing]);
   const data = useMemo(() => {
     if (!all) return undefined;
-    const items = all.items.filter((i) => i.status !== 'done');
+    let items = all.items.filter((i) => i.status !== 'done');
+    const mockQ = new URLSearchParams(window.location.search); // MOCK-HOOK
+    if (mockQ.get('cur') === 'new' && mockQ.get('added') && f.goal) { // MOCK-HOOK: the saved view's Drafts only, applied
+      const onGoal = items.filter((i) => i.goal && (krs.parentOf(i.goal.id)?.key ?? i.goal.key) === f.goal).slice(2).map((i) => i.id); // MOCK-HOOK
+      items = items.filter((i) => !onGoal.includes(i.id)); // MOCK-HOOK
+    } // MOCK-HOOK
     if (!f.goal) return { ...all, items };
     // qa-nov17 #12: under a Goal filter the milestones are that goal's too (its tracks' and its
     // items'), as the rows are; the key dates stay.

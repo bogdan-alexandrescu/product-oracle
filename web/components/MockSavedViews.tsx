@@ -185,8 +185,8 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
   let control: ReactNode = null; // MOCK-HOOK
   if (place === 'b') { // MOCK-HOOK
     control = ( // MOCK-HOOK
-      <div className="relative flex flex-wrap items-center gap-2" data-testid="sv-views-menu"> {/* MOCK-HOOK */}
-        <button className={`${btn} max-w-[34rem] ${open && open !== 'manage' ? 'bg-surface2' : ''}`} aria-haspopup="menu" aria-expanded={!!open}> {/* MOCK-HOOK */}
+      <div className="relative flex min-w-0 max-w-full flex-wrap items-center gap-2" data-testid="sv-views-menu"> {/* MOCK-HOOK */}
+        <button className={`${btn} min-w-0 max-w-full sm:max-w-[34rem] ${open && open !== 'manage' ? 'bg-surface2' : ''}`} aria-haspopup="menu" aria-expanded={!!open}> {/* MOCK-HOOK */}
           <span className="font-normal text-text2">View</span><span className="truncate">{mode === 'b' && p.get('fromlink') === '1' ? 'From a link' : curName}</span>{sv2 && cur.kind === 'shared' && <span className="text-xs font-normal text-text2">{mode === 'd' ? 'Team' : 'Everyone'}</span>}<span aria-hidden>▾</span> {/* MOCK-HOOK */}
         </button> {/* MOCK-HOOK */}
         {editedBits} {doneTick} {/* MOCK-HOOK */}
@@ -199,10 +199,10 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
     const rest = all.length - shown.length; // MOCK-HOOK
     control = ( // MOCK-HOOK
       <div className="relative flex w-full items-end gap-1 border-b border-line" data-testid="sv-tabs"> {/* MOCK-HOOK */}
-        <div className={`flex min-w-0 items-end gap-1 ${phone ? 'flex-1 overflow-x-auto' : ''}`} role="tablist"> {/* MOCK-HOOK */}
+        <div className={`flex min-w-0 items-end gap-1 ${phone ? 'flex-1 overflow-x-auto pr-6 [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)]' : ''}`} role="tablist"> {/* MOCK-HOOK */}
           {shown.map((v) => removed === v.id ? null : ( // MOCK-HOOK
             <div key={v.id} role="tab" aria-selected={v.id === cur.id} className={`group relative flex h-9 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm ${v.id === cur.id ? 'border-accent font-semibold text-accent-ink' : 'border-transparent text-text2 hover:text-text'} ${p.get('drag') === v.id ? 'rounded-t-lg bg-accent-soft shadow-lg -translate-y-0.5' : ''}`}> {/* MOCK-HOOK */}
-              {sv3 === 'c' && phase === 'mid' && v.id === cur.id ? <input defaultValue={typed} autoFocus className="h-7 w-56 rounded-md border border-accent bg-surface px-2 text-sm font-normal text-text" /> : <span className="max-w-[12rem] truncate" title={v.name}>{v.name}</span>} {/* MOCK-HOOK */}
+              {sv3 === 'c' && phase === 'mid' && v.id === cur.id ? <input defaultValue={typed} autoFocus className="h-7 w-56 rounded-md border border-accent bg-surface px-2 text-sm font-normal text-text" /> : <span className={`${phone ? 'max-w-[8rem]' : 'max-w-[12rem]'} truncate`} title={v.name}>{v.name}</span>} {/* MOCK-HOOK */}
               <span className="text-xs font-normal text-text2">{v.count}</span> {/* MOCK-HOOK */}
               {sv3 === 'c' && v.id === cur.id && v.kind !== 'built' && <button className="rounded px-1 text-text2" aria-label="More for this view">⋯</button>} {/* MOCK-HOOK */}
               {sv3 === 'c' && v.id === cur.id && open === 'more' && <div role="menu" className={`${card} absolute left-0 top-10 z-30 flex w-48 flex-col p-1 font-normal text-text`}>{['Rename', 'Make it the default', 'Copy link', 'Remove'].map((t) => <button key={t} className={`rounded-md px-3 py-1.5 text-left text-sm hover:bg-surface2 ${t === 'Rename' ? 'bg-surface2' : ''} ${t === 'Remove' ? 'text-crit' : ''}`}>{t}</button>)}</div>} {/* MOCK-HOOK */}

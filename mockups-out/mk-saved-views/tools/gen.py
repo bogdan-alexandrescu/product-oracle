@@ -78,6 +78,6 @@ for fr in frames:
     elif fr['path']=='/simple/roadmap' and fr['q'].get('open') and fr['q'].get('open')!='manage': fr['scroll']=SC; fr['off']=-200
 for fr in frames:
     if fr['file']=='sv3-c-phone-390': fr['pre']=["() => { const t=document.querySelector('[data-testid=sv-tabs] [role=tab][aria-selected=true]'); const l=t && t.parentElement; if (l) l.scrollLeft = t.offsetLeft - l.offsetLeft - 8; }"]
-json.dump(frames,open('/cache/att_29c1f97ad092422dbc96/tmp/cap/frames.json','w'),indent=1)
-json.dump({f'{k[0]}-{k[1]}':v for k,v in props.items()},open('/cache/att_29c1f97ad092422dbc96/tmp/cap/props.json','w'),indent=1)
+json.dump(frames,open('/cache/att_ac3bd35d49af4f9081a8/tmp/cap/frames.json','w'),indent=1)
+json.dump({f'{k[0]}-{k[1]}':v for k,v in props.items()},open('/cache/att_ac3bd35d49af4f9081a8/tmp/cap/props.json','w'),indent=1)
 print(len(frames))
