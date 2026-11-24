@@ -364,9 +364,7 @@ test("Simple's Home: what waits on me, the next meeting and the plan this quarte
     page.getByRole('heading', { level: 2, name: 'Decisions waiting for you' }),
   ).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2, name: 'Next review meeting' })).toBeVisible();
-  await expect(
-    page.getByRole('heading', { level: 2, name: 'The plan this quarter' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: /^The plan( · |$)/ })).toBeVisible();
   await expect(page.getByTestId('home-plan').getByTestId('home-strip-row').first()).toBeVisible();
 });
 

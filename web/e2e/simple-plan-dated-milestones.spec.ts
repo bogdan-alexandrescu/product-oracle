@@ -56,8 +56,10 @@ for (const phone of [false, true]) {
           await login(page, EMAILS[role]);
           await page.goto('/simple');
           const card = page.getByTestId('home-plan');
-          await expect(page.getByRole('heading', { name: 'The plan this quarter' })).toBeVisible();
-          await expect(card.getByTestId('home-plan-span')).toHaveText('Nov 2 - Feb 12');
+          // #1764: the title names the plan's span, with a dash.
+          await expect(
+            page.getByRole('heading', { name: 'The plan · Nov 2 – Feb 12', exact: true }),
+          ).toBeVisible();
           // The company roadmap's plan (PR 1235): its own milestones, each row opening the whole roadmap.
           const rows = card.getByTestId('home-strip-row');
           await expect(rows.first()).toBeVisible();

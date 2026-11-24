@@ -186,7 +186,7 @@ test.describe('desktop', () => {
       expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       expect(await label.evaluate((el) => getComputedStyle(el).textOverflow)).not.toBe('ellipsis');
     }
-    await expect(page.getByTestId('home-goal-weight').first()).toHaveText(/^\d+% of the score$/);
+    await expect(page.getByTestId('home-goal-weight').first()).toHaveText(/^Weight \d+%$/);
     await expect(
       page.getByRole('button', { name: "About the goal's share of the score" }).first(),
     ).toBeVisible();
