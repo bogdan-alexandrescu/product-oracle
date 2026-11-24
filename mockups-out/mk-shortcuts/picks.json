@@ -6,7 +6,7 @@
    "code": "KS1",
    "name": "The keys and the help sheet",
    "question": "Which keys does Oracle use, and how does the ? sheet lay them out?",
-   "common": "Every proposal moves through rows with a key, opens the one feature panel with Enter, closes the top panel with Esc, moves a row with a key held with Shift (a commenter's move becomes a proposal, as dragging does today), and opens a sheet of keys from a Keys line: above Ask Oracle in Simple's rail, above Settings in Detailed's. The sheet lists this page first. A viewer sees move and add struck out as view only; a commenter's move reads Suggest a move. On a phone the Keys line sits in More only when a keyboard is plugged in, and keys are off while typing (KS3). The version viewer's keys move onto the same layer unchanged.",
+   "common": "Every proposal moves through rows with a key, opens the one feature panel with Enter, closes the top panel with Esc, moves a row with a key held with Shift (a commenter's move becomes a proposal, as dragging does today), and opens a sheet of keys from a Keys line: above Ask Oracle in Simple's rail, above Settings in Detailed's (with KS2 D's bottom bar, its ? All keys takes the Keys line's place). The sheet lists this page first. A viewer sees move and add struck out as view only; a commenter's move reads Suggest a move and add reads Suggest an item. On a phone the Keys line sits in More only when a keyboard is plugged in, and keys are off while typing (KS3). The version viewer's keys move onto the same layer unchanged.",
    "proposals": [
     {
      "letter": "A",
@@ -73,11 +73,11 @@
       },
       {
        "file": "ks1-b-viewer.html",
-       "caption": "A viewer opens the sheet: moving rows and adding are struck out as view only; the rest works."
+       "caption": "A viewer opens the sheet: moving rows and adding are struck out as view only; the rest works. The rail's counts are what waits on this person, so they are smaller than the owner's."
       },
       {
        "file": "ks1-b-commenter.html",
-       "caption": "A commenter opens the sheet: the move keys read Suggest a move, as dragging does today."
+       "caption": "A commenter opens the sheet: the move keys read Suggest a move and c reads Suggest an item, since a commenter's edits become proposals, as they do today. The rail's counts are what waits on this person, so they are smaller than the owner's."
       },
       {
        "file": "ks1-b-phone-390.html",
@@ -89,7 +89,7 @@
      "letter": "C",
      "name": "Alt and Ctrl keys",
      "recommended": false,
-     "what": "Every key is held with Alt or Ctrl: Alt and the arrows step through rows, Alt Enter opens, Alt Shift and the arrows move a row, Ctrl Alt and a number opens a page, Ctrl / opens the sheet. The sheet is a large table with every page's keys open at once.",
+     "what": "Every key is held with Alt or Ctrl: Alt and the arrows step through rows, Alt Enter opens, Alt Shift and the arrows move a row, Ctrl Alt and a number opens a page, Ctrl / opens the sheet, Ctrl K searches (Ctrl F stays the browser's own find). The sheet is a large table with every page's keys open at once.",
      "plus": "A stray letter never fires anything, so it is the safest for people who type a lot or use a screen reader.",
      "cost": "Open the third feature: 6 keys (Alt ↓, Alt ↓, Alt Enter, held in pairs) against 1 click. Go to Roadmap: 3 keys (Ctrl Alt 3, held together).",
      "frames": [
@@ -115,7 +115,7 @@
       },
       {
        "file": "ks1-c-phone-390.html",
-       "caption": "Phone 390 with a keyboard: the three columns stack into one long list."
+       "caption": "Phone 390 with a keyboard: the three columns stack into one long list; search is Ctrl K, so Ctrl F stays the browser's own find."
       }
      ]
     },
@@ -176,7 +176,7 @@
       },
       {
        "file": "ks2-a-open.html",
-       "caption": "Hovering Roadmap in the rail: its tooltip, just under it, shows g then r."
+       "caption": "Hovering Roadmap in the rail: its tooltip, beside it, shows g then r."
       },
       {
        "file": "ks2-a-mid.html",
@@ -188,11 +188,11 @@
       },
       {
        "file": "ks2-a-hard-1512.html",
-       "caption": "The hard case, a commenter at 1512 in dark: the grip's tooltip reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal."
+       "caption": "The hard case, a commenter at 1512 in dark: the grip's tooltip reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal. The rail's counts are what waits on this person, so they are smaller than the owner's."
       },
       {
        "file": "ks2-a-viewer.html",
-       "caption": "A viewer's rows have no grip; the tip under the row says view only, with no key; j, k and Enter still work."
+       "caption": "A viewer's rows have no grip; the tip beside the row's name says view only, with no key; j, k and Enter still work. The rail's counts are what waits on this person, so they are smaller than the owner's."
       },
       {
        "file": "ks2-a-detailed.html",
@@ -371,7 +371,7 @@
       },
       {
        "file": "ks3-b-result.html",
-       "caption": "Ctrl Enter (2 keys) saves the note (the saved toast shows) and opens the next feature, Mobile alert push."
+       "caption": "Ctrl Enter (2 keys) saves the note to the working draft (the toast says so) and opens the next feature, Mobile alert push."
       },
       {
        "file": "ks3-b-hard-1512.html",
@@ -387,7 +387,7 @@
      "letter": "C",
      "name": "Keys off, shown",
      "recommended": false,
-     "what": "While a field has the cursor a small tag under it says the keys are off; Esc leaves the field as in A. In a dialog, ? (outside its field) shows only that dialog's keys. On a phone a sideways swipe on the panel goes to the next feature.",
+     "what": "While a field has the cursor a small tag beside its Save and Cancel says the keys are off; Esc leaves the field as in A. In a dialog, ? (outside its field) shows only that dialog's keys. On a phone a sideways swipe on the panel goes to the next feature.",
      "plus": "A person always sees why a key did nothing.",
      "cost": "Same keys as A; one more tag on screen while typing, and a gesture on the phone that has to be found.",
      "frames": [
@@ -397,7 +397,7 @@
       },
       {
        "file": "ks3-c-open.html",
-       "caption": "Change on Notes opens the field; a tag just below it shows the keys are off while typing; it sits on the Cancel link, so it would need a line of its own."
+       "caption": "Change on Notes opens the field; a tag after its Save and Cancel shows the keys are off while typing."
       },
       {
        "file": "ks3-c-mid.html",
@@ -409,7 +409,7 @@
       },
       {
        "file": "ks3-c-hard-1512.html",
-       "caption": "The hard case, a dialog at 1512 in dark: Tab to its buttons, then ? shows only this box's keys in a card beside it: Enter, Esc, Tab."
+       "caption": "The hard case, a dialog at 1512 in dark: Tab to its buttons, then ? (2 keys) shows only this box's keys in a card beside it: Enter, Esc, Tab."
       },
       {
        "file": "ks3-c-phone-390.html",

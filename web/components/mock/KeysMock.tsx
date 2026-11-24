@@ -99,7 +99,7 @@ function grammar(ks1: string, pages: { name: string; href: string }[], detailed:
   );
   const every: Key[] = [
     { keys: mod ? ['Ctrl', '/'] : ['?'], label: 'Show the keys' },
-    { keys: mod ? ['Ctrl', 'F'] : ['/'], label: 'Search or filter' },
+    { keys: mod ? ['Ctrl', 'K'] : ['/'], label: 'Search or filter' }, // MOCK-HOOK: Ctrl K, so the browser keeps Ctrl F
     { keys: ['Esc'], label: 'Close the top panel' },
     { keys: mod ? ['Alt', 'N'] : ['c'], label: 'Add on this page' },
     { keys: mod ? ['Alt', 'D'] : ['s'], label: detailed ? 'Switch to Simple' : 'Switch to Detailed' },
@@ -121,7 +121,7 @@ function grammar(ks1: string, pages: { name: string; href: string }[], detailed:
     {
       name: 'Goal map',
       keys: [
-        { keys: mod ? ['Ctrl', 'F'] : ['/'], label: 'Search the roadmap' },
+        { keys: mod ? ['Ctrl', 'K'] : ['/'], label: 'Search the roadmap' }, // MOCK-HOOK
         { keys: mod ? ['Alt', 'Enter'] : ['Enter'], label: 'Open the goal' },
       ],
     },
@@ -277,6 +277,7 @@ export function KeysMock() {
       if ((!mod && e.key === '?') || (mod && e.ctrlKey && e.key === '/')) {
         e.preventDefault();
         if (mod) setTrail(['Ctrl', '/']);
+        if (ks3 === 'c' && inDialog) setTrail(['Tab', '?']); // MOCK-HOOK: the costed step is Tab then ?
         setOpen((o) => !o);
         return;
       }
@@ -351,6 +352,21 @@ export function KeysMock() {
     return i >= 0 ? g.go[i] : null;
   };
 
+  // MOCK-HOOK: the end of a row's name line (name, code, badges), so a tip sits inside the row.
+  const nameLineEnd = (row: Element) => {
+    const t = rectOf(row.querySelector('[data-testid=prio-title]'));
+    const rr = row.getBoundingClientRect();
+    if (!t) return null;
+    const mid = t.top + t.height / 2;
+    let right = t.right;
+    row.querySelectorAll('*').forEach((el) => {
+      if (el.children.length) return;
+      const b = el.getBoundingClientRect();
+      if (b.width && Math.abs(b.top + b.height / 2 - mid) < 6 && b.right < rr.left + rr.width * 0.6) right = Math.max(right, b.right);
+    });
+    return new DOMRect(right, t.top, 0, t.height);
+  };
+
   // ---------- the tooltip with its key (KS2 a, and the rail tip every proposal of KS1 shares)
   let tipEl: ReactNode = null;
   const tipAt = (r: DOMRect | null, label: string, k: Key | null, side: 'right' | 'below' | 'left' | 'belowRight' = 'right') => {
@@ -376,7 +392,7 @@ export function KeysMock() {
   };
   if (!phone && (ks2 === 'a' || p('tip'))) {
     if (tip === 'rail') {
-      tipEl = tipAt(rectOf(navLink('Roadmap')), 'Roadmap', goKey('Roadmap'), 'below');
+      tipEl = tipAt(rectOf(navLink('Roadmap')), 'Roadmap', goKey('Roadmap'), 'right'); // MOCK-HOOK: beside the rail item
     } else if (tip === 'row' && rows[hover]) {
       tipEl = tipAt(rectOf(rows[hover].querySelector('[data-testid=prio-title]')), 'Open', { keys: ['Enter'], label: '' }, 'below');
     } else if (tip === 'close') {
@@ -384,7 +400,7 @@ export function KeysMock() {
     } else if (tip === 'grip' && rows[hover]) {
       tipEl =
         role === 'viewer'
-          ? tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), 'View only: no moving', null, 'below')
+          ? tipAt(nameLineEnd(rows[hover]), 'View only: no moving', null, 'right') // MOCK-HOOK: beside the name, inside its own row
           : tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), role === 'commenter' ? 'Suggest a move' : 'Move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'below');
     }
   }
@@ -459,8 +475,13 @@ export function KeysMock() {
   const field = document.activeElement as HTMLElement | null;
   if (ks3 === 'c' && (typing || p('paused') === '1') && field) {
     const r = field.getBoundingClientRect();
+    // MOCK-HOOK: the tag sits after the field's Save and Cancel, never on them.
+    const box = field.closest('[data-testid=item-panel],[role=dialog]');
+    const cancel = [...(box?.querySelectorAll('button') ?? [])].find((x) => (x.textContent || '').trim() === 'Cancel' && x.getBoundingClientRect().top >= r.bottom - 2);
+    const cr = rectOf(cancel);
+    const at = cr ? { left: cr.right + 12, top: cr.top + cr.height / 2 - 11 } : { right: window.innerWidth - r.right, top: r.bottom + 6 };
     typingEl = (
-      <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2 py-0.5 text-xs text-text2" style={{ right: window.innerWidth - r.right, top: r.bottom + 6 }}>
+      <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface2 px-1.5 py-0.5 text-xs text-text2" style={at}>
         <span aria-hidden>⌨</span>Keys off while typing
       </div>
     );
@@ -498,6 +519,9 @@ export function KeysMock() {
   ];
   // MOCK-HOOK: a viewer sees move and add as not for them; a commenter's move is a suggestion.
   const edits = (k: Key) => /^(Move the row|Add on this page|Add an item)/.test(k.label);
+  // MOCK-HOOK: a commenter's move and add become suggestions (as their edits do today).
+  const commenterLabel = (l: string) =>
+    l.startsWith('Move the row') ? l.replace('Move the row', 'Suggest a move') : /^Add (on this page|an item)/.test(l) ? 'Suggest an item' : l;
   const Row = ({ k, active }: { k: Key; active?: boolean }) =>
     role === 'viewer' && edits(k) ? (
       <li className="flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-text-faint">
@@ -506,7 +530,7 @@ export function KeysMock() {
       </li>
     ) : (
       <li className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1 ${active ? 'bg-accent-soft' : ''}`}>
-        <span className="text-text">{role === 'commenter' && k.label.startsWith('Move the row') ? k.label.replace('Move the row', 'Suggest a move') : k.label}</span>
+        <span className="text-text">{role === 'commenter' ? commenterLabel(k.label) : k.label}</span>
         <Keys k={k} />
       </li>
     );
