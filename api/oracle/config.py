@@ -7,6 +7,8 @@ from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SECRET_KEY_MIN_LENGTH = 32
+# #1606: the only ORACLE_ENV names that are not a real deployment (an allow-list).
+LOCAL_ENVS = frozenset({"development", "test"})
 
 
 class Settings(BaseSettings):
@@ -118,7 +120,9 @@ class Settings(BaseSettings):
     web_search_key: SecretStr = SecretStr("")
     web_search_max_per_run: int = 30
     web_fetch_max_per_run: int = 40
-    # The deployment's kind (ORACLE_ENV); "production" refuses the switches for tests below.
+    # The deployment's kind (ORACLE_ENV). Only "development" and "test" (any case, spaces
+    # ignored) are local; every other name (production, prod, staging, ...) is a real
+    # deployment and refuses the switches for tests and the default secret key below (#1606).
     env: str = "development"
     # I1 webhooks: the Playwright fixture's stub receiver only. On, a webhook may point at
     # a loopback address (http or https), sent without the guarded transport; every other
@@ -143,21 +147,24 @@ class Settings(BaseSettings):
                 "ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS is for tests and the mock only; it "
                 "cannot be set with ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
             )
-        real = self.env == "production" or self.cookie_secure or self.iap_audiences
+        local_env = self.env.strip().lower() in LOCAL_ENVS
+        real = not local_env or self.cookie_secure or bool(self.iap_audiences)
         if self.webhooks_allow_loopback_for_tests and real:
             raise ValueError(
                 "ORACLE_WEBHOOKS_ALLOW_LOOPBACK_FOR_TESTS is for tests only; it cannot be set "
-                "with ORACLE_ENV=production, ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
+                "with an ORACLE_ENV other than development or test, ORACLE_COOKIE_SECURE or "
+                "ORACLE_IAP_AUDIENCES"
             )
         # #1571: the default key is public; with it anyone could sign a session cookie.
+        # #1606: whitespace is not a secret, so the key is judged without it.
+        key = self.secret_key.strip()
         if real and (
-            self.secret_key == type(self).model_fields["secret_key"].default
-            or len(self.secret_key) < SECRET_KEY_MIN_LENGTH
+            key == type(self).model_fields["secret_key"].default or len(key) < SECRET_KEY_MIN_LENGTH
         ):
             raise ValueError(
                 f"ORACLE_SECRET_KEY must be set to a secret of at least {SECRET_KEY_MIN_LENGTH} "
-                "characters with ORACLE_ENV=production, ORACLE_COOKIE_SECURE or "
-                "ORACLE_IAP_AUDIENCES"
+                "characters with an ORACLE_ENV other than development or test, "
+                "ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
             )
         return self
 
