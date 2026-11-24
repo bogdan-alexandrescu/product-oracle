@@ -548,7 +548,7 @@ export function Board({
           onPointerCancel={onCancel}
           onKeyDown={(e) => onKey(e, item)}
           onBlur={() => onBlur(item)}
-          className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip data-[bulk-picked=true]:ring-2 data-[bulk-picked=true]:ring-accent data-[bulk-picked=true]:bg-accent-soft data-[bulk-picked=true]:pr-9 ${/* MOCK-HOOK */ ''}${
+          className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip data-[bulk-picked=true]:outline-2 data-[bulk-picked=true]:outline-accent data-[bulk-picked=true]:bg-accent-soft data-[bulk-picked=true]:pr-9 ${/* MOCK-HOOK */ ''}${
             red
               ? 'border-crit'
               : kind === 'draft'

@@ -150,7 +150,11 @@ export function useBulkState(rows: R[]): Bulk | null {
   };
   const apply = () => {
     const got = rows.filter((r) => picked.has(r.feature_id));
-    const changed = got.filter((r) => right(r) === 'edit').map((r) => r.feature_id);
+    // A feature that already has the picked status did not change: no tick, its pill stays as it was.
+    const only = !!draft.status && !draft.owner && !draft.shift && !draft.end && !draft.track;
+    const changed = got
+      .filter((r) => right(r) === 'edit' && !(only && statusOf(r) === draft.status))
+      .map((r) => r.feature_id);
     const proposed = got.filter((r) => right(r) === 'propose').map((r) => r.feature_id);
     const skipped = got.filter((r) => right(r) === 'none').map((r) => r.feature_id);
     const next = { ...applied };
@@ -163,9 +167,6 @@ export function useBulkState(rows: R[]): Bulk | null {
       changed.forEach((id) => (o[id] = WORD_MARK[draft.status!]));
       setOver(o);
     }
-    const moved = draft.status && !draft.owner && !draft.shift && !draft.end && !draft.track
-      ? got.filter((r) => right(r) === 'edit' && statusOf(r) !== draft.status).length
-      : changed.length;
     const words = draftWords(draft);
     const res = { changed, proposed, skipped, words };
     setOpen(null);
@@ -173,7 +174,7 @@ export function useBulkState(rows: R[]): Bulk | null {
     setMode(false);
     const undo = { label: 'Undo', onClick: () => { setApplied(applied); setOver(before); } };
     if (!mixed && !commenter) {
-      toast({ message: `${moved} features: ${words}`, action: undo, place: 'corner' });
+      toast({ message: `${changed.length} features: ${words}`, action: undo, place: 'corner' });
     } else if (be3 === 'b') {
       toast({
         message: proposed.length
@@ -713,7 +714,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'a' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(8.1rem+var(--phone-tab-bar))] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(6.6rem+var(--phone-tab-bar))] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                     {has && (
@@ -734,7 +735,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'c' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(8.1rem+var(--phone-tab-bar))] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(6.6rem+var(--phone-tab-bar))] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                   </div>

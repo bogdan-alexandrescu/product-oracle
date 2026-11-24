@@ -63,7 +63,7 @@ for v in 'abc':
     dn=st+[('click','[data-testid="bulk-opt-Rosa Lind"]')]
     sc=[al(7)]
     end=[al(7)] if v=='b' else [top(10)]
-    endp=[al(3,-10)] if v=='b' else [top(54)]
+    endp=[al(3,-13)] if v=='b' else [top(54)]
     add(f'be3-{v}-rest',u,[('hover','h1')]+sc)
     add(f'be3-{v}-open',u,sc+st)
     add(f'be3-{v}-mid',u,sc+dn)

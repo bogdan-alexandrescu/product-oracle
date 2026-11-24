@@ -82,13 +82,16 @@ test('snap', async ({ browser }) => {
       if (kind === 'scroll') await page.evaluate((y) => window.scrollTo(0, Number(y)), sel);
       else if (kind === 'scrollto')
         await page.locator(sel).first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
-      else if (kind === 'align')
+      else if (kind === 'align') {
         // Scroll so the row ends in the gap over the bulk bar (or over the corner message, or the window's end).
         await page.locator(sel).first().evaluate((el, gap) => {
           const tops = Array.from(document.querySelectorAll('[data-testid="bulk-dock"], [data-testid="toasts"] > *')).map((d) => d.getBoundingClientRect().top);
           const end = Math.min(window.innerHeight, ...tops);
           window.scrollBy({ top: el.getBoundingClientRect().bottom + gap - end, behavior: 'instant' });
         }, Number(mods?.[0] ?? 8));
+        // The pointer rests off the rows once a message is up.
+        if (!phone && (await page.locator('[data-testid="toasts"] > *').count())) await page.mouse.move(120, 640);
+      }
       else if (kind === 'below') {
         // Scroll so the element's top sits at this many pixels from the top.
         await page.locator(sel).first().evaluate((el, y) => {
