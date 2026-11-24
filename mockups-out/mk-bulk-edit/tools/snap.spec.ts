@@ -22,6 +22,12 @@ const CLONE = ([vw, vh]: [number, number]) => {
     if (i.checked) i.setAttribute('checked', '');
     else i.removeAttribute('checked');
   });
+  // The page's scroll, the boxes' part-picked look and any inner scroll are kept, so the html opens as its PNG.
+  document.documentElement.setAttribute('data-mk-scroll', String(Math.round(window.scrollY)));
+  document.querySelectorAll<HTMLElement>('body *').forEach((e) => {
+    if (e.scrollTop > 0) e.setAttribute('data-mk-top', String(e.scrollTop));
+    if ((e as HTMLInputElement).indeterminate) e.setAttribute('data-mk-part', '');
+  });
   const root = document.documentElement.cloneNode(true) as HTMLElement;
   root.querySelectorAll('script, link[rel="stylesheet"], link[rel="modulepreload"], style').forEach((n) => n.remove());
   const head = root.querySelector('head')!;
@@ -30,7 +36,7 @@ const CLONE = ([vw, vh]: [number, number]) => {
   head.appendChild(st);
   const s = document.createElement('script');
   s.textContent =
-    "(function(){var t=new URLSearchParams(location.search).get('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();";
+    "(function(){var t=new URLSearchParams(location.search).get('theme');if(t)document.documentElement.setAttribute('data-theme',t);function r(){document.querySelectorAll('[data-mk-part]').forEach(function(e){e.indeterminate=true});document.querySelectorAll('[data-mk-top]').forEach(function(e){e.scrollTop=+e.getAttribute('data-mk-top')});window.scrollTo({top:+(document.documentElement.getAttribute('data-mk-scroll')||0),behavior:'instant'});}addEventListener('load',function(){r();document.fonts&&document.fonts.ready.then(r);});})();";
   head.prepend(s);
   const m = document.createElement('meta');
   m.name = 'mockup-viewport';
@@ -76,6 +82,21 @@ test('snap', async ({ browser }) => {
       if (kind === 'scroll') await page.evaluate((y) => window.scrollTo(0, Number(y)), sel);
       else if (kind === 'scrollto')
         await page.locator(sel).first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      else if (kind === 'align')
+        // Scroll so the row ends in the gap over the bulk bar (or over the corner message, or the window's end).
+        await page.locator(sel).first().evaluate((el, gap) => {
+          const tops = Array.from(document.querySelectorAll('[data-testid="bulk-dock"], [data-testid="toasts"] > *')).map((d) => d.getBoundingClientRect().top);
+          const end = Math.min(window.innerHeight, ...tops);
+          window.scrollBy({ top: el.getBoundingClientRect().bottom + gap - end, behavior: 'instant' });
+        }, Number(mods?.[0] ?? 8));
+      else if (kind === 'below') {
+        // Scroll so the element's top sits at this many pixels from the top.
+        await page.locator(sel).first().evaluate((el, y) => {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          window.scrollTo({ top: el.getBoundingClientRect().top - y, behavior: 'instant' });
+        }, Number(mods![0]));
+        if (!phone) await page.mouse.move(120, 640);
+      }
       else if (kind === 'note')
         // A mock-up note, not product UI: what the proposal costs in clicks against today.
         await page.evaluate((t) => {
@@ -83,7 +104,7 @@ test('snap', async ({ browser }) => {
           d.setAttribute('data-mockup-note', '');
           d.textContent = 'Clicks: ' + t;
           d.style.cssText =
-            'position:fixed;top:12px;right:12px;z-index:9999;padding:6px 10px;border:2px dashed #b45309;border-radius:8px;background:#fffbeb;color:#78350f;font:600 13px/1.3 system-ui,sans-serif';
+            'position:fixed;left:16px;bottom:164px;width:199px;box-sizing:border-box;z-index:9999;padding:6px 10px;border:2px dashed #b45309;border-radius:8px;background:#fffbeb;color:#78350f;font:600 13px/1.3 system-ui,sans-serif';
           document.body.appendChild(d);
         }, sel);
       else {

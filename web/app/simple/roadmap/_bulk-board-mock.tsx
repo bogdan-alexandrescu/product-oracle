@@ -62,16 +62,21 @@ export function BoardBox({ bp, id, name, order }: { bp: BoardPick | null; id: st
   );
 }
 
-export function BoardBar({ bp }: { bp: BoardPick | null }) {
+export function BoardBar({ bp, dock }: { bp: BoardPick | null; dock?: boolean }) {
   if (!bp || !bp.picked.size) return null;
   const btn =
     'rounded-md border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface2 max-sm:w-full max-sm:px-1';
   return (
     <>
-    <style>{'tr[data-bulk-picked="true"] > td { background: var(--color-accent-soft); }'}</style>
+    {/* The whole row is tinted, not its cells: on a phone the cells are separate blocks. */}
+    <style>{'tr[data-bulk-picked="true"], li[data-bulk-picked="true"] { background: var(--color-accent-soft); } tr[data-bulk-picked="true"] > td { background: transparent; }'}</style>
+    <div
+      data-testid="bulk-dock"
+      className={dock ? 'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg px-3 pt-2 pb-3 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:pb-2 md:left-[232px] md:px-9' : 'fixed inset-x-3 bottom-4 z-40 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] md:left-[calc(240px+1rem)]'}
+    >
     <div
       data-testid="bulk-bar"
-      className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-sm shadow-lg max-sm:grid max-sm:grid-cols-4 max-sm:px-3 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] md:left-[calc(240px+1rem)]"
+      className="mx-auto flex max-w-4xl flex-wrap items-center gap-2 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-sm shadow-lg max-sm:grid max-sm:grid-cols-4 max-sm:px-3"
     >
       <span className="font-semibold max-sm:col-span-2">{bp.picked.size} picked</span>
       <button type="button" className="text-accent underline max-sm:col-span-2 max-sm:text-right" onClick={bp.clear}>
@@ -83,6 +88,7 @@ export function BoardBar({ bp }: { bp: BoardPick | null }) {
           {f} ▾
         </button>
       ))}
+    </div>
     </div>
     </>
   );

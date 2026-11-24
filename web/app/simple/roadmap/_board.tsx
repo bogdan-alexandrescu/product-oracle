@@ -562,7 +562,8 @@ export function Board({
             data-testid="board-card-name"
             className={`text-base leading-snug font-medium ${kind === 'cut' ? 'text-text2 line-through' : ''}`}
           >
-            {itemName(item)}
+            {/^F-\d+ /.test(itemName(item)) && <span className="mr-1.5">{itemName(item).split(' ')[0]}</span> /* MOCK-HOOK */}
+            {itemName(item).replace(/^F-\d+ /, '') /* MOCK-HOOK */}
             <CommentCount item={item} />
           </p>
           <NotInGt item={item} className="mt-1 h-5! px-2! text-xs!" />
@@ -729,7 +730,7 @@ export function Board({
           )}
         </section>
       ))}
-      <BoardBar bp={bp} /* MOCK-HOOK */ />
+      <BoardBar bp={bp} dock /* MOCK-HOOK */ />
     </div>
   );
 }

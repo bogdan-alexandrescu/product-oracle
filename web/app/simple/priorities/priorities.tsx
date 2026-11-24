@@ -1100,11 +1100,11 @@ function YourList({
                       <MarkFor featureId={r.feature_id} checked />
                     </span>
                     )}{/* MOCK-HOOK */}
-                    <BulkChips r={r} /* MOCK-HOOK */ />
                   </span>
                   {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
                   {!r.own_key && <NotInGt />}
                   <PartOf r={r} />
+                  <BulkChips r={r} /* MOCK-HOOK */ />
                 </span>
                 {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
                 <span

@@ -27,11 +27,11 @@
             },
             {
               "file": "frames/be1-a-mid.html",
-              "caption": "Alert rules engine is picked; with Shift held over Alert history export, the rows between are tinted to show what Shift-click will pick."
+              "caption": "Alert rules engine is picked; with Shift held over Alert history export, the rows between are tinted to show what Shift-click will pick; the list ends above the bar."
             },
             {
               "file": "frames/be1-a-result.html",
-              "caption": "After the Shift-click: 5 rows picked, every box shows, \"Pick all 22 shown\" shows part-picked, the bar says \"5 picked\". The note top right gives the clicks against today."
+              "caption": "After the Shift-click: 5 rows picked, every box shows, \"Pick all 22 shown\" shows part-picked, the bar says \"5 picked\". The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be1-a-result-dark.html",
@@ -39,11 +39,11 @@
             },
             {
               "file": "frames/be1-a-hard-1512.html",
-              "caption": "Hard case, 1512 wide, all 22 picked with \"Pick all 22 shown\", scrolled to the end: the bar stays at the bottom and the last row clears it."
+              "caption": "Hard case, 1512 wide, all 22 picked with \"Pick all 22 shown\", scrolled to the end: the bar stays at the bottom and the last row ends above it."
             },
             {
               "file": "frames/be1-a-phone.html",
-              "caption": "Phone 390: no hover, so every row shows its box; 3 rows picked by tapping their boxes, the bar sits under the list."
+              "caption": "Phone 390: no hover, so every row shows its box; 3 rows picked by tapping their boxes, the list ends above the bar."
             },
             {
               "file": "frames/be1-a-phone-dark.html",
@@ -113,7 +113,7 @@
             },
             {
               "file": "frames/be1-b-result.html",
-              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked and the bar shows. The note top right gives the clicks against today."
+              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked and the bar shows. The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be1-b-result-dark.html",
@@ -125,7 +125,7 @@
             },
             {
               "file": "frames/be1-b-phone.html",
-              "caption": "Phone 390: \"Done picking\" at the top shows the mode is on; 2 rows picked, the handle space holds the box."
+              "caption": "Phone 390: \"Done picking\" shows the mode is on; rows 2 and 3 picked (row 3 is just below), the handle space holds the box."
             },
             {
               "file": "frames/be1-b-phone-dark.html",
@@ -155,7 +155,7 @@
             },
             {
               "file": "frames/be1-c-result.html",
-              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked. The note top right gives the clicks against today."
+              "caption": "Shift-click on row 7 adds the run 4 to 7: 5 picked. The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be1-c-result-dark.html",
@@ -187,7 +187,7 @@
           "letter": "A",
           "name": "Bar with field menus",
           "recommended": true,
-          "what": "A bar floats at the bottom: \"4 picked \u00b7 Clear | Owner Status Dates Track\". Each field opens a small menu above the bar; once a value is picked the menu lists every feature before -> after (features that already have it say \"already\") with Cancel and \"Change 4\". Applying closes the bar and shows a toast with Undo.",
+          "what": "A bar sits at the bottom, with the list ending above it: \"4 picked \u00b7 Clear | Owner Status Dates Track\". Each field opens a small menu above the bar; once a value is picked the menu lists every feature before -> after (features that already have it say \"already\") with Cancel and \"Change 4\". Applying closes the bar and shows a toast with Undo.",
           "why": "One field at a time is what people do most (\"give these an owner\", \"mark these done\"); the preview sits right by the choice, and nothing covers the list until a field is opened.",
           "plus": "Short: 3 clicks after picking; the preview names each feature, so a wrong pick is seen before applying.",
           "cost": "Pick (2) + field (1) + value (1) + Change (1) = 5 clicks for any number of features (today: about 16 for 4, 32 for 8).",
@@ -214,7 +214,7 @@
             },
             {
               "file": "frames/be2-a-result.html",
-              "caption": "\"Change 4\" pressed with Exists: the 3 that changed show the product's Exists pill with a tick, the Show counts update, the picks clear, a toast says 3 changed with Undo. The note top right gives the clicks against today."
+              "caption": "\"Change 4\" pressed with Exists: the 3 that changed show the product's Exists pill with a tick, the Show counts update, the picks clear, a toast says 3 changed with Undo. The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be2-a-result-dark.html",
@@ -260,7 +260,7 @@
             },
             {
               "file": "frames/be2-b-result.html",
-              "caption": "\"Change 4\" pressed: rows show Rosa Lind and their new end dates, the sheet closes, a toast offers Undo. The note top right gives the clicks against today."
+              "caption": "\"Change 4\" pressed: rows show Rosa Lind and their new end dates, the sheet closes, a toast offers Undo. The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be2-b-result-dark.html",
@@ -268,7 +268,7 @@
             },
             {
               "file": "frames/be2-b-hard-1512.html",
-              "caption": "Hard case, 1512 wide, 14 picked with long names: the preview is long and scrolls above the sheet's buttons; the list stays in view on the left, the bar is hidden."
+              "caption": "Hard case, 1512 wide, 14 picked with long names: the preview shows 3 and \"and 11 more\", which opens the rest; the list stays in view on the left, the bar is hidden."
             },
             {
               "file": "frames/be2-b-phone.html",
@@ -306,7 +306,7 @@
             },
             {
               "file": "frames/be2-c-result.html",
-              "caption": "\"Change 4\" pressed: rows keep the new end date in the edited colour, a toast offers Undo. The note top right gives the clicks against today."
+              "caption": "\"Change 4\" pressed: rows keep the new end date in the edited colour, a toast offers Undo. The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be2-c-result-dark.html",
@@ -314,7 +314,7 @@
             },
             {
               "file": "frames/be2-c-hard-1512.html",
-              "caption": "Hard case, 1512 wide, 14 picked with long names: only the picks on screen can be checked; 9 sit below the fold."
+              "caption": "Hard case, 1512 wide, 14 picked with long names: only the 4 picks on screen can be checked; 10 sit below the fold."
             },
             {
               "file": "frames/be2-c-phone.html",
@@ -338,7 +338,7 @@
           "letter": "A",
           "name": "Sorted preview",
           "recommended": true,
-          "what": "Picked rows carry a small \"Proposal\" or \"Cannot change\" tag. The preview splits into \"Changes now\", \"Sent to Avery Stone to approve\" and \"Not changed\" (with an (i) saying why), and the button says \"Change 2, propose 1\". After applying, a strip reads \"Owner Rosa Lind: 2 changed \u00b7 1 sent to Avery Stone \u00b7 1 not changed\"; each count highlights its rows, with Undo.",
+          "what": "Picked rows carry a small \"Proposal\" or \"Cannot change\" tag. The preview splits into \"Changes now\", \"Sent to Avery Stone to approve\" and \"Not changed\" (with an (i) saying why), and the button says \"Change 2, propose 1\". After applying, a strip over the list reads \"Owner Rosa Lind: 2 changed \u00b7 1 sent to Avery Stone \u00b7 1 not changed\"; each count highlights its rows, with Undo.",
           "why": "Nothing surprises the person: they see the split before pressing and can find every item after, while all four stay pickable.",
           "plus": "One apply for the whole mix; the counts lead to the rows they count.",
           "cost": "The same 5 clicks as BE2 A; 1 more to see which rows were not changed.",
@@ -357,7 +357,7 @@
             },
             {
               "file": "frames/be3-a-result.html",
-              "caption": "Applied: Alert routing by team keeps its owner, Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. The note top right gives the clicks."
+              "caption": "Applied: Alert routing by team keeps its owner, Jonah Pike, and its \"Cannot change\" tag, Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. The dashed note in the left menu gives the clicks."
             },
             {
               "file": "frames/be3-a-result-dark.html",
@@ -369,7 +369,7 @@
             },
             {
               "file": "frames/be3-a-phone.html",
-              "caption": "Phone 390: the result strip with its three counts above the list."
+              "caption": "Phone 390: the result strip with its three counts, above the list; rows 1 to 3 under it."
             },
             {
               "file": "frames/be3-a-phone-dark.html",
@@ -399,7 +399,7 @@
             },
             {
               "file": "frames/be3-b-result.html",
-              "caption": "Applied: a toast \"2 changed, 1 sent to Avery Stone to approve\" with Undo; Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\". The note top right gives the clicks."
+              "caption": "Applied: a toast \"2 changed, 1 sent to Avery Stone to approve\" with Undo; Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\". The dashed note in the left menu gives the clicks."
             },
             {
               "file": "frames/be3-b-result-dark.html",
@@ -411,7 +411,7 @@
             },
             {
               "file": "frames/be3-b-phone.html",
-              "caption": "Phone 390: the result as a toast."
+              "caption": "Phone 390: the result as a toast, with rows 2 and 3 above it."
             },
             {
               "file": "frames/be3-b-phone-dark.html",
@@ -423,7 +423,7 @@
           "letter": "C",
           "name": "Apply, then report",
           "recommended": false,
-          "what": "No rights are shown before applying: the button says \"Change 4\". After it, a strip lists what was not changed, each with its reason and an \"Ask Jonah Pike\" button, and counts the proposals sent.",
+          "what": "No rights are shown before applying: the button says \"Change 4\". After it, a strip over the list lists what was not changed, each with its reason and an \"Ask Jonah Pike\" button, and counts the proposals sent.",
           "plus": "The plainest bar; the \"why\" and the way out sit together after the fact.",
           "cost": "The same 5 clicks, plus 1 per locked feature to ask its owner.",
           "frames": [
@@ -441,7 +441,7 @@
             },
             {
               "file": "frames/be3-c-result.html",
-              "caption": "Applied: the strip counts 2 changed, 1 sent, 1 not changed and lists Alert routing by team, \"Locked by Jonah Pike for the Dec 15 board meeting\", with \"Ask Jonah Pike\". The note top right gives the clicks."
+              "caption": "Applied: the strip over the list counts 2 changed, 1 sent, 1 not changed and lists Alert routing by team (its row keeps Jonah Pike as owner), \"Locked by Jonah Pike for the Dec 15 board meeting\", with \"Ask Jonah Pike\". The dashed note in the left menu gives the clicks."
             },
             {
               "file": "frames/be3-c-result-dark.html",
@@ -453,7 +453,7 @@
             },
             {
               "file": "frames/be3-c-phone.html",
-              "caption": "Phone 390: the report strip with the Ask button."
+              "caption": "Phone 390: the report strip with the Ask button, above the list."
             },
             {
               "file": "frames/be3-c-phone-dark.html",

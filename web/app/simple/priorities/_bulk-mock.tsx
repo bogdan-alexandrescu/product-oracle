@@ -253,6 +253,7 @@ export function bulkRow(b: Bulk | null, r: R, i: number) {
     props: {
       'data-picked': on ? 'true' : undefined,
       onMouseEnter: () => b.setHover(i),
+      onMouseLeave: () => b.setHover(null),
       onMouseDown: (e: React.MouseEvent) => {
         if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
       },
@@ -310,12 +311,13 @@ export function BulkChips({ r }: { r: R }) {
   const b = useBulk();
   if (!b) return null;
   const got = b.applied[r.feature_id];
+  const kept = !!b.result?.skipped.includes(r.feature_id); // a feature the change could not touch keeps its owner and its tag
   const rt = b.right(r);
   const on = b.picked.has(r.feature_id);
   const preview = on && b.be2 === 'c' && Object.values(b.draft).some(Boolean) ? b.draft : null;
   const d = got ?? preview;
   const out: ReactNode[] = [];
-  if (b.long || on || got) {
+  if (b.long || on || got || kept) {
     const owner = ownerOf(r);
     out.push(
       <span key="o" className="whitespace-nowrap text-[length:var(--simple-small)] text-text2">
@@ -352,11 +354,11 @@ export function BulkChips({ r }: { r: R }) {
     );
   if (got?.proposed)
     out.push(
-      <span key="p" className={`${chip} border border-dashed border-accent text-accent`}>
+      <span key="p" className={`${chip} border border-dashed border-accent text-accent sm:whitespace-nowrap`}>
         {got.status ?? got.owner ?? `${got.shift} weeks`}, waiting for {BULK_APPROVER}
       </span>,
     );
-  if (on && b.mixed && rt !== 'edit' && !got && b.be3 !== 'c')
+  if ((on || kept) && b.mixed && rt !== 'edit' && !got && b.be3 !== 'c')
     out.push(
       <span key="r" className={`${chip} border border-line text-text2`}>
         {rt === 'propose' ? 'Proposal' : 'Cannot change'}
@@ -370,11 +372,66 @@ export function bulkHidesMark(_b: Bulk | null, _r: R): boolean {
   return false;
 }
 
+/** BE3 a and c: what happened, over the list (it stays in view while the list scrolls). */
+function BulkResult({ b, res }: { b: Bulk; res: Result }) {
+  return (
+        <div
+          data-testid="bulk-result"
+          className="sticky top-2 z-30 mb-3 flex flex-wrap items-center gap-2 rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 shadow-lg max-[600px]:top-[52px]"
+        >
+          <span className="font-semibold">{res.words}:</span>
+          {(
+            [
+              ['changed', `${res.changed.length} changed`],
+              ['proposed', `${res.proposed.length} sent to ${BULK_APPROVER}`],
+              ['skipped', `${res.skipped.length} not changed`],
+            ] as const
+          ).map(([k, w]) =>
+            res[k].length ? (
+              <button
+                key={k}
+                type="button"
+                className={`${btn} ${b.shown === k ? '!border-accent !bg-accent-soft' : ''}`}
+                onClick={() => b.setShown(b.shown === k ? null : k)}
+              >
+                {w}
+              </button>
+            ) : null,
+          )}
+          <span className="ml-auto flex gap-2">
+            <button type="button" className={btn} onClick={() => b.setResult(null)}>
+              Undo
+            </button>
+            <button type="button" aria-label="Close" className={btn} onClick={() => b.setResult(null)}>
+              ✕
+            </button>
+          </span>
+          {b.be3 === 'c' && res.skipped.length > 0 && (
+            <ul className="basis-full divide-y divide-line border-t border-line pt-1">
+              {b.rows
+                .filter((r) => res.skipped.includes(r.feature_id))
+                .map((r) => (
+                  <li key={r.feature_id} className="flex flex-wrap items-center gap-2 py-1.5">
+                    <span className="font-medium">{bulkTitle(b, r)}</span>
+                    {r.own_key && <span className="text-text2">{r.own_key}</span>}
+                    <span className="text-text2">{BULK_WHY[r.title] ?? 'Read only'}</span>
+                    <button type="button" className={`${btn} ml-auto`}>
+                      Ask {(BULK_WHY[r.title] ?? '').match(/by ([A-Z][a-z]+ [A-Z][a-z]+)/)?.[1] ?? 'the owner'}
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+  );
+}
+
 /** Over the list: BE1 b's "Pick several" switch, BE1 c's tip, BE1 a's "pick all shown". */
 export function BulkTop() {
   const b = useBulk();
   if (!b) return null;
   const all = b.picked.size === b.rows.length;
+  if (b.result) return <BulkResult b={b} res={b.result} />;
   return (
     <div className="flex min-h-10 flex-wrap items-center gap-3 text-[length:var(--simple-small)]">
       {b.be1 === 'b' && (
@@ -416,7 +473,7 @@ export function BulkTop() {
       )}
       {b.be1 === 'c' && (
         <span className="flex items-center gap-1 text-text2">
-          {b.picked.size ? null : 'Pick several'}
+          Pick several
           <InfoTip label="How to pick several">
             1. Ctrl-click (⌘-click on a Mac) a row. 2. Shift-click another to pick all between.
           </InfoTip>
@@ -427,7 +484,7 @@ export function BulkTop() {
 }
 
 const btn =
-  'rounded-md border border-line bg-surface px-3 py-1.5 text-[length:var(--simple-small)] font-medium hover:bg-surface2';
+  'rounded-md border border-line bg-surface px-3 py-1.5 text-[length:var(--simple-small)] font-medium [word-spacing:0.12em] hover:bg-surface2';
 const primary =
   'rounded-md bg-accent px-4 py-1.5 text-[length:var(--simple-small)] font-semibold text-on-accent';
 
@@ -506,7 +563,9 @@ function FieldPick({ f, b }: { f: Field; b: Bulk }) {
 }
 
 /** The before → after list (BE2 a's popover, BE2 b's sheet), grouped by right when BE3 a. */
-function Preview({ b, max }: { b: Bulk; max: number }) {
+function Preview({ b, max: cap, grow }: { b: Bulk; max: number; grow?: boolean }) {
+  const [whole, setWhole] = useState(false);
+  const max = whole ? 999 : cap;
   const got = b.rows.filter((r) => b.picked.has(r.feature_id));
   const line = (r: R) => (
     <li key={r.feature_id} className="flex flex-wrap items-baseline gap-x-2 py-1">
@@ -543,7 +602,17 @@ function Preview({ b, max }: { b: Bulk; max: number }) {
   const list = (rs: R[]) => (
     <ul className="divide-y divide-line">
       {rs.slice(0, max).map(line)}
-      {rs.length > max && <li className="py-1 text-text2">and {rs.length - max} more</li>}
+      {rs.length > max && (
+        <li className="py-1 text-text2">
+          {grow ? (
+            <button type="button" className="text-accent underline" onClick={() => setWhole(true)}>
+              and {rs.length - max} more
+            </button>
+          ) : (
+            <>and {rs.length - max} more</>
+          )}
+        </li>
+      )}
     </ul>
   );
   if (b.mixed && b.be3 === 'a') {
@@ -601,64 +670,17 @@ export function BulkBar() {
   if (!b) return null;
   const n = b.picked.size;
   const has = Object.values(b.draft).some(Boolean);
-  const res = b.result;
   return (
     <>
-      {(n > 0 || res) && <div aria-hidden className="h-28" />}
-      {res && (
-        <div
-          data-testid="bulk-result"
-          className="fixed inset-x-3 bottom-4 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 shadow-lg md:left-[calc(240px+1rem)]"
-        >
-          <span className="font-semibold">{res.words}:</span>
-          {(
-            [
-              ['changed', `${res.changed.length} changed`],
-              ['proposed', `${res.proposed.length} sent to ${BULK_APPROVER}`],
-              ['skipped', `${res.skipped.length} not changed`],
-            ] as const
-          ).map(([k, w]) =>
-            res[k].length ? (
-              <button
-                key={k}
-                type="button"
-                className={`${btn} ${b.shown === k ? '!border-accent !bg-accent-soft' : ''}`}
-                onClick={() => b.setShown(b.shown === k ? null : k)}
-              >
-                {w}
-              </button>
-            ) : null,
-          )}
-          {b.be3 === 'c' && res.skipped.length > 0 && (
-            <ul className="basis-full divide-y divide-line border-t border-line pt-1">
-              {b.rows
-                .filter((r) => res.skipped.includes(r.feature_id))
-                .map((r) => (
-                  <li key={r.feature_id} className="flex flex-wrap items-center gap-2 py-1.5">
-                    <span className="font-medium">{bulkTitle(b, r)}</span>
-                    {r.own_key && <span className="text-text2">{r.own_key}</span>}
-                    <span className="text-text2">{BULK_WHY[r.title] ?? 'Read only'}</span>
-                    <button type="button" className={`${btn} ml-auto`}>
-                      Ask {(BULK_WHY[r.title] ?? '').match(/by ([A-Z][a-z]+ [A-Z][a-z]+)/)?.[1] ?? 'the owner'}
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          )}
-          <span className="ml-auto flex gap-2">
-            <button type="button" className={btn} onClick={() => b.setResult(null)}>
-              Undo
-            </button>
-            <button type="button" aria-label="Close" className={btn} onClick={() => b.setResult(null)}>
-              ✕
-            </button>
-          </span>
-        </div>
-      )}
+      {n > 0 && <div aria-hidden className="h-28" />}
       {n > 0 && b.open !== 'sheet' && (
         <div
+          data-testid="bulk-dock"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg px-3 pt-2 pb-3 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:pb-2 md:left-[232px] md:px-9"
+        >
+        <div
           data-testid="bulk-bar"
-          className="fixed inset-x-3 bottom-4 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-4 max-sm:gap-2 max-sm:px-3 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg md:left-[calc(240px+1rem)]"
+          className="relative mx-auto flex max-w-4xl flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-4 max-sm:gap-2 max-sm:px-3 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-[length:var(--simple-small)] shadow-lg"
         >
           <span className="font-semibold max-sm:col-span-2" data-testid="bulk-count">
             {n} picked
@@ -691,7 +713,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'a' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(9.5rem+var(--phone-tab-bar))] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal flex max-h-[70vh] w-[min(30rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(8.1rem+var(--phone-tab-bar))] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                     {has && (
@@ -712,7 +734,7 @@ export function BulkBar() {
                 {b.open === f && b.be2 === 'c' && (
                   <div
                     data-testid="bulk-pop"
-                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(9.5rem+var(--phone-tab-bar))] max-sm:w-auto"
+                    className="absolute bottom-full left-0 mb-2 whitespace-normal w-[min(22rem,calc(100vw-1.5rem))] rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 shadow-lg max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(8.1rem+var(--phone-tab-bar))] max-sm:w-auto"
                   >
                     <FieldPick f={f} b={b} />
                   </div>
@@ -726,12 +748,13 @@ export function BulkBar() {
             </button>
           )}
         </div>
+        </div>
       )}
       {b.open === 'sheet' && n > 0 && (
         <aside
           data-testid="bulk-sheet"
           aria-label={`Edit ${n} features`}
-          className="fixed inset-y-0 right-0 z-50 flex w-[min(30rem,100vw)] flex-col gap-4 overflow-auto border-l border-line bg-surface p-5 shadow-xl"
+          className="fixed inset-y-0 right-0 z-50 flex w-[min(30rem,100vw)] flex-col gap-2.5 overflow-auto border-l border-line bg-surface p-5 shadow-xl"
         >
           <header className="flex items-center justify-between">
             <h2 className="text-[length:var(--simple-h2)] font-semibold">Edit {n} features</h2>
@@ -740,7 +763,7 @@ export function BulkBar() {
             <details
               key={f}
               open={b.open2 === f || (f === 'dates' ? b.draft.shift !== undefined || !!b.draft.owner : f === 'owner' && !b.draft.owner && !b.open2)}
-              className="rounded-md border border-line p-3"
+              className="rounded-md border border-line px-3 py-2"
             >
               <summary className="cursor-pointer font-semibold" data-testid={`bulk-sum-${f}`} onClick={(e) => { e.preventDefault(); b.setOpen2(b.open2 === f ? null : f); }}>
                 {label}
@@ -758,9 +781,9 @@ export function BulkBar() {
             </details>
           ))}
           {has && (
-            <section className="pb-4">
+            <section className="pb-2">
               <h3 className="mb-1 font-semibold">What changes</h3>
-              <Preview b={b} max={8} />
+              <Preview b={b} max={n > 4 ? 3 : 4} grow />
             </section>
           )}
           <footer className="sticky -bottom-5 -mx-5 -mb-5 mt-auto flex justify-end gap-2 border-t border-line bg-surface px-5 py-3">
