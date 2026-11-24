@@ -132,9 +132,9 @@ test.describe('Goal map: goals by tracks grid', () => {
     expect(Math.abs(a.y + a.height / 2 - (b.y + b.height / 2))).toBeLessThan(4);
     expect(b.x).toBeGreaterThan(a.x + a.width - 1);
     // Nothing between the legend row and the grid.
-    expect((await page.getByTestId('gm-grid').boundingBox())!.y - (b.y + b.height)).toBeLessThan(
-      40,
-    );
+    expect(
+      (await page.getByTestId('gm-head-box').boundingBox())!.y - (b.y + b.height),
+    ).toBeLessThan(40);
     await rail.hover();
     const tip = page.getByRole('tooltip').filter({ hasText: 'Failed payments' });
     await expect(tip).toContainText('Failed payments under 2% every day');
