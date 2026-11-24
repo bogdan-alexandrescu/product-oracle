@@ -114,10 +114,10 @@ import {
   TRACKS,
 } from './simple-roadmap';
 import { routeGoalSuggestions } from './simple-suggestions';
+import { pushTask } from './task-push';
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from './trash';
 import { madeOrder } from './made-order';
 import { reply } from './typed';
-import { pushTask } from './task-push';
 
 type Change = Schemas['SimpleChangeOut'];
 type Session = Schemas['SimpleSessionOut'];

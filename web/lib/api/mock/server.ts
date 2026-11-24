@@ -12,6 +12,7 @@ import { citationHref, formatDate, formatDay, goalFigure } from '@/lib/format';
 import { parseBlocks, plainText, type Inline } from '@/lib/markdown';
 import { type FeatureCommentRow, routeFeatureComments } from './feature-comments';
 import { mockName as displayName } from './people';
+import { retryTask, seedTrackedTask } from './task-push';
 import { reply, rawReply } from './typed';
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from './ids';
@@ -461,7 +462,6 @@ import {
   simpleInboxRows,
   type SimpleChangesCtx,
 } from './simple-changes';
-import { retryTask, seedTrackedTask } from './task-push';
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from './currentstate';
 import {
   featureKeyOf,
