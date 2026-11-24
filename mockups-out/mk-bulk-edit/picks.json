@@ -187,7 +187,7 @@
           "letter": "A",
           "name": "Bar with field menus",
           "recommended": true,
-          "what": "A bar sits at the bottom, with the list ending above it: \"4 picked \u00b7 Clear | Owner Status Dates Track\". Each field opens a small menu above the bar; once a value is picked the menu lists every feature before -> after (features that already have it say \"already\") with Cancel and \"Change 4\". Applying closes the bar and shows a toast with Undo.",
+          "what": "A bar sits at the bottom, with the list ending above it: \"4 picked \u00b7 Clear | Owner Status Dates Track\". Each field opens a small menu above the bar; once a value is picked the menu lists every feature before -> after (features that already have it say \"already\") with Cancel and \"Change 3\" (it counts only the features that change). Applying closes the bar and shows a toast with Undo.",
           "why": "One field at a time is what people do most (\"give these an owner\", \"mark these done\"); the preview sits right by the choice, and nothing covers the list until a field is opened.",
           "plus": "Short: 3 clicks after picking; the preview names each feature, so a wrong pick is seen before applying.",
           "cost": "Pick (2) + field (1) + value (1) + Change (1) = 5 clicks for any number of features (today: about 16 for 4, 32 for 8).",
@@ -202,7 +202,7 @@
             },
             {
               "file": "frames/be2-a-mid.html",
-              "caption": "Exists picked: the menu lists the 4 features before -> after, \"already Exists\" where nothing changes, and \"Change 4\"."
+              "caption": "Exists picked: the menu lists the 4 features before -> after, \"already Exists\" where nothing changes, and \"Change 3\", the 3 that do."
             },
             {
               "file": "frames/be2-a-dates.html",
@@ -214,7 +214,7 @@
             },
             {
               "file": "frames/be2-a-result.html",
-              "caption": "\"Change 4\" pressed with Exists: the 3 that changed show the product's Exists pill with a tick, the Show counts update, the picks clear, a toast says 3 changed with Undo. The dashed note in the left menu gives the clicks against today."
+              "caption": "\"Change 3\" pressed with Exists: the 3 that changed show the product's Exists pill with a tick beside it, the Show counts update, the picks clear (Alert routing by team, already Exists, keeps its owner line and gets no tick), a toast says 3 changed with Undo. The dashed note in the left menu gives the clicks against today."
             },
             {
               "file": "frames/be2-a-result-dark.html",
@@ -332,7 +332,7 @@
       "code": "BE3",
       "name": "Mixed rights",
       "question": "When some picked features will become proposals and some cannot be changed at all, how does the person know before and after applying?",
-      "common": "Rights come from each feature's own can_* fields: owners and approvers change at once, a commenter's change becomes a proposal to the approver (Avery Stone here), a locked feature is not changed. Shown with the BE2 A bar; 4 picked: two the person may change, Weekly alert digest F-79 (needs approval) and Alert routing by team (locked by Jonah Pike).",
+      "common": "Rights come from each feature's own can_* fields: a feature's owner or approver changes it at once, anyone else's change becomes a proposal to that feature's approver, a locked feature is not changed. Shown with the BE2 A bar, signed in as Lena Vos, an approver; 4 picked: two Lena approves, Weekly alert digest F-79 (Avery Stone approves it, so the change goes to Avery Stone) and Alert routing by team (locked by Jonah Pike).",
       "proposals": [
         {
           "letter": "A",
@@ -345,7 +345,7 @@
           "frames": [
             {
               "file": "frames/be3-a-rest.html",
-              "caption": "At rest: 4 picked, scrolled to Alert routing by team, tagged \"Cannot change\"; Weekly alert digest above it is tagged \"Proposal\"."
+              "caption": "At rest, signed in as Lena Vos, an approver: 4 picked, scrolled to Alert routing by team, tagged \"Cannot change\"; Weekly alert digest above it is tagged \"Proposal\"."
             },
             {
               "file": "frames/be3-a-open.html",
@@ -387,7 +387,7 @@
           "frames": [
             {
               "file": "frames/be3-b-rest.html",
-              "caption": "At rest: 3 picked; Alert routing by team shows a lock instead of a box."
+              "caption": "At rest, signed in as Lena Vos, an approver: 3 picked; Alert routing by team shows a lock instead of a box."
             },
             {
               "file": "frames/be3-b-open.html",
@@ -429,7 +429,7 @@
           "frames": [
             {
               "file": "frames/be3-c-rest.html",
-              "caption": "At rest: 4 picked; no tags on the rows."
+              "caption": "At rest, signed in as Lena Vos, an approver: 4 picked; no tags on the rows."
             },
             {
               "file": "frames/be3-c-open.html",
