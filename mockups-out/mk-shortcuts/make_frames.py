@@ -37,7 +37,7 @@ f('ks1-d-rest', P + '?ks1=d&row=0')
 f('ks1-d-open', P + '?ks1=d&row=0', [['key', '?']])
 f('ks1-d-mid', P + '?ks1=d&row=0', [['key', '?'], ['type', 'road']])
 f('ks1-d-result', P + '?ks1=d&row=0' + TR, [['key', '?'], ['type', 'road'], ['press', 'Enter']])
-f('ks1-d-hard-1512', D + '?ks1=d&open=1', [['type', 'pl']], width=1512, theme='dark')
+f('ks1-d-hard-1512', D + '?ks1=d&open=1&q=pl', width=1512, theme='dark')
 
 # KS2: teaching in place, focus on rows
 f('ks2-a-rest', P + '?ks2=a&row=0')

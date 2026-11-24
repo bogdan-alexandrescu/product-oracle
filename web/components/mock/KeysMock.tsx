@@ -450,7 +450,7 @@ export function KeysMock() {
   if (ks3 === 'c' && (typing || p('paused') === '1') && field) {
     const r = field.getBoundingClientRect();
     typingEl = (
-      <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2 py-0.5 text-xs text-text2" style={{ left: r.left, top: r.bottom + 6 }}>
+      <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2 py-0.5 text-xs text-text2" style={{ right: window.innerWidth - r.right + 18, top: r.bottom - 28 }}>
         <span aria-hidden>⌨</span>Keys off while typing
       </div>
     );
@@ -588,7 +588,8 @@ export function KeysMock() {
                 if (e.key === 'ArrowDown') setSel((x) => Math.min(hits.length - 1, x + 1));
                 if (e.key === 'ArrowUp') setSel((x) => Math.max(0, x - 1));
                 if (e.key === 'Enter' && hits[sel]) {
-                  setTrail((t) => [...t, ...q.split(''), 'Enter'].slice(-8));
+                  e.nativeEvent.stopPropagation();
+                  setTrail(['?', ...q.split(''), 'Enter']);
                   setOpen(false);
                   if (hits[sel].href) goTo(hits[sel].href!);
                 }

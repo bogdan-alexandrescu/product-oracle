@@ -257,13 +257,8 @@
  },
  {
   "file": "ks1-d-hard-1512",
-  "path": "/priorities?ks1=d&open=1",
-  "steps": [
-   [
-    "type",
-    "pl"
-   ]
-  ],
+  "path": "/priorities?ks1=d&open=1&q=pl",
+  "steps": [],
   "width": 1512,
   "theme": "dark",
   "role": ""
