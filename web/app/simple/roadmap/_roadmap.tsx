@@ -638,9 +638,21 @@ function GoalCounters({
           {g.metric ?? 'No metric yet'}
         </p>
       )}
-      {/* #1740: what the count covers, on hover (the Tracks sheet and the timeline say theirs). */}
-      <p className="mt-0.5 text-sm" data-testid="goal-counter-items" title={GOAL_COUNT}>
-        <b className="tnum">{g.items}</b> {g.items === 1 ? 'item' : 'items'}
+      {/* #1740: the count opens what it covers (hover, tap or focus), as the Tracks sheet's. */}
+      <p className="mt-0.5 text-sm" data-testid="goal-counter-items">
+        <InfoTip
+          label="what is counted"
+          align="start"
+          testId="goal-counter-count-tip"
+          trigger={
+            <span>
+              <b className="tnum">{g.items}</b> {g.items === 1 ? 'item' : 'items'}
+            </span>
+          }
+          lazy
+        >
+          {GOAL_COUNT}
+        </InfoTip>
         {g.broken > 0 && (
           <span className="text-crit">
             {' '}

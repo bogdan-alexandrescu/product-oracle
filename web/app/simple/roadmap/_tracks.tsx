@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Button, Sheet, toast } from '@/components/ds';
+import { Button, InfoTip, Sheet, toast } from '@/components/ds';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { useQuery } from '@/lib/use-query';
 
@@ -337,9 +337,17 @@ export function TracksButton({
                             ) : (
                               'No owner · '
                             ))}
-                        {/* #1740: what this count covers, as the goal cards' and the timeline's say. */}
-                        <span data-testid="track-count" title={TRACK_COUNT}>
-                          {features(count)}
+                        {/* #1740: the count opens what it covers (hover, tap or focus), as a goal card's. */}
+                        <span data-testid="track-count">
+                          <InfoTip
+                            label="what is counted"
+                            align="start"
+                            testId="track-count-tip"
+                            trigger={features(count)}
+                            lazy
+                          >
+                            {TRACK_COUNT}
+                          </InfoTip>
                         </span>
                         {t.status !== 'active' ? ` · ${STATE[t.status]}` : ''}
                       </p>

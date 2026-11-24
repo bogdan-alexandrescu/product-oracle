@@ -6,10 +6,10 @@ import { expect, test, type Page } from './test';
 /*
  * roadmap-ux (the UX audit of Nov 23, issues #1740 #1746 #1749 #1750 #1751 #1752 #1753 #1757):
  * Simple > Roadmap, driven as a person would, on the mock's invented roadmaps.
- * fails_when = a count says nothing of what it covers; Key dates stays open on an outside click,
+ * fails_when = a count has no tip (hover, tap, focus) saying what it covers; Key dates stays open on an outside click,
  * mixes outside events with PRD milestones under one list, or shows the browser's own date
  * format; the open feature's row and bar are barely marked; a cut label has no full name on
- * hover; a track's health mark is a 14 px target; every track reads "No owner".
+ * hover; a track's health reason does not open on a tap or focus; every track reads "No owner".
  */
 
 const WIDE = { width: 1500, height: 620 };
@@ -144,7 +144,9 @@ test('#1752 every cut label on the timeline shows its full name on hover and foc
   }
 });
 
-test("#1753 a track's health reason shows on a tap near its small mark", async ({ browser }) => {
+test("#1753 (already fixed) a track's health reason shows on a tap and on focus", async ({
+  browser,
+}) => {
   const context = await browser.newContext({ hasTouch: true, viewport: WIDE });
   const page = await context.newPage();
   await open(page, 'roadmap-milestones');
@@ -153,10 +155,15 @@ test("#1753 a track's health reason shows on a tap near its small mark", async (
     .filter({ hasText: 'Usage alerts track' })
     .getByTestId('track-health');
   await expect(risk).toHaveAttribute('data-health', 'at_risk');
-  await risk.scrollIntoViewIfNeeded();
-  const box = (await risk.boundingBox())!;
-  // A finger lands a few pixels off the 14 px glyph: still the mark.
-  await page.touchscreen.tap(box.x + box.width + 3, box.y + box.height / 2);
+  const mark = risk.getByTestId('track-health-tip');
+  await mark.scrollIntoViewIfNeeded();
+  // A tap on the mark, as on a phone.
+  await mark.tap();
+  await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
+  await page.touchscreen.tap(5, 5);
+  await expect(risk.getByRole('tooltip')).toBeHidden();
+  // Keyboard focus, as Tab lands on it.
+  await mark.focus();
   await expect(risk.getByRole('tooltip')).toHaveText(/^At risk: /);
   await context.close();
 });
@@ -189,12 +196,23 @@ test('#1740 the goal cards and the Tracks sheet each say what their count covers
 }) => {
   await open(page);
   // A goal card counts items for the goal that the filters show; a track's count is every
-  // feature on it: each says so on hover.
-  const cards = page.getByTestId('goal-counter-items');
-  await expect(cards.first()).toHaveAttribute('title', /filters show.*cut and merged/);
+  // feature on it: each count opens its tip on a click and on keyboard focus.
+  const card = page.getByTestId('goal-counter-items').first();
+  const cardTip = card.getByTestId('goal-counter-count-tip');
+  await cardTip.focus();
+  await expect(card.getByRole('tooltip')).toHaveText(/filters show.*cut and merged/);
+  await cardTip.blur();
+  await expect(card.getByRole('tooltip')).toBeHidden();
+  await cardTip.click();
+  await expect(card.getByRole('tooltip')).toHaveText(/filters show.*cut and merged/);
+  await page.keyboard.press('Escape');
   await page.getByTestId('tracks-open').click();
-  await expect(page.getByTestId('track-count').first()).toHaveAttribute(
-    'title',
-    /whatever the filters show.*cut and merged/,
-  );
+  const count = page.getByTestId('track-count').first();
+  const countTip = count.getByTestId('track-count-tip');
+  await countTip.focus();
+  await expect(count.getByRole('tooltip')).toHaveText(/whatever the filters show.*cut and merged/);
+  await countTip.blur();
+  await expect(count.getByRole('tooltip')).toBeHidden();
+  await countTip.click();
+  await expect(count.getByRole('tooltip')).toHaveText(/whatever the filters show.*cut and merged/);
 });

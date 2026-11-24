@@ -1,16 +1,17 @@
 # roadmap-ux handoff (issues #1740 #1746 #1749 #1750 #1751 #1752 #1753 #1757)
 
 Base 83b3594. Spec: web/e2e/roadmap-ux-nov24.spec.ts (8 tests, one per issue). Red-first commit 3eaaa9b
-(7 of 8 red on the base build; #1752 green on base, see below).
+(6 of 8 red on the base build, as the review re-ran it: #1752 and #1753 are green on base, both already
+fixed; the first round's "7 of 8" was wrong about #1753).
 
 ## What changed (web/app/simple/roadmap only)
 - #1746 `_keydates.tsx`: Key dates closes on a pointerdown outside it (its own button and the toast stack excepted), as on Escape.
 - #1750 `_keydates.tsx`: when a roadmap has PRD milestones, its list splits into "Events" and "PRD milestones" (headings; testids key-dates-events / key-dates-milestones).
 - #1751 `_keydates.tsx` + new `_dayfield.tsx`: DayField: the day in words, month first ("Dec 3, 2026"), the native date input laid over it unseen (opacity 0), as the milestone card's DateField. Add and Edit both.
 - #1749 `_zoom.tsx` (Timeline) and `_timeline.tsx` (Gantt): the open feature's label gets an accent ring, a 4 px accent edge and bold; its bar a 3 px accent outline plus a soft halo (Timeline) or an accent ring rect (Gantt, testid bar-open-ring); the open row's tint is full accent-soft.
-- #1753 `_trackbands.tsx`: the health mark gets an invisible pad (about 26x28 px) so a tap a few px off the glyph opens its reason; InfoTip already opened on click (touch) and focus. Row height unchanged.
+- #1753 already fixed: the health mark is an InfoTip trigger, which opens on hover, tap and focus. The first round's invisible pad is dropped (fix round: no test failed without it). The spec taps the mark and focuses it and reads the reason; it passes on base.
 - #1757 `_tracks.tsx`: the owner shows in the Tracks sheet only once some track has an owner; then "No owner" is a button (for those who may change) opening the row with Owner focused.
-- #1740 `_roadmap.tsx`, `_tracks.tsx`, `_lib.ts`: the goal card count and the track count each say what they cover in a title tooltip (no new visible prose). Finding: the audit compared tracks (drawer, by track, every feature incl. done, filters ignored) with goal cards (by goal, filters applied, PM-owned excluded); the Timeline itself shows no per-lane count now (bands are tracks). Counts were not changed.
+- #1740 `_roadmap.tsx`, `_tracks.tsx`, `_lib.ts`: the goal card count and the track count are each the trigger of an InfoTip saying what they cover (hover, tap, focus; testids goal-counter-count-tip, track-count-tip; no new visible prose). Fix round: was a title attribute, which touch and keyboard cannot open. Finding: the audit compared tracks (drawer, by track, every feature incl. done, filters ignored) with goal cards (by goal, filters applied, PM-owned excluded); the Timeline itself shows no per-lane count now (bands are tracks). Counts were not changed.
 - #1752 already fixed: every cut label on the Timeline (row names: title=; milestone chips and band labels: aria-label plus a role=tooltip tip on hover and focus). The spec proves it by hovering each cut label (10 in the roadmap-milestones scenario) and focusing one. No code change.
 
 ## Specs updated for the intended change
@@ -35,6 +36,11 @@ Base 83b3594. Spec: web/e2e/roadmap-ux-nov24.spec.ts (8 tests, one per issue). R
 - #1740: the counts are labelled, not changed. If the owner wants one number everywhere, the Tracks sheet
   count is the API's (api/oracle/simple/removed.py:191-225) and would need an API change.
 - The two pre-existing failures above belong to the timeline-order and goal-order lanes.
+
+## Fix round (review NOT_YET, two majors; minors left as they were)
+- Major 1 (#1753): option (a), pad dropped, spec opens the reason by tap and by focus.
+- Major 2 (#1740): counts are InfoTip triggers; spec opens each by focus and by click and reads role=tooltip.
+- Gates: see the end of this section.
 
 # codes-at-write handoff (PR #1811, fix round 3)
 
