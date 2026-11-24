@@ -34,13 +34,7 @@ import {
 import { ConnectedClients } from '@/components/mcp/McpClients';
 import { ConnectGuide } from '@/components/mcp/McpConnect';
 import { ROLE_LABEL } from '@/components/MembersSettings';
-import {
-  api,
-  ApiError,
-  unwrap,
-  type ApiToken,
-  type MyAccount as Account,
-} from '@/lib/api/client';
+import { api, ApiError, unwrap, type ApiToken, type MyAccount as Account } from '@/lib/api/client';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
 import { useRouter } from '@/lib/nav';

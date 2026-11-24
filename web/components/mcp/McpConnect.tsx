@@ -232,7 +232,13 @@ function useWatch(query: ClientsQuery) {
       if (Date.now() - started >= WATCH_FOR_MS) setLate(true);
       else void reload();
     }, WATCH_EVERY_MS);
-    return () => clearInterval(timer);
+    // A background tab's timers are slowed: read again as soon as the page is back.
+    const back = () => document.visibilityState === 'visible' && void reload();
+    document.addEventListener('visibilitychange', back);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', back);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one watch per waiting spell
   }, [waiting]);
   return { fresh, late };
