@@ -22,7 +22,7 @@ export const MK_SLIPS: MkSlip[] = [ // MOCK-HOOK
     days: 8, // MOCK-HOOK
     why: 'Alert rules engine, which it needs, now ends Nov 18', // MOCK-HOOK
     goal: 'Grow retention', // MOCK-HOOK
-    past: 'Milestone Beta', // MOCK-HOOK
+    past: 'M6 Beta', // MOCK-HOOK
   }, // MOCK-HOOK
   { // MOCK-HOOK
     code: 'F-01', // MOCK-HOOK
@@ -31,7 +31,7 @@ export const MK_SLIPS: MkSlip[] = [ // MOCK-HOOK
     from: 'Nov 15', // MOCK-HOOK
     to: 'Nov 29', // MOCK-HOOK
     days: 14, // MOCK-HOOK
-    why: 'Rae Okafor set it At risk: “Waiting on the import design”', // MOCK-HOOK
+    why: 'Rae Okafor set it at risk: “Waiting on the import design”', // MOCK-HOOK
     goal: 'Faster activation', // MOCK-HOOK
   }, // MOCK-HOOK
   { // MOCK-HOOK
@@ -84,6 +84,7 @@ export type MkWatched = { code: string; name: string; kind: string; reason: stri
 /** What the signed-in owner watches (Avery Stone): theirs by default, plus a few they picked. */ // MOCK-HOOK
 export const MK_WATCHED: MkWatched[] = [ // MOCK-HOOK
   { code: 'F-79', name: 'Weekly alert digest', kind: 'Feature', reason: 'You decide it', tells: 'Everything' }, // MOCK-HOOK
+  { code: 'F-01', name: 'Setup checklist', kind: 'Feature', reason: 'You decide it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'M6', name: 'Beta', kind: 'Milestone', reason: 'You own it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'G-2', name: 'Faster activation', kind: 'Goal', reason: 'You own it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'P-3', name: 'Usage alerts', kind: 'PRD', reason: 'You approve it', tells: 'Dates and status' }, // MOCK-HOOK
@@ -91,10 +92,9 @@ export const MK_WATCHED: MkWatched[] = [ // MOCK-HOOK
   { code: 'F-121', name: 'Rep daily scoreboard with team and region breakdowns for managers', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'F-109', name: 'Guided first week', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'F-123', name: 'Lead list ranking by likely paid conversion this quarter', kind: 'Feature', reason: 'You picked it', tells: 'Mentions only' }, // MOCK-HOOK
-  { code: 'M7', name: 'Pricing launch', kind: 'Milestone', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
+  { code: 'M7', name: '10 paid conversions per rep', kind: 'Milestone', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'F-124', name: 'Partner referral channel with shared revenue reports', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'F-105', name: 'Refund in one step', kind: 'Feature', reason: 'You picked it', tells: 'Dates only' }, // MOCK-HOOK
-  { code: 'G-4', name: 'Paid conversions per rep per day', kind: 'Goal', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
 ]; // MOCK-HOOK
 
 export const MK_WATCHERS = ['Avery Stone', 'Rae Okafor', 'Jonah Prell', 'Mira Castell', 'Dev Anand', 'Lena Hartwig']; // MOCK-HOOK

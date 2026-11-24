@@ -39,7 +39,7 @@
             },
             {
               "file": "wd1-a-hard-1512.png",
-              "caption": "Hard case at 1512: twelve watched items with long names, in the Inbox's Watching list. Each shows why it is watched, what it tells and Stop.",
+              "caption": "Hard case at 1512, signed in as Avery Stone, the owner: the Inbox's Watching list holds twelve items with long names. F-79 and F-01 are hers because she decides them, M6 and G-2 because she owns them; the rest she picked. Each row has Stop.",
               "dark": "wd1-a-hard-1512-dark.png"
             },
             {
@@ -74,7 +74,7 @@
             },
             {
               "file": "wd1-b-result.png",
-              "caption": "One click: F-01's eye fills and a note says she watches everything on it, with Undo. No menu, so she cannot pick what to hear. Cost: 1 click.",
+              "caption": "One click: F-01's eye fills and a note at the foot of the side menu says she watches everything on it, with Undo. No menu, so she cannot pick what to hear. Cost: 1 click.",
               "dark": "wd1-b-result-dark.png"
             },
             {
@@ -89,7 +89,7 @@
             },
             {
               "file": "wd1-b-viewer.png",
-              "caption": "A viewer (Lena Ortiz) can watch too: one click on F-01's eye, with the same note and Undo.",
+              "caption": "A viewer (Lena Ortiz) can watch too: one click on F-01's eye, with the same note and Undo at the foot of the side menu.",
               "dark": "wd1-b-viewer-dark.png"
             }
           ]
@@ -243,7 +243,7 @@
             },
             {
               "file": "wd2-b-hard-1512.png",
-              "caption": "Hard case at 1512: a busy morning sends a separate message for every slip; the first six of twelve fit the screen.",
+              "caption": "Hard case at 1512: a busy morning sends a separate message for every slip; Slack marks 12 new messages and the first six fill the screen.",
               "dark": "wd2-b-hard-1512-dark.png"
             },
             {
@@ -366,6 +366,10 @@
               "dark": "wd3-b-rest-dark.png"
             },
             {
+              "file": "wd3-b-quiet.png",
+              "caption": "Nothing slipped: a tick above the list says nothing was sent today."
+            },
+            {
               "file": "wd3-b-open.png",
               "caption": "Slack not connected, seen by Priya: Slack items read 'Email (Slack not connected)', with Ask an owner.",
               "dark": "wd3-b-open-dark.png"
@@ -387,7 +391,7 @@
             },
             {
               "file": "wd3-b-phone-390.png",
-              "caption": "Phone 390: the per-item table is cramped on a phone.",
+              "caption": "Phone 390: each item's channel and timing sit under its name, so the list runs long on a phone.",
               "dark": "wd3-b-phone-390-dark.png"
             }
           ]
@@ -398,7 +402,7 @@
           "recommended": false,
           "what": "No settings panel: My account shows one line saying what you get. You change it by replying to any digest ('weekly', 'email only', 'stop'). Slack goes first; email follows only if Slack is still unread by noon.",
           "plus": "Nothing to find in Oracle; people change it where they read it.",
-          "cost": "1 reply to change or stop; nothing to click in Oracle, but nothing to see there either.",
+          "cost": "1 reply to change, stop or start again; nothing to click in Oracle, but nothing to set there either.",
           "frames": [
             {
               "file": "wd3-c-rest.png",
@@ -427,7 +431,7 @@
             },
             {
               "file": "wd3-c-result.png",
-              "caption": "After replying 'stop': the line says Stopped, with Turn back on.",
+              "caption": "After replying 'stop': the line on My account says Stopped, and that replying 'start' to any old digest turns it back on. No button.",
               "dark": "wd3-c-result-dark.png"
             },
             {
