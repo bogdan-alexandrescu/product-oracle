@@ -67,8 +67,9 @@ test('qa-settings-12/28/30: /account token tables show whole dates, plain scopes
 
   const clients = page.getByTestId('clients-panel');
   const clientRows = page.getByTestId('my-client-row');
-  await expect(clientRows).toHaveCount(2);
-  await expect(clients.getByTestId('panel-count')).toHaveText('1 active · 2 total');
+  // Owner's pick (Nov 23): Connected clients lists the live ones only.
+  await expect(clientRows).toHaveCount(1);
+  await expect(clients.getByTestId('panel-count')).toHaveText('1');
   await datesWhole(clientRows);
   await expect(
     clientRows.filter({ hasText: 'Claude Desktop' }).getByTestId('token-scopes'),

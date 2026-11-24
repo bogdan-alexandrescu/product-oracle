@@ -1,11 +1,12 @@
 'use client';
 
-import { Link, useSearchParams } from '@/lib/nav';
 import { useId, useState, type FormEvent } from 'react';
 
 import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from '@/components/ds';
+import { CompanyMcp } from '@/components/mcp/McpClients';
 import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
+import { Link, useSearchParams } from '@/lib/nav';
 import { errorMessage, useQuery } from '@/lib/use-query';
 
 import { Field, INPUT } from '../_components/fields';
@@ -105,6 +106,7 @@ export function ConnectionsSettings() {
       />
 
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
+        <CompanyMcp />
         {connected && !callbackError && (
           <Notice tone="pass">{nameOf(connected)} is connected.</Notice>
         )}

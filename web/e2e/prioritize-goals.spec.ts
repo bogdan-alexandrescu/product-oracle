@@ -105,10 +105,31 @@ test.describe('Goals: prioritize by their header', () => {
     await page.reload();
     await expect(page.getByTestId('gm-grid')).toBeVisible();
     await expect.poll(() => mapGoals(page)).toEqual(before);
-    // Every page follows: moved on the map, Goal buckets reads the same order.
     await handle(before[0]).focus();
     await page.keyboard.press('Alt+ArrowRight');
     await expect.poll(() => mapGoals(page)).toEqual(once);
+  });
+
+  // Every page follows: moved on the Goal map, Goal buckets reads the two goals in the same order.
+  test('Goal buckets reads the goal order the Goal map sets', async ({ page }) => {
+    await goalMap(page);
+    const before = await mapGoals(page);
+    const handle = (id: string | null) =>
+      page.locator(`[data-testid=gm-goal][data-goal="${id}"]`).getByTestId('goal-handle');
+    const two = (gs: (string | null)[]) => gs.filter((g) => g === before[0] || g === before[1]);
+    const inBuckets = async (want: (string | null)[]) => {
+      await page.goto('/simple/priorities?tab=buckets');
+      await expect(page.getByTestId('goal-bucket').first()).toBeVisible();
+      await expect.poll(async () => two(await bucketGoals(page))).toEqual(want);
+    };
+    await inBuckets([before[0], before[1]]);
+    await page.goto('/simple/goals');
+    await expect(page.getByTestId('gm-grid')).toBeVisible();
+    await handle(before[0]).focus();
+    await page.keyboard.press('Alt+ArrowRight');
+    await expect.poll(() => mapGoals(page)).toEqual(swap(before, 0));
+    await expect(page.getByRole('status').filter({ hasText: 'Goal order saved' })).toBeVisible();
+    await inBuckets([before[1], before[0]]);
   });
 
   // Goal-order proposals are not built: a commenter gets no goal handle (handoff.md).

@@ -160,14 +160,15 @@ test.describe('desktop', () => {
     expect(gaps).toEqual([]);
   });
 
-  test("qa4-47: the Timeline's rows come in reading order: lane by lane, each lane by start date", async ({
+  test("qa4-47: the Timeline's rows come in reading order: lane by lane, each lane in priority order", async ({
     page,
   }) => {
-    await open(page);
+    await open(page, { scenario: 'goal-buckets-undated' });
     const chart = timeline(page);
     await expect(chart.getByTestId('timeline-bar').first()).toBeVisible();
+    // Each row's feature code, lane by lane, as drawn.
     const lanes = await chart.evaluate((root) => {
-      const out: { lane: string; items: { item: string; x: number }[] }[] = [];
+      const out: { lane: string; items: { item: string; code: string }[] }[] = [];
       for (const r of root.querySelectorAll<HTMLElement>(
         '[data-testid="timeline-lane"], [data-testid="timeline-row"]',
       )) {
@@ -176,21 +177,42 @@ test.describe('desktop', () => {
         else
           out[out.length - 1]?.items.push({
             item: r.dataset.item!,
-            x: r.querySelector<HTMLElement>('[data-testid="timeline-bar"]')!.getBoundingClientRect()
-              .left,
+            code: (r.querySelector('[data-testid="timeline-row-name"]')?.textContent ?? '').split(
+              ' ',
+            )[0],
           });
       }
       return out;
     });
     expect(lanes.flatMap((l) => l.items).length).toBeGreaterThan(3);
-    // (Below the line keeps the cut order, not dates.)
+    // The one priority order is what Goal buckets lists, bucket by bucket: the same data the
+    // Timeline reads (a feature's rank), not the bars' dates.
+    await page.goto('/simple/priorities?tab=buckets');
+    await expect(page.getByTestId('plan-feature').first()).toBeVisible();
+    const buckets = await page
+      .getByTestId('goal-bucket')
+      .evaluateAll((els) =>
+        els.map((b) =>
+          [...b.querySelectorAll<HTMLElement>('[data-testid=plan-feature]')].map(
+            (e) => e.dataset.code!,
+          ),
+        ),
+      );
+    let compared = 0;
+    // (Below the line keeps the cut order, not priority.)
     for (const l of lanes.filter((x) => !x.lane.startsWith('Below the line'))) {
-      const sorted = [...l.items].sort((a, b) => a.x - b.x);
-      expect(
-        l.items.map((o) => o.item),
-        l.lane,
-      ).toEqual(sorted.map((o) => o.item));
+      // (Only the plan's own features rank in a bucket; other rows have no place in it.)
+      const drawn = l.items.filter((o) => o.item.startsWith('plan-f-')).map((o) => o.code);
+      for (const bucket of buckets) {
+        const mine = drawn.filter((c) => bucket.includes(c));
+        if (mine.length < 2) continue;
+        compared++;
+        expect(mine, l.lane).toEqual(bucket.filter((c) => mine.includes(c)));
+      }
     }
+    expect(compared).toBeGreaterThan(0);
+    await page.goBack();
+    await expect(chart.getByTestId('timeline-bar').first()).toBeVisible();
     // And Tab walks them so: a row's name, its bar, then the next row's name.
     const rows = chart.getByTestId('timeline-row');
     const [first, second] = [

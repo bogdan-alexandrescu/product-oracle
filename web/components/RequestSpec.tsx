@@ -312,10 +312,11 @@ export function RequestSpecDialog({
                   className="font-medium text-accent-ink hover:underline"
                 >
                   Read it
-                </Link>
-              </p>
-              <p className="text-sm text-text2">
-                The spec must not contradict what the engineering review decided without saying so.
+                </Link>{' '}
+                <InfoTip label="the tech brief">
+                  The spec must not contradict what the engineering review decided without saying
+                  so.
+                </InfoTip>
               </p>
             </>
           ) : briefs.error ? (

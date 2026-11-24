@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, test } from './test';
+import { expect, test, vi } from 'vitest';
+
+// It reads the whole tree: a census, not a 5-second unit test.
+vi.setConfig({ testTimeout: 120_000 });
 
 /**
  * #1587: the mock API (web/lib/api/mock) answers every route a page reads. A page's read is

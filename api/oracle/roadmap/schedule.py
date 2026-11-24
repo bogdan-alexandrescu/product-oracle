@@ -304,6 +304,7 @@ async def withdraw(
     date is withheld when the item is read, unless another basis supports it). The
     caller commits."""
     from oracle import audit
+    from oracle.roadmap import staleness
 
     basis.status = "withdrawn"
     basis.withdrawn_by = principal.id
@@ -320,10 +321,11 @@ async def withdraw(
     when = now()
     reason_text = f"the schedule basis {basis.reference} was withdrawn"
     for item in await _resting_items(db, basis):
+        reasons = staleness.open_reasons(item)
         if item.freshness != "potentially_stale" or item.stale_since is None:
             item.stale_since = when
         item.freshness = "potentially_stale"
-        item.stale_reasons = [*(item.stale_reasons or []), reason_text][-20:]
+        item.stale_reasons = [*reasons, reason_text][-20:]
         stale.append(item.id)
     await db.flush()
     await audit.record(

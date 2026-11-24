@@ -164,3 +164,27 @@ export function seedItemMilestones(): MockMilestone[] {
     at(scale, 'M3', 'Ready for launch', '2027-01-15'),
   ];
 }
+
+/**
+ * codes-at-write ("shared-code" scenario, on "one-roadmap"): Trusted seller badge came from the Trust
+ * plan PRD's section F-40, and Seller ratings, on the company roadmap from another PRD's section F-40,
+ * shows F-40 already; the owner's Priorities move adds the badge there with its own number.
+ */
+export const SHARED_CODE_SCENARIO = 'shared-code';
+export function seedSharedCode(db: SimpleDb): void {
+  const badge = db.items.find((s) => s.key === 'trusted-badge');
+  if (badge) badge.section = 'f-40';
+  db.items.push({
+    key: 'seller-ratings',
+    title: 'Seller ratings',
+    horizon: 'later',
+    roadmap: COMPANY_SLUG,
+    prd_doc: SAFETY,
+    section: 'f-40',
+    confidence: 'medium',
+    start: 71,
+    end: 90,
+    source: 'engineering',
+  });
+  db.ids['seller-ratings'] = stableUuid('simple-item/seller-ratings');
+}

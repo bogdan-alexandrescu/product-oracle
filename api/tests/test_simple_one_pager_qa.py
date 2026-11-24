@@ -115,8 +115,13 @@ async def other_prd_slicing_f07(s) -> Document:
 
 
 @pytest.mark.parametrize("own_plan", [False, True])
-async def test_timeline_places_items_by_this_prds_plan(client, own_plan):
+async def test_timeline_places_items_by_this_prds_plan(client, own_plan, monkeypatch):
     """An item's timeline place follows this PRD's own plan, not another PRD's."""
+    from oracle.roadmap import codes
+
+    # Two items of F-07 on one roadmap, as rows stood before codes-at-write (Nov 23), which now
+    # numbers the second as it is written: this test reads plan places, not codes.
+    monkeypatch.setattr(codes._Numbering, "give", lambda self, row, code: None)
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))

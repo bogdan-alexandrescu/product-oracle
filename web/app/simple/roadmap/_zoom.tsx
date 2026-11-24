@@ -19,13 +19,15 @@ import {
 } from 'react';
 
 import { InfoTip } from '@/components/ds/InfoTip';
+import { CommentCount } from '@/components/simple/FeatureComments';
 import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
 import { addMonths, calendarDay, utcDay } from '@/lib/dates';
 import { useMe } from '@/lib/me';
 import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
+import { PendingMark } from '../priorities/feature-order';
+
 import { AddRow, type WaitingAdd } from './_addrow';
-import { OwnerPick, useOwners, type Person } from './_owner';
 import { PM_LANE } from './_board';
 import { FixButtons, fixCount, type Act } from './_card';
 import { itemName, NotInGt } from './_gtflag';
@@ -56,6 +58,8 @@ import {
 } from './_lib';
 import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from './_milestones';
 import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from './_mk';
+import { inOrder, useRowOrder, type RowOrder } from './_order';
+import { OwnerPick, useOwners, type Person } from './_owner';
 import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from './_timeline';
 import { TrackHead } from './_trackbands';
 
@@ -84,7 +88,10 @@ type Row =
  * The lanes are the data's goal groups (oneLane(lanes(data, "goal"))), as the goal cards, the
  * Gantt, the Waterfall and Now / Next / Later count them: a plan's slices put an item with no
  * goal of its own in its plan goal's lane, and PM-owned work has a lane of its own. */
-function rowsOf(data: Roadmap): Row[] {
+function rowsOf(
+  data: Roadmap,
+  arrange: (lane: string, items: Item[]) => Item[] = (_, items) => inOrder(items),
+): Row[] {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const lanes = new Map<string, { title: string; items: Item[] }>();
   const below: Item[] = [];
@@ -103,7 +110,11 @@ function rowsOf(data: Roadmap): Row[] {
   const out: Row[] = [];
   for (const [k, l] of order) {
     out.push({ kind: 'lane', key: k, title: l.title, count: l.items.length });
-    const sorted = [...l.items].sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+    // timeline-order: by start, then in the one feature order (rows with no place after the ordered).
+    const sorted = arrange(
+      k,
+      [...l.items].sort((a, b) => (a.start.date < b.start.date ? -1 : 1)),
+    );
     // feature-parts: every part, at any depth, right under its parent (in its top parent's
     // lane, oneLane), drawn as a tree; one whose parent is not shown keeps its own place.
     for (const x of partsTree([sorted.map((i) => i.id)], byId)[0])
@@ -236,6 +247,8 @@ export interface TimelineProps extends Common {
   /** de-r1 (RE1 A): add a feature in a lane (a goal's or a track's key) at a week's six-week span;
    * absent, the lanes have no "+ Add" row. True once it is added or proposed. */
   onAddAt?: (lane: string, title: string, start: string, end: string) => Promise<boolean>;
+  /** timeline-order: the items whose move waits for a decider (the pending mark). */
+  orderPending?: ReadonlySet<string>;
   /** de-fix: the changes waiting for a decider (a mark on a moved bar, a faint bar for an add). */
   proposals?: Change[];
 }
@@ -508,7 +521,13 @@ function DayChart(props: TimelineProps) {
   const joined = joinedNames(data.goal_milestones ?? [], data.milestones ?? []);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
-  const rows = useMemo(() => rowsOf(data), [data]);
+  const ord = useRowOrder({
+    act: props.act,
+    canChange: props.canChange,
+    proposed: props.orderPending,
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- ord.local is the move in flight
+  const rows = useMemo(() => rowsOf(data, ord.arrange), [data, ord.local]);
   const owners = useOwners(props.canChange);
   // de-r1 (RE1 A): the lanes a feature may be added to in place (a goal's, or a track's), the
   // index of each one's last row, under which its "+ Add" row sits.
@@ -1502,6 +1521,7 @@ function DayChart(props: TimelineProps) {
                   lane={laneOf.get(i.id) ?? ''}
                   people={openKey === i.key ? owners : undefined}
                   renamable={i.can_decide || canChange}
+                  order={ord.order}
                   waiting={waiting.has(i.id)}
                 />
                 {addRow}
@@ -1708,6 +1728,7 @@ const TimelineRow = memo(function TimelineRow({
   lane,
   renamable,
   people,
+  order,
   waiting,
 }: {
   item: Item;
@@ -1734,6 +1755,8 @@ const TimelineRow = memo(function TimelineRow({
   renamable: boolean;
   /** de-r1: who may own it (the open bar's owner pick); undefined while read. */
   people?: Person[];
+  /** timeline-order: the name's handle (drag, Alt+Arrow) and the pending mark. */
+  order?: RowOrder;
   /** de-fix: a change to it waits for its decider (a small mark beside the bar). */
   waiting?: boolean;
 }) {
@@ -1766,6 +1789,7 @@ const TimelineRow = memo(function TimelineRow({
       data-testid="timeline-row"
       data-item={i.key}
       data-lane={lane}
+      data-position={i.position ?? undefined}
       data-depth={depth || undefined}
       data-open={sel || undefined}
       // A row out of sight is not painted (content-visibility), so a drag's frame repaints the
@@ -1799,6 +1823,8 @@ const TimelineRow = memo(function TimelineRow({
           <button
             type="button"
             data-testid="timeline-row-label"
+            {...(order?.may(i) ? order.drag(lane, i) : {})}
+            onKeyDown={order?.keys(lane, i)}
             onClick={() =>
               sel && renamable && !still ? setRenaming(true) : on.name(i, sel, bx, bw)
             }
@@ -1828,6 +1854,8 @@ const TimelineRow = memo(function TimelineRow({
                 </span>
               )}
             </span>
+            {/* timeline-order (owner, Nov 23): the comment count the Now / Next / Later cards show. */}
+            <CommentCount item={i} />
             {lk.chip && (
               <span
                 data-testid="draft-tag"
@@ -1844,6 +1872,7 @@ const TimelineRow = memo(function TimelineRow({
             )}
             {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
             <NotInGt item={i} short className="h-[18px]! px-1.5! text-xs!" />
+            {order?.pending(i) && <PendingMark />}
           </button>
         )}
         <div className="relative" style={{ width: trackW }}>

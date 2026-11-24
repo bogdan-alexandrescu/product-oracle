@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from '@/lib/nav';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { itemKind, itemTitle } from '@/components/ArtifactMenu';
@@ -81,19 +81,28 @@ export function PrdMenu({
       </button>
       {open && (
         <div role="menu" className={MENU}>
-          {items.map(([label, go, tone]) => (
-            <button
-              key={label}
-              type="button"
-              role="menuitem"
-              className={`${ITEM} ${tone ?? ''}`}
-              onClick={() => {
-                setOpen(false);
-                go();
-              }}
-            >
-              {label}
-            </button>
+          {items.map(([label, go, tone], i) => (
+            <Fragment key={label}>
+              {/* #1766: Delete PRD sits apart from Move up and Move down, under a divider. */}
+              {tone && i > 0 && (
+                <div
+                  role="separator"
+                  data-testid="prd-menu-divider"
+                  className="my-1 border-t border-line"
+                />
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                className={`${ITEM} ${tone ?? ''}`}
+                onClick={() => {
+                  setOpen(false);
+                  go();
+                }}
+              >
+                {label}
+              </button>
+            </Fragment>
           ))}
         </div>
       )}

@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.deps import Principal
-from oracle.baseline import goals, scoring
+from oracle.baseline import goals, scoring, standing
 from oracle.baseline.goal_order import goal_sort_key
 from oracle.baseline.models import (
     EDGE_TYPES,
@@ -1175,12 +1175,14 @@ async def _record_change(
     edge: dict[str, Any] | None = None,
     wholes: list[uuid.UUID] | None = None,
     evidence_ids: list[uuid.UUID] | None = None,
+    standing_only: bool | None = None,
 ) -> None:
     """v2 hook: what is built on this entity may now be stale (oracle.trace).
 
     Inside :func:`batched_changes` the change is collected instead (a deletion is
     always recorded at once, while the entity and its edges still exist).
-    ``evidence_ids``: the evidence a deletion takes with it."""
+    ``evidence_ids``: the evidence a deletion takes with it. ``standing_only``: whether a
+    link's change only raises its standing (an entity's own is judged here)."""
     kind = _change_subject(entity, before)
     if kind is None:
         return
@@ -1193,6 +1195,9 @@ async def _record_change(
         "actor": actor,
         "fields": sorted(k for k in after if (before or {}).get(k) != after.get(k)),
         "entity": _entity_ref(entity),
+        "standing_only": (
+            standing.entity_raised(before, after) if standing_only is None else standing_only
+        ),
         "edge": edge,
         "wholes": [str(w) for w in wholes or []],
         "evidence_ids": [str(e) for e in evidence_ids or []],
@@ -1205,7 +1210,8 @@ async def _record_change(
 
 
 def _collect(batch: dict[uuid.UUID, dict[str, Any]], entry: dict[str, Any]) -> None:
-    """One entry per entity: fields and wholes merge, a removal outranks an update."""
+    """One entry per entity: fields and wholes merge, a removal outranks an update, and a
+    change of its content outranks one that only raises its standing (the event names it)."""
     seen = batch.get(entry["id"])
     if seen is None:
         batch[entry["id"]] = entry
@@ -1216,11 +1222,21 @@ def _collect(batch: dict[uuid.UUID, dict[str, Any]], entry: dict[str, Any]) -> N
     seen["entity"] = entry["entity"]
     if REMOVAL_PRIORITY.get(entry["cause"], 0) > REMOVAL_PRIORITY.get(seen["cause"], 0):
         seen["cause"] = entry["cause"]
-    seen["edge"] = seen["edge"] or entry["edge"]
+    elif seen["standing_only"] and not entry["standing_only"]:
+        seen["cause"] = entry["cause"]
+    if seen["standing_only"] == entry["standing_only"]:
+        seen["edge"] = seen["edge"] or entry["edge"]
+    elif seen["standing_only"]:
+        seen["edge"] = entry["edge"]
+    seen["standing_only"] = seen["standing_only"] and entry["standing_only"]
 
 
 def _data(entry: dict[str, Any]) -> dict[str, Any]:
-    data: dict[str, Any] = {"fields": entry["fields"], "entity": entry["entity"]}
+    data: dict[str, Any] = {
+        "fields": entry["fields"],
+        "entity": entry["entity"],
+        "standing_only": entry["standing_only"],
+    }
     if entry["edge"] is not None:
         data["edge"] = entry["edge"]
     if entry["wholes"]:
@@ -1285,26 +1301,29 @@ async def batched_changes(db: AsyncSession) -> AsyncIterator[None]:
 
 
 async def _record_edge_change(
-    db: AsyncSession, actor: str, edge: Edge, cause: str, *, was: str | None
+    db: AsyncSession, actor: str, edge: Edge, cause: str, *, before: dict[str, Any] | None
 ) -> None:
     """An edge created, removed or changed (a re-parent is a removal and a creation):
     recorded against its downstream end, with the whole it joins or leaves. Only an edge
     that is or was confirmed: a proposed (or rejected) edge is not in the trace, so
-    nothing was built on it; confirming one is a change. ``was``: its status before."""
+    nothing was built on it. Confirming one is recorded, as a change of standing only.
+    ``before``: the edge as it was (:func:`edge_snapshot`), None when new."""
     if edge.type in UNTRACED_EDGES:
         return
     now = None if cause == "edge_deleted" else edge.status
-    if "confirmed" not in (was, now):
+    if "confirmed" not in ((before or {}).get("status"), now):
         return
     target_id = edge.dst_id if edge.type in DST_DOWNSTREAM_EDGES else edge.src_id
     target = await db.get(Entity, target_id)
     if target is None:
         return
     wholes = [edge.dst_id] if edge.type in WHOLE_EDGES else []
-    snapshot = {"id": str(edge.id), **edge_snapshot(edge)}
+    after = edge_snapshot(edge)
     await _record_change(
-        db, actor, target, entity_snapshot(target), cause, edge=snapshot, wholes=wholes
-    )
+        db, actor, target, entity_snapshot(target), cause, edge={"id": str(edge.id), **after},
+        wholes=wholes,
+        standing_only=cause == "edge_updated" and standing.edge_raised(before, after),
+    )  # fmt: skip
 
 
 async def _evidence_of(
@@ -1700,7 +1719,7 @@ async def create_edge(
     if type_ == "supports":
         await scoring.rescore_around(db, [src_id])
     await db.flush()
-    await _record_edge_change(db, writer.actor, edge, "edge_created", was=None)
+    await _record_edge_change(db, writer.actor, edge, "edge_created", before=None)
     return WriteResult(edge=edge)
 
 
@@ -1734,7 +1753,7 @@ async def update_edge(
     if edge.type == "supports":
         await scoring.rescore_around(db, [edge.src_id])
     await db.flush()
-    await _record_edge_change(db, writer.actor, edge, "edge_updated", was=before["status"])
+    await _record_edge_change(db, writer.actor, edge, "edge_updated", before=before)
     return WriteResult(edge=edge)
 
 
@@ -1752,7 +1771,7 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
         {"before": edge_snapshot(edge), "origin": writer.origin, "reason": writer.reason},
     )
     evidence_ids = await _release_edge_evidence(db, writer.actor, edge)
-    await _record_edge_change(db, writer.actor, edge, "edge_deleted", was=edge.status)
+    await _record_edge_change(db, writer.actor, edge, "edge_deleted", before=edge_snapshot(edge))
     await links.release(db, evidence_ids=evidence_ids)
     await db.delete(edge)
     await db.flush()

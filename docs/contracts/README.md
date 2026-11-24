@@ -7,7 +7,7 @@ the check that keeps the copy the same as its source:
 | Prefix | Owner | Check (rewrite) |
 | --- | --- | --- |
 | `api-*` | api/tests/fixtures | `api/tests/test_contracts_published.py` (`CONTRACTS_WRITE=1`) |
-| `web-*`, `mock-*` | web/ | `web/e2e/contracts-published.spec.ts` (`CONTRACTS_WRITE=1`) |
+| `web-*`, `mock-*` | web/ | `web/guards/contracts-published.test.ts` (`CONTRACTS_WRITE=1`) |
 | `docs-*` | docs/ | `python3 docs/contracts/check.py` (`--write` for the template hashes and YAML texts) |
 
 The guards that throw on any other read of another tree: `api/tests/_own_tree_only.py`

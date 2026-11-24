@@ -8,11 +8,17 @@ Test cards (protects / fails_when / no_claim):
   byte of either read: each view's body (group goal, track and prd, one roadmap, a viewer's
   read, the waiting count) hashes to the digest the reads had before it (5c6d57bed);
   fails_when=any field, order or value moves; no_claim=a reader with a working draft.
-- test_reads_take_few_statements: protects=the roadmap read takes at most 60 statements and
-  the waiting count at most 24 on that company; fails_when=a loader comes back per row or a
-  table is read twice; no_claim=other pages.
+- test_reads_take_few_statements: protects=the roadmap read takes at most 59 statements (the
+  first read on a fresh seed) and the waiting count at most 24 on that company;
+  fails_when=a loader comes back per row or a table is read twice; no_claim=other pages.
+- test_read_ranks_through_a_light_load: protects=the read's rank loads columns only: no
+  evidence text, citation or source item is read, and no feature or goal is loaded twice as
+  a whole row; fails_when=the rank reads the Priorities page's full load; no_claim=its time.
+- test_a_viewers_roadmap_read_writes_nothing: protects=a viewer's roadmap read (after a first)
+  issues no UPDATE, INSERT or DELETE; fails_when=the rank or any loader writes while reading;
+  no_claim=other reads.
 - test_reads_answer_within_budget (timing mark: CI runs it alone): protects=best of 3 after
-  a warm-up: the roadmap under 300 ms, the waiting count under 110 ms; fails_when=the read
+  a warm-up: the roadmap under 360 ms, the waiting count under 110 ms; fails_when=the read
   slows past the budget; no_claim=production's network and load.
 """
 
@@ -42,16 +48,18 @@ VIEWS = {
 }
 # Each view's body on the seed as 5c6d57bed answered it (the company's id masked).
 # roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
+# timeline-order: the five roadmap views gain position (an integer) and before_override (null on
+# this seed) on each of the seed's 400 items and nothing else (JSON diff against main 64225004).
 # gt-proposed: each roadmap item's confirm_feature_id (null on this seed), after code_from; the
 # five roadmap views differ from c92397816's by that field alone, the two counts not at all.
 # unique-codes: the five roadmap views gain feature_name on each item (null on this seed) and
 # nothing else (diffed against fa899682c); the two counts are unchanged.
 DIGESTS = {
-    "goal": "5c46028834da37d61db42c0bdafa741a83d9ac2e91851f6b2219274fbe5f74b1",
-    "track": "e90a5d54bd2eaa5b22f58aab34edf075a767020eb68dae9974246277804f53f1",
-    "prd": "b1e7df020b79f8114ae8efbf435577432303d095b62ef638db48b29e94e262a2",
-    "one-roadmap": "2a4a9021f7593a62fbe28d74da0f063c8a27d31d0e6c07d0396436cc945e387e",
-    "viewer": "e7dfabd54635097a6a02805a099f270f5d1a2453a017a5f0a8c39e7ad84999f2",
+    "goal": "bcbb97399745dee54d981994134174b91d9955f9191395ca9bc2022941fbe5cf",
+    "track": "19cfa11d7cc7b6114b5b312c1ba26ca31a4ddc641f4f3b0fcef54c948ed213b9",
+    "prd": "0c424b71f59d6d02c7e45b4e71c18bac7c68b0da3c7b8fba355d2f76eb3f8288",
+    "one-roadmap": "bc34dfaa8dd084ee97b323c400aa5b9f37746daea7ff3293b60cbfaa9f969533",
+    "viewer": "77e190a41f94c2f1a59a21066b8baf06d50b1f6422643eada52ac68cdd08aee0",
     "waiting": "6ec46197015480da730ce7e5d0b228599ec45f31eb3ddac72fe02b136eef19b6",
     "waiting-viewer": "8e3c599ef74b60ae7cc28c7bbcbee560464dfc074a18d9e9ac36e11f81feded5",
 }
@@ -105,8 +113,50 @@ async def test_reads_take_few_statements(client):
     roadmap = await _statements(client, ROADMAP, owner)
     waiting = await _statements(client, WAITING, owner)
     print(f"statements: roadmap {roadmap}, waiting {waiting}")
-    assert roadmap <= 60, roadmap
+    assert roadmap <= 59, roadmap
     assert waiting <= 24, waiting
+
+
+async def test_read_ranks_through_a_light_load(client):
+    """The roadmap read's rank reads no evidence text and no source items."""
+    ctx = await seed_company()
+    statements: list[str] = []
+
+    def seen(conn, cursor, statement, *args):
+        statements.append(" ".join(statement.split()))
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        r = await client.get(ROADMAP, headers=ctx.as_("viewer"))
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+    assert r.status_code == 200, r.text
+    assert not [st for st in statements if "evidence.url" in st or "FROM source_items" in st]
+
+
+async def test_a_viewers_roadmap_read_writes_nothing(client):
+    """A viewer's roadmap read, rank included, issues no UPDATE, INSERT or DELETE."""
+    ctx = await seed_company()
+    statements: list[str] = []
+
+    def seen(conn, cursor, statement, *args):
+        statements.append(" ".join(statement.split()))
+
+    # A first read may seed what later reads find (goal milestones); the next writes nothing.
+    await client.get(ROADMAP, headers=ctx.as_("owner"))
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        r = await client.get(ROADMAP, headers=ctx.as_("viewer"))
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+    assert r.status_code == 200, r.text
+    assert statements
+    writes = [
+        st for st in statements if st.split(" ", 1)[0].upper() in ("UPDATE", "INSERT", "DELETE")
+    ]
+    assert not writes, writes
 
 
 @pytest.mark.timing
@@ -125,5 +175,7 @@ async def test_reads_answer_within_budget(client):
             assert r.status_code == 200, r.text
         best[url] = min(times)
         print(f"{url}: {', '.join(f'{t * 1000:.0f}' for t in times)} ms")
-    assert best[ROADMAP] < 0.3, best
+    # 360 ms: the light rank costs about 50 ms (best of 3: 245 ms without it, 295 with it);
+    # the old 300 ms was 1.22 times the old time, and 1.22 times 295 is 360.
+    assert best[ROADMAP] < 0.36, best
     assert best[WAITING] < 0.11, best

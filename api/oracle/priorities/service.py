@@ -327,6 +327,122 @@ async def compute(
     return _ranking(result)
 
 
+async def _rank_inputs(db: AsyncSession, principal: Principal | None) -> list[FeatureInput]:
+    """timeline-order: :func:`load_features` cut to what :func:`rank` needs, for the Simple
+    roadmap read: column selects (no whole rows, no evidence text, citations or source items)
+    and never a write (``rescore=False``'s reading: unscored evidence stays unscored)."""
+    entities = (
+        await db.execute(
+            select(
+                Entity.id, Entity.type, Entity.key, Entity.title, Entity.status, Entity.attrs,
+                Entity.confidence, Entity.parent_id, Entity.created_at,
+            ).where(Entity.type.in_(["feature", "goal"]), Entity.status != "rejected")
+        )
+    ).all()  # fmt: skip
+    features = {e.id: e for e in entities if e.type == "feature"}
+    goals = {e.id: e for e in entities if e.type == "goal" and e.status == "confirmed"}
+    inputs = {
+        e.id: FeatureInput(
+            id=str(e.id),
+            key=e.key,
+            title=e.title,
+            status=e.status,
+            attrs=dict(e.attrs or {}),
+            stored_confidence=float(e.confidence) if e.confidence is not None else None,
+        )
+        for e in features.values()
+    }
+    if not inputs:
+        return []
+    edges = await db.execute(
+        select(Edge.type, Edge.src_id, Edge.dst_id, Edge.status, Edge.attrs).where(
+            Edge.type.in_(["supports", "depends_on", "blocks"]), Edge.status != "rejected"
+        )
+    )
+    # Each goal's part of a link, worked out once per goal (not once per link).
+    linked: dict[uuid.UUID, dict[str, Any]] = {}
+    for goal in goals.values():
+        parent = goals.get(goal.parent_id) if goal.parent_id else None
+        linked[goal.id] = {
+            "goal_key": goal.key,
+            "goal_title": goal.title,
+            "weight": (
+                _float((goal.attrs or {}).get("weight"))
+                if parent is None
+                else _subgoal_weight(goal, parent, goals.values())  # type: ignore[arg-type]
+            ),
+            "goal_id": str(goal.id),
+            "parent_key": parent.key if parent else None,
+            "parent_title": parent.title if parent else None,
+            "position": goal_position(goal.attrs),
+            "order": goal_sort_key(goal),  # type: ignore[arg-type]
+        }
+    for kind, src, dst, status, attrs in edges:
+        if kind == "supports" and src in inputs and dst in linked:
+            attrs = attrs or {}
+            inputs[src].goals.append(
+                GoalLink(
+                    **linked[dst],
+                    contribution=(
+                        None
+                        if attrs.get("contribution_assumed")
+                        else _contribution(attrs.get("contribution"))
+                    ),
+                    edge_status=status,
+                )
+            )
+        elif kind == "depends_on" and src in inputs and dst in inputs:
+            inputs[src].depends_on.append(inputs[dst].key)
+        elif kind == "blocks" and src in inputs and dst in inputs:
+            inputs[dst].depends_on.append(inputs[src].key)
+    # Every entity's evidence, filtered here: no list of ids sent with the statement.
+    evidence = await db.execute(
+        select(Evidence.id, Evidence.entity_id, Evidence.confidence).where(
+            Evidence.entity_id.is_not(None)
+        )
+    )
+    view = await baseline_evidence.run_view(db, principal, entity_ids=list(inputs))
+    if view is not None:
+        for f in features.values():
+            inputs[f.id].stored_confidence = view.confidence("entity", f.id)
+    for ev_id, entity_id, confidence in evidence:
+        if entity_id not in inputs:
+            continue
+        inputs[entity_id].evidence.append(
+            EvidenceRef(
+                id=str(ev_id),
+                confidence=(
+                    view.by_evidence.get(ev_id)
+                    if view is not None
+                    else (float(confidence) if confidence is not None else None)
+                ),
+                ref=None,
+            )
+        )
+    for f in inputs.values():
+        f.goals.sort(key=lambda g: (g.order, g.goal_key))
+        f.depends_on.sort()
+    await _track_record(db, list(inputs.values()))
+    return sorted(inputs.values(), key=lambda f: f.key)
+
+
+async def ranks(
+    db: AsyncSession,
+    method: str,
+    principal: Principal | None = None,
+    active: list[PriorityOverride] | None = None,
+) -> dict[str, int]:
+    """timeline-order: :func:`compute`'s rank of each feature (by entity id, overrides applied),
+    without building the ranking's models: the Simple roadmap read orders its rows by it.
+    ``active``: the live overrides when the caller has read them already. Reads through
+    :func:`_rank_inputs`, so a roadmap read (a viewer's too) never writes."""
+    features = await _rank_inputs(db, principal)
+    if active is None:
+        active = await active_overrides(db)
+    result = apply_overrides(rank(features, method), await _override_inputs(db, active, features))
+    return {r["entity_id"]: r["rank"] for r in result["features"]}
+
+
 def _ranking(result: dict[str, Any]) -> PriorityRanking:
     features = [RankedFeature.model_validate(r) for r in result["features"]]
     return PriorityRanking(

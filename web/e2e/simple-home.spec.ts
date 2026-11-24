@@ -114,9 +114,9 @@ for (const phone of [false, true]) {
         await expect(goals).toHaveCount(3);
         const retention = goals.filter({ hasText: 'Grow retention' });
         await expect(retention.getByTestId('home-goal-link')).toHaveAttribute('title', /^G-R · /);
-        await expect(retention.getByTestId('home-goal-weight')).toHaveText(/^\d+% of the score$/);
+        await expect(retention.getByTestId('home-goal-weight')).toHaveText(/^Weight \d+%$/);
         await expect(retention.getByTestId('home-goal-path')).toHaveText(
-          'From 50 teams · now 100 teams · target 200 teams with weekly alerts on',
+          'Now 100 teams · target 200 teams with weekly alerts on',
         );
         await expect(retention.getByTestId('home-goal-status')).toHaveText('At risk');
         await expect(retention.getByTestId('home-goal-need')).toContainText(/needs? you/);
@@ -124,7 +124,7 @@ for (const phone of [false, true]) {
           goals.filter({ hasText: 'Faster activation' }).getByTestId('home-goal-status'),
         ).toHaveText('Not measured yet');
         const quiet = goals.filter({ hasText: 'Keep alerts quiet' });
-        await expect(quiet.getByTestId('home-goal-status')).toHaveText('Not counted yet');
+        await expect(quiet.getByTestId('home-goal-status')).toHaveText('Not measured yet');
         await expect(quiet).toContainText('guardrail');
         // The plan strip: the PRD in play by month, its rows with their item counts (no per-item bars), today's line.
         await expect(card(page, 'plan').getByTestId('home-strip-today')).toHaveCount(1);

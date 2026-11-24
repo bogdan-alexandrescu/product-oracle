@@ -39,7 +39,7 @@ for (const phone of [false, true]) {
       await open(page, 'run-decisions');
       const runs = page.getByRole('region', { name: 'Runs' });
       await expect(runs.getByRole('heading', { name: 'Runs' })).toBeVisible();
-      await expect(runs).toContainText('Stops people approved while Oracle drafted a plan');
+      await expect(runs).toContainText('Steps people approved while Oracle drafted a plan');
       // After the meetings, before the decisions taken outside them.
       const order = await page
         .locator('section.simple-card')

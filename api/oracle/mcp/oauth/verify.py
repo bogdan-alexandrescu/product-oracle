@@ -6,7 +6,7 @@ or ``None`` for anything unknown, expired or revoked (the caller answers 401 wit
 :func:`www_authenticate`, so the client finds the authorization server).
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -18,6 +18,8 @@ from oracle.mcp.oauth.service import ACCESS_PREFIX, effective_role, issuer
 from oracle.tenancy import unscoped_session
 
 _SCHEME = "Bearer"
+# A token's use is written at most this often, so reads stay cheap.
+USE_EVERY = timedelta(minutes=1)
 
 
 async def verify_access_token(raw: str) -> Principal | None:
@@ -28,11 +30,15 @@ async def verify_access_token(raw: str) -> Principal | None:
         token = await s.scalar(select(OAuthToken).where(OAuthToken.access_hash == hash_token(raw)))
         if token is None or token.revoked_at is not None:
             return None
-        if token.expires_at <= datetime.now(UTC):
+        now = datetime.now(UTC)
+        if token.expires_at <= now:
             return None
         user = await s.get(User, token.user_id)
         if user is None or user.tenant_id != token.tenant_id or user.disabled_at is not None:
             return None
+        if token.used_at is None or now - token.used_at >= USE_EVERY:
+            token.used_at = now
+            await s.commit()
         return Principal(
             tenant_id=token.tenant_id,
             kind="user",

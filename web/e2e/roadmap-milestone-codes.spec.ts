@@ -146,7 +146,7 @@ test("Home's plan rows read each milestone by the code the roadmap shows", async
   await open(page);
   const onRoadmap = new Map((await bandCodes(page)).map(([c, name]) => [name, c]));
   await page.goto('/simple');
-  await expect(page.getByRole('heading', { name: 'The plan this quarter' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^The plan( · |$)/ })).toBeVisible();
   await expect(page.getByTestId('home-strip-label').first()).toBeVisible();
   let matched = 0;
   for (const t of await page.getByTestId('home-strip-label').allTextContents()) {

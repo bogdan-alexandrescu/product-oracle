@@ -69,9 +69,12 @@ VIEWS = {
 # two roadmap views differ from c92397816's by that field alone, the six others not at all.
 # unique-codes: the two roadmap views gain feature_name on each item (null on this seed) and
 # nothing else (diffed against fa899682c); the six others are unchanged.
+# timeline-order: the two roadmap views gain position (an integer) and before_override (null on
+# this seed) on each item and nothing else (JSON diff, with the rank and without it); the six
+# others are unchanged.
 DIGESTS = {
-    "roadmap": "ea2f719630b68d9cd442cf67e5d05970f13b15c61c85baacc34c7c4e536cf173",
-    "roadmap-viewer": "1af827fee66a631cf0532bfd555b201b6c13a69bbc1cad8441da41b92c09f2f5",
+    "roadmap": "14c265155f51012293ac299a5c593a79005d5a1cf96d0bac7d41c2fa53859e1b",
+    "roadmap-viewer": "c85e0969fda3471fb3014781fa4f0373cbd4719e34c3a572fc2c283b386b76b0",
     "priorities": "1471b1dcc8f5186e1e1227e91a2bde13d28d48b9ba8971869df141851d6c5277",
     "priorities-viewer": "6f5a79e3aef918833c7e6fda07988bbed353c7e59ee907b3d793b6a3c5550001",
     "decisions": "e5265b88addf7bd45293bc4041094ac5e6d46a38a00b94bbd175f6a22e6ec400",
@@ -179,7 +182,8 @@ async def _statements(client, url: str, headers: dict, **params) -> int:
     return len(statements)
 
 
-ROADMAP_MAX, PRIORITIES_MAX, DECISIONS_MAX = 50, 51, 50
+# 53: the roadmap's light rank adds 5 statements to the 48 it took (measured, warm).
+ROADMAP_MAX, PRIORITIES_MAX, DECISIONS_MAX = 53, 51, 50
 
 
 async def _warm_statements(client, ctx, url: str, **params) -> int:

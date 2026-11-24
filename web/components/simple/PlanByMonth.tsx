@@ -271,22 +271,25 @@ export function PlanByMonth({
           const bars = (
             <span className={`relative h-7 ${named ? '' : 'pointer-events-none'}`}>
               {grid}
-              <span
-                aria-hidden
-                data-estimated={r.estimated ? 'true' : undefined}
-                data-testid={`${testId}-span`}
-                className={`absolute top-2 h-3 rounded ${r.estimated ? 'border border-dashed border-accent' : 'bg-accent'}`}
-                style={{
-                  left: `${left}%`,
-                  width: `${Math.min(width, 100 - left)}%`,
-                  ...(r.estimated
-                    ? {
-                        backgroundImage:
-                          'repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 9px)',
-                      }
-                    : {}),
-                }}
-              />
+              {/* #1765: on Home the items in no milestone are a count (the row's link), never a bar over the whole range. */}
+              {!(named && !r.milestone) && (
+                <span
+                  aria-hidden
+                  data-estimated={r.estimated ? 'true' : undefined}
+                  data-testid={`${testId}-span`}
+                  className={`absolute top-2 h-3 rounded ${r.estimated ? 'border border-dashed border-accent' : 'bg-accent'}`}
+                  style={{
+                    left: `${left}%`,
+                    width: `${Math.min(width, 100 - left)}%`,
+                    ...(r.estimated
+                      ? {
+                          backgroundImage:
+                            'repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 9px)',
+                        }
+                      : {}),
+                  }}
+                />
+              )}
               {r.date && !r.past_edge && (
                 <span
                   aria-hidden
@@ -326,6 +329,7 @@ export function PlanByMonth({
                         <button
                           type="button"
                           aria-label={`Rename ${rowName(r, named)}`}
+                          title={`Rename ${rowName(r, named)}`}
                           data-testid={`${testId}-rename`}
                           onClick={go}
                           className="grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text"
@@ -336,7 +340,10 @@ export function PlanByMonth({
                     </span>
                   )}
                   {tipCol && (
-                    <span className="w-6 flex-none">
+                    <span
+                      className="w-6 flex-none"
+                      title={rowNames.length > 0 ? `The items in ${heard}` : undefined}
+                    >
                       {rowNames.length > 0 && (
                         <InfoTip label={`the items in ${heard}`} testId={`${testId}-items-tip`}>
                           <ul className="flex flex-col gap-0.5">
@@ -487,7 +494,20 @@ export function PlanByMonth({
           ) : (
             <span />
           )}
-          {plan.past_edge > 0 && <span data-testid={`${testId}-edge`}>{edgeLine}</span>}
+          {/* #1764: on Home the commitments past the edge are a risk: warning colours, not grey text. */}
+          {plan.past_edge > 0 && (
+            <span
+              data-testid={`${testId}-edge`}
+              className={
+                named
+                  ? 'inline-flex items-center gap-1.5 rounded-lg bg-warn-bg px-2 py-1 font-semibold text-warn'
+                  : undefined
+              }
+            >
+              {named && <Icon name="alert" size={16} />}
+              {edgeLine}
+            </span>
+          )}
         </p>
       )}
     </div>

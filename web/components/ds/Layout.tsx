@@ -168,6 +168,7 @@ export function Split({
 
 /** A white panel with a hairline border; `title` adds B1's 48 px panel head. */
 export function Panel({
+  id,
   title,
   count,
   tools,
@@ -179,6 +180,8 @@ export function Panel({
   toolsClassName = '',
   busy,
 }: {
+  /** Where a link with this hash lands. */
+  id?: string;
   title?: ReactNode;
   count?: ReactNode;
   /** Right side of the head: chips, filters, a secondary action. */
@@ -195,6 +198,7 @@ export function Panel({
 }) {
   return (
     <As
+      id={id}
       data-testid={testId}
       aria-label={typeof title === 'string' ? title : undefined}
       aria-busy={busy}

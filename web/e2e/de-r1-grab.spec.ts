@@ -52,7 +52,9 @@ async function drag(page: Page, from: { x: number; y: number }, dx: number, dy: 
 }
 
 test.describe('de-r1 grab the bar', () => {
-  test.use({ viewport: { width: 1366, height: 900 } });
+  // timeline-order: a new row sits after its track's ranked rows, so the band it is dropped on can
+  // be far above it; the page is tall enough for both to be in sight.
+  test.use({ viewport: { width: 1366, height: 1400 } });
 
   test('a bar dropped on another track moves there', async ({ page }) => {
     await open(page);

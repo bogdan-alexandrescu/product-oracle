@@ -554,4 +554,9 @@ async def test_goals_read_once_per_roadmap_read(client):
     finally:
         event.remove(engine, "before_cursor_execute", count)
     assert any(m["goal_target"] for m in body["goal_milestones"])
-    assert len(seen) == 1, "\n".join(seen)
+    # The roadmap's own read of its goals is one select; the timeline-order rank adds one more, of
+    # features and goals together (type in feature, goal), and nothing else reads a goal.
+    own = [x for x in seen if "entities.type in" not in x]
+    rank = [x for x in seen if "entities.type in" in x]
+    assert len(own) == 1, "\n".join(seen)
+    assert len(rank) == 1, "\n".join(seen)

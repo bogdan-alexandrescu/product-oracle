@@ -22,7 +22,7 @@ import {
   goalParentKey,
   goalPositionOf,
   linkOf,
-  goalRank,
+  goalRankByKeyOrId,
   goalInTrash,
   keptTarget,
   roadmapGoal,
@@ -376,7 +376,7 @@ function out(
   const up = (g: Goal) => goalParentKey(itemGoalKey(g) ?? g.key);
   const live = db.goals
     .filter((g) => !g.archived && !g.trashed && (!up(g) || isLive(db.goals, up(g)!)))
-    .sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
+    .sort((a, b) => goalRankByKeyOrId(orderKey(a)) - goalRankByKeyOrId(orderKey(b)));
   const ids = new Set(live.map((g) => g.id));
   const archived = db.goals
     .filter((g) => g.archived && !g.trashed)

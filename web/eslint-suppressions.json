@@ -1002,9 +1002,6 @@
   "app/oauth/consent/ConsentScreen.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 2
-    },
-    "import-x/order": {
-      "count": 4
     }
   },
   "app/page.tsx": {
@@ -1682,9 +1679,6 @@
   "app/settings/connections/ConnectionsSettings.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 5
-    },
-    "import-x/order": {
-      "count": 2
     },
     "max-lines": {
       "count": 1
@@ -2420,9 +2414,6 @@
     "design-system/no-raw-button": {
       "count": 15
     },
-    "import-x/order": {
-      "count": 1
-    },
     "max-lines": {
       "count": 1
     },
@@ -2715,13 +2706,10 @@
   },
   "components/MyAccount.tsx": {
     "@typescript-eslint/no-misused-promises": {
-      "count": 8
+      "count": 7
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "import-x/order": {
-      "count": 8
     },
     "max-lines": {
       "count": 1
@@ -3115,9 +3103,6 @@
     },
     "import-x/no-cycle": {
       "count": 1
-    },
-    "import-x/order": {
-      "count": 11
     },
     "max-lines": {
       "count": 1
@@ -4321,11 +4306,6 @@
       "count": 2
     }
   },
-  "e2e/contracts-published.spec.ts": {
-    "import-x/order": {
-      "count": 1
-    }
-  },
   "e2e/cost-prominence.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -5494,11 +5474,6 @@
       "count": 2
     }
   },
-  "e2e/ground-truth-words-source.spec.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
   "e2e/ground-truth-words.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -6041,11 +6016,6 @@
       "count": 2
     }
   },
-  "e2e/own-tree-only.spec.ts": {
-    "import-x/order": {
-      "count": 1
-    }
-  },
   "e2e/page-header.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -6322,11 +6292,6 @@
   "e2e/priority-run.spec.ts": {
     "import-x/order": {
       "count": 3
-    }
-  },
-  "e2e/prose-guard.spec.ts": {
-    "import-x/order": {
-      "count": 6
     }
   },
   "e2e/prose-tips.spec.ts": {
@@ -8766,9 +8731,6 @@
     }
   },
   "lib/api/mock/account.ts": {
-    "import-x/order": {
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "count": 1
     }

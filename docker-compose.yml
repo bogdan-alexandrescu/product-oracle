@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
     environment:
       POSTGRES_USER: oracle
       POSTGRES_PASSWORD: oracle
@@ -17,7 +17,11 @@ services:
       retries: 30
 
   api:
-    build: ./api
+    # #1710: the commit each image serves at /version (make up passes it; plain compose: unknown).
+    build:
+      context: ./api
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
       ORACLE_DATABASE_URL: postgresql+asyncpg://oracle:oracle@postgres:5432/oracle
       ORACLE_SECRET_KEY: ${ORACLE_SECRET_KEY:-dev-insecure-change-me}
@@ -38,6 +42,7 @@ services:
       context: ./web
       args:
         API_INTERNAL_URL: http://api:8000
+        GIT_SHA: ${GIT_SHA:-unknown}
     ports:
       - "3000:3000"
     depends_on:

@@ -406,12 +406,23 @@ async def before_restore(db: AsyncSession, entry: TrashEntry, principal: Any = N
             )
 
 
+async def coming_back(db: AsyncSession, entry: TrashEntry) -> list[Any]:
+    """The ids of the roadmap items a restore brings back that :func:`_codes_free` checks:
+    the item deleted, not its rows on other versions (codes-at-write numbers them)."""
+    rows = list(await db.execute(
+        select(RoadmapItem.id).where(RoadmapItem.trash_entry_id == entry.id)
+        .execution_options(**ALL)
+    ))  # fmt: skip
+    ids = [r.id for r in rows]
+    return [i for i in ids if i == entry.root_id] or ids
+
+
 async def _codes_free(db: AsyncSession, entry: TrashEntry, principal: Any) -> None:
     """every-field: one code, one item. An item coming back whose code another live item
     took meanwhile (a rename while it was in Trash, in the drafts the restorer sees) is not
-    restored (409, in set_code's words):
-    its title's code is checked as an add checks it, its feature's or PRD's against the codes
-    other items' titles give them. The item deleted, not its rows on other versions."""
+    restored (409, in set_code's words): its title's code is checked as an add checks it. One
+    that takes its code from its feature or PRD section is numbered as it comes back instead
+    (codes-at-write). The item deleted, not its rows on other versions."""
     from types import SimpleNamespace
 
     from oracle.simple import changes
@@ -428,10 +439,13 @@ async def _codes_free(db: AsyncSession, entry: TrashEntry, principal: Any) -> No
     await service.item_codes(db, back)  # type: ignore[arg-type]
     try:
         for e in back:
+            # codes-at-write (Nov 23): a code the item takes from its feature or PRD section,
+            # shown by another item meanwhile, gets it the next free number as it comes back
+            # (oracle.roadmap.codes.check_flush); only a typed code that is taken is refused.
             code = changes._code_of(e)
             if code is None:
                 await changes._title_code(db, None, e.row.title or "", read_)
-            else:
+            elif not changes._inherited(e):
                 await changes._not_taken(db, e, code, read_.by_id(), own_only=True)
     except changes.ChangeError as err:
         raise trash.Conflict(f"{exception_text(err)}: rename it first") from err

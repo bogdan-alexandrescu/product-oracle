@@ -268,7 +268,9 @@ def create_app() -> FastAPI:
         return Health(status="ok", database="ok")
 
     # #1569: the commit this image was built from (api/Dockerfile's GIT_SHA), without signing
-    # in: the deploy's containment check (web/scripts/deploy-serves.ts) asks it.
+    # in: the deploy's containment check (web/scripts/deploy-serves.ts) asks it. #1710: also at
+    # /v1/version, since the load balancer sends only /v1/* and /healthz to the API.
+    @app.get("/v1/version", response_model=Version, tags=["health"], operation_id="v1_version")
     @app.get("/version", response_model=Version, tags=["health"])
     async def build_commit(response: Response) -> Version:
         response.headers["Cache-Control"] = "no-store"

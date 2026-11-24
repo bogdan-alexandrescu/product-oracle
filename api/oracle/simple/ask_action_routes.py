@@ -192,6 +192,7 @@ _WHY: dict[str, tuple[str, ...]] = {
     ),
     "an API token, a way into Oracle": (
         "list_api_tokens",
+        "list_mcp_people",
         "remove_api_token",
         "revoke_api_token",
         "token_approvals",
@@ -880,6 +881,8 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "update_source",
         "update_template",
         "update_track",
+        # #1710: the build commit under /v1, for the deploy's containment check.
+        "v1_version",
         "upload_brand_logo",
         "upload_files",
         "validate_template",

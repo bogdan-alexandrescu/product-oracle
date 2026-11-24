@@ -131,7 +131,10 @@ async def test_edited_and_archived_templates_and_themes_are_untouched(db):
         (v.template_id, v.version, v.body, v.created_by)
         for v in (await db.scalars(select(TemplateVersion).order_by(TemplateVersion.id))).all()
     ]
-    before_themes = [(t.key, t.css, t.tokens) for t in (await db.scalars(select(Theme))).all()]
+    before_themes = [
+        (t.key, t.css, t.tokens)
+        for t in (await db.scalars(select(Theme).order_by(Theme.key))).all()
+    ]
 
     await ensure_seeded(db)
     await db.commit()
@@ -150,9 +153,11 @@ async def test_edited_and_archived_templates_and_themes_are_untouched(db):
     ]
     assert after_templates == before_templates
     assert after_versions == before_versions
-    assert [(t.key, t.css, t.tokens) for t in (await db.scalars(select(Theme))).all()] == (
-        before_themes
-    )
+    after_themes = [
+        (t.key, t.css, t.tokens)
+        for t in (await db.scalars(select(Theme).order_by(Theme.key))).all()
+    ]
+    assert after_themes == before_themes
     # The archived template gets no manifest; the edited one keeps the sidecar only.
     assert not await registry.read_manifest(db, memo.id)
     assert await registry.read_manifest(db, one.id)

@@ -15,7 +15,7 @@ It is not in the repository and was not reviewed.
 ## 1. Trust boundaries and credentials
 
 ```text
-Browser ──IAP──> web (Next.js, same origin proxies /v1/*) ──> API (/v1)
+Browser ──IAP──> load balancer ──/v1/*, /uploads/*, /healthz──> API; every other path ──> web (nginx, static app)
 External MCP client ──OAuth 2.1──> /mcp (public backend, no IAP) ──in-process──> /v1 routes
 CLI / scripts ──API token──> /v1
 SwarmCloud agent ──run token (not sent today)──> /mcp

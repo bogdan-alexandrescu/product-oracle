@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Build Commit */
+        get: operations["v1_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/login": {
         parameters: {
             query?: never;
@@ -2550,6 +2567,28 @@ export interface paths {
          *     when known, and how many credentials still act for them.
          */
         get: operations["list_members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Mcp People
+         * @description MCP across the company, for owners: each active member, their role, how many MCP
+         *     clients they have connected (live grants) and the newest last-used time, and how
+         *     many of them have one connected.
+         */
+        get: operations["list_mcp_people"];
         put?: never;
         post?: never;
         delete?: never;
@@ -31680,6 +31719,8 @@ export interface components {
              * Format: date-time
              */
             last_used_at: string;
+            /** Runs On */
+            runs_on: string;
             /**
              * Expires At
              * Format: date-time
@@ -31687,6 +31728,43 @@ export interface components {
             expires_at: string;
             /** Revoked At */
             revoked_at?: string | null;
+        };
+        /**
+         * McpPeopleOut
+         * @description MCP across the company: ``connected`` of ``total`` active members have a live
+         *     client; one row per active member.
+         */
+        McpPeopleOut: {
+            /** Connected */
+            connected: number;
+            /** Total */
+            total: number;
+            /** People */
+            people: components["schemas"]["McpPersonOut"][];
+        };
+        /**
+         * McpPersonOut
+         * @description One member and the MCP clients they have connected (live grants only).
+         */
+        McpPersonOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Clients */
+            clients: number;
+            /** Last Used At */
+            last_used_at?: string | null;
         };
         /**
          * McpServerRegistration
@@ -32568,6 +32646,8 @@ export interface components {
              * @default false
              */
             read_only: boolean;
+            /** Mcp Url */
+            mcp_url: string;
         };
         /**
          * NamePatch
@@ -41801,6 +41881,10 @@ export interface components {
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
             /** Off Agenda */
             off_agenda?: boolean | null;
+            /** Numbered */
+            numbered?: {
+                [key: string]: string;
+            } | null;
         };
         /** SimpleChangeResult */
         SimpleChangeResult: {
@@ -44681,6 +44765,12 @@ export interface components {
              * @default []
              */
             suggested_depends: string[];
+            /** Position */
+            position?: number | null;
+            /** Before Override */
+            before_override?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Can Decide
              * @default false
@@ -50901,6 +50991,26 @@ export interface operations {
             };
         };
     };
+    v1_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Version"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -56097,6 +56207,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberOut"][];
+                };
+            };
+        };
+    };
+    list_mcp_people: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpPeopleOut"];
                 };
             };
         };

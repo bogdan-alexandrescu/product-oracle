@@ -211,8 +211,8 @@ test("F-51: My account's token parts use plain names and keep their reasons behi
   await form.getByRole('button', { name: 'About what Write allows' }).click();
   await expect(form.getByTestId('write-scope-note')).toBeVisible();
   await expect(page.getByTestId('password-revokes')).toBeHidden();
-  // Owner's decision (Nov 5): the credentials people authorize for AI tools stay "MCP clients".
-  await expect(page.getByTestId('clients-panel')).toContainText('MCP clients');
+  // Owner's pick (Nov 23, after Nov 5's "MCP clients"): the panel is "Connected clients".
+  await expect(page.getByTestId('clients-panel')).toContainText('Connected clients');
   await expect(page.getByText('Connected app', { exact: false })).toHaveCount(0);
 });
 

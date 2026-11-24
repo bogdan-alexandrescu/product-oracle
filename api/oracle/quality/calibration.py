@@ -64,8 +64,12 @@ async def compute(db: AsyncSession) -> CalibrationOut:
     by_goal: dict[uuid.UUID, list[OutcomeRecord]] = {}
     for r in rows:
         by_goal.setdefault(r.goal_id, []).append(r)
-    found = await db.execute(select(Entity.id, Entity.title).where(Entity.id.in_(list(by_goal))))
-    titles = {goal_id: title for goal_id, title in found}
+    titles: dict[uuid.UUID, str] = {}
+    if by_goal:
+        found = await db.execute(
+            select(Entity.id, Entity.title).where(Entity.id.in_(list(by_goal)))
+        )
+        titles = {goal_id: title for goal_id, title in found}
     goals = sorted(
         (
             GoalCalibration(goal_id=g, title=titles.get(g, ""), **_figures(rs, minimum))

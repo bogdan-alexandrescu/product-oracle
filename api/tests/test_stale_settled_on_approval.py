@@ -26,6 +26,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import select, update
 
+from oracle import company_time
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
@@ -130,7 +131,7 @@ async def test_approving_a_version_settles_what_it_keeps(client, owner, runtime)
                 select(AuditEvent).where(AuditEvent.action == "roadmap.items.reconcile")
             )
         )
-    assert pay.note == f"Kept in version 2, approved {when:%b} {when.day} by {name}"
+    assert pay.note == f"Kept in version 2, approved {company_time.day_in_words(when)} by {name}"
     assert pay.reconciled_at is not None and pay.reconciled_by is not None
     assert pay.reconciled_version_id is not None
     assert ship.freshness == "potentially_stale"
@@ -168,11 +169,13 @@ async def _run_migration(tenant_id) -> None:
 
 def test_chains_on_the_single_head():
     """The migration chains directly onto its prior revision; the branch has one head, which a
-    later migration (unique item codes, after feature comments) now holds."""
+    later migration (unique item codes, stale by meaning, OAuth last-used) now holds."""
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision("0135_feature_comments").down_revision == REVISION
-    assert script.get_heads() == ["0136_unique_item_codes"]
+    assert script.get_revision("0137_stale_by_meaning").down_revision == "0136_unique_item_codes"
+    assert script.get_revision("0138_oauth_token_used_at").down_revision == "0137_stale_by_meaning"
+    assert script.get_heads() == ["0138_oauth_token_used_at"]
 
 
 async def test_the_migration_settles_todays_flags(client, owner, runtime):  # noqa: F811

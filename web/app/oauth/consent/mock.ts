@@ -3,7 +3,7 @@
  * everything else (GET /v1/me, sign-in) to the app's mock API, so "signed in" means the
  * same thing here as on every other screen.
  */
-import { mockFetch } from '@/lib/api/mock/server';
+import { mockFetch, mockGrantClient } from '@/lib/api/mock/server';
 import { reply } from '@/lib/api/mock/typed';
 
 export const MOCK_CONSENT = {
@@ -71,8 +71,14 @@ export async function consentMockFetch(req: Request): Promise<Response> {
   }
   if (url.pathname === '/oauth/authorize/decision' && decision) {
     const back = new URL(MOCK_CONSENT.redirect_uri);
-    if (decision.approve) back.searchParams.set('code', 'poc_mock-code');
-    else back.searchParams.set('error', 'access_denied');
+    if (decision.approve) {
+      back.searchParams.set('code', 'poc_mock-code');
+      mockGrantClient(
+        user.email,
+        { id: MOCK_CONSENT.client_id, name: MOCK_CONSENT.client_name },
+        !readOnly,
+      );
+    } else back.searchParams.set('error', 'access_denied');
     back.searchParams.set('state', MOCK_CONSENT.state);
     return reply('/oauth/authorize/decision', 'post', { redirect_to: back.toString() });
   }

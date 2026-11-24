@@ -73,8 +73,14 @@ for (const [device, size] of [
       await signIn(page, ADMIN.email, size, false);
       const goals = home(page).getByTestId('home-goal');
       await expect(goals).toHaveCount(2);
-      for (const g of await goals.all())
-        await expect(g.getByTestId('home-goal-path')).toHaveText(/^From .+ · now .+ · target .+$/);
+      // #1759: one progress pattern on the card; where it started is in its tooltip.
+      for (const g of await goals.all()) {
+        await expect(g.getByTestId('home-goal-path')).toHaveText(/^Now .+ · target .+$/);
+        await expect(g.getByTestId('home-goal-path')).toHaveAttribute(
+          'title',
+          /^From .+ · now .+ · target .+$/,
+        );
+      }
       await expect(home(page).getByTestId('home-goals-proposed')).toHaveText('1 proposed goal');
       for (const g of await goals.all())
         await expect(g.getByTestId('goal-suggestions-open')).toBeVisible();

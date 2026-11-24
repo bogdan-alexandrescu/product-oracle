@@ -1228,7 +1228,10 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
       footer={<Button onClick={onClose}>Done</Button>}
     >
       <p className="text-text2">
-        Counts browsers, not people. Oracle never records who opened a link.
+        Counts browsers, not people.{' '}
+        <InfoTip label="who opened it" align="start">
+          Oracle never records who opened a link.
+        </InfoTip>
       </p>
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!v && !q.error && <Loading />}

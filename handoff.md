@@ -1,6 +1,38 @@
+# codes-at-write handoff (PR #1811, fix round 3)
+
+## Write paths that number an item at write (file:line, at this branch)
+- Every flush of a roadmap item: `api/oracle/tenancy.py:144` calls `codes.check_flush`
+  (`api/oracle/roadmap/codes.py:281`); Priorities add relies on it (`api/oracle/simple/targets.py:837`).
+- Link (merge_item with feature_id): `api/oracle/simple/changes.py:1414` (`_number_linked`, :1464), audited at
+  :1510 (`codes.numbered`, `api/oracle/roadmap/codes.py:538`); the response's `change.numbered` at
+  `api/oracle/simple/changes_router.py:157`.
+- Restore: `api/oracle/trash/service.py:908` (`trash_items.coming_back`, `api/oracle/simple/trash_items.py:409`)
+  then :916 (`codes.claim`, `api/oracle/roadmap/codes.py:352`); `_codes_free` (trash_items.py:420) refuses only a
+  typed title code.
+- The mock's twins: link in `web/lib/api/mock/simple-changes.ts` (planS7, merge_item with feature_id; applyS7;
+  createS7's `numbered`), restore in `web/lib/api/mock/trash.ts` (restoreFromTrash -> `claimBack`) and
+  `web/lib/api/mock/simple-roadmap.ts` (`nextCode`, `claimBack`); `restoreCodeTaken` refuses only a typed code.
+
+## Part 3's choice
+- "part" goes away as a code source: a copy of an item (a version row, a working draft) keeps its code through
+  `copied_from` / `_held` in `api/oracle/roadmap/codes.py`, so no separate rule for parts is needed.
+
+## This round (re-review NOT_YET, one major)
+- Major fixed: the mock numbers on Merge into a feature and on Restore, as the API. Red specs first
+  (`web/e2e/codes-at-write.spec.ts`, two tests on the new "codes-at-write" mock scenario), then the fix.
+  The mock's look-alikes may now name a Ground Truth feature by id (kind "feature"), as additions.reconcile.
+- Minor fixed: `api/tests/test_stale_settled_on_approval.py::test_approving_a_version_settles_what_it_keeps`
+  reads the kept note's day in the company's time zone (`company_time.day_in_words`), so it passes after
+  midnight UTC. Its sibling `test_the_migration_settles_todays_flags` keeps the UTC day: the migration writes it.
+- Minors handoff (write paths, Part 3): this section.
+- Minors left (not one-line or test-only): Restore's response does not carry the new code (the page reads it on
+  its next roadmap read); a commenter's link fixes its number at proposal time; the lock test's
+  `asyncio.sleep(0.3)` in `api/tests/test_codes_at_write.py`.
+
 # prioritize handoff (owner's Nov 23 order: prioritize in place)
 
-Built on d62c215d5 (the direct-edit merge below). Parts 1 to 3 are built; part 4 is NOT built.
+Built on d62c215d5 (the direct-edit merge below). Parts 1 to 3 are built; part 4 is now built by the
+timeline-order step (its section at the end); the 'NOT built' note below is kept as it was then.
 
 ## Built
 - Part 1, Goal buckets: drag a feature within its bucket (grip) or Alt+ArrowUp/Down on it; stored as the
@@ -109,6 +141,70 @@ on the Timeline for a proposer's change.
 - Other pytest files beyond the touched ones NOT run: de-inst changed live-roadmap reads; the full suite may hold
   more old-rule tests.
 
+## timeline-order (owner's Nov 23 order: prioritize on the Roadmap timeline), on 43c7420ba
+
+### Built (parts 1-4 of that order)
+- API: each Simple roadmap item carries `position` (its feature's Priorities rank: the one feature order the Goal
+  buckets and the Priorities list follow) and `before_override` (its feature's pin). `make openapi` ran.
+- The move is NOT a new keyed reorder op: it reuses `override_priority` on the item (the rank of the row it lands
+  on), the same op the Goal buckets and Priorities write. Why: the order says one order per thing and no second
+  ordering rule; override_priority already renumbers every feature between in one request (whole numbers), refuses
+  a stale `before` with 409, and has the decider / commenter / viewer split and the server rights check.
+  pytest: api/tests/test_simple_roadmap_order_api.py (each role, renumbering, 409, another company untouched).
+- Timeline: each track's and goal's rows follow `position` (no position: start order after the ordered ones);
+  drag a row by its name or Alt+ArrowUp/Down on it; optimistic, rolled back with the server's words; Undo toast;
+  a commenter's move shows the pending mark; a viewer has no handle. Gantt and Now / Next / Later keep their
+  grouping and follow the order within it. Mock parity for the field and the op.
+  Spec: web/e2e/timeline-order.spec.ts; web/e2e/simple-roadmap-lanes.spec.ts reads the order too.
+
+### Fix step (review NOT_YET, four majors)
+- Speed: budgets back at 60 statements and 0.3 s (test_simple_roadmap_speed.py as on main but the digests). The read
+  is 58 statements (base 55; the first cut 64): the company's settings are read once per session until it writes
+  (tenant_settings_api._stored, the goal_reads pattern: forgotten on flush, commit, rollback and any write; not kept
+  while the session holds unwritten changes or reads across companies), the live overrides once, and calibration
+  skips its goal titles read when no goal has an outcome. Time: the ranking (load_features + rank) still costs
+  about 0.13 s per read here. On this machine the timing test fails at base too (the waiting read, untouched,
+  measures 0.11-0.18 s against 0.11; the roadmap read 0.59-0.73 s), so the 0.3 s check cannot be judged here.
+  Next, if the owner wants the time back: column selects in priorities.load_features (it builds ORM rows for
+  about 1,600 entities on the seed), or a stored live ranking.
+- Row order handle: useRowOrder returns its handle from useMemo, rebuilt only when canChange or the set of pending
+  moves changes (act through a ref), so a bar drag no longer redraws every row. No spec measures redraws.
+- Goals spec: the Goal buckets check is back as its own test ('Goal buckets reads the goal order the Goal map
+  sets', web/e2e/prioritize-goals.spec.ts): after a Goal map move it opens Goal buckets and reads the two goals
+  in the same order. It failed at first: a mock defect, not the page. In the Goal map's scenario the items name
+  their goal by id, so the mock's Priorities buckets (keyed by it) found no place in goalRank and kept the seed's
+  order (Goal buckets: activations, revenue, failed payments, booked demos; Goal map: booked demos, failed
+  payments, activations, revenue). The API orders buckets by its goal entities, so the mock's goalRank now
+  matches a goal by id as well as by key (web/lib/api/mock/simple-roadmap.ts). The test passes with it.
+- Minors left as they were (the brief: blockers and majors only), including the full lint's two older errors.
+
+### Gates (this fix step)
+- ruff check and format --check: clean.
+- pytest (Postgres 16, -n 4): test_tenant_settings_api, test_calibration, test_company_timezone,
+  test_goal_horizons, test_priorities, test_priority_overrides, test_simple_priorities_api,
+  test_simple_roadmap_order_api, test_branding, test_display_timezone, test_simple_quarter_horizon,
+  test_simple_roadmap_speed: 147 passed, 1 skipped, 1 failed: test_reads_answer_within_budget (timing, above).
+  test_reads_take_few_statements passes at 60 (58).
+- tsc --noEmit: 0. eslint on the changed files: 0. Prettier on the changed files: clean.
+- Playwright (mock build, E2E_PREBUILT=1, --retries=0, trace off): timeline-order, prioritize-goals/map/buckets,
+  simple-roadmap-lanes: 25 passed, 1 skipped (a fixme since removed). prio*.spec.ts and goal-*.spec.ts: 352 passed,
+  1 skipped, BEFORE the goalRank mock fix; prioritize-goals after it: 6 passed. Later runs are listed below.
+- Final runs, at the goals spec's poll fix (mock build, E2E_PREBUILT=1, --retries=0, trace off, workers 4):
+  prio*.spec.ts and goal-*.spec.ts: 352 passed, 1 failed: the new Goal buckets check read the buckets before they
+  drew their goal ids; it now polls (expect.poll), then lane specs prioritize-goals/map/buckets and timeline-order
+  with --repeat-each=2: 36 passed. Planted: without the goalRank id match the Goal buckets check fails.
+  simple-roadmap-*.spec.ts (39 files, two runs): 384 passed, 9 skipped, 2 failed: filter-review:107 and
+  stale-filters:60, the duplicate 'Track' select from before this lane (as the review found).
+  prose-guard (PROSE_BASE=43c7420ba): 33 passed. tsc --noEmit: 0. format:check: 0.
+- NOT run: the FULL `npm run lint` (about 10 minutes, past a foreground command's limit). eslint on each changed web
+  file: no errors; lib/api/mock/simple-roadmap.ts exits 2 only for "suppressions left that do not occur anymore",
+  as it did before this step. eslint-suppressions.json not touched. The review measured the full lint at exit 2 on
+  the two older errors only (_add.tsx max-lines, FeatureDelete.tsx complexity).
+
+### Left
+- The roadmap read's timing (0.13 s of ranking per read); the owner may want it back (see Speed above).
+- The review's minors (no-op moves still say "Moved", the dependency snap-back with no words, the lanes spec's
+  position check that passes when both are missing, the red test rewritten in the fix commit).
 # de-fix handoff (fix step on the merged branch, base d62c215)
 
 All four major findings in verdict.json are fixed. Each fix has a check that fails without it. Commits:
@@ -129,3 +225,40 @@ NOT RUN or not green:
 
 Minors not done (this step was asked to fix the majors only): undo's setGone([]) redraw, a proposer's milestone drag, Esc on the track rename, PRIORITIZE (not built and not reachable), the onAdd suppression.
 No API, mock or migration change. Files outside the merged lanes' own files: none new, apart from `_add-form.tsx` (split out of `_add.tsx`).
+
+### Fix round 2 (re-review NOT_YET: one major, minors; owner's Nov 23 picks)
+- Major, the rank in every roadmap read: `priorities.ranks()` now reads through `_rank_inputs`
+  (api/oracle/priorities/service.py): column selects only (entities, edges, evidence id/entity/
+  confidence; no evidence text, citations or source items), each goal's link worked out once,
+  and it never writes (unscored evidence stays unscored: what `rescore=False` reads). Priorities'
+  own read is unchanged. Red tests first (2a317093): a viewer's read issues no UPDATE
+  (test_simple_roadmap_order_api.py::test_viewer_read_writes_nothing) and the read selects no
+  evidence text or source items (test_simple_roadmap_speed.py::test_read_ranks_through_a_light_load).
+- Cost left: on this machine (timing test alone, no xdist, alternated) best of 3 was 494-522 ms
+  with the rank and 382-396 ms with item_order stubbed out, so about +0.1 s. Most of it is rank()'s
+  own Python (about 41 ms on 1,600 features) plus about 50 ms of load. This machine is too slow to
+  meet the budget: the read misses 0.3 s even without the rank, and the waiting count misses
+  0.11 s, which this round did not touch. Filed as questions.json ("Accept the cost" built;
+  "Store the live ranking" is the other choice). Statements: roadmap 59 (budget 60), waiting 18.
+- Minor, the settings cache (api/oracle/tenant_settings_api.py): the cached read now honours
+  UNSCOPED_KEY, and a lock taken with a SELECT (FOR UPDATE, pg_advisory_*lock) forgets it. Kept
+  because the 60-statement budget needs it. Red first: tests/test_tenant_settings_cache.py
+  (across companies, after a lock (advisory, FOR UPDATE), after a write).
+- Owner's pick: the comment count on Timeline rows. CommentCount came with the comments feature
+  on main, so main was merged in (51566a0c). Conflicts kept both sides; the 5 roadmap digests were
+  updated, since the bodies now carry main's confirm_feature_id and this branch's position. The
+  mock's duplicated imports were fixed in cce45e32. The count is mounted after the row's name in
+  _zoom.tsx; spec e2e/timeline-comment-count.spec.ts (red on a build without it, cce45e32, green
+  after ed263036).
+- Minor done (test only): simple-roadmap-lanes.spec.ts asserts both positions exist and differ.
+- Minors left, as the brief says (behaviour changes or other files, not one-line): a no-op move
+  still says 'Moved'; an optimistic move above its own dependency snaps back with no words; no row
+  redraw measurement for _order.tsx; the red-test rewrite inside 8aba3e304 is history. The full
+  lint's old _add.tsx and FeatureDelete.tsx errors were not reported on this tree (main fixed them).
+  _zoom.tsx's import order is fixed and its suppression pruned (1ea9dca4).
+- Gates (at 1ea9dca4): ruff ok; pytest speed (not timing), order_api, tenant_settings_cache,
+  tenant_settings_api, simple_priorities_api: 64 passed; timing test alone: FAILED on this machine
+  (roadmap best 676 ms, waiting 125 ms; see above); alembic one head (0135_feature_comments);
+  tsc 0; Playwright --retries=0 on a mock build: timeline-comment-count, timeline-order,
+  simple-roadmap-lanes, feature-comments 15 passed; prose guard passed; format:check on the
+  touched files ok; full npm run lint: exit 0 (at 701f40ce, after the import-order fix).

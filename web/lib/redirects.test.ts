@@ -3,13 +3,14 @@ import { join } from 'node:path';
 
 import { expect, test } from 'vitest';
 
+import { nginxAnswer, nginxLocations } from './nginx-locations.testing';
 import { REDIRECTS, resolveRedirect } from './redirects';
 
 /*
  * #1580: the one redirect table (lib/redirects.ts) and the helper that applies it.
  * protects=an old link that lands on a missing page, or a table entry nginx never answers;
  * fails_when=an entry's `to` (or `bare`) names no page under app/, an entry does not resolve,
- * or nginx/default.conf.template has no location for an entry;
+ * or nginx/default.conf.template answers an entry with another code, target, query or bare form;
  * no_claim=the redirect over HTTP (the specs that open an old address drive that).
  */
 
@@ -62,15 +63,19 @@ test('the helper carries segments and the query, and sends a bare request to `ba
   expect(resolveRedirect('/baselines', '')).toBeNull();
 });
 
+// #1715: the target, the query and the bare form, not only the status code: each entry's
+// example path (and its bare form) is answered by nginx's own location, run as a pattern.
 test('nginx answers each entry, as the router does', () => {
   const conf = readFileSync(join(__dirname, '..', 'nginx', 'default.conf.template'), 'utf8');
-  // One location per entry, by its literal path (the dynamic part is nginx's own pattern).
+  const locations = nginxLocations(conf);
   for (const r of REDIRECTS) {
-    const head = r.from.replace(/\/:\w+\*?$/, '');
-    expect(conf, r.from).toContain(head);
-    const at = new RegExp(
-      `location [=~^ ]*\\^?${head.replace(/\//g, '\\/')}[^{]*\\{[^}]*return ${r.permanent ? 308 : 307} `,
-    );
-    expect(conf, r.from).toMatch(at);
+    const paths = [example(r.from), r.from.replace(/\/:\w+\*$/, '')];
+    for (const path of new Set(paths)) {
+      for (const query of ['', 'x=1']) {
+        const router = resolveRedirect(path, query ? `?${query}` : '');
+        const want = router && { code: router.permanent ? 308 : 307, to: router.to };
+        expect(nginxAnswer(locations, path, query), `${path}?${query}`).toEqual(want);
+      }
+    }
   }
 });

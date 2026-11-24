@@ -17,9 +17,10 @@ import {
   codedTitle,
   ROADMAPS,
   companyToday,
-  goalRank,
+  goalRankByKeyOrId,
   prdCode,
   roadmapOut,
+  shownCode,
   trackPrdTitles,
   TRACKS,
   type SeedItem,
@@ -408,7 +409,8 @@ export function addToCompany(
   db: SimpleDb,
   fid: string,
   seen: SimpleDb = db,
-): string | { refused: string } | undefined {
+  gave?: { next: () => string; codes: Record<string, string> },
+): string | undefined {
   const base = featureItem(db, fid);
   const src = base ? db.items.find((s) => s.key === base) : undefined;
   if (!base || !src) return undefined;
@@ -429,31 +431,29 @@ export function addToCompany(
     kept.trace_feature = undefined;
     return kept.key;
   }
-  // every-field (targets.add_to_company): its code is no other item's own, a title's (its slices share it), in set_code's words.
+  // codes-at-write (targets.add_to_company, codes.check_flush): when another item there shows the
+  // feature's code (its own title's, or another item of the feature), the item gets the next free
+  // number at once; nothing is refused.
   const code =
     (src.feature_id && db.feature_codes?.[src.feature_id]) ||
     codedTitle(src.title, prdCode(src.section))[0];
-  const other = code
-    ? seen.items.find(
-        (x) =>
-          x.roadmap === slug &&
-          !x.trashed &&
-          x.key !== base &&
-          x.feature !== base &&
-          !(x.feature_id && seen.feature_codes?.[x.feature_id]) &&
-          !prdCode(x.section) &&
-          codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase(),
-      )
-    : undefined;
-  if (code && other)
-    return {
-      refused: `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}`,
-    };
+  const shown = (x: SeedItem) =>
+    featureOf(seen, x.key) === base ? code : shownCode(x, (id) => seen.feature_codes?.[id] ?? null);
+  const taken =
+    !!code &&
+    seen.items.some(
+      (x) =>
+        x.roadmap === slug &&
+        !x.trashed &&
+        x.key !== base &&
+        shown(x)?.toUpperCase() === code.toUpperCase(),
+    );
+  const number = taken && gave ? gave.next() : null;
   let key = base;
   for (let n = 2; db.ids[key]; n++) key = `${base}-${n}`;
   const row: SeedItem = {
     key,
-    title: src.title,
+    title: number ? `${number} ${codedTitle(src.title, null)[1]}` : src.title,
     horizon: 'later',
     roadmap: slug,
     feature: base,
@@ -463,6 +463,7 @@ export function addToCompany(
   };
   db.items.push(row);
   db.ids[key] = stableUuid(`simple-item/${key}`);
+  if (number && gave) gave.codes[db.ids[key]] = number;
   return key;
 }
 
@@ -823,9 +824,9 @@ const noFeature = (db: SimpleDb, i: Item): boolean =>
   db.items.find((s) => s.key === i.key)?.feature_id === null;
 
 /** Every roadmap's open items as an owner reads them, the company roadmap's first. */
-function openItems(db: SimpleDb): Item[] {
+function openItems(db: SimpleDb, owned?: Item[]): Item[] {
   const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
-  const on = roadmapOut(db, 'owner', new URLSearchParams())!.items.filter(
+  const on = (owned ?? roadmapOut(db, 'owner', new URLSearchParams())!.items).filter(
     (i) => i.status !== 'cut' && !cut.has(i.key),
   );
   return [...on, ...offCompany(db, on).filter((i) => i.status !== 'cut' && !cut.has(i.key))];
@@ -862,36 +863,17 @@ export function featureShortCodes(
   return new Map(created.map((k, n) => [k, shorts[n]]));
 }
 
-export function prioritiesOut(
-  db: SimpleDb,
-  ctx: PrioritiesCtx,
-  route: (c: Schemas['SimpleChangeOut']) => string[],
-  decides: (itemId: string) => boolean,
-  lineKey: string | null = null,
-): Schemas['SimplePrioritiesOut'] {
-  const today = companyToday();
-  const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
-  const trackKeys = new Map(Object.keys(TRACKS).map((k) => [stableUuid(`simple-track/${k}`), k]));
-  const { lines, same } = linesOf(read, (id) => {
-    const k = trackKeys.get(id);
-    return k ? trackPrdTitles(db, k) : [];
-  });
-  const line = pickLine(lineKey, lines, same);
-  const readItems = new Map(read.items.map((i) => [i.id, i]));
-  // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
-  // S7: a draft merged into another is closed too.
-  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
-  const live = read.items.filter((i) => i.status !== 'cut' && !cut.has(i.key));
-  // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
-  // is a row with no item, never reorderable (priorities.py).
-  const seen = new Set(read.items.map((i) => i.id));
-  const all = openItems(db);
+/**
+ * The live ranking (priorities.service.compute): Oracle's order by score and dependency, then people's pins, oldest
+ * first, never above a dependency. `yours` is the one feature order: Priorities' rows, the Goal buckets' and the
+ * roadmap read's `position` (timeline-order).
+ */
+function ranking(db: SimpleDb, all: Item[] = openItems(db)) {
   const ranked = rankedItems(db, all);
   const byId = new Map(ranked.map((i) => [i.id, i]));
-  const keyOf = (i: Item) => i.key;
   const score = new Map<string, number>();
   for (const i of ranked) {
-    const e = estimates(db, keyOf(i), i.id);
+    const e = estimates(db, i.key, i.id);
     // No effort (PM-owned work): no score (scoring.py's missing_inputs), ranked after the scored.
     // No goal value (a goal Oracle has none for): no score either.
     if (e.effort && e.value != null)
@@ -916,6 +898,61 @@ export function prioritiesOut(
     yours.splice(Math.min(pos - 1, yours.length), 0, i);
   }
   yours = dependencyOrder(yours, byId);
+  return { ranked, byId, score, sc, oracleRank, yours };
+}
+
+/**
+ * timeline-order (service.py `item_order`): each item of a roadmap read with its place in the one feature order (its
+ * rank) and its pin as override_priority's `before.override` wants it; an item that does not rank has neither.
+ */
+export function withOrder(
+  db: SimpleDb,
+  out: Schemas['SimpleRoadmapOut'] | null,
+  /** `out` is the owner's whole read: the ranking starts from its items instead of reading the roadmap again (500 items drew slower for it), unless the owner holds a working draft (the API ranks from the committed items, not the draft's overlay). */
+  ownerRead = false,
+): Schemas['SimpleRoadmapOut'] | null {
+  if (!out) return out;
+  const rank = new Map(
+    ranking(db, openItems(db, ownerRead && !out.drafts?.length ? out.items : undefined)).yours.map(
+      (i, n) => [i.id, n + 1],
+    ),
+  );
+  const items = out.items.map((i) => ({
+    ...i,
+    position: rank.get(i.id) ?? null,
+    before_override: rank.has(i.id)
+      ? ((stored(db, i.id).override as Record<string, unknown> | undefined) ?? null)
+      : null,
+  }));
+  return { ...out, items };
+}
+
+export function prioritiesOut(
+  db: SimpleDb,
+  ctx: PrioritiesCtx,
+  route: (c: Schemas['SimpleChangeOut']) => string[],
+  decides: (itemId: string) => boolean,
+  lineKey: string | null = null,
+): Schemas['SimplePrioritiesOut'] {
+  const today = companyToday();
+  const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
+  const trackKeys = new Map(Object.keys(TRACKS).map((k) => [stableUuid(`simple-track/${k}`), k]));
+  const { lines, same } = linesOf(read, (id) => {
+    const k = trackKeys.get(id);
+    return k ? trackPrdTitles(db, k) : [];
+  });
+  const line = pickLine(lineKey, lines, same);
+  const readItems = new Map(read.items.map((i) => [i.id, i]));
+  // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
+  // S7: a draft merged into another is closed too.
+  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
+  const live = read.items.filter((i) => i.status !== 'cut' && !cut.has(i.key));
+  // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
+  // is a row with no item, never reorderable (priorities.py).
+  const seen = new Set(read.items.map((i) => i.id));
+  const all = openItems(db);
+  const { ranked, byId, score, sc, oracleRank, yours } = ranking(db, all);
+  const keyOf = (i: Item) => i.key;
   const can = ctx.role !== 'viewer';
   // qa-prio-twins (priorities._held): a feature's live draft on the roadmap the reader sees, by its link.
   // Only the company roadmap's while there is one.
@@ -1208,7 +1245,8 @@ export function prioritiesOut(
   }
   // goal-order: goals in the one goal order, No goal last.
   buckets.sort(
-    (a, b) => Number(a.no_goal) - Number(b.no_goal) || goalRank(a.key) - goalRank(b.key),
+    (a, b) =>
+      Number(a.no_goal) - Number(b.no_goal) || goalRankByKeyOrId(a.key) - goalRankByKeyOrId(b.key),
   );
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;

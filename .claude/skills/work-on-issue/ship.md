@@ -20,7 +20,9 @@
 
 - The work is done when the merge commit is serving, not when it is merged. Find the merge
   commit (`gh pr view <pr> --json mergeCommit`), and confirm the running app was built from
-  it or a later commit of main: on a local stack, `git pull` main and `make up`, then
-  `curl -s localhost:8000/healthz`; elsewhere, the deploy's own record of the commit it built.
+  it or a later commit of main: on a local stack, `git pull` main and `make up` (it stamps both
+  images with the commit), then
+  `node web/scripts/deploy-serves.ts <merge-commit> http://localhost:8000/v1/version http://localhost:3000/version`
+  (exit 0: both serve it or a later commit); elsewhere, the deploy job's containment check.
 - Then test the change through the UI as a person would (root `CLAUDE.md`, Feature loop).
 - Report the merge commit, how you saw it serving, and anything left.
