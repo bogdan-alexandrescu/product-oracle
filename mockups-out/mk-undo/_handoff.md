@@ -26,3 +26,21 @@ wraps on phone; count leaves out Undone lines), UT3 b hard, hard-1512, phone (a 
 - Drawn-twice items (Restore bar beside the toast's Undo; UT3 a History beside Decided/Proposals; draft Undo vs toast Undo).
 - (Done: focus rings on UT2 c and UT3 a/b mid frames; a cost tag on every result frame; UT3 a frames scrolled to History, UT3 c rest to Removed · 7; `web/mk-snap/tags.spec.ts`.)
 - Still open: a Detailed frame per recommended proposal; UT3 c mid focus ring; minors on 'Not in GT' and codes in the real toast's text.
+
+## Round 3 (this round)
+Runner: `web/mk-snap/` (every line marked MOCK-HOOK): `ut1.spec.ts`, `ut2.spec.ts` (new: UT2 commenter frames, live),
+`ut3.spec.ts` (new: UT3 b/c phone on the open panel, UT3 b/c dark, Detailed frames), `tags.spec.ts` (cost notes, focus rings),
+`patch.spec.ts` (static UT2/UT3 frames: banner 'Undo whole draft', History without the line Decided already lists).
+- Toast placement as today's clearSpot: bottom when clear, else the first spot that covers no real button (chart chips weigh
+  little), and left of an open feature panel on a desktop. UT1 b's 'N more' sits inside the oldest toast; UT1 c's hard
+  frames are scrolled to the timeline so the open list covers only the chart.
+- Cost tags are a margin note in the rail's empty middle (top right on UT3 b's result, where the open list fills the rail).
+- UT1 a's story undoes a move of F-79 Weekly alert digest, whose bar is in view at Oct 31 – Dec 10 in the result.
+- UT2 commenter: a toast offers Withdraw; b a 'Proposed · Withdraw' mark beside the status, no toast; c toast Undo; d a plain
+  toast naming Proposals on it, which shows Withdraw. None says 'Needs a decision' (a commenter has none).
+- Toast text: the two uncoded names get F-63 Welcome video and F-64 In-app tour; no 'in your working draft' suffix.
+- The draft banner's Undo reads 'Undo whole draft'.
+## Still open
+- UT3 a has no Detailed frame (History lives in the Simple panel only); UT1 c and UT2 a have one.
+- The cut's toast Undo still sits beside the panel's 'Cut on … by …' Restore bar in UT2 a/b/c mid (not reworked this round).
+- 'Not in GT' chip and its end dot on the timeline (built text), 'In-app tour' uncoded in the built Removed list.
