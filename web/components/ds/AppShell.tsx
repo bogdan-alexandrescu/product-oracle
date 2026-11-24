@@ -1,5 +1,6 @@
 'use client';
 
+import { myWorkEntry } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 import {
   Suspense,
@@ -62,6 +63,7 @@ type Dest = { label: string; href: string; icon: IconName; testId: string; match
  */
 export const DESTINATIONS: Dest[] = [
   { label: 'Home', href: '/home', icon: 'home', testId: 'nav-home' },
+  ...(myWorkEntry() ? [{ label: 'My work', href: '/my-work', icon: 'check' as const, testId: 'nav-my-work' }] : []), // MOCK-HOOK
   { label: 'Requests', href: '/requests', icon: 'requests', testId: 'nav-requests' },
   { label: 'Ground Truth', href: '/ground-truth', icon: 'baseline', testId: 'nav-baseline' },
   { label: 'PRDs', href: '/documents', icon: 'prds', testId: 'nav-prds' },

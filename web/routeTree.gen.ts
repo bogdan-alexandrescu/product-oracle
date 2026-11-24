@@ -26,6 +26,7 @@ import { Route as GroundTruthPageRouteImport } from './app/ground-truth/page'
 import { Route as HomePageRouteImport } from './app/home/page'
 import { Route as InboxPageRouteImport } from './app/inbox/page'
 import { Route as LoginPageRouteImport } from './app/login/page'
+import { Route as MyWorkPageRouteImport } from './app/my-work/page'
 import { Route as PlanPageRouteImport } from './app/plan/page'
 import { Route as PrioritiesPageRouteImport } from './app/priorities/page'
 import { Route as RequestsPageRouteImport } from './app/requests/page'
@@ -74,6 +75,7 @@ import { Route as SimpleDecisionsPageRouteImport } from './app/simple/decisions/
 import { Route as SimpleGoalsPageRouteImport } from './app/simple/goals/page'
 import { Route as SimpleInboxPageRouteImport } from './app/simple/inbox/page'
 import { Route as SimpleMeetingsPageRouteImport } from './app/simple/meetings/page'
+import { Route as SimpleMyWorkPageRouteImport } from './app/simple/my-work/page'
 import { Route as SimpleOnePagersPageRouteImport } from './app/simple/one-pagers/page'
 import { Route as SimplePrioritiesPageRouteImport } from './app/simple/priorities/page'
 import { Route as SimpleRoadmapPageRouteImport } from './app/simple/roadmap/page'
@@ -188,6 +190,11 @@ const InboxPageRoute = InboxPageRouteImport.update({
 const LoginPageRoute = LoginPageRouteImport.update({
   id: '/login/',
   path: '/login/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyWorkPageRoute = MyWorkPageRouteImport.update({
+  id: '/my-work/',
+  path: '/my-work/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlanPageRoute = PlanPageRouteImport.update({
@@ -432,6 +439,11 @@ const SimpleMeetingsPageRoute = SimpleMeetingsPageRouteImport.update({
   path: '/meetings/',
   getParentRoute: () => SimpleLayoutRoute,
 } as any)
+const SimpleMyWorkPageRoute = SimpleMyWorkPageRouteImport.update({
+  id: '/my-work/',
+  path: '/my-work/',
+  getParentRoute: () => SimpleLayoutRoute,
+} as any)
 const SimpleOnePagersPageRoute = SimpleOnePagersPageRouteImport.update({
   id: '/one-pagers/',
   path: '/one-pagers/',
@@ -615,6 +627,7 @@ export interface FileRoutesByFullPath {
   '/home/': typeof HomePageRoute
   '/inbox/': typeof InboxPageRoute
   '/login/': typeof LoginPageRoute
+  '/my-work/': typeof MyWorkPageRoute
   '/plan/': typeof PlanPageRoute
   '/priorities/': typeof PrioritiesPageRoute
   '/requests/': typeof RequestsPageRoute
@@ -662,6 +675,7 @@ export interface FileRoutesByFullPath {
   '/simple/goals/': typeof SimpleGoalsPageRoute
   '/simple/inbox/': typeof SimpleInboxPageRoute
   '/simple/meetings/': typeof SimpleMeetingsPageRoute
+  '/simple/my-work/': typeof SimpleMyWorkPageRoute
   '/simple/one-pagers/': typeof SimpleOnePagersPageRoute
   '/simple/priorities/': typeof SimplePrioritiesPageRoute
   '/simple/roadmap/': typeof SimpleRoadmapPageRoute
@@ -706,6 +720,7 @@ export interface FileRoutesByTo {
   '/home': typeof HomePageRoute
   '/inbox': typeof InboxPageRoute
   '/login': typeof LoginPageRoute
+  '/my-work': typeof MyWorkPageRoute
   '/plan': typeof PlanPageRoute
   '/priorities': typeof PrioritiesPageRoute
   '/requests': typeof RequestsPageRoute
@@ -753,6 +768,7 @@ export interface FileRoutesByTo {
   '/simple/goals': typeof SimpleGoalsPageRoute
   '/simple/inbox': typeof SimpleInboxPageRoute
   '/simple/meetings': typeof SimpleMeetingsPageRoute
+  '/simple/my-work': typeof SimpleMyWorkPageRoute
   '/simple/one-pagers': typeof SimpleOnePagersPageRoute
   '/simple/priorities': typeof SimplePrioritiesPageRoute
   '/simple/roadmap': typeof SimpleRoadmapPageRoute
@@ -803,6 +819,7 @@ export interface FileRoutesById {
   '/home/': typeof HomePageRoute
   '/inbox/': typeof InboxPageRoute
   '/login/': typeof LoginPageRoute
+  '/my-work/': typeof MyWorkPageRoute
   '/plan/': typeof PlanPageRoute
   '/priorities/': typeof PrioritiesPageRoute
   '/requests/': typeof RequestsPageRoute
@@ -850,6 +867,7 @@ export interface FileRoutesById {
   '/simple/goals/': typeof SimpleGoalsPageRoute
   '/simple/inbox/': typeof SimpleInboxPageRoute
   '/simple/meetings/': typeof SimpleMeetingsPageRoute
+  '/simple/my-work/': typeof SimpleMyWorkPageRoute
   '/simple/one-pagers/': typeof SimpleOnePagersPageRoute
   '/simple/priorities/': typeof SimplePrioritiesPageRoute
   '/simple/roadmap/': typeof SimpleRoadmapPageRoute
@@ -902,6 +920,7 @@ export interface FileRouteTypes {
     | '/home/'
     | '/inbox/'
     | '/login/'
+    | '/my-work/'
     | '/plan/'
     | '/priorities/'
     | '/requests/'
@@ -949,6 +968,7 @@ export interface FileRouteTypes {
     | '/simple/goals/'
     | '/simple/inbox/'
     | '/simple/meetings/'
+    | '/simple/my-work/'
     | '/simple/one-pagers/'
     | '/simple/priorities/'
     | '/simple/roadmap/'
@@ -993,6 +1013,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/inbox'
     | '/login'
+    | '/my-work'
     | '/plan'
     | '/priorities'
     | '/requests'
@@ -1040,6 +1061,7 @@ export interface FileRouteTypes {
     | '/simple/goals'
     | '/simple/inbox'
     | '/simple/meetings'
+    | '/simple/my-work'
     | '/simple/one-pagers'
     | '/simple/priorities'
     | '/simple/roadmap'
@@ -1089,6 +1111,7 @@ export interface FileRouteTypes {
     | '/home/'
     | '/inbox/'
     | '/login/'
+    | '/my-work/'
     | '/plan/'
     | '/priorities/'
     | '/requests/'
@@ -1136,6 +1159,7 @@ export interface FileRouteTypes {
     | '/simple/goals/'
     | '/simple/inbox/'
     | '/simple/meetings/'
+    | '/simple/my-work/'
     | '/simple/one-pagers/'
     | '/simple/priorities/'
     | '/simple/roadmap/'
@@ -1185,6 +1209,7 @@ export interface RootRouteChildren {
   HomePageRoute: typeof HomePageRoute
   InboxPageRoute: typeof InboxPageRoute
   LoginPageRoute: typeof LoginPageRoute
+  MyWorkPageRoute: typeof MyWorkPageRoute
   PrioritiesPageRoute: typeof PrioritiesPageRoute
   RunsPageRoute: typeof RunsPageRoute
   BriefsIdPageRoute: typeof BriefsIdPageRoute
@@ -1325,6 +1350,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login/'
       preLoaderRoute: typeof LoginPageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-work/': {
+      id: '/my-work/'
+      path: '/my-work'
+      fullPath: '/my-work/'
+      preLoaderRoute: typeof MyWorkPageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plan/': {
@@ -1661,6 +1693,13 @@ declare module '@tanstack/react-router' {
       path: '/meetings'
       fullPath: '/simple/meetings/'
       preLoaderRoute: typeof SimpleMeetingsPageRouteImport
+      parentRoute: typeof SimpleLayoutRoute
+    }
+    '/simple/my-work/': {
+      id: '/simple/my-work/'
+      path: '/my-work'
+      fullPath: '/simple/my-work/'
+      preLoaderRoute: typeof SimpleMyWorkPageRouteImport
       parentRoute: typeof SimpleLayoutRoute
     }
     '/simple/one-pagers/': {
@@ -2014,6 +2053,7 @@ interface SimpleLayoutRouteChildren {
   SimpleGoalsPageRoute: typeof SimpleGoalsPageRoute
   SimpleInboxPageRoute: typeof SimpleInboxPageRoute
   SimpleMeetingsPageRoute: typeof SimpleMeetingsPageRoute
+  SimpleMyWorkPageRoute: typeof SimpleMyWorkPageRoute
   SimpleOnePagersPageRoute: typeof SimpleOnePagersPageRoute
   SimplePrioritiesPageRoute: typeof SimplePrioritiesPageRoute
   SimpleRoadmapPageRoute: typeof SimpleRoadmapPageRoute
@@ -2028,6 +2068,7 @@ const SimpleLayoutRouteChildren: SimpleLayoutRouteChildren = {
   SimpleGoalsPageRoute: SimpleGoalsPageRoute,
   SimpleInboxPageRoute: SimpleInboxPageRoute,
   SimpleMeetingsPageRoute: SimpleMeetingsPageRoute,
+  SimpleMyWorkPageRoute: SimpleMyWorkPageRoute,
   SimpleOnePagersPageRoute: SimpleOnePagersPageRoute,
   SimplePrioritiesPageRoute: SimplePrioritiesPageRoute,
   SimpleRoadmapPageRoute: SimpleRoadmapPageRoute,
@@ -2092,6 +2133,7 @@ const rootRouteChildren: RootRouteChildren = {
   HomePageRoute: HomePageRoute,
   InboxPageRoute: InboxPageRoute,
   LoginPageRoute: LoginPageRoute,
+  MyWorkPageRoute: MyWorkPageRoute,
   PrioritiesPageRoute: PrioritiesPageRoute,
   RunsPageRoute: RunsPageRoute,
   BriefsIdPageRoute: BriefsIdPageRoute,

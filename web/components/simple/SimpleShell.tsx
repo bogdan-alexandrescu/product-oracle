@@ -1,5 +1,6 @@
 'use client';
 
+import { myWorkEntry, myWorkLate } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { Link, usePathname, useRouter } from '@/lib/nav';
 import {
   useCallback,
@@ -58,9 +59,11 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   // S-7: in Simple's shell, so the person stays in Simple.
   { label: 'Inbox', href: '/simple/inbox', icon: 'inbox', testId: 'simple-nav-inbox' },
 ];
+// MOCK-HOOK: My work's own rail entry under Home (#1798 MW1 a).
+if (myWorkEntry()) SIMPLE_DESTINATIONS.splice(1, 0, { label: 'My work', href: '/simple/my-work', icon: 'check', testId: 'simple-nav-my-work' }); // MOCK-HOOK
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
-const TABS = ['Home', 'One-pagers', 'Roadmap', 'Decisions'];
+const TABS = myWorkEntry() ? ['Home', 'My work', 'Roadmap', 'Decisions'] : ['Home', 'One-pagers', 'Roadmap', 'Decisions']; // MOCK-HOOK
 
 function isActive(pathname: string, d: Dest): boolean {
   if (d.href === SIMPLE_HOME) return pathname === SIMPLE_HOME;
@@ -505,7 +508,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
         </Link>
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {
-          const n = counts?.[d.label] ?? 0;
+          const n = d.label === 'My work' ? myWorkLate() : (counts?.[d.label] ?? 0); // MOCK-HOOK
           const failed = failedOf(d.label);
           const words = failed
             ? failedWords(countWords(d.label, n, counts), n)

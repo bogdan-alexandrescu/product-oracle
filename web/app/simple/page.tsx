@@ -96,6 +96,8 @@ import {
   waitingChanged,
 } from '@/lib/simple-waiting';
 import { WAITING_KIND, WaitingRow } from '@/components/simple/WaitingItems';
+import { MyWorkHome } from '@/components/simple/MyWorkMock'; // MOCK-HOOK
+import { mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 
 type Change = Schemas['SimpleChangeOut'];
 type Decision = Schemas['DecisionOut'];
@@ -1188,6 +1190,7 @@ function SimpleHome() {
                     />
                   )}
 
+                {mw('mw1') === 'b' && <MyWorkHome />} {/* MOCK-HOOK */}
                 <section aria-label="Goals" data-testid="home-goals">
                   {canOrder && !ordering && (tiles?.length ?? 0) > 1 && (
                     <div className="mb-2 flex justify-end">

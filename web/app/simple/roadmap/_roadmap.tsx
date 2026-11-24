@@ -166,6 +166,9 @@ import {
   takeRoadmap,
   warmRoadmapPage,
 } from './_warm';
+import { MyWorkBody } from '@/components/simple/MyWorkMock'; // MOCK-HOOK
+import { mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
+import { OpenFeatureContext as MwOpen } from '@/components/simple/OpenFeature'; // MOCK-HOOK
 import { ConflictPanel, ZoomTimeline } from './_zoom';
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -2939,6 +2942,11 @@ export function SimpleRoadmap() {
           Needs a decision{waitingRead && !waitingFailed ? ` · ${waiting}` : ''}
         </Button>
       )}
+      {mw('mw1') === 'c' && (
+        <Button data-testid="mw-mine" aria-pressed={mw('mine') === '1'} onClick={() => { const u = new URL(window.location.href); u.searchParams.set('mine', mw('mine') === '1' ? '0' : '1'); window.location.assign(u.toString()); }} className={mw('mine') === '1' ? 'border-accent bg-accent-soft text-accent-ink' : ''}>
+          {mw('mine') === '1' ? '✓ Mine · 7' : 'Mine · 7'}
+        </Button>
+      )} {/* MOCK-HOOK */}
       <Button
         data-testid="key-dates-open"
         aria-expanded={keyDates}
@@ -3320,6 +3328,14 @@ export function SimpleRoadmap() {
                   />
                 )}
               </header>
+              {mw('mw1') === 'c' && mw('mine') === '1' && (
+                <div data-mw-mine="" className="simple-card">
+                  <style>{'[data-mw-mine] ~ * { display: none !important; }'}</style>
+                  <MwOpen.Provider value={(x) => { const it = data.items.find((i) => i.code === x.code); if (it) openCard(it.id); }}>
+                    <MyWorkBody place="roadmap" />
+                  </MwOpen.Provider>
+                </div>
+              )} {/* MOCK-HOOK */}
               <DraftPrdsRead
                 needed={
                   (!restored &&

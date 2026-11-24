@@ -55,6 +55,8 @@ import { GoalsPanel } from './_goals-panel';
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from './_in-flight';
 import { baselineStep, SetupChip, SetupPanel, setupOpen } from './_setup';
 import { WelcomePanel } from './_welcome';
+import { MyWorkHome } from '@/components/simple/MyWorkMock'; // MOCK-HOOK
+import { mw } from '@/components/simple/my-work-switch'; // MOCK-HOOK
 import { useGoals } from './_use-goals';
 
 /** Runs that are still going: under way, or waiting on a person. */
@@ -369,6 +371,7 @@ function HomePage() {
         // The empty In flight line carries New PRD itself; never draw it twice.
         action={!nothingInFlight && newPrd()}
       />
+      {mw('mw1') === 'b' && <div data-mode="simple" className="simple-mode"><MyWorkHome /></div>} {/* MOCK-HOOK */}
       <Split
         inspector={
           selected ? (
