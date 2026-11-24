@@ -186,6 +186,8 @@ export type GoalView = {
   missing: string[] | null;
   /** The current value is typed with its day: the goal may have dated measurements for its trend. */
   measured: boolean;
+  /** #1742: the current value is typed but has no day it was read: a starting figure, not a reading. */
+  unread: boolean;
   /** #345: the parent goal's id for a subgoal; null for a goal. */
   parentId: string | null;
   /** #345: how many subgoals it has. */
@@ -273,6 +275,7 @@ export function goalViews(
       typed: !!target,
       missing: g.goal_check?.missing ?? null,
       measured: !!current && typeof a.current_as_of === 'string',
+      unread: !!current && typeof a.current_as_of !== 'string',
     };
   });
 }
@@ -309,6 +312,17 @@ export type Progress = {
   /** The distance as shown, with its currency and k/M/B: "300k", "$900k", "1.6". */
   amount?: string;
 };
+
+/**
+ * #1742: the Goal map's rule (goal_map.goal_status): a goal going up that is under 75% of its
+ * target is at risk, read from the same current value the card shows.
+ */
+export function atRisk(g: GoalView, p: Progress): boolean {
+  const c = g.current;
+  const t = g.target;
+  if (p.state !== 'togo' || !c || !t || t.range || g.said?.way === 'down') return false;
+  return base(c) < 0.75 * base(t);
+}
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 

@@ -219,6 +219,8 @@ class _Refs:
     # by the title the person typed on its brief, the one the import gives the document:
     # never by its slug in words. By run id.
     pending: dict[uuid.UUID, str] = field(default_factory=dict)
+    # #1789: each code map run's repo, by run id.
+    repos: dict[uuid.UUID, str] = field(default_factory=dict)
 
     def get(self, document_id: uuid.UUID | None) -> str | None:
         return self.slugs.get(document_id) if document_id else None
@@ -256,7 +258,20 @@ async def _refs(
         if any(r.error for r in runs) or any(s.error for s in segments or [])
         else company_time.DEFAULT_ZONE
     )
-    return _Refs(slugs, kinds, sources, zone, titles, await _pending_titles(db, runs))
+    return _Refs(
+        slugs, kinds, sources, zone, titles, await _pending_titles(db, runs), await _repos(db, runs)
+    )
+
+
+async def _repos(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:
+    """#1789: by run id, the repo each code map run maps (its Runs row's name)."""
+    from oracle.engineering.models import CodeMap
+
+    ids = [r.id for r in runs if r.flow == "code_map"]
+    if not ids:
+        return {}
+    rows = await db.execute(select(CodeMap.run_id, CodeMap.repo).where(CodeMap.run_id.in_(ids)))
+    return {run_id: repo for run_id, repo in rows.all() if run_id is not None}
 
 
 async def _pending_titles(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:
@@ -319,6 +334,7 @@ def _summary(
         template=run.knobs.get("template"),
         theme=run.knobs.get("theme"),
         roadmap_read=run.knobs.get("roadmap_read"),
+        repo=refs.repos.get(run.id),
         estimate_usd=_usd(run.estimate_usd),
         spent_usd=_usd(run.spent_usd),
         created_by=run.created_by,

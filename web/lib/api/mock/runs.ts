@@ -17,6 +17,7 @@ import { fileItems } from './checkpoint-review';
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from './agent-questions';
 import { readableRefusal } from './refusal';
 import { mockNowMs } from './clock';
+import { MOCK_SCENARIO_KEY } from './ids';
 import {
   answerCode,
   applySuggestion,
@@ -78,6 +79,8 @@ export interface DraftRow {
 
 export interface RunsDb {
   runs: RunOut[];
+  /** #1789: a code map run's repo, by run id (the API reads it from the run's code map). */
+  repos?: Record<string, string>;
   /** `${runId}|${seq}|${name}` -> content; a send-back's previous attempt: `${runId}|${seq}|${name}|${attempt}` */
   artifacts: Record<string, string>;
   /** C6: run id -> its PRD scopes, oldest first (a mock db saved before C6 has none). */
@@ -3157,6 +3160,7 @@ export async function routeRuns(
           return {
             ...summary(r),
             document_title: docTitle(ctx, r),
+            repo: ctx.db.repos?.[r.id] ?? null,
             can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null),
           };
         }),
@@ -4182,7 +4186,45 @@ export function seedRuns(ctx: Omit<RunsContext, 'db'>): RunsDb {
   });
 
   for (const r of db.runs) refresh(r);
+  seedCodeMapRuns(ctx, db);
   return db;
+}
+
+/** #1789: three ended code map runs, one per repo, finished in another order than started. */
+export const RUNS_CODE_MAPS_SCENARIO = 'runs-code-maps';
+
+function seedCodeMapRuns(ctx: Omit<RunsContext, 'db'>, db: RunsDb) {
+  if (typeof localStorage === 'undefined') return;
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) !== RUNS_CODE_MAPS_SCENARIO) return;
+  const base = db.runs.find((r) => r.status === 'succeeded') ?? db.runs[0];
+  if (!base) return;
+  db.repos = {};
+  for (const [repo, started, finished] of [
+    ['example-org/web', '2026-11-16T09:00:00Z', '2026-11-22T10:00:00Z'],
+    ['example-org/api', '2026-11-17T09:00:00Z', '2026-11-17T10:00:00Z'],
+    ['example-org/docs', '2026-11-18T09:00:00Z', '2026-11-18T10:00:00Z'],
+  ]) {
+    const run: RunOut = {
+      ...structuredClone(base),
+      id: ctx.uuid(),
+      flow: 'code_map',
+      flow_title: 'Code map',
+      status: 'succeeded',
+      document_id: null,
+      document_slug: null,
+      document_kind: null,
+      source: null,
+      segments: [],
+      checkpoints: [],
+      waiting_on: null,
+      error: null,
+      created_at: started,
+      started_at: started,
+      finished_at: finished,
+    };
+    db.runs.push(run);
+    db.repos[run.id] = repo;
+  }
 }
 
 /**

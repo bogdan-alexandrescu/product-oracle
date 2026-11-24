@@ -1041,6 +1041,8 @@ class RunSummary(BaseModel):
     # roadmap, working draft (edited Nov 5, 2026, 11:40 PM PST)" or "Company roadmap v7
     # (published Nov 4)"); None before it read one, and on other runs.
     roadmap_read: str | None = None
+    # #1789: a code map run's repo ("example-org/web"), what its Runs row is for; else None.
+    repo: str | None = None
     estimate_usd: float | None = None
     # #1572: the known costs of its segments; None until one is reported.
     spent_usd: float | None = None
