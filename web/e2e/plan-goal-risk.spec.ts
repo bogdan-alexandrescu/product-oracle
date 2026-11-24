@@ -19,13 +19,15 @@ test('Plan goal cards: at risk wins over the evidence score; no reading is not T
   await page.goto('/plan');
   const band = page.getByTestId('plan-goals').filter({ visible: true });
   const growth = band.getByTestId('home-goal-G2');
-  await expect(growth.getByTestId('goal-confidence')).toHaveText('At risk');
+  await expect(growth.getByTestId('goal-at-risk')).toHaveText('At risk');
+  await expect(growth.getByTestId('goal-confidence')).toHaveCount(0);
   await expect(growth.getByRole('img', { name: /^Confidence/ })).toHaveCount(0);
 
   const activation = band.getByTestId('home-goal-G3');
   await expect(activation).toContainText('Activation');
   await expect(activation.getByTestId('goal-to-go')).toHaveText('No current value yet');
   await expect(activation.getByTestId('goal-confidence')).toHaveCount(0);
+  await expect(activation.getByTestId('goal-at-risk')).toHaveCount(0);
   await expect(band).not.toContainText('Target met');
 
   // Under 75% but never read (no day for its figure): no reading, so neither At risk nor a ring.
@@ -33,6 +35,7 @@ test('Plan goal cards: at risk wins over the evidence score; no reading is not T
   await expect(churn).toContainText('Cut early churn');
   await expect(churn.getByTestId('goal-to-go')).toHaveText('No current value yet');
   await expect(churn.getByTestId('goal-confidence')).toHaveCount(0);
+  await expect(churn.getByTestId('goal-at-risk')).toHaveCount(0);
 });
 
 test('Plan goal cards: a long key result reads in full', async ({ page }) => {
