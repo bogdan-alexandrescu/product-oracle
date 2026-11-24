@@ -107,7 +107,7 @@ function Pop({ onClose, children, title }: { onClose: () => void; children: Reac
     return () => (window.removeEventListener('keydown', k), window.removeEventListener('mousedown', d));
   }, [onClose]);
   // Fixed to the page, under its control and inside the window, so a scrolling grid never clips it.
-  const [at, setAt] = useState<CSSProperties>({ visibility: 'hidden' });
+  const [at, setAt] = useState<CSSProperties>({ position: 'fixed', visibility: 'hidden' });
   useLayoutEffect(() => {
     const a = ref.current?.parentElement?.getBoundingClientRect();
     if (!a || window.innerWidth <= 600) return setAt({});
