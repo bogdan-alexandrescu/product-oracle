@@ -31,7 +31,7 @@
             },
             {
               "file": "frames/pc1-a-result.html",
-              "caption": "That click opens F-107’s panel: Dec 16 – Jan 12, dates from engineering; the goal’s date Dec 31. The cost sits below the map."
+              "caption": "That click opens F-107’s panel: Dec 16 – Jan 12, dates from engineering; Milestone M7 10 paid conversions per rep, due Dec 31. The cost sits below the map."
             },
             {
               "file": "frames/pc1-a-hard-rest-1512.html",
@@ -47,11 +47,11 @@
             },
             {
               "file": "frames/pc1-a-commenter-open.html",
-              "caption": "A commenter opens the same dates, with “You can suggest dates; Dana Whitlock approves”."
+              "caption": "A commenter opens the same dates, with “You can suggest dates; Avery Stone decides” (Avery Stone is F-107’s Decider)."
             },
             {
               "file": "frames/pc1-a-commenter-result.html",
-              "caption": "The commenter’s F-107 panel: each Change there sends a suggestion, not a change."
+              "caption": "The commenter’s F-107 panel: every field has Suggest a change, plus Suggest a dependency and Suggest a feature that needs it."
             }
           ]
         },
@@ -81,7 +81,7 @@
             },
             {
               "file": "frames/pc1-b-result.html",
-              "caption": "F-107’s click scrolls the Roadmap to its row; its bar reads Dec 16 – Jan 12."
+              "caption": "F-107’s click scrolls the Roadmap to its row: a solid bar reads Dec 16 – Jan 12, the panel says dates from engineering and Milestone M7; the other rows show their own dates."
             },
             {
               "file": "frames/pc1-b-hard-rest-1512.html",
@@ -131,7 +131,7 @@
             },
             {
               "file": "frames/pc1-c-open-390.html",
-              "caption": "On a phone in dark (PNG): each slip sits on its own line under its milestone; long names run past the strip’s edge, and M4’s dates open as a sheet."
+              "caption": "On a phone in dark (PNG): the strip snaps to the Paid conversions card, whole; each slip sits on its own line under its milestone, and M4’s dates open as a sheet."
             }
           ]
         }
@@ -158,15 +158,15 @@
             },
             {
               "file": "frames/pc2-a-open.html",
-              "caption": "The Paid conversions dates with the (i) open below its button: read from the latest feature end date, F-107 ends Jan 12, 4 of 5 features have an end date."
+              "caption": "The Paid conversions dates with the (i) open below the panel: read from the latest feature end date, F-107 ends Jan 12, 4 of 5 features have an end date."
             },
             {
               "file": "frames/pc2-a-mid.html",
-              "caption": "The pointer is on F-107, the feature that ends last."
+              "caption": "The pointer is on F-107, the feature that ends last; the (i) stays open below."
             },
             {
               "file": "frames/pc2-a-result.html",
-              "caption": "F-107’s panel opens with Dec 16 – Jan 12, the same end as the prediction."
+              "caption": "F-107’s panel opens with Dec 16 – Jan 12, the same end as the prediction, and Milestone M7."
             },
             {
               "file": "frames/pc2-a-hard-rest-1512.html",
@@ -182,11 +182,11 @@
             },
             {
               "file": "frames/pc2-a-commenter-open.html",
-              "caption": "A commenter sees the same dates and “You can suggest dates; Dana Whitlock approves”."
+              "caption": "A commenter sees the same dates and “You can suggest dates; Avery Stone decides”."
             },
             {
               "file": "frames/pc2-a-commenter-result.html",
-              "caption": "The commenter’s F-107 panel, where a date change is a suggestion."
+              "caption": "The commenter’s F-107 panel: each field has Suggest a change, so a date change is a suggestion."
             }
           ]
         },
@@ -204,15 +204,15 @@
             },
             {
               "file": "frames/pc2-b-open.html",
-              "caption": "Opened with the (i): latest end date, widened by past slips (avg +6 days) and 1 undated feature; each milestone row draws its own band and range."
+              "caption": "Opened with the (i) below the panel: latest end date, widened by past slips (avg +6 days) and 1 undated feature; each milestone row draws its own band and range."
             },
             {
               "file": "frames/pc2-b-mid.html",
-              "caption": "The pointer is on F-107, the feature that ends last."
+              "caption": "The pointer is on F-107, the feature that ends last (boxed in the Goal row)."
             },
             {
               "file": "frames/pc2-b-result.html",
-              "caption": "F-107’s panel opens, dates from engineering."
+              "caption": "F-107’s panel opens, dates from engineering, Milestone M7."
             },
             {
               "file": "frames/pc2-b-hard-rest-1512.html",
@@ -250,7 +250,7 @@
             },
             {
               "file": "frames/pc2-c-result.html",
-              "caption": "F-107’s panel opens."
+              "caption": "F-107’s panel opens, Milestone M7."
             },
             {
               "file": "frames/pc2-c-hard-rest-1512.html",
@@ -309,11 +309,11 @@
             },
             {
               "file": "frames/pc3-a-commenter-open.html",
-              "caption": "A commenter opens the same four lines, with “You can suggest dates; Dana Whitlock approves”."
+              "caption": "A commenter opens the same four lines, with “You can suggest dates; Avery Stone decides”."
             },
             {
               "file": "frames/pc3-a-commenter-result.html",
-              "caption": "The commenter’s F-108 panel, where a date change is a suggestion."
+              "caption": "The commenter’s F-108 panel: each field has Suggest a change, so a date change is a suggestion."
             }
           ]
         },
@@ -373,7 +373,7 @@
             },
             {
               "file": "frames/pc3-c-result.html",
-              "caption": "F-107’s panel opens."
+              "caption": "F-107’s panel opens, Milestone M7."
             },
             {
               "file": "frames/pc3-c-hard-1512.html",

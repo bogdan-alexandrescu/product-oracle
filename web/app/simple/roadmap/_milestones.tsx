@@ -1466,7 +1466,7 @@ export function MsLayer(props: MsLayerProps) {
           key={`gd-${m.id}-${id}`}
           aria-hidden
           data-testid={r.guess ? 'ms-tie-guess' : undefined}
-          className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full"
+          className={`pointer-events-none absolute ${typeof window !== 'undefined' && /[?&]pc[123]=/.test(window.location.search) ? 'z-[10]' : 'z-[13]'} h-2 w-2 rounded-full`} // MOCK-HOOK: the tie's dot under the rows too
           style={{
             left: (late ? mx : Math.min(ex, mx)) - 4,
             top: cy - 4,
