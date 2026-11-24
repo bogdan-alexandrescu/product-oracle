@@ -1,0 +1,807 @@
+[
+ {
+  "file": "ik1-a-rest",
+  "url": "/simple/inbox?ik1=a",
+  "steps": [],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-a-open",
+  "url": "/simple/inbox?ik1=a",
+  "steps": [
+   "k:j",
+   "k:?"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-a-mid",
+  "url": "/simple/inbox?ik1=a",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-a-result",
+  "url": "/simple/inbox?ik1=a&cost=ik1-a",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:Enter"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-a-hard-1512",
+  "url": "/inbox?ik1=a&long=1&many=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-a-phone-390",
+  "url": "/simple/inbox?ik1=a",
+  "steps": [],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-b-rest",
+  "url": "/simple/inbox?ik1=b",
+  "steps": [],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-b-open",
+  "url": "/simple/inbox?ik1=b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-b-mid",
+  "url": "/simple/inbox?ik1=b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "c:[data-testid=ik-pane] input",
+   "t:Yes: keep edits on the phone until the signal is back"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-b-result",
+  "url": "/simple/inbox?ik1=b&cost=ik1-b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "c:[data-testid=ik-pane] input",
+   "t:Yes: keep edits on the phone until the signal is back",
+   "k:Enter"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-b-hard-1512",
+  "url": "/inbox?ik1=b&long=1&many=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-b-phone-390",
+  "url": "/simple/inbox?ik1=b",
+  "steps": [
+   "c:[data-ik-row=i3]"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-d-rest",
+  "url": "/simple/inbox?ik1=d",
+  "steps": [],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-d-open",
+  "url": "/simple/inbox?ik1=d",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:x"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-d-mid",
+  "url": "/simple/inbox?ik1=d",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-d-result",
+  "url": "/simple/inbox?ik1=d&cost=ik1-d",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:a"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-d-hard-1512",
+  "url": "/simple/inbox?ik1=d&many=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x",
+   "k:j"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik1-d-phone-390",
+  "url": "/simple/inbox?ik1=d",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:j",
+   "k:x",
+   "k:j",
+   "k:x"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-a-rest",
+  "url": "/simple/inbox?ik2=a",
+  "steps": [
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-a-open",
+  "url": "/simple/inbox?ik2=a",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Enter"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-a-mid",
+  "url": "/simple/inbox?ik2=a&cost=ik2-a",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Escape",
+   "k:a"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-a-result",
+  "url": "/simple/inbox?ik2=a",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Escape",
+   "k:a",
+   "k:z"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-a-hard-1512",
+  "url": "/simple/inbox?ik2=a&role=commenter",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:a"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "commenter"
+ },
+ {
+  "file": "ik2-a-phone-390",
+  "url": "/simple/inbox?ik2=a",
+  "steps": [
+   "r:button|Approve"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-b-rest",
+  "url": "/simple/inbox?ik2=b",
+  "steps": [
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-b-open",
+  "url": "/simple/inbox?ik2=b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:a"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-b-mid",
+  "url": "/simple/inbox?ik2=b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:a",
+   "k:d",
+   "k:e",
+   "k:j",
+   "k:w"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-b-result",
+  "url": "/simple/inbox?ik2=b&cost=ik2-b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:a",
+   "k:d",
+   "k:e",
+   "k:j",
+   "k:w",
+   "k:Shift+Enter"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-b-hard-1512",
+  "url": "/simple/inbox?ik2=b&role=commenter",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:a",
+   "k:d",
+   "k:e"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "commenter"
+ },
+ {
+  "file": "ik2-b-phone-390",
+  "url": "/simple/inbox?ik2=b",
+  "steps": [
+   "r:button|Approve",
+   "r:button|Accept"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-c-rest",
+  "url": "/simple/inbox?ik2=c",
+  "steps": [
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-c-open",
+  "url": "/simple/inbox?ik2=c",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Space"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-c-mid",
+  "url": "/simple/inbox?ik2=c&cost=ik2-c",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Space",
+   "k:a"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-c-result",
+  "url": "/simple/inbox?ik2=c",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Space",
+   "k:a",
+   "r:button|Undo"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik2-c-hard-1512",
+  "url": "/simple/inbox?ik2=c&role=commenter",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:Space"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "commenter"
+ },
+ {
+  "file": "ik2-c-phone-390",
+  "url": "/simple/inbox?ik2=c",
+  "steps": [
+   "r:button|Approve"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-a-rest",
+  "url": "/simple/inbox?ik3=a&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-a-open",
+  "url": "/simple/inbox?ik3=a&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:s"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-a-mid",
+  "url": "/simple/inbox?ik3=a&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:s",
+   "k:4"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-a-result",
+  "url": "/simple/inbox?ik3=a&snoozed=1&cost=ik3-a",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:s",
+   "k:4",
+   "k:2",
+   "c:[data-testid=inbox-needs] button:has-text(\"Snoozed\")"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-a-hard-1512",
+  "url": "/simple/inbox?ik3=a&now=nov25&long=1",
+  "steps": [],
+  "w": 1512,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-a-phone-390",
+  "url": "/simple/inbox?ik3=a&snoozed=1",
+  "steps": [
+   "c:[data-ik-row=i8] button[aria-label=Snooze]"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-b-rest",
+  "url": "/simple/inbox?ik3=b&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-b-open",
+  "url": "/simple/inbox?ik3=b&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:Shift+S"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-b-mid",
+  "url": "/simple/inbox?ik3=b&snoozed=1&cost=ik3-b",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:Escape",
+   "k:s"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-b-result",
+  "url": "/simple/inbox?ik3=b&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:Escape",
+   "k:s",
+   "c:[data-testid=ik-snoozed-fold] button"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-b-hard-1512",
+  "url": "/simple/inbox?ik3=b&now=nov25&long=1",
+  "steps": [
+   "c:[data-testid=ik-snoozed-fold] button"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-b-phone-390",
+  "url": "/simple/inbox?ik3=b&snoozed=1&swipe=i8",
+  "steps": [],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-c-rest",
+  "url": "/simple/inbox?ik3=c&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-c-open",
+  "url": "/simple/inbox?ik3=c&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:s"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-c-mid",
+  "url": "/simple/inbox?ik3=c&snoozed=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:s",
+   "k:ArrowDown",
+   "k:ArrowDown"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-c-result",
+  "url": "/simple/inbox?ik3=c&snoozed=1&cost=ik3-c",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:j",
+   "k:s",
+   "k:ArrowDown",
+   "k:ArrowDown",
+   "k:Enter",
+   "c:[data-testid=inbox-needs] button:has-text(\"Seen\")"
+  ],
+  "w": 1440,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-c-hard-1512",
+  "url": "/simple/inbox?ik3=c&snoozed=1&long=1",
+  "steps": [
+   "k:j",
+   "k:j",
+   "k:s"
+  ],
+  "w": 1512,
+  "h": 900,
+  "as": "owner"
+ },
+ {
+  "file": "ik3-c-phone-390",
+  "url": "/simple/inbox?ik3=c&snoozed=1",
+  "steps": [
+   "c:[data-ik-row=i8] button[aria-label=Snooze]"
+  ],
+  "w": 390,
+  "h": 844,
+  "as": "owner"
+ }
+]

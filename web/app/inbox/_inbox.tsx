@@ -46,6 +46,7 @@ import {
 } from './_proposals';
 import { useReminderRows } from './_reminders';
 import { useWebhookRows } from './_webhooks';
+import { IkInbox, ikParams } from './_ik-mock'; // MOCK-HOOK
 
 type Source = Schemas['SourceOut'];
 
@@ -93,7 +94,9 @@ export default function InboxPage() {
 
 function Inbox() {
   // QA pass D-2: ?kind= (Home's Needs you chips) shows that kind only.
-  const kindParam = asNeedKind(useSearchParams().get('kind'));
+  const sp = useSearchParams(); // MOCK-HOOK
+  const ik = ikParams(new URLSearchParams(sp.toString())); // MOCK-HOOK
+  const kindParam = asNeedKind(sp.get('kind')); // MOCK-HOOK
   // S-7: /inbox or Simple's /simple/inbox: "Show all" stays on the same page.
   const path = usePathname();
   const kind = NEED_KINDS.find((k) => k.id === kindParam);
@@ -187,6 +190,7 @@ function Inbox() {
         title="Inbox"
         status={
           // simple-home-qa-nov12 #18: Simple's Inbox says its count once, in Needs you.
+          !ik.on && // MOCK-HOOK
           !path.startsWith('/simple') &&
           waiting != null &&
           waiting > 0 && (
@@ -224,7 +228,8 @@ function Inbox() {
           </Link>
         </p>
       )}
-      {inbox && kindRows && (
+      {ik.on && <IkInbox p={ik} />}{/* MOCK-HOOK */}
+      {!ik.on && inbox && kindRows && ( // MOCK-HOOK
         <InboxTabs
           // qa-company-17: Next keeps this page while I am elsewhere and shows it again, its
           // reads run again; each visit's own arrival starts the tabs afresh (a tab picked on the
@@ -243,10 +248,10 @@ function Inbox() {
       )}
       {asked.sheet}
       {/* simple-home-qa-nov14: the broken links Home sends here, fixed in place; hidden under ?kind= until Show all. */}
-      {!kind && path.startsWith('/simple') && <BrokenLinks />}
+      {!ik.on && !kind && path.startsWith('/simple') && <BrokenLinks />}{/* MOCK-HOOK */}
       {/* Owner 2026-11-10: every role sees its sources that need attention; only one that can edit a source gets Edit. */}
       {/* Sources to fix are no kind of Home's: hidden under ?kind= until Show all. */}
-      {!kind && sourcesQ.data && perms.ready && (
+      {!ik.on && !kind && sourcesQ.data && perms.ready && ( // MOCK-HOOK
         <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can('update_source')} />
       )}
     </Page>
