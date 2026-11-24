@@ -1,5 +1,6 @@
 'use client';
 
+import { MockSavedViews } from '@/components/MockSavedViews'; // MOCK-HOOK
 import {
   useCallback,
   useContext,
@@ -3101,6 +3102,7 @@ export function SimpleRoadmap() {
   ].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+      <MockSavedViews page="roadmap" /> {/* MOCK-HOOK */}
       <RemovedButton
         items={data.items}
         canChange={canChange}

@@ -1,5 +1,6 @@
 'use client';
 
+import { MockSavedViews } from '@/components/MockSavedViews'; // MOCK-HOOK
 import { Link, useSearchParams } from '@/lib/nav';
 import {
   createContext,
@@ -563,6 +564,7 @@ export function Priorities() {
         )}
         {data && !blank && tab === 'ranked' && marks && (
           <div className="mb-3" data-testid="cs-prio-bar">
+            <MockSavedViews page="priorities" /> {/* MOCK-HOOK */}
             <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
             {show && (
               <p className="mt-2 text-[length:var(--simple-small)] text-text2">

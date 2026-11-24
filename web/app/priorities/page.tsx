@@ -1,5 +1,6 @@
 'use client';
 
+import { MockSavedViews } from '@/components/MockSavedViews'; // MOCK-HOOK
 import { createFileRoute } from '@tanstack/react-router';
 import { Link, useSearchParams } from '@/lib/nav';
 import {
@@ -1812,6 +1813,7 @@ function Priorities() {
           )
         }
       />
+      <div className="mb-3"><MockSavedViews page="detailed" /></div> {/* MOCK-HOOK */}
 
       <div className="flex flex-col gap-3">
         {changed && <Notice tone="info">{changed}</Notice>}
