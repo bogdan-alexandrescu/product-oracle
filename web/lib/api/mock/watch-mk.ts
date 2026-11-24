@@ -47,12 +47,12 @@ export const MK_SLIPS: MkSlip[] = [ // MOCK-HOOK
 ]; // MOCK-HOOK
 
 const LONG = [ // MOCK-HOOK
-  ['F-112', 'Rep daily scoreboard with team and region breakdowns for managers'], // MOCK-HOOK
-  ['F-104', 'Complaint early warning from support tickets and app store reviews'], // MOCK-HOOK
+  ['F-121', 'Rep daily scoreboard with team and region breakdowns for managers'], // MOCK-HOOK
+  ['F-122', 'Complaint early warning from support tickets and app store reviews'], // MOCK-HOOK
   ['F-109', 'Guided first week'], // MOCK-HOOK
-  ['F-103', 'Lead list ranking by likely paid conversion this quarter'], // MOCK-HOOK
+  ['F-123', 'Lead list ranking by likely paid conversion this quarter'], // MOCK-HOOK
   ['F-101', 'One-tap sign-up link'], // MOCK-HOOK
-  ['F-107', 'Partner referral channel with shared revenue reports'], // MOCK-HOOK
+  ['F-124', 'Partner referral channel with shared revenue reports'], // MOCK-HOOK
   ['F-108', 'Pricing page test'], // MOCK-HOOK
   ['F-105', 'Refund in one step'], // MOCK-HOOK
   ['F-102', 'Rep call script hints'], // MOCK-HOOK
@@ -87,12 +87,12 @@ export const MK_WATCHED: MkWatched[] = [ // MOCK-HOOK
   { code: 'M6', name: 'Beta', kind: 'Milestone', reason: 'You own it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'G-2', name: 'Faster activation', kind: 'Goal', reason: 'You own it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'P-3', name: 'Usage alerts', kind: 'PRD', reason: 'You approve it', tells: 'Dates and status' }, // MOCK-HOOK
-  { code: 'F-104', name: 'Complaint early warning from support tickets and app store reviews', kind: 'Feature', reason: 'You picked it', tells: 'Dates only' }, // MOCK-HOOK
-  { code: 'F-112', name: 'Rep daily scoreboard with team and region breakdowns for managers', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
+  { code: 'F-122', name: 'Complaint early warning from support tickets and app store reviews', kind: 'Feature', reason: 'You picked it', tells: 'Dates only' }, // MOCK-HOOK
+  { code: 'F-121', name: 'Rep daily scoreboard with team and region breakdowns for managers', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'F-109', name: 'Guided first week', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
-  { code: 'F-103', name: 'Lead list ranking by likely paid conversion this quarter', kind: 'Feature', reason: 'You picked it', tells: 'Mentions only' }, // MOCK-HOOK
+  { code: 'F-123', name: 'Lead list ranking by likely paid conversion this quarter', kind: 'Feature', reason: 'You picked it', tells: 'Mentions only' }, // MOCK-HOOK
   { code: 'M7', name: 'Pricing launch', kind: 'Milestone', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
-  { code: 'F-107', name: 'Partner referral channel with shared revenue reports', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
+  { code: 'F-124', name: 'Partner referral channel with shared revenue reports', kind: 'Feature', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
   { code: 'F-105', name: 'Refund in one step', kind: 'Feature', reason: 'You picked it', tells: 'Dates only' }, // MOCK-HOOK
   { code: 'G-4', name: 'Paid conversions per rep per day', kind: 'Goal', reason: 'You picked it', tells: 'Everything' }, // MOCK-HOOK
 ]; // MOCK-HOOK

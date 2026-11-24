@@ -1,6 +1,6 @@
 {
   "title": "Watch items and get Slack or email digests when they slip",
-  "subtitle": "Mock-ups for the owner to pick from (issue #1803). Invented company, people and features. Open any .html with ?theme=light or ?theme=dark; PNGs beside each. The purple tag in some frames is the cost note, not part of the app.",
+  "subtitle": "Mock-ups for the owner to pick from (issue #1803). Invented company, people and features. Open any .html with ?theme=light or ?theme=dark; PNGs beside each, light and dark (each frame's 'dark' file). The purple tag in some frames is the cost note, not part of the app.",
   "decisions": [
     {
       "code": "WD1",
@@ -12,38 +12,45 @@
           "letter": "A",
           "name": "Bell in the panel",
           "recommended": true,
-          "what": "A Watch button sits in the feature panel's head, beside ⋯ and Close. It opens a short menu: what to be told about (dates move, past its milestone, status changes, mentions, a suggestion waiting), all on by default, then Watch. The button then reads Watching, a note offers Undo, and the row on the roadmap gets a small bell. Everything you watch is listed at the top of the Inbox under Watching, with why you watch it, what it tells you and a Stop button.",
+          "what": "A Watch button sits in the feature panel's head, beside ⋯ and Close. It opens a short list of choices in place under the head, pushing the details down: what to be told about (dates move, past its milestone, status changes, mentions, a suggestion waiting), all on by default, then Watch. The button then reads Watching, a note offers Undo, and the row on the roadmap gets a small bell. Everything you watch is listed at the top of the Inbox under Watching, with why you watch it, what it tells you and a Stop button.",
           "why": "It sits where people already read and change a feature. One clear place in the panel works the same on every page and on a phone. The Inbox list gives one place to stop things, so nobody needs a separate settings hunt.",
           "plus": "Picking what to be told about stops the noise early. Row bells show what you follow without opening anything.",
-          "cost": "2 clicks to watch (Watch, then Watch in the menu); 1 click to stop from the Inbox. Today: no way to watch.",
+          "cost": "2 clicks to watch (Watch, then Watch under the choices); 1 click to stop from the Inbox. Today: no way to watch.",
           "frames": [
             {
               "file": "wd1-a-rest.png",
-              "caption": "At rest: Priya Raman (an approver) has F-01 Setup checklist open. A Watch button sits by ⋯. F-79 already has a bell because she watches it."
+              "caption": "At rest: Priya Raman (an approver) has F-01 Setup checklist open. A Watch button sits by ⋯. F-79 already has a bell because she watches it.",
+              "dark": "wd1-a-rest-dark.png"
             },
             {
               "file": "wd1-a-open.png",
-              "caption": "She clicks Watch: the menu shows what she can be told about. All five are on, and the daily email time is shown."
+              "caption": "She clicks Watch: the choices open in place under the panel's head and push its details down. All five are on, and the daily email time is shown.",
+              "dark": "wd1-a-open-dark.png"
             },
             {
               "file": "wd1-a-mid.png",
-              "caption": "She turns off mentions and suggestions, so only dates, milestone and status remain."
+              "caption": "She turns off mentions and suggestions, so only dates, milestone and status remain.",
+              "dark": "wd1-a-mid-dark.png"
             },
             {
               "file": "wd1-a-result.png",
-              "caption": "She clicks Watch: the button reads Watching, the F-01 row gets a bell, and a note says what she will hear: dates, milestone, status, with Undo. Cost: 2 clicks."
+              "caption": "She clicks Watch: the button reads Watching, the F-01 row gets a bell, and a note says what she will hear: dates, milestone, status, with Undo. Cost: 2 clicks.",
+              "dark": "wd1-a-result-dark.png"
             },
             {
               "file": "wd1-a-hard-1512.png",
-              "caption": "Hard case at 1512: twelve watched items with long names, in the Inbox's Watching list. Each shows why it is watched, what it tells and Stop."
+              "caption": "Hard case at 1512: twelve watched items with long names, in the Inbox's Watching list. Each shows why it is watched, what it tells and Stop.",
+              "dark": "wd1-a-hard-1512-dark.png"
             },
             {
               "file": "wd1-a-phone-390.png",
-              "caption": "Phone 390: the same Watch menu opens in the panel's bottom sheet."
+              "caption": "Phone 390: in the bottom sheet the same choices open under the head, above the tabs; nothing is covered.",
+              "dark": "wd1-a-phone-390-dark.png"
             },
             {
               "file": "wd1-a-viewer.png",
-              "caption": "A viewer (Lena Ortiz) can watch too: on F-01 she opens the same Watch menu, though she cannot change the item."
+              "caption": "A viewer (Lena Ortiz) can watch too: on F-01 the choices open above her 'You can read this feature' line. Viewers get no suggestions, so she is offered four.",
+              "dark": "wd1-a-viewer-dark.png"
             }
           ]
         },
@@ -53,31 +60,37 @@
           "recommended": false,
           "what": "Every roadmap row gets an eye at the end of its name. One click watches or stops watching without opening the panel. The panel's head has the same eye. There is no menu, so you are told about everything on a watched item. The list lives in the same Inbox Watching place as A.",
           "plus": "Fastest: one click from the list, with no panel to open. Quick for following a whole track.",
-          "cost": "1 click on the row to watch or stop. Today: no way to watch.",
+          "cost": "1 click on the row to watch or stop, but the name column grows to fit the eye, so less of the timeline shows. Today: no way to watch.",
           "frames": [
             {
               "file": "wd1-b-rest.png",
-              "caption": "At rest: every row has an eye after its name; F-79's is filled because Priya watches it."
+              "caption": "At rest: every row has an eye after its name; F-79's is filled because Priya watches it.",
+              "dark": "wd1-b-rest-dark.png"
             },
             {
               "file": "wd1-b-open.png",
-              "caption": "She points at the eye on F-01 Setup checklist."
+              "caption": "She points at the eye on F-01 Setup checklist.",
+              "dark": "wd1-b-open-dark.png"
             },
             {
               "file": "wd1-b-result.png",
-              "caption": "One click: F-01's eye fills and a note says she watches everything on it, with Undo. No menu, so she cannot pick what to hear. Cost: 1 click."
+              "caption": "One click: F-01's eye fills and a note says she watches everything on it, with Undo. No menu, so she cannot pick what to hear. Cost: 1 click.",
+              "dark": "wd1-b-result-dark.png"
             },
             {
               "file": "wd1-b-hard-1512.png",
-              "caption": "Hard case at 1512 with a panel open: the eyes take room from names, so 'Alert rules engine' and others are cut short. Several rows are watched."
+              "caption": "Hard case at 1512 with a panel open: names stay whole beside the eyes, but the wider name column leaves less of the timeline. Several rows are watched.",
+              "dark": "wd1-b-hard-1512-dark.png"
             },
             {
               "file": "wd1-b-phone-390.png",
-              "caption": "Phone 390: rows have no room for an eye, so it is only in the panel's head."
+              "caption": "Phone 390: rows have no room for an eye, so it is only in the panel's head.",
+              "dark": "wd1-b-phone-390-dark.png"
             },
             {
               "file": "wd1-b-viewer.png",
-              "caption": "A viewer (Lena Ortiz) can watch too: one click on F-01's eye, with the same note and Undo."
+              "caption": "A viewer (Lena Ortiz) can watch too: one click on F-01's eye, with the same note and Undo.",
+              "dark": "wd1-b-viewer-dark.png"
             }
           ]
         },
@@ -91,27 +104,33 @@
           "frames": [
             {
               "file": "wd1-c-rest.png",
-              "caption": "At rest: F-79 Weekly alert digest's panel shows Watchers: you and Jonah Prell, with Watching on."
+              "caption": "At rest: F-79 Weekly alert digest's panel shows Watchers: you and Jonah Prell, with Watching on.",
+              "dark": "wd1-c-rest-dark.png"
             },
             {
               "file": "wd1-c-open.png",
-              "caption": "Priya clicks Add someone: a name box and people who do not watch it yet."
+              "caption": "Priya clicks Add someone: a name box and people who do not watch it yet.",
+              "dark": "wd1-c-open-dark.png"
             },
             {
               "file": "wd1-c-mid.png",
-              "caption": "She types 'Ra': Rae Okafor and Rafael Moss are left. Watchers still reads You, Jonah Prell."
+              "caption": "She types 'Ra': Rae Okafor and Rafael Moss are left. Watchers still reads You, Jonah Prell.",
+              "dark": "wd1-c-mid-dark.png"
             },
             {
               "file": "wd1-c-result.png",
-              "caption": "She picks Rae Okafor: Watchers now reads You, Rae Okafor, Jonah Prell. Cost: 3 clicks and a name."
+              "caption": "She picks Rae Okafor: Watchers now reads You, Rae Okafor, Jonah Prell. Cost: 3 clicks and a name.",
+              "dark": "wd1-c-result-dark.png"
             },
             {
               "file": "wd1-c-hard-1512.png",
-              "caption": "Hard case at 1512, a commenter (Theo Brandt) with six watchers: the list shows three names and '+3'. A tick says he can watch and can ask others to watch; each name reads 'asks them'."
+              "caption": "Hard case at 1512, a commenter (Theo Brandt) with six watchers: the list shows three names and '+3'. A tick says he can watch and can ask others to watch; each name reads 'asks them'.",
+              "dark": "wd1-c-hard-1512-dark.png"
             },
             {
               "file": "wd1-c-phone-390.png",
-              "caption": "Phone 390: the Watchers line takes a full row in the bottom sheet, above the tabs' content."
+              "caption": "Phone 390: the Watchers line takes a full row in the bottom sheet, above the tabs' content.",
+              "dark": "wd1-c-phone-390-dark.png"
             }
           ]
         },
@@ -125,23 +144,28 @@
           "frames": [
             {
               "file": "wd1-d-rest.png",
-              "caption": "At rest: Avery Stone decides F-79, so its panel says 'You hear about it: you decide it' with Mute. Cost: 0 clicks."
+              "caption": "At rest: Avery Stone decides F-79, so its panel says 'You hear about it: you decide it' with Mute. Cost: 0 clicks.",
+              "dark": "wd1-d-rest-dark.png"
             },
             {
               "file": "wd1-d-result.png",
-              "caption": "Avery clicks Mute: the line reads 'Muted: you hear nothing about it', with Unmute."
+              "caption": "Avery clicks Mute: the line reads 'Muted: you hear nothing about it', with Unmute.",
+              "dark": "wd1-d-result-dark.png"
             },
             {
               "file": "wd1-d-other.png",
-              "caption": "Priya Raman (an approver) opens F-01 Setup checklist, which Avery Stone decides: the line says it is not hers, so she is not told about it, and there is no button."
+              "caption": "Priya Raman (an approver) opens F-01 Setup checklist, which Avery Stone decides: the line says it is not hers, so she is not told about it, and there is no button.",
+              "dark": "wd1-d-other-dark.png"
             },
             {
               "file": "wd1-d-hard-1512.png",
-              "caption": "Hard case at 1512, a viewer (Lena Ortiz): the line says she owns nothing here, so she is not told about slips."
+              "caption": "Hard case at 1512, a viewer (Lena Ortiz): the line says she owns nothing here, so she is not told about slips.",
+              "dark": "wd1-d-hard-1512-dark.png"
             },
             {
               "file": "wd1-d-phone-390.png",
-              "caption": "Phone 390: the same line sits under the panel's head."
+              "caption": "Phone 390: the same line sits under the panel's head.",
+              "dark": "wd1-d-phone-390-dark.png"
             }
           ]
         }
@@ -164,27 +188,33 @@
           "frames": [
             {
               "file": "wd2-a-rest.png",
-              "caption": "At rest: My account shows 'Digest of what I watch': every weekday at 8:00 AM, only on days something slipped, by email and Slack."
+              "caption": "At rest: My account shows 'Digest of what I watch': every weekday at 8:00 AM, only on days something slipped, by email and Slack.",
+              "dark": "wd2-a-rest-dark.png"
             },
             {
               "file": "wd2-a-open.png",
-              "caption": "Avery clicks See the Slack message: three slips since yesterday, each with old → new date, days later and why."
+              "caption": "Avery clicks See the Slack message: three slips since yesterday, each with old → new date, days later and why.",
+              "dark": "wd2-a-open-dark.png"
             },
             {
               "file": "wd2-a-mid.png",
-              "caption": "She changes the time to 7:30 AM: a tick says the next digest comes Fri, Oct 23 at 7:30 AM."
+              "caption": "She changes the time to 7:30 AM: a tick says the next digest comes Fri, Oct 23 at 7:30 AM.",
+              "dark": "wd2-a-mid-dark.png"
             },
             {
               "file": "wd2-a-result.png",
-              "caption": "She clicks See the email: the same three slips, sent Thu, Oct 22 at 7:30 AM, with links and the stop line at the foot. Cost: 1 change to pick the time."
+              "caption": "She clicks See the email: the same three slips, sent Thu, Oct 22 at 7:30 AM, with links and the stop line at the foot. Cost: 1 change to pick the time.",
+              "dark": "wd2-a-result-dark.png"
             },
             {
               "file": "wd2-a-hard-1512.png",
-              "caption": "Hard case at 1512: twelve slips in one Slack message, with long names. It is long but still one message."
+              "caption": "Hard case at 1512: twelve slips in one Slack message, with long names. It is long but still one message.",
+              "dark": "wd2-a-hard-1512-dark.png"
             },
             {
               "file": "wd2-a-phone-390.png",
-              "caption": "Phone 390: the email as it reads on a phone; dates wrap but stay month first."
+              "caption": "Phone 390: the email as it reads on a phone; dates wrap but stay month first.",
+              "dark": "wd2-a-phone-390-dark.png"
             }
           ]
         },
@@ -198,23 +228,28 @@
           "frames": [
             {
               "file": "wd2-b-rest.png",
-              "caption": "At rest: 'How often: Right away, one message per change'. No time to pick."
+              "caption": "At rest: 'How often: Right away, one message per change'. No time to pick.",
+              "dark": "wd2-b-rest-dark.png"
             },
             {
               "file": "wd2-b-open.png",
-              "caption": "See the Slack message: one short message for F-79 with Open and Stop watching."
+              "caption": "See the Slack message: one short message for F-79 with Open and Stop watching.",
+              "dark": "wd2-b-open-dark.png"
             },
             {
               "file": "wd2-b-result.png",
-              "caption": "See the email: one email for that one slip at 9:10 AM, the same time as its Slack message. Cost: 12 slips = 12 messages."
+              "caption": "See the email: one email for that one slip at 9:10 AM, the same time as its Slack message. Cost: 12 slips = 12 messages.",
+              "dark": "wd2-b-result-dark.png"
             },
             {
               "file": "wd2-b-hard-1512.png",
-              "caption": "Hard case at 1512: a busy morning sends a separate message for every slip; the first six of twelve fit the screen."
+              "caption": "Hard case at 1512: a busy morning sends a separate message for every slip; the first six of twelve fit the screen.",
+              "dark": "wd2-b-hard-1512-dark.png"
             },
             {
               "file": "wd2-b-phone-390.png",
-              "caption": "Phone 390: the single-slip email."
+              "caption": "Phone 390: the single-slip email.",
+              "dark": "wd2-b-phone-390-dark.png"
             }
           ]
         },
@@ -228,27 +263,33 @@
           "frames": [
             {
               "file": "wd2-c-rest.png",
-              "caption": "At rest: 'Mondays at 8:00 AM, one message for the week, by goal'."
+              "caption": "At rest: 'Mondays at 8:00 AM, one message for the week, by goal'.",
+              "dark": "wd2-c-rest-dark.png"
             },
             {
               "file": "wd2-c-open.png",
-              "caption": "See the Slack message: the week's three slips under Grow retention (at risk: 2 days to spare) and Faster activation (behind), each with old → new date and why."
+              "caption": "See the Slack message: the week's three slips under Grow retention (at risk: 2 days to spare) and Faster activation (behind), each with old → new date and why.",
+              "dark": "wd2-c-open-dark.png"
             },
             {
               "file": "wd2-c-mid.png",
-              "caption": "The time changes to 7:30 AM: a tick says the next digest comes Mon, Oct 26 at 7:30 AM."
+              "caption": "The time changes to 7:30 AM: a tick says the next digest comes Mon, Oct 26 at 7:30 AM.",
+              "dark": "wd2-c-mid-dark.png"
             },
             {
               "file": "wd2-c-result.png",
-              "caption": "See the email, dated Mon, Oct 26 at 7:30 AM: the same week by goal. Cost: a Tuesday slip is told next Monday."
+              "caption": "See the email, dated Mon, Oct 26 at 7:30 AM: the same week by goal. Cost: a Tuesday slip is told next Monday.",
+              "dark": "wd2-c-result-dark.png"
             },
             {
               "file": "wd2-c-hard-1512.png",
-              "caption": "Hard case at 1512: twelve slips across four goals, each goal with its own state, in one long message."
+              "caption": "Hard case at 1512: twelve slips across four goals, each goal with its own state, in one long message.",
+              "dark": "wd2-c-hard-1512-dark.png"
             },
             {
               "file": "wd2-c-phone-390.png",
-              "caption": "Phone 390: the weekly email."
+              "caption": "Phone 390: the weekly email.",
+              "dark": "wd2-c-phone-390-dark.png"
             }
           ]
         }
@@ -271,35 +312,43 @@
           "frames": [
             {
               "file": "wd3-a-rest.png",
-              "caption": "At rest: My digests on Avery's My account: Inbox always, Email and Slack on, with when each sends."
+              "caption": "At rest: My digests on Avery's My account: Inbox always, Email and Slack on, with when each sends.",
+              "dark": "wd3-a-rest-dark.png"
             },
             {
               "file": "wd3-a-open.png",
-              "caption": "Slack not connected, seen by Priya Raman (an approver): Slack is off and says why, with Ask an owner."
+              "caption": "Slack not connected, seen by Priya Raman (an approver): Slack is off and says why, with Ask an owner.",
+              "dark": "wd3-a-open-dark.png"
             },
             {
               "file": "wd3-a-mid.png",
-              "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click."
+              "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click.",
+              "dark": "wd3-a-mid-dark.png"
             },
             {
               "file": "wd3-a-quiet.png",
-              "caption": "Nothing slipped: a tick says no digest was sent today."
+              "caption": "Nothing slipped: a tick says no digest was sent today.",
+              "dark": "wd3-a-quiet-dark.png"
             },
             {
               "file": "wd3-a-stop.png",
-              "caption": "A preview of the email, drawn below My account's digest settings: its foot has Stop these digests, the link she clicks."
+              "caption": "A preview of the email, drawn below My account's digest settings: its foot has Stop these digests, the link she clicks.",
+              "dark": "wd3-a-stop-dark.png"
             },
             {
               "file": "wd3-a-result.png",
-              "caption": "After that click: My account says Digests stopped, slips still show in the Inbox, with Turn back on and Less often instead."
+              "caption": "After that click: My account says Digests stopped, slips still show in the Inbox, with Turn back on and Less often instead.",
+              "dark": "wd3-a-result-dark.png"
             },
             {
               "file": "wd3-a-hard-1512.png",
-              "caption": "Hard case at 1512, an owner: Company defaults on Settings > Notifications, with an option to apply them to the 31 people who never changed theirs. Slack's channel stays as today."
+              "caption": "Hard case at 1512, an owner: Company defaults on Settings > Notifications, with an option to apply them to the 31 people who never changed theirs. Slack's channel stays as today.",
+              "dark": "wd3-a-hard-1512-dark.png"
             },
             {
               "file": "wd3-a-phone-390.png",
-              "caption": "Phone 390: My digests at the top of My account."
+              "caption": "Phone 390: My digests at the top of My account.",
+              "dark": "wd3-a-phone-390-dark.png"
             }
           ]
         },
@@ -313,27 +362,33 @@
           "frames": [
             {
               "file": "wd3-b-rest.png",
-              "caption": "At rest: My account lists each watched item with its own channel and timing: five shown, and 7 more."
+              "caption": "At rest: My account lists each watched item with its own channel and timing: five shown, and 7 more.",
+              "dark": "wd3-b-rest-dark.png"
             },
             {
               "file": "wd3-b-open.png",
-              "caption": "Slack not connected, seen by Priya: Slack items read 'Email (Slack not connected)', with Ask an owner."
+              "caption": "Slack not connected, seen by Priya: Slack items read 'Email (Slack not connected)', with Ask an owner.",
+              "dark": "wd3-b-open-dark.png"
             },
             {
               "file": "wd3-b-mid.png",
-              "caption": "She asks an owner: a tick confirms it."
+              "caption": "She asks an owner: a tick confirms it.",
+              "dark": "wd3-b-mid-dark.png"
             },
             {
               "file": "wd3-b-result.png",
-              "caption": "Stopping from a message: only F-79 Weekly alert digest stops; its row reads Stopped with Watch again, and the other eleven still send. Cost: 1 stop per item: 12 items, 12 stops."
+              "caption": "Stopping from a message: only F-79 Weekly alert digest stops; its row reads Stopped with Watch again, and the other eleven still send. Cost: 1 stop per item: 12 items, 12 stops.",
+              "dark": "wd3-b-result-dark.png"
             },
             {
               "file": "wd3-b-hard-1512.png",
-              "caption": "Hard case at 1512, an owner: Company defaults set how a new watch starts for each kind of item (feature, milestone, goal, PRD), with an option to apply them to the 140 items nobody changed."
+              "caption": "Hard case at 1512, an owner: Company defaults set how a new watch starts for each kind of item (feature, milestone, goal, PRD), with an option to apply them to the 140 watches of the 31 people who never changed theirs.",
+              "dark": "wd3-b-hard-1512-dark.png"
             },
             {
               "file": "wd3-b-phone-390.png",
-              "caption": "Phone 390: the per-item table is cramped on a phone."
+              "caption": "Phone 390: the per-item table is cramped on a phone.",
+              "dark": "wd3-b-phone-390-dark.png"
             }
           ]
         },
@@ -347,35 +402,43 @@
           "frames": [
             {
               "file": "wd3-c-rest.png",
-              "caption": "At rest: one line on My account: daily on Slack at 8:00 AM, email if unread by noon. Reply to change it."
+              "caption": "At rest: one line on My account: daily on Slack at 8:00 AM, email if unread by noon. Reply to change it.",
+              "dark": "wd3-c-rest-dark.png"
             },
             {
               "file": "wd3-c-open.png",
-              "caption": "Slack not connected, seen by Priya: the line says it sends a daily email instead, with Ask an owner."
+              "caption": "Slack not connected, seen by Priya: the line says it sends a daily email instead, with Ask an owner.",
+              "dark": "wd3-c-open-dark.png"
             },
             {
               "file": "wd3-c-mid.png",
-              "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click."
+              "caption": "She clicks Ask an owner: a tick says Avery Stone was asked. Cost: 1 click.",
+              "dark": "wd3-c-mid-dark.png"
             },
             {
               "file": "wd3-c-quiet.png",
-              "caption": "Nothing slipped: a tick under the line says nothing was sent today."
+              "caption": "Nothing slipped: a tick under the line says nothing was sent today.",
+              "dark": "wd3-c-quiet-dark.png"
             },
             {
               "file": "wd3-c-stop.png",
-              "caption": "A preview of the Slack message: Avery replies 'stop' and Oracle answers that digests stopped, slips still show in the Inbox, and 'start' turns them back on."
+              "caption": "A preview of the Slack message: Avery replies 'stop' and Oracle answers that digests stopped, slips still show in the Inbox, and 'start' turns them back on.",
+              "dark": "wd3-c-stop-dark.png"
             },
             {
               "file": "wd3-c-result.png",
-              "caption": "After replying 'stop': the line says Stopped, with Turn back on."
+              "caption": "After replying 'stop': the line says Stopped, with Turn back on.",
+              "dark": "wd3-c-result-dark.png"
             },
             {
               "file": "wd3-c-hard-1512.png",
-              "caption": "Hard case at 1512, an owner: Company defaults, with Slack first and email if unread. Digests go to each person, so the company channel stays as today."
+              "caption": "Hard case at 1512, an owner: Company defaults, with Slack first and email if unread. Digests go to each person, so the company channel stays as today.",
+              "dark": "wd3-c-hard-1512-dark.png"
             },
             {
               "file": "wd3-c-phone-390.png",
-              "caption": "Phone 390: the one line on My account."
+              "caption": "Phone 390: the one line on My account.",
+              "dark": "wd3-c-phone-390-dark.png"
             }
           ]
         }
