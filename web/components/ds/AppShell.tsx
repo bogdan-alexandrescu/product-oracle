@@ -14,6 +14,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import { HopPanel } from '@/components/hop/HopPanel';
+import { KeysMock } from '@/components/mock/KeysMock'; // MOCK-HOOK
 import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
 import {
   closeTransientPanel,
@@ -1308,6 +1309,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <ConfirmHost />
         <ToastHost />
+        <KeysMock /> {/* MOCK-HOOK */}
       </div>
     </ScreenSubjectProvider>
   );
