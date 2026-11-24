@@ -284,7 +284,7 @@
             },
             {
               "file": "ut2-c-mid.html",
-              "caption": "Cut pressed: no confirm; the toast offers Undo"
+              "caption": "Cut pressed: no confirm; the keyboard is on the toast's Undo, the same word a commenter will see"
             },
             {
               "file": "ut2-c-result.html",
@@ -373,7 +373,7 @@
             },
             {
               "file": "ut3-a-mid.html",
-              "caption": "The keyboard is on the Undo of the cut"
+              "caption": "The keyboard is on the Undo of the cut (its focus ring)"
             },
             {
               "file": "ut3-a-result.html",
@@ -411,7 +411,7 @@
             },
             {
               "file": "ut3-b-mid.html",
-              "caption": "The keyboard is on the Undo of the cut"
+              "caption": "The keyboard is on the Undo of the cut (its focus ring)"
             },
             {
               "file": "ut3-b-result.html",

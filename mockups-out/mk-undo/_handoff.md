@@ -24,5 +24,5 @@ wraps on phone; count leaves out Undone lines), UT3 b hard, hard-1512, phone (a 
 - (Done: the UT2 and UT3 a/c 1512 frames were re-laid from their static frames in a real 1512x945 window, `web/mk-snap/wide.spec.ts`.)
 - UT2 commenter frames (b, c, d hard; phone frames on the commenter), UT3 b/c phone on the panel.
 - Drawn-twice items (Restore bar beside the toast's Undo; UT3 a History beside Decided/Proposals; draft Undo vs toast Undo).
-- UT3/UT2 mid frames without a focus ring; cost tags inside frames; a Detailed frame per recommended proposal;
-  UT3 a/c captions about off-screen parts; minors on 'Not in GT' and codes in real toasts.
+- (Done: focus rings on UT2 c and UT3 a/b mid frames; a cost tag on every result frame; UT3 a frames scrolled to History, UT3 c rest to Removed · 7; `web/mk-snap/tags.spec.ts`.)
+- Still open: a Detailed frame per recommended proposal; UT3 c mid focus ring; minors on 'Not in GT' and codes in the real toast's text.
