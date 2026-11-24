@@ -217,6 +217,7 @@ export function KeysMock() {
     document.addEventListener('focusin', onFocus);
     document.addEventListener('focusout', () => setTimeout(onFocus, 0));
     const onKey = (e: KeyboardEvent) => {
+      if (!e.isTrusted) return;
       const a = document.activeElement as HTMLElement | null;
       const inField = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable);
       const inDialog = !!a?.closest('[role=dialog],[role=alertdialog]') && !a?.closest('[data-keys-sheet]');
@@ -229,14 +230,14 @@ export function KeysMock() {
         e.preventDefault();
         save.click();
         setTrail((t) => [...t, 'Ctrl', 'Enter'].slice(-8));
-        if (box?.getAttribute('data-testid') === 'item-panel')
+        if (box?.closest('[data-testid=item-panel]'))
           window.setTimeout(() => {
-            setRow((r) => {
-              const n = Math.min(list.length - 1, r + 1);
-              (list[n]?.querySelector('[data-testid=prio-title]') as HTMLElement | null)?.click();
-              return n;
-            });
-          }, 400);
+            const now = [...document.querySelectorAll('[data-testid=prio-row]')];
+            const at = now.findIndex((x) => x.hasAttribute('data-kfocus'));
+            const n = Math.min(now.length - 1, at + 1);
+            setRow(n);
+            (now[n]?.querySelector('[data-testid=prio-title]') as HTMLElement | null)?.click();
+          }, 700);
         return;
       }
       const mod = ks1 === 'c';
@@ -302,7 +303,6 @@ export function KeysMock() {
         const down = e.key === 'J' || e.key === 'ArrowDown';
         grip.focus();
         grip.dispatchEvent(new KeyboardEvent('keydown', { key: down ? 'ArrowDown' : 'ArrowUp', bubbles: true }));
-        window.setTimeout(() => grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })), 150);
         return;
       }
       if (e.key === 'Enter' && (!mod || e.altKey)) {

@@ -89,6 +89,7 @@ def main():
                 frame.wait_for_load_state()
                 frame.wait_for_timeout(2500)
                 target = frame
+                page.locator('#f').focus()  # keys go to the framed app, not the host page
             else:
                 page.goto(url)
                 page.wait_for_timeout(2500)
