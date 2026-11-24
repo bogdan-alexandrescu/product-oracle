@@ -193,9 +193,7 @@ test.describe('desktop', () => {
       'href',
       /^\/simple\/(roadmap\?goal=|priorities)/,
     );
-    await expect(home(page).getByTestId('home-goal-weight').first()).toHaveText(
-      /^\d+% of the score$/,
-    );
+    await expect(home(page).getByTestId('home-goal-weight').first()).toHaveText(/^Weight \d+%$/);
     const labels = home(page).getByTestId('home-strip-label');
     // home-waiting-one-list: the plan is the company roadmap's, every PRD's items: each row is a milestone by its name, or the items in none.
     for (const t of await labels.allTextContents())

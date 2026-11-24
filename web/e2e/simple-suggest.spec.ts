@@ -105,7 +105,7 @@ for (const phone of [false, true]) {
         await signIn(page, EMAILS.commenter);
         const card = page.getByTestId('home-goal').filter({ hasText: 'Grow retention' });
         await expect(card.getByTestId('home-goal-path')).toHaveText(
-          'From 50 teams · now 100 teams · target 200 teams with weekly alerts on',
+          'Now 100 teams · target 200 teams with weekly alerts on',
         );
         await expect(card.getByTestId('goal-suggestions-open')).toHaveCount(1);
         await expect(retentionButton(page)).toHaveText('Suggestions · 1');
@@ -239,7 +239,7 @@ for (const phone of [false, true]) {
         await signIn(page, EMAILS.commenter);
         const quiet = page.getByTestId('home-goal').filter({ hasText: 'Keep alerts quiet' });
         await expect(quiet.getByTestId('home-goal-path')).toHaveText(
-          'From 12 teams muting alerts · target 10 teams muting alerts',
+          'Now – · target 10 teams muting alerts',
         );
         let drawer = await openDrawer(page);
         await expect(drawer.getByTestId('suggest-decider')).toHaveText(

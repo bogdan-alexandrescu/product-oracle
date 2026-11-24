@@ -15,8 +15,8 @@ import { expect, test } from './test';
  * no_claim = the API's list (pytest test_simple_waiting_read_budget.py).
  *
  * Card inbox-more: protects = an Inbox row Home does not draw itself (open feedback, for an
- * approver) counts on Home as on the rail and the Inbox: Home reads "A thing in your Inbox waits on you." and
- * one row "1 more in your Inbox" that opens Simple's Inbox, the rail's Inbox count reads 1 and the
+ * approver) counts on Home as on the rail and the Inbox: Home reads "1 thing in your Inbox needs you." and
+ * one row "1 in your Inbox" that opens Simple's Inbox, the rail's Inbox count reads 1 and the
  * Inbox says 1 waiting; fails_when = Home says "Nothing waits on you today." while the rail and
  * the Inbox count it.
  *
@@ -90,12 +90,13 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId('inbox-needs').getByTestId('panel-count')).toHaveText('1');
       await page.goto('/simple');
       const sentence = page.getByTestId('simple-page').getByTestId('home-sentence');
-      await expect(sentence).toHaveText('A thing in your Inbox waits on you.');
+      // #1758, #1762: plain words with the count; the row is the Inbox's link, no "more" with nothing above it.
+      await expect(sentence).toHaveText('1 thing in your Inbox needs you.');
       await expect(page.getByText('Nothing waits on you today.')).toHaveCount(0);
       const more = page.getByTestId('home-also-waiting').getByTestId('home-inbox-more');
-      await expect(more).toHaveText(/^1 more in your Inbox\s*Open$/);
+      await expect(more).toHaveText('1 in your Inbox');
       if (!phone) await expect(page.getByTestId('simple-nav-inbox-count')).toHaveText('1');
-      await more.getByRole('link', { name: 'Open' }).click();
+      await more.getByRole('link', { name: '1 in your Inbox' }).click();
       await expect(page).toHaveURL(/\/simple\/inbox$/);
       // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
       await expect(page.getByTestId('inbox-needs').getByTestId('panel-count')).toHaveText('1');

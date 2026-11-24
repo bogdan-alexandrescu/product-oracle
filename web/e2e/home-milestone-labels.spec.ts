@@ -72,7 +72,7 @@ async function home(
     ] as const);
   await login(page, email);
   await page.goto('/simple');
-  await expect(page.getByRole('heading', { name: 'The plan this quarter' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^The plan( · |$)/ })).toBeVisible();
   await expect(page.getByTestId('home-strip-label').first()).toBeVisible();
 }
 

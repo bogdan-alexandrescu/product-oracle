@@ -19,7 +19,7 @@ import { Walk } from '@/app/simple/_home/walk';
 import { runStopsOf, StopCard } from '@/app/simple/_home/run-stops';
 import { LEAD } from '@/app/simple/_home/skeleton';
 import { SimpleWelcome } from '@/app/simple/_home/welcome';
-import { GtWaitingLine } from '@/app/simple/_home/gt-flags';
+import { GtWaitingLine, useGtCheck } from '@/app/simple/_home/gt-flags';
 import { MarkForItem, WithFeatureMarks } from '@/components/current-state/CurrentState';
 import { Icon } from '@/components/ds/Icon';
 import { Button } from '@/components/ds/Button';
@@ -197,8 +197,7 @@ function shiftMoves(
 const STATUS_TONE: Record<GoalTile['status'], string> = {
   'At risk': 'simple-status-risk',
   'Not measured yet': 'simple-status-quiet',
-  'Not counted yet': 'simple-status-quiet',
-  Planned: 'simple-status-ok',
+  'On track': 'simple-status-ok',
 };
 
 /**
@@ -245,6 +244,8 @@ function SimpleHome() {
   };
   useItemChanged(reloadAll);
 
+  // #1761: the Ground Truth check, read once: its line leads the Summary, and alone it draws it.
+  const gtCheck = useGtCheck();
   const inbox = useQuery(k('inbox'), loadInbox, { keepPrevious: true });
   // Review: the questions asked of me, the rail's other part (lib/waiting waitingCount).
   const asked = useQuery(k('asked'), loadMyQuestions, { keepPrevious: true });
@@ -626,7 +627,8 @@ function SimpleHome() {
     inboxCount === 0
       ? waitSentence(parts)
       : parts.every(([n]) => n === 0)
-        ? waitSentence([[inboxCount, 'thing in your Inbox', 'things in your Inbox']])
+        ? // #1758: plain, with its count ("10 things in your Inbox need you.").
+          `${inboxCount} ${inboxCount === 1 ? 'thing in your Inbox needs' : 'things in your Inbox need'} you.`
         : `${waitSentence(parts)} More waits in your Inbox.`;
   const brokenWords = brokenOthers === 1 ? 'a broken link' : 'broken links';
   // home-honest-loading: what waits is said only once every source it counts has answered
@@ -723,17 +725,23 @@ function SimpleHome() {
             brokenOthers === 1 ? 'fix to propose' : 'fixes to propose',
           ] as const),
     ] as const
-  ).filter(([id]) =>
-    id === 'broken-links'
-      ? (roadmap.data?.items.length ?? 1) > 0
-      : id === 'decisions'
-        ? !decisionsEmpty || prdWaiting.length > 0
-        : !proposalsEmpty,
-  );
+  )
+    // #1761: a count of 0 needs nothing, so it gets no tile (a failed read keeps its "–").
+    .filter(([id, n]) =>
+      n === 0
+        ? false
+        : id === 'broken-links'
+          ? (roadmap.data?.items.length ?? 1) > 0
+          : id === 'decisions'
+            ? !decisionsEmpty || prdWaiting.length > 0
+            : !proposalsEmpty,
+    );
   // The tiles show once each of their counts is read (or failed): never a 0 or a "–" that later changes.
   const tilesReady = [waiting, decisions, changes, roadmap, drafts].every(
     (q) => q.data !== undefined || !!q.error,
   );
+  const summaryShown =
+    tilesReady && (tilesShown.length > 0 || myDrafts.length > 0 || (gtCheck.data?.total ?? 0) > 0);
   // build-rundecide review: with no other judgement call the Decisions card is not drawn; its tile goes to the first PRD's card.
   const tileAnchor = (id: string) =>
     id === 'decisions' && decisionsEmpty && prdWaiting[0]
@@ -1243,7 +1251,7 @@ function SimpleHome() {
                                         data-testid="home-goal-weight"
                                         className="simple-small tnum"
                                       >
-                                        {share(g.weight)}% of the score
+                                        Weight {share(g.weight)}%
                                       </span>
                                       <InfoTip label="the goal's share of the score" align="start">
                                         Counts for {share(g.weight)}% of each feature&apos;s score.
@@ -1265,9 +1273,14 @@ function SimpleHome() {
                                   {g.name}
                                 </Link>
                               </span>
-                              {g.path && (
-                                <span data-testid="home-goal-path" className="simple-small tnum">
-                                  {g.path}
+                              {/* #1759: one progress pattern on every card; the whole path (from where) in its tooltip. */}
+                              {g.progress && (
+                                <span
+                                  data-testid="home-goal-path"
+                                  title={g.path ?? undefined}
+                                  className="simple-small tnum"
+                                >
+                                  {g.progress}
                                 </span>
                               )}
                               <div className="mt-auto flex flex-wrap items-center gap-2">
@@ -1288,7 +1301,7 @@ function SimpleHome() {
                                   href={`/simple/goals?goal=${encodeURIComponent(g.id)}&name=${encodeURIComponent(g.name)}`}
                                   data-testid="home-goal-map"
                                   aria-label={`${g.name} on the Goal map`}
-                                  className="simple-small font-semibold text-accent-ink hover:underline"
+                                  className="simple-small font-semibold text-accent-ink underline underline-offset-2"
                                 >
                                   Goal map
                                 </Link>
@@ -1407,8 +1420,10 @@ function SimpleHome() {
                     </ul>
                   </section>
                 )}
-                {!reads && tilesReady && (tilesShown.length > 0 || myDrafts.length > 0) && (
+                {!reads && summaryShown && (
                   <section aria-label="Summary" data-testid="home-summary" className="simple-card">
+                    {/* #1761: the Ground Truth flags need action: they lead the card. */}
+                    <GtWaitingLine check={gtCheck} />
                     {tilesShown.length > 0 && (
                       // qa4-simple-home-17: a lone tile keeps a third of the card; two or three share it as built.
                       <ul
@@ -1495,8 +1510,6 @@ function SimpleHome() {
                         </Link>
                       </p>
                     ))}
-                    {/* The owner's pick (Nov 10): the Ground Truth flags, one line at the foot of the card. */}
-                    <GtWaitingLine />
                   </section>
                 )}
 
@@ -1533,9 +1546,7 @@ function SimpleHome() {
                         </Link>
                       </p>
                     )}
-                    {!(tilesReady && (tilesShown.length > 0 || myDrafts.length > 0)) && (
-                      <GtWaitingLine />
-                    )}
+                    {!summaryShown && <GtWaitingLine check={gtCheck} />}
                   </section>
                 )}
 
@@ -1671,8 +1682,9 @@ function SimpleHome() {
                     icon="flag"
                     title="Also waiting for you"
                     count={alsoWaiting.length + moreInInbox}
-                    all="/simple/decisions"
-                    allLabel="All that waits on you"
+                    // #1762: with only the Inbox's rows, its one button opens the Inbox.
+                    all={alsoWaiting.length ? '/simple/decisions' : '/simple/inbox'}
+                    allLabel={alsoWaiting.length ? 'All that waits on you' : 'Open your Inbox'}
                   >
                     <ul data-testid="home-also-waiting-list">
                       {alsoWaiting.map((i) => (
@@ -1683,14 +1695,9 @@ function SimpleHome() {
                           className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0"
                           data-testid="home-inbox-more"
                         >
-                          <span className="min-w-0 flex-1 break-words">
-                            {moreInInbox} more in your Inbox
-                          </span>
-                          <Link
-                            href="/simple/inbox"
-                            className="simple-button simple-button-primary"
-                          >
-                            Open
+                          {/* #1762: "more" only below listed rows; the Inbox opens from its words, one button in the card. */}
+                          <Link href="/simple/inbox" className="simple-link min-w-0 break-words">
+                            {moreInInbox} {alsoWaiting.length ? 'more ' : ''}in your Inbox
                           </Link>
                         </li>
                       )}
@@ -1880,19 +1887,18 @@ function SimpleHome() {
                 <HomeCard
                   id="plan"
                   icon="roadmap"
-                  title="The plan this quarter"
+                  // #1764: the title names the range the plan runs over (it may pass a quarter), with a dash.
+                  title={
+                    roadmap.data?.span
+                      ? `The plan · ${roadmap.data.span.label.replace(/\s+-\s+/g, ' – ')}`
+                      : 'The plan'
+                  }
                   all="/simple/roadmap"
                   allLabel="All of the roadmap"
                 >
                   <Block q={roadmap} testId="home-plan">
                     {(r) => (
                       <>
-                        {/* The plan's span, when the PRD's plan dates it ("Nov 2 - Feb 12"). */}
-                        {r.span && (
-                          <p className="simple-small" data-testid="home-plan-span">
-                            {r.span.label}
-                          </p>
-                        )}
                         {/* In the plan's card, filled with it: above the goal band it pushed everything down.
                   qa4-simple-home-16: the count holds unsent working drafts too, so it never says "in review". */}
                         {r.changes_in_review > 0 && (
@@ -2041,7 +2047,7 @@ function SimpleHome() {
 
                 {reads ? (
                   <>
-                    <GtWaitingLine card />
+                    <GtWaitingLine card check={gtCheck} />
                     <HomeCard
                       id="next-milestone"
                       icon="flag"

@@ -8,7 +8,7 @@ import { Icon } from '@/components/ds/Icon';
 import { InfoTip } from '@/components/ds/InfoTip';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
-import { useQuery } from '@/lib/use-query';
+import { useQuery, type Query } from '@/lib/use-query';
 
 type Check = Schemas['GroundTruthOut'];
 
@@ -73,20 +73,24 @@ function Sheet({
  * fix reads the check again, so the count changes at once; at 0 the line goes. `card`: a viewer's
  * Home has no Waiting card, so the line sits in a card of its own.
  */
-export function GtWaitingLine({ card = false }: { card?: boolean }) {
+export function useGtCheck(): Query<Check> {
+  return useQuery('home-gt-check', () => unwrap(api.GET('/v1/baseline/check')));
+}
+
+/** #1761: the flags need action, so in the Summary they lead it, in warning colours, above the counts. */
+export function GtWaitingLine({ card = false, check }: { card?: boolean; check: Query<Check> }) {
   const [open, setOpen] = useState(false);
-  const check = useQuery('home-gt-check', () => unwrap(api.GET('/v1/baseline/check')));
   const data = check.data;
   if (!data || (data.total === 0 && !open)) return null;
   const line = data.total > 0 && (
     <p
       data-testid="gtf-line"
-      className={`simple-small flex flex-wrap items-center gap-x-1.5 gap-y-1 ${card ? '' : 'mt-2 border-t border-line pt-2'}`}
+      className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 ${card ? 'simple-small' : 'mb-3 rounded-xl bg-warn-bg px-4 py-3 font-semibold text-warn'}`}
     >
       <Icon name="flag" size={16} />
       <button
         type="button"
-        className="simple-link"
+        className={card ? 'simple-link' : 'underline underline-offset-2'}
         data-testid="gtf-open"
         onClick={() => setOpen(true)}
       >
