@@ -31,6 +31,7 @@ import { ItemTalk } from '@/components/simple/chat/ItemTalk';
 import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from '@/lib/api/simple-chat';
 import { DecidedWho } from '@/components/simple/DecidedWho';
 import { FeatureComments } from '@/components/simple/FeatureComments';
+import { MkActivity, mkOn } from '@/components/simple/MkActivity'; // MOCK-HOOK
 import { useMe } from '@/lib/me';
 import { useScreenSubject } from '@/lib/screen-subject';
 import { errorMessage } from '@/lib/use-query';
@@ -1680,7 +1681,7 @@ export function FloatingCard({
           </button>
         )}
       </div>
-      <FeatureComments item={item} />
+      {/* MOCK-HOOK */ mkOn() ? <MkActivity phone={phone} /> : <FeatureComments item={item} />}
       {after}
     </>
   );

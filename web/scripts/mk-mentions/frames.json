@@ -1,0 +1,647 @@
+[
+ {
+  "file": "ma1-a-rest",
+  "q": "ma1=a",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-a-open",
+  "q": "ma1=a&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-a-mid",
+  "q": "ma1=a&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma1-a-done",
+  "q": "ma1=a&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-a-hard-1512",
+  "q": "ma1=a&hard=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-a-phone-390",
+  "q": "ma1=a",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-b-rest",
+  "q": "ma1=b",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-b-open",
+  "q": "ma1=b&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-b-mid",
+  "q": "ma1=b&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma1-b-done",
+  "q": "ma1=b&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma1-b-hard-1512",
+  "q": "ma1=b&hard=1&open=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-b-phone-390",
+  "q": "ma1=b",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-c-rest",
+  "q": "ma1=c",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-c-open",
+  "q": "ma1=c&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-c-mid",
+  "q": "ma1=c&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma1-c-done",
+  "q": "ma1=c&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma1-c-hard-1512",
+  "q": "ma1=c&hard=1&open=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-c-phone-390",
+  "q": "ma1=c",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-d-rest",
+  "q": "ma1=d",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-d-open",
+  "q": "ma1=d&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-d-mid",
+  "q": "ma1=d&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-d-done",
+  "q": "ma1=d&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-d-hard-1512",
+  "q": "ma1=d&hard=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma1-d-phone-390",
+  "q": "ma1=d&open=1",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-a-rest",
+  "q": "ma2=a",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-a-open",
+  "q": "ma2=a&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-a-mid",
+  "q": "ma2=a&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-a-done",
+  "q": "ma2=a&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-a-learn",
+  "q": "ma2=a",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "approver",
+  "page": "inbox"
+ },
+ {
+  "file": "ma2-a-hard-1512",
+  "q": "ma2=a&hard=1&phase=mid&role=commenter",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "commenter",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-a-phone-390",
+  "q": "ma2=a&open=1",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-b-rest",
+  "q": "ma2=b",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-b-open",
+  "q": "ma2=b&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-b-mid",
+  "q": "ma2=b&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-b-done",
+  "q": "ma2=b&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-b-learn",
+  "q": "ma2=b",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "approver",
+  "page": "inbox"
+ },
+ {
+  "file": "ma2-b-hard-1512",
+  "q": "ma2=b&hard=1&phase=mid&role=commenter",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "commenter",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-b-phone-390",
+  "q": "ma2=b&open=1",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-c-rest",
+  "q": "ma2=c",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-c-open",
+  "q": "ma2=c&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-c-mid",
+  "q": "ma2=c&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-c-done",
+  "q": "ma2=c&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma2-c-learn",
+  "q": "ma2=c",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "approver",
+  "page": "inbox"
+ },
+ {
+  "file": "ma2-c-hard-1512",
+  "q": "ma2=c&hard=1&phase=mid&role=commenter",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "commenter",
+  "scroll": "field"
+ },
+ {
+  "file": "ma2-c-phone-390",
+  "q": "ma2=c&open=1",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner",
+  "scroll": "field"
+ },
+ {
+  "file": "ma3-a-rest",
+  "q": "ma3=a",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-a-open",
+  "q": "ma3=a&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "undo"
+ },
+ {
+  "file": "ma3-a-mid",
+  "q": "ma3=a&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-a-done",
+  "q": "ma3=a&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-a-hard-1512",
+  "q": "ma3=a&hard=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-a-phone-390",
+  "q": "ma3=a",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-b-rest",
+  "q": "ma3=b",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-b-open",
+  "q": "ma3=b&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "undo"
+ },
+ {
+  "file": "ma3-b-mid",
+  "q": "ma3=b&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-b-done",
+  "q": "ma3=b&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-b-hard-1512",
+  "q": "ma3=b&hard=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-b-phone-390",
+  "q": "ma3=b",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-c-rest",
+  "q": "ma3=c",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-c-open",
+  "q": "ma3=c&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-c-mid",
+  "q": "ma3=c&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "undo"
+ },
+ {
+  "file": "ma3-c-done",
+  "q": "ma3=c&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-c-hard-1512",
+  "q": "ma3=c&hard=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-c-phone-390",
+  "q": "ma3=c",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-d-rest",
+  "q": "ma3=d",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-d-open",
+  "q": "ma3=d&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-d-mid",
+  "q": "ma3=d&phase=mid",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner",
+  "scroll": "undo"
+ },
+ {
+  "file": "ma3-d-done",
+  "q": "ma3=d&phase=done",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-d-hard-1512",
+  "q": "ma3=d&hard=1",
+  "size": [
+   1512,
+   900
+  ],
+  "role": "owner"
+ },
+ {
+  "file": "ma3-d-phone-390",
+  "q": "ma3=d",
+  "size": [
+   390,
+   844
+  ],
+  "role": "owner"
+ }
+]

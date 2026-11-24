@@ -4,6 +4,7 @@ import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from '@/components/ds';
+import { MkInboxMention } from '@/components/simple/MkActivity'; // MOCK-HOOK
 import { TabBar } from '@/components/review/parts';
 import { ErrorNote, LoadError, Loading } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
@@ -196,6 +197,7 @@ function Inbox() {
           )
         }
       />
+      {/* MOCK-HOOK */ <MkInboxMention />}
       {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
       {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
       {webhooks.error && (
