@@ -731,7 +731,7 @@ function MilestoneForm({
               ) : (
                 <p data-testid="milestone-no-basis" className="text-sm text-warn">
                   No verified basis for this date.{' '}
-                  <InfoTip label="the date's basis" align="start">
+                  <InfoTip label="the basis" align="start">
                     No verified estimate, capacity or commitment supports this date. Oracle never
                     invents dates.
                   </InfoTip>
