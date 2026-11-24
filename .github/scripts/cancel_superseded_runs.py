@@ -3,6 +3,8 @@
 CI runs on every merge to main, each in its own concurrency group, so an older train's run
 goes on even once a newer run (which contains its commits) has started. This cancels those
 older runs, except one whose deploy job has started: a deploy is never cut off midway.
+Only push runs supersede and are superseded: a dispatched or scheduled run is left alone
+(#1608). When unsure (a read fails), it keeps every run and exits 0: it never reds a run.
 
 Standard library only. Needs GITHUB_TOKEN with actions: write; GITHUB_REPOSITORY,
 GITHUB_RUN_ID and GITHUB_API_URL come from the Actions runner. DEPLOY_JOB_PATTERN (default
@@ -31,12 +33,15 @@ def deploy_started(jobs: list[dict], pattern: str = "deploy") -> bool:
 def superseded(
     current: dict, runs: list[dict], jobs_of: Callable[[int], list[dict]], pattern: str = "deploy"
 ) -> list[int]:
-    """The ids of the runs to cancel: older active runs of the current run's branch."""
+    """The ids of the runs to cancel: older active push runs of the current push's branch."""
+    if current.get("event") != "push":
+        return []
     return [
         run["id"]
         for run in sorted(runs, key=lambda r: r["run_number"])
         if run["run_number"] < current["run_number"]
         and run["head_branch"] == current["head_branch"]
+        and run.get("event") == "push"
         and run["status"] in ACTIVE
         and not deploy_started(jobs_of(run["id"]), pattern)
     ]
@@ -53,7 +58,30 @@ def _api(method: str, path: str) -> dict:
     return json.loads(body) if body else {}
 
 
+# What a failed read or cancel raises: HTTPError and URLError are OSErrors, as is a timeout;
+# ValueError is a body that is not JSON, KeyError and TypeError one without the fields read.
+FAILED = (OSError, ValueError, KeyError, TypeError)
+
+
 def main() -> None:
+    try:
+        to_cancel = _to_cancel()
+    except FAILED as error:
+        print(f"Could not list the runs ({error!r}): kept every run.")
+        return
+    repo = os.environ["GITHUB_REPOSITORY"]
+    for run in to_cancel:
+        try:
+            _api("POST", f"/repos/{repo}/actions/runs/{run['id']}/cancel")
+            print(f"Cancelled run {run['run_number']} ({run['head_sha'][:7]}): superseded")
+        except urllib.error.HTTPError as error:  # it finished meanwhile (409)
+            print(f"Run {run['run_number']} not cancelled: {error.code}")
+        except FAILED as error:
+            print(f"Run {run['run_number']} not cancelled: {error!r}")
+
+
+def _to_cancel() -> list[dict]:
+    """Every read first: a failed read leaves nothing half cancelled."""
     repo = os.environ["GITHUB_REPOSITORY"]
     pattern = os.environ.get("DEPLOY_JOB_PATTERN") or "deploy"
     current = _api("GET", f"/repos/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}")
@@ -69,14 +97,8 @@ def main() -> None:
     def jobs_of(run_id: int) -> list[dict]:
         return _api("GET", f"/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100")["jobs"]
 
-    for run in sorted(runs.values(), key=lambda r: r["run_number"]):
-        if run["id"] not in superseded(current, [run], jobs_of, pattern):
-            continue
-        try:
-            _api("POST", f"/repos/{repo}/actions/runs/{run['id']}/cancel")
-            print(f"Cancelled run {run['run_number']} ({run['head_sha'][:7]}): superseded")
-        except urllib.error.HTTPError as error:  # it finished meanwhile (409)
-            print(f"Run {run['run_number']} not cancelled: {error.code}")
+    ids = superseded(current, list(runs.values()), jobs_of, pattern)
+    return [runs[run_id] for run_id in ids]
 
 
 if __name__ == "__main__":

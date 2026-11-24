@@ -81,6 +81,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
+          version: "0.13.7" # #1608: api/Dockerfile's uv; never "latest"
           python-version: "3.12"
       # Each worker (one per core) drops and builds the whole schema in its own database
       # (oracle_test_gw0, ...); Postgres's default lock table runs out of shared memory
@@ -143,6 +144,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
+          version: "0.13.7" # #1608: api/Dockerfile's uv; never "latest"
           python-version: "3.12"
       - run: uv sync --frozen
       - run: gh run download "$GITHUB_RUN_ID" --pattern 'api-coverage-*' --dir "$RUNNER_TEMP/coverage"
@@ -152,6 +154,12 @@ jobs:
           cp "$RUNNER_TEMP"/coverage/api-coverage-*/.coverage.shard-* .
           uv run coverage combine
           uv run coverage json -o coverage.json
+      # #1711: the measured total, so the floor can be raised from it (coverage_floor.py update).
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: api-coverage-json
+          path: api/coverage.json
+          if-no-files-found: error
       - run: python3 ../.github/scripts/coverage_floor.py --self-test
       - run: python3 ../.github/scripts/coverage_floor.py check coverage.json
 
@@ -169,6 +177,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
+          version: "0.13.7" # #1608: api/Dockerfile's uv; never "latest"
           python-version: "3.12"
       - run: cd api && uv sync --frozen
       - run: cd web && npm ci
@@ -206,6 +215,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
+          version: "0.13.7" # #1608: api/Dockerfile's uv; never "latest"
           python-version: "3.12"
       - run: uv sync --frozen
       - run: uv run pytest -p no:cacheprovider -m timing
@@ -224,6 +234,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
+          version: "0.13.7" # #1608: api/Dockerfile's uv; never "latest"
           python-version: "3.12"
       - run: npm ci
       - name: Generated API types are up to date
@@ -268,6 +279,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
+          version: "0.13.7" # #1608: api/Dockerfile's uv; never "latest"
           python-version: "3.12"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

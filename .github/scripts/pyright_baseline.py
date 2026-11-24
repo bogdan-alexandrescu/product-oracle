@@ -10,7 +10,8 @@ The baseline (.github/scripts/pyright-baseline.json) counts errors by file, rule
 no line numbers, so moving code does not churn it. `check` fails when any (file, rule, message)
 has more errors than the baseline allows. `update` only lowers or drops counts, never adds: the
 baseline burns down and never grows. To accept a new error, fix it or add a
-`# pyright: ignore[rule]` comment that a reviewer reads.
+`# pyright: ignore[rule]` comment that a reviewer reads. `check` also fails when a baseline
+count is stale, that is above what pyright finds (#1711): fixed errors are taken off at once.
 """
 
 from __future__ import annotations
@@ -74,7 +75,7 @@ def check(found: Counter[Key], baseline: Counter[Key]) -> int:
             "`python3 .github/scripts/pyright_baseline.py update pyright.json` and commit it."
         )
     if not new:
-        return 0
+        return 1 if fixed else 0
     print(f"{sum(new.values())} new pyright errors (not in the baseline):")
     for (f, r, m), n in sorted(new.items()):
         print(f"  {f}: [{r}] {m}" + (f" (x{n})" if n > 1 else ""))
@@ -98,7 +99,9 @@ def self_test() -> int:
     base = errors(report(a, a, b), root)
     assert base == Counter({a: 2, b: 1}), base
     assert check(errors(report(a, a, b), root), base) == 0
-    assert check(errors(report(a), root), base) == 0
+    # A baseline count that is stale (errors fixed, count not lowered) fails (#1711).
+    assert check(errors(report(a), root), base) == 1
+    assert check(errors(report(a, b), root), base) == 1
     # A planted error fails, both as a new key and as one more of a known key.
     assert check(errors(report(a, a, b, ("api/oracle/c.py", "r", "m")), root), base) == 1
     assert check(errors(report(a, a, a, b), root), base) == 1
