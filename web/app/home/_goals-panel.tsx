@@ -124,7 +124,7 @@ function GoalCard({
           )}
         </span>
         {!noValue && atRisk(g, p) ? (
-          <span className="ml-auto flex-none" data-testid="goal-confidence">
+          <span className="ml-auto flex-none" data-testid="goal-at-risk">
             <Chip kind="warn" dot data-status="at_risk">
               At risk
             </Chip>
