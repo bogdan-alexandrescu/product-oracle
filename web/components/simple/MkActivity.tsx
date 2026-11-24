@@ -71,7 +71,7 @@ function Body({ text, ma2 }: { text: string; ma2: string }) {
           <span
             key={i}
             data-testid="mk-mention"
-            className="rounded bg-accent-soft px-1 font-semibold text-accent-ink"
+            className="rounded-sm bg-accent-soft font-semibold text-accent-ink underline decoration-accent decoration-2 underline-offset-2"
           >
             {p}
           </span>
@@ -97,14 +97,16 @@ function Comment({ e, ma2 }: { e: MkEvent; ma2: string }) {
 }
 
 function Undo({ id, open, busy, label = 'Undo' }: { id: string; open?: boolean; busy?: boolean; label?: string }) {
-  if ((id !== 'e2' && id !== 'Dates') || mkParam('role') === 'commenter') return null;
+  if ((id !== 'e2' && id !== 'Dates') || mkParam('role')) return null;
+  if (mkParam('ma3') && mkParam('phase') === 'done') return null;
   return (
     <>
       <button type="button" className="h-6 shrink-0 self-start rounded px-1.5 text-xs font-semibold text-accent-ink hover:bg-surface2">
         {busy ? 'Undoing…' : label}
       </button>
       {open && (
-        <div className="absolute top-7 right-0 z-10 w-64 rounded-lg border border-line bg-surface p-3 shadow-tip">
+        <div className="col-span-full flex basis-full justify-end">
+        <div className="mt-1 w-64 rounded-lg border border-line bg-surface p-3 shadow-tip">
           <p className="text-sm">
             Put Dates back to <b className="font-semibold">Oct 31 – Dec 10</b>?
           </p>
@@ -116,6 +118,7 @@ function Undo({ id, open, busy, label = 'Undo' }: { id: string; open?: boolean; 
               Cancel
             </button>
           </div>
+        </div>
         </div>
       )}
     </>
@@ -159,7 +162,7 @@ function Change({
     );
   if (ma3 === 'b')
     return (
-      <li data-testid="mk-change" className="relative flex gap-2 text-sm">
+      <li data-testid="mk-change" className="relative flex flex-wrap gap-2 text-sm">
         <Avatar name={by} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
@@ -184,9 +187,9 @@ function Change({
       <li data-testid="mk-change" className="relative grid grid-cols-[84px_1fr_auto] gap-x-2 text-sm">
         <span className="font-semibold text-text2">{e.field}</span>
         <span className="min-w-0">
-          <span className="text-text2">{e.before}</span>
+          <span className="whitespace-nowrap text-text2">{e.before}</span>
           <Arrow />
-          <span className="font-semibold">{e.after}</span>
+          <span className="whitespace-nowrap font-semibold">{e.after}</span>
           <span className="block text-xs text-text2">
             {by} · {when(e.at)}
             {prop && (prop.state === 'waiting' ? ' · waiting' : ` · accepted by ${prop.by}`)}
@@ -197,7 +200,7 @@ function Change({
     );
   // a: one sentence
   return (
-    <li data-testid="mk-change" className="relative flex gap-2 text-sm">
+    <li data-testid="mk-change" className="relative flex flex-wrap gap-2 text-sm">
       <Avatar name={by} />
       <div className="min-w-0 flex-1">
         <span>
@@ -243,7 +246,7 @@ function Field({ text, picker, query, ma2, hard }: { text: string; picker: boole
         <div
           data-testid="mk-picker"
           role="listbox"
-          className={`z-20 w-72 rounded-lg border border-line bg-surface p-1 shadow-tip ${ma2 === 'b' ? 'absolute top-8 left-0' : 'absolute top-full left-2 mt-1'}`}
+          className={`z-20 w-72 rounded-lg border border-line bg-surface p-1 shadow-tip absolute top-full left-2 mt-1`}
         >
           {ma2 === 'b' && (
             <input
@@ -278,16 +281,18 @@ function sel(on: boolean) {
 
 /** MA3 d: the latest change per field, the full list one click away. */
 function PerField({ events, open, undoOpen }: { events: MkEvent[]; open: boolean; undoOpen?: boolean }) {
-  const seen = new Map<string, { e: MkEvent; n: number }>();
+  const seen = new Map<string, { e: MkEvent; n: number; older: MkEvent[] }>();
   for (const e of events) {
-    if (e.kind !== 'change' || !e.field) continue;
+    if (e.kind !== 'change' || !e.field || e.proposal?.state === 'waiting') continue;
     const s = seen.get(e.field);
-    if (s) s.n += 1;
-    else seen.set(e.field, { e, n: 1 });
+    if (s) {
+      s.n += 1;
+      s.older.push(e);
+    } else seen.set(e.field, { e, n: 1, older: [] });
   }
   return (
     <ul className="mt-2 space-y-1.5">
-      {[...seen.values()].map(({ e, n }) => (
+      {[...seen.values()].map(({ e, n, older }) => (
         <li key={e.field} data-testid="mk-change" className="relative grid grid-cols-[88px_1fr_auto_auto] gap-x-1 text-sm">
           <span className="text-text2">{e.field}</span>
           <span className="min-w-0">
@@ -296,10 +301,26 @@ function PerField({ events, open, undoOpen }: { events: MkEvent[]; open: boolean
               was {e.before} · {e.oracle ? 'Oracle' : e.who}, {day(e.at)}
             </span>
           </span>
-          <button type="button" className="h-6 self-start rounded px-1 text-xs font-semibold text-accent-ink">
-            {open && e.field === 'Dates' ? 'Hide' : `All ${n}`}
-          </button>
+          {n > 1 ? (
+            <button type="button" className="h-6 self-start rounded px-1 text-xs font-semibold text-accent-ink">
+              {open && e.field === 'Dates' ? 'Hide' : `All ${n}`}
+            </button>
+          ) : (
+            <span />
+          )}
           {e.field === 'Dates' && !e.undo ? <Undo id="Dates" open={undoOpen} label="Put back" /> : <span />}
+          {open && e.field === 'Dates' && (
+            <ul className="col-span-full mt-1 ml-[88px] space-y-1 border-l-2 border-line pl-2">
+              {older.map((o) => (
+                <li key={o.id} className="text-sm">
+                  {o.after}
+                  <span className="block text-xs text-text2">
+                    was {o.before} · {o.oracle ? 'Oracle' : o.who}, {day(o.at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </li>
       ))}
     </ul>
@@ -318,7 +339,7 @@ export function MkActivity({ phone }: { phone: boolean }) {
   const role = mkParam('role');
 
   let events: MkEvent[] = hard && focus !== 'ma2' ? mkManyEvents() : [...MK_EVENTS];
-  if (role === 'commenter') events = [MK_WAITING, ...events];
+  if (role === 'commenter' && focus !== 'ma1') events = [MK_WAITING, ...events];
   // The story's result: MA1 posts a comment, MA2 posts one with a mention, MA3 undoes Priya's date change.
   if (phase === 'done' && focus === 'ma1')
     events = [{ id: 'n1', kind: 'comment', who: 'Avery Stone', at: '2026-11-24T09:41:00Z', body: 'Can we keep Dec 18 for the pilot?' }, ...events];
@@ -343,8 +364,9 @@ export function MkActivity({ phone }: { phone: boolean }) {
   }
 
   // MA1 filter / tab / fold state.
-  const [filter, setFilter] = useState<'all' | 'comments' | 'changes'>(
-    focus === 'ma1' && open && ma1 === 'a' ? 'changes' : focus === 'ma3' && ma3 === 'c' && open ? 'changes' : 'all',
+  const ma3Dates = focus === 'ma3' && ma3 === 'c' && (open || !!phase);
+  const [filter, setFilter] = useState<string>(
+    focus === 'ma1' && open && ma1 === 'a' ? 'changes' : ma3Dates ? 'Dates' : 'all',
   );
   const [tab, setTab] = useState<'comments' | 'history'>(
     focus === 'ma1' && open && ma1 === 'b' ? 'history' : 'comments',
@@ -394,7 +416,20 @@ export function MkActivity({ phone }: { phone: boolean }) {
       </div>
     ) : null;
 
-  const field = <Field text={text} picker={picker} query={query} ma2={ma2} hard={hard} />;
+  // MOCK-HOOK: what a commenter or viewer can do, said in a short status.
+  const field =
+    role === 'viewer' ? (
+      <p data-testid="mk-role-status" className="text-xs text-text2">✓ Viewers can read the activity</p>
+    ) : (
+      <>
+        <Field text={text} picker={picker} query={query} ma2={ma2} hard={hard} />
+        {role === 'commenter' && focus !== 'ma2' && (
+          <p data-testid="mk-role-status" className="mt-1 text-xs text-text2">
+            ✓ You can comment and propose; an owner or approver accepts or undoes
+          </p>
+        )}
+      </>
+    );
 
   // MA3 c: filter by field, with counts.
   const fieldChips =
@@ -472,19 +507,33 @@ export function MkActivity({ phone }: { phone: boolean }) {
       </>
     );
   } else {
-    const list = filter === 'comments' ? comments : filter === 'changes' ? changes : events;
+    const OTHER = (e: MkEvent) => e.kind !== 'comment' && !['Dates', 'Status', 'Owner'].includes(e.field ?? '');
+    const list =
+      filter === 'comments' ? comments
+      : filter === 'changes' ? changes
+      : filter === 'Other' ? events.filter(OTHER)
+      : filter !== 'all' ? events.filter((e) => e.field === filter)
+      : events;
+    // MA3 c: one chip row, the field chips standing in for Changes.
+    const chipRow: [string, string, number][] =
+      ma3 === 'c'
+        ? [
+            ['all', 'All', events.length],
+            ['comments', 'Comments', comments.length],
+            ...(['Dates', 'Status', 'Owner'] as const).map((f): [string, string, number] => [f, f, changes.filter((e) => e.field === f).length]),
+            ['Other', 'Other', events.filter(OTHER).length],
+          ]
+        : [
+            ['all', 'All', events.length],
+            ['comments', 'Comments', comments.length],
+            ['changes', 'Changes', changes.length],
+          ];
     inner = (
       <>
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-text2">Activity</h3>
-          <div className="ml-auto flex gap-1.5">
-            {(
-              [
-                ['all', 'All', events.length],
-                ['comments', 'Comments', comments.length],
-                ['changes', 'Changes', changes.length],
-              ] as const
-            ).map(([k, label, n]) => (
+          <div className="ml-auto flex flex-wrap justify-end gap-1.5">
+            {chipRow.map(([k, label, n]) => (
               <button key={k} type="button" onClick={() => setFilter(k)} className={sel(filter === k)}>
                 {label} {k === 'all' ? '' : n}
               </button>
@@ -494,21 +543,20 @@ export function MkActivity({ phone }: { phone: boolean }) {
         <div className="mt-2">{field}</div>
         {filter === 'comments' || ma3 === 'a' || ma3 === 'b' || ma3 === 'c' ? (
           <>
-            {ma3 === 'c' && filter !== 'comments' && fieldChips}
-            <ul className="mt-3 space-y-3">{withDays(ma3 === 'c' && filter !== 'comments' ? list.filter((e) => e.kind === 'comment' || shownChanges.includes(e)) : list)}</ul>
+            <ul className="mt-3 space-y-3">{withDays(list)}</ul>
             {more(list.length)}
           </>
         ) : (
           <>
-            <h4 className="mt-3 text-xs font-semibold text-text2">Latest change to each</h4>
-            <PerField events={changes} open={focus === 'ma3' && open && !phase} undoOpen={focus === 'ma3' && phase === 'mid'} />
-            {focus === 'ma3' && open && !phase && (
-              <ul className="mt-2 space-y-2 border-l-2 border-line pl-3">
-                {changes.filter((e) => e.field === 'Dates').map((e) => (
-                  <Change key={e.id} e={e} ma3="c" nested />
+            {changes.some((e) => e.proposal?.state === 'waiting') && (
+              <ul className="mt-3 space-y-3">
+                {changes.filter((e) => e.proposal?.state === 'waiting').map((e) => (
+                  <Change key={e.id} e={e} ma3="a" />
                 ))}
               </ul>
             )}
+            <h4 className="mt-3 text-xs font-semibold text-text2">Latest change to each</h4>
+            <PerField events={changes} open={focus === 'ma3' && open && !phase} undoOpen={focus === 'ma3' && phase === 'mid'} />
             <ul className="mt-4 space-y-3">{withDays(comments)}</ul>
             {more(comments.length)}
           </>
@@ -567,11 +615,13 @@ export function MkInboxMention() {
         <Avatar name="Avery Stone" size={28} />
         <div className="min-w-0 flex-1">
           <div>
-            <b className="font-semibold">Avery Stone</b> {ma2 === 'b' ? 'asked you on' : 'mentioned you on'}{' '}
+            <b className="font-semibold">Avery Stone</b> {ma2 === 'b' ? 'sent a comment to you on' : 'mentioned you on'}{' '}
             <a className={LINK} href="#">F-79 Weekly alert digest</a>
             <span className="ml-2 text-xs text-text2">Nov 24, 9:41 AM</span>
           </div>
-          <p className="mt-1 border-l-2 border-line pl-2 text-text2">Thanks, can you confirm Monday mornings with support?</p>
+          <p className="mt-1 border-l-2 border-line pl-2 text-text2">
+            {ma2 === 'b' ? 'Thanks, can you confirm Monday mornings with support?' : 'Thanks, Priya Raman can you confirm Monday mornings with support?'}
+          </p>
           <div className="mt-2 flex gap-2">
             <button type="button" className={BTN_ACC}>Reply</button>
             <button type="button" className={BTN}>Done</button>
@@ -592,17 +642,13 @@ export function MkBell() {
           <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
           </svg>
-          <span className="absolute -top-1 -right-1 rounded-full bg-accent px-1.5 text-xs font-semibold text-on-accent">2</span>
+          <span className="absolute -top-1 -right-1 rounded-full bg-accent px-1.5 text-xs font-semibold text-on-accent">1</span>
         </span>
       </div>
       <ul className="mt-2 space-y-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-tip">
         <li>
           <b className="font-semibold">Avery Stone</b> mentioned you on <span className={LINK}>F-79 Weekly alert digest</span>
           <span className="block text-xs text-text2">Nov 24, 9:41 AM</span>
-        </li>
-        <li className="border-t border-line pt-2">
-          <b className="font-semibold">Jun Park</b> mentioned you on <span className={LINK}>F-01 Setup checklist</span>
-          <span className="block text-xs text-text2">Nov 23, 4:02 PM</span>
         </li>
       </ul>
     </div>

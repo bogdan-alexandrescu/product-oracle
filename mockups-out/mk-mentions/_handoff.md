@@ -25,3 +25,12 @@
   `swarm-test-browsers npx playwright test -c scripts/mk-mentions/playwright.config.ts`; `MK_ONLY=ma2` for a subset).
 - Not done: lint on the mock-up code fails (raw buttons, file length); it is never merged. Detailed's History is not
   redrawn: every proposal shares its lines with it (said in each decision's common text).
+
+## Review round (Nov 24)
+- Fixed from verdict.json: ma1-d-rest shows the Activity button (`scroll: center`); F-79's mock end is Dec 18 under any `ma1..3` switch
+  and Dec 10 in MA3 done frames (`simple-roadmap.ts`, MOCK-HOOK); rail Inbox +1 under `ma2=a` (`SimpleShell.tsx`, MOCK-HOOK);
+  MA3 c one chip row, Dates shows date lines only; undo confirm sits in the flow under its line; MA3 d expands older changes in
+  place, no `All 1`; new frames `ma1-*-viewer` (role=viewer) and `ma3-*-commenter`; every cost says `Today:`; MA2 b find box under
+  the field; bell count 1; Inbox quotes match the sent comment; no Undo after an undo; sticky title no longer half-hides a line.
+- Detailed: asked of the owner (questions.json, built "Simple only").
+- Not done: bell list still covers the Inbox's first row in ma2-c-learn; no phone frame of the bell; MA3 b box widths.

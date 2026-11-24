@@ -42,6 +42,7 @@ export const MK_EVENTS: MkEvent[] = [ // MOCK-HOOK
   { id: 'e7', kind: 'comment', who: 'Avery Stone', at: '2026-11-19T14:22:00Z', body: 'Linking the PRD section once it is approved.' },
   { id: 'e8', kind: 'change', who: 'Avery Stone', at: '2026-11-18T13:00:00Z', field: 'Goal', before: 'No goal', after: 'Grow retention', mine: true },
   { id: 'e9', kind: 'change', who: 'Priya Raman', at: '2026-11-17T12:45:00Z', field: 'Depends on', before: 'Nothing', after: 'Alert rules engine' },
+  { id: 'e9b', kind: 'change', who: 'Avery Stone', at: '2026-11-16T10:20:00Z', field: 'Dates', before: 'Oct 28 – Dec 5', after: 'Oct 31 – Dec 10', mine: true },
   { id: 'e10', kind: 'added', who: 'Avery Stone', at: '2026-11-16T10:00:00Z', after: 'Usage alerts roadmap' },
 ];
 

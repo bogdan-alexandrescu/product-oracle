@@ -1127,7 +1127,8 @@ const SEED: SeedItem[] = [
     track: 'alerts',
     confidence: 'medium',
     start: 30,
-    end: 70,
+    // MOCK-HOOK: mk-mentions: Priya moved the end to Dec 18; MA3's undo frames put it back.
+    end: typeof location !== 'undefined' && /ma[123]=/.test(location.search) && !/ma3=[a-d].*phase=done|phase=done.*ma3=/.test(location.search) ? 78 : 70,
     source: 'accepted',
     depends: ['alert-rules'],
     milestone: { name: 'Beta', day: 60 },

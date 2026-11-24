@@ -225,7 +225,7 @@ function useSimpleCounts(
       'Roadmap dates': dates,
       'Roadmap suggested': suggested,
       'Roadmap asks': asks,
-      Inbox: all,
+      Inbox: all + (typeof location !== 'undefined' && /[?&]ma2=a\b/.test(location.search) ? 1 : 0), // MOCK-HOOK: MA2 a counts the mention
       Meetings: live,
       'Meetings live': live,
     },

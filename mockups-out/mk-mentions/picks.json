@@ -6,7 +6,7 @@
    "code": "MA1",
    "name": "Comments and history in the panel",
    "question": "How should comments and the history of changes share the feature panel?",
-   "common": "Everything sits at the end of the one feature panel, after details, dependencies, dates and goal, on every page that opens it. Comments keep today's field (Enter sends). Detailed keeps its History; the same lines show there.",
+   "common": "Everything sits at the end of the one feature panel, after details, dependencies, dates and goal, on every page that opens it. Comments keep today's field (Enter sends). Detailed keeps its History; whether it is redrawn is asked of the owner.",
    "proposals": [
     {
      "letter": "a",
@@ -23,7 +23,7 @@
       },
       {
        "file": "ma1-a-open.html",
-       "caption": "Changes chip picked: only who changed what, 7 lines."
+       "caption": "Changes chip picked: only who changed what, 8 lines."
       },
       {
        "file": "ma1-a-mid.html",
@@ -40,6 +40,10 @@
       {
        "file": "ma1-a-phone-390.html",
        "caption": "Phone 390: the same section at the end of the sheet."
+      },
+      {
+       "file": "ma1-a-viewer.html",
+       "caption": "As a viewer: the same stream, no field; a tick says viewers can read it."
       }
      ]
     },
@@ -49,7 +53,7 @@
      "recommended": false,
      "what": "The panel's Comments become two tabs: Comments (as today, oldest first, field at the end) and History (changes only, newest first).",
      "plus": "Comments look exactly as today; history never pushes comments down.",
-     "cost": "Seeing changes: 1 click on History. Linking a change to the comment about it: switch tabs and compare.",
+     "cost": "Seeing changes: 1 click on History; linking a change to its comment means switching tabs. Today: Open the detailed view, find History, 3 clicks and a page change.",
      "frames": [
       {
        "file": "ma1-b-rest.html",
@@ -74,6 +78,10 @@
       {
        "file": "ma1-b-phone-390.html",
        "caption": "Phone 390: the two tabs at the end of the sheet."
+      },
+      {
+       "file": "ma1-b-viewer.html",
+       "caption": "As a viewer: both tabs, no field; a tick says viewers can read it."
       }
      ]
     },
@@ -81,13 +89,13 @@
      "letter": "c",
      "name": "History folded under",
      "recommended": false,
-     "what": "Comments stay as today; under the field a fold, Show 7 changes, opens the history below them.",
+     "what": "Comments stay as today; under the field a fold, Show 8 changes, opens the history below them.",
      "plus": "The smallest change to today's panel; history is there for whoever looks.",
-     "cost": "Seeing changes: 1 click on the fold, then scroll past every comment.",
+     "cost": "Seeing changes: 1 click on the fold, then scroll past every comment. Today: Open the detailed view, find History, 3 clicks and a page change.",
      "frames": [
       {
        "file": "ma1-c-rest.html",
-       "caption": "At rest: comments as today, Show 7 changes folded under the field."
+       "caption": "At rest: comments as today, Show 8 changes folded under the field."
       },
       {
        "file": "ma1-c-open.html",
@@ -108,6 +116,10 @@
       {
        "file": "ma1-c-phone-390.html",
        "caption": "Phone 390: comments then the fold, at the end of the sheet."
+      },
+      {
+       "file": "ma1-c-viewer.html",
+       "caption": "As a viewer: comments and the fold, no field; a tick says viewers can read it."
       }
      ]
     },
@@ -117,7 +129,7 @@
      "recommended": false,
      "what": "The panel keeps only an Activity button with its count. It opens a second card beside the feature panel holding the one stream, so details and activity show side by side.",
      "plus": "The panel stays short; on a wide screen details and activity are both in view.",
-     "cost": "Everything costs 1 extra click; on a phone the second card covers the feature panel.",
+     "cost": "Everything costs 1 extra click, and on a phone the second card covers the feature panel. Today: Open the detailed view, find History, 3 clicks and a page change.",
      "frames": [
       {
        "file": "ma1-d-rest.html",
@@ -141,7 +153,11 @@
       },
       {
        "file": "ma1-d-phone-390.html",
-       "caption": "Phone 390: the side card becomes a second sheet over the panel."
+       "caption": "Phone 390: the side card becomes a second sheet over the panel; × closes it."
+      },
+      {
+       "file": "ma1-d-viewer.html",
+       "caption": "As a viewer: the side card, no field; a tick says viewers can read it."
       }
      ]
     }
@@ -160,7 +176,7 @@
      "what": "Typing @ opens a list of company members by name and role; arrows and Enter pick one. Sent, the name reads as a tinted name in the comment. The person gets a Mentions row in their Inbox, counted in the rail's Inbox number, with Reply and Done.",
      "why": "Uses the one place people already look for what waits on them; no email shown, no new icon; picking is four keys.",
      "plus": "Fast for people who know @ from other tools; mentions are counted with everything else.",
-     "cost": "Mention: @, 2 or 3 letters, Enter (about 4 keys). The mentioned person: 1 click on Inbox, where they already go.",
+     "cost": "Mention: @, 2 or 3 letters, Enter (about 4 keys). The person: 1 click on Inbox, where they already go. Today: no mentions; you message the person outside Oracle.",
      "frames": [
       {
        "file": "ma2-a-rest.html",
@@ -180,7 +196,7 @@
       },
       {
        "file": "ma2-a-learn.html",
-       "caption": "Priya's Inbox: Avery mentioned you, with the comment, Reply and Done."
+       "caption": "Priya's Inbox: Avery mentioned you, with the comment, Reply and Done; the rail's Inbox reads 10, 9 plus the mention."
       },
       {
        "file": "ma2-a-hard-1512.html",
@@ -198,7 +214,7 @@
      "recommended": false,
      "what": "No typing syntax: a Notify chip above the field opens a find-a-person box. Picked people show as chips; sent, the comment starts with To and their names. They get a Sent to you row in their Inbox.",
      "plus": "Nothing to learn; a name can never be mis-typed inside the text.",
-     "cost": "Mention: click Notify, 3 letters, click the name (2 clicks, 3 keys). The person: 1 click on Inbox.",
+     "cost": "Mention: click Notify, 3 letters, click the name (2 clicks, 3 keys). The person: 1 click on Inbox. Today: no mentions; you message the person outside Oracle.",
      "frames": [
       {
        "file": "ma2-b-rest.html",
@@ -210,7 +226,7 @@
       },
       {
        "file": "ma2-b-mid.html",
-       "caption": "Typed pri: Priya Raman picked shows as a chip."
+       "caption": "Typed pri under the field: Priya Raman picked shows as a chip; the comment stays in view."
       },
       {
        "file": "ma2-b-done.html",
@@ -218,7 +234,7 @@
       },
       {
        "file": "ma2-b-learn.html",
-       "caption": "Priya's Inbox: Sent to you, with Reply and Done."
+       "caption": "Priya's Inbox: Avery sent a comment to you, with Reply and Done."
       },
       {
        "file": "ma2-b-hard-1512.html",
@@ -236,11 +252,11 @@
      "recommended": false,
      "what": "The same @ list, but a sent mention reads as bold @Name, and the person learns of it from a new bell in the page corner with its own count and list, apart from the Inbox.",
      "plus": "Mentions never mix with decisions and proposals that wait in the Inbox.",
-     "cost": "Mention: about 4 keys. The person: a second place to check, 1 click on the bell; the product has no bell today.",
+     "cost": "Mention: about 4 keys. The person: a second place to check, 1 click on the bell. Today: no mentions and no bell; you message the person outside Oracle.",
      "frames": [
       {
        "file": "ma2-c-rest.html",
-       "caption": "At rest: an earlier mention of Avery Stone reads as a tinted name."
+       "caption": "At rest: an earlier mention of Avery Stone reads as bold @Avery Stone."
       },
       {
        "file": "ma2-c-open.html",
@@ -256,7 +272,7 @@
       },
       {
        "file": "ma2-c-learn.html",
-       "caption": "Priya sees a new bell with 2, its list open; the Inbox count does not change."
+       "caption": "Priya sees a new bell with 1, its list open; the Inbox count does not change."
       },
       {
        "file": "ma2-c-hard-1512.html",
@@ -274,7 +290,7 @@
    "code": "MA3",
    "name": "One history line",
    "question": "What does one history line say, and how does a long history read?",
-   "common": "Every line says who, which field, from what to what, and when, month first. Proposals say who accepted them. Owners and approvers can undo; commenters see their proposal waiting.",
+   "common": "Every line says who, which field, from what to what, and when, month first. Proposals say who accepted them. Owners and approvers can undo; a commenter's change waits as a proposal, with no undo.",
    "proposals": [
     {
      "letter": "a",
@@ -308,6 +324,10 @@
       {
        "file": "ma3-a-phone-390.html",
        "caption": "Phone 390: sentences wrap; Undo stays on the right."
+      },
+      {
+       "file": "ma3-a-commenter.html",
+       "caption": "As a commenter: Theo's date change waits as a proposal; no Undo, a tick says what he can do."
       }
      ]
     },
@@ -317,7 +337,7 @@
      "recommended": false,
      "what": "Each change is a heading (who, when, proposed and accepted by) over a small box: the field, the old value struck through, the new value.",
      "plus": "Old and new values are easy to scan side by side.",
-     "cost": "Undo: 2 clicks. Each change takes two lines, so the stream is about a third longer.",
+     "cost": "Undo: 2 clicks; each change takes two lines, so the stream is about a third longer. Today: no history in Simple and no undo; change the field back by hand.",
      "frames": [
       {
        "file": "ma3-b-rest.html",
@@ -342,6 +362,10 @@
       {
        "file": "ma3-b-phone-390.html",
        "caption": "Phone 390: the boxes at full width."
+      },
+      {
+       "file": "ma3-b-commenter.html",
+       "caption": "As a commenter: his change waits in its box; no Undo, a tick says what he can do."
       }
      ]
     },
@@ -349,9 +373,9 @@
      "letter": "c",
      "name": "Field first, filter",
      "recommended": false,
-     "what": "Each line starts with the field; who and when go underneath. Chips with counts (All, Dates, Status, Owner, Other) narrow the history to one field.",
+     "what": "Each line starts with the field; who and when go underneath. One chip row (All, Comments, then Dates, Status, Owner, Other with counts) narrows the stream to one field.",
      "plus": "Best for \"when did the dates move?\": one chip answers it, even in 200 events.",
-     "cost": "Undo: 3 clicks (Dates, Undo, confirm). Who did it is in small text under each line.",
+     "cost": "Undo: 3 clicks (Dates, Undo, confirm); who did it is small text under each line. Today: no history in Simple and no undo; change the field back by hand.",
      "frames": [
       {
        "file": "ma3-c-rest.html",
@@ -359,7 +383,7 @@
       },
       {
        "file": "ma3-c-open.html",
-       "caption": "Dates chip picked: only date changes."
+       "caption": "Dates chip picked: only the 2 date changes."
       },
       {
        "file": "ma3-c-mid.html",
@@ -376,6 +400,10 @@
       {
        "file": "ma3-c-phone-390.html",
        "caption": "Phone 390: chips wrap above the lines."
+      },
+      {
+       "file": "ma3-c-commenter.html",
+       "caption": "As a commenter: his date change waits, field first; no Undo, a tick says what he can do."
       }
      ]
     },
@@ -383,9 +411,9 @@
      "letter": "d",
      "name": "Latest change per field",
      "recommended": false,
-     "what": "No timeline of changes: one row per field with its value, what it was, who changed it and when. All n opens that field's full list; Put back undoes the last change.",
+     "what": "No timeline of changes: one row per field with its value, what it was, who changed it and when. A field changed more than once has All n, which opens its older changes in place; Put back undoes the last change.",
      "plus": "Always short, even with 200 events; answers \"who set this?\" at a glance.",
-     "cost": "Undo: 2 clicks. Order across fields is lost; older changes need All n, 1 more click each.",
+     "cost": "Undo: 2 clicks; order across fields is lost and older changes need All n, 1 more click each. Today: no history in Simple and no undo; change the field back by hand.",
      "frames": [
       {
        "file": "ma3-d-rest.html",
@@ -393,7 +421,7 @@
       },
       {
        "file": "ma3-d-open.html",
-       "caption": "All 1 on Dates opened: that field's list."
+       "caption": "All 2 on Dates opened: the older date change shows in place under it."
       },
       {
        "file": "ma3-d-mid.html",
@@ -401,7 +429,7 @@
       },
       {
        "file": "ma3-d-done.html",
-       "caption": "Done: Dates now reads Oct 31 – Dec 10, was Dec 18. Cost: 2 clicks."
+       "caption": "Done: Dates now reads Oct 31 – Dec 10, was Oct 31 – Dec 18, and so does the bar. Cost: 2 clicks."
       },
       {
        "file": "ma3-d-hard-1512.html",
@@ -410,6 +438,10 @@
       {
        "file": "ma3-d-phone-390.html",
        "caption": "Phone 390: field rows at full width."
+      },
+      {
+       "file": "ma3-d-commenter.html",
+       "caption": "As a commenter: rows show the current values with his change waiting; no Put back."
       }
      ]
     }

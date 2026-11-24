@@ -55,6 +55,15 @@
   "role": "owner"
  },
  {
+  "file": "ma1-a-viewer",
+  "q": "ma1=a&role=viewer",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "viewer"
+ },
+ {
   "file": "ma1-b-rest",
   "q": "ma1=b",
   "size": [
@@ -109,6 +118,15 @@
    844
   ],
   "role": "owner"
+ },
+ {
+  "file": "ma1-b-viewer",
+  "q": "ma1=b&role=viewer",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "viewer"
  },
  {
   "file": "ma1-c-rest",
@@ -167,13 +185,23 @@
   "role": "owner"
  },
  {
+  "file": "ma1-c-viewer",
+  "q": "ma1=c&role=viewer",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "viewer"
+ },
+ {
   "file": "ma1-d-rest",
   "q": "ma1=d",
   "size": [
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "center"
  },
  {
   "file": "ma1-d-open",
@@ -219,6 +247,15 @@
    844
   ],
   "role": "owner"
+ },
+ {
+  "file": "ma1-d-viewer",
+  "q": "ma1=d&role=viewer&open=1",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "viewer"
  },
  {
   "file": "ma2-a-rest",
@@ -474,6 +511,15 @@
   "scroll": "change"
  },
  {
+  "file": "ma3-a-commenter",
+  "q": "ma3=a&role=commenter",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "commenter"
+ },
+ {
   "file": "ma3-b-rest",
   "q": "ma3=b",
   "size": [
@@ -530,6 +576,15 @@
   ],
   "role": "owner",
   "scroll": "change"
+ },
+ {
+  "file": "ma3-b-commenter",
+  "q": "ma3=b&role=commenter",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "commenter"
  },
  {
   "file": "ma3-c-rest",
@@ -589,6 +644,15 @@
   "scroll": "change"
  },
  {
+  "file": "ma3-c-commenter",
+  "q": "ma3=c&role=commenter",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "commenter"
+ },
+ {
   "file": "ma3-d-rest",
   "q": "ma3=d",
   "size": [
@@ -644,5 +708,14 @@
   ],
   "role": "owner",
   "scroll": "change"
+ },
+ {
+  "file": "ma3-d-commenter",
+  "q": "ma3=d&role=commenter",
+  "size": [
+   1440,
+   900
+  ],
+  "role": "commenter"
  }
 ]

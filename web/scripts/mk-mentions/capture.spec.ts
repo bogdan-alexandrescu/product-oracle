@@ -18,6 +18,7 @@ const EMAIL: Record<string, string> = {
   owner: 'admin@example.com',
   approver: 'approver@example.com',
   commenter: 'commenter@example.com',
+  viewer: 'viewer@example.com',
 };
 
 async function login(page: Page, role: string) {
@@ -119,12 +120,18 @@ async function frame(browser: Browser, f: Frame, states: Map<string, string>) {
         (scrollTo === 'mention' && pick('[data-testid="mk-mention"]')) ||
         (scrollTo === 'change' && (document.querySelectorAll('[data-testid="mk-change"]')[1] as HTMLElement)) ||
         (scrollTo === 'more' && pick('[data-testid="mk-more"]')) ||
+        (scrollTo === 'center' && pick('[data-testid="mk-activity"]')) ||
         pick('[data-testid="mk-activity"]');
       el?.scrollIntoView({ block: scrollTo === 'top' || !scrollTo ? 'start' : 'center' });
       if (scrollTo === 'top' || !scrollTo) {
         let p = el?.parentElement ?? null;
         while (p && !(p.scrollHeight > p.clientHeight && getComputedStyle(p).overflowY !== 'visible')) p = p.parentElement;
-        p?.scrollBy(0, -60);
+        // Clear the panel's sticky title so no line shows half under it.
+        let h = 0;
+        for (const c of Array.from(p?.querySelectorAll('*') ?? [])) {
+          if (getComputedStyle(c).position === 'sticky') { h = Math.max(h, (c as HTMLElement).getBoundingClientRect().height); break; }
+        }
+        p?.scrollBy(0, -h);
       }
     }, f.scroll ?? 'top');
     await page.waitForTimeout(400);
