@@ -86,6 +86,7 @@ import {
   roadmapRoute,
   goalTargetOf,
   setTargetName,
+  nextCode,
   readerDb,
   readsRoadmap,
   roadmapId,
@@ -2365,8 +2366,8 @@ function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): 
   );
 }
 
-/** trash_items._codes_free: an item coming back whose code another item took while it was in Trash (its title's, as an add
- * checks it; its feature's or PRD's, against other items' title codes), in set_code's words; null when it is free. Every
+/** trash_items._codes_free: an item coming back whose typed code another item took while it was in Trash (its title's, as an
+ * add checks it), in set_code's words; null when it is free (one coded by its feature or PRD is numbered: claimBack). Every
  * restore goes through it, a feature's and a goal's: as the API, it checks the items the entry brings back (a goal's entry
  * holds the goal alone, so a goal comes back and an item deleted before stays in Trash). */
 export function restoreCodeTaken(
@@ -2386,8 +2387,10 @@ export function restoreCodeTaken(
       : [];
   const seen = back.length ? readerDb(db, me) : null;
   for (const s of back) {
-    const own = takenFrom(s, (id) => db.feature_codes?.[id]);
-    const taken = own ? ownCodeTaken(seen!, s.key, own) : titleCodeTaken(db, seen!, null, s.title);
+    // codes-at-write (Nov 23): a code it takes from its feature or PRD section is numbered as it
+    // comes back (claimBack); only a typed code another item took meanwhile is refused.
+    if (takenFrom(s, (id) => db.feature_codes?.[id])) continue;
+    const taken = titleCodeTaken(db, seen!, null, s.title);
     if (taken) return `${taken}: rename it first`;
   }
   return null;
@@ -3390,19 +3393,6 @@ function titleCodeTaken(
   return codeTaken(db, seen, key ?? '', lead);
 }
 
-/** changes._merge_plan: another item showing ``code`` as its own (its title's, not its feature's or PRD's), in set_code's words; ``seen``: the items the reader reads. */
-function ownCodeTaken(seen: SimpleDb, key: string, code: string): string | null {
-  const other = seen.items.find(
-    (x) =>
-      x.key !== key &&
-      !x.trashed &&
-      codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase(),
-  );
-  return other
-    ? `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}`
-    : null;
-}
-
 /** A proposal whose feature or goal went to Trash meanwhile: closed, not left open. */
 function alreadyInTrash(db: SimpleDb, ctx: SimpleChangesCtx, c: Change, now: string): Response {
   Object.assign(c, {
@@ -3837,25 +3827,31 @@ function planS7(
   }
   if (typeof target.feature_id === 'string' && target.feature_id) {
     // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
-    // Its code (the feature's key, before any ".", and its short code, a published PRD section's) is no other item's own.
+    // codes-at-write (changes._number_linked): when another item of its roadmap shows the feature's
+    // code, the item gets the next free number as it is written; nothing is refused.
     const fid = target.feature_id;
-    const short = db.items.find(
-      (x) => x.feature_id === fid && !x.draft && prdCode(x.section),
-    )?.section;
-    const codes = [
-      db.feature_keys?.[fid] ?? db.feature_codes?.[fid],
-      short ? prdCode(short) : null,
-    ].map((k) => k?.split('.')[0]);
-    for (const code of new Set(
-      codes.filter((k): k is string => !!k && /^[A-Z]{1,3}-\d+[a-j]?$/.test(k)),
-    )) {
-      const taken = ownCodeTaken(readerDb(db, ctx), key, code);
-      if (taken) return json(422, { detail: taken });
+    const after: Values = { feature_id: fid, kept_both: true };
+    const code = db.feature_codes?.[fid];
+    const seen = readerDb(db, ctx);
+    if (
+      code &&
+      !codedTitle(s.title, null)[0] &&
+      seen.items.some(
+        (x) =>
+          x.key !== key &&
+          x.roadmap === s.roadmap &&
+          !x.trashed &&
+          !x.merged_into &&
+          shownCode(x, (id) => db.feature_codes?.[id])?.toUpperCase() === code.toUpperCase(),
+      )
+    ) {
+      Object.assign(target, { numbered: nextCode(db), code_was: code });
+      after.title = `${String(target.numbered)} ${s.title}`;
     }
     return {
       target,
       before: { [String(target.item_id)]: { feature_id: null, kept_both: !!s.kept_both } },
-      after: { [String(target.item_id)]: { feature_id: target.feature_id, kept_both: true } },
+      after: { [String(target.item_id)]: after },
       roadmap: s.roadmap,
       applies,
     };
@@ -3914,7 +3910,17 @@ async function createS7(
     session!.last_change_at = now;
   } else change.routed_to = route(db, ctx, change);
   (db.changes ??= []).push(change);
-  return reply('/v1/simple/changes', 'post', { change: view(db, ctx, change), flags }, 201);
+  // codes-at-write (changes_router.create_simple_change): the code the link gave the item.
+  const numbered =
+    applies && typeof target.numbered === 'string'
+      ? { [String(target.item_id)]: target.numbered }
+      : null;
+  return reply(
+    '/v1/simple/changes',
+    'post',
+    { change: { ...view(db, ctx, change), numbered }, flags },
+    201,
+  );
 }
 
 /** Whether an S7 proposal still fits the items (its draft open, the kept item live). */
@@ -3949,19 +3955,6 @@ function reopenSuggestion(db: SimpleDb, c: Change): void {
       decided_by_name: null,
       decided_at: null,
     });
-}
-
-/** additions._next_code: the highest F-number any item or Ground Truth feature uses, plus one. */
-function nextCode(db: SimpleDb): string {
-  const used = [
-    ...db.items.map((x) => shownCode(x, (id) => db.feature_codes?.[id])),
-    ...Object.values(db.feature_codes ?? {}),
-  ];
-  const nums = used.flatMap((u) => {
-    const m = /^F-(\d+)[a-j]?$/.exec((u ?? '').split('.')[0]);
-    return m ? [Number(m[1])] : [];
-  });
-  return `F-${Math.max(0, ...nums) + 1}`;
 }
 
 function applyS7(db: SimpleDb, c: Change, undo = false): void {
@@ -4049,6 +4042,9 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   if (!intoKey) {
     s.linked_feature = String(c.target.feature_id);
     s.kept_both = true;
+    // codes-at-write: the number the link gave it (planS7).
+    const title = (c.after[id] as Values | undefined)?.title;
+    if (c.target.numbered && typeof title === 'string') s.title = title;
     return;
   }
   const kept = seed(db, intoKey);

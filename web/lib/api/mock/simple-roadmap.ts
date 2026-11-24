@@ -28,7 +28,7 @@ import {
 } from './fit-date-engine';
 import { unitOk } from './goal-units';
 import { newCompany, seeded, stableUuid } from './ids';
-import { codedTitle, prdCode } from './item-code';
+import { codedTitle, inheritedCode, prdCode, shownCode } from './item-code';
 import { withRoadmapCodes } from './roadmap-codes';
 import { plainFlow } from './simple-visuals';
 import {
@@ -2890,6 +2890,42 @@ function readerView(
 
 /** fix4 qa-simple-roadmap-9: the items one reader reads (the API's drafts.overlays_for): a
  * change's stale check and a fix's plan read them, so a commenter acts on what they see. */
+/** additions._next_code: the highest F-number any item or Ground Truth feature uses, plus one. */
+export function nextCode(db: SimpleDb): string {
+  const used = [
+    ...db.items.map((x) => shownCode(x, (id) => db.feature_codes?.[id])),
+    ...Object.values(db.feature_codes ?? {}),
+  ];
+  const nums = used.flatMap((u) => {
+    const m = /^F-(\d+)[a-j]?$/.exec((u ?? '').split('.')[0]);
+    return m ? [Number(m[1])] : [];
+  });
+  return `F-${Math.max(0, ...nums) + 1}`;
+}
+
+/** codes.claim (trash/service.restore_entry): each item back from Trash that shows a code it takes
+ * from its feature or PRD section, which another live item of its roadmap shows, gets the next free
+ * number now. */
+export function claimBack(db: SimpleDb, back: SeedItem[]): void {
+  const featureCode = (id: string) => db.feature_codes?.[id];
+  for (const s of back) {
+    if (s.trashed || codedTitle(s.title, null)[0]) continue;
+    const code = inheritedCode(s, featureCode)?.toUpperCase();
+    if (
+      code &&
+      db.items.some(
+        (x) =>
+          x.key !== s.key &&
+          x.roadmap === s.roadmap &&
+          !x.trashed &&
+          !x.merged_into &&
+          shownCode(x, featureCode)?.toUpperCase() === code,
+      )
+    )
+      s.title = `${nextCode(db)} ${s.title}`;
+  }
+}
+
 export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb {
   return readerView(db, me).db;
 }

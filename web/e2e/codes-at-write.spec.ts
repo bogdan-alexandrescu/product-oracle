@@ -96,7 +96,8 @@ async function codeOf(page: Page, key: string): Promise<string> {
   await openRoadmapItem(page, key);
   const code = panel(page).getByTestId('card-code');
   await expect(code).toBeVisible();
-  const text = (await code.textContent())!.trim();
+  // The code it shows, before the note on its feature ("Part of the Ground Truth feature …").
+  const text = /^[A-Z]+-\d+/.exec((await code.textContent())!.trim())?.[0] ?? '';
   await page.keyboard.press('Escape');
   await expect(panel(page)).toHaveCount(0);
   return text;
