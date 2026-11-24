@@ -14,10 +14,12 @@
 #   deployed by the job, and a laptop only moves traffic back to an earlier revision.
 # - --set-env-vars replaces every variable, so ORACLE_MIGRATE_AT_START is read from the
 #   revision serving now and passed through with the same value (never dropped: a revision
-#   without it migrates at start). It is never taken from the arguments. With 0 (set when the
-#   job is turned on) the new revision does not migrate either.
-# - The traffic then moves to the new revision. When the serving
-#   revisions can not be read, or disagree, it deploys nothing.
+#   without it migrates at start). It is never taken from the arguments.
+# - Without 0 the traffic then moves to the new revision, which migrates at start. With 0 (set
+#   when the job is turned on, and kept when it is turned off) the new revision is staged with
+#   no traffic, the migrate job (ORACLE_MIGRATE_JOB, default oracle-api-migrate) runs on its
+#   image, and only then does the traffic move to it. When the serving revisions can not be
+#   read, or disagree, it deploys nothing.
 set -uo pipefail
 image=${1:?usage: deploy-api.sh <image> <NAME=value,...> [gcloud run deploy flags]}
 env_vars=${2:?usage: deploy-api.sh <image> <NAME=value,...> [gcloud run deploy flags]}
@@ -76,8 +78,34 @@ else
   env_vars="$env_vars${delim}ORACLE_MIGRATE_AT_START=$keep"
 fi
 
+if [ "$keep" != 0 ]; then
+  gcloud run deploy "$service" --image="$image" --project="$project" --region="$region" \
+    --set-env-vars="$env_vars" "$@" || exit
+  # An Actions deploy leaves the traffic on one revision (by its tag), and a new revision then
+  # takes none: move it to the one just deployed.
+  exec gcloud run services update-traffic "$service" --project="$project" --region="$region" --to-latest
+fi
+
+# #1709: with 0 the new revision never migrates itself, so do as the Actions job does: stage it
+# with no traffic (by a tag), run the migrate job on its image, and only then move the traffic,
+# by the tag (a revision created meanwhile never takes it). A failure moves no traffic.
+job=${ORACLE_MIGRATE_JOB:-oracle-api-migrate}
+tag="laptop-$(date -u +%Y%m%d%H%M%S)"
+untag() {
+  gcloud run services update-traffic "$service" --project="$project" --region="$region" \
+    --remove-tags="$tag" --quiet
+}
 gcloud run deploy "$service" --image="$image" --project="$project" --region="$region" \
-  --set-env-vars="$env_vars" "$@" || exit
-# An Actions deploy leaves the traffic on one revision (by its tag), and a new revision then
-# takes none: move it to the one just deployed.
-exec gcloud run services update-traffic "$service" --project="$project" --region="$region" --to-latest
+  --no-traffic --tag="$tag" --set-env-vars="$env_vars" "$@" || exit
+echo "Staged with no traffic as $tag; migrating with the job $job on the new image."
+if ! gcloud run jobs update "$job" --image="$image" --project="$project" --region="$region" \
+  --command=python --args=-m,oracle.startup,migrate --max-retries=0 --quiet ||
+  ! gcloud run jobs execute "$job" --project="$project" --region="$region" --wait --quiet; then
+  echo "The migration failed: no traffic moved."
+  untag
+  rollback
+  exit 1
+fi
+gcloud run services update-traffic "$service" --project="$project" --region="$region" \
+  --to-tags="$tag=100" --quiet || exit
+untag

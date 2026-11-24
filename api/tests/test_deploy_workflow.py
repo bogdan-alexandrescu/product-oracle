@@ -30,6 +30,11 @@
   gcloud's ^<delim>^ form (values with commas, such as a JSON list) as well as NAME=value,...;
   fails_when=a laptop deploy drops the value, deploys beside the Actions job, refuses or
   rewrites the ^<delim>^ form, or lets ORACLE_MIGRATE_AT_START in through it.
+- test_laptop_deploy_with_migrate_at_start_off_migrates_before_traffic (#1709): protects=with
+  the kept value 0 a laptop deploy stages the revision with no traffic, runs the migrate job on
+  its image, then moves the traffic by its tag and removes the tag; fails_when=it serves the new
+  image on the old schema (no migrate step), moves traffic before or without the migration, or
+  leaves the tag after a failed one.
 """
 
 import json
@@ -122,7 +127,7 @@ FAKE_GCLOUD = r"""#!/usr/bin/env bash
 echo "gcloud $*" >> "$FAKE_LOG"
 case "$*" in
   "run services describe"*) [ -n "$FAKE_SERVICE" ] || exit 1; echo "$FAKE_SERVICE" ;;
-  "run jobs execute"*) [ "$FAKE_JOB_FAILS" = 1 ] && exit 1 ;;
+  "run jobs execute"*) [ "$FAKE_JOB_FAILS" != 1 ] || exit 1 ;;
   "run revisions describe"*)
     rev=$4
     jq -e --arg r "$rev" '.[$r]' <<<"$FAKE_REVISIONS" || exit 1 ;;
