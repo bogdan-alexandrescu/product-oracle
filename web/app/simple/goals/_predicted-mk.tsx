@@ -420,7 +420,7 @@ export function MkCost() {
   const c = mkParam('mkcost');
   if (!c) return null;
   return (
-    <div data-testid="mk-cost" className="pointer-events-none fixed bottom-3 left-1/2 -translate-x-1/2 z-50 max-[600px]:top-14 max-[600px]:bottom-auto max-w-[210px] rounded-lg border-2 border-accent bg-surface px-3 py-2 text-sm shadow-lg">
+    <div data-testid="mk-cost" className="pointer-events-none fixed bottom-[152px] left-4 z-50 max-[600px]:top-14 max-[600px]:bottom-auto w-[200px] rounded-lg border-2 border-accent bg-surface px-3 py-2 text-sm shadow-lg">
       <b className="text-accent-ink">Cost</b> · {c}
     </div>
   );
