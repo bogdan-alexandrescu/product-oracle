@@ -218,12 +218,26 @@ test('after five minutes the strip says the sign-in timed out, with /mcp to copy
 test('the strip dates a client last used over a day ago, month first', async ({ page }) => {
   await login(page);
   await page.goto('/account');
-  await expect(page.getByTestId('mcp-check')).toContainText(/Used on [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+  // The mock's Claude Desktop was last used three days before now: that day, in whichever
+  // zone the company shows dates (the same instant is at most three calendar days apart).
+  // "Now" is the page's own clock (the test harness may pin it), not this process's.
+  const used = new Date((await page.evaluate(() => Date.now())) - 3 * 86_400_000);
+  const days = ['Etc/GMT+12', 'UTC', 'Etc/GMT-14'].map((timeZone) =>
+    used.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone }),
+  );
+  const check = page.getByTestId('mcp-check');
+  await expect(check).toContainText('Used on ');
+  const shown = /Used on ([A-Z][a-z]{2} \d{1,2}, \d{4})/.exec(
+    (await check.textContent()) ?? '',
+  )?.[1];
+  expect(days).toContain(shown);
 });
 
 test('on a phone a row reads "Used just now", lower case after Used', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await login(page);
+  // The commenter's Cursor client was last used four minutes ago, so its row shows the
+  // relative text (the owner's own client is days old and shows a date instead).
+  await login(page, 'commenter@example.com');
   await page.goto('/account');
   const used = page
     .getByTestId('my-client-row')
