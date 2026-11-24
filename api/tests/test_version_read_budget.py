@@ -18,6 +18,7 @@ Test cards (protects / fails_when / no_claim) head each test.
 import time
 import uuid
 
+import pytest
 from sqlalchemy import event, select, text
 
 from oracle.db import get_engine
@@ -171,6 +172,7 @@ async def plans(statements: list[tuple[str, tuple]]) -> list[str]:
     return out
 
 
+@pytest.mark.timing
 async def test_a_big_prds_version_page_reads_in_a_fixed_budget(client):
     """protects=the version page of a 49-section PRD with 50 sources, 7 versions, a run's
     draft under review, comments, verdicts and feedback shows within a second: the version

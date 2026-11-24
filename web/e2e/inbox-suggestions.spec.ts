@@ -405,6 +405,8 @@ for (const phone of [false, true]) {
       await readRoadmap(page);
       await readRoadmap(page);
       // On a phone, the Roadmap tab's count: this line's Roadmap tab counts a version waiting for my approval.
+      // Wait for the count to be drawn before reading it: a read before it shows is 0, not the count.
+      if (phone) await expect.poll(() => inboxCount(page, true, 'roadmap')).toBeGreaterThan(0);
       const phoneBefore = phone ? await inboxCount(page, true, 'roadmap') : 0;
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByTestId('filter-roadmap').selectOption({ label: 'Alerts roadmap' });

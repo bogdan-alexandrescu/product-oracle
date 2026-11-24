@@ -58,6 +58,10 @@ const atLeast = (role: Role, min: Role) => ORDER.indexOf(role) >= ORDER.indexOf(
  * expired personal token, a removed member's revoked token, a service token, a run's
  * token, and two MCP clients (one revoked).
  */
+// The seeded MCP clients are dated from now, so they never expire under a spec as time passes.
+const DAY = 86_400_000;
+const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+
 export function seedAccount(members: Member[], uuid: () => string): AccountDb {
   const by = (email: string) => members.find((m) => m.email === email);
   const admin = by('admin@example.com')!;
@@ -125,9 +129,9 @@ export function seedAccount(members: Member[], uuid: () => string): AccountDb {
     }),
     personal(admin, 'Claude Desktop', {
       kind: 'mcp_client',
-      created_at: '2026-10-05T12:00:00Z',
-      last_used_at: '2026-10-20T07:00:00Z',
-      expires_at: '2026-11-19T07:00:00Z',
+      created_at: ago(20 * DAY),
+      last_used_at: ago(3 * DAY),
+      expires_at: ago(-10 * DAY),
       client_id: 'pocl_claude_desktop',
     }),
     personal(admin, 'Old notebook agent', {
@@ -144,9 +148,9 @@ export function seedAccount(members: Member[], uuid: () => string): AccountDb {
       kind: 'mcp_client',
       scopes: ['oracle:read'],
       role: 'viewer',
-      created_at: '2026-10-11T12:00:00Z',
-      last_used_at: '2026-10-19T12:00:00Z',
-      expires_at: '2026-11-18T12:00:00Z',
+      created_at: ago(14 * DAY),
+      last_used_at: ago(4 * 60_000),
+      expires_at: ago(-16 * DAY),
       client_id: 'pocl_cursor',
     }),
   ];

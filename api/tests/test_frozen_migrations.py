@@ -3,9 +3,10 @@ oracle.migration_checks helpers), so changing the app never changes history; the
 0039_company_timezone and 0093_meeting_comments_as_notes needed is frozen in each file.
 
 Card: protects=no migration imports oracle.* outside oracle.migration_checks; 0039's frozen
-next date matches the app's for every kind of rule today; fails_when=a migration reaches
-into live app code; no_claim=the migrations' data effects (test_company_timezone_migration,
-test_fix4_simple_decide_review_api)."""
+next date matches a hard-coded table of the dates it gave when written (#1720: never the
+live app's, so a change to the app never asks for an edit to history); fails_when=a
+migration reaches into live app code or 0039's dates change; no_claim=the migrations'
+data effects (test_company_timezone_migration, test_simple_meetings_api)."""
 
 import ast
 import importlib.util
@@ -13,7 +14,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from oracle.rituals.schedule import next_occurrence
 from tests.conftest import API_DIR
 
 VERSIONS = API_DIR / "migrations" / "versions"
@@ -64,9 +64,22 @@ MOMENTS = [
 ]
 
 
-@pytest.mark.parametrize("rule", RULES)
-def test_0039_frozen_next_date_matches_the_app_today(rule):
-    """A frozen migration's own next-occurrence rule still matches the live app's calculation."""
+# The next occurrence (UTC) of each rule after each moment, as 0039 computed it when it
+# was written (#1720: frozen values, so a change to the live scheduler never reaches here).
+EXPECTED = [
+    ["2026-03-09 16:00", "2026-11-02 17:00", "2027-01-04 17:00", "2027-02-01 17:00"],
+    ["2026-03-08 14:30", "2026-11-01 14:30", "2027-01-03 14:30", "2027-02-07 14:30"],
+    ["2026-03-11 10:15", "2026-11-18 10:15", "2027-01-20 10:15", "2027-02-10 10:15"],
+    ["2026-03-27 08:00", "2026-11-27 08:00", "2027-01-29 08:00", "2027-02-26 08:00"],
+    ["2026-03-10 07:00", "2026-11-10 08:00", "2027-01-12 08:00", "2027-02-09 08:00"],
+    ["2026-05-07 09:00", "2026-11-05 09:00", "2027-02-04 09:00", "2027-02-04 09:00"],
+    ["2026-11-24 01:45", "2026-11-24 01:45", "2027-11-23 01:45", "2027-11-23 01:45"],
+]
+
+
+@pytest.mark.parametrize(("rule", "expected"), list(zip(RULES, EXPECTED, strict=True)))
+def test_0039_frozen_next_date_matches_its_written_values(rule, expected):
+    """A frozen migration's next-occurrence rule still gives the dates it gave when written."""
     frozen = _migration("0039_company_timezone")
-    for after in MOMENTS:
-        assert frozen._next_occurrence(rule, after) == next_occurrence(rule, after)
+    got = [frozen._next_occurrence(rule, after) for after in MOMENTS]
+    assert [d.astimezone(UTC).strftime("%Y-%m-%d %H:%M") for d in got] == expected

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { tokenState, when } from '@/components/ApiTokensSettings';
 import { Button, Chip, Icon, InfoTip, Panel, SegmentedControl } from '@/components/ds';
+import { ROLE_LABEL } from '@/components/MembersSettings';
 import type { McpClient } from '@/lib/api/client';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useMe } from '@/lib/me';
@@ -34,7 +35,11 @@ export function ago(iso: string) {
 export const usedCell = (iso: string) => {
   const a = ago(iso);
   return a ? (
-    <span className="whitespace-nowrap text-text2" title={formatDateTime(iso)}>
+    // On the phone the row reads "Used just now": lower case after its label.
+    <span
+      className="whitespace-nowrap text-text2 max-[600px]:lowercase"
+      title={formatDateTime(iso)}
+    >
       {a}
     </span>
   ) : (
@@ -81,7 +86,7 @@ function CopyChip({ text, testId }: { text: string; testId?: string }) {
 
 /** What the person's tools will be able to do: read from what their role may call. */
 function RoleAccess() {
-  const { can, capsReady } = useMe();
+  const { can, capsReady, role } = useMe();
   const [kind, label, tip] = can('create_bucket_goal')
     ? ([
         'pass',
@@ -97,7 +102,7 @@ function RoleAccess() {
       : ([
           'na',
           'Read only',
-          'A connected tool reads goals, the roadmap and documents, and changes nothing.',
+          `Your role is ${role ? ROLE_LABEL[role] : 'not known'}: a connected tool reads goals, the roadmap and documents, and changes nothing.`,
         ] as const);
   // Until the capabilities load, no status (never a wrong one).
   if (!capsReady) return null;

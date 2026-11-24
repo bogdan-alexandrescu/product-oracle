@@ -528,6 +528,7 @@ async def test_a_resumed_webhook_reads_active_until_its_next_failure_and_gets_72
     assert got.json()["failing_since"] is not None
 
 
+@pytest.mark.timing
 async def test_one_webhook_timing_out_does_not_hold_up_another(
     client, tenant_id, owner, receiver, monkeypatch
 ):

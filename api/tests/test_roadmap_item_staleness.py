@@ -5,7 +5,7 @@ reconcile. Against Postgres with the FakeRuntime."""
 import uuid
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from oracle import changes
 from oracle.auth.deps import Principal
@@ -488,3 +488,34 @@ def test_an_old_alert_line_cut_on_a_hidden_title_keeps_its_other_reasons():
     assert staleness.detail_for_reader(old, None) == (
         "A requirement changed; Pricing; enterprise; tier changed; the feature moved"
     )
+
+
+# Folded from test_simple_walk_fixes3_ph_api.py (#1718): the owner's production walk of
+# Simple mode (P4, P11). Test cards:
+# - test_new_prd_version_leaves_items_with_no_section: protects=an item with no PRD section
+#   is not marked stale by a new PRD version (nothing of its own changed), while an item whose
+#   section changed is; fails_when=every section-less item goes stale on any new version;
+#   no_claim=entity-driven staleness (test_roadmap_item_staleness).
+
+
+async def _section_less(tenant_id, key: str) -> None:
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(RoadmapItem).where(RoadmapItem.item_key == key).values(prd_section_key=None)
+        )
+        await s.commit()
+
+
+async def test_new_prd_version_leaves_items_with_no_section(client, owner, runtime):  # noqa: F811
+    """A new PRD version only marks stale the items whose own section actually changed."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    await _section_less(tenant_id, "payment-step")
+    assert (await import_draft(client, auth, prd_v2())).status_code == 201
+    got = await items(client, auth)
+    assert got["payment-step"]["freshness"] == "fresh", got["payment-step"]
+    assert got["shipping-step"]["freshness"] == "potentially_stale"
+    assert got["shipping-step"]["stale_reasons"] == [
+        "PRD section 5.2 Shipping step changed in version 2"
+    ]

@@ -19,24 +19,26 @@ const BASE =
  * surface2 panel (the same fill) it still reads as a button, not as plain text.
  * qa-settings-38: that outline is dashed, so a disabled filled button never passes for an
  * enabled secondary one (a solid outline on the page's fill).
+ * #1744: hover is plain to see on every style: a filled button darkens to accent-ink, an
+ * outline one takes the accent outline on accent-soft, a ghost the accent-soft fill.
  */
 const DISABLED_FILL =
-  'disabled:border disabled:border-dashed disabled:border-line-strong aria-disabled:border aria-disabled:border-dashed aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100';
+  'disabled:border disabled:border-dashed disabled:border-line-strong aria-disabled:border aria-disabled:border-dashed aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:bg-surface2 aria-disabled:hover:brightness-100';
 const DISABLED_OUTLINE =
-  'disabled:border-line disabled:text-text2 disabled:hover:bg-surface aria-disabled:border-line aria-disabled:text-text2 aria-disabled:hover:bg-surface';
+  'disabled:border-line disabled:text-text2 disabled:hover:border-line disabled:hover:bg-surface aria-disabled:border-line aria-disabled:text-text2 aria-disabled:hover:border-line aria-disabled:hover:bg-surface';
 
 const VARIANT: Record<ButtonVariant, string> = {
   // One per screen, top-right (I3 rule 3).
-  primary: `h-10 rounded-button px-4 text-base bg-accent text-on-accent hover:brightness-110 ${DISABLED_FILL}`,
+  primary: `h-10 rounded-button px-4 text-base bg-accent text-on-accent hover:bg-accent-ink ${DISABLED_FILL}`,
   // Row actions everywhere (Decide, Approve, Resolve) are outline.
-  secondary: `h-8 rounded-lg px-3 text-sm border border-line-strong bg-surface text-text hover:bg-surface2 ${DISABLED_OUTLINE}`,
+  secondary: `h-8 rounded-lg px-3 text-sm border border-line-strong bg-surface text-text hover:border-accent hover:bg-accent-soft ${DISABLED_OUTLINE}`,
   // A form's submit inside a panel: filled like primary, at row size; never a row action.
-  solid: `h-8 rounded-lg px-3 text-sm bg-accent text-on-accent hover:brightness-110 ${DISABLED_FILL}`,
+  solid: `h-8 rounded-lg px-3 text-sm bg-accent text-on-accent hover:bg-accent-ink ${DISABLED_FILL}`,
   ghost:
-    'h-8 rounded-lg px-2.5 text-sm font-medium text-text2 hover:bg-surface2 hover:text-text disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text2 aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-text2',
+    'h-8 rounded-lg px-2.5 text-sm font-medium text-text2 hover:bg-accent-soft hover:text-accent-ink disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text2 aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-text2',
   danger: `h-8 rounded-lg px-3 text-sm border border-crit bg-surface text-crit hover:bg-crit-bg ${DISABLED_OUTLINE}`,
   // Secondary action in an Inspector head ("Open").
-  hero: 'h-8 rounded-lg px-3 text-sm border border-hero-text2 bg-transparent text-hero-text hover:bg-hero-2',
+  hero: 'h-8 rounded-lg px-3 text-sm border border-hero-text2 bg-transparent text-hero-text hover:border-hero-text hover:bg-hero-2',
 };
 
 type Common = {

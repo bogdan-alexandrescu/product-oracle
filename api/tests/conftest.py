@@ -235,8 +235,6 @@ _RITUALS_SEEDED_ON = frozenset({
     "test_simple_meetings_walk",
     "test_simple_review_fixes",
     "test_simple_roadmap_api",
-    "test_simple_walk_fixes3_cp_api",
-    "test_simple_walk_fixes3_m2_api",
     "test_simple_walk_fixes_api",
     "test_simple_walk_fixes_review_api",
     "test_slack_bridge",
@@ -332,4 +330,12 @@ def pytest_collection_modifyitems(items) -> None:
         raise pytest.UsageError(
             "These tests have no docstring; add one line saying why each exists:\n  "
             + "\n  ".join(bare)
+        )
+    # #1719: a wall-clock assert runs alone in CI (the timing job), never in the shards.
+    from tests.timing_check import unmarked
+
+    if timed := unmarked(items):
+        raise pytest.UsageError(
+            "These tests assert on wall-clock time; mark them @pytest.mark.timing:\n  "
+            + "\n  ".join(timed)
         )

@@ -131,6 +131,7 @@ async def test_approving_a_version_settles_what_it_keeps(client, owner, runtime)
                 select(AuditEvent).where(AuditEvent.action == "roadmap.items.reconcile")
             )
         )
+    # The company's day, as the app writes it (a UTC day is a day ahead every Pacific evening).
     assert pay.note == f"Kept in version 2, approved {company_time.day_in_words(when)} by {name}"
     assert pay.reconciled_at is not None and pay.reconciled_by is not None
     assert pay.reconciled_version_id is not None

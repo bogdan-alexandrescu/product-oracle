@@ -54,6 +54,7 @@ import {
   yearSpan,
   codedFlag,
 } from './_lib';
+import { featureHref, useFeatureUrl, useOutsideClose } from './_link';
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (
@@ -991,6 +992,10 @@ export function FloatingCard({
   // fix4 qa-simple-roadmap-3: the card, its talk and the chat name the item by its title, no code.
   const about = item.title;
   const ref = useRef<HTMLDivElement>(null);
+  // panel-ux #1796: the address names the shown feature; Back closes it.
+  useFeatureUrl(item, onClose);
+  // panel-ux #1747: a side panel (it dims nothing) closes on a click in the page's empty space.
+  useOutsideClose(ref, onClose, !phone && style.position === 'relative' && !flowOpen);
   // home-waiting-one-list: the card opened from a waiting row (?item=): scroll its fix into view.
   useEffect(() => {
     if (focus) ref.current?.querySelector('[data-waits]')?.scrollIntoView({ block: 'center' });
@@ -1147,6 +1152,14 @@ export function FloatingCard({
         after: { status: 'planned' },
       },
     );
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(featureHref(item));
+      cornerToast({ message: 'Link copied' });
+    } catch {
+      cornerToast({ message: 'Oracle could not copy the link' });
+    }
+  };
   const menuItem = (label: string, run: () => void, warn = false) => (
     <button
       type="button"
@@ -1230,6 +1243,8 @@ export function FloatingCard({
                     item.can_decide ? 'Cut from the roadmap' : 'Propose: cut',
                     () => void cutIt(),
                   )}
+              {/* panel-ux #1796: the address that opens this panel (a reader has it in the address bar). */}
+              {menuItem('Copy link', () => void copyLink())}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
               {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
               {menuItem(
@@ -1784,10 +1799,16 @@ export function FloatingCard({
           </>
         ) : (
           <>
-            <div className="flex-none px-4 pt-4">{head}</div>
+            {/* panel-ux #1754: the details scroll under a ruled head, never into its last line. */}
+            <div
+              data-testid="card-head"
+              className="flex-none border-b border-line px-4 pt-4 pb-2.5"
+            >
+              {head}
+            </div>
             <div
               data-fit-body=""
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4"
             >
               {details}
             </div>

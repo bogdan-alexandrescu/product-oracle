@@ -920,7 +920,8 @@ code .date-mark {
   white-space: nowrap;
 }
 .simple-button:hover {
-  background: var(--surface2);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 /* A disabled button reads as one (the walk's Undo while nothing can be undone). */
 .simple-button:disabled,
@@ -930,14 +931,17 @@ code .date-mark {
 }
 .simple-button:disabled:hover,
 .simple-button[aria-disabled='true']:hover {
+  border-color: var(--line-strong);
   background: var(--surface);
 }
 .simple-button-primary:disabled:hover,
 .simple-button-primary[aria-disabled='true']:hover {
+  border-color: var(--accent);
   background: var(--accent);
 }
 .simple-button-quiet:disabled:hover,
 .simple-button-quiet[aria-disabled='true']:hover {
+  border-color: transparent;
   background: transparent;
 }
 /* A button with a long label (a change card's fixes): wraps inside its container. */
@@ -969,6 +973,7 @@ code .date-mark {
   opacity: 0.5;
 }
 .simple-button-primary:disabled:hover {
+  border-color: var(--accent);
   background: var(--accent);
 }
 .simple-row {
@@ -1088,6 +1093,7 @@ code .date-mark {
   color: var(--accent-ink);
 }
 .simple-button-quiet:hover {
+  border-color: transparent;
   background: var(--accent-soft);
 }
 .simple-button[aria-pressed='true'] {
@@ -1481,6 +1487,47 @@ code .date-mark {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) [data-testid='audience-view'] iframe {
     filter: brightness(0.8);
+  }
+}
+
+/*
+ * #1743: every enabled control shows the hand (Tailwind's reset leaves buttons on the arrow);
+ * a disabled one shows not-allowed. #1745: a row's "More" menu is at least a 24x24 hit area
+ * (the box grows round the icon; the icon keeps its size). In the base layer, behind :where(),
+ * so a control's own cursor or size utilities (cursor-grab, size-8) still win.
+ */
+@layer base {
+  :where(
+    button,
+    summary,
+    select,
+    a[href],
+    label:has(> input[type='checkbox'], > input[type='radio']),
+    input[type='checkbox'],
+    input[type='radio'],
+    [role='button'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='menuitemradio'],
+    [role='menuitemcheckbox'],
+    [role='option'],
+    [role='switch'],
+    [role='radio'],
+    [role='checkbox']
+  ) {
+    cursor: pointer;
+  }
+  :where(button, select, input, a, [role]):where(:disabled, [aria-disabled='true']),
+  :where(label:has(> input:disabled)) {
+    cursor: not-allowed;
+  }
+  :where(
+    button[aria-haspopup='menu'],
+    button[aria-label^='More for'],
+    button[aria-label^='More actions']
+  ) {
+    min-width: 24px;
+    min-height: 24px;
   }
 }
 

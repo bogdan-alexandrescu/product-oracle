@@ -28,7 +28,7 @@ from oracle.roadmap.models import (
 from oracle.runs.models import Run
 from oracle.runtokens import mint_run_token
 from oracle.tenancy import tenant_session
-from tests.day_helpers import company_today
+from tests.day_helpers import company_today, hold_before_fixed_beta
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
@@ -591,9 +591,10 @@ async def test_accept_refuses_a_moved_record_and_the_wrong_people(client, owner,
 # --- Inbox -------------------------------------------------------------------------------------
 
 
-async def test_the_inbox_carries_the_track_row_to_its_audience(client, owner, runtime):  # noqa: F811
+async def test_the_inbox_carries_the_track_row_to_its_audience(client, owner, runtime, monkeypatch):  # noqa: F811
     """protects=criterion 8; fails_when=the owner's total leaves the alerts out, an approver
     who is not the owner sees the row, or the lead sees other kinds; no_claim=the web rows."""
+    hold_before_fixed_beta(monkeypatch)  # #1604: Beta not yet overdue, whatever the day.
     tenant_id, auth = owner
     track, slip = await slipped(client, auth, runtime)
     await importing(

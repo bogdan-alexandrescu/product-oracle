@@ -37,7 +37,8 @@ Cards (protects / fails_when / no_claim):
   run's lease renewal winds down stays cancelled; fails_when=end() swallows the job's own
   cancel; no_claim=a database.
 - test_a_long_live_run_keeps_its_lease: protects=a run longer than replies.LEASE keeps its
-  line ``streaming`` and its token through the minute tick's lease sweep; fails_when=the
+  line ``streaming`` and its token through the minute tick's lease sweep, renewing at a third
+  of the lease on a fake clock (#1719: no real wait); fails_when=the renewal stops or the
   sweep fails the line and revokes the token mid-answer; no_claim=the real 150 s.
 """
 
@@ -47,13 +48,14 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text, update
 
 from oracle import company_time
 from oracle.discussions import plan, replies
 from oracle.discussions.models import DiscussionMessage, DiscussionParticipant
 from oracle.jobs import worker
 from oracle.jobs.models import LlmJob
+from oracle.simple import chat_reader
 from oracle.tenancy import tenant_session
 from tests.live_fakes import ARCHIVE_ENDPOINT
 from tests.test_discussion_replies import with_key
@@ -257,10 +259,33 @@ async def test_one_read_and_one_failure_says_the_failure_plainly(client, sources
     assert [(x["source"], x["call"]) for x in line["live_reads"]] == [(LABEL, "list_meetings")]
 
 
-@pytest.mark.timing
+class _RenewalClock:
+    """#1719: the lease renewal's clock, faked: each of its sleeps is recorded and waits
+    until the test lets one renewal through (everything else is asyncio's own)."""
+
+    def __init__(self) -> None:
+        self.asked: list[float] = []
+        self.ticks: asyncio.Queue[None] = asyncio.Queue()
+        self.sleeping = asyncio.Event()
+
+    def __getattr__(self, name: str):
+        return getattr(asyncio, name)
+
+    async def sleep(self, seconds: float) -> None:
+        self.asked.append(seconds)
+        self.sleeping.set()
+        await self.ticks.get()
+
+    async def renew_once(self) -> None:
+        self.sleeping.clear()
+        self.ticks.put_nowait(None)
+        await asyncio.wait_for(self.sleeping.wait(), 30)  # renewed, asleep again
+
+
 async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypatch):  # noqa: F811
     """A long live run renews its lease so a slow reply is not cut off early."""
-    monkeypatch.setattr(replies, "LEASE", timedelta(seconds=1))
+    clock = _RenewalClock()
+    monkeypatch.setattr(chat_reader, "asyncio", clock)
     ctx = await make_people()
     await World(ctx).build()
     await with_key(ctx, PLAN)
@@ -270,9 +295,18 @@ async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypa
     raw = await started_token(claude)
     line_of = (DiscussionMessage.discussion_id == uuid.UUID(out["id"]),
                DiscussionMessage.author_kind == "oracle")  # fmt: skip
-    # sched-order: 2.5 s against a 1 s lease renewed every 0.33 s catches a renewal slower
-    # than the lease; a loaded worker can stretch that, so the test is marked timing.
-    await asyncio.sleep(2.5)
+    await asyncio.wait_for(clock.sleeping.wait(), 30)
+    assert clock.asked == [replies.LEASE.total_seconds() / 3]
+    # The run outlives its lease (moved into the past, no real wait), then the renewal's
+    # next beat comes: the minute tick's sweep finds the lease renewed, not lapsed.
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(DiscussionMessage)
+            .where(*line_of)
+            .values(stream_lease_until=func.now() - timedelta(seconds=1))
+        )
+        await s.commit()
+    await clock.renew_once()
     tick = await replies.run_pending(ctx.tenant_id, budget_seconds=0)
     assert tick.interrupted == 0
     async with tenant_session(ctx.tenant_id) as s:

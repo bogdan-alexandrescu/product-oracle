@@ -79,6 +79,12 @@ for (const width of [1440, 1024]) {
         words(s1),
       );
       await page.reload();
+      // The panel wrote ?feature= to the address, so after a reload it reopens (the shareable
+      // link's rule); it covers the draft banner, so it is closed before Undo.
+      const reopened = page.getByTestId('item-panel');
+      await expect(reopened).toBeVisible();
+      await reopened.getByRole('button', { name: 'Close' }).click();
+      await expect(reopened).toHaveCount(0);
       await expect(bar(page, 'alert-export')).toHaveAttribute('data-start', s1);
       await expect(bar(page, 'alert-export')).toHaveAttribute('data-end', e1);
       // Undo, as the Gantt's: the working draft's last change goes.

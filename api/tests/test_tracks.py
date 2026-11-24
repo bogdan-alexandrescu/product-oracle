@@ -3,17 +3,19 @@ alignment (E1) and track monitoring through oracle.changes. Against Postgres wit
 FakeRuntime."""
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from oracle import changes
 from oracle.config import get_settings
 from oracle.roadmap import views
-from oracle.roadmap.models import ProductTrack
+from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.views import _headline
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
 from tests.day_helpers import company_today
+from tests.launch_helpers import ENG_412
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
@@ -179,7 +181,10 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     """A schedule basis linked to a tracker record must agree with its target date."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
-    day = (TODAY + timedelta(days=10)).isoformat()
+    # #1604: after both today and ENG-412's fixed day, so the list's order (by date, then
+    # reference) never turns on what day the suite runs.
+    eng_412 = date.fromisoformat(ENG_412[0]["supports_date"])
+    day = (max(TODAY, eng_412) + timedelta(days=10)).isoformat()
     body = {"kind": "commitment", "reference": "Q1 launch", "supports_date": day, "prd": PRD}
     viewer = await as_user(tenant_id, "viewer")
     assert (await client.post("/v1/schedule-bases", json=body, headers=viewer)).status_code == 403
@@ -493,3 +498,106 @@ async def test_patches_refuse_nulls_and_duplicate_names(client, owner, runtime):
         assert resp.status_code == 422, (field, resp.text)
     resp = await client.patch(patch, json={"lock_version": 1, "name": "Beta"}, headers=auth)
     assert resp.status_code == 409
+
+
+# Folded from test_qa4_plan_headline.py (#1718). qa4-plan-26: a track's headline counts
+# items and reasons apart. One item that is both slipping and may be out of date read "1 of
+# 7 items need attention (1 may be out of date, 1 slipping)", two counts for one item; it
+# now names that item's reasons without counts. Several items keep a count per reason.
+
+
+def _counts(**kw: int) -> dict[str, int]:
+    return {"items": 7, "at_risk": 0, "blocked": 0, "stale": 0, "slipping": 0, **kw}
+
+
+def test_one_item_with_two_reasons_reads_as_one_item() -> None:
+    """A track's headline counts one item once, even with two reasons, not twice."""
+    text = _headline("at_risk", _counts(at_risk=1, stale=1, slipping=1), None)
+    assert text == "At risk: 1 of 7 items needs attention (may be out of date and slipping)."
+    assert "1 slipping" not in text
+
+
+def test_several_items_keep_a_count_per_reason() -> None:
+    """A track's headline with several items shows a separate count per reason."""
+    text = _headline("at_risk", _counts(at_risk=2, blocked=1, slipping=2), None)
+    assert text == "At risk: 2 of 7 items need attention (1 blocked, 2 slipping)."
+
+
+def test_a_single_item_track_says_the_item() -> None:
+    """A track with a single item says 'the item', not a count of one."""
+    text = _headline("off_track", {**_counts(at_risk=1, slipping=1), "items": 1}, None)
+    assert text == "Off track: the item needs attention (slipping)."
+
+
+# Folded from test_simple_walk_fixes3_ph_api.py (#1718): the owner's production walk of
+# Simple mode (P4, P11). Test cards:
+# - test_track_headline_counts_only_own_staleness: protects=items an earlier rule marked
+#   stale only for "the PRD has a new version (N)" are not stale on the track: the headline
+#   never reads "N of N items need attention (N stale)"; an item stale for its own reason is
+#   counted, in plain words ("1 may be out of date"); fails_when=the headline counts the
+#   whole-PRD marks or says "stale"; no_claim=alerts' wording.
+# - test_headline_plain_when_only_the_prd_moved: protects=a track at risk only because the
+#   PRD has a newer approved version says that, never "0 of N items need attention";
+#   fails_when=the headline counts zero items; no_claim=the web's chip.
+
+
+async def _mark(tenant_id, key: str | None, reason: str) -> None:
+    async with tenant_session(tenant_id) as s:
+        q = update(RoadmapItem)
+        if key is not None:
+            q = q.where(RoadmapItem.item_key == key)
+        await s.execute(
+            q.values(
+                freshness="potentially_stale",
+                stale_since=datetime(2026, 10, 21, tzinfo=UTC),
+                stale_reasons=[reason],
+            )
+        )
+        await s.commit()
+
+
+async def _track(client, auth) -> dict:
+    tracks = (await client.get("/v1/tracks", headers=auth)).json()
+    assert len(tracks) == 1, tracks
+    return (await client.get(f"/v1/tracks/{tracks[0]['id']}", headers=auth)).json()
+
+
+async def test_track_headline_counts_only_own_staleness(client, owner, runtime):  # noqa: F811
+    """A track's headline counts only items stale from their own section, not the PRD."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    # As production rows read: every item marked by the earlier whole-PRD rule.
+    await _mark(tenant_id, None, "the PRD has a new version (2)")
+    track = await _track(client, auth)
+    assert track["counts"]["stale"] == 0, track["headline"]
+    assert all(r["kind"] != "stale" for i in track["at_risk"] for r in i["reasons"])
+    assert "stale" not in track["headline"]
+    assert f"{track['counts']['items']} of {track['counts']['items']}" not in track["headline"]
+
+    # One item's own section changed: that one counts, in plain words.
+    await _mark(tenant_id, "shipping-step", "PRD section s-5-2 changed in version 2")
+    track = await _track(client, auth)
+    assert track["counts"]["stale"] == 1
+    assert track["health"] in ("at_risk", "off_track")
+    headline = track["headline"]
+    assert "1 of 2 items needs attention (may be out of date)" in headline, headline
+    assert "stale" not in track["headline"]
+    reasons = {i["item_key"]: [r["detail"] for r in i["reasons"] if r["kind"] == "stale"]
+               for i in track["at_risk"]}  # fmt: skip
+    assert reasons.get("shipping-step") == ["PRD section 5.2 Shipping step changed in version 2"]
+    assert not reasons.get("payment-step")
+
+
+def test_headline_plain_when_only_the_prd_moved():
+    """A track headline about a newer PRD version says so plainly, with no zero counts."""
+    counts = {"items": 40, "now": 40, "next": 0, "later": 0, "at_risk": 0, "blocked": 0,
+              "stale": 0, "slipping": 0, "done": 0}  # fmt: skip
+    text = views._headline("at_risk", counts, None, 3)
+    assert text == "At risk: The PRD has a newer approved version (v3)."
+    assert "0 of" not in text and "need attention" not in text
+    counts |= {"at_risk": 2, "stale": 1, "blocked": 1}
+    assert views._headline("at_risk", counts, None) == (
+        "At risk: 2 of 40 items need attention (1 blocked, 1 may be out of date)."
+    )
+    assert views._headline("on_track", {**counts, "items": 1}, None) == "On track: 1 item."

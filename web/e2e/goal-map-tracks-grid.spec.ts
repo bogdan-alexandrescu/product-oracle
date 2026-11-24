@@ -132,9 +132,9 @@ test.describe('Goal map: goals by tracks grid', () => {
     expect(Math.abs(a.y + a.height / 2 - (b.y + b.height / 2))).toBeLessThan(4);
     expect(b.x).toBeGreaterThan(a.x + a.width - 1);
     // Nothing between the legend row and the grid.
-    expect((await page.getByTestId('gm-grid').boundingBox())!.y - (b.y + b.height)).toBeLessThan(
-      40,
-    );
+    expect(
+      (await page.getByTestId('gm-head-box').boundingBox())!.y - (b.y + b.height),
+    ).toBeLessThan(40);
     await rail.hover();
     const tip = page.getByRole('tooltip').filter({ hasText: 'Failed payments' });
     await expect(tip).toContainText('Failed payments under 2% every day');
@@ -292,7 +292,7 @@ test.describe('Goal map: goals by tracks grid', () => {
     await expect(
       goal(page, 'Booked demos per rep per day').getByTitle('Booked demos per rep per day'),
     ).toBeVisible();
-    // A goal's name is clamped to two lines; a long feature name keeps to one line on its chip.
+    // A goal's name is clamped to two lines; a long feature name wraps to two lines on its chip (#1772).
     const name = goal(page, 'Booked demos per rep per day').getByTitle(
       'Booked demos per rep per day',
     );
@@ -313,7 +313,8 @@ test.describe('Goal map: goals by tracks grid', () => {
       (el) =>
         [el.getBoundingClientRect().height, parseFloat(getComputedStyle(el).lineHeight)] as const,
     );
-    expect(ch).toBeLessThanOrEqual(clh + 1);
+    expect(ch).toBeGreaterThan(clh + 1);
+    expect(ch).toBeLessThanOrEqual(2 * clh + 1);
   });
 });
 
