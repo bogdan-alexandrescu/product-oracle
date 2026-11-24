@@ -93,6 +93,7 @@ import {
   type Brand,
 } from './_export';
 import { GoalTitle } from './_goalcards';
+import { RoadmapDrift, MkCost } from '../goals/_predicted-mk'; // MOCK-HOOK
 import { itemName, NotInGt } from './_gtflag';
 import { KeyDatesEditor } from './_keydates';
 import { Lanes, pmItem } from './_lanes';
@@ -647,6 +648,7 @@ function GoalCounters({
         )}
       </p>
       {keyResultsLine(id, g.title)}
+      <RoadmapDrift goal={g.title} onOpen={(n) => { const b = [...document.querySelectorAll<HTMLElement>('[data-testid="timeline-row-label"]')].find((x) => x.textContent?.includes(n)); b?.scrollIntoView({ block: 'center' }); b?.click(); }} />{/* MOCK-HOOK */}
       {open(id, g.title)}
     </li>
   );
@@ -669,6 +671,7 @@ function GoalCounters({
   );
   return (
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
+      <MkCost />{/* MOCK-HOOK */}
       {/* qa4-simple-roadmap-10: a card for every goal with a lane (the grid wraps past four). */}
       {/* goal-order: every card in the one goal order, goals with no items among the others. */}
       {[

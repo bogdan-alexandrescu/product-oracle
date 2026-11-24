@@ -8,6 +8,7 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
+import { mkEnd } from './predicted-mk'; // MOCK-HOOK
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
@@ -4107,6 +4108,19 @@ function readRoadmap(
   return reads.out.get(at) ?? null;
 }
 
+// MOCK-HOOK: with an mk-predicted switch on, a feature's dates are the end dates its goal's predicted line reads.
+function mkDated(items: { title: string; start: { date: string }; end: { date: string }; estimated: boolean }[]) { // MOCK-HOOK
+  const s = typeof window === 'undefined' ? '' : window.location.search; // MOCK-HOOK
+  if (!/[?&](pc1|pc2|pc3)=/.test(s)) return; // MOCK-HOOK
+  for (const i of items) { // MOCK-HOOK
+    const end = mkEnd(i.title, /mkdata=big|pc3=/.test(s)); // MOCK-HOOK
+    if (!end) continue; // MOCK-HOOK
+    i.start = { ...i.start, date: new Date(Date.parse(`${end}T12:00:00Z`) - 27 * 86_400_000).toISOString().slice(0, 10) }; // MOCK-HOOK
+    i.end = { ...i.end, date: end }; // MOCK-HOOK
+    i.estimated = false; // MOCK-HOOK
+  } // MOCK-HOOK
+} // MOCK-HOOK
+
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
 export async function routeSimpleRoadmap(
   db: SimpleDb,
@@ -4124,6 +4138,7 @@ export async function routeSimpleRoadmap(
     if (q.get('roadmap') && !readableRoadmap(q.get('roadmap'), me.role))
       return json(404, { detail: 'No such roadmap' });
     const out = readRoadmap(db, me.role, q, me);
+    if (out) mkDated(out.items); // MOCK-HOOK
     return out
       ? reply('/v1/simple/roadmap', 'get', out)
       : json(422, { detail: 'group: goal, track or prd' });

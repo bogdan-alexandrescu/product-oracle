@@ -35,6 +35,7 @@ import { PendingMark, useFeatureOrder } from '../priorities/feature-order';
 import { ChangeFailed, propose, resultWords, undo, type ChangeResult } from '../roadmap/_lib';
 import { Editor, type Edit, type EditSave } from './_editors';
 import { FeaturePanel, type Placement } from './_panel';
+import { GoalPredicted, MilestoneSlip, MkCost } from './_predicted-mk'; // MOCK-HOOK
 
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
@@ -1184,6 +1185,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
               </span>
             )}
             <Bar g={g} />
+            <GoalPredicted goal={g.name} onOpen={(n) => { const f = chips.find((x) => x.name === n); if (f) c.onOpen(f); }} />{/* MOCK-HOOK */}
           </div>
         ))}
         <span className="pt-2 text-xs font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">
@@ -1223,6 +1225,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                       </span>
                     )}
                     <MilestoneDay m={m} c={c} />
+                    <MilestoneSlip goal={g.name} code={c.mcode.get(m.id) ?? ''} onOpen={(n) => { const f = chips.find((x) => x.name === n); if (f) c.onOpen(f); }} />{/* MOCK-HOOK */}
                     {m.threshold === null && (
                       <Status
                         s="no_gate"
@@ -2060,6 +2063,7 @@ export function GoalMapPage() {
           </p>
         )}
         <TracksGrid chips={chips} lines={folded?.lines ?? new Map()} c={c} />
+        <MkCost />{/* MOCK-HOOK */}
         {mover && <MovePicker f={mover} c={c} onClose={() => setMover(null)} />}
       </div>
       {attach && (
