@@ -83,10 +83,15 @@ export function KeyDatesEditor({
   const fit = useFitViewport(ref, { on: !phone });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    // #1746: a click outside closes it, as the Tracks drawer; its own button toggles it itself.
+    // #1746: a click outside closes it, as the Tracks drawer; its own button toggles it itself,
+    // and a toast's Undo leaves it open.
     const onDown = (e: PointerEvent) => {
       const at = e.target as Element | null;
-      if (!at || ref.current?.contains(at) || at.closest?.('[data-testid="key-dates-open"]'))
+      if (
+        !at ||
+        ref.current?.contains(at) ||
+        at.closest?.('[data-testid="key-dates-open"], [data-testid="toasts"]')
+      )
         return;
       onClose();
     };

@@ -120,7 +120,9 @@ test.describe('Tracks sheet', () => {
     await page.getByLabel('Track', { exact: true }).selectOption({ label: 'Guided setup track' });
     await expect(page.getByText('Alert rules engine')).toHaveCount(0);
     await page.getByTestId('tracks-open').click();
-    await expect(row(page, 'Usage alerts track')).toContainText('No owner · 5 features');
+    // #1757: no track has an owner yet, so no "No owner" line.
+    await expect(row(page, 'Usage alerts track')).toContainText('5 features');
+    await expect(row(page, 'Usage alerts track')).not.toContainText('No owner');
     // Its 4 and the Goal map's 12, though the filter shows only the track's own.
     await expect(row(page, 'Guided setup track')).toContainText('16 features');
     await expect(row(page, 'Welcome media track')).toContainText('0 features');
@@ -260,7 +262,8 @@ test.describe('Tracks sheet', () => {
     await toasts(page).getByRole('button', { name: 'Withdraw' }).click();
     await expect(toasts(page)).toContainText('Withdrawn');
     // Read again after Withdraw, the track is as it was.
-    await expect(r).toContainText('No owner · 5 features');
+    await expect(r).toContainText('5 features');
+    await expect(r.getByTestId('track-no-owner')).toHaveCount(0);
     await expect(r).not.toContainText('· Paused');
   });
 
