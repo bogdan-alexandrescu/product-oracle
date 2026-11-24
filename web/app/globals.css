@@ -1485,6 +1485,47 @@ code .date-mark {
 }
 
 /*
+ * #1743: every enabled control shows the hand (Tailwind's reset leaves buttons on the arrow);
+ * a disabled one shows not-allowed. #1745: a row's "More" menu is at least a 24x24 hit area
+ * (the box grows round the icon; the icon keeps its size). In the base layer, behind :where(),
+ * so a control's own cursor or size utilities (cursor-grab, size-8) still win.
+ */
+@layer base {
+  :where(
+    button,
+    summary,
+    select,
+    a[href],
+    label:has(> input[type='checkbox'], > input[type='radio']),
+    input[type='checkbox'],
+    input[type='radio'],
+    [role='button'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='menuitemradio'],
+    [role='menuitemcheckbox'],
+    [role='option'],
+    [role='switch'],
+    [role='radio'],
+    [role='checkbox']
+  ) {
+    cursor: pointer;
+  }
+  :where(button, select, input, a, [role]):where(:disabled, [aria-disabled='true']),
+  :where(label:has(> input:disabled)) {
+    cursor: not-allowed;
+  }
+  :where(
+    button[aria-haspopup='menu'],
+    button[aria-label^='More for'],
+    button[aria-label^='More actions']
+  ) {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
+/*
  * qa4-settings-20: in dark, the browser's own checkbox draws an unchecked box as a filled grey
  * square that reads as ticked. Dark draws it itself: an outline when unchecked, the accent with
  * a tick when checked. In the base layer, so a box's own size utilities (size-4, size-6) win;
