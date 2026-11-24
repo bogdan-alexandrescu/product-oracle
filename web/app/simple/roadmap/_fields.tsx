@@ -36,6 +36,7 @@ import {
 } from './_lib';
 
 import type { Act } from './_card';
+const mkAsk = () => typeof window !== 'undefined' && /[?&]as=commenter/.test(window.location.search); // MOCK-HOOK: mk-predicted's commenter frames: each change is a suggestion
 
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
 const TAP =
@@ -89,7 +90,7 @@ function Field({
                 aria-label={`Change the ${label.toLowerCase()}`}
                 onClick={() => setOpen(true)}
               >
-                Change
+                {mkAsk() ? 'Suggest a change' : 'Change' /* MOCK-HOOK */}
               </button>
             )}
           </span>
@@ -1313,7 +1314,7 @@ function AddDependency({
         className={`${LINK} mt-0.5 block max-sm:flex max-sm:w-fit`}
         onClick={() => setOpen(true)}
       >
-        Add a dependency
+        {mkAsk() ? 'Suggest a dependency' : 'Add a dependency' /* MOCK-HOOK */}
       </button>
     );
   // goals-dep-picker: another PRD's features, from the roadmap read the panel already has,
@@ -1425,7 +1426,7 @@ function AddDependent({
         className={`${LINK} mt-0.5 block max-sm:flex max-sm:w-fit`}
         onClick={() => setOpen(true)}
       >
-        Add a feature that needs it
+        {mkAsk() ? 'Suggest a feature that needs it' : 'Add a feature that needs it' /* MOCK-HOOK */}
       </button>
     );
   const chosen = options.find((o) => o.id === pick);

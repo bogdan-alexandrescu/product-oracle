@@ -149,7 +149,7 @@ function Pop({ onClose, children, title }: { onClose: () => void; children: Reac
 function Why({ p, label }: { p: PmGoal; label: string }) {
   const undated = p.total - p.dated;
   return (
-    <InfoTip label={`${label}'s predicted date`} testId="pm-why" side="bottom" align="end">
+    <InfoTip label={`${label}'s predicted date`} testId="pm-why" side="top" align="end">
       <span className="flex flex-col gap-1">
         {mkParam('pc2') === 'b' ? (
           <b>Latest end date, widened by past slips (avg +{p.slipRate} days){undated ? ` and ${undated} undated ${undated === 1 ? 'feature' : 'features'}` : ''}</b>
@@ -300,7 +300,7 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
           </span>
           {pc3 === 'c' ? <Ranked p={p} onOpen={go} /> : <MilestoneLines p={p} onOpen={go} lo={lo} hi={hi} ticks={pc3 === 'b'} />}
           {p.dated < p.total && (
-            <span className="text-xs text-na" data-testid="pm-undated">{p.total - p.dated} of {p.total} features have no end date</span>
+            <span className="text-xs text-na" data-testid="pm-undated">{p.total - p.dated} of {p.total} {p.total - p.dated === 1 ? 'feature has' : 'features have'} no end date</span>
           )}
         </Pop>
       )}
@@ -389,7 +389,7 @@ export function RoadmapDrift({ goal, onOpen }: { goal: string; onOpen: Open }) {
 /** A commenter's line in the dates panel (&as=commenter): the dates come from features, whose change is a suggestion. */
 function MkAsk() {
   if (mkParam('as') !== 'commenter') return null;
-  return <span className="text-xs text-text2" data-testid="pm-ask">You can suggest dates; Dana Whitlock approves</span>;
+  return <span className="text-xs text-text2" data-testid="pm-ask">You can suggest dates; Avery Stone decides</span>;
 }
 
 /** PC1 b: the Roadmap's own milestone card shows the milestone's due and predicted dates. */

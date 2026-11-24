@@ -65,6 +65,19 @@ ${got.body}
   fs.writeFileSync(`${FR}/${name}.html`, html);
 }
 
+// The phone: the strip scrolls so the opened goal's card starts where the first card starts (no card cut on its left, the opened one whole).
+async function snapStrip(page: Page) {
+  await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('[data-testid="gm-goal"], [data-testid="goal-counter"]')] as HTMLElement[];
+    const card = cards.find((c) => c.textContent?.includes('Paid conversions'));
+    if (!card || !cards[0]) return;
+    let box = card.parentElement;
+    while (box && !(box.scrollWidth > box.clientWidth + 2 && getComputedStyle(box).overflowX !== 'visible')) box = box.parentElement;
+    if (!box) return;
+    box.scrollLeft += card.getBoundingClientRect().left - cards[0].getBoundingClientRect().left - box.scrollLeft;
+  });
+  await page.waitForTimeout(300);
+}
 const D = { width: 1440, height: 900 };
 const W = { width: 1512, height: 982 };
 const P = { width: 390, height: 844 };
@@ -152,10 +165,10 @@ test('mk-predicted frames', async ({ browser }) => {
     // the phone
     await go(page, `${s.path}${big}`, P, s.card);
     // the strip snaps to the card, so the card behind the sheet reads whole
-    await page.locator(s.card).first().evaluate((el) => el.scrollIntoView({ inline: 'end', block: 'center' }));
-    await page.locator(s.opener).first().scrollIntoViewIfNeeded();
+    // the strip snaps to the opened card: its left edge at the strip's start, so no card is cut
+    await snapStrip(page);
     await page.locator(s.opener).first().click();
-    await page.waitForTimeout(300);
+    await snapStrip(page);
     await snap(page, `${s.id}-open-390`, { dark: true });
     // the hard case at the owner's window: twenty features, four milestones, light and dark
     await ctx.close();

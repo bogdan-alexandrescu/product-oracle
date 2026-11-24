@@ -1780,7 +1780,8 @@ const TimelineRow = memo(function TimelineRow({
   // QA Nov 12 #6: an item with only Oracle's estimate reads "No dates yet · estimated …" at every
   // zoom: on its bar where the words fit whole, else beside it.
   const guess = !live && estimateOnly(i);
-  const words = guess ? estimateWords(ds, de, today) : spanWords(ds, de, today);
+  const mkShort = !guess && typeof window !== 'undefined' && /[?&]pc[123]=/.test(window.location.search) && daysBetween(ds, de) < 60; // MOCK-HOOK: a short bar reads its days whole ("Dec 16 – Jan 12"); the panel has the years
+  const words = guess ? estimateWords(ds, de, today) : mkShort ? `${shortDay(ds)} – ${shortDay(de)}` : spanWords(ds, de, today); // MOCK-HOOK
   const room = bx + bw - Math.max(bx, sl);
   const onBar = !fit && room > (guess ? words.length * 6.5 + 16 : 120);
   const besideW = words.length * 6.5 + 8;
@@ -1930,7 +1931,7 @@ const TimelineRow = memo(function TimelineRow({
           )}
           {onBar && (
             <span
-              className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5"
+              className={`pointer-events-none absolute top-[9px] ${mkShort ? 'z-[30]' : 'z-[11]'} flex px-1.5`} // MOCK-HOOK: the bar's dates over the month line
               style={{
                 left: Math.max(bx, sl),
                 width: bx + bw - Math.max(bx, sl),

@@ -37,6 +37,7 @@ import { Editor, type Edit, type EditSave } from './_editors';
 import { FeaturePanel, type Placement } from './_panel';
 import { GoalPredicted, MilestoneSlip, MkCost, mkParam } from './_predicted-mk'; // MOCK-HOOK
 import { MK_BIG_M9 } from '@/lib/api/mock/goal-map'; // MOCK-HOOK
+import { mkMilestoneOf } from '@/lib/api/mock/predicted-mk'; // MOCK-HOOK
 
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
@@ -158,6 +159,8 @@ function placement(map: GoalMap, c: Chip, codes: Map<string, string>): Placement
     milestone: mWords(m, { mcode: codes }),
     expected: c.f?.links.find((l) => l.milestone === m.id)?.expected ?? '',
   }));
+  const mkMs = mkMilestoneOf(c.name); // MOCK-HOOK: the milestone whose date the feature's end sets comes first (F-107 sets M7)
+  if (mkMs) served.sort((a, b) => Number(b.milestone.startsWith(`${mkMs} `)) - Number(a.milestone.startsWith(`${mkMs} `))); // MOCK-HOOK
   return {
     goal: {
       id: g.id,

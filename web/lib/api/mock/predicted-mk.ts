@@ -125,3 +125,29 @@ export function mkEnd(name: string, isBig: boolean): string | null { // MOCK-HOO
   } // MOCK-HOOK
   return null; // MOCK-HOOK
 } // MOCK-HOOK
+
+/** With an mk-predicted switch on: the milestone code a feature's end date sets (F-107: M7), else null. */
+export function mkMilestoneOf(name: string): string | null { // MOCK-HOOK
+  if (typeof window === 'undefined' || !/[?&](pc1|pc2|pc3)=/.test(window.location.search)) return null; // MOCK-HOOK
+  const isBig = /mkdata=big|pc3=/.test(window.location.search); // MOCK-HOOK
+  for (const g of [...(isBig ? [big] : []), ...Object.values(small)]) { // MOCK-HOOK
+    const f = g.features.find((x) => x.name === name); // MOCK-HOOK
+    if (f) return f.ms; // MOCK-HOOK
+  } // MOCK-HOOK
+  return null; // MOCK-HOOK
+} // MOCK-HOOK
+
+/** A feature the mock-up's goals list with no end date (F-105 Refund in one step). */
+export function mkUndated(name: string, isBig: boolean): boolean { // MOCK-HOOK
+  return [...(isBig ? [big] : []), ...Object.values(small)].some((g) => g.features.some((x) => x.name === name && !x.end)); // MOCK-HOOK
+} // MOCK-HOOK
+
+/** The name of the milestone a feature's end date sets (F-107: 10 paid conversions per rep). */
+export function mkMilestoneName(name: string, isBig: boolean): string | null { // MOCK-HOOK
+  for (const g of [...(isBig ? [big] : []), ...Object.values(small)]) { // MOCK-HOOK
+    const f = g.features.find((x) => x.name === name && x.end); // MOCK-HOOK
+    const m = f && g.milestones.find((x) => x.code === f.ms); // MOCK-HOOK
+    if (m) return m.name; // MOCK-HOOK
+  } // MOCK-HOOK
+  return null; // MOCK-HOOK
+} // MOCK-HOOK

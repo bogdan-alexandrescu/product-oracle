@@ -8,7 +8,7 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
-import { mkEnd, predictedFor } from './predicted-mk'; // MOCK-HOOK
+import { mkEnd, mkMilestoneName, mkUndated, predictedFor } from './predicted-mk'; // MOCK-HOOK
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
@@ -4109,17 +4109,21 @@ function readRoadmap(
 }
 
 // MOCK-HOOK: with an mk-predicted switch on, a feature's dates are the end dates its goal's predicted line reads.
-function mkDated(items: { title: string; start: { date: string; source?: string }; end: { date: string; source?: string }; estimated: boolean; suggestion?: unknown; source?: string; date_basis?: string | null; goal?: { title?: string; due?: string | null } | null }[]) { // MOCK-HOOK
+function mkDated(items: { title: string; start: { date: string; source?: string }; end: { date: string; source?: string }; estimated: boolean; suggestion?: unknown; source?: string; date_basis?: string | null; goal?: { title?: string; due?: string | null } | null; milestone?: unknown }[], gms: readonly { id: string; name: string }[] = []) { // MOCK-HOOK
   const s = typeof window === 'undefined' ? '' : window.location.search; // MOCK-HOOK
   if (!/[?&](pc1|pc2|pc3)=/.test(s)) return; // MOCK-HOOK
   const big = /mkdata=big|pc3=/.test(s); // MOCK-HOOK
   for (const i of items) { // MOCK-HOOK
     const g = i.goal?.title ? predictedFor(i.goal.title, big) : null; // MOCK-HOOK
     if (i.goal && g && !i.goal.due) i.goal = { ...i.goal, due: g.planned }; // MOCK-HOOK: the goal's date the card shows as "Due"
+    const msName = mkMilestoneName(i.title, big); // MOCK-HOOK: the milestone its end date sets (F-107: M7)
+    const gm = msName ? gms.find((m) => m.name === msName) : undefined; // MOCK-HOOK
+    if (gm) i.milestone = { id: gm.id, name: gm.name }; // MOCK-HOOK
     const end = mkEnd(i.title, big); // MOCK-HOOK
-    if (!end) continue; // MOCK-HOOK
-    i.start = { ...i.start, date: new Date(Date.parse(`${end}T12:00:00Z`) - 27 * 86_400_000).toISOString().slice(0, 10), source: 'engineering' }; // MOCK-HOOK
-    i.end = { ...i.end, date: end, source: 'engineering' }; // MOCK-HOOK
+    if (!end && mkUndated(i.title, big)) continue; // MOCK-HOOK: the one feature with no end date stays "No dates yet"
+    const startDay = end ? new Date(Date.parse(`${end}T12:00:00Z`) - 27 * 86_400_000).toISOString().slice(0, 10) : i.start.date; // MOCK-HOOK: every other feature's dates come from engineering
+    i.start = { ...i.start, date: startDay, source: 'engineering', estimated: false } as typeof i.start; // MOCK-HOOK
+    i.end = { ...i.end, date: end ?? i.end.date, source: 'engineering', estimated: false } as typeof i.end; // MOCK-HOOK
     i.estimated = false; // MOCK-HOOK
     i.suggestion = null; // MOCK-HOOK: its end date is set, so no Oracle suggestion beside it
     i.source = 'engineering'; // MOCK-HOOK: "Dates from engineering", not "Estimated by Oracle"
@@ -4144,7 +4148,7 @@ export async function routeSimpleRoadmap(
     if (q.get('roadmap') && !readableRoadmap(q.get('roadmap'), me.role))
       return json(404, { detail: 'No such roadmap' });
     const out = readRoadmap(db, me.role, q, me);
-    if (out) mkDated(out.items); // MOCK-HOOK
+    if (out) mkDated(out.items, out.goal_milestones ?? []); // MOCK-HOOK
     return out
       ? reply('/v1/simple/roadmap', 'get', out)
       : json(422, { detail: 'group: goal, track or prd' });
@@ -4154,8 +4158,10 @@ export async function routeSimpleRoadmap(
     // the dates the reader may confirm, no filter but ``roadmap`` (one roadmap's; 404 when unread).
     const one = q.get('roadmap');
     if (one && !readableRoadmap(one, me.role)) return json(404, { detail: 'No such roadmap' });
+    const wout = readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me); // MOCK-HOOK
+    if (wout) mkDated(wout.items, wout.goal_milestones ?? []); // MOCK-HOOK: the badge counts the same dates the rows show
     const items = (
-      readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []
+      wout?.items ?? [] // MOCK-HOOK
     ).filter((i) => i.status !== 'done');
     const links = items
       .flatMap((i) => i.flags)
