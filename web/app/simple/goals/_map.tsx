@@ -173,6 +173,22 @@ function placement(map: GoalMap, c: Chip, codes: Map<string, string>): Placement
 /** The ring's key: one chip, a feature under one goal. */
 const ringOf = (feature: string, goal: string) => `${feature} ${goal}`;
 
+/** #1748: the chip of the feature the panel shows: the clicked one, else one of the feature it moved to (none: no chip). */
+function markOf(
+  panel: Chip | null,
+  shown: { id: string; code: string | null; title: string } | null,
+  chips: Chip[],
+  codes: Map<string, string>,
+): string | null {
+  if (!panel) return null;
+  const is = (f: Chip) =>
+    !shown ||
+    f.id === shown.id ||
+    (!!shown.code && codes.get(f.id)?.toLowerCase() === shown.code.toLowerCase());
+  const hit = is(panel) ? panel : chips.find(is);
+  return hit ? ringOf(hit.id, hit.goal) : null;
+}
+
 function reveal(sel: string, block: ScrollLogicalPosition = 'center') {
   setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block, inline: 'nearest' }), 50);
 }
@@ -311,14 +327,18 @@ function Menu({
   label,
   items,
   c,
+  pin,
 }: {
   k: string;
   label: string;
   items: { w: string; on: () => void; crit?: boolean }[];
   c: Ctx;
+  /** #1769: placed on the window under its ⋯, so the held goal row (a sideways scroll box) does not cut it. */
+  pin?: boolean;
 }) {
   const open = c.menu === k;
   const more = useRef<HTMLButtonElement>(null);
+  const [at, setAt] = useState<CSSProperties | undefined>(undefined);
   return (
     <span
       className="relative inline-flex"
@@ -339,7 +359,17 @@ function Menu({
         aria-label={`More for ${label}`}
         aria-expanded={open}
         data-testid={`gm-menu-${k}`}
-        onClick={(e) => (e.stopPropagation(), c.setMenu(open ? null : k))}
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          if (pin)
+            setAt({
+              position: 'fixed',
+              top: r.bottom,
+              right: document.documentElement.clientWidth - r.right,
+            });
+          c.setMenu(open ? null : k);
+        }}
         className={`rounded-md px-1 leading-none text-text2 hover:bg-surface2 ${open ? 'bg-surface2' : ''}`}
       >
         <Icon name="more" size={16} />
@@ -347,6 +377,7 @@ function Menu({
       {open && (
         <span
           role="menu"
+          style={pin ? at : undefined}
           className="absolute top-full right-0 z-30 mt-1 flex w-max min-w-[180px] flex-col rounded-xl border border-line bg-surface py-1 text-sm shadow-lg"
         >
           {items.map((it) => (
@@ -426,7 +457,7 @@ function goalMenu(g: GmGoal, ms: M[], c: Ctx) {
     { w: 'Propose a milestone', on: () => c.onEdit({ kind: 'propose', goal: g.id }) },
     { w: 'Pick its metric', on: () => c.onEdit({ kind: 'metric', goal: g.id }) },
   ];
-  return <Menu k={`g-${g.id}`} label={g.name} c={c} items={items} />;
+  return <Menu k={`g-${g.id}`} label={g.name} c={c} items={items} pin />;
 }
 
 /** What resolves a goal's badge: Not measured, its metric; No gate, its first milestone's gate. */
@@ -1166,16 +1197,35 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
       .map((id) => inCell(goal, track).find((f) => f.id === id)!);
   const inCell = (goal: string, track: string | null) =>
     chips.filter((f) => at(f).goal === goal && at(f).track === track);
+  const wrap = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  // The goal row's own sideways scroll (no bar) and the grid's move as one, either way.
+  const follow = (to: HTMLDivElement | null, x: number) => {
+    if (to && to.scrollLeft !== x) to.scrollLeft = x;
+  };
+  useEffect(() => {
+    const [w, b, g] = [wrap.current, box.current, grid.current];
+    if (!w || !b || !g) return;
+    const ro = new ResizeObserver(() => {
+      w.style.setProperty('--gm-head-h', `${b.offsetHeight}px`);
+      follow(b, g.scrollLeft);
+    });
+    ro.observe(b);
+    ro.observe(g);
+    return () => ro.disconnect();
+  }, []);
   return (
-    // #1769: the goal row holds at the top while the columns scroll; it scrolls sideways with them only where
-    // the grid does not fit (a phone), as a sticky row needs no scrolling box between it and the page.
-    <div className="@container">
+    // #1769: the goal row holds at the top at every width. It sits outside the sideways scroll box (a sticky row
+    // needs no scrolling box between it and the page) and follows that box's scroll; focus stops clear of it.
+    <div ref={wrap} className="@container" style={{ '--gm-n': n } as CSSProperties}>
       <div
-        data-testid="gm-grid"
-        className="relative flex flex-col overflow-x-auto @min-[1000px]:overflow-x-visible"
-        style={{ '--gm-n': n } as CSSProperties}
+        ref={box}
+        data-testid="gm-head-box"
+        onScroll={(e) => follow(grid.current, e.currentTarget.scrollLeft)}
+        className="sticky top-0 z-20 overflow-x-auto overflow-y-hidden bg-bg [scrollbar-width:none] max-[600px]:top-(--phone-top-bar)"
       >
-        <div data-testid="gm-head" className={`${GRID} sticky top-0 z-20 bg-bg pb-px`}>
+        <div data-testid="gm-head" className={`${GRID} pb-px`}>
           {/* The corner: on a phone it holds still with the track names, so the goal cards pass under it. */}
           <span
             data-testid="gm-corner"
@@ -1228,6 +1278,13 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
             </div>
           ))}
         </div>
+      </div>
+      <div
+        ref={grid}
+        data-testid="gm-grid"
+        onScroll={(e) => follow(box.current, e.currentTarget.scrollLeft)}
+        className="relative flex flex-col overflow-x-auto @min-[1000px]:overflow-x-visible [&_*]:scroll-mt-[calc(var(--gm-head-h,0px)+8px)]"
+      >
         <div className={GRID}>
           <span className="pt-2 text-xs font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">
             Milestones
@@ -1742,6 +1799,10 @@ export function GoalMapPage() {
     new Map(),
   );
   const [panel, setPanel] = useState<Chip | null>(null);
+  // #1748: a dependency the panel opened in its place (null: the clicked chip's own feature).
+  const [shown, setShown] = useState<{ id: string; code: string | null; title: string } | null>(
+    null,
+  );
   const [attach, setAttach] = useState<string | null>(null);
   const [attachTrack, setAttachTrack] = useState<string | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -1911,8 +1972,8 @@ export function GoalMapPage() {
     confirm,
     mcode,
     tracks,
-    onOpen: setPanel,
-    opened: panel ? ringOf(panel.id, panel.goal) : null,
+    onOpen: (f) => (setShown(null), setPanel(f)),
+    opened: markOf(panel, shown, chips, codes),
     menu,
     setMenu,
     setMover,
@@ -2127,7 +2188,9 @@ export function GoalMapPage() {
           code={codes.get(panel.id)}
           name={panel.name}
           placed={placement(map, panel, mcode)}
+          onShown={setShown}
           onClose={() => {
+            setShown(null);
             setPanel(null);
             void refresh();
           }}
