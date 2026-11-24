@@ -143187,6 +143187,17 @@
             ],
             "title": "Item Title"
           },
+          "item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Code"
+          },
           "kind": {
             "type": "string",
             "enum": [

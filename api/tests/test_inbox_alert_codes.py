@@ -32,5 +32,5 @@ async def test_an_alert_carries_its_items_code(client):
     alerts = {a["item_key"]: a for t in rows.values() for a in t["alerts"]}
     assert alerts["checkout-tips"]["item_code"] == "F-17"
     assert alerts["checkout-tips"]["item_title"] == "Checkout tips"
-    # Signup nudge's section (s-2) is no code, and it has no feature: no code.
-    assert alerts["signup-nudge"]["item_code"] is None
+    # Read replicas' section key is no code, and it has no feature: no code.
+    assert alerts["read-replicas"]["item_code"] is None
