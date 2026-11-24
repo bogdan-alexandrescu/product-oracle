@@ -1,429 +1,477 @@
 {
- "title": "A linked pull request suggests the feature's status",
- "subtitle": "Mock-ups for GitHub issue #1800, on invented data (alertly/web). Light frames as pictures; open any HTML frame with ?theme=dark.",
- "decisions": [
-  {
-   "code": "LP1",
-   "name": "Linking a pull request",
-   "question": "How is a pull request linked to a feature, and how is it shown in the panel and on rows?",
-   "common": "Every proposal uses the one feature panel, shows each pull request's state as Open, Merged or Closed, keeps the feature's code with its name, and turns a commenter's link into a proposal.",
-   "proposals": [
+  "title": "A linked pull request suggests the feature's status",
+  "subtitle": "Mock-ups for GitHub issue #1800, on invented data (alertly/web). Light frames as pictures; open any HTML frame with ?theme=dark.",
+  "decisions": [
     {
-     "letter": "A",
-     "name": "Field with a picker",
-     "recommended": true,
-     "what": "The feature panel gets a Pull requests field under Status. Each linked pull request shows its state (Open, Merged, Closed) and its title; one whose title names the feature's code links by itself, marked with an (i). \"Link a pull request\" opens a small search of the connected repo's recent pull requests; Link adds one. Each Priorities row gets one chip: \"Open\", \"1 of 3 merged\" or \"Merged\". A commenter's link becomes a proposal.",
-     "plus": "One field, one chip per row; linking works for features with or without a code; the panel stays the one place to change it.",
-     "cost": "3 clicks + a few keys per link; today there is no way to link a pull request at all.",
-     "frames": [
-      {
-       "file": "frames/lp1-a-rest.html",
-       "caption": "Priorities at rest: each row with linked pull requests shows one chip, e.g. Weekly alert digest \"1 of 2 merged\"."
-      },
-      {
-       "file": "frames/lp1-a-open.html",
-       "caption": "The owner opens Weekly alert digest and clicks Link a pull request: a search of the repo's recent pull requests opens in the field."
-      },
-      {
-       "file": "frames/lp1-a-mid.html",
-       "caption": "They type \"unsub\": only #503 Unsubscribe link in the digest footer is left."
-      },
-      {
-       "file": "frames/lp1-a-done.html",
-       "caption": "They click Link: #503 joins the list as Open, and the row's chip reads \"1 of 3 merged\" at once. Cost: 3 clicks + 5 keys."
-      },
-      {
-       "file": "frames/lp1-a-hard.html",
-       "caption": "Many pull requests (9, long titles, one closed): the field lists them all, wrapping; the row chip still reads one line, \"5 of 8 merged\"."
-      },
-      {
-       "file": "frames/lp1-a-hard-1512.html",
-       "caption": "The same feature with 9 pull requests at the owner's 1512 width."
-      },
-      {
-       "file": "frames/lp1-a-phone-390.html",
-       "caption": "Phone: the row chip wraps under the name; the panel is the bottom sheet, the field sits under Status."
-      }
-     ],
-     "why": "It is the product's own pattern (a field with Change-style actions in the one feature panel), works for features with no code, and keeps each row to one short chip however many pull requests there are."
+      "code": "LP1",
+      "name": "Linking a pull request",
+      "question": "How is a pull request linked to a feature, and how is it shown in the panel and on rows?",
+      "common": "Every proposal uses the one feature panel, shows each pull request's state as Open, Merged or Closed, keeps the feature's code with its name, and turns a commenter's link into a proposal.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Field with a picker",
+          "recommended": true,
+          "what": "The feature panel gets a Pull requests field under Status. Each linked pull request shows its state (Open, Merged, Closed) and its title; one whose title names the feature's code links by itself, marked with an (i). \"Link a pull request\" opens a small search of the connected repo's recent pull requests; Link adds one. Each Priorities row gets one chip: \"Open\", \"1 of 3 merged\" or \"Merged\". A commenter's link becomes a proposal.",
+          "plus": "One field, one chip per row; linking works for features with or without a code; the panel stays the one place to change it.",
+          "cost": "3 clicks + a few keys per link; today there is no way to link a pull request at all.",
+          "frames": [
+            {
+              "file": "frames/lp1-a-rest.html",
+              "caption": "Priorities at rest: each row with linked pull requests shows one chip, e.g. Weekly alert digest \"1 of 2 merged\"."
+            },
+            {
+              "file": "frames/lp1-a-open.html",
+              "caption": "The owner opens Weekly alert digest and clicks Link a pull request: a search of the repo's recent pull requests opens in the field."
+            },
+            {
+              "file": "frames/lp1-a-mid.html",
+              "caption": "They type \"unsub\": only #503 Unsubscribe link in the digest footer is left."
+            },
+            {
+              "file": "frames/lp1-a-done.html",
+              "caption": "They click Link: #503 joins the list as Open, and the row's chip reads \"1 of 3 merged\" at once. Cost: 3 clicks + 5 keys."
+            },
+            {
+              "file": "frames/lp1-a-hard.html",
+              "caption": "Many pull requests (9, long titles, one closed): the chip reads \"4 of 8 merged · 1 closed\"; the field lists them all."
+            },
+            {
+              "file": "frames/lp1-a-hard-1512.html",
+              "caption": "The same feature with 9 pull requests at the owner's 1512 width."
+            },
+            {
+              "file": "frames/lp1-a-phone-390.html",
+              "caption": "Phone: the row chip wraps under the name; the panel is the bottom sheet, the field sits under Status."
+            },
+            {
+              "file": "frames/lp1-a-commenter.html",
+              "caption": "A commenter: the same field reads Propose a link; the found pull request's button reads Propose, and it goes to the decider."
+            },
+            {
+              "file": "frames/lp1-a-viewer.html",
+              "caption": "A viewer: the list of pull requests only, with nothing to link."
+            }
+          ],
+          "why": "It is the product's own pattern (a field with Change-style actions in the one feature panel), works for features with no code, and keeps each row to one short chip however many pull requests there are."
+        },
+        {
+          "letter": "B",
+          "name": "Code in the title",
+          "recommended": false,
+          "what": "No picker: a pull request links itself when its title or text names the feature's code (\"F-79\"). The panel lists what was found and offers \"Copy F-79\", with the two steps behind an (i). Rows show a small glyph with the count.",
+          "plus": "Nothing to do in Oracle once the team names codes; no searching.",
+          "cost": "1 click to copy + 4 keys in GitHub per pull request; today no way to link.",
+          "frames": [
+            {
+              "file": "frames/lp1-b-rest.html",
+              "caption": "Priorities at rest: a small glyph and count on each row with pull requests."
+            },
+            {
+              "file": "frames/lp1-b-open.html",
+              "caption": "In the panel, the (i) beside Copy F-79 shows the two steps."
+            },
+            {
+              "file": "frames/lp1-b-mid.html",
+              "caption": "The owner clicks Copy F-79: the button shows it is copied."
+            },
+            {
+              "file": "frames/lp1-b-done.html",
+              "caption": "Lena opens #503 with F-79 in its title: it shows in the panel by itself, marked found by its code. Cost: 1 click + 4 keys in GitHub."
+            },
+            {
+              "file": "frames/lp1-b-hard.html",
+              "caption": "A feature with no code yet (Mobile alert push, not in the Ground Truth): nothing can name it, so it shows \"Needs a code first\"."
+            },
+            {
+              "file": "frames/lp1-b-hard-1512.html",
+              "caption": "The same feature with no code at 1512."
+            },
+            {
+              "file": "frames/lp1-b-phone-390.html",
+              "caption": "Phone: the panel's bottom sheet with the found pull requests."
+            },
+            {
+              "file": "frames/lp1-b-commenter.html",
+              "caption": "A commenter: the same Copy F-79, so their pull request links by its title like anyone's."
+            },
+            {
+              "file": "frames/lp1-b-viewer.html",
+              "caption": "A viewer: the found pull requests only; no Copy button."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Paste a link",
+          "recommended": false,
+          "what": "The panel's Pull requests field has a box that takes a pasted pull request link. Rows show each pull request as its own chip, \"#482 Merged\", two at most, then \"+N\".",
+          "plus": "Works with any link a person already has; rows say exactly which pull request is in which state.",
+          "cost": "Copy the link in GitHub, 2 clicks + paste; today no way to link.",
+          "frames": [
+            {
+              "file": "frames/lp1-c-rest.html",
+              "caption": "Priorities at rest: up to two pull request chips per row, each with its number and state."
+            },
+            {
+              "file": "frames/lp1-c-open.html",
+              "caption": "In the panel the owner clicks into the link box."
+            },
+            {
+              "file": "frames/lp1-c-mid.html",
+              "caption": "They paste the link to #503."
+            },
+            {
+              "file": "frames/lp1-c-done.html",
+              "caption": "They press Enter: #503 joins the panel's list; on the row it only adds to \"+ more\"."
+            },
+            {
+              "file": "frames/lp1-c-hard.html",
+              "caption": "Many pull requests: the row shows two chips and \"+7 more\"; rows get busy."
+            },
+            {
+              "file": "frames/lp1-c-hard-1512.html",
+              "caption": "The same rows at 1512."
+            },
+            {
+              "file": "frames/lp1-c-phone-390.html",
+              "caption": "Phone: the chips wrap onto their own line under each name."
+            },
+            {
+              "file": "frames/lp1-c-commenter.html",
+              "caption": "A commenter: the paste field's button reads Propose, so the link waits for the decider."
+            },
+            {
+              "file": "frames/lp1-c-viewer.html",
+              "caption": "A viewer: the list only, with no paste field."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Own panel section",
+          "recommended": false,
+          "what": "Pull requests get their own section lower in the panel, grouped Open, Merged and Closed with counts. \"+ Link pull requests\" opens a dialog where several can be ticked at once. Rows show nothing.",
+          "plus": "Links several at once; the panel's top stays as it is; rows stay calm.",
+          "cost": "Scroll + 4 clicks for two links; today no way to link.",
+          "frames": [
+            {
+              "file": "frames/lp1-d-rest.html",
+              "caption": "The panel scrolled to its Pull requests section, grouped by state; the rows behind show nothing."
+            },
+            {
+              "file": "frames/lp1-d-open.html",
+              "caption": "The owner clicks + Link pull requests: a dialog lists the repo's recent pull requests."
+            },
+            {
+              "file": "frames/lp1-d-mid.html",
+              "caption": "They tick #503 and #502."
+            },
+            {
+              "file": "frames/lp1-d-done.html",
+              "caption": "They click Link 2: both join the Open group. Cost: scroll + 4 clicks."
+            },
+            {
+              "file": "frames/lp1-d-hard.html",
+              "caption": "9 pull requests: the section grows long, far below the fold."
+            },
+            {
+              "file": "frames/lp1-d-hard-1512.html",
+              "caption": "The same long section at 1512."
+            },
+            {
+              "file": "frames/lp1-d-phone-390.html",
+              "caption": "Phone: the section at the foot of the bottom sheet."
+            },
+            {
+              "file": "frames/lp1-d-commenter.html",
+              "caption": "A commenter: the section's button reads + Propose links; the dialog's button reads Propose."
+            },
+            {
+              "file": "frames/lp1-d-viewer.html",
+              "caption": "A viewer: the section's groups only, with nothing to link."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "B",
-     "name": "Code in the title",
-     "recommended": false,
-     "what": "No picker: a pull request links itself when its title or text names the feature's code (\"F-79\"). The panel lists what was found and offers \"Copy F-79\", with the two steps behind an (i). Rows show a small glyph with the count.",
-     "plus": "Nothing to do in Oracle once the team names codes; no searching.",
-     "cost": "1 click to copy + 4 keys in GitHub per pull request; today no way to link.",
-     "frames": [
-      {
-       "file": "frames/lp1-b-rest.html",
-       "caption": "Priorities at rest: a small glyph and count on each row with pull requests."
-      },
-      {
-       "file": "frames/lp1-b-open.html",
-       "caption": "In the panel, the (i) beside Copy F-79 shows the two steps."
-      },
-      {
-       "file": "frames/lp1-b-mid.html",
-       "caption": "The owner clicks Copy F-79: the button shows it is copied."
-      },
-      {
-       "file": "frames/lp1-b-done.html",
-       "caption": "Lena opens #503 with F-79 in its title: it shows in the panel by itself, marked found by its code. Cost: 1 click + 4 keys in GitHub."
-      },
-      {
-       "file": "frames/lp1-b-hard.html",
-       "caption": "A feature with no code yet (Mobile alert push, not in the Ground Truth): nothing can name it, so it shows \"Needs a code first\"."
-      },
-      {
-       "file": "frames/lp1-b-hard-1512.html",
-       "caption": "The same feature with no code at 1512."
-      },
-      {
-       "file": "frames/lp1-b-phone-390.html",
-       "caption": "Phone: the panel's bottom sheet with the found pull requests."
-      }
-     ]
+      "code": "LP2",
+      "name": "The status suggestion",
+      "question": "Where does Oracle's suggested status show, and how does the owner accept or dismiss it?",
+      "common": "A pull request never changes status by itself: when all of a feature's linked pull requests merge Oracle suggests Done (one opening suggests In progress), and a person accepts or dismisses; a commenter proposes. Shown with LP1 A's field and chip. Acting on one moves every Inbox count at once (rail, Needs you, New).",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Mark, panel and Inbox",
+          "recommended": true,
+          "what": "When all of a feature's linked pull requests merge, Oracle suggests Done (an open one suggests In progress). The suggestion shows as a \"✦ Done?\" mark on the feature's row, as a box under Status in its panel, and as a Status row in the owner's Inbox, each with Accept and Dismiss. Acting in one place clears it everywhere. A commenter sees \"Propose Done\"; a viewer sees the mark only. With several pull requests it waits until the last one merges; the (i) says which.",
+          "plus": "Seen wherever the person looks; same Accept and Dismiss as Oracle's date suggestions today.",
+          "cost": "2 clicks (mark, Accept); today 4 clicks in the panel, and only if someone notices.",
+          "frames": [
+            {
+              "file": "frames/lp2-a-rest.html",
+              "caption": "Priorities at rest: Weekly alert digest shows \"3 of 3 merged\" and a \"✦ Done?\" mark."
+            },
+            {
+              "file": "frames/lp2-a-open.html",
+              "caption": "The owner clicks the mark: the panel opens with \"Oracle suggests Done\" under Status, Accept and Dismiss."
+            },
+            {
+              "file": "frames/lp2-a-mid.html",
+              "caption": "The (i) says why: 3 of 3 pull requests merged, the last on Nov 23."
+            },
+            {
+              "file": "frames/lp2-a-done.html",
+              "caption": "They click Accept: Status reads Done, the box goes, the row shows \"Status: Done\", and the Inbox count drops by one."
+            },
+            {
+              "file": "frames/lp2-a-inbox.html",
+              "caption": "The same suggestion's Status row is gone from the Inbox too; only the late feature with no pull request stays."
+            },
+            {
+              "file": "frames/lp2-a-hard.html",
+              "caption": "A commenter: the panel's box offers \"Propose Done\" and no Dismiss; it becomes a proposal for the decider."
+            },
+            {
+              "file": "frames/lp2-a-hard-1512.html",
+              "caption": "The commenter's panel at 1512."
+            },
+            {
+              "file": "frames/lp2-a-phone-390.html",
+              "caption": "Phone: the bottom sheet with the suggestion under the Pull requests field."
+            },
+            {
+              "file": "frames/lp2-a-detailed.html",
+              "caption": "Detailed: the same Status row in Detailed's Inbox (the one Inbox), here at rest before any accept."
+            }
+          ],
+          "why": "The rule says Oracle suggests and a person confirms; this puts the suggestion where people already work (the row, the panel, the Inbox) with the same Accept and Dismiss as Oracle's date suggestions, so nothing new to learn."
+        },
+        {
+          "letter": "B",
+          "name": "Inbox only",
+          "recommended": false,
+          "what": "Suggestions land only in the Inbox, as Status rows with the change (\"Planned → Oracle suggests Done\"), why, Accept and Dismiss, and an \"Accept all\" for several. Rows and panel stay as they are.",
+          "plus": "One list to clear; Accept all handles a busy week in one click.",
+          "cost": "1 click for all 4; today 4 clicks per feature.",
+          "frames": [
+            {
+              "file": "frames/lp2-b-rest.html",
+              "caption": "The Inbox with 4 Status suggestions, Accept all 4, and one late feature with no pull request."
+            },
+            {
+              "file": "frames/lp2-b-open.html",
+              "caption": "The (i) on Weekly alert digest lists its 3 merged pull requests."
+            },
+            {
+              "file": "frames/lp2-b-mid.html",
+              "caption": "The owner points at Accept all 4."
+            },
+            {
+              "file": "frames/lp2-b-done.html",
+              "caption": "They click it: all 4 rows go, and the Inbox counts drop by 4. Cost: 1 click for all 4 · today: 16 clicks (4 per feature)."
+            },
+            {
+              "file": "frames/lp2-b-hard.html",
+              "caption": "A commenter: each row offers Propose, with no Accept all."
+            },
+            {
+              "file": "frames/lp2-b-hard-1512.html",
+              "caption": "The commenter's Inbox at 1512."
+            },
+            {
+              "file": "frames/lp2-b-phone-390.html",
+              "caption": "Phone: each Status row stacks, actions under it."
+            },
+            {
+              "file": "frames/lp2-b-detailed.html",
+              "caption": "Detailed: the 4 suggestions and Accept all 4 in Detailed's Inbox, the same list."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Row popover only",
+          "recommended": false,
+          "what": "Only the Priorities row shows \"✦ Done?\"; clicking it opens a small popover with why, Accept and Dismiss, like the Timeline's date popover. No Inbox row.",
+          "plus": "Fast for someone ranking work on Priorities.",
+          "cost": "2 clicks; today 4 clicks in the panel.",
+          "frames": [
+            {
+              "file": "frames/lp2-c-rest.html",
+              "caption": "Priorities at rest with the \"✦ Done?\" mark on Weekly alert digest."
+            },
+            {
+              "file": "frames/lp2-c-open.html",
+              "caption": "The owner clicks it: a popover says Oracle suggests Done, 3 of 3 merged, with Accept and Dismiss."
+            },
+            {
+              "file": "frames/lp2-c-mid.html",
+              "caption": "They point at Accept."
+            },
+            {
+              "file": "frames/lp2-c-done.html",
+              "caption": "They click it: the mark goes, the row shows \"Status: Done\", and the Inbox count drops by one."
+            },
+            {
+              "file": "frames/lp2-c-hard.html",
+              "caption": "A commenter: the popover offers Propose Done only."
+            },
+            {
+              "file": "frames/lp2-c-hard-1512.html",
+              "caption": "The commenter's popover at 1512."
+            },
+            {
+              "file": "frames/lp2-c-phone-390.html",
+              "caption": "Phone: the suggestion opens as a sheet at the bottom, naming F-79 Weekly alert digest."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "C",
-     "name": "Paste a link",
-     "recommended": false,
-     "what": "The panel's Pull requests field has a box that takes a pasted pull request link. Rows show each pull request as its own chip, \"#482 Merged\", two at most, then \"+N\".",
-     "plus": "Works with any link a person already has; rows say exactly which pull request is in which state.",
-     "cost": "Copy the link in GitHub, 2 clicks + paste; today no way to link.",
-     "frames": [
-      {
-       "file": "frames/lp1-c-rest.html",
-       "caption": "Priorities at rest: up to two pull request chips per row, each with its number and state."
-      },
-      {
-       "file": "frames/lp1-c-open.html",
-       "caption": "In the panel the owner clicks into the link box."
-      },
-      {
-       "file": "frames/lp1-c-mid.html",
-       "caption": "They paste the link to #503."
-      },
-      {
-       "file": "frames/lp1-c-done.html",
-       "caption": "They press Enter: #503 joins the panel's list; on the row it only adds to \"+1\", and the name wraps. Cost: 2 clicks + paste, after copying in GitHub."
-      },
-      {
-       "file": "frames/lp1-c-hard.html",
-       "caption": "Many pull requests: the row shows two chips and \"+7\"; rows get busy."
-      },
-      {
-       "file": "frames/lp1-c-hard-1512.html",
-       "caption": "The same rows at 1512."
-      },
-      {
-       "file": "frames/lp1-c-phone-390.html",
-       "caption": "Phone: the chips wrap onto their own line under each name."
-      }
-     ]
-    },
-    {
-     "letter": "D",
-     "name": "Own panel section",
-     "recommended": false,
-     "what": "Pull requests get their own section lower in the panel, grouped Open, Merged and Closed with counts. \"+ Link pull requests\" opens a dialog where several can be ticked at once. Rows show nothing.",
-     "plus": "Links several at once; the panel's top stays as it is; rows stay calm.",
-     "cost": "Scroll + 4 clicks for two links; today no way to link.",
-     "frames": [
-      {
-       "file": "frames/lp1-d-rest.html",
-       "caption": "The panel scrolled to its Pull requests section, grouped by state; the rows behind show nothing."
-      },
-      {
-       "file": "frames/lp1-d-open.html",
-       "caption": "The owner clicks + Link pull requests: a dialog lists the repo's recent pull requests."
-      },
-      {
-       "file": "frames/lp1-d-mid.html",
-       "caption": "They tick #503 and #502."
-      },
-      {
-       "file": "frames/lp1-d-done.html",
-       "caption": "They click Link 2: both join the Open group. Cost: scroll + 4 clicks."
-      },
-      {
-       "file": "frames/lp1-d-hard.html",
-       "caption": "9 pull requests: the section grows long, far below the fold."
-      },
-      {
-       "file": "frames/lp1-d-hard-1512.html",
-       "caption": "The same long section at 1512."
-      },
-      {
-       "file": "frames/lp1-d-phone-390.html",
-       "caption": "Phone: the section at the foot of the bottom sheet."
-      }
-     ]
+      "code": "LP3",
+      "name": "Set-up and broken links",
+      "question": "How does an owner see that GitHub is not connected or a link no longer resolves, and fix it?",
+      "common": "No prose: a state chip and an (i). Acting moves every Inbox count at once. Connect GitHub shows only to those who may connect it; a viewer sees the state only.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Fix where it shows",
+          "recommended": true,
+          "what": "Problems show in the panel's Pull requests field, where the link lives: a link that no longer resolves reads \"Can't be found\" (red), with Fix (Remove the link, Link another), and its row gets a \"⚠ 1 link\" chip. With GitHub not connected the field reads \"GitHub not connected\" with Connect GitHub for those who may connect it; rows show no chips.",
+          "plus": "No new page or list; the fix is one click from the problem.",
+          "cost": "2 clicks (Fix, Remove); today there are no links to break.",
+          "frames": [
+            {
+              "file": "frames/lp3-a-rest.html",
+              "caption": "The panel: #466 can't be found, in red, with Fix; the row behind shows \"⚠ 1 link\"."
+            },
+            {
+              "file": "frames/lp3-a-open.html",
+              "caption": "The owner clicks Fix: Remove the link and Link another."
+            },
+            {
+              "file": "frames/lp3-a-mid.html",
+              "caption": "They point at Remove the link."
+            },
+            {
+              "file": "frames/lp3-a-done.html",
+              "caption": "They click it: #466 is gone from the field and the row's warning goes. Cost: 2 clicks."
+            },
+            {
+              "file": "frames/lp3-a-hard.html",
+              "caption": "GitHub not connected: the field says so with Connect GitHub; no row chips anywhere."
+            },
+            {
+              "file": "frames/lp3-a-hard-1512.html",
+              "caption": "Not connected, at 1512."
+            },
+            {
+              "file": "frames/lp3-a-phone-390.html",
+              "caption": "Phone: the broken link and Fix in the bottom sheet."
+            },
+            {
+              "file": "frames/lp3-a-commenter.html",
+              "caption": "A commenter opens Fix: Propose removing it, or Link another."
+            },
+            {
+              "file": "frames/lp3-a-viewer.html",
+              "caption": "A viewer: the broken link shows, with no Fix."
+            }
+          ],
+          "why": "It follows the rule that every problem leads to the item with the action that fixes it, in the one feature panel, without adding a page-wide banner or new Inbox noise."
+        },
+        {
+          "letter": "C",
+          "name": "Inbox fixes",
+          "recommended": false,
+          "what": "Each broken link is an Inbox row (\"Link broken\", the feature, #466 can't be found) with Relink and Remove; a missing connection is one Inbox row with Connect GitHub.",
+          "plus": "Nothing to hunt for: problems arrive with the rest of the owner's work.",
+          "cost": "2 clicks + a few keys to relink; today no links to break.",
+          "frames": [
+            {
+              "file": "frames/lp3-c-rest.html",
+              "caption": "The Inbox: a Link broken row for #466 on Weekly alert digest, with Relink and Remove."
+            },
+            {
+              "file": "frames/lp3-c-open.html",
+              "caption": "The owner clicks Relink: the repo search opens in the row."
+            },
+            {
+              "file": "frames/lp3-c-mid.html",
+              "caption": "They type \"unsub\"."
+            },
+            {
+              "file": "frames/lp3-c-done.html",
+              "caption": "They click Link on #503: the broken-link row is gone. Cost: 2 clicks + 5 keys."
+            },
+            {
+              "file": "frames/lp3-c-hard.html",
+              "caption": "GitHub not connected: one row, \"4 features wait on it\", with Connect GitHub."
+            },
+            {
+              "file": "frames/lp3-c-hard-1512.html",
+              "caption": "Not connected, at 1512."
+            },
+            {
+              "file": "frames/lp3-c-phone-390.html",
+              "caption": "Phone: the Link broken row stacked, actions under it."
+            },
+            {
+              "file": "frames/lp3-c-detailed.html",
+              "caption": "Detailed: the same Link broken row in Detailed's Inbox."
+            },
+            {
+              "file": "frames/lp3-c-commenter.html",
+              "caption": "A commenter: Propose a relink or Propose removing it; the (i) says it goes to Avery Stone."
+            },
+            {
+              "file": "frames/lp3-c-viewer.html",
+              "caption": "A viewer: the row says an owner can fix it."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Strip on Priorities",
+          "recommended": false,
+          "what": "A warning strip at the top of Priorities: \"GitHub not connected\" with Connect, or \"1 pull request link can't be found\" with Show, which lists each with Remove.",
+          "plus": "Impossible to miss on the page that ranks the work.",
+          "cost": "2 clicks; today no links to break.",
+          "frames": [
+            {
+              "file": "frames/lp3-d-rest.html",
+              "caption": "Priorities with the warning strip: 1 pull request link can't be found."
+            },
+            {
+              "file": "frames/lp3-d-open.html",
+              "caption": "The owner clicks Show: #466 on F-79 Weekly alert digest, with Remove the link."
+            },
+            {
+              "file": "frames/lp3-d-mid.html",
+              "caption": "They point at Remove the link."
+            },
+            {
+              "file": "frames/lp3-d-done.html",
+              "caption": "They click it: the strip goes. Cost: 2 clicks."
+            },
+            {
+              "file": "frames/lp3-d-hard.html",
+              "caption": "A viewer with GitHub not connected: the strip says an owner can connect it."
+            },
+            {
+              "file": "frames/lp3-d-hard-1512.html",
+              "caption": "The viewer's strip at 1512."
+            },
+            {
+              "file": "frames/lp3-d-phone-390.html",
+              "caption": "Phone: the strip on one line above the list."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "code": "LP2",
-   "name": "The status suggestion",
-   "question": "Where does Oracle's suggested status show, and how does the owner accept or dismiss it?",
-   "common": "A pull request never changes status by itself: when all of a feature's linked pull requests merge Oracle suggests Done (one opening suggests In progress), and a person accepts or dismisses; a commenter proposes. Shown with LP1 A's field and chip. The Inbox and rail counts are not redrawn in these mock-ups; built, every count moves at once.",
-   "proposals": [
-    {
-     "letter": "A",
-     "name": "Mark, panel and Inbox",
-     "recommended": true,
-     "what": "When all of a feature's linked pull requests merge, Oracle suggests Done (an open one suggests In progress). The suggestion shows as a \"✦ Done?\" mark on the feature's row, as a box under Status in its panel, and as a Status row in the owner's Inbox, each with Accept and Dismiss. Acting in one place clears it everywhere. A commenter sees \"Propose Done\"; a viewer sees the mark only. With several pull requests it waits until the last one merges; the (i) says which.",
-     "plus": "Seen wherever the person looks; same Accept and Dismiss as Oracle's date suggestions today.",
-     "cost": "2 clicks (mark, Accept); today 4 clicks in the panel, and only if someone notices.",
-     "frames": [
-      {
-       "file": "frames/lp2-a-rest.html",
-       "caption": "Priorities at rest: Weekly alert digest shows \"3 of 3 merged\" and a \"✦ Done?\" mark."
-      },
-      {
-       "file": "frames/lp2-a-open.html",
-       "caption": "The owner clicks the mark: the panel opens with \"Oracle suggests Done\" under Status, Accept and Dismiss."
-      },
-      {
-       "file": "frames/lp2-a-mid.html",
-       "caption": "The (i) says why: 3 of 3 pull requests merged, the last on Nov 23."
-      },
-      {
-       "file": "frames/lp2-a-done.html",
-       "caption": "They click Accept: Status reads Done, the box goes, the row shows \"✓ Done\". Cost: 2 clicks."
-      },
-      {
-       "file": "frames/lp2-a-inbox.html",
-       "caption": "The same suggestion's Status row is gone from the Inbox too; only the late feature with no pull request stays."
-      },
-      {
-       "file": "frames/lp2-a-hard.html",
-       "caption": "A commenter: the panel's box offers \"Propose Done\" and no Dismiss; it becomes a proposal for the decider."
-      },
-      {
-       "file": "frames/lp2-a-hard-1512.html",
-       "caption": "The commenter's panel at 1512."
-      },
-      {
-       "file": "frames/lp2-a-phone-390.html",
-       "caption": "Phone: the bottom sheet with the suggestion under Status."
-      },
-      {
-       "file": "frames/lp2-a-detailed.html",
-       "caption": "Detailed: the same Status row in Detailed's Inbox (the one Inbox), here at rest before any accept."
-      }
-     ],
-     "why": "The rule says Oracle suggests and a person confirms; this puts the suggestion where people already work (the row, the panel, the Inbox) with the same Accept and Dismiss as Oracle's date suggestions, so nothing new to learn."
-    },
-    {
-     "letter": "B",
-     "name": "Inbox only",
-     "recommended": false,
-     "what": "Suggestions land only in the Inbox, as Status rows with the change (\"Planned → Oracle suggests Done\"), why, Accept and Dismiss, and an \"Accept all\" for several. Rows and panel stay as they are.",
-     "plus": "One list to clear; Accept all handles a busy week in one click.",
-     "cost": "1 click for all 4; today 4 clicks per feature.",
-     "frames": [
-      {
-       "file": "frames/lp2-b-rest.html",
-       "caption": "The Inbox with 4 Status suggestions, Accept all 4, and one late feature with no pull request."
-      },
-      {
-       "file": "frames/lp2-b-open.html",
-       "caption": "The (i) on Weekly alert digest lists its 3 merged pull requests."
-      },
-      {
-       "file": "frames/lp2-b-mid.html",
-       "caption": "The owner points at Accept all 4."
-      },
-      {
-       "file": "frames/lp2-b-done.html",
-       "caption": "They click it: all 4 rows go. Cost: 1 click for 4."
-      },
-      {
-       "file": "frames/lp2-b-hard.html",
-       "caption": "A commenter: each row offers Propose, with no Accept all."
-      },
-      {
-       "file": "frames/lp2-b-hard-1512.html",
-       "caption": "The commenter's Inbox at 1512."
-      },
-      {
-       "file": "frames/lp2-b-phone-390.html",
-       "caption": "Phone: each Status row stacks, actions under it."
-      },
-      {
-       "file": "frames/lp2-b-detailed.html",
-       "caption": "Detailed: the 4 suggestions and Accept all 4 in Detailed's Inbox, the same list."
-      }
-     ]
-    },
-    {
-     "letter": "C",
-     "name": "Row popover only",
-     "recommended": false,
-     "what": "Only the Priorities row shows \"✦ Done?\"; clicking it opens a small popover with why, Accept and Dismiss, like the Timeline's date popover. No Inbox row.",
-     "plus": "Fast for someone ranking work on Priorities.",
-     "cost": "2 clicks; today 4 clicks in the panel.",
-     "frames": [
-      {
-       "file": "frames/lp2-c-rest.html",
-       "caption": "Priorities at rest with the \"✦ Done?\" mark on Weekly alert digest."
-      },
-      {
-       "file": "frames/lp2-c-open.html",
-       "caption": "The owner clicks it: a popover says Oracle suggests Done, 3 of 3 merged, with Accept and Dismiss."
-      },
-      {
-       "file": "frames/lp2-c-mid.html",
-       "caption": "They point at Accept."
-      },
-      {
-       "file": "frames/lp2-c-done.html",
-       "caption": "They click it: the mark goes and the row shows \"✓ Done\". Cost: 2 clicks."
-      },
-      {
-       "file": "frames/lp2-c-hard.html",
-       "caption": "A commenter: the popover offers Propose Done only."
-      },
-      {
-       "file": "frames/lp2-c-hard-1512.html",
-       "caption": "The commenter's popover at 1512."
-      },
-      {
-       "file": "frames/lp2-c-phone-390.html",
-       "caption": "Phone: the mark under the name, its popover over the row."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "code": "LP3",
-   "name": "Set-up and broken links",
-   "question": "How does an owner see that GitHub is not connected or a link no longer resolves, and fix it?",
-   "common": "No prose: a state chip and an (i). Inbox counts are not redrawn in these mock-ups. Connect GitHub shows only to those who may connect it; a viewer sees the state only.",
-   "proposals": [
-    {
-     "letter": "A",
-     "name": "Fix where it shows",
-     "recommended": true,
-     "what": "Problems show in the panel's Pull requests field, where the link lives: a link that no longer resolves reads \"Can't be found\" (red), with Fix (Remove the link, Link another), and its row gets a \"⚠ 1 link\" chip. With GitHub not connected the field reads \"GitHub not connected\" with Connect GitHub for those who may connect it; rows show no chips.",
-     "plus": "No new page or list; the fix is one click from the problem.",
-     "cost": "2 clicks (Fix, Remove); today there are no links to break.",
-     "frames": [
-      {
-       "file": "frames/lp3-a-rest.html",
-       "caption": "The panel: #466 can't be found, in red, with Fix; the row behind shows \"⚠ 1 link\"."
-      },
-      {
-       "file": "frames/lp3-a-open.html",
-       "caption": "The owner clicks Fix: Remove the link and Link another."
-      },
-      {
-       "file": "frames/lp3-a-mid.html",
-       "caption": "They point at Remove the link."
-      },
-      {
-       "file": "frames/lp3-a-done.html",
-       "caption": "They click it: #466 is gone from the field and the row's warning goes. Cost: 2 clicks."
-      },
-      {
-       "file": "frames/lp3-a-hard.html",
-       "caption": "GitHub not connected: the field says so with Connect GitHub; no row chips anywhere."
-      },
-      {
-       "file": "frames/lp3-a-hard-1512.html",
-       "caption": "Not connected, at 1512."
-      },
-      {
-       "file": "frames/lp3-a-phone-390.html",
-       "caption": "Phone: the broken link and Fix in the bottom sheet."
-      }
-     ],
-     "why": "It follows the rule that every problem leads to the item with the action that fixes it, in the one feature panel, without adding a page-wide banner or new Inbox noise."
-    },
-    {
-     "letter": "C",
-     "name": "Inbox fixes",
-     "recommended": false,
-     "what": "Each broken link is an Inbox row (\"Link broken\", the feature, #466 can't be found) with Relink and Remove; a missing connection is one Inbox row with Connect GitHub.",
-     "plus": "Nothing to hunt for: problems arrive with the rest of the owner's work.",
-     "cost": "2 clicks + a few keys to relink; today no links to break.",
-     "frames": [
-      {
-       "file": "frames/lp3-c-rest.html",
-       "caption": "The Inbox: a Link broken row for #466 on Weekly alert digest, with Relink and Remove."
-      },
-      {
-       "file": "frames/lp3-c-open.html",
-       "caption": "The owner clicks Relink: the repo search opens in the row."
-      },
-      {
-       "file": "frames/lp3-c-mid.html",
-       "caption": "They type \"unsub\"."
-      },
-      {
-       "file": "frames/lp3-c-done.html",
-       "caption": "They click Link on #503: the broken-link row is gone. Cost: 2 clicks + 5 keys."
-      },
-      {
-       "file": "frames/lp3-c-hard.html",
-       "caption": "GitHub not connected: one row, \"4 features wait on it\", with Connect GitHub."
-      },
-      {
-       "file": "frames/lp3-c-hard-1512.html",
-       "caption": "Not connected, at 1512."
-      },
-      {
-       "file": "frames/lp3-c-phone-390.html",
-       "caption": "Phone: the Link broken row stacked, actions under it."
-      },
-      {
-       "file": "frames/lp3-c-detailed.html",
-       "caption": "Detailed: the same Link broken row in Detailed's Inbox."
-      }
-     ]
-    },
-    {
-     "letter": "D",
-     "name": "Strip on Priorities",
-     "recommended": false,
-     "what": "A warning strip at the top of Priorities: \"GitHub not connected\" with Connect, or \"1 pull request link can't be found\" with Show, which lists each with Remove.",
-     "plus": "Impossible to miss on the page that ranks the work.",
-     "cost": "2 clicks; today no links to break.",
-     "frames": [
-      {
-       "file": "frames/lp3-d-rest.html",
-       "caption": "Priorities with the warning strip: 1 pull request link can't be found."
-      },
-      {
-       "file": "frames/lp3-d-open.html",
-       "caption": "The owner clicks Show: #466 on F-79 Weekly alert digest, with Remove the link."
-      },
-      {
-       "file": "frames/lp3-d-mid.html",
-       "caption": "They point at Remove the link."
-      },
-      {
-       "file": "frames/lp3-d-done.html",
-       "caption": "They click it: the strip goes. Cost: 2 clicks."
-      },
-      {
-       "file": "frames/lp3-d-hard.html",
-       "caption": "A viewer with GitHub not connected: the strip shows, with nothing they can do."
-      },
-      {
-       "file": "frames/lp3-d-hard-1512.html",
-       "caption": "The viewer's strip at 1512."
-      },
-      {
-       "file": "frames/lp3-d-phone-390.html",
-       "caption": "Phone: the strip wraps above the list."
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }

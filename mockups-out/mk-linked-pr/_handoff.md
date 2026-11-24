@@ -20,7 +20,8 @@
   Inbox component, so the Inbox proposals (LP2 A, LP2 B, LP3 C) have a `-detailed` frame.
 
 ## Not drawn / limits
-- Inbox and rail counts are not redrawn when a mock row is acted on (mock rows are drawn by the MOCK-HOOK only).
+- Inbox counts (rail, Needs you, New) add the mock rows still waiting (`useMkInboxExtra`), so acting on one moves them all.
+- Role frames: `-commenter`, `-viewer` for LP1 A-D, LP3 A, LP3 C.
 - LP1 B's "done" frame is reached by `&phase=done` (the pull request is opened in GitHub, outside Oracle).
 
 ## How to run

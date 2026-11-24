@@ -239,7 +239,7 @@ export const MK_SUGGESTS: MkSuggest[] = [
     code: 'F-79',
     from: 'Planned',
     to: 'Done',
-    why: '3 of 3 pull requests merged · last Nov 23',
+    why: '3 of 3 pull requests merged · last Nov\u00a023',
   },
 ]; // MOCK-HOOK
 export const MK_SUGGESTS_MANY: MkSuggest[] = [
@@ -249,21 +249,21 @@ export const MK_SUGGESTS_MANY: MkSuggest[] = [
     code: 'F-01',
     from: 'Planned',
     to: 'In progress',
-    why: '#455 opened Nov 20',
+    why: '#455 Checklist card on Home opened Nov\u00a020',
   },
   {
     title: 'Lead list ranking',
     code: 'F-103',
     from: 'Planned',
     to: 'In progress',
-    why: '#504 opened Nov 23',
+    why: '#504 Ranking by last reply opened Nov\u00a023',
   },
   {
     title: 'One-tap sign-up link',
     code: 'F-101',
     from: 'In progress',
     to: 'Done',
-    why: '2 of 2 pull requests merged · last Nov 22',
+    why: '2 of 2 pull requests merged · last Nov\u00a022',
   },
 ]; // MOCK-HOOK
 

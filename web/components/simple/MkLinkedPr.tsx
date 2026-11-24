@@ -671,7 +671,7 @@ export function MkRowChip({
             <span
               role="dialog"
               aria-label="Oracle's status suggestion"
-              className="absolute top-8 left-0 z-30 block w-[320px] rounded-xl border border-line bg-surface p-3 text-left shadow-tip max-sm:fixed max-sm:top-auto max-sm:right-0 max-sm:bottom-0 max-sm:left-0 max-sm:w-auto max-sm:rounded-b-none max-sm:pb-6"
+              className="absolute top-8 left-0 z-30 block w-[320px] rounded-xl border border-line bg-surface p-3 text-left shadow-tip max-sm:fixed max-sm:z-[70] max-sm:top-auto max-sm:right-0 max-sm:bottom-0 max-sm:left-0 max-sm:w-auto max-sm:rounded-b-none max-sm:pb-6"
             >
               <span
                 aria-hidden
