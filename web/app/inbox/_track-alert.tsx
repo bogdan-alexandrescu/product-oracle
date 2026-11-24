@@ -6,7 +6,6 @@
 import { useId, useState } from 'react';
 
 import { Button, LinkButton } from '@/components/ds';
-import { Menu } from '@/components/review/parts';
 import { FeatureName } from '@/components/simple/FeatureName';
 import {
   acceptTrackAlertDate,
@@ -53,7 +52,8 @@ export function AlertItem({ a }: { a: TrackAlertOut }) {
 export function AlertSummary({ a }: { a: TrackAlertOut }) {
   const [open, setOpen] = useState(false);
   const id = useId();
-  const parts = alertSentence(a).split('; ');
+  // A stale alert's reasons are joined by "; " (staleness.detail_for_reader); other alerts are one sentence.
+  const parts = a.kind === 'stale' ? alertSentence(a).split('; ') : [alertSentence(a)];
   const more = parts.length - 1;
   return (
     <span className="flex min-w-0 items-baseline gap-1.5 text-sm text-text2">
@@ -92,6 +92,7 @@ export function TrackAlertActions({
   act: Act;
 }) {
   const [keeping, setKeeping] = useState(false);
+  const [more, setMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const title = alertTitle(a);
   const first = firstSafeAction(a);
@@ -121,7 +122,7 @@ export function TrackAlertActions({
   return (
     <span
       data-child-actions
-      className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full"
+      className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full"
     >
       {first === 'accept_date' && (
         <Button
@@ -152,34 +153,40 @@ export function TrackAlertActions({
         </LinkButton>
       )}
       {first !== null && (
-        <Menu label={`More actions for ${title}`} icon="more" iconOnly>
-          {(close) => (
-            <span className="flex min-w-40 flex-col gap-1" role="menu">
-              {first !== 'keep' && keep && (
-                <Button
-                  variant="ghost"
-                  role="menuitem"
-                  className="justify-start"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    close();
-                    setKeeping(true);
-                  }}
-                >
-                  Keep watching
-                </Button>
-              )}
-              <LinkButton
-                variant="ghost"
-                role="menuitem"
-                className="justify-start"
-                href={planHref(a)}
-              >
-                Open in Plan
-              </LinkButton>
-            </span>
+        // The row's menu opens in the row: a panel over the table would be cut by its scroll box.
+        <Button
+          icon="more"
+          aria-label={`More actions for ${title}`}
+          title={`More actions for ${title}`}
+          aria-expanded={more}
+          className="w-8 px-0"
+          onClick={() => setMore((m) => !m)}
+        />
+      )}
+      {more && (
+        <span
+          className="flex basis-full justify-end gap-1.5 max-[600px]:flex-col"
+          role="menu"
+          aria-label={`More actions for ${title}`}
+          onKeyDown={(e) => e.key === 'Escape' && setMore(false)}
+        >
+          {first !== 'keep' && keep && (
+            <Button
+              variant="ghost"
+              role="menuitem"
+              disabled={busy !== null}
+              onClick={() => {
+                setMore(false);
+                setKeeping(true);
+              }}
+            >
+              Keep watching
+            </Button>
           )}
-        </Menu>
+          <LinkButton variant="ghost" role="menuitem" href={planHref(a)}>
+            Open in Plan
+          </LinkButton>
+        </span>
       )}
       {errorLine}
     </span>
