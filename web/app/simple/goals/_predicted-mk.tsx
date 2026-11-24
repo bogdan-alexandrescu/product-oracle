@@ -55,7 +55,7 @@ function Driver({ p, name, onOpen, label = 'Set by' }: { p: PmGoal; name: string
   return (
     <span className="min-w-0">
       <span className="text-text2">{label} </span>
-      <button type="button" data-testid="pm-driver" onClick={() => onOpen(name)} className="font-semibold text-accent-ink hover:underline focus-visible:underline">
+      <button type="button" data-testid="pm-driver" onClick={() => onOpen(name)} className="text-left font-semibold text-accent-ink hover:underline focus-visible:underline">
         <span className="tnum">{codeOf(p, name)}</span> {name}
       </button>
     </span>
