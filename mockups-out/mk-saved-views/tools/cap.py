@@ -1,6 +1,6 @@
 import json, sys, os, urllib.request, urllib.parse
 from swarm_browser import live
-OUT = '/workspace/att_ba3d1374145642d6a0e9/work/repo/mockups-out/mk-saved-views'
+OUT = '/workspace/att_29c1f97ad092422dbc96/work/repo/mockups-out/mk-saved-views'
 BASE = 'http://127.0.0.1:3100'
 SNAP = open(os.path.join(os.path.dirname(__file__), 'snap.js')).read()
 frames = json.load(open(sys.argv[1]))
@@ -21,7 +21,7 @@ for fr in frames:
     theme = fr.get('theme', 'light')
     pg.evaluate("([r,t]) => { r ? localStorage.setItem('po-mock-role', r) : localStorage.removeItem('po-mock-role'); localStorage.setItem('oracle-theme', t); }", [role, theme])
     url = BASE + fr['path'] + ('&' if '?' in fr['path'] else '?') + urllib.parse.urlencode(fr.get('q', {}))
-    scale = min(1, 1440 / w)
+    scale = 1
     pg.set_content(f'<html><body style="margin:0;background:#888"><iframe id=f src="{url}" style="border:0;width:{w}px;height:{h}px;transform:scale({scale});transform-origin:0 0;display:block;background:#fff"></iframe></body></html>')
     f = pg.frame_locator('#f')
     fh = pg.query_selector('#f').content_frame()
@@ -47,6 +47,6 @@ for fr in frames:
             data = urllib.request.urlopen(urllib.parse.urljoin(BASE + '/', u)).read()
             open(f'{OUT}/assets/{b}', 'wb').write(data); fontsdone.add(b)
         except Exception as e: print('font fail', u, e)
-    pg.query_selector('#f').screenshot(path=f'{OUT}/frames/{name}.png')
+    pg.screenshot(path=f'{OUT}/frames/{name}.png', full_page=True, clip={'x':0,'y':0,'width':w,'height':h})
     print('ok', name, w, h, theme)
 pg.close(); pw.stop()

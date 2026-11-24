@@ -14,11 +14,11 @@
      "recommended": false,
      "what": "Each view is a tab in a row above the filters, with its count. Save view sits at the row’s end and lights up when the filters change; it asks only for a name. When tabs run out of room, the rest go under +N more; on a phone the row scrolls sideways.",
      "plus": "Every view is one click away and in sight; saving is the fewest steps.",
-     "cost": "Save: 2 steps. Reopen: 1 click. Today: 2 to 6 picks every visit.",
+     "cost": "Save: 2 steps. Reopen: 1 click. Today: 2 to 6 picks every visit. Adds a second tab row under Timeline and Gantt.",
      "frames": [
       {
        "file": "frames/sv1-a-rest.html",
-       "caption": "At rest: views are tabs above the filters; Goal and Drafts only were just picked, so Save view lights up."
+       "caption": "At rest: views are a second tab row, under Timeline and Gantt; Goal and Drafts only were just picked, so Save view lights up."
       },
       {
        "file": "frames/sv1-a-open.html",
@@ -30,11 +30,11 @@
       },
       {
        "file": "frames/sv1-a-result.html",
-       "caption": "Result: the new view is a tab, picked, with a Saved tick. Cost: Save: 2 steps (Save view, then type a name and press Enter). Reopen: 1 click. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+       "caption": "Result: the new view is a tab, picked; the Saved tick sits under the tabs. Cost: Save: 2 steps · today: 2–6 picks every visit"
       },
       {
        "file": "frames/sv1-a-hard-1512.html",
-       "caption": "Hard case at 1512: twelve saved views with long names; six tabs fit, the rest go under +11 more."
+       "caption": "Hard case at 1512: ten more views with long names; six tabs fit, the rest go under +N more."
       },
       {
        "file": "frames/sv1-a-detailed.html",
@@ -69,7 +69,7 @@
       },
       {
        "file": "frames/sv1-b-result.html",
-       "caption": "Result: the View button reads the new name, with a Saved tick. Cost: Save: 3 steps (View, Save these filters, then a name and Enter). Reopen: 2 clicks. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+       "caption": "Result: the View button reads the new name, with a Saved tick. Cost: Save: 3 steps · today: 2–6 picks every visit"
       },
       {
        "file": "frames/sv1-b-hard-1512.html",
@@ -107,7 +107,7 @@
       },
       {
        "file": "frames/sv1-c-result.html",
-       "caption": "Result: the new view sits in the side list, picked, with a Saved tick. Cost: Save: 2 steps (Save these filters, then a name and Enter). Reopen: 1 click. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+       "caption": "Result: the new view sits in the side list, picked, with a Saved tick. Cost: Save: 2 steps · today: 2–6 picks every visit"
       },
       {
        "file": "frames/sv1-c-hard-1512.html",
@@ -145,7 +145,7 @@
       },
       {
        "file": "frames/sv1-d-result.html",
-       "caption": "Result: the picker reads the new name, with a Saved tick. Cost: Save: 3 steps (open View, pick Save these filters, then a name and Save). Reopen: 2 picks. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+       "caption": "Result: the picker reads the new name, with a Saved tick. Cost: Save: 3 steps · today: 2–6 picks every visit"
       },
       {
        "file": "frames/sv1-d-hard-1512.html",
@@ -157,7 +157,7 @@
       },
       {
        "file": "frames/sv1-d-phone-390.html",
-       "caption": "Phone 390, Simple Priorities: the View picker opens the phone’s own list."
+       "caption": "Phone 390, Simple Priorities: View is one more picker in the row; a tap opens the phone’s own list."
       }
      ]
     }
@@ -176,7 +176,7 @@
      "what": "When saving, Who sees it: Only me or Everyone. The menu splits Mine from Shared with everyone, each shared view naming its maker. Its maker, owners and approvers can change a shared view (Save, Save as new, Undo changes); a commenter gets Suggest this change, which sends the maker a proposal, and Save as my view.",
      "why": "It keeps the one rule people already know in Simple (direct for owners and approvers, a proposal for commenters) instead of a new rights setting, and it costs one tap.",
      "plus": "One tap to share; the rule for changing matches how Simple already treats owners, approvers and commenters.",
-     "cost": "1 more tap to share. Changing a shared view: 1 click; a commenter’s: 1 click to suggest.",
+     "cost": "Share: 1 more tap when saving; change a shared view: 1 click; a commenter suggests in 1 click. Today: no sharing; people send the page link or re-pick the filters.",
      "frames": [
       {
        "file": "frames/sv2-a-rest.html",
@@ -192,11 +192,11 @@
       },
       {
        "file": "frames/sv2-a-result.html",
-       "caption": "Result: the view is under Shared with everyone with its maker’s name; tick: Saved, everyone sees it. Cost: Share: 1 more tap (Everyone) when saving. Change a shared view: 1 click (Save)."
+       "caption": "Result: the view is under Shared with everyone with its maker’s name; tick: Saved, everyone sees it. Cost: Share: 1 more tap · today: send the page link"
       },
       {
        "file": "frames/sv2-a-hard-1512.html",
-       "caption": "Hard case, a commenter at 1512: they cannot change Rosa Lind’s view, so Suggest this change sends her a proposal; Save as my view keeps a private copy."
+       "caption": "Hard case, a commenter at 1512: the line says they can suggest changes to Rosa Lind’s view; Suggest this change sends her a proposal, Save as my view keeps a private copy."
       },
       {
        "file": "frames/sv2-a-phone-390.html",
@@ -210,7 +210,7 @@
      "recommended": false,
      "what": "Views are always private. Sharing is Copy link: whoever opens it sees the same filters, with a banner naming whose link it is and Save as my view.",
      "plus": "Nothing to manage or keep in step; nobody can change someone else’s view.",
-     "cost": "2 clicks to share. A team must each save their own; a change reaches nobody.",
+     "cost": "Share: 2 clicks (Copy link). Today: the same, send the page link. A team must each save their own; a change reaches nobody.",
      "frames": [
       {
        "file": "frames/sv2-b-rest.html",
@@ -226,11 +226,11 @@
       },
       {
        "file": "frames/sv2-b-result.html",
-       "caption": "Result: a viewer opens the link; the page shows the filters from Rosa Lind’s link, with Save as my view. Cost: Share: 2 clicks (Copy link, then paste it). Nothing to keep in step: a link is a copy."
+       "caption": "Result: a viewer opens the link; the button reads From a link, the banner names Rosa Lind’s link and says they can read it and keep their own copy. Cost: Share: 2 clicks · today: send the page link"
       },
       {
        "file": "frames/sv2-b-hard-1512.html",
-       "caption": "Hard case at 1512: a team that reviews from the same views must each save their own; a change to one reaches nobody else."
+       "caption": "Hard case at 1512: twelve private views and an edited one; there is only Save, Save as new and Copy link, so a change stays with its maker."
       },
       {
        "file": "frames/sv2-b-phone-390.html",
@@ -244,7 +244,7 @@
      "recommended": false,
      "what": "When saving, Who sees it and Who can change it (Just me; Owners and approvers; Anyone who can edit). A lock marks limited views. People who may not change a view get only Save as my view; there is no proposal path.",
      "plus": "Fine control for teams that want a view to stay fixed.",
-     "cost": "2 more taps to share. A new setting to learn, and commenters lose the proposal path they have elsewhere.",
+     "cost": "Share: 2 more taps when saving. Today: no sharing; people send the page link. A new setting to learn, and commenters lose the proposal path they have elsewhere.",
      "frames": [
       {
        "file": "frames/sv2-c-rest.html",
@@ -260,7 +260,7 @@
       },
       {
        "file": "frames/sv2-c-result.html",
-       "caption": "Result: the view is shared, with a lock. Cost: Share: 2 more taps (Everyone, then who can change it) when saving."
+       "caption": "Result: the view is shared, with a lock. Cost: Share: 2 more taps · today: send the page link"
       },
       {
        "file": "frames/sv2-c-hard-1512.html",
@@ -268,7 +268,7 @@
       },
       {
        "file": "frames/sv2-c-phone-390.html",
-       "caption": "Phone 390: the save sheet with both choices stacked."
+       "caption": "Phone 390: the save sheet with Who sees it and Who can change it, each on one line."
       }
      ]
     },
@@ -278,11 +278,11 @@
      "recommended": false,
      "what": "Only owners and approvers can make Team views; they sit at the top of everyone’s menu. Everyone else saves for themselves only.",
      "plus": "A short, curated list everyone shares; no clutter from personal views.",
-     "cost": "1 more tap, owners only. Others cannot share a useful view except by link.",
+     "cost": "Share: 1 more tap, owners only. Today: no sharing; people send the page link. Others can still only share by link.",
      "frames": [
       {
        "file": "frames/sv2-d-rest.html",
-       "caption": "At rest: a team view is picked; the button says Team."
+       "caption": "At rest: a team view is picked; the button and its row both say Team."
       },
       {
        "file": "frames/sv2-d-open.html",
@@ -294,11 +294,11 @@
       },
       {
        "file": "frames/sv2-d-result.html",
-       "caption": "Result: the view is a team view for everyone; tick: Saved as a team view. Cost: Share: 1 more tap (Make it a team view), owners only."
+       "caption": "Result: the view is a team view for everyone; tick: Saved as a team view. Cost: Share: 1 more tap, owners only · today: send the page link"
       },
       {
        "file": "frames/sv2-d-hard-1512.html",
-       "caption": "Hard case, a viewer at 1512: they can save for themselves only; no team choice is offered."
+       "caption": "Hard case, a viewer at 1512: a line says they can save for themselves and owners set team views; no team choice is offered."
       },
       {
        "file": "frames/sv2-d-phone-390.html",
@@ -321,7 +321,7 @@
      "what": "Manage views, at the foot of the View menu, opens a side sheet listing every view: a handle to drag, the name to click and rename, a Default choice, and Remove (Hide for built-in views). A removal shows Undo in a toast. On a phone the sheet fills the screen.",
      "why": "With ten long names a full-height list is the only place every name stays readable and every action stays one tap; the View menu stays a plain picker.",
      "plus": "All four jobs in one place, with room for long names to wrap; drag works well with many views.",
-     "cost": "Rename: 4 steps. Reorder: one drag. Default: 1 tap in the sheet. Remove: 1 tap, Undo in the toast.",
+     "cost": "Rename: 4 steps. Reorder: one drag. Default: 1 tap in the sheet. Remove: 1 tap, Undo in the toast. Today: no views to manage; filters are re-picked each visit.",
      "frames": [
       {
        "file": "frames/sv3-a-rest.html",
@@ -329,7 +329,7 @@
       },
       {
        "file": "frames/sv3-a-open.html",
-       "caption": "Manage views opened (View, then Manage views): a sheet with every view, a handle to drag, Default, and Remove (built-in views can be hidden)."
+       "caption": "Manage views opened (View, then Manage views): every view with a handle, Default and Remove (Hide for built-in views); Q1 retention check is being dragged."
       },
       {
        "file": "frames/sv3-a-mid.html",
@@ -337,15 +337,15 @@
       },
       {
        "file": "frames/sv3-a-result.html",
-       "caption": "Result: renamed in place, tick: Renamed. Cost: Rename: 4 steps (View, Manage views, the name, type and Enter). Reorder: drag. Default: 1 tap in the sheet. Remove: 1 tap, Undo in the toast."
+       "caption": "Result: renamed in place; the new name wraps, with a Renamed tick under it. Cost: Rename: 4 steps · today: no views to rename"
       },
       {
        "file": "frames/sv3-a-hard-1512.html",
-       "caption": "Hard case at 1512: twelve saved views with long names wrap on two lines in the sheet; one was removed and the toast offers Undo."
+       "caption": "Hard case at 1512: ten more views with long names wrap in full in the sheet; one was removed and the toast offers Undo."
       },
       {
        "file": "frames/sv3-a-phone-390.html",
-       "caption": "Phone 390: the sheet fills the screen; handles stay on the left."
+       "caption": "Phone 390: the sheet fills the screen; long names wrap in full, handles stay on the left."
       }
      ]
     },
@@ -355,7 +355,7 @@
      "recommended": false,
      "what": "Each saved row in the View menu has ⋯: Rename, Move up, Move down, Make it the default, Copy link, Remove. Rename turns the row into a name box; a removed view leaves an Undo line in its place.",
      "plus": "Nothing new to open; each action sits on the view it changes.",
-     "cost": "Rename: 4 steps. Reorder: one place per click. Remove: 3 clicks, Undo in place.",
+     "cost": "Rename: 4 steps. Reorder: one place per click. Remove: 3 clicks, Undo in place. Today: no views to manage; filters are re-picked each visit.",
      "frames": [
       {
        "file": "frames/sv3-b-rest.html",
@@ -371,7 +371,7 @@
       },
       {
        "file": "frames/sv3-b-result.html",
-       "caption": "Result: the row and the View button carry the new name. Cost: Rename: 4 steps (View, ⋯, Rename, type and Enter). Reorder: Move up or down, one place per click. Remove: 3 clicks, Undo in place."
+       "caption": "Result: the row and the View button carry the new name. Cost: Rename: 4 steps · today: no views to rename"
       },
       {
        "file": "frames/sv3-b-hard-1512.html",
@@ -379,7 +379,7 @@
       },
       {
        "file": "frames/sv3-b-phone-390.html",
-       "caption": "Phone 390: the same menu as a bottom sheet; ⋯ on each saved row."
+       "caption": "Phone 390: the menu as a bottom sheet; ⋯ opened on a row, and a removed view left an Undo line."
       }
      ]
     },
@@ -389,7 +389,7 @@
      "recommended": false,
      "what": "With views as tabs (SV1 A), ⋯ on the picked tab offers Rename, Make it the default, Copy link and Remove; tabs reorder by drag; the +N more list has drag handles. Removal shows Undo in a toast.",
      "plus": "Direct: change the tab you see. Only fits if SV1 picks tabs.",
-     "cost": "Rename: 3 steps. Reorder: drag. Remove: 2 clicks, Undo in the toast. Long names are cut short in tabs.",
+     "cost": "Rename: 3 steps. Reorder: drag. Remove: 2 clicks, Undo in the toast. Long names are cut short in tabs. Today: no views to manage; filters are re-picked each visit.",
      "frames": [
       {
        "file": "frames/sv3-c-rest.html",
@@ -405,15 +405,15 @@
       },
       {
        "file": "frames/sv3-c-result.html",
-       "caption": "Result: the tab carries the new name. Cost: Rename: 3 steps (⋯ on the tab, Rename, type and Enter). Reorder: drag a tab. Remove: 2 clicks, Undo in the toast."
+       "caption": "Result: the tab carries the new name. Cost: Rename: 3 steps · today: no views to rename"
       },
       {
        "file": "frames/sv3-c-hard-1512.html",
-       "caption": "Hard case at 1512: six tabs fit; the rest sit under +N more with drag handles; a removed tab shows Undo in a toast."
+       "caption": "Hard case at 1512: six tabs fit; the rest sit under +N more with drag handles; the removed view is struck through there, and the toast offers Undo."
       },
       {
        "file": "frames/sv3-c-phone-390.html",
-       "caption": "Phone 390: the tabs scroll sideways; long names are cut short."
+       "caption": "Phone 390: the tab strip scrolled to a saved view; its long name is cut short, with ⋯ beside it."
       }
      ]
     }
