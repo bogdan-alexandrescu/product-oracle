@@ -4096,14 +4096,16 @@ function readRoadmap(
   q: URLSearchParams,
   me: Who,
 ): Schemas['SimpleRoadmapOut'] | null {
-  if (!readsOn) return withOrder(db, roadmapOut(db, role, q, me));
+  // An owner's read with no filter is the whole roadmap the ranking starts from.
+  const whole = role === 'owner' && [...q.keys()].every((k) => k === 'group');
+  if (!readsOn) return withOrder(db, roadmapOut(db, role, q, me), whole);
   const stored = JSON.stringify(db);
   if (stored !== reads.stored) reads = { stored, out: new Map() };
   const key = new URLSearchParams(q);
   if (!key.get('group')) key.set('group', 'goal');
   key.sort();
   const at = `${role}|${me.id}|${companyToday()}|${key}`;
-  if (!reads.out.has(at)) reads.out.set(at, withOrder(db, roadmapOut(db, role, q, me)));
+  if (!reads.out.has(at)) reads.out.set(at, withOrder(db, roadmapOut(db, role, q, me), whole));
   return reads.out.get(at) ?? null;
 }
 

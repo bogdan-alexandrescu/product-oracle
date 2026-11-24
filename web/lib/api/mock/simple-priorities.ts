@@ -824,9 +824,9 @@ const noFeature = (db: SimpleDb, i: Item): boolean =>
   db.items.find((s) => s.key === i.key)?.feature_id === null;
 
 /** Every roadmap's open items as an owner reads them, the company roadmap's first. */
-function openItems(db: SimpleDb): Item[] {
+function openItems(db: SimpleDb, owned?: Item[]): Item[] {
   const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
-  const on = roadmapOut(db, 'owner', new URLSearchParams())!.items.filter(
+  const on = (owned ?? roadmapOut(db, 'owner', new URLSearchParams())!.items).filter(
     (i) => i.status !== 'cut' && !cut.has(i.key),
   );
   return [...on, ...offCompany(db, on).filter((i) => i.status !== 'cut' && !cut.has(i.key))];
@@ -908,9 +908,16 @@ function ranking(db: SimpleDb, all: Item[] = openItems(db)) {
 export function withOrder(
   db: SimpleDb,
   out: Schemas['SimpleRoadmapOut'] | null,
+  /** `out` is the owner's whole read: the ranking starts from its items instead of reading the roadmap again (500 items drew slower for it). */
+  ownerRead = false,
 ): Schemas['SimpleRoadmapOut'] | null {
   if (!out) return out;
-  const rank = new Map(ranking(db).yours.map((i, n) => [i.id, n + 1]));
+  const rank = new Map(
+    ranking(db, openItems(db, ownerRead ? out.items : undefined)).yours.map((i, n) => [
+      i.id,
+      n + 1,
+    ]),
+  );
   const items = out.items.map((i) => ({
     ...i,
     position: rank.get(i.id) ?? null,
