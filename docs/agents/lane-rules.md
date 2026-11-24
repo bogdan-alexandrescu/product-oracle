@@ -40,6 +40,10 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
   Set `ORACLE_TEST_DATABASE_URL`: without it, tests that cannot reach a database are
   skipped, not failed. Each xdist worker makes its own database (`oracle_test_gw0`, ...).
   Stop it with `pg_ctl -D "$XDG_CACHE_HOME/pgdata" stop` before tsc or a build.
+  A run killed mid-way (a timeout) leaves its `oracle_test_gw*` databases half set up, and
+  the next run errors at setup: drop them first (`dropdb -h localhost -U oracle --force
+  <name>` for each in `psql -h localhost -U oracle -d postgres -Atc "select datname from
+  pg_database where datname like 'oracle_test_gw%'"`).
 - Never put the data directory, logs or other scratch under a literal /tmp (3 GiB) or in
   the workspace (5 GiB, checkpointed). Use `$TMPDIR`. Why: `docs/lessons/README.md`.
 - A migration, if one is needed, chains after the branch's own head, so
