@@ -90,10 +90,6 @@ test('Detailed: the account menu opens Connect an AI tool; the Claude Code comma
   await expect(guide.getByTestId('mcp-steps-code')).toContainText(
     'In Claude Code, run /mcp and choose oracle',
   );
-  // The picked frame prints the whole sentence in plain text: no code wrappers in the title.
-  await expect(
-    guide.getByTestId('mcp-steps-code').locator('li').nth(1).locator('span.text-base code'),
-  ).toHaveCount(0);
   await guide
     .getByRole('group', { name: 'Your tool' })
     .getByRole('button', { name: 'Claude app' })

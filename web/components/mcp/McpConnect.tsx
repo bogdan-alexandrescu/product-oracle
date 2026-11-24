@@ -4,9 +4,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { tokenState, when } from '@/components/ApiTokensSettings';
 import { Button, Chip, Icon, InfoTip, Panel, SegmentedControl } from '@/components/ds';
+import { ROLE_LABEL } from '@/components/MembersSettings';
 import type { McpClient } from '@/lib/api/client';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { ROLE_LABEL } from '@/components/MembersSettings';
 import { useMe } from '@/lib/me';
 import type { useQuery } from '@/lib/use-query';
 
@@ -179,7 +179,15 @@ function ClientSteps({ tab, url }: { tab: Tab; url: string }) {
         >
           <CopyChip text={`claude mcp add --transport http oracle ${url}`} testId="mcp-command" />
         </Step>
-        <Step n={2} title={'In Claude Code, run /mcp and choose oracle'}>
+        <Step
+          n={2}
+          title={
+            <>
+              In Claude Code, run <code className="font-mono">/mcp</code> and choose{' '}
+              <code className="font-mono">oracle</code>
+            </>
+          }
+        >
           <span className="w-fit">
             <CopyChip text="/mcp" />
           </span>
