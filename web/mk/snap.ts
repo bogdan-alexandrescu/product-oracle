@@ -55,11 +55,17 @@ export async function snap(page: Page, name: string, note?: string) {
       } else i.setAttribute('value', i.value);
     });
     document.querySelectorAll('select').forEach((s) => {
-      Array.from(s.options).forEach((o) => (o.selected ? o.setAttribute('selected', '') : o.removeAttribute('selected')));
+      Array.from(s.options).forEach((o) =>
+        o.selected ? o.setAttribute('selected', '') : o.removeAttribute('selected'),
+      );
     });
     const c = document.documentElement.cloneNode(true) as HTMLElement;
-    c.querySelectorAll('script, link[rel="stylesheet"], link[rel="modulepreload"], style').forEach((n) => n.remove());
-    document.querySelectorAll('[data-mk-scroll]').forEach((el) => el.removeAttribute('data-mk-scroll'));
+    c.querySelectorAll('script, link[rel="stylesheet"], link[rel="modulepreload"], style').forEach(
+      (n) => n.remove(),
+    );
+    document
+      .querySelectorAll('[data-mk-scroll]')
+      .forEach((el) => el.removeAttribute('data-mk-scroll'));
     return { html: c.outerHTML, css };
   });
   const fonts = new Set<string>();

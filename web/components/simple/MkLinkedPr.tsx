@@ -603,40 +603,46 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
         </button>
       )}
       {lp2 === 'c' && sug && (
-        <span
-          className="flex flex-none items-center gap-1 rounded-full border border-accent bg-accent-soft py-0.5 pr-1 pl-2 text-xs"
-          data-testid="mk-row-inline"
-        >
+        <span className="relative flex-none" data-testid="mk-row-inline">
           <button
             type="button"
-            className="font-semibold text-accent-ink"
             aria-expanded={s.step !== 'rest'}
-            onClick={() => set(() => ({ step: 'open' }))}
+            onClick={() => set((x) => ({ step: x.step === 'rest' ? 'open' : 'rest' }))}
           >
-            ✦ {s.step === 'rest' ? `${sug.to}?` : `Oracle suggests ${sug.to} · ${sug.why}`}
+            <Chip kind="acc" className="!h-6 !border !border-accent !px-2 !text-xs">
+              ✦ {sug.to}?
+            </Chip>
           </button>
-          {s.step !== 'rest' && (rights.decide || rights.propose) && (
-            <>
-              <button
-                type="button"
-                aria-label={rights.decide ? `Accept ${sug.to}` : `Propose ${sug.to}`}
-                onMouseEnter={() => set(() => ({ step: 'mid' }))}
-                onClick={() => set((x) => ({ accepted: [...x.accepted, title], step: 'done' }))}
-                className={`grid h-6 place-items-center rounded-full px-2 font-semibold ${s.step === 'mid' ? 'bg-accent text-white' : 'bg-surface text-accent-ink'}`}
-              >
-                {rights.decide ? '✓ Accept' : '✓ Propose'}
-              </button>
-              {rights.decide && (
-                <button
-                  type="button"
-                  aria-label={`Dismiss ${sug.to}`}
-                  onClick={() => set((x) => ({ dismissed: [...x.dismissed, title] }))}
-                  className="grid size-6 place-items-center rounded-full bg-surface text-text2"
-                >
-                  ✕
-                </button>
+          {s.step !== 'rest' && (
+            <span
+              role="dialog"
+              aria-label="Oracle's status suggestion"
+              className="absolute top-8 left-0 z-30 block w-[300px] rounded-xl border border-line bg-surface p-3 text-left shadow-tip"
+            >
+              <span className="block text-sm font-semibold">
+                Oracle suggests {sug.to} <span className="font-normal text-text2">· {sug.why}</span>
+              </span>
+              {(rights.decide || rights.propose) && (
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  <Button
+                    aria-label={rights.decide ? `Accept ${sug.to}` : `Propose ${sug.to}`}
+                    variant={s.step === 'mid' ? 'solid' : 'secondary'}
+                    onMouseEnter={() => set(() => ({ step: 'mid' }))}
+                    onClick={() => set((x) => ({ accepted: [...x.accepted, title], step: 'done' }))}
+                  >
+                    {rights.decide ? 'Accept' : `Propose ${sug.to}`}
+                  </Button>
+                  {rights.decide && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => set((x) => ({ dismissed: [...x.dismissed, title] }))}
+                    >
+                      Dismiss
+                    </Button>
+                  )}
+                </span>
               )}
-            </>
+            </span>
           )}
         </span>
       )}

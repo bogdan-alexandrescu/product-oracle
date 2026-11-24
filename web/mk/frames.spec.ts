@@ -92,10 +92,15 @@ const STORIES: Story[] = [
       await panel(p);
       await p.getByLabel('Paste a pull request link').click();
       await s('open');
-      await p.getByLabel('Paste a pull request link').fill('https://github.com/alertly/web/pull/503');
+      await p
+        .getByLabel('Paste a pull request link')
+        .fill('https://github.com/alertly/web/pull/503');
       await s('mid');
       await p.getByLabel('Paste a pull request link').press('Enter');
-      await s('done', 'Cost: copy the link in GitHub, 2 clicks + paste · today: no way to link one');
+      await s(
+        'done',
+        'Cost: copy the link in GitHub, 2 clicks + paste · today: no way to link one',
+      );
     },
     hard: { url: `${PRIO}?lp1=c&data=many`, prep: (p) => rowInView(p) },
     phone: { url: `${PRIO}?lp1=c`, prep: (p) => rowInView(p) },
@@ -144,7 +149,10 @@ const STORIES: Story[] = [
       await s('mid');
       await p.getByRole('button', { name: 'About Why Oracle suggests it' }).click();
       await p.getByTestId('mk-suggest').getByRole('button', { name: 'Accept' }).click();
-      await s('done', 'Cost: 2 clicks · today: open the panel, Change status, pick Done, Save (4 clicks), only if someone notices');
+      await s(
+        'done',
+        'Cost: 2 clicks · today: open the panel, Change status, pick Done, Save (4 clicks), only if someone notices',
+      );
       await p.goto(`${INBOX}?lp2=a`);
       await p.waitForLoadState('networkidle');
       await p.waitForTimeout(600);
@@ -191,9 +199,9 @@ const STORIES: Story[] = [
       await s('rest');
       await p.getByTestId('mk-row-inline').getByRole('button').first().click();
       await s('open');
-      await p.getByRole('button', { name: 'Accept Done' }).hover();
+      await p.getByRole('button', { name: 'Accept Done' }).hover({ force: true });
       await s('mid');
-      await p.getByRole('button', { name: 'Accept Done' }).click();
+      await p.getByRole('button', { name: 'Accept Done' }).click({ force: true });
       await s('done', 'Cost: 2 clicks, on Priorities only · today: 4 clicks in the panel');
     },
     hard: {
