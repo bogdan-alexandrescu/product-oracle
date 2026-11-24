@@ -46,11 +46,26 @@ if (process.env.VITE_API_MOCKS === '1') {
 }
 
 // A chunk from an older deploy is gone (nginx answers 404, no-store): load the new build once.
+// #1714: the mark is cleared once a page loads, so a later deploy reloads again; a browser that
+// blocks storage throws here, and without the mark a reload could loop, so it does not reload.
+const RELOADED = 'oracle-reloaded';
+function reloadMark(write?: string | null): string | null | undefined {
+  try {
+    if (write === undefined) return sessionStorage.getItem(RELOADED);
+    if (write === null) sessionStorage.removeItem(RELOADED);
+    else sessionStorage.setItem(RELOADED, write);
+    return write;
+  } catch {
+    return undefined;
+  }
+}
 window.addEventListener('vite:preloadError', () => {
-  if (sessionStorage.getItem('oracle-reloaded') === location.href) return;
-  sessionStorage.setItem('oracle-reloaded', location.href);
+  const mark = reloadMark();
+  if (mark === undefined || mark === location.href) return;
+  if (reloadMark(location.href) === undefined) return;
   location.reload();
 });
+router.subscribe('onResolved', () => reloadMark(null));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

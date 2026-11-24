@@ -72,7 +72,7 @@ Set under Settings, Secrets and variables, Actions, **Variables** (none of them 
 | `ORACLE_WIF_PROVIDER` | `projects/<project-number>/locations/global/workloadIdentityPools/oracle-github/providers/oracle-main` | the provider below |
 | `ORACLE_DEPLOY_SERVICE_ACCOUNT` | `oracle-deploy@<project-id>.iam.gserviceaccount.com` | the deploy identity |
 | `ORACLE_SQL_INSTANCE` | `<instance>` | the Cloud SQL instance to back up |
-| `ORACLE_API_VERSION_URL` | `https://<host>/...` | the API's `/version`, reachable from GitHub's runners |
+| `ORACLE_API_VERSION_URL` | `https://<host>/v1/version` | the API's commit, reachable from GitHub's runners (the load balancer sends only `/v1/*`, `/uploads/*` and `/healthz` to the API; `/version` there is the web's) |
 | `ORACLE_WEB_VERSION_URL` | `https://<host>/version` | the web's `/version`, reachable from GitHub's runners |
 | `ORACLE_IAP_AUDIENCE_API` | `<api-iap-oauth-client-id>` | the audience of the ID token sent to the API's `/version` |
 | `ORACLE_IAP_AUDIENCE_WEB` | `<web-iap-oauth-client-id>` | the audience of the ID token sent to the web's `/version` |
@@ -80,6 +80,18 @@ Set under Settings, Secrets and variables, Actions, **Variables** (none of them 
 
 IAP stays in front of both version URLs: the job asks them as the deploy service account
 (IAM step 2 lets it through IAP and lets it mint its own ID token).
+
+The load balancer's URL map must send `/v1/*`, `/uploads/*` (company logos) and `/healthz` to
+the API and everything else to the web. The web image has no API behind it in production:
+it answers `/v1/` and `/uploads/` with a 404, so a missing path rule shows as a 404, not as
+the app's page (#1708). Check it once:
+
+```sh
+gcloud compute url-maps describe <url-map> --project=<project-id> --format=json \
+  | jq '.pathMatchers[].pathRules[] | {paths, service}'
+```
+
+and add `/uploads/*` to the API's path rule if it is missing.
 
 Create the GitHub environment `production` (Settings, Environments), with the deployment
 branch rule "Selected branches: `main`". The job declares it, so its OIDC token carries
@@ -203,7 +215,14 @@ gcloud run services update oracle-api --project=<project-id> --region=<region> \
 ```
 
 Set the variables above, then `ORACLE_DEPLOY_ENABLED=true`. The first run after that deploys
-the head of `main`. To turn it off at once, set `ORACLE_DEPLOY_ENABLED` to anything else.
+the head of `main`.
+
+### 5. Turn it off
+
+Set `ORACLE_DEPLOY_ENABLED` to anything else; that stops the job at once. The serving API
+keeps `ORACLE_MIGRATE_AT_START=0`, and laptop deploys keep it too, so each one migrates
+through the job before moving traffic (Laptop deploys): whoever deploys from a laptop then
+needs `roles/run.developer` on `oracle-api-migrate`, as the deploy identity has (step 3).
 
 ## Laptop deploys
 
@@ -214,8 +233,11 @@ revision serving now and passes it through `--set-env-vars` (which replaces ever
 so a laptop deploy never drops it; it deploys nothing when the serving revisions can not be
 read or disagree, or when the value is given in its arguments. After deploying it moves the
 traffic to the new revision (an Actions deploy leaves it on one revision, by tag). Once the
-serving revision has `ORACLE_MIGRATE_AT_START=0` (Turn it on), a laptop deploy keeps `0` and
-does not migrate, so set it only in the sitting that sets `ORACLE_DEPLOY_ENABLED=true`.
+serving revision has `ORACLE_MIGRATE_AT_START=0` (Turn it on, and still after Turn it off), the
+new revision does not migrate at start either, so a laptop deploy does what the job does (#1709):
+it stages the revision with no traffic (tag `laptop-<time>`), runs the migrate job
+(`ORACLE_MIGRATE_JOB`, default `oracle-api-migrate`) on the new image, and only then moves
+the traffic to the tag and removes it. A failed migration moves no traffic.
 
 The variables are given as `NAME=value,...`, or, when a value holds a comma (a JSON list), in
 gcloud's alternate-delimiter form `^<delim>^NAME=value<delim>...`, exactly as

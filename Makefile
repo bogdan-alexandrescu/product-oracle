@@ -4,8 +4,9 @@ COMPOSE ?= docker compose
 # Tests need a Postgres; `make up` provides one with an oracle_test database.
 TEST_DATABASE_URL ?= postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_test
 
+# #1710: the images serve this commit at /version, so the serving check can ask them.
 up:
-	$(COMPOSE) up -d --build
+	GIT_SHA=$$(git rev-parse HEAD) $(COMPOSE) up -d --build
 
 down:
 	$(COMPOSE) down

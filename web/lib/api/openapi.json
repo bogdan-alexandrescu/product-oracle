@@ -47,6 +47,27 @@
         }
       }
     },
+    "/v1/version": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Build Commit",
+        "operationId": "v1_version",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "tags": [
