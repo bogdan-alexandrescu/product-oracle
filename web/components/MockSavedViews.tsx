@@ -48,7 +48,7 @@ function Who({ v }: { v: View }) { // MOCK-HOOK
   return <span className="shrink-0 text-xs text-text2">{v.kind === 'mine' ? 'Only me' : `Everyone · ${v.by}`}</span>; // MOCK-HOOK
 } // MOCK-HOOK
 
-/** The new filters every proposal shares: Status, Confidence, Draft, beside the page's own. */
+/** The new filters every proposal shares: Status, Confidence, Draft, beside the page's own. */ // MOCK-HOOK
 function NewFilters({ on }: { on: string[] }) { // MOCK-HOOK
   const has = (k: string) => on.find((f) => f.startsWith(k)); // MOCK-HOOK
   const sel = (label: string, val: string | undefined, opts: string[]) => ( // MOCK-HOOK
@@ -122,7 +122,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
   ); // MOCK-HOOK
   const doneTick = phase === 'done' && <Tick>{mode === 'b' && sv2 ? 'Link copied' : p.get('share') === 'all' ? (mode === 'd' ? 'Saved as a team view' : 'Saved, everyone sees it') : renamed ? 'Renamed' : 'Saved, only you see it'}</Tick>; // MOCK-HOOK
 
-  // One row of a views list (menu, side list, manage sheet).
+  // One row of a views list (menu, side list, manage sheet). // MOCK-HOOK
   const row = (v: View, extra?: ReactNode) => ( // MOCK-HOOK
     <div key={v.id} role="menuitemradio" aria-checked={v.id === cur.id} data-testid="sv-row" className={`flex min-h-9 items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${v.id === cur.id ? 'bg-accent-soft font-semibold text-accent-ink' : 'text-text hover:bg-surface2'} ${removed === v.id ? 'line-through opacity-60' : ''}`}> {/* MOCK-HOOK */}
       <span className="w-4 shrink-0 text-accent-ink">{v.id === cur.id ? '✓' : ''}</span> {/* MOCK-HOOK */}
@@ -164,7 +164,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
     <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/30"><div role="menu" className="max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-line-strong bg-surface pb-4"><div className="flex items-center justify-between px-3 pt-3"><span className="text-base font-semibold text-text">{saveOpen ? 'Save these filters' : 'Views'}</span><button className={ghost} aria-label="Close">✕</button></div>{panelBody}</div></div> // MOCK-HOOK
   ) : <div role="menu" data-testid="sv-menu" className={`${card} absolute z-30 ${cls} max-h-[70vh] ${open === 'more' ? 'overflow-visible' : 'overflow-y-auto'} py-1`}>{panelBody}</div>; // MOCK-HOOK
 
-  // SV3 a: the Manage views sheet.
+  // SV3 a: the Manage views sheet. // MOCK-HOOK
   const manage = sv3 === 'a' && (open === 'manage') && ( // MOCK-HOOK
     <div className={`fixed z-40 flex flex-col border-line-strong bg-surface shadow-2xl ${phone ? 'inset-0' : 'inset-y-0 right-0 w-[30rem] border-l'}`} data-testid="sv-manage-sheet"> {/* MOCK-HOOK */}
       <div className="flex items-center justify-between border-b border-line px-4 py-3"><span className="text-base font-semibold text-text">Manage views</span><button className={ghost} aria-label="Close">✕</button></div> {/* MOCK-HOOK */}
@@ -236,7 +236,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
       </> // MOCK-HOOK
     ); // MOCK-HOOK
   } else { // MOCK-HOOK
-    // SV1 d: a View picker like the page's other pickers.
+    // SV1 d: a View picker like the page's other pickers. // MOCK-HOOK
     control = ( // MOCK-HOOK
       <div className="relative flex flex-wrap items-center gap-2"> {/* MOCK-HOOK */}
         {saveOpen ? <span className="flex items-center gap-2 text-sm text-text2">Save as<input defaultValue={typed} autoFocus={!!typed} placeholder="Name this view" className="h-8 w-60 rounded-lg border border-accent bg-surface px-2 text-sm text-text" /><button className={solid}>Save</button><button className={ghost}>Cancel</button></span> : ( // MOCK-HOOK
