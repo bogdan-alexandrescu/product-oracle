@@ -149,6 +149,9 @@ test('wd1d', async ({ page }) => { // MOCK-HOOK
   await page.context().clearCookies(); await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); }); // MOCK-HOOK
   await size(page, 'w'); await login(page, 'viewer@example.com'); // MOCK-HOOK
   await roadmap(page, 'wd1=d&role=viewer', 'alert-digest'); await snap(page, 'wd1-d-hard-1512'); // MOCK-HOOK
+  // A and B for the same viewer: watching is personal, so she can watch
+  await size(page, 'd'); await roadmap(page, 'wd1=a&role=viewer', 'setup-checklist'); await mkx(page, 'watch').click(); await snap(page, 'wd1-a-viewer'); // MOCK-HOOK
+  await roadmap(page, 'wd1=b&role=viewer'); await mkx(page, 'row-eye-setup-checklist').click(); await page.mouse.move(700, 600); await snap(page, 'wd1-b-viewer'); // MOCK-HOOK
 }); // MOCK-HOOK
 
 test('wd2', async ({ page }) => { // MOCK-HOOK

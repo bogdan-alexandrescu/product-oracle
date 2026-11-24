@@ -40,6 +40,10 @@
             {
               "file": "wd1-a-phone-390.png",
               "caption": "Phone 390: the same Watch menu opens in the panel's bottom sheet."
+            },
+            {
+              "file": "wd1-a-viewer.png",
+              "caption": "A viewer (Lena Ortiz) can watch too: on F-01 she opens the same Watch menu, though she cannot change the item."
             }
           ]
         },
@@ -70,6 +74,10 @@
             {
               "file": "wd1-b-phone-390.png",
               "caption": "Phone 390: rows have no room for an eye, so it is only in the panel's head."
+            },
+            {
+              "file": "wd1-b-viewer.png",
+              "caption": "A viewer (Lena Ortiz) can watch too: one click on F-01's eye, with the same note and Undo."
             }
           ]
         },
