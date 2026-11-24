@@ -14,12 +14,12 @@
      "recommended": true,
      "what": "The first key press marks a row with a blue edge. j and k move it; Enter opens the item right under its row (a question's answer box, a cost's reason) with Esc to close. Only the focused row shows its keys, as small key caps on its own buttons; a Keys button in the panel head (or ?) lists them all.",
      "why": "It adds the least to the page as built: rows, buttons and the open-in-place answer box already exist, the keys only show where they act, and a person who never touches the keyboard sees no change.",
-     "plus": "Nothing new on screen until the keyboard is used; the keys sit on the buttons they press, so nothing has to be learned up front. Works the same in Simple and Detailed.",
+     "plus": "The keys sit on the buttons they press, so nothing has to be learned up front; at rest each row gains only a snooze button (a moon) and the panel head a Keys button. Works the same in Simple and Detailed.",
      "cost": "4 keys (j j j Enter) to open the fourth item, against today's scroll, find the row and 1 click.",
      "frames": [
       {
        "file": "frames/ik1-a-rest.html",
-       "caption": "At rest: the Inbox as it is today, plus a Keys button in the panel head. No row is marked until a key is pressed."
+       "caption": "At rest: the Inbox as it is today, plus a Keys button in the panel head and a snooze button (moon) on every row. No row is marked until a key is pressed."
       },
       {
        "file": "frames/ik1-a-open.html",
@@ -27,7 +27,7 @@
       },
       {
        "file": "frames/ik1-a-mid.html",
-       "caption": "j j j: the blue edge is on the question from Teo; its Answer button shows Enter, Decline d, the clock s."
+       "caption": "j j j: the blue edge is on the question from Teo; its Answer button shows Enter and its snooze button carries s."
       },
       {
        "file": "frames/ik1-a-result.html",
@@ -36,6 +36,14 @@
       {
        "file": "frames/ik1-a-hard-1512.html",
        "caption": "Detailed at 1512 with 47 items and long names: after 22 presses the marked row stays in view as the list scrolls."
+      },
+      {
+       "file": "frames/ik1-a-commenter-1512.html",
+       "caption": "A commenter at 1512: Needs you holds only what they can act on (questions, feedback, review reminders); feedback says Propose, as their change goes to the owners. Another role's items sit under For your information."
+      },
+      {
+       "file": "frames/ik1-a-viewer-1512.html",
+       "caption": "A viewer at 1512: Needs you holds only review reminders to read; the rest sits under For your information, which says once that they can read and owners decide."
       },
       {
        "file": "frames/ik1-a-phone-390.html",
@@ -83,7 +91,7 @@
      "recommended": false,
      "what": "Each row gets a tick box. j and k move, x ticks the focused row; a bar opens above the list with the number ticked and Accept a, Decline d, Snooze s, Clear Esc, which act on every ticked row at once.",
      "plus": "Fast for a pile of the same kind (many date suggestions); one action and one Undo for all.",
-     "cost": "7 keys for 3 items (j x j x j x, then a), against 3 clicks that each wait for their banner.",
+     "cost": "13 keys for 3 items (j five times to the first, then j x j j x j x, then a), against 3 clicks that each wait for their banner.",
      "frames": [
       {
        "file": "frames/ik1-d-rest.html",
@@ -107,7 +115,7 @@
       },
       {
        "file": "frames/ik1-d-phone-390.html",
-       "caption": "Phone 390: tick boxes by touch, the bar wraps above the rows."
+       "caption": "Phone 390: tick boxes by touch; the \"3 ticked\" bar sits above the tab bar with Accept, Decline, Snooze and Clear, no key caps."
       }
      ]
     }
@@ -117,7 +125,7 @@
    "code": "ik2",
    "name": "Acting from the keyboard",
    "question": "What do the action keys do, how does a person see the result, and how is it undone?",
-   "common": "Uses the focused row from Moving through the Inbox. Each key does what the row's own button does and only what the person's role allows; a commenter's owner-only rows say \"Owners decide\". Every count (tabs, Needs you, the rail) changes at once. One Undo, for the last action, with z.",
+   "common": "Uses the focused row from Moving through the Inbox. Each key does what the row's own button does and only what the person's role allows; another role's items sit under For your information, where \"Owners decide\" is said once; a commenter's change goes to the owners as a proposal. Every count (tabs, Needs you, the rail) changes at once. One Undo, for the last action, with z.",
    "proposals": [
     {
      "letter": "a",
@@ -130,27 +138,31 @@
      "frames": [
       {
        "file": "frames/ik2-a-rest.html",
-       "caption": "At rest: the cost approval is focused; its buttons show a and d, the clock s."
+       "caption": "At rest: the cost approval is focused; its buttons show a and d, its snooze button s."
       },
       {
        "file": "frames/ik2-a-open.html",
-       "caption": "Enter opens it in place: the reason, and Keep watching w and Done e beside it."
+       "caption": "Enter opens it in place: the reason, with Move to Seen w and Done e beside it."
       },
       {
        "file": "frames/ik2-a-mid.html",
-       "caption": "Esc, then a: \"Approved: run started\" with Undo z; the row is gone, the focus is on F-41 Recipe cards and every count is 16."
+       "caption": "Esc, then a: \"Approved: run started\" with Undo z; the row is gone, the focus is on F-41 Recipe cards and Needs you, New and the rail drop by one."
       },
       {
        "file": "frames/ik2-a-result.html",
-       "caption": "z: \"Undone\"; the cost approval is back where it was and the counts are 17 again."
+       "caption": "z: \"Undone\"; the cost approval is back where it was, focused again, and every count is back."
       },
       {
        "file": "frames/ik2-a-hard-1512.html",
-       "caption": "A commenter at 1512: a on the cost approval does nothing and says \"Owners decide this one\"; owner-only rows say Owners decide."
+       "caption": "A commenter at 1512: a on F-47 Checkout totals proposes it: \"Sent to the owners as a proposal\" with Undo. Owner-only items sit under For your information, \"Owners decide\" said once."
+      },
+      {
+       "file": "frames/ik2-a-viewer-1512.html",
+       "caption": "A viewer at 1512: only the review reminders can be acted on (Review opens them); everything else is under For your information."
       },
       {
        "file": "frames/ik2-a-phone-390.html",
-       "caption": "Phone 390: tapping Approve does the same; the banner with Undo shows above the rows."
+       "caption": "Phone 390: tapping Approve does the same; the banner with Undo shows above the rows, no key caps."
       }
      ]
     },
@@ -158,9 +170,9 @@
      "letter": "b",
      "name": "Mark, then apply",
      "recommended": false,
-     "what": "Keys only mark rows (a green Accept, red Decline, Done, Keep) and move on; nothing happens until Apply (Shift+Enter) in a bar at the foot of the list, which settles them together with one Undo.",
+     "what": "Keys only mark rows and move on: the row's own button (Approve, Accept, Decline) is outlined, or a Done or To Seen chip shows. Nothing happens until Apply (Shift+Enter) in a bar at the foot of the list, which settles them together with one Undo.",
      "plus": "Room to change one's mind before anything happens; a batch reads as a plan.",
-     "cost": "5 keys for 3 items (a d e, then Shift+Enter), against 3 clicks with no way to settle them together.",
+     "cost": "6 keys for 4 items (a d e j w, then Shift+Enter), against 4 clicks with no way to settle them together.",
      "frames": [
       {
        "file": "frames/ik2-b-rest.html",
@@ -168,23 +180,23 @@
       },
       {
        "file": "frames/ik2-b-open.html",
-       "caption": "a: the row is marked Accept and stays; a bar opens at the foot: \"1 marked, Apply\"."
+       "caption": "a: the cost approval's own Approve button is outlined and the row stays; a bar opens at the foot: \"1 marked\", Apply."
       },
       {
        "file": "frames/ik2-b-mid.html",
-       "caption": "d, e and w on the next rows: \"4 marked: 1 accept, 1 decline, 1 done, 1 keep\"."
+       "caption": "d, e, then w on the next rows: \"4 marked: 1 to accept or approve, 1 decline, 1 done, 1 to Seen\"."
       },
       {
        "file": "frames/ik2-b-result.html",
-       "caption": "Shift+Enter: \"4 items settled\" with Undo; the marked rows leave and the counts drop to 14."
+       "caption": "Shift+Enter: \"1 approved · 1 declined · 1 done · 1 moved to Seen\" with Undo; the four rows leave New (one to Seen) and every count changes at once."
       },
       {
        "file": "frames/ik2-b-hard-1512.html",
-       "caption": "A commenter at 1512: owner-only rows cannot be marked; only Done shows."
+       "caption": "A commenter at 1512: feedback can be marked Propose or Done; owner-only items sit under For your information and cannot be marked."
       },
       {
        "file": "frames/ik2-b-phone-390.html",
-       "caption": "Phone 390: taps mark rows the same way; the Apply bar sits above the tab bar."
+       "caption": "Phone 390: taps mark rows the same way (Approve and Accept outlined); the Apply bar sits above the tab bar with \"2 marked\"."
       }
      ]
     },
@@ -192,7 +204,7 @@
      "letter": "c",
      "name": "One key opens the actions",
      "recommended": false,
-     "what": "Space (or .) opens a small menu at the focused row that lists only what this person can do here, each with its key. The result shows in the app's toast at the foot with Undo.",
+     "what": "Space (or .) opens a small menu at the focused row that lists only what this person can do here, each with its key. The result shows in the banner the Inbox already has, above the rows, with Undo.",
      "plus": "Nothing to remember: the menu says every action, and a commenter sees only theirs.",
      "cost": "2 keys (Space, a), against today's 1 click.",
      "frames": [
@@ -202,23 +214,23 @@
       },
       {
        "file": "frames/ik2-c-open.html",
-       "caption": "Space: the menu lists Approve a, Decline d, Keep watching w, Done e, Snooze s."
+       "caption": "Space: the menu lists Approve a, Decline d, Move to Seen w, Done e, Snooze s."
       },
       {
        "file": "frames/ik2-c-mid.html",
-       "caption": "a: the toast says \"Approved: run started\" with Undo; the row is gone and the counts are 16."
+       "caption": "a: the banner above the rows says \"Approved: run started\" with Undo; the row is gone and the counts drop by one."
       },
       {
        "file": "frames/ik2-c-result.html",
-       "caption": "Undo in the toast: the cost approval is back and the counts are 17."
+       "caption": "Undo in the banner: the cost approval is back and the counts are back."
       },
       {
        "file": "frames/ik2-c-hard-1512.html",
-       "caption": "A commenter at 1512: the menu lists only Keep watching, Done and Snooze, then \"Owners decide the rest\"."
+       "caption": "A commenter at 1512: on F-47 Checkout totals the menu lists Propose, Decline, Move to Seen, Done and Snooze; owner-only items are under For your information."
       },
       {
        "file": "frames/ik2-c-phone-390.html",
-       "caption": "Phone 390: tapping Approve shows the same toast above the tab bar."
+       "caption": "Phone 390: tapping Approve shows the same banner above the rows."
       }
      ]
     }
@@ -228,7 +240,7 @@
    "code": "ik3",
    "name": "Snooze",
    "question": "Until when can an item be snoozed, where does it wait, how does it come back, and how is it done by touch?",
-   "common": "Snoozing takes the item out of the list and out of every count until its time; it comes back into New at 9:00 AM on the day (or at the time picked) and says it is back. Dates read month first. On a phone the same choices open by touch.",
+   "common": "Snoozing takes the item out of the list and out of every count until its time; it comes back into New at 9:00 AM on the day (or at the time picked) and says it is back. Dates read month first. On a phone the same choices open by touch. A commenter or viewer snoozes only what is in their own Needs you.",
    "proposals": [
     {
      "letter": "a",
@@ -237,7 +249,7 @@
      "what": "s opens a short menu at the row: Later today 5:00 PM, Tomorrow 9:00 AM, Next week Mon 9:00 AM, Pick a day (keys 1 to 4). Snoozed items wait in their own Snoozed tab with when each comes back and Bring back now; back in New they carry \"Back from snooze\".",
      "why": "It keeps snoozed items in plain sight in a tab like the other states, offers the times people use most at one key each, and needs nothing new on a phone beyond a sheet.",
      "plus": "Every snoozed item can be found and woken by hand; matches the Inbox's state tabs.",
-     "cost": "2 keys (s, 2) or 3 for a day, against today: not possible, the item stays and is counted.",
+     "cost": "3 keys for a day (s, 4, 1) or 2 for tomorrow (s, 2), against today: not possible, the item stays and is counted.",
      "frames": [
       {
        "file": "frames/ik3-a-rest.html",
@@ -245,7 +257,7 @@
       },
       {
        "file": "frames/ik3-a-open.html",
-       "caption": "s: the menu shows Later today, Tomorrow, Next week and Pick a day, with 1 to 4."
+       "caption": "s: the menu shows Later today, Tomorrow, Next week and Pick a day, with 1 to 4; the snooze button is a moon, not the Dates clock."
       },
       {
        "file": "frames/ik3-a-mid.html",
@@ -253,15 +265,27 @@
       },
       {
        "file": "frames/ik3-a-result.html",
-       "caption": "2 (Thu Nov 26): F-47 leaves New, every count drops to 16, Snoozed is 3; the Snoozed tab shows each item with when it comes back."
+       "caption": "1 (Wed Nov 25): F-47 leaves New, every count drops by one, Snoozed is 3; the Snoozed tab shows each item with when it comes back."
       },
       {
        "file": "frames/ik3-a-hard-1512.html",
-       "caption": "The next morning at 1512 with long names: F-35 Weekly menu email is back at the top of New with \"Back from snooze\"; Snoozed is 1."
+       "caption": "The next morning (Nov 25) at 1512 with long names: F-47 Checkout totals and F-35 Weekly menu email are back at the top of New with \"Back from snooze\"; Snoozed is 1."
       },
       {
        "file": "frames/ik3-a-phone-390.html",
-       "caption": "Phone 390: the clock on a row opens the same four choices as a sheet."
+       "caption": "Phone 390: the moon on F-47 Checkout totals opens the same four choices as a sheet."
+      },
+      {
+       "file": "frames/ik3-a-phone-result-390.html",
+       "caption": "Phone 390: Tomorrow tapped: \"Snoozed: Back Nov 25, 9:00 AM\" with Undo above the rows; New and Needs you drop by one, Snoozed is 3."
+      },
+      {
+       "file": "frames/ik3-a-commenter-1512.html",
+       "caption": "A commenter at 1512: s on F-47 Checkout totals opens the same menu; only their own items can be snoozed."
+      },
+      {
+       "file": "frames/ik3-a-viewer-1512.html",
+       "caption": "A viewer at 1512: the review reminders can be snoozed; the rest is under For your information."
       }
      ]
     },
@@ -269,13 +293,13 @@
      "letter": "b",
      "name": "Tomorrow in one key",
      "recommended": false,
-     "what": "s snoozes until tomorrow 9:00 AM at once; Shift+s opens the day picker. Snoozed items wait in a \"Snoozed\" fold at the foot of New rather than a tab. On a phone, a swipe left on a row shows Tomorrow and Later.",
+     "what": "s snoozes until tomorrow 9:00 AM at once; Shift+s opens the day picker. Snoozed items wait in a \"Snoozed\" fold at the head of New, under the counts, rather than a tab. On a phone, a swipe left on a row shows Tomorrow (with its date) and Pick a day.",
      "plus": "The commonest case costs one key; no new tab.",
      "cost": "1 key (s) for tomorrow, 2 for a day, against today: not possible.",
      "frames": [
       {
        "file": "frames/ik3-b-rest.html",
-       "caption": "At rest: F-47 Checkout totals is focused; a \"Snoozed 2\" fold sits at the foot of the list."
+       "caption": "At rest: F-47 Checkout totals is focused; a \"Snoozed 2\" fold sits at the head of the list."
       },
       {
        "file": "frames/ik3-b-open.html",
@@ -283,19 +307,23 @@
       },
       {
        "file": "frames/ik3-b-mid.html",
-       "caption": "Esc, then s: \"Snoozed until Nov 25, 9:00 AM\" with Undo; the row is gone and the counts drop to 16."
+       "caption": "Esc, then s: \"Snoozed: Back Nov 25, 9:00 AM\" with Undo; the row is gone, Needs you and New drop by one, the fold says 3."
       },
       {
        "file": "frames/ik3-b-result.html",
-       "caption": "Opening the fold at the foot: the 3 snoozed items with when each comes back."
+       "caption": "Opening the fold: the 3 snoozed items with their kind, when each comes back and Bring back now, the counts still in view."
       },
       {
        "file": "frames/ik3-b-hard-1512.html",
-       "caption": "The next morning at 1512: F-35 Weekly menu email is back at the top with \"Back from snooze\"; the fold says 1."
+       "caption": "The next morning (Nov 25) at 1512: F-47 Checkout totals and F-35 are back at the top with \"Back from snooze\"; the fold above them says 1."
       },
       {
        "file": "frames/ik3-b-phone-390.html",
-       "caption": "Phone 390: a swipe left on F-47 shows Tomorrow and Later."
+       "caption": "Phone 390: a swipe left on F-47 Checkout totals shows Tomorrow (Wed Nov 25) and Pick a day; its code and name stay readable."
+      },
+      {
+       "file": "frames/ik3-b-phone-result-390.html",
+       "caption": "Phone 390: Tomorrow tapped: \"Snoozed: Back Nov 25, 9:00 AM\" with Undo above the rows; New and Needs you drop by one, the fold says 3."
       }
      ]
     },
@@ -303,9 +331,9 @@
      "letter": "c",
      "name": "Until something happens",
      "recommended": false,
-     "what": "s opens a menu with times and events: Tomorrow, Next week, Until Product sync (the next meeting), Until the person replies, Until the run moves. Snoozed items wait at the foot of Seen under \"Coming back\", each with its reason.",
+     "what": "s opens a menu with times and events: Later today, Tomorrow, Next week, Until Product sync (the next meeting), Until the person replies, Until the run moves, and Pick a day. Snoozed items wait at the foot of Seen under \"Coming back\", each with one return label (\"Back Nov 25, 9:00 AM\", \"Back after Product sync, Nov 26\").",
      "plus": "Items come back when they can be acted on, not on a guessed date.",
-     "cost": "4 keys (s, down, down, Enter), against today: not possible.",
+     "cost": "5 keys (s, down three times, Enter), against today: not possible.",
      "frames": [
       {
        "file": "frames/ik3-c-rest.html",
@@ -313,23 +341,31 @@
       },
       {
        "file": "frames/ik3-c-open.html",
-       "caption": "s: the menu offers Tomorrow, Next week, Until Product sync, Until Mara replies."
+       "caption": "s: the menu offers Later today, Tomorrow, Next week, Until Product sync, Until Mara replies and Pick a day."
       },
       {
        "file": "frames/ik3-c-mid.html",
-       "caption": "Down twice: Until Product sync, Thu Nov 26 is picked."
+       "caption": "Down three times: Until Product sync, Thu Nov 26 is picked."
       },
       {
        "file": "frames/ik3-c-result.html",
-       "caption": "Enter, then Seen: \"Snoozed until Product sync, Thu Nov 26\"; under Coming back, each item with when or what brings it back."
+       "caption": "Enter, then Seen: \"Snoozed: Back after Product sync, Nov 26\"; under Coming back, each item with its return label."
       },
       {
        "file": "frames/ik3-c-hard-1512.html",
        "caption": "A cost approval at 1512: the menu adds \"Until the run moves\"; each item gets the events that fit it."
       },
       {
+       "file": "frames/ik3-c-back-1512.html",
+       "caption": "After Product sync (Nov 26) at 1512: F-47 Checkout totals and the other snoozed items are back at the top of New with \"Back from snooze\"."
+      },
+      {
        "file": "frames/ik3-c-phone-390.html",
-       "caption": "Phone 390: the same menu as a sheet from the clock on the row."
+       "caption": "Phone 390: the same menu as a sheet from the moon on the row."
+      },
+      {
+       "file": "frames/ik3-c-phone-result-390.html",
+       "caption": "Phone 390: Until Product sync tapped: \"Snoozed: Back after Product sync, Nov 26\" with Undo above the rows; the counts drop by one."
       }
      ]
     }

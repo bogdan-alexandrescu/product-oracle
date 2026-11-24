@@ -23,6 +23,11 @@ async function login(page: Page, email: string) {
 async function save(page: Page, name: string, w: number, h: number) {
   await page.waitForTimeout(250);
   await page.screenshot({ path: join(OUT, 'frames', `${name}.png`) });
+  // The dark PNG of the same state.
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: join(OUT, 'frames', `${name}-dark.png`) });
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
   const { html, css } = await page.evaluate(() => {
     let css = '';
     for (const sh of Array.from(document.styleSheets)) {
@@ -97,14 +102,14 @@ async function run(page: Page, f: Frame) {
   await save(page, f.file, w, h);
 }
 
-const FRAMES: Frame[] = JSON.parse(require('node:fs').readFileSync(join(__dirname, 'frames.json'), 'utf8'));
+const FRAMES: Frame[] = JSON.parse(require('node:fs').readFileSync(join(__dirname, 'frames.json'), 'utf8')).frames;
 const ONLY = process.env.MK_ONLY;
 
-for (const who of ['owner', 'commenter']) {
+for (const who of ['owner', 'commenter', 'viewer']) {
   test(`frames as ${who}`, async ({ page }) => {
     const mine = FRAMES.filter((f) => (f.as ?? 'owner') === who && (!ONLY || f.file.startsWith(ONLY)));
     test.skip(mine.length === 0);
-    await login(page, who === 'owner' ? 'admin@example.com' : 'commenter@example.com');
+    await login(page, who === 'owner' ? 'admin@example.com' : `${who}@example.com`);
     for (const f of mine) await run(page, f);
   });
 }

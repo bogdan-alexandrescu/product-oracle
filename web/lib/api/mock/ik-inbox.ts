@@ -79,5 +79,5 @@ export function ikItems(opts: { long?: boolean; many?: boolean }): IkItem[] { //
 /** Items already snoozed, with when they come back. MOCK-HOOK */
 export const IK_SNOOZED: { item: IkItem; until: string; event?: string }[] = [ // MOCK-HOOK
   { item: { ...base[0], id: 'z1', kind: 'Feedback', icon: 'comment', title: '"Weekly menu should start on Sunday"', code: 'F-35', ctx: 'From Lena Fischer · Weekly menu email', age: '2w', main: 'Accept', did: 'Accepted', decline: true, ownerOnly: false }, until: 'Nov 25, 9:00 AM' },
-  { item: { ...base[0], id: 'z2', kind: 'Proposal', icon: 'pencil', title: 'Drop the printed shopping list', code: 'F-33', ctx: 'From Ravi Kapoor · Printable lists', age: '1w', main: 'Accept', did: 'Accepted', decline: true, ownerOnly: true }, until: 'Nov 30, 9:00 AM', event: 'Until Product sync, Thu Nov 26' },
+  { item: { ...base[0], id: 'z2', kind: 'Proposal', icon: 'pencil', title: 'Drop the printed shopping list', code: 'F-33', ctx: 'From Ravi Kapoor · Printable lists', age: '1w', main: 'Accept', did: 'Accepted', decline: true, ownerOnly: true }, until: 'Nov 26, 10:00 AM', event: 'after Product sync, Nov 26' },
 ]; // MOCK-HOOK

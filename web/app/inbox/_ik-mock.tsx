@@ -3,13 +3,15 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'; // MOCK-HOOK
 
-import { Button, Chip, Icon, Panel, Sheet, toast } from '@/components/ds'; // MOCK-HOOK
+import { Button, Chip, Icon, Panel, Sheet } from '@/components/ds'; // MOCK-HOOK
 import { TabBar } from '@/components/review/parts'; // MOCK-HOOK
 import { IK_SNOOZED, ikItems, type IkItem } from '@/lib/api/mock/ik-inbox'; // MOCK-HOOK
 
 type St = 'new' | 'open' | 'staged' | 'declined' | 'done' | 'snoozed'; // MOCK-HOOK
 type Verb = 'main' | 'decline' | 'watch' | 'done'; // MOCK-HOOK
 type Snz = { until: string; event?: string }; // MOCK-HOOK
+/** One return-label form everywhere: "Back Nov 25, 9:00 AM" or "Back after Product sync, Nov 26". MOCK-HOOK */
+const backLabel = (s: Snz) => `Back ${s.event ?? s.until}`; // MOCK-HOOK
 type Model = { st: Record<string, St>; snz: Record<string, Snz>; back: Record<string, boolean> }; // MOCK-HOOK
 
 /** The mock-up switches, read once from the URL. MOCK-HOOK */
@@ -24,11 +26,13 @@ export function ikParams(sp: URLSearchParams) { // MOCK-HOOK
     role: sp.get('role') ?? 'owner',
     long: sp.get('long') === '1',
     many: sp.get('many') === '1',
-    tomorrow: sp.get('now') === 'nov25',
+    tomorrow: sp.get('now') === 'nov25' || sp.get('now') === 'nov26',
+    now: sp.get('now'),
     cost: sp.get('cost'),
     swipe: sp.get('swipe'),
     focus: Number(sp.get('f') ?? '0'),
     seeded: sp.get('snoozed') === '1',
+    fold: sp.get('fold') === '1',
   };
 } // MOCK-HOOK
 type P = ReturnType<typeof ikParams>; // MOCK-HOOK
@@ -44,19 +48,19 @@ const DAYS = ['Wed Nov 25', 'Thu Nov 26', 'Fri Nov 27', 'Mon Nov 30', 'Tue Dec 1
 const COST: Record<string, string> = { // MOCK-HOOK
   'ik1-a': 'Keys: j j j ↵ · 4 keys, hands stay on the keyboard · Today: scroll, find the row, 1 click',
   'ik1-b': 'Keys: j j j · 3 keys, the item reads at once · Today: scroll, 1 click, Back to return',
-  'ik1-d': 'Keys: j x j x j x then a · 7 keys for 3 items · Today: 3 rows × 1 click, each waits for its banner',
+  'ik1-d': 'Keys: j ×5 to the first, j x j j x j x, then a · 13 keys for 3 items · Today: 3 rows × 1 click, each waits for its banner',
   'ik2-a': 'Keys: a · 1 key, focus moves on · Today: find the button, 1 click, then find the next row',
-  'ik2-b': 'Keys: a j d e then ⇧↵ · 5 keys for 3 items · Today: 3 clicks, no way to settle them together',
+  'ik2-b': 'Keys: a d e j w then ⇧↵ · 6 keys for 4 items · Today: 4 clicks, no way to settle them together',
   'ik2-c': 'Keys: Space then a · 2 keys, the menu says what each does · Today: 1 click',
-  'ik3-a': 'Keys: s 2 · 2 keys · Today: not possible: the item stays and is counted',
+  'ik3-a': 'Keys: s 4 1 · 3 keys · Today: not possible: the item stays and is counted',
   'ik3-b': 'Keys: s · 1 key for tomorrow, ⇧s for a date · Today: not possible',
-  'ik3-c': 'Keys: s ↓ ↓ ↵ · 4 keys · Today: not possible',
+  'ik3-c': 'Keys: s ↓ ↓ ↓ ↵ · 5 keys · Today: not possible',
 }; // MOCK-HOOK
 
-function Kbd({ k, quiet }: { k: string; quiet?: boolean }) { // MOCK-HOOK
+function Kbd({ k, quiet, cls = 'ml-1.5' }: { k: string; quiet?: boolean; cls?: string }) { // MOCK-HOOK
   return (
     <kbd
-      className={`ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded border px-1 font-mono text-xs leading-none ${quiet ? 'border-line text-text2' : 'border-line bg-surface2 text-text'}`}
+      className={`${cls} inline-grid h-5 min-w-5 max-[600px]:hidden place-items-center rounded border px-1 font-mono text-xs leading-none ${quiet ? 'border-line text-text2' : 'border-line bg-surface2 text-text'}`}
     >
       {k}
     </kbd>
@@ -75,7 +79,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
     for (const i of items) st[i.id] = i.seen ? 'open' : 'new';
     for (const s of IK_SNOOZED) {
       if (!p.seeded && !p.tomorrow) continue;
-      if (p.tomorrow && s.until.startsWith('Nov 25')) {
+      if (p.tomorrow && (s.until.startsWith('Nov 25') || (p.now === 'nov26' && s.until.startsWith('Nov 26')))) {
         st[s.item.id] = 'new';
         back[s.item.id] = true;
       } else {
@@ -83,9 +87,14 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
         snz[s.item.id] = { until: s.until, event: s.event };
       }
     }
+    // The come-back frames continue the story: F-47 Checkout totals was snoozed in the frame before. MOCK-HOOK
+    if (p.tomorrow && st.i8) {
+      st.i8 = 'new';
+      back.i8 = true;
+    }
     return { st, snz, back };
   });
-  const [undo, setUndo] = useState<{ msg: string; prev: Model } | null>(null);
+  const [undo, setUndo] = useState<{ msg: string; prev: Model; ids?: string[] } | null>(null);
   const [tab, setTab] = useState<St>('new');
   const [focus, setFocus] = useState<string | null>(null);
   const [kbd, setKbd] = useState(false);
@@ -97,14 +106,19 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
   const [sheet, setSheet] = useState<string | null>(null);
   const [swiped, setSwiped] = useState<string | null>(p.swipe);
   const commenter = p.role === 'commenter';
+  const viewer = p.role === 'viewer'; // MOCK-HOOK
   const ids = Object.keys(m.st);
-  const shown = ids.filter((id) => m.st[id] === tab).sort((a, b) => Number(!!m.back[b]) - Number(!!m.back[a])).map((id) => byId[id]);
-  const count = (s: St) => ids.filter((id) => m.st[id] === s).length;
+  // The built role rules: a viewer reads only; a commenter's changes go to owners as proposals. MOCK-HOOK
+  const may = (i: IkItem) => (viewer ? i.main === 'Review' : !(commenter && i.ownerOnly));
+  const mine = (id: string) => !byId[id] || may(byId[id]); // MOCK-HOOK
+  const all = ids.filter((id) => m.st[id] === tab).sort((a, b) => Number(!!m.back[b]) - Number(!!m.back[a])).map((id) => byId[id]);
+  const shown = all.filter((i) => may(i));
+  const fyi = all.filter((i) => !may(i)); // MOCK-HOOK: another role's items, under For your information
+  const count = (s: St) => ids.filter((id) => m.st[id] === s && mine(id)).length;
   const waiting = count('new') + count('open');
   const focused = focus ?? (shown[p.focus]?.id ?? null);
   const fi = shown.findIndex((i) => i.id === focused);
   const cur = fi >= 0 ? shown[fi] : null;
-  const may = (i: IkItem) => !(commenter && i.ownerOnly);
 
   const orig = useRef<string | null>(null);
   // Every count at once: the rail's Inbox badge follows the panel's (the mock-up reads it from the page). MOCK-HOOK
@@ -143,16 +157,16 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
       if (typeof verb === 'object') {
         st[i.id] = 'snoozed';
         snz[i.id] = verb.snooze;
-        msg = `Snoozed until ${verb.snooze.event ?? verb.snooze.until}`;
+        msg = `Snoozed: ${backLabel(verb.snooze)}`;
       } else if (verb === 'main') {
         st[i.id] = i.main === 'Accept' ? 'staged' : 'done';
-        msg ||= i.did;
+        msg ||= commenter && i.main === 'Accept' ? 'Sent to the owners as a proposal' : i.did;
       } else if (verb === 'decline') {
         st[i.id] = 'declined';
         msg ||= 'Declined: the item is left as it was';
       } else if (verb === 'watch') {
         st[i.id] = 'open';
-        msg ||= 'Kept in Seen: it stays counted';
+        msg ||= 'Moved to Seen: it stays counted';
       } else {
         st[i.id] = 'done';
         msg ||= 'Marked done';
@@ -165,10 +179,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
     setOpenId(null);
     setSheet(null);
     setSwiped(null);
-    if (p.v2 === 'c') {
-      toast({ message: msg, action: { label: 'Undo', onClick: () => setM(prev) } });
-      setUndo({ msg, prev });
-    } else setUndo({ msg, prev });
+    setUndo({ msg, prev, ids: list.map((i) => i.id) });
   }
 
   function verbOn(i: IkItem, verb: Verb) {
@@ -207,16 +218,16 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
     setDenied(null);
     if (menu === 'snooze' || menu === 'dates') {
       if (k === 'Escape') return setMenu(null);
+      if (menu === 'dates') {
+        const d = Number(k);
+        if (d >= 1 && d <= 9) snooze(cur, { until: `${DAYS[d - 1].slice(4)}, 9:00 AM` });
+        return;
+      }
       if (p.v3 === 'c') {
         const opts = snoozeEvents(cur);
         if (k === 'ArrowDown' || k === 'j') return setMenuAt((n) => Math.min(n + 1, opts.length - 1));
         if (k === 'ArrowUp' || k === 'k') return setMenuAt((n) => Math.max(n - 1, 0));
-        if (k === 'Enter') return snooze(cur, opts[menuAt].snz);
-        return;
-      }
-      if (menu === 'dates') {
-        const d = Number(k);
-        if (d >= 1 && d <= 9) snooze(cur, { until: `${DAYS[d - 1]}, 9:00 AM` });
+        if (k === 'Enter') return opts[menuAt].snz ? snooze(cur, opts[menuAt].snz) : setMenu('dates');
         return;
       }
       const t2 = TIMES.find((x) => x.key === k);
@@ -257,6 +268,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
     }
     if (k === 'z' && undo) {
       setM(undo.prev);
+      if (undo.ids?.[0]) setFocus(undo.ids[0]);
       setUndo({ msg: 'Undone', prev: undo.prev });
       return;
     }
@@ -281,7 +293,12 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
       setM({ ...m, st });
       setMarks({});
       setFocus(shown.find((i) => !marks[i.id] && st[i.id] === tab)?.id ?? null);
-      setUndo({ msg: `${list.length} items settled`, prev });
+      const said = (['main', 'decline', 'done', 'watch'] as Verb[])
+        .map((v) => [v, list.filter((i) => marks[i.id] === v)] as const)
+        .filter(([, l]) => l.length)
+        .map(([v, l]) => `${l.length} ${v === 'main' ? (l.every((i) => i.main === 'Approve') ? 'approved' : 'accepted') : v === 'decline' ? 'declined' : v === 'done' ? 'done' : 'moved to Seen'}`)
+        .join(' · ');
+      setUndo({ msg: said, prev, ids: list.map((i) => i.id) });
       return;
     }
     if (k === 'Enter') return setOpenId(openId === cur.id ? null : cur.id);
@@ -332,14 +349,14 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
   const snoozedList = ids.filter((id) => m.st[id] === 'snoozed');
   const showHints = kbd || p.v1 !== 'a';
 
-  const banner = (undo || denied) && p.v2 !== 'c' && (
+  const banner = (undo || denied) && (
     <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-goal border border-line bg-surface2 px-3 py-2 text-base" role="status" data-testid="ik-notice">
       <Icon name={denied ? 'lock' : 'check'} />
       <span>{denied ? 'Owners decide this one' : undo?.msg}</span>
       {!denied && undo && undo.msg !== 'Undone' && (
         <button type="button" className="font-semibold text-accent-ink hover:underline" onClick={() => setM(undo.prev)}>
           Undo
-          <Kbd k="z" quiet />
+          {p.v2 !== 'c' && <Kbd k="z" quiet />}
         </button>
       )}
     </div>
@@ -382,8 +399,11 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
           />
         </div>
         {banner}
+        {p.v3 === 'b' && p.has3 && tab === 'new' && snoozedList.length > 0 && (
+          <SnoozeFold list={snoozedList.map((id) => ({ i: byId[id], s: m.snz[id] }))} onWake={(id) => setM({ ...m, st: { ...m.st, [id]: 'new' }, back: { ...m.back, [id]: true } })} open={p.fold} />
+        )}
         {p.v1 === 'd' && ticked.size > 0 && (
-          <div className="sticky top-0 z-10 mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-goal border border-accent bg-accent-soft px-3 py-2 text-base" data-testid="ik-bulk">
+          <div className="sticky top-0 z-10 mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-goal border border-accent bg-accent-soft px-3 py-2 text-base max-[600px]:fixed max-[600px]:inset-x-2 max-[600px]:top-auto max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] max-[600px]:z-40 max-[600px]:mx-0 max-[600px]:shadow-panel" data-testid="ik-bulk">
             <b className="tnum">{ticked.size} ticked</b>
             <span className="ml-auto flex flex-wrap gap-2">
               <Button>Accept<Kbd k="a" /></Button>
@@ -427,29 +447,41 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
             {shown.length === 0 && <li className="px-4 py-8 text-center text-base text-text2">Nothing {TAB_LABEL[tab].toLowerCase()}</li>}
           </ul>
         )}
-        {p.v3 === 'b' && tab === 'new' && snoozedList.length > 0 && (
-          <SnoozeFold list={snoozedList.map((id) => ({ i: byId[id], s: m.snz[id] }))} />
+        {fyi.length > 0 && (
+          <section className="border-t border-line pb-2" aria-label="For your information" data-testid="ik-fyi">{/* MOCK-HOOK */}
+            <h3 className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-1 text-sm font-semibold text-text2">
+              For your information · {fyi.length}
+              <span className="font-normal">{viewer ? 'You can read these; owners decide.' : 'Owners decide. Your changes go to them as proposals.'}</span>
+            </h3>
+            {fyi.map((i) => (
+              <div key={i.id} className="flex items-center gap-3 px-4 py-2 text-base text-text2 max-[600px]:flex-wrap">
+                <span className="flex w-[170px] flex-none items-center gap-2 max-[600px]:w-full max-[600px]:text-sm"><Icon name={i.icon} />{i.kind}</span>
+                <ItemName i={i} />
+                <span className="ml-auto text-sm tnum max-[600px]:hidden">{i.age}</span>
+              </div>
+            ))}
+          </section>
         )}
         {p.v3 === 'c' && tab === 'open' && snoozedList.length > 0 && (
           <section className="border-t border-line pb-2" aria-label="Coming back">
             <h3 className="px-4 pt-3 pb-1 text-sm font-semibold tracking-[0.02em] text-text2">Coming back · {snoozedList.length}</h3>
             {snoozedList.map((id) => (
               <div key={id} className="flex items-center gap-3 px-4 py-2 text-base text-text2">
-                <Icon name="clock" />
+                <Icon name="moon" />
                 <ItemName i={byId[id]} />
-                <span className="ml-auto text-sm">{m.snz[id].event ?? `Back ${m.snz[id].until}`}</span>
+                <span className="ml-auto text-sm">{backLabel(m.snz[id])}</span>
               </div>
             ))}
           </section>
         )}
         {p.v2 === 'b' && Object.keys(marks).length > 0 && (
-          <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-b-panel border-t border-line bg-surface px-4 py-2.5 text-base" data-testid="ik-apply">
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-b-panel border-t border-line bg-surface px-4 py-2.5 text-base max-[600px]:rounded-goal max-[600px]:border max-[600px]:fixed max-[600px]:inset-x-2 max-[600px]:top-auto max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] max-[600px]:z-40 max-[600px]:mx-0 max-[600px]:shadow-panel" data-testid="ik-apply">
             <b className="tnum">{Object.keys(marks).length} marked</b>
             <span className="text-text2">
               {(['main', 'decline', 'done', 'watch'] as Verb[])
                 .map((v) => [v, Object.values(marks).filter((x) => x === v).length] as const)
                 .filter(([, n]) => n)
-                .map(([v, n]) => `${n} ${MARK[v].toLowerCase()}`)
+                .map(([v, n]) => `${n} ${v === 'main' ? 'to accept or approve' : MARK[v].toLowerCase()}`)
                 .join(' · ')}
             </span>
             <span className="ml-auto flex gap-2">
@@ -470,24 +502,26 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
         </Sheet>
       )}
       {p.cost && COST[p.cost] && (
-        <div className="fixed top-3 left-1/2 z-50 -translate-x-1/2 rounded-full bg-text px-4 py-1.5 text-sm font-semibold text-surface shadow-panel max-[600px]:w-[92%] max-[600px]:rounded-goal" data-mockup-note>
-          {COST[p.cost]}
+        <div className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 rounded-full border-2 border-dashed border-surface bg-text px-4 py-1.5 text-sm font-semibold text-surface shadow-panel max-[600px]:w-[92%] max-[600px]:rounded-goal" data-mockup-note>
+          Mock-up note, not in the product · {COST[p.cost]}
         </div>
       )}
     </div>
   );
 } // MOCK-HOOK
 
-const MARK: Record<Verb, string> = { main: 'Accept', decline: 'Decline', done: 'Done', watch: 'Keep' }; // MOCK-HOOK
+const MARK: Record<Verb, string> = { main: 'Accept', decline: 'Decline', done: 'Done', watch: 'To Seen' }; // MOCK-HOOK
 
-function snoozeEvents(i: IkItem | null): { label: string; sub: string; snz: Snz }[] { // MOCK-HOOK
+function snoozeEvents(i: IkItem | null): { label: string; sub: string; snz: Snz | null }[] { // MOCK-HOOK
   const who = i?.ctx.match(/(?:From|Asked by|Nudged by) ([A-Z][a-z]+)/)?.[1];
   return [
+    { label: 'Later today', sub: 'Tue Nov 24, 5:00 PM', snz: { until: 'Nov 24, 5:00 PM' } },
     { label: 'Tomorrow', sub: 'Wed Nov 25, 9:00 AM', snz: { until: 'Nov 25, 9:00 AM' } },
     { label: 'Next week', sub: 'Mon Nov 30, 9:00 AM', snz: { until: 'Nov 30, 9:00 AM' } },
-    { label: 'Until Product sync', sub: 'Meetings · Thu Nov 26, 10:00 AM', snz: { until: 'Nov 26, 10:00 AM', event: 'Product sync, Thu Nov 26' } },
-    ...(who ? [{ label: `Until ${who} replies`, sub: 'or Mon Nov 30 at the latest', snz: { until: 'Nov 30', event: `${who} replies` } }] : []),
-    ...(i?.kind === 'Cost approval' || i?.kind === 'Checkpoint' ? [{ label: 'Until the run moves', sub: 'its next step or Fri Nov 27', snz: { until: 'Nov 27', event: 'the run moves' } }] : []),
+    { label: 'Until Product sync', sub: 'Meetings · Thu Nov 26, 10:00 AM', snz: { until: 'Nov 26, 10:00 AM', event: 'after Product sync, Nov 26' } },
+    ...(who ? [{ label: `Until ${who} replies`, sub: 'or Mon Nov 30 at the latest', snz: { until: 'Nov 30, 9:00 AM', event: `when ${who} replies, by Nov 30` } }] : []),
+    ...(i?.kind === 'Cost approval' || i?.kind === 'Checkpoint' ? [{ label: 'Until the run moves', sub: 'its next step or Fri Nov 27', snz: { until: 'Nov 27, 9:00 AM', event: 'when the run moves, by Nov 27' } }] : []),
+    { label: 'Pick a day', sub: '9:00 AM on the day', snz: null },
   ];
 } // MOCK-HOOK
 
@@ -505,7 +539,7 @@ function KeySheet({ v2, v3 }: { v2: string; v3: string }) { // MOCK-HOOK
   const rows: [string, string][] = [
     ['j  k', 'Move'],
     ['↵', 'Open here'],
-    ...(v2 === 'c' ? ([['Space', 'Actions']] as [string, string][]) : ([['a', 'Accept or approve'], ['d', 'Decline'], ['w', 'Keep watching'], ['e', 'Done']] as [string, string][])),
+    ...(v2 === 'c' ? ([['Space', 'Actions']] as [string, string][]) : ([['a', 'Accept or approve'], ['d', 'Decline'], ['w', 'Move to Seen'], ['e', 'Done']] as [string, string][])),
     [v3 === 'b' ? 's  ⇧s' : 's', 'Snooze'],
     ['z', 'Undo'],
     ['Esc', 'Close'],
@@ -530,13 +564,13 @@ function KeySheet({ v2, v3 }: { v2: string; v3: string }) { // MOCK-HOOK
 
 function SnoozeOptions({ p, i, onPick, touch, at = 0, dates, onDates }: { p: P; i: IkItem; onPick: (s: Snz) => void; touch?: boolean; at?: number; dates?: boolean; onDates?: () => void }) { // MOCK-HOOK
   const [pickDate, setPickDate] = useState(!!dates);
-  if (p.v3 === 'c')
+  if (p.v3 === 'c' && !(pickDate || dates))
     return (
       <ul className="py-1" role="menu" aria-label="Snooze until">
         {snoozeEvents(i).map((o, n) => (
           <li key={o.label}>
-            <button type="button" role="menuitem" onClick={() => onPick(o.snz)} className={`flex w-full items-start gap-2 rounded-goal px-3 py-2 text-left ${n === at && !touch ? 'bg-accent-soft' : 'hover:bg-surface2'}`}>
-              <Icon name={n < 2 ? 'clock' : n === 2 ? 'target' : 'user'} />
+            <button type="button" role="menuitem" onClick={() => (o.snz ? onPick(o.snz) : onDates ? onDates() : setPickDate(true))} className={`flex w-full items-start gap-2 rounded-goal px-3 py-2 text-left ${n === at && !touch ? 'bg-accent-soft' : 'hover:bg-surface2'}`}>
+              <Icon name={!o.snz ? 'more' : n < 3 ? 'moon' : n === 3 ? 'target' : 'user'} />
               <span>
                 <span className="block text-base font-semibold">{o.label}</span>
                 <span className="block text-sm text-text2">{o.sub}</span>
@@ -552,7 +586,7 @@ function SnoozeOptions({ p, i, onPick, touch, at = 0, dates, onDates }: { p: P; 
         <div className="mb-1.5 text-sm font-semibold text-text2">Pick a day · 9:00 AM</div>
         <div className="grid grid-cols-5 gap-1.5 max-[600px]:grid-cols-3">
           {DAYS.map((d, n) => (
-            <button key={d} type="button" onClick={() => onPick({ until: `${d}, 9:00 AM` })} className="flex items-center justify-between rounded-goal border border-line px-2 py-1.5 text-sm hover:bg-surface2">
+            <button key={d} type="button" onClick={() => onPick({ until: `${d.slice(4)}, 9:00 AM` })} className="flex items-center justify-between rounded-goal border border-line px-2 py-1.5 text-sm hover:bg-surface2">
               {d}
               {!touch && n < 9 && <Kbd k={String(n + 1)} quiet />}
             </button>
@@ -588,9 +622,10 @@ function Row(props: { // MOCK-HOOK
 }) {
   const { i, p, focused } = props;
   const hint = (k: string) => (focused && props.hints ? <Kbd k={k} /> : null);
+  const tint = (v: Verb) => (props.mark === v ? 'ring-2 ring-accent bg-accent-soft' : ''); // MOCK-HOOK: a marked row tints its own button
   const mainBtn = props.may ? (
-    <Button onClick={() => props.onVerb('main')}>
-      {i.main}
+    <Button onClick={() => props.onVerb('main')} className={tint('main')} aria-pressed={props.mark === 'main' || undefined}>
+      {p.role === 'commenter' && i.main === 'Accept' ? 'Propose' : i.main}
       {hint(i.main === 'Review' || i.main === 'Answer' ? '↵' : 'a')}
     </Button>
   ) : (
@@ -599,7 +634,7 @@ function Row(props: { // MOCK-HOOK
   const snoozedRow = !!props.snz;
   const actions = snoozedRow ? (
     <>
-      <span className="text-sm text-text2">Back {props.snz!.until}</span>
+      <span className="text-sm text-text2">{backLabel(props.snz!)}</span>
       <Button variant="ghost" onClick={props.onWake}>Bring back now</Button>
     </>
   ) : p.v2 === 'c' && focused ? (
@@ -615,33 +650,36 @@ function Row(props: { // MOCK-HOOK
     <>
       {mainBtn}
       {i.decline && props.may && (
-        <Button variant="ghost" onClick={() => props.onVerb('decline')}>
+        <Button variant="ghost" onClick={() => props.onVerb('decline')} className={tint('decline')} aria-pressed={props.mark === 'decline' || undefined}>
           Decline{hint('d')}
         </Button>
       )}
       <Button variant="ghost" aria-label="Snooze" onClick={props.onLater} className="max-[600px]:inline-flex">
-        <Icon name="clock" />
-        {hint('s')}
+        <span className="relative inline-flex">
+          <Icon name="moon" />
+          {focused && props.hints && <Kbd k="s" cls="absolute -top-2.5 -right-3.5" />}
+        </span>
       </Button>
     </>
   );
-  const swipeOffset = props.swiped ? 'max-[600px]:-translate-x-[180px]' : '';
+  const swipeOffset = props.swiped ? 'max-[600px]:mr-[180px]' : '';
   return (
     <li
       data-ik-row={i.id}
       data-focused={focused || undefined}
       onClick={props.onFocus}
-      className={`relative border-t border-line first:border-t-0 ${props.swiped ? 'overflow-x-clip' : ''} ${focused} ? 'bg-accent-soft/40 shadow-[inset_3px_0_0_var(--color-accent)]' : ''} ${props.mark ? 'opacity-70' : ''}`}
+      className={`relative border-t border-line first:border-t-0 ${props.swiped ? 'overflow-x-clip' : ''} ${focused ? 'bg-accent-soft/40 shadow-[inset_3px_0_0_var(--color-accent)]' : ''}`}
     >
       {p.v3 === 'b' && props.swiped && (
         <div className="absolute inset-y-0 right-0 hidden w-[180px] items-stretch max-[600px]:flex">
           <button type="button" className="flex-1 bg-accent-soft text-sm font-semibold text-accent-ink" onClick={() => props.onSnooze({ until: 'Nov 25, 9:00 AM' })}>
-            <Icon name="clock" />
+            <Icon name="moon" />
             <span className="block">Tomorrow</span>
+            <span className="block font-normal">Wed Nov 25</span>
           </button>
           <button type="button" className="flex-1 bg-surface2 text-sm font-semibold" onClick={props.onLater}>
             <Icon name="more" />
-            <span className="block">Later</span>
+            <span className="block">Pick a day</span>
           </button>
         </div>
       )}
@@ -662,8 +700,7 @@ function Row(props: { // MOCK-HOOK
         </span>
         <span className="w-10 flex-none text-base text-text2 tnum max-[600px]:hidden">{i.age}</span>
         <span className="flex flex-none flex-wrap items-center justify-end gap-2 max-[600px]:w-full max-[600px]:justify-start">
-          {props.mark && <Chip kind={props.mark === 'decline' ? 'crit' : props.mark === 'main' ? 'pass' : 'line'}>{MARK[props.mark]}</Chip>}
-          {props.denied && <Chip kind="warn">Owners decide</Chip>}
+          {(props.mark === 'done' || props.mark === 'watch') && <Chip kind="line">{MARK[props.mark]}</Chip>}
           {actions}
         </span>
       </div>
@@ -674,14 +711,14 @@ function Row(props: { // MOCK-HOOK
             {i.main === 'Answer' ? (
               <>
                 <input aria-label="Your answer" className="min-w-60 flex-1 rounded-goal border border-line bg-surface px-2 py-1 text-base" defaultValue="" />
-                <Button variant="primary">Send</Button>
+                <Button>Send</Button>
               </>
             ) : (
               <Button variant="primary">Open the full page</Button>
             )}
             {p.v2 !== 'c' && (
               <>
-                <Button variant="ghost" onClick={() => props.onVerb('watch')}>Keep watching<Kbd k="w" quiet /></Button>
+                <Button variant="ghost" onClick={() => props.onVerb('watch')}>Move to Seen<Kbd k="w" quiet /></Button>
                 <Button variant="ghost" onClick={() => props.onVerb('done')}>Done<Kbd k="e" quiet /></Button>
               </>
             )}
@@ -699,9 +736,9 @@ function Row(props: { // MOCK-HOOK
       {props.menu === 'actions' && (
         <div role="menu" aria-label="Actions" className="absolute top-full right-4 z-30 -mt-1 w-64 rounded-panel border border-line bg-surface p-1 shadow-panel" data-testid="ik-actions">
           {([
-            ['main', props.may ? i.main : null, 'a'],
+            ['main', props.may ? (p.role === 'commenter' && i.main === 'Accept' ? 'Propose' : i.main) : null, 'a'],
             ['decline', props.may && i.decline ? 'Decline' : null, 'd'],
-            ['watch', 'Keep watching', 'w'],
+            ['watch', 'Move to Seen', 'w'],
             ['done', 'Done', 'e'],
             ['snooze', 'Snooze', 's'],
           ] as const)
@@ -743,8 +780,8 @@ function Pane({ i, may, hints, onVerb }: { i: IkItem; may: boolean; hints: boole
         ) : (
           <span className="self-center text-sm text-text2">Owners decide</span>
         )}
-        <Button variant="ghost" onClick={() => onVerb('watch')}>Keep watching{hints && <Kbd k="w" quiet />}</Button>
-        <Button variant="ghost"><Icon name="clock" /> Snooze{hints && <Kbd k="s" quiet />}</Button>
+        <Button variant="ghost" onClick={() => onVerb('watch')}>Move to Seen{hints && <Kbd k="w" quiet />}</Button>
+        <Button variant="ghost"><Icon name="moon" /> Snooze{hints && <Kbd k="s" quiet />}</Button>
       </div>
     </div>
   );
@@ -790,20 +827,22 @@ function Split({ shown, focused, setFocus, may, p, openSheet, marks, onVerb }: {
   );
 } // MOCK-HOOK
 
-function SnoozeFold({ list }: { list: { i: IkItem; s: Snz }[] }): ReactNode { // MOCK-HOOK
-  const [open, setOpen] = useState(false);
+function SnoozeFold({ list, onWake, open: start }: { list: { i: IkItem; s: Snz }[]; onWake: (id: string) => void; open: boolean }): ReactNode { // MOCK-HOOK
+  const [open, setOpen] = useState(start);
   return (
     <section className="border-t border-line" data-testid="ik-snoozed-fold">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-base font-semibold text-text2 hover:bg-surface2">
-        <Icon name="clock" />
+        <Icon name="moon" />
         Snoozed <span className="tnum">{list.length}</span>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} />
       </button>
       {open &&
         list.map(({ i, s }) => (
-          <div key={i.id} className="flex items-center gap-3 border-t border-line px-4 py-2 text-base text-text2">
+          <div key={i.id} className="flex items-center gap-3 border-t border-line px-4 py-2 text-base text-text2 max-[600px]:flex-wrap">
+            <span className="flex w-[170px] flex-none items-center gap-2"><Icon name={i.icon} />{i.kind}</span>
             <ItemName i={i} />
-            <span className="ml-auto text-sm whitespace-nowrap">Back {s.until}</span>
+            <span className="ml-auto text-sm whitespace-nowrap">{backLabel(s)}</span>
+            <Button variant="ghost" onClick={() => onWake(i.id)}>Bring back now</Button>
           </div>
         ))}
     </section>
