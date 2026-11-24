@@ -40,7 +40,7 @@ import { NameEdit, PanelFields } from './_fields';
 import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
-import { mkParam } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { MkHistory, mkParam } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import {
   closedItem,
   milestoneInk,
@@ -1577,6 +1577,7 @@ export function FloatingCard({
             </section>
           )}
           {flowPart}
+          <MkHistory canUndo={item.can_decide} /> {/* MOCK-HOOK */}
           <Part title="Proposals on it">
             {waiting.length > 0 && (
               <ul className="mt-1 space-y-1" data-testid="card-talk-proposals">

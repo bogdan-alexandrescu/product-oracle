@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toast as dsToast, type ToastAsk } from '@/components/ds';
-import { MkHistory, mkUt2 } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { mkUt2 } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import { withdraw } from './_tracks'; // MOCK-HOOK
 import { api, unwrap } from '@/lib/api/client';
 import {
@@ -271,7 +271,6 @@ export function FeaturePanel({
     return (
       <div data-testid="item-panel" aria-label={item.title} className="contents">
         {body}
-        <MkHistory canUndo={canChange} /> {/* MOCK-HOOK */}
       </div>
     );
   return (
@@ -286,7 +285,6 @@ export function FeaturePanel({
       style={!phone && top ? { top, maxHeight: `calc(100dvh - ${top + 12}px)` } : undefined}
     >
       {body}
-      {item && !draft && <MkHistory canUndo={canChange} />} {/* MOCK-HOOK */}
     </aside>
   );
 }
