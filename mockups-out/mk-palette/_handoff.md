@@ -28,3 +28,10 @@ MOCK-UPS ONLY, never merged. Branch base 83b3594.
   `swarm-test-browsers npx playwright test -c playwright.mk.config.ts` (`MK_ONLY=cp2-b` for one).
 - Writes `mockups-out/mk-palette/frames/*.html|png`; fonts in `assets/`; `?theme=dark` on any html.
 - Recommended: CP1 a (centered sheet), CP2 b (find and do), CP3 a (Find in the rail).
+
+## Round 3 (fixes)
+- New item hint is now "Roadmap · last track used" (one line in every frame).
+- Side sheet (CP1 c): the row's second line wraps instead of cutting next to the Tab and ↵ chips.
+- Cost strip: the feature panel ends above it; the cp2-b result frame waits out the 10 s Added toast.
+- cp2-b-viewer-1512 caption names Ask Oracle, New item, New PRD as drawn.
+- Re-captured cp1-*, cp2-b, cp3-* (light, dark, 1512, 390).
