@@ -21,7 +21,7 @@ wraps on phone; count leaves out Undone lines), UT3 b hard, hard-1512, phone (a 
 
 ## Findings left open (not done in this round's time)
 - UT1 a/d result frames still change only the toast, not the page; the draft banner count does not follow the toasts.
-- UT2/UT3 1512 frames other than UT3 b are still the old zoomed 1440 window.
+- (Done: the UT2 and UT3 a/c 1512 frames were re-laid from their static frames in a real 1512x945 window, `web/mk-snap/wide.spec.ts`.)
 - UT2 commenter frames (b, c, d hard; phone frames on the commenter), UT3 b/c phone on the panel.
 - Drawn-twice items (Restore bar beside the toast's Undo; UT3 a History beside Decided/Proposals; draft Undo vs toast Undo).
 - UT3/UT2 mid frames without a focus ring; cost tags inside frames; a Detailed frame per recommended proposal;
