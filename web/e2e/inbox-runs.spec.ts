@@ -1,6 +1,6 @@
+import { login, seedStuckRuns } from './helpers';
 import { expect, test } from './test';
 
-import { login, seedStuckRuns } from './helpers';
 
 test('stuck runs and failed imports are rows of the Inbox, counted alike by the badge, Home and /inbox', async ({
   page,

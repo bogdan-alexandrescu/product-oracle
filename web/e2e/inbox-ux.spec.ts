@@ -1,7 +1,8 @@
-import { expect, test, type Page } from './test';
 
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * inbox-ux (Nov 24): the UX audit's Inbox findings (#1782 to #1786) and the Plan header's

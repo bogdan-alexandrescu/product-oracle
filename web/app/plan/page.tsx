@@ -1,11 +1,9 @@
 'use client';
 
 import { createFileRoute } from '@tanstack/react-router';
-import { Link } from '@/lib/nav';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { BuildRoadmapButton } from '@/components/BuildRoadmap';
-import { LinkIssueDialog } from '@/components/LinkIssueDialog';
 import { LinkedDiscussion } from '@/components/discuss/LinkedDiscussion';
 import {
   Chip,
@@ -18,14 +16,18 @@ import {
   Split,
   ViewOnly,
 } from '@/components/ds';
+import { LinkIssueDialog } from '@/components/LinkIssueDialog';
 import { Loading } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { useMe } from '@/lib/me';
+import { Link } from '@/lib/nav';
 import { usePlanScope, usePlanView, type PlanScope, type PlanView } from '@/lib/preferences';
 import { useQuery } from '@/lib/use-query';
 
 import { GoalsPanel } from '../home/_goals-panel';
 import { useGoals } from '../home/_use-goals';
+
+import { AtRiskItems } from './_at-risk';
 import {
   approvedRoadmaps,
   draftOnlyRoadmaps,
@@ -34,7 +36,6 @@ import {
   roadmapName,
   useRoadmapDocs,
 } from './_edit-plan';
-import { AtRiskItems } from './_at-risk';
 import { PlanInspector } from './_inspector';
 import { wantedRow, type PlanItem } from './_lib';
 import { MissingItem } from './_missing-item';

@@ -1,7 +1,8 @@
-import { expect, test, type Page } from './test';
 
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * F2 Track health in Plan and Inbox, driven through the UI on the mock layer

@@ -9,10 +9,7 @@
  * on purpose: health, drift and staleness follow the API's rules, not its every message.
  * Synthetic placeholders only. Reads need a viewer; writes an approver, as in the API.
  */
-import { prdRanker } from './prd-rank';
-import { APPROVED_ROADMAP_SCENARIO, TRAILS_BASES, TRAILS_PRD_SLUG } from './approved-roadmap';
 import type { Schemas } from '@/lib/api/client';
-import { calendarDay } from '@/lib/dates';
 import type {
   AcceptDateOut,
   InboxTrack,
@@ -20,14 +17,18 @@ import type {
   TrackAlertOut,
   TrackerRecordEventOut,
 } from '@/lib/api/track-alerts';
+import { calendarDay } from '@/lib/dates';
 
+import { APPROVED_ROADMAP_SCENARIO, TRAILS_BASES, TRAILS_PRD_SLUG } from './approved-roadmap';
 import { companyDayIso } from './connections';
 import { mockUuid, seeded, stableUuid } from './ids';
 import { codedTitle, prdCode } from './item-code';
-import type { PlanEditItem, PlanEditsDb } from './plan-edits';
+import { prdRanker } from './prd-rank';
 import { diffItems, snapshot } from './roadmap-diff';
 import itemsFixture from './roadmap-items.json';
 import { reply } from './typed';
+
+import type { PlanEditItem, PlanEditsDb } from './plan-edits';
 
 type Role = 'viewer' | 'commenter' | 'approver' | 'owner';
 type Item = Schemas['RoadmapItemOut'];

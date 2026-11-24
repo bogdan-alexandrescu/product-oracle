@@ -1,7 +1,8 @@
-import { expect, test, type Page } from './test';
 
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * The stale-marks walk (Nov 6, 2026): a person reconciled 'May be stale' roadmap items and the

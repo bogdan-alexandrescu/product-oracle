@@ -1,6 +1,5 @@
 'use client';
 
-import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from '@/components/ds';
@@ -9,6 +8,7 @@ import { usePhone } from '@/components/simple/FlowViews';
 import { SimplePage } from '@/components/simple/SimplePage';
 import { ErrorNote, LoadError, Loading } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { errorMessage, useQuery } from '@/lib/use-query';
 import {
   asNeedKind,
@@ -23,6 +23,8 @@ import {
 
 import { useAccessRequestRows } from './_access';
 import { useActed } from './_actions';
+import { BrokenLinks } from './_broken';
+import { minutesRows } from './_minutes';
 import {
   allNeeds,
   NeedTable,
@@ -36,9 +38,6 @@ import {
   type InboxState,
   type NeedGroup,
 } from './_needs';
-import { useQuestionRows } from './_questions';
-import { BrokenLinks } from './_broken';
-import { minutesRows } from './_minutes';
 import {
   approvalRows,
   dateSuggestionRows,
@@ -46,6 +45,7 @@ import {
   proposalRows,
   trackSuggestionRows,
 } from './_proposals';
+import { useQuestionRows } from './_questions';
 import { useReminderRows } from './_reminders';
 import { useWebhookRows } from './_webhooks';
 
