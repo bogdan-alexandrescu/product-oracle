@@ -1264,6 +1264,8 @@ export const KEY_RENEWED_SCENARIO = 'key-renewed';
 export const STORED_REFUSALS_SCENARIO = 'stored-refusals';
 /** unique-codes (Nov 23): two roadmap items of one Ground Truth feature, each with its own code. */
 export const UNIQUE_CODES_SCENARIO = 'unique-codes';
+/** codes-at-write (Nov 23): an item shows as its own the code of a feature another item links to or inherits. */
+export const CODES_AT_WRITE_SCENARIO = 'codes-at-write';
 /** Pass F F-63: the Drive picker config answers as the API does when it is not set up, once; Try again then opens it. */
 export const DRIVE_PICKER_UNSET_SCENARIO = 'drive-picker-unset';
 /** Pass F F-61: GET /v1/sources fails, so Settings › Connections cannot tell which sources use a connection. */
@@ -14009,11 +14011,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
+  const freshRoadmap = !db.simple_roadmap;
   db.simple_roadmap ??= seedSimpleRoadmap();
   // unique-codes (Nov 23): two items of one feature (F-01), the second with a code of its own.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === UNIQUE_CODES_SCENARIO) {
     const it = db.simple_roadmap.items.find((x) => x.key === 'setup-import');
     if (it && !it.gt_key) Object.assign(it, { gt_key: 'F-01', title: 'F-88 Sample data import' });
+  }
+  // codes-at-write (Nov 23): "Sample data import" shows F-01 (Setup checklist's, from its feature) as its own;
+  // "Welcome video" shows F-05 (Team invites') as its own, and the draft "Team invite nudges" looks like Team invites.
+  if (freshRoadmap && localStorage.getItem(MOCK_SCENARIO_KEY) === CODES_AT_WRITE_SCENARIO) {
+    const titled = (key: string, title: string) => {
+      const it = db.simple_roadmap!.items.find((x) => x.key === key);
+      if (it) it.title = title;
+    };
+    titled('setup-import', 'F-01 Sample data import');
+    titled('setup-video', 'F-05 Welcome video');
+    const invites = db.baseline.entities.find((e) => e.type === 'feature' && e.key === 'F-05');
+    const nudges = db.simple_roadmap.items.find((x) => x.key === 'setup-ideas');
+    if (invites && nudges) nudges.looks_like = [invites.id];
   }
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
