@@ -135,7 +135,9 @@ export function useBulkState(rows: R[]): Bulk | null {
     } else if (be3 === 'b') {
       toast({
         message: proposed.length
-          ? `${proposed.length} changes sent to ${BULK_APPROVER} to approve`
+          ? changed.length
+            ? `${changed.length} changed, ${proposed.length} sent to ${BULK_APPROVER} to approve`
+            : `${proposed.length} changes sent to ${BULK_APPROVER} to approve`
           : `${changed.length} features: ${words}`,
         action: undo,
         place: 'corner',
@@ -227,7 +229,7 @@ export function BulkBox({ r, i }: { r: R; i: number }) {
   const lockB = b.be3 === 'b' && rt === 'none' && b.mixed;
   const show = b.be1 === 'b' || on || b.picked.size > 0 || b.hover === i;
   return (
-    <span className={`flex w-6 items-center justify-center ${show ? '' : 'opacity-0'}`}>
+    <span className={`flex w-6 items-center justify-center ${show ? '' : 'opacity-0 max-sm:opacity-100'}`}>
       {lockB ? (
         <span data-bulk-keep title={BULK_WHY[r.title]} aria-label={`Cannot change ${r.title}`}>
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className="text-text2">
@@ -298,7 +300,7 @@ export function BulkChips({ r }: { r: R }) {
         Waiting for {BULK_APPROVER}
       </span>,
     );
-  if (on && b.mixed && rt !== 'edit' && !got)
+  if (on && b.mixed && rt !== 'edit' && !got && b.be3 !== 'c')
     out.push(
       <span key="r" className={`${chip} border border-line text-text2`}>
         {rt === 'propose' ? 'Proposal' : 'Cannot change'}
@@ -500,6 +502,7 @@ function Preview({ b, max }: { b: Bulk; max: number }) {
 
 function applyWords(b: Bulk): string {
   const got = b.rows.filter((r) => b.picked.has(r.feature_id));
+  if (b.mixed && b.be3 === 'c') return `Change ${got.length}`;
   const now = got.filter((r) => b.right(r) === 'edit').length;
   const prop = got.filter((r) => b.right(r) === 'propose').length;
   if (!now && prop) return `Propose ${prop} changes`;
@@ -516,6 +519,7 @@ export function BulkBar() {
   const res = b.result;
   return (
     <>
+      {(n > 0 || res) && <div aria-hidden className="h-28" />}
       {res && (
         <div
           data-testid="bulk-result"
@@ -539,6 +543,22 @@ export function BulkBar() {
                 {w}
               </button>
             ) : null,
+          )}
+          {b.be3 === 'c' && res.skipped.length > 0 && (
+            <ul className="basis-full divide-y divide-line border-t border-line pt-1">
+              {b.rows
+                .filter((r) => res.skipped.includes(r.feature_id))
+                .map((r) => (
+                  <li key={r.feature_id} className="flex flex-wrap items-center gap-2 py-1.5">
+                    <span className="font-medium">{bulkTitle(b, r)}</span>
+                    {r.own_key && <span className="text-text2">{r.own_key}</span>}
+                    <span className="text-text2">{BULK_WHY[r.title] ?? 'Read only'}</span>
+                    <button type="button" className={`${btn} ml-auto`}>
+                      Ask {(BULK_WHY[r.title] ?? '').match(/by ([A-Z][a-z]+ [A-Z][a-z]+)/)?.[1] ?? 'the owner'}
+                    </button>
+                  </li>
+                ))}
+            </ul>
           )}
           <span className="ml-auto flex gap-2">
             <button type="button" className={btn} onClick={() => b.setResult(null)}>
