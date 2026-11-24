@@ -82,6 +82,7 @@ import {
   type PriorityKeyResults,
 } from './key-results';
 import { useCodedMilestone } from './milestone-codes';
+import { BulkBar, BulkBox, BulkChips, BulkCtx, BulkTop, bulkHidesMark, bulkRow, bulkTitle, useBulkState } from './_bulk-mock'; // MOCK-HOOK
 import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
 import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
 import {
@@ -867,6 +868,7 @@ function YourList({
   const rows = byLine(data).filter(
     (r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName),
   );
+  const bulk = useBulkState(rows); // MOCK-HOOK
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -975,8 +977,11 @@ function YourList({
       {goal
         ? rows.length > 0 && <LineCaption data={{ ...data, rows }} />
         : !apart && <LineCaption data={data} />}
+      <BulkCtx.Provider value={bulk /* MOCK-HOOK */}>
+      <BulkTop /* MOCK-HOOK */ />
       <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
         {rows.flatMap((r, i) => {
+          const bk = bulkRow(bulk, r, i); // MOCK-HOOK
           // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
           const divider = apart
             ? [
@@ -1010,11 +1015,13 @@ function YourList({
               data-misses={r.above_line ? undefined : 'true'}
               data-moved={words ? 'true' : undefined}
               data-shown={shown(r) ? 'true' : undefined}
-              className={`max-sm:relative rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? 'bg-surface' : 'bg-surface2 text-text2'} ${target || words || shown(r) ? 'border-accent ring-2 ring-accent' : 'border-line'} ${drag?.from === i ? 'opacity-60' : ''}`}
+              {...bk.props /* MOCK-HOOK */}
+              className={`max-sm:relative rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? 'bg-surface' : 'bg-surface2 text-text2'} ${target || words || shown(r) ? 'border-accent ring-2 ring-accent' : 'border-line'} ${drag?.from === i ? 'opacity-60' : ''} ${bk.cls /* MOCK-HOOK */}`}
             >
               {/* PR4: on a phone the row's ⋯ is pinned top-right, so it never takes a line of its own. */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                {mayChange && r.can_reorder && (
+                <BulkBox r={r} i={i} /* MOCK-HOOK */ />
+                {mayChange && r.can_reorder && !(bulk?.be1 === 'b' && bulk.mode) /* MOCK-HOOK */ && (
                   <button
                     aria-label={`Drag ${nameOf(r)} to reorder`}
                     // A role whose move is a proposal is told so (qa-plan-14): the row's own `applies`.
@@ -1078,7 +1085,7 @@ function YourList({
                         data-testid="prio-title"
                         onClick={() => open(r)}
                       >
-                        {r.title}
+                        {bulkTitle(bulk, r) /* MOCK-HOOK */}
                       </button>
                     ) : (
                       <span className="min-w-0 font-medium" data-testid="prio-title">
@@ -1086,9 +1093,12 @@ function YourList({
                       </span>
                     )}
                     <OwnKey r={r} />
+                    {!bulkHidesMark(bulk, r) /* MOCK-HOOK */ && (
                     <span className="flex flex-none items-center">
                       <MarkFor featureId={r.feature_id} checked />
                     </span>
+                    )}
+                    <BulkChips r={r} /* MOCK-HOOK */ />
                   </span>
                   {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
                   {!r.own_key && <NotInGt />}
@@ -1231,6 +1241,8 @@ function YourList({
           ];
         })}
       </ol>
+      <BulkBar /* MOCK-HOOK */ />
+      </BulkCtx.Provider>
     </>
   );
 }
