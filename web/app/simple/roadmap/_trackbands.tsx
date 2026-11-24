@@ -38,14 +38,19 @@ export function trackLaned(data: Roadmap): Roadmap {
   };
 }
 
+// #1753: an invisible pad makes the small mark a target of about 26 x 28 px (the row keeps its
+// height), so a tap shows why as the hover and the focus do.
+const MARK =
+  "relative font-bold before:absolute before:-inset-x-1.5 before:-inset-y-1 before:content-['']";
+
 function Mark({ t }: { t: Track }) {
   return t.health === 'on_track' ? (
-    <span className="font-bold text-pass">
+    <span className={`${MARK} text-pass`}>
       <span aria-hidden>✓</span>
       <span className="sr-only">On track</span>
     </span>
   ) : (
-    <span className="font-bold text-warn">
+    <span className={`${MARK} text-warn`}>
       <span aria-hidden>⚠</span>
       <span className="sr-only">Needs a look</span>
     </span>

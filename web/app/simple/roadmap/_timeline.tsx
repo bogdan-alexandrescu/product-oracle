@@ -1173,7 +1173,7 @@ export function Chart({
                     y: (l.y.get(r.item.id) ?? 0) + l.rowH,
                   })
                 }
-                className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? 'gap-1 px-2 text-sm' : 'gap-2 px-3 text-base'} ${open === r.item.id ? 'bg-accent-soft' : ''}`}
+                className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? 'gap-1 px-2 text-sm' : 'gap-2 px-3 text-base'} ${open === r.item.id ? 'bg-accent-soft font-semibold shadow-[inset_4px_0_0_var(--color-accent)] ring-2 ring-accent ring-inset' : ''}`}
               >
                 {/* fix4 qa-simple-roadmap-3: no "#1" on a row: the place in the return queue in words
                   ("1st"). QA Nov 12 #1: the name reads with its code first ("F-06 Weekly alert
@@ -2139,6 +2139,21 @@ const Bar = memo(function Bar({
               </rect>
             );
           })}
+        {/* #1749: the open feature's bar wears a clear accent ring, as the Goal map's picked chip. */}
+        {open && (
+          <rect
+            data-testid="bar-open-ring"
+            x={x - 3}
+            y={y + pad - 3}
+            width={w + 6}
+            height={h - 2 * pad + 6}
+            rx={6}
+            fill="none"
+            stroke="var(--color-accent)"
+            strokeWidth={3}
+            pointerEvents="none"
+          />
+        )}
         <rect
           data-body
           x={x}

@@ -141,6 +141,7 @@ import {
   ownerOptions,
   ownerPick,
   ownersSeen,
+  GOAL_COUNT,
 } from './_lib';
 import {
   MsCard,
@@ -637,7 +638,8 @@ function GoalCounters({
           {g.metric ?? 'No metric yet'}
         </p>
       )}
-      <p className="mt-0.5 text-sm">
+      {/* #1740: what the count covers, on hover (the Tracks sheet and the timeline say theirs). */}
+      <p className="mt-0.5 text-sm" data-testid="goal-counter-items" title={GOAL_COUNT}>
         <b className="tnum">{g.items}</b> {g.items === 1 ? 'item' : 'items'}
         {g.broken > 0 && (
           <span className="text-crit">

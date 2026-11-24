@@ -880,3 +880,7 @@ export const ownerOptions = (seen: [string, string][]): [string, string][] => [
   ...[...seen].sort(([, a], [, b]) => a.localeCompare(b)),
   [NO_OWNER, 'No owner'],
 ];
+
+/** #1740: what a goal card's count covers, as its tooltip says (the Tracks sheet's: TRACK_COUNT). */
+export const GOAL_COUNT =
+  "Items for this goal and its key results that the filters show, done ones too; cut and merged ones and PM-owned work aren't counted";

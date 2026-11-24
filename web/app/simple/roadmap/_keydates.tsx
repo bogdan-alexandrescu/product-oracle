@@ -19,6 +19,33 @@ const value = (k: KeyDate) => ({ name: k.name, date: k.date, note: k.note ?? nul
 const dayWords = (day: string, today: string) =>
   day.slice(0, 4) === today.slice(0, 4) ? shortDay(day) : `${shortDay(day)}, ${day.slice(0, 4)}`;
 
+/** #1751: the day in words, month first ("Nov 14, 2026"), a native date picker laid over it,
+ * as the milestone card's date field: the browser's own format (dd.mm.yyyy) never shows. */
+function DayField({
+  value,
+  label,
+  onChange,
+}: {
+  value: string;
+  label: string;
+  onChange: (d: string) => void;
+}) {
+  return (
+    <span className="relative flex h-8 min-w-[8.5rem] items-center rounded-lg border border-line bg-bg px-2 text-base font-normal text-text focus-within:border-accent">
+      <span data-testid="key-date-day-words" className={value ? '' : 'text-text2'}>
+        {value ? `${shortDay(value)}, ${value.slice(0, 4)}` : 'Pick a day'}
+      </span>
+      <input
+        aria-label={label}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      />
+    </span>
+  );
+}
+
 /**
  * Roadmap-plus: the roadmap header's small "Key dates" editor (a conference, a product launch,
  * a board meeting). Every edit is a change through the engine (add_key_date, edit_key_date,
@@ -56,9 +83,20 @@ export function KeyDatesEditor({
   const fit = useFitViewport(ref, { on: !phone });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    // #1746: a click outside closes it, as the Tracks drawer; its own button toggles it itself.
+    const onDown = (e: PointerEvent) => {
+      const at = e.target as Element | null;
+      if (!at || ref.current?.contains(at) || at.closest?.('[data-testid="key-dates-open"]'))
+        return;
+      onClose();
+    };
     window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
     ref.current?.focus();
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
+    };
   }, [onClose]);
   // The roadmap the hint and the Add button speak of: the one a new key date goes to.
   const current =
@@ -73,6 +111,17 @@ export function KeyDatesEditor({
     list: (data.key_dates ?? []).filter((k) => k.roadmap.id === r.roadmap.id),
   }));
 
+  // #1750: a roadmap's own key dates (events) and its PRDs' milestones, each a list of its own.
+  const split = (list: KeyDate[]) => {
+    const events = list.filter((k) => !k.prd);
+    const prd = list.filter((k) => !!k.prd);
+    return prd.length
+      ? [
+          { kind: 'events' as const, rows: events },
+          { kind: 'milestones' as const, rows: prd },
+        ]
+      : [{ kind: 'events' as const, rows: events }];
+  };
   const add = async () => {
     const to = addable.find((r) => r.roadmap.id === rm);
     if (!to || !adding.name.trim() || !adding.date) return;
@@ -108,8 +157,7 @@ export function KeyDatesEditor({
     ...(!adding.date ? ['a date'] : []),
   ];
   const field = 'h-8 rounded-lg border border-line bg-bg px-2 text-base';
-  // fix4 qa-simple-roadmap-36: each field has its label in view (the date field's own format
-  // is the browser's: a native date input writes the day its own way).
+  // fix4 qa-simple-roadmap-36: each field has its label in view (#1751: the day in words, DayField).
   const labelled = 'flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2';
   return (
     <div
@@ -159,135 +207,150 @@ export function KeyDatesEditor({
           {groups.length > 1 && (
             <h3 className="mt-3 text-sm font-semibold text-text2">{r.roadmap.title}</h3>
           )}
-          <ul className="mt-2 space-y-2" aria-label={`${r.roadmap.title}'s key dates`}>
-            {list.length === 0 && <li className="text-sm text-text2">No key dates yet.</li>}
-            {list.map((k) =>
-              editing === k.id ? (
-                <li
-                  key={k.id}
-                  className="space-y-2 rounded-lg border border-accent p-2"
-                  data-testid="key-date-edit"
+          {/* #1750: outside events first, then the PRD's milestones under their own heading. */}
+          {split(list).map(({ kind, rows }) => (
+            <div key={kind} data-testid={`key-dates-${kind}`}>
+              {split(list).length > 1 && (
+                <h4
+                  className="mt-2 text-xs font-semibold text-text2"
+                  data-testid="key-dates-heading"
                 >
-                  <label className={labelled}>
-                    Name
-                    <input
-                      className={`${field} w-full font-normal text-text`}
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    />
-                  </label>
-                  <div className="flex gap-2">
-                    <label className={labelled}>
-                      Date
-                      <input
-                        type="date"
-                        className={`${field} font-normal text-text`}
-                        value={form.date}
-                        onChange={(e) => setForm({ ...form, date: e.target.value })}
-                      />
-                    </label>
-                    <label className={`${labelled} flex-1`}>
-                      Note
-                      <input
-                        className={`${field} w-full font-normal text-text`}
-                        placeholder="Optional"
-                        value={form.note}
-                        onChange={(e) => setForm({ ...form, note: e.target.value })}
-                      />
-                    </label>
-                  </div>
-                  {/* fix4 qa-simple-roadmap-36: Cancel and Save the same height (row size). */}
-                  <div className="flex justify-end gap-2">
-                    <Button onClick={() => setEditing(null)}>Cancel</Button>
-                    <Button
-                      variant="solid"
-                      disabled={!form.name.trim() || !form.date}
-                      onClick={() => void save(k)}
+                  {kind === 'events' ? 'Events' : 'PRD milestones'}
+                </h4>
+              )}
+              <ul
+                className="mt-2 space-y-2"
+                aria-label={`${r.roadmap.title}'s ${kind === 'events' ? 'key dates' : 'PRD milestones'}`}
+              >
+                {rows.length === 0 && <li className="text-sm text-text2">No key dates yet.</li>}
+                {rows.map((k) =>
+                  editing === k.id ? (
+                    <li
+                      key={k.id}
+                      className="space-y-2 rounded-lg border border-accent p-2"
+                      data-testid="key-date-edit"
                     >
-                      {of(k.roadmap.id)?.applies ? 'Save' : 'Propose'}
-                    </Button>
-                  </div>
-                </li>
-              ) : (
-                <li
-                  key={k.id}
-                  className="flex flex-wrap items-start gap-2 rounded-lg border border-line p-2"
-                  data-testid="key-date-row"
-                  data-name={k.name}
-                >
-                  <span
-                    aria-hidden
-                    className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink"
-                  />
-                  {/* vqa-detailed: the text keeps room for its name, day and badge; Edit and Remove go
-                  under it when the row is narrow, so a name never breaks one letter a line. */}
-                  <div className="min-w-[min(16rem,calc(100%-1.5rem))] flex-1">
-                    {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
-                    <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
-                      {/* qa4-simple-roadmap-37: the name wraps, never cut mid-word. */}
-                      <span
-                        className="min-w-0 break-words"
-                        title={keyDateWords(k, data.goal_milestones ?? [])}
-                      >
-                        {keyDateWords(k, data.goal_milestones ?? [])}
-                      </span>
-                      <span
-                        className="flex-none whitespace-nowrap text-text2"
-                        data-testid="key-date-day"
-                      >
-                        · {dayWords(k.date, data.today)}
-                      </span>
-                      {k.prd && (
-                        <span
-                          className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2"
-                          data-testid="key-date-from-prd"
-                        >
-                          From the PRD
-                        </span>
-                      )}
-                      {k.in_draft && (
-                        <span
-                          className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2"
-                          data-testid="key-date-in-draft"
-                        >
-                          in the draft
-                        </span>
-                      )}
-                    </div>
-                    {k.note && <div className="text-sm text-text2">{k.note}</div>}
-                    {/* roadmap-keydates (the owner, Nov 1): a PRD's milestone is read from the PRD; it changes there. */}
-                    {k.prd && (
-                      <div className="text-sm text-text2" data-testid="key-date-where">
-                        Change it in the PRD,{' '}
-                        <Link
-                          href={`/documents/${k.prd.slug}`}
-                          className="font-semibold text-accent-ink hover:underline"
-                        >
-                          {k.prd.title}
-                        </Link>
+                      <label className={labelled}>
+                        Name
+                        <input
+                          className={`${field} w-full font-normal text-text`}
+                          value={form.name}
+                          onChange={(e) => setForm({ ...form, name: e.target.value })}
+                        />
+                      </label>
+                      <div className="flex gap-2">
+                        <div className={labelled}>
+                          <span aria-hidden>Date</span>
+                          <DayField
+                            label="Date"
+                            value={form.date}
+                            onChange={(date) => setForm({ ...form, date })}
+                          />
+                        </div>
+                        <label className={`${labelled} flex-1`}>
+                          Note
+                          <input
+                            className={`${field} w-full font-normal text-text`}
+                            placeholder="Optional"
+                            value={form.note}
+                            onChange={(e) => setForm({ ...form, note: e.target.value })}
+                          />
+                        </label>
                       </div>
-                    )}
-                  </div>
-                  {!k.prd && mayChange && !!of(k.roadmap.id)?.can_change && (
-                    <span className="ml-auto flex flex-none gap-1">
-                      <Button
-                        aria-label={`Edit ${k.name}`}
-                        onClick={() => {
-                          setForm({ name: k.name, date: k.date, note: k.note ?? '' });
-                          setEditing(k.id);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button aria-label={`Remove ${k.name}`} onClick={() => void remove(k)}>
-                        Remove
-                      </Button>
-                    </span>
-                  )}
-                </li>
-              ),
-            )}
-          </ul>
+                      {/* fix4 qa-simple-roadmap-36: Cancel and Save the same height (row size). */}
+                      <div className="flex justify-end gap-2">
+                        <Button onClick={() => setEditing(null)}>Cancel</Button>
+                        <Button
+                          variant="solid"
+                          disabled={!form.name.trim() || !form.date}
+                          onClick={() => void save(k)}
+                        >
+                          {of(k.roadmap.id)?.applies ? 'Save' : 'Propose'}
+                        </Button>
+                      </div>
+                    </li>
+                  ) : (
+                    <li
+                      key={k.id}
+                      className="flex flex-wrap items-start gap-2 rounded-lg border border-line p-2"
+                      data-testid="key-date-row"
+                      data-name={k.name}
+                    >
+                      <span
+                        aria-hidden
+                        className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink"
+                      />
+                      {/* vqa-detailed: the text keeps room for its name, day and badge; Edit and Remove go
+                  under it when the row is narrow, so a name never breaks one letter a line. */}
+                      <div className="min-w-[min(16rem,calc(100%-1.5rem))] flex-1">
+                        {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
+                        <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
+                          {/* qa4-simple-roadmap-37: the name wraps, never cut mid-word. */}
+                          <span
+                            className="min-w-0 break-words"
+                            title={keyDateWords(k, data.goal_milestones ?? [])}
+                          >
+                            {keyDateWords(k, data.goal_milestones ?? [])}
+                          </span>
+                          <span
+                            className="flex-none whitespace-nowrap text-text2"
+                            data-testid="key-date-day"
+                          >
+                            · {dayWords(k.date, data.today)}
+                          </span>
+                          {k.prd && (
+                            <span
+                              className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2"
+                              data-testid="key-date-from-prd"
+                            >
+                              From the PRD
+                            </span>
+                          )}
+                          {k.in_draft && (
+                            <span
+                              className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2"
+                              data-testid="key-date-in-draft"
+                            >
+                              in the draft
+                            </span>
+                          )}
+                        </div>
+                        {k.note && <div className="text-sm text-text2">{k.note}</div>}
+                        {/* roadmap-keydates (the owner, Nov 1): a PRD's milestone is read from the PRD; it changes there. */}
+                        {k.prd && (
+                          <div className="text-sm text-text2" data-testid="key-date-where">
+                            Change it in the PRD,{' '}
+                            <Link
+                              href={`/documents/${k.prd.slug}`}
+                              className="font-semibold text-accent-ink hover:underline"
+                            >
+                              {k.prd.title}
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                      {!k.prd && mayChange && !!of(k.roadmap.id)?.can_change && (
+                        <span className="ml-auto flex flex-none gap-1">
+                          <Button
+                            aria-label={`Edit ${k.name}`}
+                            onClick={() => {
+                              setForm({ name: k.name, date: k.date, note: k.note ?? '' });
+                              setEditing(k.id);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button aria-label={`Remove ${k.name}`} onClick={() => void remove(k)}>
+                            Remove
+                          </Button>
+                        </span>
+                      )}
+                    </li>
+                  ),
+                )}
+              </ul>
+            </div>
+          ))}
         </section>
       ))}
       {can && (
@@ -334,12 +397,10 @@ export function KeyDatesEditor({
           <div className="flex gap-2">
             <div className={labelled}>
               <span aria-hidden>Date</span>
-              <input
-                aria-label="New key date's day"
-                type="date"
-                className={`${field} font-normal text-text`}
+              <DayField
+                label="New key date's day"
                 value={adding.date}
-                onChange={(e) => setAdding({ ...adding, date: e.target.value })}
+                onChange={(date) => setAdding({ ...adding, date })}
               />
             </div>
             <div className={`${labelled} flex-1`}>

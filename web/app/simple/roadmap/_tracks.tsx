@@ -52,6 +52,9 @@ function scroller(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/** #1740: what each count on the page covers (its tooltip). */
+const TRACK_COUNT =
+  "Every feature on this track, done ones too, whatever the filters show; cut and merged ones aren't counted";
 const features = (n: number) => `${n} ${n === 1 ? 'feature' : 'features'}`;
 /** The Move to Trash confirm: its live features, then the cut or merged ones it moves too, then
  * those the reader's draft moved off that are still on it in the published Roadmap. */
@@ -117,6 +120,7 @@ export function TracksButton({
   };
   const data = q.data;
   const tracks = data?.tracks ?? [];
+  const owned = tracks.some((t) => !!t.owner_name);
   useLayoutEffect(() => {
     const h = held.current;
     const btn =
@@ -302,7 +306,41 @@ export function TracksButton({
                         {t.title}
                       </p>
                       <p className="text-sm text-text2">
-                        {t.owner_name ?? 'No owner'} · {features(count)}
+                        {/* #1757: the owner shows once owners are used; a track with none then
+                          leads to setting one (its row opens on Owner). */}
+                        {t.owner_name
+                          ? `${t.owner_name} · `
+                          : owned &&
+                            (canChange ? (
+                              <>
+                                <button
+                                  type="button"
+                                  data-testid="track-no-owner"
+                                  className="text-accent-ink hover:underline"
+                                  onClick={() => {
+                                    settle();
+                                    setOpened(t.id);
+                                    setTrashing(null);
+                                    requestAnimationFrame(() =>
+                                      list.current
+                                        ?.querySelector<HTMLSelectElement>(
+                                          'select[aria-label="Owner"]',
+                                        )
+                                        ?.focus(),
+                                    );
+                                  }}
+                                >
+                                  No owner
+                                </button>
+                                {' · '}
+                              </>
+                            ) : (
+                              'No owner · '
+                            ))}
+                        {/* #1740: what this count covers, as the goal cards' and the timeline's say. */}
+                        <span data-testid="track-count" title={TRACK_COUNT}>
+                          {features(count)}
+                        </span>
                         {t.status !== 'active' ? ` · ${STATE[t.status]}` : ''}
                       </p>
                     </div>
