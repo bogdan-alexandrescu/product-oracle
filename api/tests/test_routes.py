@@ -34,12 +34,14 @@ SPEC_ROUTES = [
     ("GET", V + "/export"),
     ("GET", "/healthz"),
     ("GET", "/version"),
+    ("GET", "/v1/version"),
 ]
 PUBLIC = {
     ("POST", "/v1/auth/login"),
     ("POST", "/v1/auth/logout"),
     ("GET", "/healthz"),
     ("GET", "/version"),
+    ("GET", "/v1/version"),
 }
 
 

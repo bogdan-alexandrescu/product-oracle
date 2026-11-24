@@ -122,6 +122,7 @@ FAKE_GCLOUD = r"""#!/usr/bin/env bash
 echo "gcloud $*" >> "$FAKE_LOG"
 case "$*" in
   "run services describe"*) [ -n "$FAKE_SERVICE" ] || exit 1; echo "$FAKE_SERVICE" ;;
+  "run jobs execute"*) [ "$FAKE_JOB_FAILS" = 1 ] && exit 1 ;;
   "run revisions describe"*)
     rev=$4
     jq -e --arg r "$rev" '.[$r]' <<<"$FAKE_REVISIONS" || exit 1 ;;
@@ -175,6 +176,7 @@ def _fake(
         "FAKE_SERVICE": service,
         "FAKE_REVISIONS": revisions,
         "FAKE_ENABLED": enabled,
+        "FAKE_JOB_FAILS": "",
         "ORACLE_GCP_PROJECT": "example-project",
         "ORACLE_GCP_REGION": "example-region",
     }
@@ -294,15 +296,62 @@ def _laptop(
 
 def test_laptop_deploy_passes_migrate_at_start_through(tmp_path):
     """A laptop deploy passes its migrate-at-start setting through, then moves traffic."""
-    env = _fake(tmp_path, {"r1": {"ORACLE_MIGRATE_AT_START": "0", "ORACLE_ENV": "prod"}})
+    for case, kept in {"unset": None, "one": "1"}.items():
+        serving = {"ORACLE_ENV": "prod"} | ({"ORACLE_MIGRATE_AT_START": kept} if kept else {})
+        env = _fake(tmp_path / case, {"r1": serving})
+        r = _laptop(env)
+        assert r.returncode == 0, r.stdout + r.stderr
+        calls = _calls(env).splitlines()
+        deploy = [c for c in calls if c.startswith("gcloud run deploy")]
+        assert len(deploy) == 1, case
+        # The revision migrates at start itself: no job, and the traffic moves to it (an
+        # Actions deploy left it on one revision).
+        assert not [c for c in calls if c.startswith("gcloud run jobs")], case
+        assert "update-traffic oracle-api" in calls[-1] and "--to-latest" in calls[-1], case
+        suffix = f",ORACLE_MIGRATE_AT_START={kept}" if kept else ""
+        assert deploy[0].endswith(f"--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1{suffix}"), case
+
+
+def test_laptop_deploy_with_migrate_at_start_off_migrates_before_traffic(tmp_path):
+    """#1709: with the kept value 0, the new revision is staged with no traffic, the migrate
+    job runs on its image, and only then does the traffic move to it, by its tag."""
+    env = _fake(tmp_path / "ok", {"r1": {"ORACLE_MIGRATE_AT_START": "0"}})
     r = _laptop(env)
     assert r.returncode == 0, r.stdout + r.stderr
     calls = _calls(env).splitlines()
-    deploy = [c for c in calls if c.startswith("gcloud run deploy")]
-    assert len(deploy) == 1
-    # Then the traffic moves to it (an Actions deploy left it on one revision).
-    assert "update-traffic oracle-api" in calls[-1] and "--to-latest" in calls[-1]
-    assert "--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1,ORACLE_MIGRATE_AT_START=0" in deploy[0]
+    i = {
+        name: next(n for n, c in enumerate(calls) if c.startswith(prefix))
+        for name, prefix in {
+            "deploy": "gcloud run deploy oracle-api",
+            "job": "gcloud run jobs update oracle-api-migrate",
+            "run": "gcloud run jobs execute oracle-api-migrate",
+            "move": "gcloud run services update-traffic oracle-api",
+        }.items()
+    }
+    assert i["deploy"] < i["job"] < i["run"] < i["move"]
+    deploy, job, run, move = (calls[i[k]] for k in ("deploy", "job", "run", "move"))
+    assert "--set-env-vars=ORACLE_ENV=prod,ORACLE_EXAMPLE=1,ORACLE_MIGRATE_AT_START=0" in deploy
+    assert "--no-traffic" in deploy
+    tag = re.search(r"--tag=(\S+)", deploy)
+    assert tag and re.fullmatch(r"[a-z][a-z0-9-]*", tag[1]), deploy
+    assert "--image=example-image@sha256:abc" in job and "--args=-m,oracle.startup,migrate" in job
+    assert "--wait" in run
+    assert f"--to-tags={tag[1]}=100" in move
+    assert "--to-latest" not in _calls(env)
+    assert f"--remove-tags={tag[1]}" in calls[-1]
+    # A job named by ORACLE_MIGRATE_JOB is the one run.
+    named = _fake(tmp_path / "named", {"r1": {"ORACLE_MIGRATE_AT_START": "0"}})
+    named["ORACLE_MIGRATE_JOB"] = "example-migrate"
+    assert _laptop(named).returncode == 0
+    assert "gcloud run jobs execute example-migrate " in _calls(named)
+    # A failed migration moves no traffic and leaves no tag behind.
+    failed = _fake(tmp_path / "failed", {"r1": {"ORACLE_MIGRATE_AT_START": "0"}})
+    failed["FAKE_JOB_FAILS"] = "1"
+    r = _laptop(failed)
+    assert r.returncode != 0
+    calls = _calls(failed)
+    assert "--to-tags" not in calls and "--to-latest" not in calls
+    assert f"--remove-tags={tag[1].split('-')[0]}" in calls
 
 
 def test_laptop_deploy_reads_the_alternate_delimiter_form(tmp_path):

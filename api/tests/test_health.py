@@ -21,3 +21,14 @@ async def test_version_without_a_stamp_says_unknown(client, monkeypatch):
     r = await client.get("/version")
     assert r.status_code == 200
     assert r.json() == {"git_sha": "unknown"}
+
+
+# #1710: the load balancer sends only /v1/* and /healthz to the API, so its commit is served
+# under /v1 as well, for the deploy's containment check (ORACLE_API_VERSION_URL).
+async def test_version_is_served_under_v1_without_signing_in(client, monkeypatch):
+    """The API's commit is reachable at /v1/version, where the load balancer routes it."""
+    monkeypatch.setenv("ORACLE_GIT_SHA", "0123456789abcdef0123456789abcdef01234567")
+    r = await client.get("/v1/version")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-store"
+    assert r.json() == {"git_sha": "0123456789abcdef0123456789abcdef01234567"}
