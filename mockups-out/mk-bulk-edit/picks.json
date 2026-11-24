@@ -44,6 +44,26 @@
             {
               "file": "frames/be1-a-phone.html",
               "caption": "Phone 390: no hover, so every row shows its box; 3 rows picked by tapping their boxes, the bar sits under the list."
+            },
+            {
+              "file": "frames/be1-a-board-open.html",
+              "caption": "The same on Roadmap, Now / Next / Later: the pointer on a card shows its box in the top-right corner; the rest of the card still drags and opens the panel."
+            },
+            {
+              "file": "frames/be1-a-board-mid.html",
+              "caption": "One card picked; every card now shows its box."
+            },
+            {
+              "file": "frames/be1-a-board-result.html",
+              "caption": "Shift-click on a later card picks the run down the column: 4 picked, the same bar. Cost: 2 clicks."
+            },
+            {
+              "file": "frames/be1-a-board-result-1512.html",
+              "caption": "Board at 1512 wide: a card in Later added with one more click; picks can span columns."
+            },
+            {
+              "file": "frames/be1-a-board-phone.html",
+              "caption": "Board on a phone 390: boxes always show; 2 cards picked by tapping."
             }
           ]
         },

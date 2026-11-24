@@ -35,6 +35,7 @@ import {
 } from './_lib';
 import { MsBoardRow } from './_milestones';
 import { inOrder } from './_order';
+import { BoardBar, BoardBox, useBoardPick } from './_bulk-board-mock'; // MOCK-HOOK
 
 export type Horizon = Item['horizon'];
 
@@ -504,6 +505,8 @@ export function Board({
   };
 
   const depthOf = new Map(cols.flatMap((c) => [...c.depth]));
+  const bp = useBoardPick(); // MOCK-HOOK
+  const pickOrder = cols.flatMap((c) => [...c.groups.flatMap((g) => g.items), ...c.below]).map((i) => i.id); // MOCK-HOOK
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const card = (item: Item) => {
     const kind = closedItem(item) ? 'cut' : barKind(item);
@@ -535,6 +538,8 @@ export function Board({
           data-kind={kind}
           data-broken={red ? 'true' : 'false'}
           data-open={open === item.id ? 'true' : undefined}
+          data-bulk-picked={bp?.picked.has(item.id) ? 'true' : undefined /* MOCK-HOOK */}
+          onMouseEnter={() => bp?.setHover(item.id) /* MOCK-HOOK */}
           aria-label={`${itemName(item)}, ${item.horizon}${held[item.id] ? ', not sent yet' : ''}${movable ? '. Arrows move it to another column, sent when you pause; Escape cancels' : ''}`}
           style={{ touchAction: movable ? 'pan-y' : 'auto' }}
           onPointerDown={(e) => onDown(e, item)}
@@ -543,7 +548,7 @@ export function Board({
           onPointerCancel={onCancel}
           onKeyDown={(e) => onKey(e, item)}
           onBlur={() => onBlur(item)}
-          className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip ${
+          className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip data-[bulk-picked=true]:ring-2 data-[bulk-picked=true]:ring-accent data-[bulk-picked=true]:bg-accent-soft data-[bulk-picked=true]:pr-9 ${/* MOCK-HOOK */ ''}${
             red
               ? 'border-crit'
               : kind === 'draft'
@@ -551,6 +556,7 @@ export function Board({
                 : 'border-line'
           } ${movable ? 'cursor-grab' : 'cursor-pointer'} ${kind === 'cut' ? 'opacity-70' : ''}`}
         >
+          <BoardBox bp={bp} id={item.id} name={itemName(item)} order={pickOrder} /* MOCK-HOOK */ />
           {/* QA Nov 12 #1: the code before the name ("F-06 Weekly alert digest"); #2: no code, flagged. */}
           <p
             data-testid="board-card-name"
@@ -723,6 +729,7 @@ export function Board({
           )}
         </section>
       ))}
+      <BoardBar bp={bp} /* MOCK-HOOK */ />
     </div>
   );
 }

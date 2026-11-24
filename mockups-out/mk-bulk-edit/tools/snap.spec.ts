@@ -68,7 +68,7 @@ test('snap', async ({ browser }) => {
       state = JSON.parse(state);
     }
     await page.goto(f.url);
-    await page.locator('[data-testid="prio-row"]').first().waitFor();
+    await page.locator((f as { wait?: string }).wait ?? '[data-testid="prio-row"]').first().waitFor();
     await page.waitForTimeout(800);
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), f.theme);
     try {

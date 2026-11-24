@@ -68,3 +68,16 @@ add('be1-a-result-dark','?be1=a',[('click',box(2)),('click',box(6),['Shift'])],t
 add('be3-a-result-dark','?be3=a&pick=2,3,4,7',[('click','[data-testid="bulk-field-status"]'),('click','[data-testid="bulk-opt-Exists"]'),('click','[data-testid="bulk-apply"]')],theme='dark')
 json.dump(F,open('spec.json','w'),indent=0)
 print(len(F))
+# BE1 a on the Roadmap board
+card=lambda n: f':nth-match([data-testid="board-card"], {n})'
+bb=lambda n: f'{card(n)} [data-testid="board-box"]'
+G=[]
+def addb(file, do, w=1440, h=900, theme='light'):
+    G.append(dict(file=file, url='/simple/roadmap?be1=a', wait='[data-testid="format-board"]', do=[('click','[data-testid="format-board"]')]+list(do), w=w, h=h, theme=theme))
+addb('be1-a-board-open',[('hover',card(2))])
+addb('be1-a-board-mid',[('click',bb(2)),('hover',card(5))])
+addb('be1-a-board-result',[('click',bb(2)),('click',bb(5),['Shift'])])
+addb('be1-a-board-result-1512',[('click',bb(2)),('click',bb(5),['Shift']),('click',bb(9))],w=1512,h=982)
+addb('be1-a-board-phone',[('click',bb(1)),('click',bb(2))],**PH)
+json.dump(F+G,open('spec.json','w'),indent=0)
+json.dump(G,open('spec-board.json','w'),indent=0)
