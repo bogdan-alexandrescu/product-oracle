@@ -186,7 +186,9 @@ export type GoalView = {
   missing: string[] | null;
   /** The current value is typed with its day: the goal may have dated measurements for its trend. */
   measured: boolean;
-  /** #1742: the current value is typed but has no day it was read: a starting figure, not a reading. */
+  /** #1742: a current value with the day it was read, typed or kept as text: a reading. */
+  dated: boolean;
+  /** #1742: a goal with a number for its target shows a current value with no day it was read: not a reading. */
   unread: boolean;
   /** #345: the parent goal's id for a subgoal; null for a goal. */
   parentId: string | null;
@@ -249,6 +251,8 @@ export function goalViews(
     const current = typedFigure(a.current, a.unit, short);
     const targetRaw = a.target_text ?? a.target;
     const currentRaw = a.current_text ?? a.current;
+    const shown = !!(current ?? parseFigure(currentRaw)) || !!text(currentRaw);
+    const dated = typeof a.current_as_of === 'string';
     // qa-plan-4: the Baseline's rule (no evidence, no score), so Plan's ring and the Baseline's Goals table agree.
     const scored = scoredConfidence(g.confidence, g.evidence_count);
     return {
@@ -274,8 +278,11 @@ export function goalViews(
         : (direction(targetRaw) ?? (titled ? { way: titled, strict: false } : null)),
       typed: !!target,
       missing: g.goal_check?.missing ?? null,
-      measured: !!current && typeof a.current_as_of === 'string',
-      unread: !!current && typeof a.current_as_of !== 'string',
+      measured: !!current && dated,
+      dated: shown && dated,
+      // #1742: the Goal map measures a goal with a number for its target; a current with no day
+      // it was read (typed, or kept as text for want of a day) is not a reading.
+      unread: typeof a.target === 'number' && shown && !dated,
     };
   });
 }
@@ -320,7 +327,7 @@ export type Progress = {
 export function atRisk(g: GoalView, p: Progress): boolean {
   const c = g.current;
   const t = g.target;
-  if (p.state !== 'togo' || !c || !t || t.range || g.said?.way === 'down') return false;
+  if (!g.dated || p.state !== 'togo' || !c || !t || t.range || g.said?.way === 'down') return false;
   return base(c) < 0.75 * base(t);
 }
 
