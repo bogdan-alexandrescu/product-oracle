@@ -20,8 +20,8 @@ import { percent } from '@/lib/goal-tree';
 
 import { buildRun, type BaselineState } from './_setup';
 import {
-  assess,
   atRisk,
+  cardProgress,
   changeText,
   formatFigure,
   shownGoals,
@@ -51,12 +51,8 @@ function GoalCard({
 }) {
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
-  const read = assess(g, history);
-  // #1742: a typed figure with no day it was read is not a reading: never "Target met" on it.
-  const p: typeof read =
-    read.state === 'met' && g.unread ? { state: 'none', text: 'No current value yet' } : read;
-  // #1742: the Goal map's at-risk rule, from the same current value, wins over the evidence's score.
-  const risk = atRisk(g, p);
+  // #1742: no "Target met" on a figure never read; the Goal map's at-risk rule beats the ring.
+  const p = cardProgress(g, history);
   // prod-2: no current value, no confidence ring: a number beside "–" reads as the goal's score.
   const noValue = p.state === 'none' || !g.currentText;
   return (
@@ -127,7 +123,7 @@ function GoalCard({
             </span>
           )}
         </span>
-        {!noValue && risk ? (
+        {!noValue && atRisk(g, p) ? (
           <span className="ml-auto flex-none" data-testid="goal-confidence">
             <Chip kind="warn" dot data-status="at_risk">
               At risk

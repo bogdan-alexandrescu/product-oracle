@@ -324,6 +324,12 @@ export function atRisk(g: GoalView, p: Progress): boolean {
   return base(c) < 0.75 * base(t);
 }
 
+/** #1742: where a goal card stands: a typed figure with no day it was read is no reading. */
+export function cardProgress(g: GoalView, history?: Point[]): Progress {
+  const read = assess(g, history);
+  return read.state === 'met' && g.unread ? { state: 'none', text: 'No current value yet' } : read;
+}
+
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** 900000 -> "900k", 1200000 -> "1.2M" when the goal is written that way; else the plain figure. */

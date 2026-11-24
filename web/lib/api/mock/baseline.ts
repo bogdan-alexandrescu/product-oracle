@@ -412,9 +412,9 @@ export function seedBaseline(uuid: () => string): BaselineState {
   // Activation a count of 0 against at most 0 that was never read (no day for its current value).
   if (scenario === PLAN_GOAL_RISK_SCENARIO) {
     paid.attrs = { ...paid.attrs, current: 5 };
-    const { current_as_of: _unread, ...rest } = activation.attrs ?? {};
     activation.attrs = {
-      ...rest,
+      ...activation.attrs,
+      current_as_of: undefined,
       unit: 'events',
       comparison: 'at_most',
       target: 0,
