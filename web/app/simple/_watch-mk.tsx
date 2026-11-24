@@ -17,7 +17,7 @@ let seeded = false; // MOCK-HOOK
 const subs = new Set<() => void>(); // MOCK-HOOK
 const setWatched = (key: string, on: boolean) => { watched = new Set(watched); if (on) watched.add(key); else watched.delete(key); subs.forEach((f) => f()); }; // MOCK-HOOK
 function useWatched(): Set<string> { // MOCK-HOOK
-  if (!seeded) { seeded = true; if (mk.step() === 'done' || mk.step() === 'hard') watched.add('setup-checklist'); } // MOCK-HOOK
+  if (!seeded) { seeded = true; if (mk.step() === 'done' || mk.step() === 'hard') watched.add('setup-checklist'); if (mk.step() === 'hard' && mk.wd1() === 'b') ['alert-mobile', 'setup-import', 'gm-f10', 'gm-f4', 'gm-f3'].forEach((k) => watched.add(k)); } // MOCK-HOOK
   return useSyncExternalStore((f) => (subs.add(f), () => subs.delete(f)), () => watched, () => watched); // MOCK-HOOK
 } // MOCK-HOOK
 

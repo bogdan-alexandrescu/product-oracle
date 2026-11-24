@@ -115,8 +115,7 @@ test('wd1', async ({ page }) => { // MOCK-HOOK
   await snap(page, 'wd1-b-rest'); // MOCK-HOOK
   await mkx(page, 'row-eye-setup-checklist').hover(); await snap(page, 'wd1-b-open'); // MOCK-HOOK
   await mkx(page, 'row-eye-setup-checklist').click(); await page.mouse.move(700, 600); await snap(page, 'wd1-b-result', { cost: 'Cost: 1 click on the row (today: no way to watch)' }); // MOCK-HOOK
-  await size(page, 'w'); await roadmap(page, 'wd1=b'); // MOCK-HOOK
-  for (const k of ['alert-mobile', 'setup-import', 'gm-f10', 'gm-f4', 'gm-f3']) await mkx(page, `row-eye-${k}`).click().catch(() => undefined); // MOCK-HOOK
+  await size(page, 'w'); await roadmap(page, 'wd1=b&step=hard'); // MOCK-HOOK: several rows already watched, so no fresh note covers the rows
   await bar(page, 'gm-f4').click(); await page.getByTestId('item-panel').waitFor(); // MOCK-HOOK
   await snap(page, 'wd1-b-hard-1512'); // MOCK-HOOK
   await phonePanel(page, 'wd1=b', f01); await snap(page, 'wd1-b-phone-390'); // MOCK-HOOK
