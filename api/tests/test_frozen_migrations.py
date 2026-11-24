@@ -5,7 +5,7 @@ oracle.migration_checks helpers), so changing the app never changes history; the
 Card: protects=no migration imports oracle.* outside oracle.migration_checks; 0039's frozen
 next date matches the app's for every kind of rule today; fails_when=a migration reaches
 into live app code; no_claim=the migrations' data effects (test_company_timezone_migration,
-test_fix4_simple_decide_review_api)."""
+test_simple_meetings_api)."""
 
 import ast
 import importlib.util

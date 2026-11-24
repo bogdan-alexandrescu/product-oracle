@@ -9,7 +9,7 @@ Cards (protects / fails_when / no_claim):
   (Detailed's item reads its stored freshness), and an item stale for a reason of its own
   keeps that reason without the whole-PRD one; fails_when=the first stays
   potentially_stale, or the second loses its own reason or its stale state;
-  no_claim=the reads' own rule (tests/test_simple_walk_fixes3_ph_api.py).
+  no_claim=the reads' own rule (tests/test_tracks.py).
 """
 
 import importlib.util
@@ -28,7 +28,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     runtime,
 )
 from tests.test_roadmap_item_staleness import items
-from tests.test_simple_walk_fixes3_ph_api import _mark
+from tests.test_tracks import _mark
 
 REVISION = "0090_whole_prd_stale_cleared"
 PREVIOUS = "0090_simple_prd_plans"

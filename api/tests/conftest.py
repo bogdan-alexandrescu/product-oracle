@@ -235,8 +235,6 @@ _RITUALS_SEEDED_ON = frozenset({
     "test_simple_meetings_walk",
     "test_simple_review_fixes",
     "test_simple_roadmap_api",
-    "test_simple_walk_fixes3_cp_api",
-    "test_simple_walk_fixes3_m2_api",
     "test_simple_walk_fixes_api",
     "test_simple_walk_fixes_review_api",
     "test_slack_bridge",
