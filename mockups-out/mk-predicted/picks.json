@@ -1,339 +1,391 @@
 {
- "title": "Planned vs predicted date chart per goal and milestone",
- "subtitle": "Mock-ups for issue #1801: how far a goal or milestone drifts and which feature drives it. Invented data. Switches: ?pc1=a|b|c, ?pc2=a|b|c, ?pc3=a|b|c, &mkdata=big, &open=1.",
- "decisions": [
-  {
-   "code": "PC1",
-   "name": "Chart form and place",
-   "question": "Which chart shows planned against predicted dates, and where does it live?",
-   "common": "Every proposal reads the same dates: the due date as an open diamond, the predicted date as a filled dot, and the words late, on time or early beside them (a shape and a word, never colour alone). Each names the feature that sets the predicted date with its code, and that name opens the one feature panel. It only reads: owners, approvers, commenters and viewers all see the same. Today nothing shows how far a goal drifts.",
-   "proposals": [
+  "title": "Planned vs predicted date chart per goal and milestone",
+  "subtitle": "Mock-ups for issue #1801: how far a goal or milestone drifts and which feature drives it. Invented data. Simple only: Detailed is unchanged. Switches: ?pc1=a|b|c, ?pc2=a|b|c, ?pc3=a|b|c, &mkdata=big, &open=1, &as=commenter. Each phone and 1512 frame has a dark PNG beside it; every HTML frame takes ?theme=dark.",
+  "decisions": [
     {
-     "letter": "A",
-     "name": "Dates on goal cards",
-     "recommended": true,
-     "what": "On the Goal map, each goal card gets one thin line under its progress bar: the due date, the predicted date, the gap between them and a late or early word. A click opens a small panel with the same line for the goal and for each of its milestones, each naming the feature that sets its date.",
-     "why": "The Goal map already shows goals over their milestones, so the dates sit where people read goals; one line per item reads at a glance, and the panel covers the milestones too.",
-     "plus": "No new page or tab; the milestone lines answer 'in the milestone panel' in the same place.",
-     "cost": "0 clicks to see late or early on every goal; 1 click for the milestones; 2 clicks to reach the feature. Today: not possible.",
-     "frames": [
-      {
-       "file": "frames/pc1-a-rest.html",
-       "caption": "At rest: each goal card shows its due date, its predicted date and 4 days early, 12 days late, or No date yet."
-      },
-      {
-       "file": "frames/pc1-a-open.html",
-       "caption": "One click on the Paid conversions line opens its dates: the goal and its three milestones, each with the feature that sets the date."
-      },
-      {
-       "file": "frames/pc1-a-mid.html",
-       "caption": "The pointer is on F-107 Partner referral channel, the feature that sets the goal's date."
-      },
-      {
-       "file": "frames/pc1-a-result.html",
-       "caption": "That click opens F-107's own feature panel, its dates Dec 16 to Jan 12; the corner shows the cost."
-      },
-      {
-       "file": "frames/pc1-a-hard-1512.html",
-       "caption": "The hard case at 1512: twenty features and four milestones; the card still shows one line, the panel four."
-      },
-      {
-       "file": "frames/pc1-a-open-390.html",
-       "caption": "On a phone the dates open as a sheet above the tab bar."
-      }
-     ]
+      "code": "PC1",
+      "name": "Chart form and place",
+      "question": "Which chart shows planned against predicted dates, and where does it live?",
+      "common": "Every proposal reads the same dates: the due date as an open diamond, the predicted date as a filled dot, and the words late, on time or early beside them (a shape and a word, never colour alone). Each names the feature that sets the predicted date with its code, and that name opens the one feature panel, whose dates now read “Dates from engineering”. The Roadmap milestone chip’s own check or warning follows the predicted date, so a chip never shows a check beside “9 days late”. Owners and approvers change dates in the feature panel; a commenter’s change there is a suggestion. Simple only.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Dates on goal cards",
+          "recommended": true,
+          "what": "On the Goal map, each goal card gets one thin line under its progress bar: the due date, the predicted date, the gap between them and a late or early word. A click opens a small panel with the same line for the goal and for each of its milestones, each naming the feature that sets its date.",
+          "why": "The Goal map already shows goals over their milestones, so the dates sit where people read goals; one line per item reads at a glance, and the panel covers the milestones too.",
+          "plus": "No new page or tab; the milestone lines answer 'in the milestone panel' in the same place.",
+          "cost": "0 clicks to see late or early on every goal; 1 click for the milestones; 2 clicks to reach the feature. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc1-a-rest.html",
+              "caption": "At rest: each goal card shows Due and predicted dates with 4 days early, 12 days late, or No date yet."
+            },
+            {
+              "file": "frames/pc1-a-open.html",
+              "caption": "One click on the Paid conversions line opens its dates: the goal and M2, M4, M7, each with the feature that sets it."
+            },
+            {
+              "file": "frames/pc1-a-mid.html",
+              "caption": "The pointer is on F-107 Partner referral channel, the feature that sets the goal’s date."
+            },
+            {
+              "file": "frames/pc1-a-result.html",
+              "caption": "That click opens F-107’s panel: Dec 16 – Jan 12, dates from engineering; the goal’s date Dec 31. The cost sits below the map."
+            },
+            {
+              "file": "frames/pc1-a-hard-rest-1512.html",
+              "caption": "The hard case at 1512: M9 joins the strip and fifteen more features sit under the goal (not on a track yet); the card reads Due Feb 28 · predicted Mar 9."
+            },
+            {
+              "file": "frames/pc1-a-hard-1512.html",
+              "caption": "Its dates opened at 1512: four milestone lines; the last, M9, set by F-129."
+            },
+            {
+              "file": "frames/pc1-a-open-390.html",
+              "caption": "On a phone in dark (PNG) the dates open as a sheet; the card behind it stays whole."
+            },
+            {
+              "file": "frames/pc1-a-commenter-open.html",
+              "caption": "A commenter opens the same dates, with “You can suggest dates; Dana Whitlock approves”."
+            },
+            {
+              "file": "frames/pc1-a-commenter-result.html",
+              "caption": "The commenter’s F-107 panel: each Change there sends a suggestion, not a change."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Weekly drift on Roadmap",
+          "recommended": false,
+          "what": "The Roadmap’s goal card carries a small line of the predicted date week by week against the flat due date, with late or early beside it; one click opens the weeks. Each milestone’s own Roadmap card (opened from its chip) shows its due and predicted dates and the feature that sets them.",
+          "plus": "Shows when the slip began, not only how big it is.",
+          "cost": "0 clicks for the trend on each Roadmap goal card; 1 click for the weeks; milestones only in their own Roadmap card, 1 click each. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc1-b-rest.html",
+              "caption": "At rest: each Roadmap goal card has a small weekly line with 4 days early or 12 days late; Revenue per day has only its No date yet pill."
+            },
+            {
+              "file": "frames/pc1-b-open.html",
+              "caption": "One click on Paid conversions opens its predicted date by week against the Dec 31 due date."
+            },
+            {
+              "file": "frames/pc1-b-mid.html",
+              "caption": "The pointer is on F-107 Partner referral channel."
+            },
+            {
+              "file": "frames/pc1-b-card.html",
+              "caption": "M7’s own Roadmap milestone card, opened from its chip: due Dec 31, predicted Jan 12, 12 days late, set by F-107; its chip and Status carry a warning, not a check."
+            },
+            {
+              "file": "frames/pc1-b-result.html",
+              "caption": "F-107’s click scrolls the Roadmap to its row; its bar reads Dec 16 – Jan 12."
+            },
+            {
+              "file": "frames/pc1-b-hard-rest-1512.html",
+              "caption": "The hard case at 1512: the card’s line ends 9 days late; the Roadmap still lists the goal’s 5 roadmap items."
+            },
+            {
+              "file": "frames/pc1-b-hard-1512.html",
+              "caption": "Its weeks at 1512: the prediction climbs from Feb 28 to Mar 9 between Oct 13 and Nov 24."
+            },
+            {
+              "file": "frames/pc1-b-open-390.html",
+              "caption": "On a phone in dark (PNG) the weekly chart opens as a sheet."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Slip on milestones",
+          "recommended": false,
+          "what": "No line for the goal: each milestone in the Goal map’s strip carries its slip in words on its own line (9 days late, 2 days early); one click opens that milestone’s dates and the feature that sets them.",
+          "plus": "Points straight at the milestone that slips.",
+          "cost": "0 clicks to see each milestone’s slip; 1 click per milestone; 2 to reach the feature; the goal itself has no line. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc1-c-rest.html",
+              "caption": "At rest: under each milestone in the strip, its slip in words: 2 days early, 9 days late, No date yet."
+            },
+            {
+              "file": "frames/pc1-c-open.html",
+              "caption": "One click on M4’s 9 days late opens its due and predicted dates."
+            },
+            {
+              "file": "frames/pc1-c-mid.html",
+              "caption": "The pointer is on F-108 Pricing page test, which sets M4’s date."
+            },
+            {
+              "file": "frames/pc1-c-result.html",
+              "caption": "That click opens F-108’s panel, its dates from engineering."
+            },
+            {
+              "file": "frames/pc1-c-hard-rest-1512.html",
+              "caption": "The hard case at 1512: four milestones in the strip, each slip on its own line under its name."
+            },
+            {
+              "file": "frames/pc1-c-hard-1512.html",
+              "caption": "M4 opened at 1512; the fifteen new features sit below the map."
+            },
+            {
+              "file": "frames/pc1-c-open-390.html",
+              "caption": "On a phone in dark (PNG): each slip sits on its own line under its milestone; long names run past the strip’s edge, and M4’s dates open as a sheet."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "B",
-     "name": "Weekly drift on Roadmap",
-     "recommended": false,
-     "what": "On the Roadmap's goal cards, a small line of the predicted date week by week against the flat due date, so you see when it started to slip. A click opens a larger chart with the weeks named and the feature that sets the date.",
-     "plus": "Shows when the slip began, not only how big it is.",
-     "cost": "0 clicks for the trend on each card; 1 click for the weeks; 2 to reach the feature. Milestones are not shown.",
-     "frames": [
-      {
-       "file": "frames/pc1-b-rest.html",
-       "caption": "At rest: each Roadmap goal card has a small weekly line with 4 days early or 12 days late."
-      },
-      {
-       "file": "frames/pc1-b-open.html",
-       "caption": "One click on Paid conversions opens its predicted date by week against the Dec 31 due date."
-      },
-      {
-       "file": "frames/pc1-b-mid.html",
-       "caption": "The pointer is on F-107 Partner referral channel."
-      },
-      {
-       "file": "frames/pc1-b-result.html",
-       "caption": "That click opens F-107 on the Roadmap, its bar now Dec 16 to Jan 12."
-      },
-      {
-       "file": "frames/pc1-b-hard-1512.html",
-       "caption": "The hard case at 1512: twenty features move the date from Feb 26 to Mar 9 over eight weeks."
-      },
-      {
-       "file": "frames/pc1-b-open-390.html",
-       "caption": "On a phone the weekly chart opens as a sheet."
-      }
-     ]
+      "code": "PC2",
+      "name": "What predicted says",
+      "question": "What is the predicted date read from, and how are its confidence and reason shown?",
+      "common": "Every proposal shows late, on time, early, or No date yet with a word and a shape, and labels both dates (“Due Dec 31 · predicted Jan 12”). The reason sits behind an (i) or a tooltip, never a paragraph. None reads the feature panel’s Confidence field: it is about the feature’s effect on the goal, not its dates. All are drawn on the Goal map’s goal cards.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Latest end, (i) why",
+          "recommended": true,
+          "what": "The predicted date is the latest end date among the goal's features. The card shows the date and late or early; the (i) in its panel says what it is read from, which feature ends last, and how many features have an end date.",
+          "why": "It is the rule a person can check by hand from the feature panels, and the count of undated features says how far to trust it.",
+          "plus": "Uses only the end dates the Roadmap already has.",
+          "cost": "1 click for the dates, 1 more on the (i) for why: 2 clicks. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc2-a-rest.html",
+              "caption": "At rest: one goal 4 days early, one 12 days late, one with No date yet."
+            },
+            {
+              "file": "frames/pc2-a-open.html",
+              "caption": "The Paid conversions dates with the (i) open below its button: read from the latest feature end date, F-107 ends Jan 12, 4 of 5 features have an end date."
+            },
+            {
+              "file": "frames/pc2-a-mid.html",
+              "caption": "The pointer is on F-107, the feature that ends last."
+            },
+            {
+              "file": "frames/pc2-a-result.html",
+              "caption": "F-107’s panel opens with Dec 16 – Jan 12, the same end as the prediction."
+            },
+            {
+              "file": "frames/pc2-a-hard-rest-1512.html",
+              "caption": "The hard case at 1512: the card reads Due Feb 28 · predicted Mar 9, 9 days late."
+            },
+            {
+              "file": "frames/pc2-a-hard-1512.html",
+              "caption": "Its dates at 1512: four milestones, 2 of 20 features with no end date."
+            },
+            {
+              "file": "frames/pc2-a-open-390.html",
+              "caption": "On a phone in dark (PNG) the same (i) sits in the sheet."
+            },
+            {
+              "file": "frames/pc2-a-commenter-open.html",
+              "caption": "A commenter sees the same dates and “You can suggest dates; Dana Whitlock approves”."
+            },
+            {
+              "file": "frames/pc2-a-commenter-result.html",
+              "caption": "The commenter’s F-107 panel, where a date change is a suggestion."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Range from past slips",
+          "recommended": false,
+          "what": "The predicted date is a range: the latest feature end date widened by how far past features slipped (outcome records, avg +6 days) and by features with no end date. The card, each milestone row and the late words all show the range (5–19 days late).",
+          "plus": "Confidence is drawn, not just said.",
+          "cost": "0 clicks to read the range on the card; 2 clicks for why. A range is harder to quote than one date. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc2-b-rest.html",
+              "caption": "At rest: each card shows a hatched band and its range, e.g. Due Dec 31 · predicted Jan 5 – Jan 19, 5–19 days late."
+            },
+            {
+              "file": "frames/pc2-b-open.html",
+              "caption": "Opened with the (i): latest end date, widened by past slips (avg +6 days) and 1 undated feature; each milestone row draws its own band and range."
+            },
+            {
+              "file": "frames/pc2-b-mid.html",
+              "caption": "The pointer is on F-107, the feature that ends last."
+            },
+            {
+              "file": "frames/pc2-b-result.html",
+              "caption": "F-107’s panel opens, dates from engineering."
+            },
+            {
+              "file": "frames/pc2-b-hard-rest-1512.html",
+              "caption": "The hard case at 1512: the band on the Feb 28 goal."
+            },
+            {
+              "file": "frames/pc2-b-hard-1512.html",
+              "caption": "Its dates at 1512: four bands; M2’s reads Up to 6 days late."
+            },
+            {
+              "file": "frames/pc2-b-open-390.html",
+              "caption": "On a phone in dark (PNG): the card’s two dates wrap between them; the sheet shows every range."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Status mark and word",
+          "recommended": false,
+          "what": "The card shows a mark (check, warning, dash) and its word beside the due date; one click opens the two dates and the feature that sets them.",
+          "plus": "The quietest card; nothing new to learn.",
+          "cost": "1 click on the mark to read the dates, 1 more for the feature. The card carries two pills: At risk (the measure) and the date word. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc2-c-rest.html",
+              "caption": "At rest: a check, a warning or a dash with its word beside each goal’s due date."
+            },
+            {
+              "file": "frames/pc2-c-open.html",
+              "caption": "One click on the warning: 12 days late, due Dec 31, predicted Jan 12."
+            },
+            {
+              "file": "frames/pc2-c-mid.html",
+              "caption": "The pointer is on F-107 Partner referral channel."
+            },
+            {
+              "file": "frames/pc2-c-result.html",
+              "caption": "F-107’s panel opens."
+            },
+            {
+              "file": "frames/pc2-c-hard-rest-1512.html",
+              "caption": "The hard case at 1512: the mark reads 9 days late and does not say how many milestones slip."
+            },
+            {
+              "file": "frames/pc2-c-hard-1512.html",
+              "caption": "Its short panel at 1512: the goal only."
+            },
+            {
+              "file": "frames/pc2-c-open-390.html",
+              "caption": "On a phone in dark (PNG) the mark opens a short sheet."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "C",
-     "name": "Slip bars on milestones",
-     "recommended": false,
-     "what": "On the Goal map's milestone strip, each milestone gets a short bar as long as its slip, with +9 days, On time or No date. A click opens that milestone's dates and the feature that sets them. The goal itself has no line.",
-     "plus": "Points straight at the milestone that slips.",
-     "cost": "0 clicks to see each milestone's slip; 1 click per milestone; 2 to reach the feature. No one line for the goal.",
-     "frames": [
-      {
-       "file": "frames/pc1-c-rest.html",
-       "caption": "At rest: each milestone chip ends with its slip: 2 days early, +9 days, +12 days, No date."
-      },
-      {
-       "file": "frames/pc1-c-open.html",
-       "caption": "One click on M4's +9 days opens its due and predicted dates."
-      },
-      {
-       "file": "frames/pc1-c-mid.html",
-       "caption": "The pointer is on F-108 Pricing page test, which sets M4's date."
-      },
-      {
-       "file": "frames/pc1-c-result.html",
-       "caption": "That click opens F-108's panel, its dates Nov 12 to Dec 9."
-      },
-      {
-       "file": "frames/pc1-c-hard-1512.html",
-       "caption": "The hard case at 1512: the strip's chips wrap in narrow goal columns."
-      },
-      {
-       "file": "frames/pc1-c-open-390.html",
-       "caption": "On a phone the slip words wrap and the dates open as a sheet."
-      }
-     ]
+      "code": "PC3",
+      "name": "Twenty features, four milestones",
+      "question": "How does a goal with twenty features and four milestones stay readable at 1512 and on a phone?",
+      "common": "Every proposal opens from the goal card’s one line, uses the app’s pass, warn and crit colours with a shape and a word for each, works in light and dark, and keeps the panel inside the window with its own scroll. The Goal map behind shows the same twenty features (fifteen not on a track yet) and M9.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "One line per milestone",
+          "recommended": true,
+          "what": "The panel shows the goal's line, then one line per milestone, each naming only the one feature that sets its date; the count of undated features closes it.",
+          "why": "Four milestones fit without scrolling at 1512; the reader sees which milestone slips and which feature to open, and twenty features never crowd the view.",
+          "plus": "Same look as the small case, so nothing new to learn.",
+          "cost": "1 click shows all four milestones, 1 more opens the feature; scrolls inside the sheet on a phone. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc3-a-rest.html",
+              "caption": "At rest: M9 joins the strip, the new features sit under No track, and the card reads Due Feb 28 · predicted Mar 9, 9 days late."
+            },
+            {
+              "file": "frames/pc3-a-open.html",
+              "caption": "One click: the goal and M2, M4, M7, M9 each on one line with the feature that sets it."
+            },
+            {
+              "file": "frames/pc3-a-mid.html",
+              "caption": "The pointer is on F-108 Pricing page test, which sets M4."
+            },
+            {
+              "file": "frames/pc3-a-result.html",
+              "caption": "F-108’s panel opens, its dates from engineering."
+            },
+            {
+              "file": "frames/pc3-a-hard-1512.html",
+              "caption": "At 1512 the whole panel fits; M9’s long name wraps to two lines (dark PNG beside it)."
+            },
+            {
+              "file": "frames/pc3-a-open-390.html",
+              "caption": "On a phone in dark (PNG) the four lines scroll inside the sheet."
+            },
+            {
+              "file": "frames/pc3-a-commenter-open.html",
+              "caption": "A commenter opens the same four lines, with “You can suggest dates; Dana Whitlock approves”."
+            },
+            {
+              "file": "frames/pc3-a-commenter-result.html",
+              "caption": "The commenter’s F-108 panel, where a date change is a suggestion."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Every feature a tick",
+          "recommended": false,
+          "what": "Each milestone line also carries a small tick for every feature's end date; the feature that sets the date is a thick tick and is named.",
+          "plus": "Shows the spread: one late outlier or many late features.",
+          "cost": "1 click; reading twenty ticks takes longer than four lines. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc3-b-rest.html",
+              "caption": "At rest: the goal card’s line carries a tick for each dated feature."
+            },
+            {
+              "file": "frames/pc3-b-open.html",
+              "caption": "One click: each milestone line with its features’ ticks, the one that sets its date thick."
+            },
+            {
+              "file": "frames/pc3-b-mid.html",
+              "caption": "The pointer is on F-108 Pricing page test."
+            },
+            {
+              "file": "frames/pc3-b-result.html",
+              "caption": "F-108’s panel opens."
+            },
+            {
+              "file": "frames/pc3-b-hard-1512.html",
+              "caption": "At 1512 the ticks stay apart; colour is backed by thickness (dark PNG beside it)."
+            },
+            {
+              "file": "frames/pc3-b-open-390.html",
+              "caption": "On a phone in dark (PNG): about three ticks per line; the sheet scrolls to M9."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Ranked by days late",
+          "recommended": false,
+          "what": "Instead of milestone lines, the panel ranks the features by how many days past their own milestone’s date they end, with a bar each; six show, Show all lists the twenty.",
+          "plus": "Answers 'what do we fix first' directly.",
+          "cost": "1 click for the top six, 1 for all 20, 1 to open a feature: 3 clicks. Milestones are not drawn. Today: no predicted date anywhere, only the goal’s At risk pill (which is about the measure, not dates).",
+          "frames": [
+            {
+              "file": "frames/pc3-c-rest.html",
+              "caption": "At rest: the goal card reads 9 days late."
+            },
+            {
+              "file": "frames/pc3-c-open.html",
+              "caption": "One click: the six features furthest past their own milestone’s date, F-123 (+20 days) first; the goal’s date is set by F-129."
+            },
+            {
+              "file": "frames/pc3-c-mid.html",
+              "caption": "Show all 20 lists every feature; the pointer is on F-107 Partner referral channel."
+            },
+            {
+              "file": "frames/pc3-c-result.html",
+              "caption": "F-107’s panel opens."
+            },
+            {
+              "file": "frames/pc3-c-hard-1512.html",
+              "caption": "At 1512 the ranked list sits below the goal line (dark PNG beside it)."
+            },
+            {
+              "file": "frames/pc3-c-open-390.html",
+              "caption": "On a phone in dark (PNG): names shorten, the days stay readable."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "code": "PC2",
-   "name": "What predicted says",
-   "question": "What is the predicted date read from, and how are its confidence and reason shown?",
-   "common": "Every proposal shows late, on time, early, or No date yet when no feature has an end date, with a word and a shape. The reason and confidence sit behind an (i) or a tooltip, never a paragraph. All are drawn on the Goal map's goal cards.",
-   "proposals": [
-    {
-     "letter": "A",
-     "name": "Latest end, (i) why",
-     "recommended": true,
-     "what": "The predicted date is the latest end date among the goal's features. The card shows the date and late or early; the (i) in its panel says what it is read from, which feature ends last, and how many features have an end date.",
-     "why": "It is the rule a person can check by hand from the feature panels, and the count of undated features says how far to trust it.",
-     "plus": "Uses only the end dates the Roadmap already has.",
-     "cost": "1 click for the dates, 1 more on the (i) for why: 2 clicks.",
-     "frames": [
-      {
-       "file": "frames/pc2-a-rest.html",
-       "caption": "At rest: one goal early, one late, one with No date yet."
-      },
-      {
-       "file": "frames/pc2-a-open.html",
-       "caption": "The Paid conversions dates with the (i) open: read from the latest feature end date, F-107 ends Jan 12, 4 of 5 features have an end date."
-      },
-      {
-       "file": "frames/pc2-a-mid.html",
-       "caption": "The pointer is on F-107, the feature that ends last."
-      },
-      {
-       "file": "frames/pc2-a-result.html",
-       "caption": "F-107's panel opens with its end date Jan 12, the same date as the prediction."
-      },
-      {
-       "file": "frames/pc2-a-hard-1512.html",
-       "caption": "The hard case at 1512: 18 of 20 features have an end date."
-      },
-      {
-       "file": "frames/pc2-a-open-390.html",
-       "caption": "On a phone the same reason sits behind the (i) in the sheet."
-      }
-     ]
-    },
-    {
-     "letter": "B",
-     "name": "Range from past slips",
-     "recommended": false,
-     "what": "The predicted date is shown as a range, not a day: the latest end date widened by how far the team's past features ended past their plan (the stored predicted-against-actual records) and by how many features have no end date. A wide band means less sure.",
-     "plus": "Confidence is drawn, not just said.",
-     "cost": "0 clicks to read the range; 2 clicks for why. The range is harder to quote than one date.",
-     "frames": [
-      {
-       "file": "frames/pc2-b-rest.html",
-       "caption": "At rest: each card shows a hatched band, e.g. Due Dec 31 · Jan 5 – Jan 19."
-      },
-      {
-       "file": "frames/pc2-b-open.html",
-       "caption": "The dates opened with the (i) showing what the range is read from."
-      },
-      {
-       "file": "frames/pc2-b-mid.html",
-       "caption": "The pointer is on F-107, the feature that ends last."
-      },
-      {
-       "file": "frames/pc2-b-result.html",
-       "caption": "F-107's panel opens."
-      },
-      {
-       "file": "frames/pc2-b-hard-1512.html",
-       "caption": "The hard case at 1512: two undated features widen the band."
-      },
-      {
-       "file": "frames/pc2-b-open-390.html",
-       "caption": "On a phone the band and its dates wrap under the card."
-      }
-     ]
-    },
-    {
-     "letter": "C",
-     "name": "Status tick only",
-     "recommended": false,
-     "what": "No chart on the card: a single tick (a check for on time or early, a warning for late, a dash for no date) beside the due date; its tooltip and a click give the predicted date and the feature that sets it.",
-     "plus": "The quietest card; nothing new to learn.",
-     "cost": "1 click on the tick to read any date at all; 2 to reach the feature.",
-     "frames": [
-      {
-       "file": "frames/pc2-c-rest.html",
-       "caption": "At rest: a check, a warning or a dash beside each goal's due date."
-      },
-      {
-       "file": "frames/pc2-c-open.html",
-       "caption": "One click on the warning: 12 days late, due Dec 31, predicted Jan 12."
-      },
-      {
-       "file": "frames/pc2-c-mid.html",
-       "caption": "The pointer is on F-107 Partner referral channel."
-      },
-      {
-       "file": "frames/pc2-c-result.html",
-       "caption": "F-107's panel opens."
-      },
-      {
-       "file": "frames/pc2-c-hard-1512.html",
-       "caption": "The hard case at 1512 looks the same as the easy one: the tick hides how many milestones slip."
-      },
-      {
-       "file": "frames/pc2-c-open-390.html",
-       "caption": "On a phone the tick opens a short sheet."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "code": "PC3",
-   "name": "Twenty features, four milestones",
-   "question": "How does a goal with twenty features and four milestones stay readable at 1512 and on a phone?",
-   "common": "Every proposal opens from the goal card's one line, uses the app's pass, warn and crit colours with a shape and a word for each (readable without colour), works in light and dark, and keeps the panel inside the window with its own scroll.",
-   "proposals": [
-    {
-     "letter": "A",
-     "name": "One line per milestone",
-     "recommended": true,
-     "what": "The panel shows the goal's line, then one line per milestone, each naming only the one feature that sets its date; the count of undated features closes it.",
-     "why": "Four milestones fit without scrolling at 1512; the reader sees which milestone slips and which feature to open, and twenty features never crowd the view.",
-     "plus": "Same look as the small case, so nothing new to learn.",
-     "cost": "1 click for all four milestones; 1 more for the feature. Other features are one more click away, in their milestone.",
-     "frames": [
-      {
-       "file": "frames/pc3-a-rest.html",
-       "caption": "At rest: twenty features, the goal 11 days late."
-      },
-      {
-       "file": "frames/pc3-a-open.html",
-       "caption": "One click: the goal and M2, M4, M7, M9 each on one line with the feature that sets it."
-      },
-      {
-       "file": "frames/pc3-a-mid.html",
-       "caption": "The pointer is on F-108 Pricing page test, which sets M4."
-      },
-      {
-       "file": "frames/pc3-a-result.html",
-       "caption": "F-108's panel opens, its dates Nov 12 to Dec 9."
-      },
-      {
-       "file": "frames/pc3-a-hard-1512.html",
-       "caption": "At 1512 the whole panel fits; the frame's dark copy is beside it (?theme=dark)."
-      },
-      {
-       "file": "frames/pc3-a-open-390.html",
-       "caption": "On a phone the four lines scroll inside the sheet."
-      }
-     ]
-    },
-    {
-     "letter": "B",
-     "name": "Every feature a tick",
-     "recommended": false,
-     "what": "Each milestone line also carries a small tick for every feature's end date; the feature that sets the date is a thick tick and is named.",
-     "plus": "Shows the spread: one late outlier or many late features.",
-     "cost": "1 click; reading twenty ticks takes longer, and close ticks merge on a phone.",
-     "frames": [
-      {
-       "file": "frames/pc3-b-rest.html",
-       "caption": "At rest: the goal card's line carries twenty thin ticks."
-      },
-      {
-       "file": "frames/pc3-b-open.html",
-       "caption": "One click: each milestone line with its features' ticks, the one that sets its date thick."
-      },
-      {
-       "file": "frames/pc3-b-mid.html",
-       "caption": "The pointer is on F-108 Pricing page test."
-      },
-      {
-       "file": "frames/pc3-b-result.html",
-       "caption": "F-108's panel opens."
-      },
-      {
-       "file": "frames/pc3-b-hard-1512.html",
-       "caption": "At 1512 in dark: ticks stay apart; colour is backed by thickness."
-      },
-      {
-       "file": "frames/pc3-b-open-390.html",
-       "caption": "On a phone the ticks crowd together."
-      }
-     ]
-    },
-    {
-     "letter": "C",
-     "name": "Ranked by days late",
-     "recommended": false,
-     "what": "Under the goal's line, the features are listed by how many days they push past their milestone's date, with a bar for each; six show, Show all 20 lists the rest.",
-     "plus": "Answers 'what do we fix first' directly.",
-     "cost": "1 click for the top six, 1 for all 20, 1 to open a feature: 3 clicks. Milestones are not drawn.",
-     "frames": [
-      {
-       "file": "frames/pc3-c-rest.html",
-       "caption": "At rest: the goal card shows 11 days late."
-      },
-      {
-       "file": "frames/pc3-c-open.html",
-       "caption": "One click: the six features that push the date most, +20 days at the top."
-      },
-      {
-       "file": "frames/pc3-c-mid.html",
-       "caption": "Show all 20 lists every feature; the pointer is on F-107 Partner referral channel."
-      },
-      {
-       "file": "frames/pc3-c-result.html",
-       "caption": "F-107's panel opens."
-      },
-      {
-       "file": "frames/pc3-c-hard-1512.html",
-       "caption": "At 1512 the ranked list fits beside the goal line."
-      },
-      {
-       "file": "frames/pc3-c-open-390.html",
-       "caption": "On a phone in dark: names shorten, the days stay readable."
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }
