@@ -275,6 +275,7 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/members/{user_id}/impact", "owner", {"params": {"change": "remove"}}),
     ("GET", "/v1/members/{user_id}/approvals", "owner", {}),
     ("POST", "/v1/members/{user_id}/hand-over", "owner", {"json": {"hand_over": []}}),
+    ("GET", "/v1/mcp-people", "owner", {}),
     ("GET", "/v1/api-tokens", "owner", {}),
     ("DELETE", "/v1/api-tokens/{token_id}", "owner", {}),
     ("GET", "/v1/api-tokens/{token_id}/approvals", "owner", {}),

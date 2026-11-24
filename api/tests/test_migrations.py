@@ -191,8 +191,8 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     previous = script.get_revision(BASELINE_FLOW).down_revision
     # removed-tracks, prd-order, feature-parts, qaC-numfix, item-milestone, milestone-kinds,
     # tb-mk, feature-panel, track-order, ritual-failed-at, simple-change-indexes,
-    # outcomes-edit, roadmap-dates, stale-approval, comments: renumbered on merge.
-    assert script.get_heads() == ["0135_feature_comments"]
+    # outcomes-edit, roadmap-dates, stale-approval, comments, mcp-connect: renumbered on merge.
+    assert script.get_heads() == ["0136_oauth_token_used_at"]
 
     upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()

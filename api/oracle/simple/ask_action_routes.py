@@ -192,6 +192,7 @@ _WHY: dict[str, tuple[str, ...]] = {
     ),
     "an API token, a way into Oracle": (
         "list_api_tokens",
+        "list_mcp_people",
         "remove_api_token",
         "revoke_api_token",
         "token_approvals",
