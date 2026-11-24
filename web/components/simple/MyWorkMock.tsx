@@ -35,6 +35,13 @@ const KIND_WORDS: Record<MwKind, string> = {
   proposal: 'Your proposal', // MOCK-HOOK
   milestone: 'Milestone you own', // MOCK-HOOK
 };
+// MOCK-HOOK: a viewer or commenter is named on the item, but their role cannot change it.
+const ROLE_KIND_WORDS: Record<MwKind, string> = {
+  feature: 'Feature named for you', // MOCK-HOOK
+  decision: 'Asked of you', // MOCK-HOOK
+  proposal: 'Your proposal', // MOCK-HOOK
+  milestone: 'Milestone named for you', // MOCK-HOOK
+};
 const WHEN_WORDS = ['Late or at risk', 'This week', 'Next week', 'Later', 'No date']; // MOCK-HOOK
 const ROLE_GROUPS: [MwKind, string][] = [
   ['decision', 'Waiting for your decision'], // MOCK-HOOK
@@ -143,7 +150,7 @@ function Row({
         <span className="simple-meta">
           {noKind
             ? ''
-            : `${item.kind === 'decision' && (!canAct || proposeOnly) ? 'Asked of you' : KIND_WORDS[item.kind]} · `}
+            : `${!canAct || proposeOnly ? ROLE_KIND_WORDS[item.kind] : KIND_WORDS[item.kind]} · `}
           {item.track}
           {item.due ? ` · due ${item.due}` : ''}
           {item.blocks ? ` · Blocks ${item.blocks}` : ''}
@@ -266,18 +273,21 @@ function Row({
 function Group({
   title,
   n,
+  done,
   children,
   id,
 }: {
   title: string;
   n: number;
+  /** MOCK-HOOK: rows decided this visit, kept in place with Undo. */
+  done?: number;
   children: ReactNode;
   id: string;
 }) {
   return (
     <section className="flex flex-col gap-3" aria-label={title} data-testid={`mw-group-${id}`}>
       <h3 className="text-lg font-semibold">
-        {title} <span className="simple-meta tnum">· {n}</span>
+        {title} <span className="simple-meta tnum">· {n}{done ? ` · ${done} decided` : ''}</span>
       </h3>
       {children}
     </section>
@@ -302,7 +312,7 @@ function Empty({ canAct, onTaken }: { canAct: boolean; onTaken: (xs: MwItem[]) =
         <p className="simple-small flex items-center gap-2">
           Nothing is yours yet.
           {v === 'c' && canAct && (
-            <Link href="/simple/roadmap" className="simple-link">
+            <Link href="/simple/roadmap?mw3=c&case=none" className="simple-link">
               Set owners on the Roadmap
             </Link>
           )}
@@ -487,12 +497,12 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
       </InfoTip>
       {!canAct && (
         <span className="simple-status ml-2" data-testid="mw-role">
-          You can read; ask an owner to change
+          Your role can read only; ask an editor to change
         </span>
       )}
       {proposeOnly && (
         <span className="simple-status ml-2" data-testid="mw-role">
-          You propose; an approver decides
+          Your role proposes; an approver decides
         </span>
       )}
     </p>
@@ -601,6 +611,7 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
           id={`when-${w}`}
           title={WHEN_WORDS[w]}
           n={xs.filter((i) => !decided[i.id]).length}
+          done={xs.filter((i) => decided[i.id]).length}
         >
           <ul>{cap(xs).map(row)}</ul>
           {moreLine(xs)}

@@ -311,6 +311,8 @@ export function mwRoadmapItem<T extends { code?: string | null; title: string; [
     (out as Record<string, unknown>).owner = { id: meId, name: 'Avery Stone' }; // MOCK-HOOK
     (out as Record<string, unknown>).own_owner_id = meId; // MOCK-HOOK
   }
+  const g = (i as Record<string, any>).goal; // MOCK-HOOK
+  if (g && !g.due) (out as Record<string, unknown>).goal = { ...g, due: '2027-03-31' }; // MOCK-HOOK: the goal's target date, so Date is not blank beside the feature's dates
   if (row.due && i.start && i.end) {
     const end = isoOf(row.due); // MOCK-HOOK
     (out as Record<string, unknown>).start = {
