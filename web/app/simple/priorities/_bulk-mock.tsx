@@ -12,7 +12,8 @@ import { useSearchParams } from '@/lib/nav';
 import { InfoTip, toast } from '@/components/ds';
 import { FeatureMarks } from '@/components/current-state/CurrentState';
 import {
-  BULK_APPROVER,
+  approverOf,
+  approversOf,
   BULK_LONG,
   BULK_OWNER,
   BULK_PEOPLE,
@@ -26,7 +27,7 @@ type R = { feature_id: string; title: string; rank: number; own_key?: string | n
 type Field = 'owner' | 'status' | 'dates' | 'track';
 type Draft = { owner?: string; status?: string; shift?: number; end?: string; track?: string };
 type Right = 'edit' | 'propose' | 'none';
-type Result = { changed: string[]; proposed: string[]; skipped: string[]; words: string };
+type Result = { changed: string[]; proposed: string[]; skipped: string[]; words: string; to: string };
 
 type Bulk = {
   be1: string;
@@ -158,6 +159,7 @@ export function useBulkState(rows: R[]): Bulk | null {
       .filter((r) => right(r) === 'edit' && !(only && statusOf(r) === draft.status))
       .map((r) => r.feature_id);
     const proposed = got.filter((r) => right(r) === 'propose').map((r) => r.feature_id);
+    const to = approversOf(got.filter((r) => right(r) === 'propose').map((r) => r.title));
     const skipped = got.filter((r) => right(r) === 'none').map((r) => r.feature_id);
     const next = { ...applied };
     changed.forEach((id) => (next[id] = { ...draft }));
@@ -171,7 +173,7 @@ export function useBulkState(rows: R[]): Bulk | null {
       setOver(o);
     }
     const words = draftWords(draft);
-    const res = { changed, proposed, skipped, words };
+    const res = { changed, proposed, skipped, words, to };
     setOpen(null);
     setPicked(new Set());
     setMode(false);
@@ -182,8 +184,8 @@ export function useBulkState(rows: R[]): Bulk | null {
       toast({
         message: proposed.length
           ? changed.length
-            ? `${changed.length} changed, ${proposed.length} sent to ${BULK_APPROVER} to approve`
-            : `${proposed.length} changes sent to ${BULK_APPROVER} to approve`
+            ? `${changed.length} changed, ${proposed.length} sent to ${to} to approve`
+            : `${proposed.length} changes sent to ${to} to approve`
           : `${changed.length} features: ${words}`,
         action: undo,
         place: 'corner',
@@ -363,7 +365,7 @@ export function BulkChips({ r }: { r: R }) {
   if (got?.proposed)
     out.push(
       <span key="p" className={`${chip} border border-dashed border-accent text-accent sm:whitespace-nowrap`}>
-        {got.status ?? got.owner ?? `${(got.shift ?? 0) > 0 ? '+' : ''}${got.shift} weeks`}, waiting for {BULK_APPROVER}
+        {got.status ?? got.owner ?? `${(got.shift ?? 0) > 0 ? '+' : ''}${got.shift} weeks`}, waiting for {approverOf(r.title)}
       </span>,
     );
   if ((on || kept) && b.mixed && rt !== 'edit' && !got && b.be3 !== 'c')
@@ -403,7 +405,7 @@ function BulkResult({ b, res }: { b: Bulk; res: Result }) {
           {(
             [
               ['changed', `${res.changed.length} changed`],
-              ['proposed', `${res.proposed.length} sent to ${BULK_APPROVER}`],
+              ['proposed', `${res.proposed.length} sent to ${res.to}`],
               ['skipped', `${res.skipped.length} not changed`],
             ] as const
           ).map(([k, w]) =>
@@ -452,6 +454,8 @@ export function BulkTop() {
   if (!b) return null;
   const all = b.picked.size === b.rows.length;
   if (b.result) return <BulkResult b={b} res={b.result} />;
+  // After a change is applied and the picks clear, nothing sits over the list: no empty band. // MOCK-HOOK
+  if (b.be1 === 'a' && !b.picked.size && b.done.length) return null;
   return (
     <div className={`flex min-h-10 flex-wrap items-center gap-3 text-[length:var(--simple-small)] ${b.be1 === 'b' ? 'mb-3' : ''}`} /* MOCK-HOOK */>
       {b.be1 === 'b' && (
@@ -636,18 +640,21 @@ function Preview({ b, max: cap, grow }: { b: Bulk; max: number; grow?: boolean }
     </ul>
   );
   if (b.mixed && b.be3 === 'a') {
-    const groups: [Right, string][] = [
-      ['edit', 'Changes now'],
-      ['propose', `Sent to ${BULK_APPROVER} to approve`],
-      ['none', 'Not changed'],
+    // Each proposal goes to its own feature's approver: one group per approver. // MOCK-HOOK
+    const props = got.filter((r) => b.right(r) === 'propose');
+    const groups: [Right, string, R[]][] = [
+      ['edit', 'Changes now', got.filter((r) => b.right(r) === 'edit')],
+      ...[...new Set(props.map((r) => approverOf(r.title)))].map(
+        (who) => ['propose', `Sent to ${who} to approve`, props.filter((r) => approverOf(r.title) === who)] as [Right, string, R[]],
+      ),
+      ['none', 'Not changed', got.filter((r) => b.right(r) === 'none')],
     ];
     return (
       <div className="flex flex-col gap-3" data-testid="bulk-preview">
-        {groups.map(([k, label]) => {
-          const rs = got.filter((r) => b.right(r) === k);
+        {groups.map(([k, label, rs]) => {
           if (!rs.length) return null;
           return (
-            <section key={k}>
+            <section key={label}>
               <h4 className="flex items-center gap-1 font-semibold">
                 {label} · {rs.length}
                 {k === 'none' && (
@@ -657,7 +664,7 @@ function Preview({ b, max: cap, grow }: { b: Bulk; max: number; grow?: boolean }
               {k === 'none' ? (
                 <ul>
                   {rs.map((r) => (
-                    <li key={r.feature_id} className="py-1 text-text2">
+                    <li key={r.feature_id} className="py-1 text-text2 text-balance" /* MOCK-HOOK: no lone last word */>
                       {bulkTitle(b, r)} · {BULK_WHY[r.title] ?? 'Read only'}
                     </li>
                   ))}
@@ -712,7 +719,20 @@ export function BulkBar() {
           <span className="mx-1 h-6 w-px bg-line max-sm:hidden" aria-hidden />
           {b.commenter && (
             <span className="text-text2 max-sm:col-span-4 max-sm:order-last" data-testid="bulk-commenter">
-              Your changes go to {BULK_APPROVER} to approve
+              {/* MOCK-HOOK: each change goes to its own feature's approver; the tip names them. */}
+              {(() => {
+                const ts = b.rows.filter((r) => b.picked.has(r.feature_id)).map((r) => r.title);
+                const who = [...new Set(ts.map(approverOf))];
+                if (who.length < 2) return <>Your changes go to {who[0]} to approve</>;
+                return (
+                  <span className="inline-flex items-center gap-1">
+                    Your changes go to each feature&apos;s approver
+                    <InfoTip label="Who approves">
+                      {who.map((w) => `${w}: ${ts.filter((t) => approverOf(t) === w).join(', ')}`).join('. ')}
+                    </InfoTip>
+                  </span>
+                );
+              })()}
             </span>
           )}
           {b.be2 === 'b' ? (

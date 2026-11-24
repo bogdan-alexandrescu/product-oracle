@@ -332,7 +332,7 @@
       "code": "BE3",
       "name": "Mixed rights",
       "question": "When some picked features will become proposals and some cannot be changed at all, how does the person know before and after applying?",
-      "common": "Rights come from each feature's own can_* fields: a feature's owner or approver changes it at once, anyone else's change becomes a proposal to that feature's approver, a locked feature is not changed. Shown with the BE2 A bar, signed in as Lena Vos, an approver; 4 picked: two Lena approves, Weekly alert digest F-79 (Avery Stone approves it, so the change goes to Avery Stone) and Alert routing by team (locked by Jonah Pike).",
+      "common": "Rights come from each feature's own can_* fields: a feature's owner or approver changes it at once, anyone else's change becomes a proposal to that feature's approver, a locked feature is not changed. Shown with the BE2 A bar, signed in as Lena Vos, an approver; 4 picked: two Lena approves, Weekly alert digest F-79 (Avery Stone approves it, so the change goes to Avery Stone) and Alert routing by team (locked by Jonah Pike). Avery Stone also approves Alert history export.",
       "proposals": [
         {
           "letter": "A",
@@ -365,7 +365,7 @@
             },
             {
               "file": "frames/be3-a-hard-1512.html",
-              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: the bar says her changes go to Avery Stone to approve, the preview has one group and the button says \"Propose 4 changes\"."
+              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: each change goes to that feature's own approver: the bar says her changes go to each feature's approver (its (i) names Lena Vos and Avery Stone), the preview splits into \"Sent to Lena Vos to approve \u00b7 2\" (Alert rules engine, Mobile alert push) and \"Sent to Avery Stone to approve \u00b7 2\" (Weekly alert digest, Alert history export), and the button says \"Propose 4 changes\"."
             },
             {
               "file": "frames/be3-a-phone.html",
@@ -407,7 +407,7 @@
             },
             {
               "file": "frames/be3-b-hard-1512.html",
-              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: every box stays (all can be proposed), the bar says her changes go to Avery Stone, the button says \"Propose 4 changes\"."
+              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: every box stays (all can be proposed); each goes to that feature's own approver, so the bar says her changes go to each feature's approver, its (i) naming Lena Vos and Avery Stone; the button says \"Propose 4 changes\"."
             },
             {
               "file": "frames/be3-b-phone.html",
@@ -449,7 +449,7 @@
             },
             {
               "file": "frames/be3-c-hard-1512.html",
-              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: only the bar's line says her changes go to Avery Stone; the button still says \"Change 4\"."
+              "caption": "Hard case, 1512 wide, signed in as Mei Arden, a commenter: only the bar's line says her changes go to each feature's approver (its (i) names Lena Vos and Avery Stone); the button still says \"Change 4\"."
             },
             {
               "file": "frames/be3-c-phone.html",

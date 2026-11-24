@@ -50,7 +50,7 @@ test('snap', async ({ browser }) => {
   fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true });
   let state: string | undefined;
   for (const f of SPEC) {
-    if (ONLY && !f.file.startsWith(ONLY)) continue;
+    if (ONLY && !ONLY.split(',').some((o) => f.file.startsWith(o))) continue;
     const phone = f.w < 500;
     const ctx = await browser.newContext({
       viewport: { width: f.w, height: f.h },

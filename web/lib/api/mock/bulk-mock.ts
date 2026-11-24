@@ -38,6 +38,21 @@ export const BULK_WHY: Record<string, string> = {
 /** Who approves a proposed change (BE3). */ // MOCK-HOOK
 export const BULK_APPROVER = 'Avery Stone'; // MOCK-HOOK
 
+/** Each feature's own approver, by title (BE3): a proposal goes to this person. */ // MOCK-HOOK
+export const BULK_APPROVER_OF: Record<string, string> = {
+  // MOCK-HOOK
+  'Alert rules engine': 'Lena Vos', // MOCK-HOOK
+  'Mobile alert push': 'Lena Vos', // MOCK-HOOK
+  'Weekly alert digest': 'Avery Stone', // MOCK-HOOK
+  'Alert history export': 'Avery Stone', // MOCK-HOOK
+}; // MOCK-HOOK
+
+/** Who approves a change to this feature (BE3). */ // MOCK-HOOK
+export const approverOf = (title: string): string => BULK_APPROVER_OF[title] ?? BULK_APPROVER; // MOCK-HOOK
+
+/** "Lena Vos" or "Lena Vos and Avery Stone": everyone who approves these features (BE3). */ // MOCK-HOOK
+export const approversOf = (titles: string[]): string => [...new Set(titles.map(approverOf))].join(' and '); // MOCK-HOOK
+
 /** Long names for the hard case (&long=1), by title. */ // MOCK-HOOK
 export const BULK_LONG: Record<string, string> = {
   // MOCK-HOOK
