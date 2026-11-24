@@ -180,14 +180,22 @@ const BASE_COLUMNS: Column<Need>[] = [
   {
     key: 'age',
     header: 'Age',
-    width: '56px',
+    width: '68px',
     align: 'right',
     phone: 'meta',
     cell: (n) => (
       <span
         className="tnum text-text2"
         title={n.atTip ?? (n.at ? formatDateTime(n.at) : undefined)}
+        data-testid="need-age"
       >
+        {/* inbox-ux (#1786): the age carries its label: a clock, and "Age" for a screen reader. */}
+        {ageOf(n.at) && (
+          <>
+            <Icon name="clock" size={16} className="mr-0.5 inline-block align-[-3px]" />
+            <span className="sr-only">Age </span>
+          </>
+        )}
         {ageOf(n.at)}
         {n.left && (
           <span

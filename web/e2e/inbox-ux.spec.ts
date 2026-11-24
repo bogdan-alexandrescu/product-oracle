@@ -65,6 +65,10 @@ test("a track's status reads as on the Roadmap: Needs a look", async ({ page }) 
   await expect(
     page.locator('[data-need="Track"]').filter({ visible: true }).getByTestId('track-label'),
   ).toHaveText('Usage alerts PRD · Needs a look · 2 need you');
+  // #1786: the row's age carries its label (a clock, and "Age" for a screen reader).
+  const age = page.locator('[data-need="Track"]').filter({ visible: true }).getByTestId('need-age');
+  await expect(age.locator('svg')).toHaveCount(1);
+  await expect(age).toHaveText(/^Age \d+[mhdw]$/);
 });
 
 // protects=#1786; fails_when=an alert's item shows no code (or no flag when it has none), its
