@@ -37,7 +37,7 @@ type ProposalRow = Omit<
 >;
 type Attrs = Record<string, unknown>;
 
-/** #1742: a goal at risk with a full evidence score, and a typed goal never read (MOCK_SCENARIO_KEY). */
+/** #1742: a goal at risk, and a typed goal never read (MOCK_SCENARIO_KEY). */
 export const PLAN_GOAL_RISK_SCENARIO = 'plan-goal-risk';
 /** #1788: a key result's name longer than its line on a goal card. */
 export const PLAN_LONG_KR =
@@ -408,11 +408,10 @@ export function seedBaseline(uuid: () => string): BaselineState {
     [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
   const scenario =
     typeof localStorage !== 'undefined' ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
-  // #1742: Growth under 75% of its target (the Goal map's at risk) with a full evidence score, and
+  // #1742: Growth under 75% of its target (the Goal map's at risk), and
   // Activation a count of 0 against at most 0 that was never read (no day for its current value).
   if (scenario === PLAN_GOAL_RISK_SCENARIO) {
     paid.attrs = { ...paid.attrs, current: 5 };
-    paid.confidence = 1;
     const { current_as_of: _unread, ...rest } = activation.attrs ?? {};
     activation.attrs = {
       ...rest,

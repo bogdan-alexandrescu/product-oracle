@@ -1,4 +1,5 @@
 import { PLAN_LONG_KR } from '../lib/api/mock/baseline';
+import { login } from './helpers';
 import { expect, test } from './test';
 
 /**
@@ -13,6 +14,7 @@ test.beforeEach(async ({ page }) => {
 test('Plan goal cards: at risk wins over the evidence score; no reading is not Target met', async ({
   page,
 }) => {
+  await login(page);
   await page.goto('/plan');
   const band = page.getByTestId('plan-goals').filter({ visible: true });
   const growth = band.getByTestId('home-goal-G2');
@@ -27,6 +29,7 @@ test('Plan goal cards: at risk wins over the evidence score; no reading is not T
 });
 
 test('Plan goal cards: a long key result reads in full', async ({ page }) => {
+  await login(page);
   await page.goto('/plan');
   const band = page.getByTestId('plan-goals').filter({ visible: true });
   const kr = band.getByTestId('home-goal-G2.1').getByTestId('code-name');

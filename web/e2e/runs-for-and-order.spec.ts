@@ -1,3 +1,4 @@
+import { login } from './helpers';
 import { expect, test } from './test';
 
 /**
@@ -6,8 +7,9 @@ import { expect, test } from './test';
  */
 test('Runs: each code map row names its repo; rows are newest updated first', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'runs-code-maps'));
+  await login(page);
   await page.goto('/runs');
-  const table = page.getByRole('table');
+  const table = page.getByRole('grid');
   for (const repo of ['example-org/web', 'example-org/api', 'example-org/docs'])
     await expect(table.getByRole('link', { name: repo, exact: true })).toBeVisible();
 
@@ -17,4 +19,15 @@ test('Runs: each code map row names its repo; rows are newest updated first', as
   expect(stamps.length).toBeGreaterThan(3);
   expect(stamps.every((t) => !Number.isNaN(t))).toBe(true);
   expect(stamps).toEqual([...stamps].sort((a, b) => b - a));
+});
+
+/** #1717: Plan › Dates lists its date sources by the day each supports, as the API orders them. */
+test('Plan › Dates: date sources read in date order', async ({ page }) => {
+  await login(page);
+  await page.goto('/plan/dates');
+  const days = page.locator('[data-day]').filter({ visible: true });
+  await expect(days.first()).toBeVisible();
+  const read = await days.evaluateAll((els) => els.map((el) => el.getAttribute('data-day') ?? ''));
+  expect(read.length).toBeGreaterThan(2);
+  expect(read).toEqual([...read].sort());
 });
