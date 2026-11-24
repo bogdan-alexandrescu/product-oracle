@@ -7,7 +7,7 @@ Logic lives in :mod:`oracle.members.service`; each handler commits once.
 
 import uuid
 from collections.abc import Awaitable
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -104,7 +104,7 @@ async def list_mcp_people(db: TenantDB) -> McpPeopleOut:
             user_id=u.id,
             email=u.email,
             name=u.name,
-            role=u.role,
+            role=cast(Role, u.role),
             clients=len(live.get(u.id, [])),
             last_used_at=max((g.last_used_at for g in live.get(u.id, [])), default=None),
         )
