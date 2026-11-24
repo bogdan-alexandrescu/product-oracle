@@ -61,3 +61,10 @@
 - BE2 A's button counts only the features that change ("Change 3"). A row that was picked but did not change keeps its owner line. Dates read "+2 weeks".
 - On a phone, the floating bar (Detailed and the board) sits right on the bottom tabs with a solid back. BE1 B's "Done picking" has a gap above row 1.
 - Every frame was re-snapped. To snap again, run `python3 spec.py` in `tools/`; it regenerates `spec.json`, which is not committed.
+
+## Review round 5, what changed
+
+- Each proposal goes to that feature's own approver (`BULK_APPROVER_OF`, `approverOf` in `bulk-mock.ts`): Lena Vos approves Alert rules engine and Mobile alert push, Avery Stone approves Weekly alert digest and Alert history export. In the hard frames (Mei Arden, Commenter), A's preview splits into "Sent to Lena Vos to approve · 2" and "Sent to Avery Stone to approve · 2". The bar says "Your changes go to each feature's approver", and its (i) names both people. Naming both people in the bar pushed Track onto a second line at 1512, so the names went into the tip.
+- After a change is applied and the picks clear, the empty "Pick all" band over the list is gone (BE2 and BE3 B result frames).
+- BE3 A "Not changed": the feature name sits on one line and the reason on the next, so no word sits alone and no name is split.
+- Snapping: serve with `npm run start:mock -- --port 3393` (dist-mock, SPA fallback). Plain `vite preview` serves 404 on /login and the snap hangs. `MK_ONLY` takes a comma list of prefixes. `picks.py` takes the output folder: `python3 tools/picks.py mockups-out/mk-bulk-edit`. All BE2 and BE3 frames were re-snapped with swarm-test-browsers Chromium, so the 1512 frames are real 1512x982.
