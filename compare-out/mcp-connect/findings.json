@@ -1,0 +1,151 @@
+[
+  {
+    "frame": "mc1-a-rest",
+    "theme": "light",
+    "status": "match",
+    "why": ""
+  },
+  {
+    "frame": "mc1-a-simple-menu",
+    "theme": "light",
+    "status": "differs",
+    "why": "The account menu and its 'Connect an AI tool' item match. Behind it, Simple Home's goal cards read 'Weight 37%' and 'Now 9.4% \u00b7 target 12%' with 'On track', where the frame reads '37% of the score', 'From 11.2% \u00b7 now 9.4% \u00b7 target 12%' and 'Planned' (not part of this feature).",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc1-a-open",
+    "theme": "light",
+    "status": "differs",
+    "why": "Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc1-a-open",
+    "theme": "dark",
+    "status": "differs",
+    "why": "Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc1-a-open-390",
+    "theme": "light",
+    "status": "differs",
+    "why": "On the phone, 'Changes apply at once' sits on the same line as 'Your tools can' and the address fits on one line; in the picked frame the chip is on its own line under the label and the address wraps (the frame was drawn with a desktop scrollbar, so it may be 15px narrower). Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc1-a-company-1512",
+    "theme": "light",
+    "status": "match",
+    "why": ""
+  },
+  {
+    "frame": "mc2-a-app",
+    "theme": "light",
+    "status": "match",
+    "why": ""
+  },
+  {
+    "frame": "mc2-a-copied",
+    "theme": "light",
+    "status": "differs",
+    "why": "'Copied' and the waiting check strip match. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc2-a-copied-390",
+    "theme": "light",
+    "status": "differs",
+    "why": "On the phone, 'Changes apply at once' sits on the same line as 'Your tools can' and the address fits on one line; in the picked frame the chip is on its own line under the label and the address wraps (the frame was drawn with a desktop scrollbar, so it may be 15px narrower). Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc2-a-done",
+    "theme": "light",
+    "status": "differs",
+    "why": "The connected strip, the row and the MCP clients count match. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc2-a-done",
+    "theme": "dark",
+    "status": "differs",
+    "why": "The connected strip, the row and the MCP clients count match. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc2-a-late",
+    "theme": "light",
+    "status": "differs",
+    "why": "The 'Sign-in timed out' strip with '/mcp' and Copy matches. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc2-a-viewer-1512",
+    "theme": "light",
+    "status": "differs",
+    "why": "The Read only tip drops the frame's opening words 'Your role is Viewer:'; the built tip starts 'A connected tool reads goals, the roadmap and documents...'.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc2-a-commenter-1512",
+    "theme": "light",
+    "status": "differs",
+    "why": "'Changes become proposals' and the newest client in the strip match. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text. The mock could only list 4 clients, all named Example Agent (the seeded Cursor client has expired), so the frame's long names were not shown.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-rest",
+    "theme": "light",
+    "status": "differs",
+    "why": "One client, Your computer, Read & write, Just now, with Revoke: matches. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-five-1512",
+    "theme": "light",
+    "status": "differs",
+    "why": "The table's columns, Read & write chips and Revoke match. The mock could only make 3 clients, all named Example Agent (the seeded Claude Desktop has expired), so the frame's long shared-machine name wrapping in full could not be checked. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-five",
+    "theme": "dark",
+    "status": "differs",
+    "why": "Same as at 1512: only 3 Example Agent clients could be made, so the long-name wrap was not checked. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-five-390",
+    "theme": "light",
+    "status": "differs",
+    "why": "Each row's second line reads 'Used Just now' with a capital J; the frame's rows read 'Used 3 h ago', 'Used 4 min ago' in lower case. The long-name wrap was not checked (only 3 Example Agent clients). Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-revoke",
+    "theme": "light",
+    "status": "differs",
+    "why": "The confirm's title, client name, two lines and buttons match, but Cancel shows no focus ring after the mouse click that opened it; the frame shows Cancel focused with a ring.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-revoked",
+    "theme": "light",
+    "status": "differs",
+    "why": "The empty list, the waiting strip and the 0 MCP clients count match. Step 2 sets '/mcp' and 'oracle' in code (monospace) type in 'In Claude Code, run /mcp and choose oracle'; the picked frame has the whole sentence in plain text.",
+    "severity": "minor"
+  },
+  {
+    "frame": "mc3-a-consent",
+    "theme": "light",
+    "status": "match",
+    "why": ""
+  },
+  {
+    "frame": "mc3-a-company-1512",
+    "theme": "light",
+    "status": "match",
+    "why": ""
+  }
+]
