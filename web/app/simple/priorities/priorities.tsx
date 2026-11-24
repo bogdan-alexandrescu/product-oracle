@@ -175,6 +175,16 @@ const SUBTITLE: Record<Tab, string> = {
   buckets: 'Where the engineer-weeks go, goal by goal.',
 };
 
+/** prio-ux (#1739): why All counts more lines than the line's "N of M miss", which counts the ranked features. */
+function allWords(data: Out, all: number): string {
+  const twins = data.rows.reduce((n, r) => n + (r.twins?.length ?? 0), 0);
+  const parts = [`${data.rows.length} ranked features`];
+  if (twins) parts.push(`${twins} same-name ${twins === 1 ? 'line' : 'lines'}`);
+  const rest = all - data.rows.length - twins;
+  if (rest) parts.push(`${rest} ${rest === 1 ? 'item' : 'items'} not ranked yet`);
+  return `All ${all}: ${parts.join(', ')}. "Miss" counts the ranked features only.`;
+}
+
 /** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
 const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
   const fCodes = data.rows.length > 0 && data.rows.every((r) => !!r.own_key);
@@ -562,7 +572,14 @@ export function Priorities() {
         )}
         {data && !blank && tab === 'ranked' && marks && (
           <div className="mb-3" data-testid="cs-prio-bar">
-            <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
+            <div className="flex items-center gap-2">
+              <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
+              {allCount !== data.rows.length && (
+                <InfoTip label="the All count" testId="prio-all-help" id="prio-all-text">
+                  {allWords(data, allCount)}
+                </InfoTip>
+              )}
+            </div>
             {show && (
               <p className="mt-2 text-[length:var(--simple-small)] text-text2">
                 {SHOW_NOTE[show](showCounts[show])}{' '}

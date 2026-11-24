@@ -1,4 +1,6 @@
+import { GROUND_TRUTH_FLAGS_SCENARIO } from '../lib/api/mock/ground-truth';
 import { MOCK_SCENARIO_KEY, UNIQUE_CODES_SCENARIO } from '../lib/api/mock/server';
+import { PRIORITIES_TWINS_SCENARIO } from '../lib/api/mock/simple-priorities';
 
 import { login } from './helpers';
 import { expect, test } from './test';
@@ -192,3 +194,28 @@ test('#1738 a move on Goal buckets names the place the Ranked list shows, with a
   await page.getByRole('tab', { name: 'Ranked list' }).click();
   await expect(rowByTitle(page, name).getByTestId('prio-rank')).toHaveText(String(place));
 });
+
+for (const [what, scenario] of [
+  ['a same-name line', PRIORITIES_TWINS_SCENARIO],
+  ['an item not ranked yet', GROUND_TRUTH_FLAGS_SCENARIO],
+] as const)
+  test(`#1739 the All chip's (i) says why it counts more than "N of M miss": ${what}`, async ({
+    page,
+  }) => {
+    await open(page, '', scenario);
+    const rows = await page.getByTestId('prio-row').count();
+    const twins = await page.getByTestId('prio-twin').count();
+    const unranked = await page.getByTestId('prio-unranked-row').count();
+    const all = rows + twins + unranked;
+    expect(all).toBeGreaterThan(rows);
+    await expect(page.getByTestId('cs-legend').getByRole('button', { name: /^All / })).toHaveText(
+      `All ${all}`,
+    );
+    await expect(page.getByTestId('line-caption').first()).toContainText(`of ${rows} miss`);
+    await page.getByRole('button', { name: 'About the All count' }).click();
+    const words = page.locator('#prio-all-text');
+    await expect(words).toContainText(`All ${all}: ${rows} ranked features`);
+    if (twins) await expect(words).toContainText(`${twins} same-name`);
+    if (unranked) await expect(words).toContainText(`${unranked} item`);
+    await expect(words).toContainText('"Miss" counts the ranked features only.');
+  });
