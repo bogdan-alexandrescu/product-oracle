@@ -1,10 +1,10 @@
 // Lowers the prose guard's ceilings (e2e/prose-ceilings.json) to today's counts: `npm run prose:ratchet`.
 // Runs e2e/prose-guard.spec.ts (skip with --no-run to use the last run's test-results/prose),
 // then for each page and role sets the ceiling to the count when that is lower, and records a
-// page that has no ceiling yet at 0 (#1724: a new page has no visible prose; the spec fails until
-// it is hidden). It never raises a ceiling, ignores the count of a page that opened "not found",
-// and drops a ceiling only when its page's route file is gone (a visit removed and added again
-// keeps its ceiling).
+// page that has no ceiling yet at 0 when its page is new since the merge base (#1724: the spec
+// fails until its prose is hidden), at its count when the page was there but not yet visited.
+// It never raises a ceiling, ignores the count of a page that opened "not found", and drops a
+// ceiling only when its page's route file is gone (a visit removed and added again keeps it).
 // Prints the ten pages with the most prose. Ceilings are never edited by hand: the spec fails
 // when one is above the merge base's.
 import { spawnSync } from 'node:child_process';
@@ -52,14 +52,13 @@ if (pages) {
     }
   }
 }
-for (const { role, route, words } of counts) {
+for (const { role, route, words, start = 0 } of counts) {
   const byRole = (ceilings[role] ??= {});
   const was = byRole[route];
   if (was === undefined) {
-    byRole[route] = 0;
-    changes.push(
-      `${role} ${route}: new -> 0${words ? ` (it shows ${words} words: hide them)` : ''}`,
-    );
+    byRole[route] = start;
+    const over = words > start ? ` (it shows ${words} words: hide them)` : '';
+    changes.push(`${role} ${route}: new -> ${start}${over}`);
   } else if (words < was) {
     byRole[route] = words;
     changes.push(`${role} ${route}: ${was} -> ${words}`);
