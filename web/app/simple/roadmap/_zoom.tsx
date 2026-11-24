@@ -132,6 +132,11 @@ function rowsOf(
   return out;
 }
 
+/** #1749: the open feature's row label, as the Goal map's picked chip: an accent ring, a bar at its
+ * left edge and its name in bold. */
+const OPEN_LABEL =
+  'bg-accent-soft font-semibold shadow-[inset_4px_0_0_var(--color-accent)] ring-2 ring-accent ring-inset';
+
 /** The open broken link of a live item (red means this and nothing else). */
 export function brokenFlag(i: Item): Flag | undefined {
   return closedItem(i) ? undefined : broken(i).find((f) => f.kind === 'dependency_order');
@@ -1807,7 +1812,7 @@ const TimelineRow = memo(function TimelineRow({
       }
     >
       <div
-        className={`pointer-events-none relative flex border-b border-line/60 ${sel ? 'bg-accent-soft/50' : ''}`}
+        className={`pointer-events-none relative flex border-b border-line/60 ${sel ? 'bg-accent-soft' : ''}`}
         style={{ height: ROW_H }}
       >
         {renaming ? (
@@ -1828,7 +1833,7 @@ const TimelineRow = memo(function TimelineRow({
             onClick={() =>
               sel && renamable && !still ? setRenaming(true) : on.name(i, sel, bx, bw)
             }
-            className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 overflow-hidden border-r border-line px-3 text-left text-sm ${sel ? 'bg-accent-soft' : 'bg-surface'} hover:underline`}
+            className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 overflow-hidden border-r border-line px-3 text-left text-sm ${sel ? OPEN_LABEL : 'bg-surface'} hover:underline`}
             style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
             title={itemName(i)}
           >
@@ -1914,8 +1919,12 @@ const TimelineRow = memo(function TimelineRow({
               width: bw,
               top: 8,
               height: 18,
-              outline: sel ? '2px solid var(--accent-ink)' : undefined,
+              // #1749: the open feature's bar wears a thick accent ring, plain on the dark theme too.
+              outline: sel ? '3px solid var(--accent)' : undefined,
               outlineOffset: 2,
+              boxShadow: sel
+                ? '0 0 0 7px color-mix(in srgb, var(--accent) 30%, transparent)'
+                : undefined,
             }}
           />
           {waiting && (

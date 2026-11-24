@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Button, Sheet, toast } from '@/components/ds';
+import { Button, InfoTip, Sheet, toast } from '@/components/ds';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import { useQuery } from '@/lib/use-query';
 
@@ -52,6 +52,9 @@ function scroller(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/** #1740: what each count on the page covers (its tooltip). */
+const TRACK_COUNT =
+  "Every feature on this track, done ones too, whatever the filters show; cut and merged ones aren't counted";
 const features = (n: number) => `${n} ${n === 1 ? 'feature' : 'features'}`;
 /** The Move to Trash confirm: its live features, then the cut or merged ones it moves too, then
  * those the reader's draft moved off that are still on it in the published Roadmap. */
@@ -117,6 +120,7 @@ export function TracksButton({
   };
   const data = q.data;
   const tracks = data?.tracks ?? [];
+  const owned = tracks.some((t) => !!t.owner_name);
   useLayoutEffect(() => {
     const h = held.current;
     const btn =
@@ -302,7 +306,49 @@ export function TracksButton({
                         {t.title}
                       </p>
                       <p className="text-sm text-text2">
-                        {t.owner_name ?? 'No owner'} · {features(count)}
+                        {/* #1757: the owner shows once owners are used; a track with none then
+                          leads to setting one (its row opens on Owner). */}
+                        {t.owner_name
+                          ? `${t.owner_name} · `
+                          : owned &&
+                            (canChange ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  data-testid="track-no-owner"
+                                  className="!h-auto !min-h-0 !p-0 !text-sm text-accent-ink hover:underline"
+                                  onClick={() => {
+                                    settle();
+                                    setOpened(t.id);
+                                    setTrashing(null);
+                                    requestAnimationFrame(() =>
+                                      list.current
+                                        ?.querySelector<HTMLSelectElement>(
+                                          'select[aria-label="Owner"]',
+                                        )
+                                        ?.focus(),
+                                    );
+                                  }}
+                                >
+                                  No owner
+                                </Button>
+                                {' · '}
+                              </>
+                            ) : (
+                              'No owner · '
+                            ))}
+                        {/* #1740: the count opens what it covers (hover, tap or focus), as a goal card's. */}
+                        <span data-testid="track-count">
+                          <InfoTip
+                            label="what is counted"
+                            align="start"
+                            testId="track-count-tip"
+                            trigger={features(count)}
+                            lazy
+                          >
+                            {TRACK_COUNT}
+                          </InfoTip>
+                        </span>
                         {t.status !== 'active' ? ` · ${STATE[t.status]}` : ''}
                       </p>
                     </div>
