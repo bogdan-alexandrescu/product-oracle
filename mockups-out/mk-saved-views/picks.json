@@ -1,6 +1,6 @@
 {
  "title": "Saved and shared views for roadmap and priority filters",
- "subtitle": "Mock-ups for the owner to pick from (issue #1797). Invented company and people; Simple Roadmap, Simple Priorities and Detailed Priorities; 1440, 1512 and phone 390; open any frame with ?theme=dark for the dark look.",
+ "subtitle": "Mock-ups for the owner to pick from (issue #1797). Invented company and people; Simple Roadmap, Simple Priorities and Detailed Priorities; 1440, 1512 and phone 390; each frame has a light PNG and a -dark.png, and its HTML takes ?theme=dark.",
  "decisions": [
   {
    "code": "SV1",
@@ -324,8 +324,12 @@
      "cost": "Rename: 4 steps. Reorder: one drag. Default: 1 tap in the sheet. Remove: 1 tap, Undo in the toast.",
      "frames": [
       {
+       "file": "frames/sv3-a-rest.html",
+       "caption": "At rest: a saved view, Alerts launch review, is picked from the View menu."
+      },
+      {
        "file": "frames/sv3-a-open.html",
-       "caption": "Manage views opened from the View menu: a sheet with every view, a handle to drag, Default, and Remove (built-in views can be hidden)."
+       "caption": "Manage views opened (View, then Manage views): a sheet with every view, a handle to drag, Default, and Remove (built-in views can be hidden)."
       },
       {
        "file": "frames/sv3-a-mid.html",
@@ -353,6 +357,10 @@
      "plus": "Nothing new to open; each action sits on the view it changes.",
      "cost": "Rename: 4 steps. Reorder: one place per click. Remove: 3 clicks, Undo in place.",
      "frames": [
+      {
+       "file": "frames/sv3-b-rest.html",
+       "caption": "At rest, menu open: each saved row carries a ⋯; there is no Manage views."
+      },
       {
        "file": "frames/sv3-b-open.html",
        "caption": "The View menu opened, then ⋯ on Alerts launch review: Rename, Move up, Move down, Make it the default, Copy link, Remove."
@@ -383,6 +391,10 @@
      "plus": "Direct: change the tab you see. Only fits if SV1 picks tabs.",
      "cost": "Rename: 3 steps. Reorder: drag. Remove: 2 clicks, Undo in the toast. Long names are cut short in tabs.",
      "frames": [
+      {
+       "file": "frames/sv3-c-rest.html",
+       "caption": "At rest: views are tabs; the picked saved tab shows its ⋯."
+      },
       {
        "file": "frames/sv3-c-open.html",
        "caption": "Views as tabs: ⋯ on the picked tab opens Rename, Make it the default, Copy link, Remove."

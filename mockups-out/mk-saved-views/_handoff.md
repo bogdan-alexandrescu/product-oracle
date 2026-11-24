@@ -20,3 +20,8 @@
 - Frames: captured by an iframe host in the live 1440 browser (1512 is scaled to fit for the PNG; the HTML carries
   `mockup-viewport` 1512x982). Scrollbars are the live browser's own (its launch flags are not ours to set).
 - SV2 and SV3 build on SV1 B (and SV3 C on SV1 A), so they skip a second "at rest" frame of the same page.
+
+# Status (10:55 UTC)
+- Done: 70 frames (HTML, a light PNG and a dark PNG each), picks.json, all MOCK-HOOK code committed. tsc passed.
+- Not done: lint, Playwright and the prose guard were not run (mock-ups only). The 1512 PNGs are scaled to 1440 wide, because the live browser is fixed at 1440.
+- Capture scripts were kept outside the repo ($TMPDIR/cap: gen.py, cap.py, snap.js, picks.py, darkall.py).
