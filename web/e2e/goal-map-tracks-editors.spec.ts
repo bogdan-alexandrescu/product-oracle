@@ -53,26 +53,30 @@ test.describe('Goal map editors in the tracks grid', () => {
     // clears the badge. fails_when: No gate is plain text, or the gate cannot be set from the grid.
     await open(page);
     const m = strip(page, 'Annual plans live');
-    await m.getByRole('button', { name: 'No gate' }).click();
+    await m.getByRole('button', { name: '+ Target' }).click();
     const drawer = page.getByRole('dialog', { name: /gate of Annual plans live/ });
     await drawer.getByRole('textbox', { name: 'At least' }).fill('18000');
     await drawer.getByRole('button', { name: 'Save gate' }).click();
     await expect(drawer).toHaveCount(0);
     await expect(strip(page, 'Annual plans live')).toBeVisible();
-    await expect(strip(page, 'Annual plans live').getByText('No gate')).toHaveCount(0);
+    await expect(
+      strip(page, 'Annual plans live').getByRole('button', { name: '+ Target' }),
+    ).toHaveCount(0);
   });
 
   test("Set the gate from a milestone's ⋯ menu", async ({ page }) => {
     // protects: the gate editor from the menu too. fails_when: the menu has no Set the gate.
     await open(page);
     await expect(
-      strip(page, 'Self-serve setup').getByRole('button', { name: 'No gate' }),
+      strip(page, 'Self-serve setup').getByRole('button', { name: '+ Target' }),
     ).toBeVisible();
     await milestoneMenu(page, 'Self-serve setup', 'Set the gate');
     const drawer = page.getByRole('dialog', { name: /gate of Self-serve setup/ });
     await drawer.getByRole('textbox', { name: 'At least' }).fill('25');
     await drawer.getByRole('button', { name: 'Save gate' }).click();
-    await expect(strip(page, 'Self-serve setup').getByText('No gate')).toHaveCount(0);
+    await expect(
+      strip(page, 'Self-serve setup').getByRole('button', { name: '+ Target' }),
+    ).toHaveCount(0);
   });
 
   test("New PRD from it opens the new PRD sheet with the milestone's name", async ({ page }) => {

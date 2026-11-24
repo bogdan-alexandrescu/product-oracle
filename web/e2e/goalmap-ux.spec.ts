@@ -79,7 +79,7 @@ test.describe('Goal map UX (Nov 23 audit)', () => {
     await open(page);
     const m = strip(page, 'Self-serve setup');
     await expect(m.getByText('No gate')).toHaveCount(0);
-    const set = m.getByRole('button', { name: '+ Set target' });
+    const set = m.getByRole('button', { name: '+ Target' });
     await expect(set).toBeVisible();
     expect(await style(set, 'border-top-style')).toBe('dashed');
     expect(await style(set, 'cursor')).toBe('pointer');

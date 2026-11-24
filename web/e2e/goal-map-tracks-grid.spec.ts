@@ -292,7 +292,7 @@ test.describe('Goal map: goals by tracks grid', () => {
     await expect(
       goal(page, 'Booked demos per rep per day').getByTitle('Booked demos per rep per day'),
     ).toBeVisible();
-    // A goal's name is clamped to two lines; a long feature name keeps to one line on its chip.
+    // A goal's name is clamped to two lines; a long feature name wraps to two lines on its chip (#1772).
     const name = goal(page, 'Booked demos per rep per day').getByTitle(
       'Booked demos per rep per day',
     );
@@ -313,7 +313,8 @@ test.describe('Goal map: goals by tracks grid', () => {
       (el) =>
         [el.getBoundingClientRect().height, parseFloat(getComputedStyle(el).lineHeight)] as const,
     );
-    expect(ch).toBeLessThanOrEqual(clh + 1);
+    expect(ch).toBeGreaterThan(clh + 1);
+    expect(ch).toBeLessThanOrEqual(2 * clh + 1);
   });
 });
 
