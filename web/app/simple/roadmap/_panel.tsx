@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toast as dsToast, type ToastAsk } from '@/components/ds';
-import { MkHistory, mkParam, mkPush } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { MkHistory, mkUt2 } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import { withdraw } from './_tracks'; // MOCK-HOOK
 import { api, unwrap } from '@/lib/api/client';
 import {
@@ -147,20 +147,7 @@ export function FeaturePanel({
     async (what, body, note) => {
       try {
         const r = await propose(body);
-        const mk = mkParam('ut2'); // MOCK-HOOK
-        const small = ['set_status', 'set_confidence', 'set_dates', 'set_owner'].includes(body.op) && (body.after as { status?: string })?.status !== 'cut'; // MOCK-HOOK
-        if (mk === 'b' && small && r.change.status === 'applied') { // MOCK-HOOK
-          const f = body.op === 'set_status' ? 'status' : body.op === 'set_dates' ? 'dates' : 'confidence'; // MOCK-HOOK
-          mkPush({ message: 'Saved', kind: 'tick', anchor: `[data-testid="card-${f}"]` }); // MOCK-HOOK
-          return; // MOCK-HOOK
-        } // MOCK-HOOK
-        if ((mk === 'a' || mk === 'c') && r.change.status !== 'applied') // MOCK-HOOK
-          return toast({ // MOCK-HOOK
-            message: resultWords(r, what, item?.deciders, note), // MOCK-HOOK
-            action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void withdraw(r.change.id).then(() => (toast({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) }, // MOCK-HOOK
-          }); // MOCK-HOOK
-        if (mk === 'd' && !small && r.change.status === 'applied') // MOCK-HOOK
-          return toast({ message: resultWords(r, what, item?.deciders, note) }); // MOCK-HOOK
+        if (mkUt2(r, body, resultWords(r, what, item?.deciders, note), withdraw, reload, toast)) return; // MOCK-HOOK
         toast({
           message: resultWords(r, what, item?.deciders, note),
           action:

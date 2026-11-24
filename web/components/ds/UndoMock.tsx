@@ -39,7 +39,7 @@ function useLog() { // MOCK-HOOK
   useEffect(() => { // MOCK-HOOK
     const f = () => set((n) => n + 1); // MOCK-HOOK
     subs.add(f); // MOCK-HOOK
-    const t = mkParam('hold') ? 0 : window.setInterval(f, 250); // MOCK-HOOK
+    const t = window.setInterval(f, 250); // MOCK-HOOK
     return () => { subs.delete(f); window.clearInterval(t); }; // MOCK-HOOK
   }, []); // MOCK-HOOK
   return log; // MOCK-HOOK
@@ -235,4 +235,34 @@ function MkMine() { // MOCK-HOOK
       )} {/* MOCK-HOOK */}
     </div> // MOCK-HOOK
   ); // MOCK-HOOK
+} // MOCK-HOOK
+
+/** UT2: what a change's toast offers, per proposal; true when it was handled here. */
+export function mkUt2( // MOCK-HOOK
+  r: { change: { id: string; status: string } }, // MOCK-HOOK
+  body: { op: string; after?: unknown }, // MOCK-HOOK
+  message: string, // MOCK-HOOK
+  wd: (id: string) => Promise<void>, // MOCK-HOOK
+  reload: () => unknown, // MOCK-HOOK
+  push: (a: ToastAsk) => void, // MOCK-HOOK
+): boolean { // MOCK-HOOK
+  const mk = mkParam('ut2'); // MOCK-HOOK
+  if (!mk) return false; // MOCK-HOOK
+  const cut = (body.after as { status?: string } | undefined)?.status === 'cut'; // MOCK-HOOK
+  const small = ['set_status', 'set_confidence', 'set_dates', 'set_owner', 'move', 'set_rank'].includes(body.op) && !cut; // MOCK-HOOK
+  const applied = r.change.status === 'applied'; // MOCK-HOOK
+  if (mk === 'b' && small && applied) { // MOCK-HOOK
+    const f = body.op === 'set_status' ? 'status' : body.op === 'set_dates' ? 'dates' : 'confidence'; // MOCK-HOOK
+    mkPush({ message: 'Saved', kind: 'tick', anchor: `button[aria-label="Change the ${f}"]` }); // MOCK-HOOK
+    return true; // MOCK-HOOK
+  } // MOCK-HOOK
+  if ((mk === 'a' || mk === 'c') && !applied) { // MOCK-HOOK
+    push({ message, action: { label: mk === 'a' ? 'Withdraw' : 'Undo', onClick: () => void wd(r.change.id).then(() => (push({ message: mk === 'a' ? 'Withdrawn: it no longer waits for a decision' : 'Undone' }), reload())) } }); // MOCK-HOOK
+    return true; // MOCK-HOOK
+  } // MOCK-HOOK
+  if (mk === 'd' && !small && applied) { // MOCK-HOOK
+    push({ message }); // MOCK-HOOK
+    return true; // MOCK-HOOK
+  } // MOCK-HOOK
+  return false; // MOCK-HOOK
 } // MOCK-HOOK

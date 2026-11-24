@@ -167,6 +167,8 @@ import {
   warmRoadmapPage,
 } from './_warm';
 import { ConflictPanel, ZoomTimeline } from './_zoom';
+import { mkUt2 } from '@/components/ds/UndoMock'; // MOCK-HOOK
+import { withdraw as mkWithdraw } from './_tracks'; // MOCK-HOOK
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
@@ -2327,6 +2329,7 @@ export function SimpleRoadmap() {
           target?.key,
           latest.current.get(String(body.target?.subject ?? ''))?.key,
         ].filter(Boolean);
+        if (mkUt2(r, body, resultWords(r, what, target?.deciders, note), mkWithdraw, reloadAfter, toast)) return r; // MOCK-HOOK
         toast({
           avoid: keys.length
             ? keys.map((k) => `[data-testid="conflict"][data-item="${k}"]`).join(', ')
