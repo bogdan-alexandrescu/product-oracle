@@ -7,10 +7,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Button, InfoTip } from '@/components/ds';
+import { Button, InfoTip, toast } from '@/components/ds';
 import { api, unwrap } from '@/lib/api/client';
 import { formatDay } from '@/lib/format';
-import { dataChanged, useQuery } from '@/lib/use-query';
+import { dataChanged, errorMessage, useQuery } from '@/lib/use-query';
 
 import type { Act } from './_card';
 import type { ChangeWords, Item } from './_lib';
@@ -146,7 +146,7 @@ function TrackerMark({ task, canChange }: { task: Task; canChange: boolean }) {
     setBusy(true);
     const path = { task_id: task.id };
     void unwrap(api.POST('/v1/simple/tasks/{task_id}/tracker-push', { params: { path } }))
-      .catch(() => undefined)
+      .catch((e: unknown) => toast({ message: errorMessage(e) }))
       .finally(() => (setBusy(false), dataChanged()));
   };
   return (
