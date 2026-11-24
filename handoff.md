@@ -262,3 +262,39 @@ No API, mock or migration change. Files outside the merged lanes' own files: non
   tsc 0; Playwright --retries=0 on a mock build: timeline-comment-count, timeline-order,
   simple-roadmap-lanes, feature-comments 15 passed; prose guard passed; format:check on the
   touched files ok; full npm run lint: exit 0 (at 701f40ce, after the import-order fix).
+
+# prio-ux fix round (review NOT_YET on 6c73c29; issues #1738, #1739, #1773–#1777)
+
+## Fixed (each verdict.json blocker and major)
+- B1 mock "this quarter" read the roadmap's span without a dated plan: `web/lib/api/mock/simple-priorities.ts`
+  `thisQuarter` takes the span only when `planOf` gives a plan (as `priorities.plan_quarter`).
+  goal-buckets-accept.spec.ts:94 and edit-goals-prds-move.spec.ts:70 green.
+- B2 one rule, in the API: "this quarter" = the items whose dates put them in Now plus, with a dated plan, the
+  plan's items in its span (`api/oracle/simple/priorities.py` `plan_quarter`'s `inside`); the line and the goal
+  buckets read that one set; the mock follows. Red pytest first:
+  `api/tests/test_simple_priorities_one_quarter_api.py::test_an_item_dated_into_now_outside_the_plan_makes_the_line_and_its_bucket`.
+  prio-company.spec.ts:123 x4 and simple-plan-charts.spec.ts:143 x4 green, specs unchanged.
+- B3 `web/e2e/qa4-simple-plan.spec.ts` reads the one row layout (details under the title).
+- M4 `web/e2e/fix2-simple-plan-review.spec.ts`: the precondition is back (the row under the picked one is not
+  rank + 1), so the test fails again for "ArrowDown asks for the on-screen neighbour".
+- M5 `web/app/simple/priorities/feature-order.tsx`: writes the API rank (pinOf), the note names the list's place.
+  Spec `prio-ux.spec.ts` "#1738 a move on Goal buckets names the place..." red without it (Expected 13, Received 12).
+- M6 an (i) by the All chip (`prio-all-help`, `allWords` in priorities.tsx) says All counts ranked features,
+  same-name lines and items not ranked yet, while "Miss" counts ranked features. Spec in prio-ux.spec.ts on the
+  priorities-twins and ground-truth-flags scenarios (existing mock scenarios: one carries twins, one an unranked
+  item); both red without the tip.
+
+## Already fixed before this lane / minors
+- #1775: prio-ux.spec.ts:112 passes on the base build too (the mock already stripped the code); the red proof is
+  `api/tests/test_simple_priorities_titles_api.py` (red at 83b3594).
+- #1776 overlap: the chart already spread or grouped marks at base (mark-counts.tsx, qa-simple-plan-11); only the
+  side list's tip about skipped numbers is new.
+- Minors left as they are (not blocker/major): the mock drops a row when its own item is Done while the API drops
+  a feature only when all its items are Done; the mock's span set takes only the plan PRD's items; Goal map chips of
+  Done features sort last (out of scope).
+
+## Gates this round
+- Playwright: every spec that drives /simple/priorities (99 files, `grep -l "simple/priorities"`), mock build,
+  4 workers, --retries=0: 1064 passed, 0 failed. prose-guard green with PROSE_BASE=83b3594.
+- web: tsc 0, full `npm run lint` 0, format:check 0.
+- api: see the PR body for the whole-suite, timing, pyright and frozen-migration verdicts.
