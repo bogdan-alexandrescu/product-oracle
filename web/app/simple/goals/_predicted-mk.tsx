@@ -282,7 +282,7 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
           <DateLine planned={p.planned} predicted={p.predicted} lo={lo} hi={hi} ticks={pc3 === 'b' ? p.features.filter((f) => f.end).map((f) => ({ at: f.end!, strong: f.name === p.driver })) : undefined} />
         )}
         <span className="tnum flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5 text-xs text-text2">
-          <span className="whitespace-nowrap">Due {md(p.planned)}{p.predicted ? ` · predicted ${pc2 === 'b' ? `${md(shift(p.predicted, -range(p)))} – ${md(shift(p.predicted, range(p)))}` : md(p.predicted)}` : ''}</span>
+          <span className="flex flex-wrap gap-x-1"><span className="whitespace-nowrap">Due {md(p.planned)}{p.predicted ? ' ·' : ''}</span>{p.predicted && <span className="whitespace-nowrap">predicted {pc2 === 'b' ? `${md(shift(p.predicted, -range(p)))} – ${md(shift(p.predicted, range(p)))}` : md(p.predicted)}</span>}</span>
           <Chip v={v} testId="pm-chip" />
         </span>
       </button>

@@ -152,7 +152,7 @@ test('mk-predicted frames', async ({ browser }) => {
     // the phone
     await go(page, `${s.path}${big}`, P, s.card);
     // the strip snaps to the card, so the card behind the sheet reads whole
-    await page.locator(s.card).first().evaluate((el) => el.scrollIntoView({ inline: 'center', block: 'center' }));
+    await page.locator(s.card).first().evaluate((el) => el.scrollIntoView({ inline: 'end', block: 'center' }));
     await page.locator(s.opener).first().scrollIntoViewIfNeeded();
     await page.locator(s.opener).first().click();
     await page.waitForTimeout(300);

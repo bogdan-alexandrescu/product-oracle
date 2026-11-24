@@ -4109,7 +4109,7 @@ function readRoadmap(
 }
 
 // MOCK-HOOK: with an mk-predicted switch on, a feature's dates are the end dates its goal's predicted line reads.
-function mkDated(items: { title: string; start: { date: string; source?: string }; end: { date: string; source?: string }; estimated: boolean; suggestion?: unknown; goal?: { title?: string; due?: string | null } | null }[]) { // MOCK-HOOK
+function mkDated(items: { title: string; start: { date: string; source?: string }; end: { date: string; source?: string }; estimated: boolean; suggestion?: unknown; source?: string; date_basis?: string | null; goal?: { title?: string; due?: string | null } | null }[]) { // MOCK-HOOK
   const s = typeof window === 'undefined' ? '' : window.location.search; // MOCK-HOOK
   if (!/[?&](pc1|pc2|pc3)=/.test(s)) return; // MOCK-HOOK
   const big = /mkdata=big|pc3=/.test(s); // MOCK-HOOK
@@ -4122,6 +4122,8 @@ function mkDated(items: { title: string; start: { date: string; source?: string 
     i.end = { ...i.end, date: end, source: 'engineering' }; // MOCK-HOOK
     i.estimated = false; // MOCK-HOOK
     i.suggestion = null; // MOCK-HOOK: its end date is set, so no Oracle suggestion beside it
+    i.source = 'engineering'; // MOCK-HOOK: "Dates from engineering", not "Estimated by Oracle"
+    i.date_basis = null; // MOCK-HOOK
   } // MOCK-HOOK
 } // MOCK-HOOK
 
