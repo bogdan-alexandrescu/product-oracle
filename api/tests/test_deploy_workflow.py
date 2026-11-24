@@ -438,3 +438,15 @@ def test_laptop_deploy_is_traffic_only_once_actions_deploys_are_on(tmp_path):
     r = _laptop(cannot_tell)
     assert r.returncode != 0
     assert "gcloud run deploy" not in _calls(cannot_tell)
+
+
+@pytest.mark.foreign_read("docker-compose.yml", "Makefile")
+def test_make_up_builds_both_images_with_the_commit():
+    """#1710: `make up` passes the checkout's commit to both images' GIT_SHA build argument, so
+    a local /version names it and the serving check (deploy-serves.ts) can ask it."""
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+    for name in ("api", "web"):
+        assert compose[name]["build"]["args"]["GIT_SHA"] == "${GIT_SHA:-unknown}", name
+    make = (ROOT / "Makefile").read_text()
+    up = make[make.index("\nup:") :].split("\n\n")[0]
+    assert "GIT_SHA=$$(git rev-parse HEAD) $(COMPOSE) up -d --build" in up
