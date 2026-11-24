@@ -21,7 +21,7 @@ import { useQuery } from '@/lib/use-query';
 import { invalidateWaiting, waitingChanged } from '@/lib/simple-waiting';
 
 import { FloatingCard, type Act } from './_card';
-import { featureShown, namesFeature } from './_link';
+import { featureShown, InLinked, namesFeature, onPageOpen } from './_link';
 import { DraftDetails, type DraftItem, type DraftPrd } from './_drafts';
 import {
   ChangeFailed,
@@ -302,6 +302,15 @@ export function LinkedFeature() {
     if (featureShown(param)) return;
     setOpen(param);
   }, [param, open]);
+  // A page's own panel (a bar, a row) takes the link's place: one panel at a time.
+  useEffect(
+    () =>
+      onPageOpen(() => {
+        closing.current = param;
+        setOpen(null);
+      }),
+    [param],
+  );
   if (!open) return null;
   return (
     <LinkedPanel
@@ -327,11 +336,13 @@ function LinkedPanel({ value, onClose }: { value: string; onClose: () => void })
   if (!roadmap.data) return null;
   const item = roadmap.data.items.find((i) => namesFeature(value, i));
   return (
-    <FeaturePanel
-      feature={{ id: item?.id ?? null, code: item?.code ?? value, name: item?.title ?? value }}
-      phone={phone}
-      canChange={can('create_simple_change')}
-      onClose={onClose}
-    />
+    <InLinked.Provider value>
+      <FeaturePanel
+        feature={{ id: item?.id ?? null, code: item?.code ?? value, name: item?.title ?? value }}
+        phone={phone}
+        canChange={can('create_simple_change')}
+        onClose={onClose}
+      />
+    </InLinked.Provider>
   );
 }

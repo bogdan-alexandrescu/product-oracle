@@ -6,7 +6,7 @@
 // - A side panel (one that dims nothing) closes on a click in the page's empty space; a click on
 //   anything that does something (another feature, a button, a field) is left to it.
 
-import { useEffect, useRef, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useRef, type RefObject } from 'react';
 
 import { useRouter, useSearchParams } from '@/lib/nav';
 
@@ -32,44 +32,68 @@ export function featureHref(f: Linked): string {
 // switching to another feature unmounts one and mounts the next: one address change, not two).
 const shown = new Set<Linked>();
 let want: string | null = null;
+let swap = false;
 let timer = 0;
-function settle(push: (href: string) => void) {
+function settle(go: (href: string, replace: boolean) => void) {
   window.clearTimeout(timer);
   timer = window.setTimeout(() => {
+    const replace = swap;
+    swap = false;
     const url = new URL(window.location.href);
     if (url.searchParams.get('feature') === want) return;
     if (want) url.searchParams.set('feature', want);
     else url.searchParams.delete('feature');
-    push(`${url.pathname}${url.search}${url.hash}`);
+    go(`${url.pathname}${url.search}${url.hash}`, replace);
   }, 0);
+}
+
+/** True inside the panel a link opened (LinkedFeature's); a page's own panel then takes its place. */
+export const InLinked = createContext(false);
+const pageOpens = new Set<() => void>();
+/** `run` whenever a page opens its own panel (not the link's); returns the unsubscribe. */
+export function onPageOpen(run: () => void): () => void {
+  pageOpens.add(run);
+  return () => void pageOpens.delete(run);
 }
 
 /** A feature panel's address: written while it shows; Back (the address losing it) closes it. */
 export function useFeatureUrl(f: Linked, onClose: () => void): void {
   const router = useRouter();
+  const linked = useContext(InLinked);
   const param = useSearchParams().get('feature');
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;
   });
   const { id, code, key } = f;
+  const last = useRef<string | null>(null);
   useEffect(() => {
     const me = { id, code, key };
     const link = featureLink(me);
-    const push = (href: string) => router.push(href, { scroll: false });
+    const go = (href: string, replace: boolean) =>
+      replace ? router.replace(href, { scroll: false }) : router.push(href, { scroll: false });
+    // The same feature with a new code: its address follows, with no new Back step.
+    if (last.current === id) swap = true;
+    else if (!linked) pageOpens.forEach((run) => run());
+    last.current = id;
     shown.add(me);
     want = link;
-    settle(push);
+    settle(go);
     return () => {
       shown.delete(me);
-      if (want === link) want = null;
-      settle(push);
+      // Another panel showing the same feature (a page's own, opened over the link's) keeps it.
+      if (want === link && ![...shown].some((s) => featureLink(s) === link)) want = null;
+      settle(go);
     };
-  }, [id, code, key, router]);
+  }, [id, code, key, router, linked]);
+  // Only a move of the address (Back, Forward) closes it, never its own code changing.
   const named = useRef(false);
+  const before = useRef(param);
   useEffect(() => {
+    const moved = before.current !== param;
+    before.current = param;
     if (param && namesFeature(param, { id, code, key })) named.current = true;
-    else if (named.current) {
+    else if (named.current && moved) {
       named.current = false;
       close.current();
     }
