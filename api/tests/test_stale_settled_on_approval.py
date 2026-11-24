@@ -175,7 +175,7 @@ def test_chains_on_the_single_head():
     assert script.get_revision("0135_feature_comments").down_revision == REVISION
     assert script.get_revision("0137_stale_by_meaning").down_revision == "0136_unique_item_codes"
     assert script.get_revision("0138_oauth_token_used_at").down_revision == "0137_stale_by_meaning"
-    assert script.get_heads() == ["0138_oauth_token_used_at"]
+    assert script.get_heads() == ["0139_task_tracker_push_error"]
 
 
 async def test_the_migration_settles_todays_flags(client, owner, runtime):  # noqa: F811

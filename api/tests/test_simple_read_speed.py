@@ -72,9 +72,11 @@ VIEWS = {
 # timeline-order: the two roadmap views gain position (an integer) and before_override (null on
 # this seed) on each item and nothing else (JSON diff, with the rank and without it); the six
 # others are unchanged.
+# task-push: the two roadmap views gain tracker_ref, tracker_url and tracker_error on each task
+# (null on this seed) and nothing else (JSON diff against 4ecbc5620); the six others are unchanged.
 DIGESTS = {
-    "roadmap": "14c265155f51012293ac299a5c593a79005d5a1cf96d0bac7d41c2fa53859e1b",
-    "roadmap-viewer": "c85e0969fda3471fb3014781fa4f0373cbd4719e34c3a572fc2c283b386b76b0",
+    "roadmap": "18d356376efd9c8dfe1b56ef957314ec4c3906217578682139e52b263f102d74",
+    "roadmap-viewer": "3d3d4ce268b8405e79b0b27b3d763bb9f3e8417a6294f3e3834968fa09bd305c",
     "priorities": "1471b1dcc8f5186e1e1227e91a2bde13d28d48b9ba8971869df141851d6c5277",
     "priorities-viewer": "6f5a79e3aef918833c7e6fda07988bbed353c7e59ee907b3d793b6a3c5550001",
     "decisions": "e5265b88addf7bd45293bc4041094ac5e6d46a38a00b94bbd175f6a22e6ec400",
