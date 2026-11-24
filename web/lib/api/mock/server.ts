@@ -400,7 +400,9 @@ import {
   seedRoadmap,
   seededPlanItems,
   PLAN_APPROVE_STALE_SCENARIO,
+  STALE_RULE_SCENARIO,
   trackRunBody,
+  tracedWrite,
   type RoadmapContext,
   type RoadmapDb,
 } from './roadmap';
@@ -5538,7 +5540,10 @@ function baselineEntity(
 /** The roadmap data, seeded on first use (./roadmap.ts), with the "sharing" roadmap's items (seedSharingRoadmap). */
 function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
   if (!db.roadmap) {
-    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY), { plan: true });
+    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY), {
+      plan: true,
+      proposed: db.baseline.entities.find((e) => e.key === 'f.usage-export')?.id,
+    });
     for (const [id, items] of Object.entries(db.sharing_items ?? {}))
       db.roadmap.items[id] ??= items;
   }
@@ -8840,6 +8845,7 @@ function load(): Db {
     'launches',
     'plan-decider',
     PLAN_APPROVE_STALE_SCENARIO,
+    STALE_RULE_SCENARIO,
     'strategy-plan',
     'outcomes',
     'outcomes-long',
@@ -16211,6 +16217,8 @@ export async function mockFetch(req: Request): Promise<Response> {
     roadmapReadsAt(roadmapRead);
     // inbox-reads: the Inbox's counts alone (as the API's GET /v1/inbox/counts) and a visit
     // recorded without the Inbox's answer (POST /v1/inbox/seen), from the Inbox's own route.
+    // The stale rule: what a write changes of what a Plan item is traced to (markTraced).
+    const traced = tracedWrite(db, req);
     const inboxCall = (search = '') =>
       route(db, new Request(new URL(`/v1/inbox${search}`, url), { headers: req.headers }));
     let res =
@@ -16229,6 +16237,7 @@ export async function mockFetch(req: Request): Promise<Response> {
               r.ok ? reply('/v1/inbox/seen', 'post', undefined, 204) : r,
             )
           : await route(db, req);
+    traced(res);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === 'GET' && url.pathname === '/v1/simple/decisions/waiting' && res.ok)
       res = await withWaitingItems(db, req, res);

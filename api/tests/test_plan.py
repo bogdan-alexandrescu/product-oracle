@@ -379,7 +379,8 @@ async def test_why_it_needs_you_names_one_count(client):
 
 async def test_why_it_needs_you_says_changed_items_in_words(client):
     """prod-6: reasons naming baseline items by ref read in words, one line per verb;
-    never "feature:delivery-x changed; goal:g-b changed; product:p was confirmed"."""
+    never "feature:delivery-x changed; goal:g-b changed". One stored for a confirmation
+    (product:p) is not said: it raised the standing of the same content (the stale rule)."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         await Seed(s).approved_roadmap(
@@ -396,7 +397,7 @@ async def test_why_it_needs_you_says_changed_items_in_words(client):
         await s.commit()
     (item,) = (await plan(client, ctx))["items"]
     stale = [r["detail"] for r in item["reasons"] if r["kind"] == "stale"]
-    assert stale == ["The feature and 2 goals changed; the product was confirmed"]
+    assert stale == ["The feature and 2 goals changed"]
     assert ":" not in stale[0]
 
 

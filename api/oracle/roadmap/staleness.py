@@ -10,7 +10,9 @@ dependencies) and marks the *items*:
   walk, P11: a plan approved a week ago read "40 of 40 items need attention (40 stale)");
   the track says the PRD has a newer approved version instead;
 - ``document_section``: items traced to that section of that PRD;
-- ``requirement``, ``decision``, ``entity``, ``blocker_status``: items whose feature,
+- ``requirement``, ``decision``, ``entity``, ``blocker_status``: a change that only raises
+  the standing of the same content (:mod:`oracle.baseline.standing`, the stale rule: a
+  proposed feature, goal or link confirmed) marks nothing. Any other: items whose feature,
   requirements or blockers include the changed entity (or a batch's roots, or what the
   trace handler found downstream, ``data["trace"]["entity_ids"]``), and items whose PRD
   section links it.
@@ -37,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
 from oracle.auth.deps import Principal
+from oracle.baseline.standing import JOIN_FIELDS
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.models import AuditEvent
 from oracle.roadmap import items as items_mod
@@ -55,16 +58,14 @@ SUBJECTS = (
 ENTITY_SUBJECTS = ("requirement", "decision", "entity", "blocker_status")
 VERBS = {
     "entity_updated": "changed",
-    "entity_confirmed": "was confirmed",
+    # A confirmation that marks is of something rejected before (:func:`_standing_only`).
+    "entity_confirmed": "was restored",
     "entity_rejected": "was rejected",
     "entity_deleted": "was deleted",
     "edge_created": "gained a link",
     "edge_deleted": "lost a link",
     "edge_updated": "had a link changed",
 }
-# What confirming an entity writes besides nothing of its content (proposed -> confirmed; a
-# feature's code is its key, given when it joins the Ground Truth): never a change.
-CONFIRM_FIELDS = frozenset({"status", "key"})
 FROM_STATES = {
     "review": ("potentially_stale",),
     "reconcile": ("potentially_stale", "under_review"),
@@ -270,19 +271,40 @@ _WHOLE_PRD = re.compile(r"the PRD has a new version \(\d+\)")
 STALE_STATES = ("potentially_stale", "under_review")
 
 
+# A confirmation's reason, stored before the stale rule: what is confirmed is the same content,
+# so no read counts or names it.
+_CONFIRMED = re.compile(
+    r"(?:[a-z][a-z_]*:\S+|\d+ (?:Ground Truth|baseline) items?) (?:was|were) confirmed"
+)
+
+
+def meant(reasons: Iterable[str] | None) -> list[str]:
+    """The reasons that say what an item means changed: no confirmation's (the stale rule)."""
+    return [r for r in reasons or [] if not _CONFIRMED.fullmatch(r)]
+
+
 def own_reasons(item: Any) -> list[str]:
-    """The item's stale reasons of its own: without "the PRD has a new version (N)"."""
-    return [r for r in item.stale_reasons or [] if not _WHOLE_PRD.fullmatch(r)]
+    """The item's stale reasons of its own: without "the PRD has a new version (N)", and
+    without a confirmation's (:func:`meant`)."""
+    return [r for r in meant(item.stale_reasons) if not _WHOLE_PRD.fullmatch(r)]
 
 
 def is_stale(item: Any) -> bool:
     """The per-item stale rule, as every read counts it (the track's headline, its at-risk
     list, alerts): the item is potentially stale or under review for a reason of its own
     (what it traces changed). An item marked only because the PRD got a new version (the
-    earlier rule for an item with no section) is not stale."""
+    earlier rule for an item with no section), or by confirmations (the stale rule), is not."""
     if item.freshness not in STALE_STATES:
         return False
     return not item.stale_reasons or bool(own_reasons(item))
+
+
+def freshness_of(item: Any) -> str:
+    """The item's freshness as every read shows it: one whose stored mark is not stale by the
+    rule (:func:`is_stale`) reads as it stood before the mark."""
+    if item.freshness in STALE_STATES and not is_stale(item):
+        return "reconciled" if item.reconciled_at is not None else "fresh"
+    return item.freshness
 
 
 def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
@@ -373,17 +395,24 @@ def detail_for_reader(
     reasons = stored_reasons(detail)
     if reasons is None:
         reasons = _old_reasons(detail, hidden)
+    reasons = meant(reasons) or reasons
     line = "; ".join(say(for_reader(reasons, hidden), names))
     # The last word: a line read that still names something hidden is not shown.
     return HIDDEN_REASON if hidden is not None and hidden.names(line) else line
 
 
+def open_reasons(item: RoadmapItem) -> list[str]:
+    """The reasons a new mark is added to: none for an item that is not stale (its stored ones
+    are settled, and never come back beside the new one)."""
+    return own_reasons(item) if is_stale(item) else []
+
+
 def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> None:
-    if item.freshness != "potentially_stale" or item.stale_since is None:
+    reasons = open_reasons(item)
+    if item.freshness != "potentially_stale" or item.stale_since is None or not is_stale(item):
         item.stale_since = now
     item.freshness = "potentially_stale"
     item.caused_by_change_id = event.id
-    reasons = list(item.stale_reasons or [])
     if reason not in reasons:
         reasons.append(reason)
     item.stale_reasons = one_count(reasons)[-20:]
@@ -461,35 +490,55 @@ async def _by_section(db: AsyncSession, event: ChangeEvent, found: dict) -> None
         found[item.id] = (item, f"PRD section {key} changed ({event.cause})")
 
 
-def _confirmed_only(cause: Any, fields: Any) -> bool:
-    """A person confirmed it (proposed -> confirmed), with no content change (the owner,
-    Nov 23: "The feature ... was confirmed" flagged every item tracing to it)."""
+def _standing_only(cause: Any, data: dict[str, Any]) -> bool:
+    """The change only raised the standing of the same content (oracle.baseline.standing), as
+    its writer recorded; an event stored before it was recorded, by its cause and fields."""
+    said = data.get("standing_only")
+    if isinstance(said, bool):
+        return said
+    fields = data.get("fields")
     return (
         cause == "entity_confirmed"
         and isinstance(fields, list)
         and bool(fields)
-        and set(fields) <= CONFIRM_FIELDS
+        and set(fields) <= JOIN_FIELDS
     )
 
 
-async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> None:
+async def _changed(db: AsyncSession, event: ChangeEvent) -> tuple[set[uuid.UUID], str]:
+    """The entities the event changed in meaning, with what is downstream of them, and the
+    change's cause. In a bulk write that also confirmed others: the rest of it only."""
     data = event.data or {}
     roots = [r for r in data.get("roots") or [] if isinstance(r, dict)]
-    confirmed: set[uuid.UUID] = set()
-    if roots:
-        confirmed = {
-            u
-            for r in roots
-            if _confirmed_only(r.get("cause"), r.get("fields")) and (u := _uuid(r.get("id")))
-        }
-        if len(confirmed) == len(roots):
-            return
-    elif _confirmed_only(event.cause, data.get("fields")):
-        return
-    ids = _entity_ids(event) - confirmed
+    if not roots:
+        return (
+            (set(), "")
+            if _standing_only(event.cause, data)
+            else (
+                _entity_ids(event),
+                event.cause,
+            )
+        )
+    rest = [r for r in roots if not _standing_only(r.get("cause"), r)]
+    if len(rest) == len(roots):
+        return _entity_ids(event), event.cause
+    causes = {r.get("cause") for r in rest}
+    cause = str(causes.pop()) if len(causes) == 1 else event.cause
+    ids = {u for r in rest if (u := _uuid(r.get("id")))}
+    if ids:
+        from oracle.trace import staleness as trace
+
+        # What the trace handler found is downstream of every root: walked again from these.
+        subject = trace.Subject(event.subject_kind, cause=cause, data={"roots": rest})
+        ids |= set((await trace.affected(db, subject)).entity_ids)
+    return ids, cause
+
+
+async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> None:
+    ids, cause = await _changed(db, event)
     if not ids:
         return
-    verb = VERBS.get(event.cause, "changed")
+    verb = VERBS.get(cause, "changed")
     if event.subject_kind == "blocker_status":
         verb = "changed status"
     # A bulk write names its size ("42 Ground Truth items"); an item says what of it is its own.
