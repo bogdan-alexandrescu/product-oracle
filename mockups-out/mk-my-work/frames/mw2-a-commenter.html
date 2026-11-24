@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="h-full antialiased" data-mode="simple" style="--scrollbar-room: 15px;"><head><meta charset="utf-8"><meta name="mockup-viewport" content="1440x900"><script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);})();</script><style>:root { --brand-mark: #0b3a7a; }
+<html lang="en" class="h-full antialiased" data-mode="simple" data-mock-scroll="0,0" style="--scrollbar-room: 15px;"><head><meta charset="utf-8"><meta name="mockup-viewport" content="1440x900"><script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);addEventListener("load",function(){document.querySelectorAll("body [data-mock-scroll]").forEach(function(e){var p=e.getAttribute("data-mock-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1];});var r=(document.documentElement.getAttribute("data-mock-scroll")||"0,0").split(",");scrollTo(+r[0],+r[1]);});})();</script><style>:root { --brand-mark: #0b3a7a; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --brand-mark: #bcd6ee; }
 }
