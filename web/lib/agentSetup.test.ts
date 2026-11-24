@@ -1,5 +1,7 @@
 // #1557: npm run test:unit (Vitest, #1583).
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import {
   BINARIES,
@@ -7,6 +9,8 @@ import {
   TYPESCRIPT_LINK,
   attributesBlock,
   checkMessage,
+  hookMessage,
+  inSwarmLane,
   missingItems,
   wantedVersions,
   withAttributesBlock,
@@ -75,4 +79,28 @@ test('the attributes block is added once and replaced, keeping other lines', () 
   assert.ok(once.startsWith('*.png binary\n'));
   const stale = once.replace('diff=agent-generated', 'diff=old');
   assert.equal(withAttributesBlock(stale), once);
+});
+
+test('#1653: SWARM_TASK_ID marks a SwarmCloud lane; blank or absent does not', () => {
+  assert.equal(inSwarmLane({ SWARM_TASK_ID: 'task-example-1' }), true);
+  assert.equal(inSwarmLane({ SWARM_TASK_ID: ' ' }), false);
+  assert.equal(inSwarmLane({}), false);
+});
+
+test('#1653: the hook is silent in a lane and unchanged outside one', () => {
+  const fresh: SetupState = { present: new Set(), versions: null, gitConfig: {}, attributes: '' };
+  assert.equal(hookMessage(fresh, true), null);
+  assert.equal(hookMessage(fresh, false), checkMessage(missingItems(fresh)));
+  assert.match(hookMessage(fresh, false)!, /make agent-setup/);
+  assert.equal(hookMessage(ready(), false), null);
+});
+
+test('#1653: the SessionStart hook command prints nothing in a lane', () => {
+  const script = fileURLToPath(new URL('../scripts/agent-setup.ts', import.meta.url));
+  const out = execFileSync(
+    process.execPath,
+    ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', script, '--check'],
+    { encoding: 'utf8', env: { ...process.env, SWARM_TASK_ID: 'task-example-1' } },
+  );
+  assert.equal(out, '');
 });

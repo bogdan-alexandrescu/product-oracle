@@ -5,6 +5,9 @@
 //   node web/scripts/agent-setup.ts --check  print one line when anything is missing; always
 //                                            exits 0 and never installs
 //
+// In a SwarmCloud lane (SWARM_TASK_ID set, #1653) --check prints nothing, and setup only sets the
+// git config and checks the coderabbit already on PATH: no language servers, no download.
+//
 // What is pinned and why lives in web/lib/agentSetup.ts.
 import { execFileSync } from 'node:child_process';
 import {
@@ -26,6 +29,8 @@ import {
   TYPESCRIPT_LINK,
   WEB_TYPESCRIPT,
   checkMessage,
+  hookMessage,
+  inSwarmLane,
   missingItems,
   wantedVersions,
   withAttributesBlock,
@@ -80,8 +85,10 @@ function readState() {
   return { present, versions, gitConfig, attributes };
 }
 
+const LANE = inSwarmLane(process.env);
+
 function check(): void {
-  const message = checkMessage(missingItems(readState()));
+  const message = hookMessage(readState(), LANE);
   if (message) console.log(message);
 }
 
@@ -108,6 +115,14 @@ function setup(): number {
     mkdirSync(dirname(attrs), { recursive: true });
     writeFileSync(attrs, withAttributesBlock(existsSync(attrs) ? readFileSync(attrs, 'utf8') : ''));
   });
+
+  if (LANE) {
+    step("coderabbit (the lane's own, on PATH)", () => {
+      const got = execFileSync('coderabbit', ['--version'], { encoding: 'utf8' }).trim();
+      console.log(`coderabbit ${got}; language servers skipped (swarm-graph serves a lane)`);
+    });
+    return failed ? 1 : 0;
+  }
 
   mkdirSync(TOOLS, { recursive: true });
   const versions: Record<string, string> = {};
