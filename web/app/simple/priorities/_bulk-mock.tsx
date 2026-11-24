@@ -49,6 +49,7 @@ type Bulk = {
   applied: Record<string, Draft & { proposed?: boolean }>;
   apply: () => void;
   result: Result | null;
+  done: string[];
   setResult: (r: Result | null) => void;
   right: (r: R) => Right;
   long: boolean;
@@ -129,6 +130,7 @@ export function useBulkState(rows: R[]): Bulk | null {
   const [draft, setDraft] = useState<Draft>(seedDraft);
   const [applied, setApplied] = useState<Record<string, Draft & { proposed?: boolean }>>({});
   const [result, setResult] = useState<Result | null>(null);
+  const [done, setDone] = useState<string[]>([]); // MOCK-HOOK: rows picked for the last change keep their owner line
   const [shown, setShown] = useState<string | null>(null);
   const [open2, setOpen2] = useState<Field | null>(null);
   marksNow = useContext(FeatureMarks) as Map<string, { mark: string }> | null;
@@ -161,6 +163,7 @@ export function useBulkState(rows: R[]): Bulk | null {
     changed.forEach((id) => (next[id] = { ...draft }));
     proposed.forEach((id) => (next[id] = { ...draft, proposed: true }));
     setApplied(next);
+    setDone(got.map((r) => r.feature_id));
     const before = over;
     if (draft.status) {
       const o = { ...over };
@@ -208,6 +211,7 @@ export function useBulkState(rows: R[]): Bulk | null {
     applied,
     apply,
     result,
+    done,
     setResult,
     right,
     long: p.get('long') === '1',
@@ -318,7 +322,13 @@ export function BulkChips({ r }: { r: R }) {
   const preview = on && b.be2 === 'c' && Object.values(b.draft).some(Boolean) ? b.draft : null;
   const d = got ?? preview;
   const out: ReactNode[] = [];
-  if (b.long || on || got || kept) {
+  const ok = !!got && !got.proposed; // MOCK-HOOK: the tick sits by the value that changed
+  const tick = (k: string) => (
+    <span key={k} aria-label="Just changed" title="Just changed" className="font-semibold text-accent">
+      ✓
+    </span>
+  );
+  if (b.long || on || got || kept || b.done.includes(r.feature_id)) {
     const owner = ownerOf(r);
     out.push(
       <span key="o" className="whitespace-nowrap text-[length:var(--simple-small)] text-text2">
@@ -326,6 +336,7 @@ export function BulkChips({ r }: { r: R }) {
           <>
             {owner && !got && <s className="mr-1">{owner}</s>}
             <b className="text-text">{d.owner}</b>
+            {ok && got.owner && <span className="ml-1">{tick('to')}</span>}
           </>
         ) : (
           owner || 'No owner'
@@ -340,23 +351,19 @@ export function BulkChips({ r }: { r: R }) {
         {d.status}
       </span>,
     );
-  if (got && !got.proposed)
-    out.push(
-      <span key="t" aria-label="Just changed" title="Just changed" className="font-semibold text-accent">
-        ✓
-      </span>,
-    );
+  if (ok && got.track && !got.status && !got.owner && !got.shift && !got.end) out.push(tick('tt'));
   if ((d?.shift || d?.end) && !got?.proposed)
     out.push(
       <span key="d" className={`${chip} whitespace-nowrap bg-[var(--simple-edited)] text-text`}>
         End {!got && <s className="mr-1 text-text2">{day(r.end_date)}</s>}
         {d.end ?? day(r.end_date, d.shift)}
+        {ok && <span className="ml-1">{tick('td')}</span>}
       </span>,
     );
   if (got?.proposed)
     out.push(
       <span key="p" className={`${chip} border border-dashed border-accent text-accent sm:whitespace-nowrap`}>
-        {got.status ?? got.owner ?? `${got.shift} weeks`}, waiting for {BULK_APPROVER}
+        {got.status ?? got.owner ?? `${(got.shift ?? 0) > 0 ? '+' : ''}${got.shift} weeks`}, waiting for {BULK_APPROVER}
       </span>,
     );
   if ((on || kept) && b.mixed && rt !== 'edit' && !got && b.be3 !== 'c')
@@ -366,6 +373,18 @@ export function BulkChips({ r }: { r: R }) {
       </span>,
     );
   return out.length ? <span className="flex flex-wrap items-center gap-2">{out}</span> : null;
+}
+
+/** The tick beside a status pill the last change set (BE2). */ // MOCK-HOOK
+export function BulkTick({ r }: { r: R }) {
+  const b = useBulk();
+  const got = b?.applied[r.feature_id];
+  if (!got || got.proposed || !got.status) return null;
+  return (
+    <span aria-label="Just changed" title="Just changed" className="ml-1.5 font-semibold text-accent">
+      ✓
+    </span>
+  );
 }
 
 /** Hides today's status pill once a new status is applied (the chip says it). */
@@ -434,7 +453,7 @@ export function BulkTop() {
   const all = b.picked.size === b.rows.length;
   if (b.result) return <BulkResult b={b} res={b.result} />;
   return (
-    <div className="flex min-h-10 flex-wrap items-center gap-3 text-[length:var(--simple-small)]">
+    <div className={`flex min-h-10 flex-wrap items-center gap-3 text-[length:var(--simple-small)] ${b.be1 === 'b' ? 'mb-3' : ''}`} /* MOCK-HOOK */>
       {b.be1 === 'b' && (
         <button
           type="button"
@@ -658,7 +677,8 @@ function Preview({ b, max: cap, grow }: { b: Bulk; max: number; grow?: boolean }
 function applyWords(b: Bulk): string {
   const got = b.rows.filter((r) => b.picked.has(r.feature_id));
   if (b.mixed && b.be3 === 'c') return `Change ${got.length}`;
-  const now = got.filter((r) => b.right(r) === 'edit').length;
+  const only = !!b.draft.status && !b.draft.owner && !b.draft.shift && !b.draft.end && !b.draft.track; // MOCK-HOOK
+  const now = got.filter((r) => b.right(r) === 'edit' && !(only && statusOf(r) === b.draft.status)).length;
   const prop = got.filter((r) => b.right(r) === 'propose').length;
   if (!now && prop) return `Propose ${prop} changes`;
   if (prop) return `Change ${now}, propose ${prop}`;
@@ -770,7 +790,7 @@ export function BulkBar() {
                 {label}
                 {(b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] || (f === 'dates' && b.draft.end) ? (
                   <span className="ml-2 font-normal text-accent">
-                    {f === 'dates' ? (b.draft.end ? `End ${b.draft.end}` : `${b.draft.shift} weeks`) : String((b.draft as Record<string, unknown>)[f])}
+                    {f === 'dates' ? (b.draft.end ? `End ${b.draft.end}` : `${(b.draft.shift ?? 0) > 0 ? '+' : ''}${b.draft.shift} weeks`) : String((b.draft as Record<string, unknown>)[f])}
                   </span>
                 ) : (
                   <span className="ml-2 font-normal text-text2">keep</span>

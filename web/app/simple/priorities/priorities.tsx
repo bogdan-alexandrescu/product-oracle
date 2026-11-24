@@ -82,7 +82,7 @@ import {
   type PriorityKeyResults,
 } from './key-results';
 import { useCodedMilestone } from './milestone-codes';
-import { BulkBar, BulkBox, BulkChips, BulkCtx, BulkTop, bulkHidesMark, bulkRow, bulkTitle, useBulkMarks, useBulkState } from './_bulk-mock'; // MOCK-HOOK
+import { BulkBar, BulkBox, BulkChips, BulkTick, BulkCtx, BulkTop, bulkHidesMark, bulkRow, bulkTitle, useBulkMarks, useBulkState } from './_bulk-mock'; // MOCK-HOOK
 import { knownCode, TaskRow, useBucketTasks, type Task } from './task-edit';
 import { MsCard, MsProvider, MsToast, useMilestones } from '../roadmap/_milestones';
 import {
@@ -1098,6 +1098,7 @@ function YourList({
                     {!bulkHidesMark(bulk, r) /* MOCK-HOOK */ && ( // MOCK-HOOK
                     <span className="flex flex-none items-center">
                       <MarkFor featureId={r.feature_id} checked />
+                      <BulkTick r={r} /* MOCK-HOOK */ />
                     </span>
                     )}{/* MOCK-HOOK */}
                   </span>

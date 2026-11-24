@@ -409,6 +409,9 @@ function UserMenu({
 
   // walk-brief review: blank while /v1/me loads, never a "?" for a member not read yet.
   const initials = me ? initialsOf(email) : '';
+  const mkQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null; // MOCK-HOOK
+  const mkBulk = !!mkQ && ['be1', 'be2', 'be3'].some((k) => mkQ.get(k)); // MOCK-HOOK
+  const mkInitials = mkBulk && me ? initialsOf(mkQ?.get('be3') ? (mkQ.get('role') === 'commenter' ? 'Mei Arden' : 'Lena Vos') : me.name || email) : initials; // MOCK-HOOK
   const rail = placement === 'rail';
   const current = pathname === '/account' || pathname.startsWith('/account/');
 
@@ -524,7 +527,7 @@ function UserMenu({
           rail ? 'size-[38px] text-sm' : 'size-8 text-sm'
         }`}
       >
-        {initials}
+        {mkInitials /* MOCK-HOOK */}
         {rail && !emailShown && (
           <span className="sr-only" data-testid="signed-in-as">
             {email}

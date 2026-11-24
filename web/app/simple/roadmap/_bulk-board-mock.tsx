@@ -74,7 +74,7 @@ export function BoardBar({ bp, dock }: { bp: BoardPick | null; dock?: boolean })
     <style>{'tr[data-bulk-picked="true"], li[data-bulk-picked="true"] { background: var(--color-accent-soft); } tr[data-bulk-picked="true"] > td { background: transparent; }'}</style>
     <div
       data-testid="bulk-dock"
-      className={dock ? 'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg px-3 pt-2 pb-3 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:pb-2 md:left-[232px] md:px-9' : 'fixed inset-x-3 bottom-4 z-40 max-[600px]:bottom-[calc(var(--phone-tab-bar)+8px)] md:left-[calc(240px+1rem)]'}
+      className={dock ? 'fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg px-3 pt-2 pb-3 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:pb-2 md:left-[232px] md:px-9' : 'fixed inset-x-3 bottom-4 z-40 max-[600px]:inset-x-0 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:border-t max-[600px]:border-line max-[600px]:bg-bg max-[600px]:px-3 max-[600px]:py-2 md:left-[calc(240px+1rem)]'}
     >
     <div
       data-testid="bulk-bar"

@@ -76,17 +76,17 @@ D.append({
   'common': 'Every proposal: owner (people), status (New, In progress, Exists: the product\'s own words), end date set to a day or shifted by weeks, track; a before -> after preview; one button that applies all, one history entry per feature, one toast with Undo. 4 features picked (ranks 2, 4, 6, 7) on Priorities. Today: 4 panel opens, about 16 steps.',
   'proposals': [
     {'letter': 'A', 'name': 'Bar with field menus', 'recommended': True,
-     'what': 'A bar sits at the bottom, with the list ending above it: "4 picked · Clear | Owner Status Dates Track". Each field opens a small menu above the bar; once a value is picked the menu lists every feature before -> after (features that already have it say "already") with Cancel and "Change 4". Applying closes the bar and shows a toast with Undo.',
+     'what': 'A bar sits at the bottom, with the list ending above it: "4 picked · Clear | Owner Status Dates Track". Each field opens a small menu above the bar; once a value is picked the menu lists every feature before -> after (features that already have it say "already") with Cancel and "Change 3" (it counts only the features that change). Applying closes the bar and shows a toast with Undo.',
      'why': 'One field at a time is what people do most ("give these an owner", "mark these done"); the preview sits right by the choice, and nothing covers the list until a field is opened.',
      'plus': 'Short: 3 clicks after picking; the preview names each feature, so a wrong pick is seen before applying.',
      'cost': 'Pick (2) + field (1) + value (1) + Change (1) = 5 clicks for any number of features (today: about 16 for 4, 32 for 8).',
      'frames': fr('be2', 'a', [
         ('rest', 'At rest: 4 rows picked, the bar at the bottom with Owner, Status, Dates and Track.'),
         ('open', 'Status opened: a menu above the bar with New, In progress and Exists.'),
-        ('mid', 'Exists picked: the menu lists the 4 features before -> after, "already Exists" where nothing changes, and "Change 4".'),
+        ('mid', 'Exists picked: the menu lists the 4 features before -> after, "already Exists" where nothing changes, and "Change 3", the 3 that do.'),
         ('dates', 'Dates opened instead: set the end date to a day, or shift it by weeks; Dec 15 picked, the preview lists each end date before -> after.'),
         ('track', 'Track opened: the tracks to move the 4 features to.'),
-        ('result', '"Change 4" pressed with Exists: the 3 that changed show the product\'s Exists pill with a tick, the Show counts update, the picks clear, a toast says 3 changed with Undo. The dashed note in the left menu gives the clicks against today.'),
+        ('result', '"Change 3" pressed with Exists: the 3 that changed show the product\'s Exists pill with a tick beside it, the Show counts update, the picks clear (Alert routing by team, already Exists, keeps its owner line and gets no tick), a toast says 3 changed with Undo. The dashed note in the left menu gives the clicks against today.'),
         ('result-dark', 'The same result in dark mode.'),
         ('hard-1512', 'Hard case, 1512 wide, 14 picked with long names, dates +2 weeks: the preview shows 5 and "and 9 more", the menu scrolls.'),
         ('phone', 'Phone 390: the bar takes two rows (count, then the 4 fields); the menu opens full width above it.'),
@@ -127,7 +127,7 @@ D.append({
 D.append({
   'code': 'BE3', 'name': 'Mixed rights',
   'question': 'When some picked features will become proposals and some cannot be changed at all, how does the person know before and after applying?',
-  'common': 'Rights come from each feature\'s own can_* fields: owners and approvers change at once, a commenter\'s change becomes a proposal to the approver (Avery Stone here), a locked feature is not changed. Shown with the BE2 A bar; 4 picked: two the person may change, Weekly alert digest F-79 (needs approval) and Alert routing by team (locked by Jonah Pike).',
+  'common': 'Rights come from each feature\'s own can_* fields: a feature\'s owner or approver changes it at once, anyone else\'s change becomes a proposal to that feature\'s approver, a locked feature is not changed. Shown with the BE2 A bar, signed in as Lena Vos, an approver; 4 picked: two Lena approves, Weekly alert digest F-79 (Avery Stone approves it, so the change goes to Avery Stone) and Alert routing by team (locked by Jonah Pike).',
   'proposals': [
     {'letter': 'A', 'name': 'Sorted preview', 'recommended': True,
      'what': 'Picked rows carry a small "Proposal" or "Cannot change" tag. The preview splits into "Changes now", "Sent to Avery Stone to approve" and "Not changed" (with an (i) saying why), and the button says "Change 2, propose 1". After applying, a strip over the list reads "Owner Rosa Lind: 2 changed · 1 sent to Avery Stone · 1 not changed"; each count highlights its rows, with Undo.',
@@ -135,7 +135,7 @@ D.append({
      'plus': 'One apply for the whole mix; the counts lead to the rows they count.',
      'cost': 'The same 5 clicks as BE2 A; 1 more to see which rows were not changed.',
      'frames': fr('be3', 'a', [
-        ('rest', 'At rest: 4 picked, scrolled to Alert routing by team, tagged "Cannot change"; Weekly alert digest above it is tagged "Proposal".'),
+        ('rest', 'At rest, signed in as Lena Vos, an approver: 4 picked, scrolled to Alert routing by team, tagged "Cannot change"; Weekly alert digest above it is tagged "Proposal".'),
         ('open', 'Owner opened: the five people.'),
         ('mid', 'Rosa Lind picked: the preview splits into Changes now 2, Sent to Avery Stone 1, Not changed 1 with its reason ("Locked by Jonah Pike for the Dec 15 board meeting"); the button says "Change 2, propose 1".'),
         ('result', 'Applied: Alert routing by team keeps its owner, Jonah Pike, and its "Cannot change" tag, Weekly alert digest reads "Rosa Lind, waiting for Avery Stone", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. The dashed note in the left menu gives the clicks.'),
@@ -149,7 +149,7 @@ D.append({
      'plus': 'Nothing is ever "not changed": the result is always all applied or proposed.',
      'cost': 'The same 5 clicks; a shift-click run skips locked rows silently.',
      'frames': fr('be3', 'b', [
-        ('rest', 'At rest: 3 picked; Alert routing by team shows a lock instead of a box.'),
+        ('rest', 'At rest, signed in as Lena Vos, an approver: 3 picked; Alert routing by team shows a lock instead of a box.'),
         ('open', 'Owner opened: the five people.'),
         ('mid', 'Rosa Lind picked: a plain preview of the 3, and "Change 2, propose 1".'),
         ('result', 'Applied: a toast "2 changed, 1 sent to Avery Stone to approve" with Undo; Weekly alert digest reads "Rosa Lind, waiting for Avery Stone". The dashed note in the left menu gives the clicks.'),
@@ -163,7 +163,7 @@ D.append({
      'plus': 'The plainest bar; the "why" and the way out sit together after the fact.',
      'cost': 'The same 5 clicks, plus 1 per locked feature to ask its owner.',
      'frames': fr('be3', 'c', [
-        ('rest', 'At rest: 4 picked; no tags on the rows.'),
+        ('rest', 'At rest, signed in as Lena Vos, an approver: 4 picked; no tags on the rows.'),
         ('open', 'Owner opened: the five people.'),
         ('mid', 'Rosa Lind picked: a plain preview, "Change 4", nothing said about rights.'),
         ('result', 'Applied: the strip over the list counts 2 changed, 1 sent, 1 not changed and lists Alert routing by team (its row keeps Jonah Pike as owner), "Locked by Jonah Pike for the Dec 15 board meeting", with "Ask Jonah Pike". The dashed note in the left menu gives the clicks.'),
