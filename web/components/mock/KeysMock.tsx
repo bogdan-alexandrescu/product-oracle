@@ -501,11 +501,11 @@ export function KeysMock() {
     const box = field.closest('[data-testid=item-panel],[role=dialog]');
     const cancel = [...(box?.querySelectorAll('button') ?? [])].find((x) => (x.textContent || '').trim() === 'Cancel' && x.getBoundingClientRect().top >= r.bottom - 2);
     const cr = rectOf(cancel);
-    const at = cr ? { right: window.innerWidth - r.right, top: cr.top + cr.height / 2 - 11 } // MOCK-HOOK: ends at the field's right edge
-      : { right: window.innerWidth - r.right, top: r.bottom + 6 };
+    // MOCK-HOOK: after Cancel, ending inside the field's right edge
+    const at = cr ? { left: cr.right + 8, top: cr.top + cr.height / 2 - 11 } : { right: window.innerWidth - r.right, top: r.bottom + 6 };
     typingEl = (
       <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface2 px-1.5 py-0.5 text-xs text-text2" style={at}>
-        <span aria-hidden>⌨</span>Keys off while typing
+        Keys off while typing
       </div>
     );
   }

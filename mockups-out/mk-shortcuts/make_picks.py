@@ -82,7 +82,7 @@ KS2 = {
      ('open', 'Hovering Roadmap in the rail: its tooltip, inside the rail after the name, shows g then r over the count until the pointer leaves.'),
      ('mid', 'After j j the focus is on Weekly alert digest; hovering its name shows Open Enter beside the name line.'),
      ('result', 'Enter opens it in the feature panel; hovering Close shows Esc under it. 3 keys against 1 click.'),
-     ('hard-1512', 'The hard case, a commenter at 1512 in dark: hovering Weekly alert digest\'s grip, the tooltip at the free end of its second line reads Suggest a move, Shift J or Shift K, since a commenter\'s move becomes a proposal. The rail\'s counts are what waits on this person, so they are smaller than the owner\'s.'),
+     ('hard-1512', 'The hard case, a commenter at 1512 in dark: hovering Weekly alert digest\'s grip, the tooltip beside its name line reads Suggest a move, Shift J or Shift K, since a commenter\'s move becomes a proposal. The rail\'s counts are what waits on this person, so they are smaller than the owner\'s.'),
      ('viewer', 'A viewer\'s rows have no grip; the tip beside the row\'s name says view only, with no key; j, k and Enter still work. The rail\'s counts are what waits on this person, so they are smaller than the owner\'s.'),
      ('detailed', 'Detailed: the focused row takes the table\'s own selected look, the same row the panel shows.'),
      ('phone-390', 'Phone 390: no tooltips; with a keyboard the first row shows the blue bar.'),
@@ -161,7 +161,7 @@ KS3 = {
    'cost': 'Same keys as A; one more tag on screen while typing, and a gesture on the phone that has to be found.',
    'frames': fr('ks3', 'c', [
      ('rest', 'At rest: Weekly alert digest is open in the feature panel.'),
-     ('open', 'Change on Notes opens the field; a tag on the Save and Cancel line, level with the field\'s right edge, shows the keys are off while typing.'),
+     ('open', 'Change on Notes opens the field; a tag after its Save and Cancel shows the keys are off while typing.'),
      ('mid', 'Typing "Ask two beta teams first jk" goes into the field; the tag stays.'),
      ('result', 'Esc leaves the field; the tag goes and the panel stays.'),
      ('hard-1512', 'The hard case, a dialog at 1512 in dark: Tab to its buttons, then ? (2 keys) shows only this box\'s keys in a card beside it: Enter, Esc, Tab.'),
