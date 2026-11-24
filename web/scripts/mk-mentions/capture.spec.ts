@@ -116,6 +116,9 @@ async function frame(browser: Browser, f: Frame, states: Map<string, string>) {
       const el =
         (scrollTo === 'field' && (pick('[data-testid="mk-activity-side"] textarea') ?? pick('[data-testid="mk-activity"] textarea'))) ||
         (scrollTo === 'undo' && pick('[data-testid="mk-activity"] .w-64')) ||
+        (scrollTo === 'mention' && pick('[data-testid="mk-mention"]')) ||
+        (scrollTo === 'change' && (document.querySelectorAll('[data-testid="mk-change"]')[1] as HTMLElement)) ||
+        (scrollTo === 'more' && pick('[data-testid="mk-more"]')) ||
         pick('[data-testid="mk-activity"]');
       el?.scrollIntoView({ block: scrollTo === 'top' || !scrollTo ? 'start' : 'center' });
       if (scrollTo === 'top' || !scrollTo) {

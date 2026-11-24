@@ -54,7 +54,7 @@ function Body({ text, ma2 }: { text: string; ma2: string }) {
   return (
     <span data-user-content className="whitespace-pre-wrap break-words">
       {ma2 === 'b' && named.length > 0 && (
-        <span className="mb-0.5 block text-xs text-text2">
+        <span data-testid="mk-mention" className="mb-0.5 block text-xs text-text2">
           To {named.join(', ')}
         </span>
       )}
@@ -62,7 +62,7 @@ function Body({ text, ma2 }: { text: string; ma2: string }) {
         i % 2 === 0 ? (
           p
         ) : ma2 === 'b' ? null : ma2 === 'c' ? (
-          <b key={i} className="font-semibold">
+          <b key={i} data-testid="mk-mention" className="font-semibold">
             @{p}
           </b>
         ) : (
@@ -386,7 +386,7 @@ export function MkActivity({ phone }: { phone: boolean }) {
         <span className="text-xs text-text2">
           {limit} of {n}
         </span>
-        <button type="button" className={BTN}>
+        <button type="button" data-testid="mk-more" className={BTN}>
           Show 20 more
         </button>
       </div>
@@ -498,8 +498,7 @@ export function MkActivity({ phone }: { phone: boolean }) {
           </>
         ) : (
           <>
-            <ul className="mt-3 space-y-3">{withDays(comments)}</ul>
-            <h4 className="mt-4 text-xs font-semibold text-text2">Latest change to each</h4>
+            <h4 className="mt-3 text-xs font-semibold text-text2">Latest change to each</h4>
             <PerField events={changes} open={focus === 'ma3' && open && !phase} undoOpen={focus === 'ma3' && phase === 'mid'} />
             {focus === 'ma3' && open && !phase && (
               <ul className="mt-2 space-y-2 border-l-2 border-line pl-3">
@@ -508,6 +507,8 @@ export function MkActivity({ phone }: { phone: boolean }) {
                 ))}
               </ul>
             )}
+            <ul className="mt-4 space-y-3">{withDays(comments)}</ul>
+            {more(comments.length)}
           </>
         )}
       </>

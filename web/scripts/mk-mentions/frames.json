@@ -227,7 +227,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "mention"
  },
  {
   "file": "ma2-a-open",
@@ -291,7 +292,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "mention"
  },
  {
   "file": "ma2-b-open",
@@ -355,7 +357,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "mention"
  },
  {
   "file": "ma2-c-open",
@@ -419,7 +422,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-a-open",
@@ -456,7 +460,8 @@
    1512,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "more"
  },
  {
   "file": "ma3-a-phone-390",
@@ -465,7 +470,8 @@
    390,
    844
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-b-rest",
@@ -474,7 +480,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-b-open",
@@ -511,7 +518,8 @@
    1512,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "more"
  },
  {
   "file": "ma3-b-phone-390",
@@ -520,7 +528,8 @@
    390,
    844
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-c-rest",
@@ -529,7 +538,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-c-open",
@@ -575,7 +585,8 @@
    390,
    844
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-d-rest",
@@ -584,7 +595,8 @@
    1440,
    900
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  },
  {
   "file": "ma3-d-open",
@@ -630,6 +642,7 @@
    390,
    844
   ],
-  "role": "owner"
+  "role": "owner",
+  "scroll": "change"
  }
 ]

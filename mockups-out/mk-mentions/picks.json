@@ -164,7 +164,7 @@
      "frames": [
       {
        "file": "ma2-a-rest.html",
-       "caption": "At rest: the field says @ mentions someone."
+       "caption": "At rest: an earlier mention of Avery Stone reads as a tinted name."
       },
       {
        "file": "ma2-a-open.html",
@@ -202,7 +202,7 @@
      "frames": [
       {
        "file": "ma2-b-rest.html",
-       "caption": "At rest: a Notify chip above the field."
+       "caption": "At rest: an earlier comment to Avery Stone starts with To."
       },
       {
        "file": "ma2-b-open.html",
@@ -240,7 +240,7 @@
      "frames": [
       {
        "file": "ma2-c-rest.html",
-       "caption": "At rest: the field says @ mentions someone."
+       "caption": "At rest: an earlier mention of Avery Stone reads as a tinted name."
       },
       {
        "file": "ma2-c-open.html",
@@ -303,7 +303,7 @@
       },
       {
        "file": "ma3-a-hard-1512.html",
-       "caption": "Hard case at 1512: 200 events, day headings, 20 shown, Show 20 more."
+       "caption": "Hard case at 1512: 200 events in day groups; the end of the first 20, Show 20 more."
       },
       {
        "file": "ma3-a-phone-390.html",
@@ -337,7 +337,7 @@
       },
       {
        "file": "ma3-b-hard-1512.html",
-       "caption": "Hard case at 1512: 200 events, fewer fit on screen."
+       "caption": "Hard case at 1512: 200 events; two lines each, so fewer fit before Show 20 more."
       },
       {
        "file": "ma3-b-phone-390.html",
@@ -371,7 +371,7 @@
       },
       {
        "file": "ma3-c-hard-1512.html",
-       "caption": "Hard case at 1512: 200 events; the chips count each field."
+       "caption": "Hard case at 1512: 200 events; the chips count each field, one click narrows it."
       },
       {
        "file": "ma3-c-phone-390.html",
@@ -389,7 +389,7 @@
      "frames": [
       {
        "file": "ma3-d-rest.html",
-       "caption": "At rest: comments, then one row per field with what it was."
+       "caption": "At rest: one row per field with what it was, then the comments."
       },
       {
        "file": "ma3-d-open.html",
@@ -405,7 +405,7 @@
       },
       {
        "file": "ma3-d-hard-1512.html",
-       "caption": "Hard case at 1512: 200 events still make six rows; the order is gone."
+       "caption": "Hard case at 1512: 200 events still make six rows above the comments; the order is gone."
       },
       {
        "file": "ma3-d-phone-390.html",
