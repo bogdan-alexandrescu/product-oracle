@@ -26,3 +26,11 @@
 - 1512 frames: the live browser has only 1440 and 390 presets, so the page is zoomed to a 1512-wide layout and the PNG is scaled to 1512x900; the HTML frames carry the 1512 viewport.
 - The Roadmap already has an Owner filter (All / a person / No owner); MW1 c's Mine is a one-tap form of it.
 - Lint on `MyWorkMock.tsx` still flags raw `simple-button` buttons and complexity (mock only, never merged).
+
+# Review round 2 (verdict NOT_YET), what changed (round 3)
+- MW3 c mid: rendered by picking Avery Stone in the panel's Owner (it saves at once, with Undo); the script then clicks Undo. The "Set owners on the Roadmap" link keeps `mw3=c&case=none`, so the rail shows no My work count on the Roadmap frames.
+- Role frames: a viewer's or commenter's rows say "Feature named for you" / "Milestone named for you"; statuses "Your role can read only; ask an editor to change" and "Your role proposes; an approver decides".
+- A group with rows decided this visit reads "· 2 · 1 decided" (mw2-a-result).
+- My work's features' goal has a target date (Mar 31, 2027) in the mock, so the panel's Date is not "No date yet" beside the feature's dates.
+- Phone dark PNG for every proposal (from the static phone HTML with ?theme=dark). mw3-a-viewer re-rendered.
+- Static HTML keeps scroll positions (`data-mock-scroll`, restored on load beside the theme hook). Scripts in `_tools/` (they drive the live browser by CDP; serve the mock build on 127.0.0.1:4173 first).
