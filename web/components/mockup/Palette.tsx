@@ -10,7 +10,13 @@ import { askWith } from '@/components/hop/open-state';
 import { usePhone } from '@/components/simple/PrdTimeline';
 import { FeaturePanel, type PanelFeature } from '@/app/simple/roadmap/_panel';
 import { api, unwrap } from '@/lib/api/client';
-import { PALETTE_MANY, PALETTE_RECENT, PALETTE_SEED, type PaletteKind } from '@/lib/api/mock/palette';
+import {
+  PALETTE_MANY,
+  PALETTE_RECENT,
+  PALETTE_SEED,
+  type PaletteKind,
+} from '@/lib/api/mock/palette';
+import { useCanStartPrd } from '@/components/simple/NewPrd';
 import { useMe } from '@/lib/me';
 import { usePathname, useRouter } from '@/lib/nav';
 import { useQuery } from '@/lib/use-query';
@@ -37,7 +43,16 @@ function sw(k: (typeof KEYS)[number]): string {
 export function usePaletteSwitches() {
   const pathname = usePathname();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => ({ cp1: sw('cp1') || 'a', cp2: sw('cp2') || 'b', cp3: sw('cp3') || 'a', many: sw('many') === '1', cost: sw('cost') }), [pathname]);
+  return useMemo(
+    () => ({
+      cp1: sw('cp1') || 'a',
+      cp2: sw('cp2') || 'b',
+      cp3: sw('cp3') || 'a',
+      many: sw('many') === '1',
+      cost: sw('cost'),
+    }),
+    [pathname],
+  );
 }
 
 export const openPalette = () => window.dispatchEvent(new Event('mk-palette-open'));
@@ -63,20 +78,66 @@ function matches(h: Hit, q: string): boolean {
 }
 
 /** Fill the roadmap's "Add an item" title box once it shows (the New item action's result). */
-function fillAddItem(title: string, tries = 40) {
+function fillAddItem(title: string, tries = 40, add = false) {
   const el = document.querySelector<HTMLInputElement>('input[placeholder^="Type a title"]');
   if (!el) {
-    if (tries > 0) setTimeout(() => fillAddItem(title, tries - 1), 150);
+    if (tries > 0) setTimeout(() => fillAddItem(title, tries - 1, add), 150);
     return;
   }
+  // CP2 b: the roadmap and track used last (the mock: the first of each), then the item is added at once.
+  const pick = (sel: string) => {
+    const box = document.querySelector<HTMLSelectElement>(sel);
+    if (!box || box.value || box.options.length < 2) return;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(
+      box,
+      box.options[1].value,
+    );
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  if (add) pick('[data-testid="quick-add-roadmap"]');
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
   set.call(el, title);
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.focus();
   el.scrollIntoView({ block: 'center' });
+  if (!add) return;
+  setTimeout(() => {
+    pick('[data-testid="quick-add-track"]');
+    setTimeout(() => {
+      const t = document.querySelector<HTMLInputElement>('input[placeholder^="Type a title"]');
+      t?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      setTimeout(() => {
+        const row = [...document.querySelectorAll<HTMLElement>('main *')].find(
+          (n) => n.childElementCount === 0 && n.textContent?.trim() === title,
+        );
+        row?.scrollIntoView({ block: 'center' });
+        const card = row?.closest<HTMLElement>('[class*="rounded"]');
+        if (card) card.style.outline = '3px solid var(--accent)';
+      }, 900);
+    }, 300);
+  }, 300);
+}
+/** After going to a goal's or key result's page, pick it out there. */
+function pickOut(name: string, href: string, tries = 40) {
+  const here = window.location.pathname === href;
+  const el = !here
+    ? undefined
+    : [...document.querySelectorAll<HTMLElement>('main *')].find(
+        (n) => n.childElementCount === 0 && n.textContent?.trim() === name,
+      );
+  if (!el) {
+    if (tries > 0) setTimeout(() => pickOut(name, href, tries - 1), 150);
+    return;
+  }
+  const card = el.closest<HTMLElement>('[class*="rounded"]') ?? el;
+  card.style.outline = '3px solid var(--accent)';
+  card.style.outlineOffset = '2px';
+  card.scrollIntoView({ block: 'center' });
 }
 function clickNewPrd(tries = 40) {
-  const b = [...document.querySelectorAll<HTMLButtonElement>('main button')].find((x) => x.textContent?.trim() === 'New PRD');
+  const b = [...document.querySelectorAll<HTMLButtonElement>('main button')].find(
+    (x) => x.textContent?.trim() === 'New PRD',
+  );
   if (!b) {
     if (tries > 0) setTimeout(() => clickNewPrd(tries - 1), 150);
     return;
@@ -108,6 +169,7 @@ function PaletteInner() {
 
   const proposes = can('create_simple_change');
   const decides = can('accept_simple_change');
+  const startsPrd = useCanStartPrd();
   const close = useCallback(() => {
     setOpen(false);
     setQ('');
@@ -132,6 +194,7 @@ function PaletteInner() {
   }, []);
   useEffect(() => {
     if (open) setTimeout(() => input.current?.focus(), 0);
+    document.documentElement.toggleAttribute('data-mk-open', open);
   }, [open]);
 
   const features: Hit[] = useMemo(() => {
@@ -140,49 +203,98 @@ function PaletteInner() {
       .filter((i) => typeof i.title === 'string' && i.code)
       .map((i) => {
         const prd = i.prd as { id: string; slug: string; title?: string } | null | undefined;
-        const track = (i.track_name ?? (i.track as { name?: string } | undefined)?.name ?? '') as string;
+        const track = (i.track_name ??
+          (i.track as { name?: string } | undefined)?.name ??
+          '') as string;
         const status = (i.status_label ?? i.status ?? '') as string;
         return {
           key: `f-${i.id}`,
           kind: 'Feature' as const,
           code: String(i.code),
           name: String(i.title),
-          where: [track || prd?.title || 'Roadmap', typeof status === 'string' && status ? status[0].toUpperCase() + status.slice(1).replace(/_/g, ' ') : '']
+          where: [
+            track || prd?.title || 'Roadmap',
+            typeof status === 'string' && status
+              ? status[0].toUpperCase() + status.slice(1).replace(/_/g, ' ')
+              : '',
+          ]
             .filter(Boolean)
             .join(' · '),
-          feature: { id: String(i.id), code: String(i.code), name: String(i.title), prd: prd ?? null },
+          feature: {
+            id: String(i.id),
+            code: String(i.code),
+            name: String(i.title),
+            prd: prd ?? null,
+          },
         };
       });
     const extra = s.many
-      ? PALETTE_MANY.map((m) => ({ ...m, key: `m-${m.code}`, feature: { code: m.code!, name: m.name } }))
+      ? PALETTE_MANY.map((m) => ({
+          ...m,
+          key: `m-${m.code}`,
+          feature: { code: m.code!, name: m.name },
+        }))
       : [];
     return [...out, ...extra];
   }, [roadmap.data, s.many]);
 
   const seeds: Hit[] = PALETTE_SEED.map((p) => ({ ...p, key: `s-${p.kind}-${p.name}` }));
-  const pages: Hit[] = PAGES.map((p) => ({ key: `p-${p.name}`, kind: 'Page', name: p.name, where: simple ? 'Simple' : 'Detailed', href: simple ? p.href : p.detailed }));
+  const pages: Hit[] = PAGES.map((p) => ({
+    key: `p-${p.name}`,
+    kind: 'Page',
+    name: p.name,
+    where: simple ? 'Simple' : 'Detailed',
+    href: simple ? p.href : p.detailed,
+  }));
   const title = q.replace(/^new( item)?:?\s*/i, '').trim();
   const typedNew = /^new\b/i.test(q.trim());
-  const actions: Hit[] = s.cp2 === 'b'
-    ? [
-        ...(proposes
-          ? [{
-              key: 'a-item',
-              kind: 'Action' as const,
-              name: typedNew && title ? `${decides ? 'New item' : 'Propose a new item'}: ${title}` : decides ? 'New item' : 'Propose a new item',
-              where: decides ? 'Roadmap · added at once' : 'Roadmap · an approver decides',
-              run: () => {
-                router.push('/simple/roadmap');
-                fillAddItem(title);
-              },
-            }]
-          : []),
-        ...(proposes
-          ? [{ key: 'a-prd', kind: 'Action' as const, name: 'New PRD', where: 'Home', run: () => { router.push('/simple'); clickNewPrd(); } }]
-          : []),
-        { key: 'a-ask', kind: 'Action' as const, name: q.trim() && !typedNew ? `Ask Oracle: ${q.trim()}` : 'Ask Oracle', where: 'Opens beside the page', run: () => askWith(typedNew ? '' : q.trim()) },
-      ]
-    : [];
+  const actions: Hit[] =
+    s.cp2 === 'b'
+      ? [
+          ...(proposes
+            ? [
+                {
+                  key: 'a-item',
+                  kind: 'Action' as const,
+                  name:
+                    typedNew && title
+                      ? `${decides ? 'New item' : 'Propose a new item'}: ${title}`
+                      : decides
+                        ? 'New item'
+                        : 'Propose a new item',
+                  where: decides
+                    ? 'Roadmap · on the roadmap and track you used last'
+                    : 'Roadmap · an approver decides',
+                  run: () => {
+                    router.push('/simple/roadmap');
+                    fillAddItem(title, 40, decides && !!title);
+                  },
+                },
+              ]
+            : []),
+          ...(startsPrd
+            ? [
+                {
+                  key: 'a-prd',
+                  kind: 'Action' as const,
+                  name: 'New PRD',
+                  where: 'Home',
+                  run: () => {
+                    router.push('/simple');
+                    clickNewPrd();
+                  },
+                },
+              ]
+            : []),
+          {
+            key: 'a-ask',
+            kind: 'Action' as const,
+            name: q.trim() && !typedNew ? `Ask Oracle: ${q.trim()}` : 'Ask Oracle',
+            where: 'Opens beside the page',
+            run: () => askWith(typedNew ? '' : q.trim()),
+          },
+        ]
+      : [];
 
   const all = [...features, ...seeds];
   const recent = PALETTE_RECENT.map((n) => all.find((h) => h.name === n)).filter(Boolean) as Hit[];
@@ -199,7 +311,12 @@ function PaletteInner() {
     const kinds: Hit['kind'][] = ['Feature', 'PRD', 'Goal', 'Key result', 'Milestone'];
     for (const k of kinds) {
       const hits = found.filter((h) => h.kind === k);
-      if (hits.length) groups.push({ label: k === 'Feature' ? 'Features' : k === 'Key result' ? 'Key results' : `${k}s`, hits: hits.slice(0, cap), more: Math.max(0, hits.length - cap) });
+      if (hits.length)
+        groups.push({
+          label: k === 'Feature' ? 'Features' : k === 'Key result' ? 'Key results' : `${k}s`,
+          hits: hits.slice(0, cap),
+          more: Math.max(0, hits.length - cap),
+        });
     }
     const pg = pages.filter((p) => matches(p, q));
     if (pg.length) groups.push({ label: 'Go to', hits: pg, more: 0 });
@@ -207,12 +324,38 @@ function PaletteInner() {
   }
   const flat = sub ? subActions(sub) : groups.flatMap((g) => g.hits);
   const none = !!q.trim() && found.length === 0 && !typedNew;
+  const roleLine = !proposes
+    ? 'As a viewer you can find and open anything; you cannot add or change.'
+    : !decides
+      ? 'As a commenter you can open any panel and propose changes there.'
+      : '';
 
   function subActions(h: Hit): Hit[] {
     return [
-      { key: 'x-open', kind: 'Action', name: 'Open its panel', where: 'Here, over this page', run: () => setPanel(h.feature!) },
-      { key: 'x-road', kind: 'Action', name: 'Show it on the Roadmap', where: 'Roadmap', run: () => { router.push('/simple/roadmap'); setPanel(h.feature!); } },
-      { key: 'x-ask', kind: 'Action', name: `Ask Oracle about ${h.code} ${h.name}`, where: 'Opens beside the page', run: () => askWith(`Tell me about ${h.code} ${h.name}`) },
+      {
+        key: 'x-open',
+        kind: 'Action',
+        name: 'Open its panel',
+        where: 'Here, over this page',
+        run: () => setPanel(h.feature!),
+      },
+      {
+        key: 'x-road',
+        kind: 'Action',
+        name: 'Show it on the Roadmap',
+        where: 'Roadmap',
+        run: () => {
+          router.push('/simple/roadmap');
+          setPanel(h.feature!);
+        },
+      },
+      {
+        key: 'x-ask',
+        kind: 'Action',
+        name: `Ask Oracle about ${h.code} ${h.name}`,
+        where: 'Opens beside the page',
+        run: () => askWith(`Tell me about ${h.code} ${h.name}`),
+      },
     ];
   }
 
@@ -225,7 +368,10 @@ function PaletteInner() {
       setPanel(h.feature);
       return;
     }
-    if (h.href) router.push(h.href);
+    if (h.href) {
+      router.push(h.href);
+      if (h.kind === 'Goal' || h.kind === 'Key result') pickOut(h.name, h.href);
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -250,7 +396,12 @@ function PaletteInner() {
         return;
       }
       go(flat[sel]);
-    } else if ((e.key === 'Tab' || e.key === 'ArrowRight') && s.cp2 === 'b' && !sub && flat[sel]?.feature) {
+    } else if (
+      (e.key === 'Tab' || e.key === 'ArrowRight') &&
+      s.cp2 === 'b' &&
+      !sub &&
+      flat[sel]?.feature
+    ) {
       e.preventDefault();
       setSub(flat[sel]);
       setSel(0);
@@ -271,22 +422,59 @@ function PaletteInner() {
           className={`flex w-full items-center gap-3 rounded-lg px-3 text-left ${two ? 'py-2' : 'py-2'} ${on ? 'bg-accent-soft' : 'hover:bg-bg'}`}
         >
           <span className="flex size-7 flex-none items-center justify-center rounded-md border border-line bg-surface text-text-faint">
-            <Icon size={16} name={h.kind === 'Feature' ? 'roadmap' : h.kind === 'PRD' ? 'doc' : h.kind === 'Goal' || h.kind === 'Key result' ? 'target' : h.kind === 'Milestone' ? 'clock' : h.kind === 'Action' ? (h.key.includes('ask') ? 'ask' : 'more') : 'link'} />
+            <Icon
+              size={16}
+              name={
+                h.kind === 'Feature'
+                  ? 'roadmap'
+                  : h.kind === 'PRD'
+                    ? 'doc'
+                    : h.kind === 'Goal' || h.kind === 'Key result'
+                      ? 'target'
+                      : h.kind === 'Milestone'
+                        ? 'clock'
+                        : h.kind === 'Action'
+                          ? h.key.includes('ask')
+                            ? 'ask'
+                            : 'more'
+                          : 'link'
+              }
+            />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-baseline gap-2">
-              {h.code && <span className="flex-none font-mono text-sm text-text-faint">{h.code}</span>}
-              <span className={`min-w-0 text-base text-text ${two ? 'line-clamp-2' : 'truncate'} ${on ? 'font-semibold' : 'font-medium'}`}>{h.name}</span>
+              {h.code && (
+                <span className="flex-none font-mono text-sm text-text-faint">{h.code}</span>
+              )}
+              <span
+                className={`min-w-0 text-base text-text ${two ? 'line-clamp-2' : 'truncate'} ${on ? 'font-semibold' : 'font-medium'}`}
+              >
+                {h.name}
+              </span>
             </span>
-            {two && <span className="block truncate text-sm text-text-faint">{h.kind} · {h.where}</span>}
+            {two && (
+              <span className="flex items-center gap-2 text-sm text-text-faint">
+                <span className="min-w-0 flex-1 truncate">
+                  {h.kind} · {h.where}
+                </span>
+                {on && !phone && h.feature && s.cp2 === 'b' && !sub && (
+                  <span className={kbd}>Tab</span>
+                )}
+                {on && !phone && <span className={kbd}>↵</span>}
+              </span>
+            )}
           </span>
           {!two && (
             <span className="max-w-[45%] flex-none truncate text-sm text-text-faint max-[600px]:hidden">
-              {look === 'b' ? h.where : `${h.kind === 'Page' || h.kind === 'Action' ? '' : `${h.kind} · `}${h.where}`}
+              {look === 'b'
+                ? h.where
+                : `${h.kind === 'Page' || h.kind === 'Action' ? '' : `${h.kind} · `}${h.where}`}
             </span>
           )}
-          {on && h.feature && s.cp2 === 'b' && !sub && <span className={kbd}>Tab</span>}
-          {on && <span className={kbd}>↵</span>}
+          {on && !phone && !two && h.feature && s.cp2 === 'b' && !sub && (
+            <span className={kbd}>Tab</span>
+          )}
+          {on && !phone && !two && <span className={kbd}>↵</span>}
         </button>
       </li>
     );
@@ -295,6 +483,14 @@ function PaletteInner() {
   let idx = 0;
   const list = (
     <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" data-testid="mk-palette-list">
+      {roleLine && (
+        <p
+          data-testid="mk-role"
+          className="mx-3 mt-3 flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-sm text-text2"
+        >
+          <Icon name={proposes ? 'comment' : 'lock'} size={16} /> {roleLine}
+        </p>
+      )}
       {sub ? (
         <>
           <p className="px-3 pt-3 pb-1 text-xs font-semibold text-text-faint">
@@ -306,16 +502,35 @@ function PaletteInner() {
         <div className="px-3 py-6 text-center" data-testid="mk-palette-none">
           <p className="text-base font-semibold text-text">Nothing matches “{q.trim()}”</p>
           {s.cp2 === 'a' ? (
-            <p className="mt-1 text-sm text-text-faint">Try a code like F-79, or a word from the name.</p>
+            <p className="mt-1 text-sm text-text-faint">
+              Try a code like F-79, or a word from the name.
+            </p>
           ) : (
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {s.cp2 === 'b' && proposes && (
-                <button type="button" className="simple-button simple-button-primary" onClick={() => { close(); router.push('/simple/roadmap'); fillAddItem(q.trim()); }}>
-                  {decides ? 'Add' : 'Propose'} “{q.trim()}” as an item <span className="ml-1 opacity-70">↵</span>
+                <button
+                  type="button"
+                  className="simple-button simple-button-primary"
+                  onClick={() => {
+                    close();
+                    router.push('/simple/roadmap');
+                    fillAddItem(q.trim());
+                  }}
+                >
+                  {decides ? 'Add' : 'Propose'} “{q.trim()}” as an item{' '}
+                  <span className="ml-1 opacity-70">↵</span>
                 </button>
               )}
-              <button type="button" className={`simple-button ${s.cp2 === 'c' || !proposes ? 'simple-button-primary' : ''}`} onClick={() => { close(); askWith(q.trim()); }}>
-                Ask Oracle {s.cp2 === 'c' || !proposes ? <span className="ml-1 opacity-70">↵</span> : null}
+              <button
+                type="button"
+                className={`simple-button ${s.cp2 === 'c' || !proposes ? 'simple-button-primary' : ''}`}
+                onClick={() => {
+                  close();
+                  askWith(q.trim());
+                }}
+              >
+                Ask Oracle{' '}
+                {s.cp2 === 'c' || !proposes ? <span className="ml-1 opacity-70">↵</span> : null}
               </button>
             </div>
           )}
@@ -326,7 +541,11 @@ function PaletteInner() {
             <div key={g.label}>
               <p className="px-3 pt-3 pb-1 text-xs font-semibold text-text-faint">{g.label}</p>
               <ul role="listbox">{g.hits.map((h) => row(h, idx++))}</ul>
-              {g.more > 0 && <p className="px-3 py-1 text-sm text-accent-ink">{g.more} more {g.label.toLowerCase()} ↓</p>}
+              {g.more > 0 && (
+                <p className="px-3 py-1 text-sm text-accent-ink">
+                  {g.more} more {g.label.toLowerCase()} ↓
+                </p>
+              )}
             </div>
           ) : null,
         )
@@ -335,7 +554,9 @@ function PaletteInner() {
   );
 
   const field = (
-    <div className={`flex items-center gap-2 ${look === 'b' ? 'px-3' : 'border-b border-line px-4'} h-14 flex-none`}>
+    <div
+      className={`flex items-center gap-2 ${look === 'b' ? 'px-3' : 'border-b border-line px-4'} h-14 flex-none`}
+    >
       <Icon name="search" />
       <input
         ref={input}
@@ -351,21 +572,53 @@ function PaletteInner() {
           setSub(null);
         }}
         onKeyDown={onKeyDown}
-        placeholder={s.cp2 === 'b' ? 'Find or do: a code, a name, “new …”' : 'Find a feature, PRD or goal'}
+        placeholder={
+          phone
+            ? s.cp2 === 'b'
+              ? 'Find or do'
+              : 'Find'
+            : s.cp2 === 'b'
+              ? 'Find or do: a code, a name, “new …”'
+              : 'Find a feature, PRD or goal'
+        }
         className="min-w-0 flex-1 bg-transparent text-lg text-text outline-none placeholder:text-text-faint"
       />
-      <span className={kbd}>Esc</span>
+      {phone ? (
+        <button
+          type="button"
+          onClick={close}
+          data-testid="mk-palette-close"
+          className="simple-button h-9 flex-none"
+        >
+          Close
+        </button>
+      ) : (
+        <span className={kbd}>Esc</span>
+      )}
     </div>
   );
 
   const costNote = s.cost && (
-    <div data-testid="mk-cost" className="fixed bottom-4 left-4 z-[80] max-w-[520px] rounded-xl border-2 border-dashed border-accent bg-surface px-4 py-2 text-sm text-text shadow-tip">
-      <b>Cost:</b> {s.cost}
-    </div>
+    <>
+      {/* The page gives up a strip at the foot for the note, so the note covers nothing. */}
+      <style>{`.h-dvh{height:calc(100dvh - 48px)!important}.min-h-dvh{min-height:calc(100dvh - 48px)!important}body{padding-bottom:48px}[data-testid=mk-entry].fixed{bottom:72px!important}`}</style>
+      <div
+        data-testid="mk-cost"
+        className="fixed inset-x-0 bottom-0 z-[80] flex h-12 items-center gap-2 border-t-2 border-dashed border-accent bg-surface px-6 text-sm text-text"
+      >
+        <b>Cost:</b> <span className="truncate">{s.cost}</span>
+      </div>
+    </>
   );
 
   const panelEl = panel && (
-    <FeaturePanel key={`${panel.code}|${panel.name}`} feature={panel} phone={phone} canChange={can('create_simple_change')} onClose={() => setPanel(null)} />
+    <FeaturePanel
+      key={`${panel.code}|${panel.name}`}
+      feature={panel}
+      phone={phone}
+      canChange={can('create_simple_change')}
+      onClose={() => setPanel(null)}
+    />
   );
 
   if (!me) return null;
@@ -379,31 +632,57 @@ function PaletteInner() {
 
   const box =
     look === 'b' ? (
-      <div className="fixed inset-0 z-[70]" onMouseDown={(e) => e.target === e.currentTarget && close()} data-testid="mk-palette">
-        <div className={`absolute ${phone ? 'inset-x-2 top-2' : 'top-3 left-[calc(50%+var(--mk-rail,0px)/2)] w-[min(680px,calc(100vw-360px))] -translate-x-1/2'} flex max-h-[min(70vh,620px)] flex-col overflow-hidden rounded-xl border-2 border-accent bg-surface shadow-tip`}>
+      <div
+        className="fixed inset-0 z-[70]"
+        onMouseDown={(e) => e.target === e.currentTarget && close()}
+        data-testid="mk-palette"
+      >
+        <div
+          className={`absolute ${phone ? 'inset-x-2 top-2' : 'top-3 left-[calc(50%+var(--mk-rail,0px)/2)] w-[min(680px,calc(100vw-360px))] -translate-x-1/2'} flex max-h-[min(70vh,620px)] flex-col overflow-hidden rounded-xl border-2 border-accent bg-surface shadow-tip`}
+        >
           {field}
           <div className="border-t border-line" />
           {list}
         </div>
       </div>
     ) : look === 'c' ? (
-      <div className="fixed inset-0 z-[70] bg-black/20" onMouseDown={(e) => e.target === e.currentTarget && close()} data-testid="mk-palette">
-        <div className={`absolute flex flex-col bg-surface shadow-tip ${phone ? 'inset-x-0 bottom-0 h-[85dvh] rounded-t-2xl' : 'top-0 right-0 h-dvh w-[460px] border-l border-line'}`}>
+      <div
+        className="fixed inset-0 z-[70] bg-[rgba(0,0,0,0.25)] [html[data-theme=dark]_&]:bg-[rgba(0,0,0,0.55)]"
+        onMouseDown={(e) => e.target === e.currentTarget && close()}
+        data-testid="mk-palette"
+      >
+        <div
+          className={`absolute flex flex-col bg-surface shadow-tip ${phone ? 'inset-x-0 bottom-0 h-[85dvh] rounded-t-2xl' : 'top-0 right-0 h-dvh w-[460px] border-l border-line'}`}
+        >
           {phone && <span className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong" />}
           {field}
           {list}
         </div>
       </div>
     ) : (
-      <div className="fixed inset-0 z-[70] bg-black/30" onMouseDown={(e) => e.target === e.currentTarget && close()} data-testid="mk-palette">
-        <div className={`absolute flex flex-col overflow-hidden bg-surface shadow-tip ${phone ? 'inset-0' : 'top-[12vh] left-1/2 max-h-[64vh] w-[640px] -translate-x-1/2 rounded-2xl border border-line'}`}>
+      <div
+        className="fixed inset-0 z-[70] bg-[rgba(0,0,0,0.3)] [html[data-theme=dark]_&]:bg-[rgba(0,0,0,0.55)]"
+        onMouseDown={(e) => e.target === e.currentTarget && close()}
+        data-testid="mk-palette"
+      >
+        <div
+          className={`absolute flex flex-col overflow-hidden bg-surface shadow-tip ${phone ? 'inset-0' : 'top-[12vh] left-1/2 max-h-[64vh] w-[640px] -translate-x-1/2 rounded-2xl border border-line'}`}
+        >
           {field}
           {list}
           {!phone && (
             <div className="flex flex-none gap-4 border-t border-line px-4 py-2 text-xs text-text-faint">
-              <span><span className={kbd}>↑↓</span> move</span>
-              <span><span className={kbd}>↵</span> open</span>
-              {s.cp2 === 'b' && <span><span className={kbd}>Tab</span> more for a feature</span>}
+              <span>
+                <span className={kbd}>↑↓</span> move
+              </span>
+              <span>
+                <span className={kbd}>↵</span> open
+              </span>
+              {s.cp2 === 'b' && flat[sel]?.feature && !sub && (
+                <span>
+                  <span className={kbd}>Tab</span> more for a feature
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -419,14 +698,23 @@ function PaletteInner() {
 }
 
 /** CP3: the entry a person without a keyboard taps. `where` is the shell slot it is drawn in. */
-export function PaletteEntry({ where }: { where: 'simple-rail' | 'detailed-rail' | 'phone-header' | 'top' | 'float' }) {
+export function PaletteEntry({
+  where,
+}: {
+  where: 'simple-rail' | 'detailed-rail' | 'phone-header' | 'top' | 'float';
+}) {
   const s = usePaletteSwitches();
   const { me } = useMe();
   if (!me) return null;
   const v = s.cp3;
   if (where === 'simple-rail' && v === 'a')
     return (
-      <button type="button" onClick={openPalette} data-testid="mk-entry" className="mb-1 flex h-12 w-full items-center gap-3 rounded-xl border border-rail-sep px-3 text-left text-[length:var(--simple-rail-label)] font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text">
+      <button
+        type="button"
+        onClick={openPalette}
+        data-testid="mk-entry"
+        className="mb-1 flex h-12 w-full items-center gap-3 rounded-xl border border-rail-sep px-3 text-left text-[length:var(--simple-rail-label)] font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text"
+      >
         <Icon name="search" stroke={1.7} />
         <span className="flex-1">Find</span>
         <span className="rounded border border-rail-sep px-1.5 font-mono text-xs">⌘K</span>
@@ -434,21 +722,37 @@ export function PaletteEntry({ where }: { where: 'simple-rail' | 'detailed-rail'
     );
   if (where === 'detailed-rail' && v === 'a')
     return (
-      <button type="button" onClick={openPalette} data-testid="mk-entry" className="flex w-[72px] flex-none flex-col items-center gap-0.5 rounded-xl py-1.5 text-sm text-rail-text hover:bg-rail-hover hover:text-rail-active-text">
+      <button
+        type="button"
+        onClick={openPalette}
+        data-testid="mk-entry"
+        className="flex w-[72px] flex-none flex-col items-center gap-0.5 rounded-xl py-1.5 text-sm text-rail-text hover:bg-rail-hover hover:text-rail-active-text"
+      >
         <Icon name="search" />
         Find
       </button>
     );
   if (where === 'phone-header' && v === 'a')
     return (
-      <button type="button" onClick={openPalette} aria-label="Find" data-testid="mk-entry-phone" className="hidden size-10 flex-none items-center justify-center rounded-full text-rail-active-text max-[600px]:flex">
+      <button
+        type="button"
+        onClick={openPalette}
+        aria-label="Find"
+        data-testid="mk-entry-phone"
+        className="hidden size-10 flex-none items-center justify-center rounded-full text-rail-active-text max-[600px]:flex"
+      >
         <Icon name="search" />
       </button>
     );
   if (where === 'top' && v === 'b')
     return (
-      <div className="sticky top-0 z-30 flex h-12 items-center justify-end border-b border-line bg-surface px-6 max-[600px]:px-3 max-[600px]:top-[var(--phone-top-bar)]">
-        <button type="button" onClick={openPalette} data-testid="mk-entry" className="flex h-9 w-[min(420px,100%)] items-center gap-2 rounded-lg border border-line bg-bg px-3 text-left text-base text-text-faint hover:border-line-strong">
+      <div className="sticky top-0 z-30 flex h-12 items-center justify-end [html[data-mk-open]_&]:invisible border-b border-line bg-surface px-6 max-[600px]:px-3 max-[600px]:top-[var(--phone-top-bar)]">
+        <button
+          type="button"
+          onClick={openPalette}
+          data-testid="mk-entry"
+          className="flex h-9 w-[min(420px,100%)] items-center gap-2 rounded-lg border border-line bg-bg px-3 text-left text-base text-text-faint hover:border-line-strong"
+        >
           <Icon name="search" size={18} />
           <span className="flex-1 truncate">Find a feature, PRD or goal</span>
           <span className={`${kbd} max-[600px]:hidden`}>⌘K</span>
@@ -457,7 +761,13 @@ export function PaletteEntry({ where }: { where: 'simple-rail' | 'detailed-rail'
     );
   if (where === 'float' && v === 'c')
     return (
-      <button type="button" onClick={openPalette} aria-label="Find" data-testid="mk-entry" className="fixed right-6 bottom-6 z-[45] flex h-14 items-center gap-2 rounded-full bg-accent px-5 text-base font-semibold text-on-accent shadow-tip max-[600px]:right-4 max-[600px]:bottom-[calc(var(--tab-bar,64px)+16px)] max-[600px]:size-14 max-[600px]:justify-center max-[600px]:px-0">
+      <button
+        type="button"
+        onClick={openPalette}
+        aria-label="Find"
+        data-testid="mk-entry"
+        className="fixed right-6 bottom-6 z-[45] flex h-14 items-center gap-2 rounded-full bg-accent px-5 text-base font-semibold text-on-accent shadow-tip max-[600px]:right-4 max-[600px]:bottom-[calc(var(--tab-bar,64px)+16px)] max-[600px]:size-14 max-[600px]:justify-center max-[600px]:px-0"
+      >
         <Icon name="search" />
         <span className="max-[600px]:hidden">Find</span>
       </button>

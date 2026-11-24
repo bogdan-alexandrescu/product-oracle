@@ -1,12 +1,12 @@
 {
   "title": "Command palette: find any feature, PRD or goal",
-  "subtitle": "Mock-ups for issue 1794: ⌘K finds any item and runs an action. Three decisions, three proposals each. Invented example data. Open any frame with ?theme=dark for dark.",
+  "subtitle": "Mock-ups for issue 1794: ⌘K finds any item and runs an action. Three decisions, three proposals each. Invented example data. Desktop frames are 1512 wide; every frame has a dark PNG beside it (-dark.png), and any html opens in dark with ?theme=dark.",
   "decisions": [
     {
       "code": "CP1",
       "name": "How the palette opens and looks",
       "question": "When a person presses ⌘K (Ctrl+K), what opens, and what does each result row show?",
-      "common": "⌘K or Ctrl+K opens it on every Simple and Detailed page; Esc closes it. Results come in groups (Features, PRDs, Goals, Key results, Milestones, Go to, Do); every feature shows its code with its name; Enter on a feature opens the one feature panel over the page you are on. Same story in each: find F-79 Weekly alert digest from Home.",
+      "common": "⌘K or Ctrl+K opens it on every Simple and Detailed page; Esc closes it. Results come in groups (Features, PRDs, Goals, Key results, Milestones, Go to, Do); every feature shows its code with its name; Enter on a feature opens the one feature panel over the page you are on. Same story in each: find F-79 Weekly alert digest from Home. Every CP1 frame is drawn with the recommended rest of the palette: Find in the rail (CP3 a) and the Do actions (CP2 b); those belong to CP2 and CP3, not to CP1.",
       "proposals": [
         {
           "letter": "a",
@@ -15,7 +15,7 @@
           "what": "A sheet opens in the middle of the screen over a dimmed page, the box at the top. One line per result: an icon for its kind, the code and name, then its kind and where it lives on the right. A key strip at the foot says ↑↓ move, ↵ open, Tab more. On a phone it fills the screen.",
           "why": "It is the shape people know from other tools, it fits the most per row (code, name, kind and place on one line), and nothing on the page moves. Long names stay on one line, so many results still fit at 1512.",
           "plus": "Kind and place on every row; works the same on every page; full screen on a phone.",
-          "cost": "3 steps (⌘K, type, Enter) against 4 steps and a scroll today.",
+          "cost": "3 steps (⌘K, type, Enter) against 4 steps and a scroll today; the sheet covers the middle of the page while open.",
           "frames": [
             {
               "file": "frames/cp1-a-rest.html",
@@ -31,11 +31,15 @@
             },
             {
               "file": "frames/cp1-a-result.html",
-              "caption": "Enter: the feature panel of F-79 opens over Home. Cost note at the foot."
+              "caption": "Enter: the feature panel of F-79 opens over Home. The cost note at the foot names what this look costs."
             },
             {
               "file": "frames/cp1-a-hard-1512.html",
               "caption": "Hard case at 1512: 60 more features with long names; 5 per group, then “more”."
+            },
+            {
+              "file": "frames/cp1-a-detailed-open-1512.html",
+              "caption": "Detailed Home at 1512: the same palette over the other shell, typing “billing”."
             },
             {
               "file": "frames/cp1-a-phone-390.html",
@@ -49,7 +53,7 @@
           "recommended": false,
           "what": "The box drops down from the top of the page, not the middle, with a strong outline and no dark cover: the page stays readable under it. Kind is the group title only; each row shows the code, the name and where it lives.",
           "plus": "The page stays visible; it reads like a search field people already use.",
-          "cost": "3 steps (⌘K, type, Enter), same as a; less room per row for the kind.",
+          "cost": "3 steps (⌘K, type, Enter), same as a; the page stays readable, but each row has less room for its kind and place.",
           "frames": [
             {
               "file": "frames/cp1-b-rest.html",
@@ -65,11 +69,15 @@
             },
             {
               "file": "frames/cp1-b-result.html",
-              "caption": "Enter: the F-79 panel opens over Home. Cost note at the foot."
+              "caption": "Enter: the F-79 panel opens over Home. The cost note at the foot names what this look costs."
             },
             {
               "file": "frames/cp1-b-hard-1512.html",
               "caption": "Hard case at 1512 on Roadmap: long names cut to one line; the page shows through."
+            },
+            {
+              "file": "frames/cp1-b-detailed-open-1512.html",
+              "caption": "Detailed Home at 1512: the same palette over the other shell, typing “billing”."
             },
             {
               "file": "frames/cp1-b-phone-390.html",
@@ -83,7 +91,7 @@
           "recommended": false,
           "what": "A tall sheet slides in from the right, like the feature panel. Each result takes two lines: the code and the full name (up to two lines), then its kind and where it lives. It shows 8 per group, not 5. On a phone it is a bottom sheet.",
           "plus": "Full long names; more results per group; feels like the panel it opens.",
-          "cost": "3 steps (⌘K, type, Enter); twice the height per row, so fewer kinds fit without scrolling.",
+          "cost": "3 steps (⌘K, type, Enter); each row is twice as tall, so fewer show without scrolling.",
           "frames": [
             {
               "file": "frames/cp1-c-rest.html",
@@ -99,11 +107,15 @@
             },
             {
               "file": "frames/cp1-c-result.html",
-              "caption": "Enter: the sheet gives way to the F-79 panel on the same side. Cost note at the foot."
+              "caption": "Enter: the sheet gives way to the F-79 panel on the same side. The cost note at the foot names what this look costs."
             },
             {
               "file": "frames/cp1-c-hard-1512.html",
-              "caption": "Hard case at 1512: long names wrap to two lines; 8 shown, then “more”."
+              "caption": "Hard case at 1512: long names wrap to two lines, the picked one too (its keys sit on the second line); 8 shown, then “more”."
+            },
+            {
+              "file": "frames/cp1-c-detailed-open-1512.html",
+              "caption": "Detailed Home at 1512: the same palette over the other shell, typing “billing”."
             },
             {
               "file": "frames/cp1-c-phone-390.html",
@@ -117,7 +129,7 @@
       "code": "CP2",
       "name": "What it finds and does",
       "question": "What does the palette find, what happens on Enter, and what does it show when the box is empty or nothing matches?",
-      "common": "It finds features by code or name, PRDs, goals, key results and milestones, and every page. Shown in the centered sheet (CP1 a). Actions follow the person's role through can(): a commenter's new item is a proposal, a viewer gets none.",
+      "common": "It finds features by code or name, PRDs, goals, key results and milestones, and every page. Shown in the centered sheet (CP1 a). The palette goes by the person's role through can(): a commenter's new item is a proposal, New PRD shows only to those who can start one, and a viewer finds and opens but adds nothing; a short line in the box says so.",
       "proposals": [
         {
           "letter": "a",
@@ -125,7 +137,7 @@
           "recommended": false,
           "what": "Only finding. Enter on a feature opens its panel over the page you are on; a PRD, goal or milestone takes you to its page. The empty box shows recent items and pages. With no match it says so and how to search (a code or a word).",
           "plus": "Simplest to learn; nothing can change by accident.",
-          "cost": "3 steps (⌘K, “f-79”, Enter); adding an item still takes 4 steps on Roadmap.",
+          "cost": "3 steps (⌘K, “f-79”, Enter) against 4 and a scroll today; adding an item still takes 5 steps on Roadmap.",
           "frames": [
             {
               "file": "frames/cp1-a-rest.html",
@@ -144,12 +156,16 @@
               "caption": "Enter: the F-79 panel opens over Home; you never left the page. Cost note at the foot."
             },
             {
-              "file": "frames/cp2-a-commenter-1512.html",
-              "caption": "Hard case, a commenter at 1512 types “quiet hours”: no match, and no way on from here."
+              "file": "frames/cp2-a-phone-390.html",
+              "caption": "Phone, the same owner, opened from the header: recent items and pages; Close instead of Esc."
             },
             {
-              "file": "frames/cp2-a-phone-390.html",
-              "caption": "Phone, opened from the header: recent items and pages."
+              "file": "frames/cp2-a-commenter-1512.html",
+              "caption": "Hard case, a commenter at 1512 types “quiet hours”: no match; a line says a commenter can open any panel and propose changes there."
+            },
+            {
+              "file": "frames/cp2-a-viewer-1512.html",
+              "caption": "A viewer at 1512 opens it: recent items and pages; a line says a viewer can find and open but not add or change."
             }
           ]
         },
@@ -160,7 +176,7 @@
           "what": "Finding plus actions in the same list: New item, New PRD, Ask Oracle, go to a page. Typing “new …” turns the words into a new item's title. Tab on a feature shows its own actions (open its panel, show it on the Roadmap, ask Oracle about it). With no match, Enter adds the words as an item, or Ask Oracle. A commenter sees “Propose a new item”; a viewer sees no add.",
           "why": "It is what the issue asks for (actions in the same box), it saves the most steps for the everyday add, and it keeps the role rule: owners and approvers add at once, commenters propose.",
           "plus": "One box for going and doing; no dead end on no match.",
-          "cost": "Add an item: 3 steps (⌘K, “new …”, Enter) against 4 today; open a feature: 3 steps.",
+          "cost": "Add an item: 3 steps (⌘K, “new …”, Enter); it goes on the roadmap and track used last, changed in its panel · today 5 steps (open Roadmap, pick a roadmap, pick a track, type the title, New item). Open a feature: 3 steps.",
           "frames": [
             {
               "file": "frames/cp1-a-rest.html",
@@ -172,23 +188,27 @@
             },
             {
               "file": "frames/cp2-b-mid.html",
-              "caption": "Typing “new Quiet hours for alerts”: New item with that title is first."
+              "caption": "Typing “new Quiet hours for alerts”: New item with that title is first; it goes on the roadmap and track used last."
             },
             {
               "file": "frames/cp2-b-result.html",
-              "caption": "Enter: Roadmap opens with “Quiet hours for alerts” in Add an item, ready to place. Cost note at the foot."
+              "caption": "Enter: the item is added. Roadmap shows F-113 Quiet hours for alerts on the Usage alerts track, its panel open to change the track or dates. Cost note at the foot."
             },
             {
               "file": "frames/cp2-b-tab.html",
               "caption": "Tab on F-79: its own actions, open its panel here, show it on Roadmap, ask Oracle."
             },
             {
-              "file": "frames/cp2-b-commenter-1512.html",
-              "caption": "Hard case, a commenter at 1512: the same words read “Propose a new item”; an approver decides."
+              "file": "frames/cp2-b-phone-390.html",
+              "caption": "Phone, the same owner: New item and New PRD as on desktop; a tap opens, Close instead of Esc."
             },
             {
-              "file": "frames/cp2-b-phone-390.html",
-              "caption": "Phone: the same list; Tab is not needed, a tap opens."
+              "file": "frames/cp2-b-commenter-1512.html",
+              "caption": "Hard case, a commenter at 1512: the same words read “Propose a new item”, no New PRD; a line says what a commenter can do."
+            },
+            {
+              "file": "frames/cp2-b-viewer-1512.html",
+              "caption": "A viewer at 1512 opens it: recent items, ask oracle and pages; no new item or new prd; a line says a viewer can find and open but not add or change."
             }
           ]
         },
@@ -217,12 +237,16 @@
               "caption": "Enter: you are on Roadmap with the F-79 panel open. Cost note at the foot."
             },
             {
-              "file": "frames/cp2-c-commenter-1512.html",
-              "caption": "Hard case, a commenter at 1512 types “quiet hours”: no match, Enter asks Oracle."
+              "file": "frames/cp2-c-phone-390.html",
+              "caption": "Phone, the same owner: the page list from the header button; Close instead of Esc."
             },
             {
-              "file": "frames/cp2-c-phone-390.html",
-              "caption": "Phone: the page list from the header button."
+              "file": "frames/cp2-c-commenter-1512.html",
+              "caption": "Hard case, a commenter at 1512 types “quiet hours”: no match, Enter asks Oracle; a line says what a commenter can do."
+            },
+            {
+              "file": "frames/cp2-c-viewer-1512.html",
+              "caption": "A viewer at 1512 opens it: pages only; a line says a viewer can find and open but not add or change."
             }
           ]
         }
@@ -232,7 +256,7 @@
       "code": "CP3",
       "name": "Reaching it without a keyboard",
       "question": "How does a person on a phone or with a mouse only open the palette?",
-      "common": "The entry opens the same palette as ⌘K (CP1 a, CP2 b). It shows on Simple and Detailed and on the phone. Story: open it with a tap, find the goal Activation, go to Goal map.",
+      "common": "The entry opens the same palette as ⌘K (CP1 a, CP2 b). It shows on Simple and Detailed and on the phone. Story: open it with a tap, find the key result Sign-ups per rep per day, land on it on Goal map. Today a person without a keyboard has no way into the palette at all: they open the page and look by eye.",
       "proposals": [
         {
           "letter": "a",
@@ -241,7 +265,7 @@
           "what": "A Find row sits at the top of the Simple rail, above Home, with its ⌘K hint; Detailed's narrow rail gets a Find tile in the same place. On a phone a search button sits in the top bar beside Ask.",
           "why": "It lives where people already look for places, takes no room on the page, and teaches the ⌘K key by showing it.",
           "plus": "No room taken from pages; shows the shortcut.",
-          "cost": "1 tap or click to open, then the same steps as ⌘K.",
+          "cost": "1 tap or click, then the same steps as ⌘K; no room taken on the page · today: no way in without a keyboard, open the page and look by eye.",
           "frames": [
             {
               "file": "frames/cp3-a-rest.html",
@@ -253,11 +277,11 @@
             },
             {
               "file": "frames/cp3-a-mid.html",
-              "caption": "Typing “activation”: the goal Activation is first."
+              "caption": "Typing “sign-ups per rep”: the key result Sign-ups per rep per day is first."
             },
             {
               "file": "frames/cp3-a-result.html",
-              "caption": "Enter: Goal map. Cost note at the foot."
+              "caption": "Enter: Goal map, with Sign-ups per rep per day picked out. Cost note at the foot."
             },
             {
               "file": "frames/cp3-a-detailed-1512.html",
@@ -279,7 +303,7 @@
           "recommended": false,
           "what": "A slim strip above every page carries a search field (“Find a feature, PRD or goal ⌘K”), in Simple, Detailed and on the phone under the top bar.",
           "plus": "Impossible to miss; looks like search everywhere else.",
-          "cost": "1 click; but a 48px strip on every page, and on a phone it pushes the page down.",
+          "cost": "1 click; but a slim bar on every page, and on a phone it pushes the page down · today: no way in without a keyboard, open the page and look by eye.",
           "frames": [
             {
               "file": "frames/cp3-b-rest.html",
@@ -287,15 +311,15 @@
             },
             {
               "file": "frames/cp3-b-open.html",
-              "caption": "A click on the field opens the palette."
+              "caption": "A click on the field opens the palette; the bar steps aside so the box is drawn once."
             },
             {
               "file": "frames/cp3-b-mid.html",
-              "caption": "Typing “activation”."
+              "caption": "Typing “sign-ups per rep”: the key result Sign-ups per rep per day is first."
             },
             {
               "file": "frames/cp3-b-result.html",
-              "caption": "Enter: Goal map, the strip still on top. Cost note at the foot."
+              "caption": "Enter: Goal map, with Sign-ups per rep per day picked out. Cost note at the foot. The strip is still on top."
             },
             {
               "file": "frames/cp3-b-detailed-1512.html",
@@ -317,7 +341,7 @@
           "recommended": false,
           "what": "A round Find button floats at the bottom right of every page; on a phone it sits above the tab bar.",
           "plus": "Always one tap away, at thumb reach on a phone.",
-          "cost": "1 tap; but it covers page corners (buttons, the panel's foot) on every page.",
+          "cost": "1 tap; but it covers page corners (buttons, the panel's foot) on every page · today: no way in without a keyboard, open the page and look by eye.",
           "frames": [
             {
               "file": "frames/cp3-c-rest.html",
@@ -329,15 +353,15 @@
             },
             {
               "file": "frames/cp3-c-mid.html",
-              "caption": "Typing “activation”."
+              "caption": "Typing “sign-ups per rep”: the key result Sign-ups per rep per day is first."
             },
             {
               "file": "frames/cp3-c-result.html",
-              "caption": "Enter: Goal map; the button stays. Cost note at the foot."
+              "caption": "Enter: Goal map, with Sign-ups per rep per day picked out. Cost note at the foot. The button stays."
             },
             {
               "file": "frames/cp3-c-detailed-1512.html",
-              "caption": "Hard case, Detailed at 1512: the button sits over Home's rows."
+              "caption": "Hard case, Detailed at 1512: the button sits at the bottom right over Home, where a scrolled page's rows pass under it."
             },
             {
               "file": "frames/cp3-c-phone-390.html",

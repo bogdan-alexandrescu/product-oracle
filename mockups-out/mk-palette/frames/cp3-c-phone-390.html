@@ -148,7 +148,6 @@
   .left-1\/2 { left: 50%; }
   .left-2\.5 { left: calc(var(--spacing) * 2.5); }
   .left-3 { left: calc(var(--spacing) * 3); }
-  .left-4 { left: calc(var(--spacing) * 4); }
   .left-6 { left: calc(var(--spacing) * 6); }
   .left-\[-20000px\] { left: -20000px; }
   .left-\[4px\] { left: 4px; }
@@ -231,6 +230,7 @@
   .-mx-6 { margin-inline: calc(var(--spacing) * -6); }
   .mx-1 { margin-inline: var(--spacing); }
   .mx-1\.5 { margin-inline: calc(var(--spacing) * 1.5); }
+  .mx-3 { margin-inline: calc(var(--spacing) * 3); }
   .mx-4 { margin-inline: calc(var(--spacing) * 4); }
   .mx-5 { margin-inline: calc(var(--spacing) * 5); }
   .mx-auto { margin-inline: auto; }
@@ -598,7 +598,6 @@
   .max-w-\[260px\] { max-width: 260px; }
   .max-w-\[320px\] { max-width: 320px; }
   .max-w-\[420px\] { max-width: 420px; }
-  .max-w-\[520px\] { max-width: 520px; }
   .max-w-\[640px\] { max-width: 640px; }
   .max-w-\[760px\] { max-width: 760px; }
   .max-w-\[880px\] { max-width: 880px; }
@@ -996,6 +995,8 @@
   .border-t-accent { border-top-color: var(--accent); }
   .\!bg-accent-soft { background-color: var(--accent-soft) !important; }
   .bg-\[\#ffffff\] { background-color: rgb(255, 255, 255); }
+  .bg-\[rgba\(0\,0\,0\,0\.3\)\] { background-color: rgba(0, 0, 0, 0.3); }
+  .bg-\[rgba\(0\,0\,0\,0\.25\)\] { background-color: rgba(0, 0, 0, 0.25); }
   .bg-\[var\(--simple-desk\)\] { background-color: var(--simple-desk); }
   .bg-\[var\(--simple-edited\)\] { background-color: var(--simple-edited); }
   .bg-\[var\(--simple-paper\)\] { background-color: var(--simple-paper); }
@@ -2600,6 +2601,8 @@
   @media (width >= 600px) {
   body:not(:has(nav[aria-label="Simple"])) .min-\[600px\]\:\[body\:not\(\:has\(nav\[aria-label\=Simple\]\)\)_\&\]\:pl-\[var\(--simple-rail-width\)\] { padding-left: var(--simple-rail-width); }
 }
+  html[data-mk-open] .\[html\[data-mk-open\]_\&\]\:invisible { visibility: hidden; }
+  html[data-theme="dark"] .\[html\[data-theme\=dark\]_\&\]\:bg-\[rgba\(0\,0\,0\,0\.55\)\] { background-color: rgba(0, 0, 0, 0.55); }
   li:has(.simple-flow-hint) ~ li .\[li\:has\(\.simple-flow-hint\)\~li_\&\]\:hidden { display: none; }
 }
 @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("../assets/inter-tight-latin.woff2") format("woff2"); }

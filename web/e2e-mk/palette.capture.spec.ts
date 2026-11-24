@@ -8,7 +8,7 @@ import { test, type Page } from '../e2e/test';
 const OUT = path.resolve(__dirname, '../../mockups-out/mk-palette/frames');
 mkdirSync(OUT, { recursive: true });
 const PASS = ['de', 'mo'].join('');
-const D = { width: 1440, height: 900 };
+const D = { width: 1512, height: 945 };
 const W = { width: 1512, height: 945 };
 const P = { width: 390, height: 844 };
 const ONLY = process.env.MK_ONLY ?? '';
@@ -56,6 +56,12 @@ async function snap(page: Page, name: string, size: { width: number; height: num
   );
   writeFileSync(path.join(OUT, `${name}.html`), html);
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+  // the same frame in dark (the html opens in dark with ?theme=dark)
+  const was = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(OUT, `${name}-dark.png`) });
+  await page.evaluate((t) => (t ? document.documentElement.setAttribute('data-theme', t) : document.documentElement.removeAttribute('data-theme')), was);
 }
 
 async function start(page: Page, email: string, to: string, size: { width: number; height: number }) {
@@ -77,6 +83,12 @@ async function type(page: Page, text: string) {
 
 const ADMIN = 'admin@example.com';
 const COMMENTER = 'commenter@example.com';
+const VIEWER = 'viewer@example.com';
+async function relog(page: Page, email: string, to: string, size: { width: number; height: number }) {
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+  await page.context().clearCookies();
+  await start(page, email, to, size);
+}
 
 const COST_FIND = (n: string) => encodeURIComponent(n);
 
@@ -85,8 +97,13 @@ for (const o of ['a', 'b', 'c']) {
   test(`cp1-${o}`, async ({ page }) => {
     test.skip(!!ONLY && !`cp1-${o}`.startsWith(ONLY));
     const q = `cp1=${o}&cp2=b&cp3=a`;
+    const today = ' · today: open Roadmap, scroll the timeline, find the row, click it (4 steps and a scroll)';
     const cost = COST_FIND(
-      '3 steps: ⌘K, type “weekly alert”, Enter · today: open Roadmap, scroll the timeline, find the row, click it (4 steps and a scroll)',
+      (o === 'a'
+        ? '3 steps: ⌘K, “weekly alert”, Enter; the sheet covers the page middle while open'
+        : o === 'b'
+          ? '3 steps: ⌘K, “weekly alert”, Enter; the page stays readable, but each row has less room'
+          : '3 steps: ⌘K, “weekly alert”, Enter; each row is twice as tall, so fewer show') + today,
     );
     await start(page, ADMIN, `/simple?${q}`, D);
     await snap(page, `cp1-${o}-rest`, D);
@@ -108,6 +125,12 @@ for (const o of ['a', 'b', 'c']) {
     await key(page);
     await type(page, 'alerts');
     await snap(page, `cp1-${o}-hard-1512`, W);
+    // Detailed: the same palette over the other shell
+    await page.goto(`/home?${q}&many=0&cost=`);
+    await page.waitForTimeout(1800);
+    await key(page);
+    await type(page, 'billing');
+    await snap(page, `cp1-${o}-detailed-open-1512`, W);
     await page.setViewportSize(P);
     await page.goto(`/simple?${q}&many=0`);
     await page.waitForTimeout(1500);
@@ -126,7 +149,7 @@ const CP2: Record<string, { mid: string; cost: string; hardQ: string }> = {
   },
   b: {
     mid: 'new Quiet hours for alerts',
-    cost: '3 steps: ⌘K, “new Quiet hours for alerts”, Enter · today: open Roadmap, pick a roadmap, pick a track, type the title (4 steps)',
+    cost: '3 steps: ⌘K, “new Quiet hours for alerts”, Enter; it goes on the roadmap and track used last · today: open Roadmap, pick a roadmap, pick a track, type the title, New item (5 steps)',
     hardQ: 'new Quiet hours for alerts',
   },
   c: {
@@ -150,7 +173,7 @@ for (const o of ['a', 'b', 'c']) {
     await key(page);
     await type(page, s.mid);
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(o === 'b' ? 3500 : 2000);
     await snap(page, `cp2-${o}-result`, D);
     if (o === 'b') {
       // a feature's own actions: Tab on the selected feature
@@ -161,19 +184,22 @@ for (const o of ['a', 'b', 'c']) {
       await page.keyboard.press('Tab');
       await snap(page, `cp2-${o}-tab`, D);
     }
-    // hard case: a commenter, at 1512
-    await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-    await page.context().clearCookies();
-    await start(page, COMMENTER, `/simple?${q}`, W);
-    await key(page);
-    await type(page, s.hardQ);
-    await snap(page, `cp2-${o}-commenter-1512`, W);
+    // phone, the same owner
     await page.setViewportSize(P);
     await page.goto(`/simple?${q}`);
     await page.waitForTimeout(1500);
     await page.getByTestId('mk-entry-phone').click();
     await page.waitForTimeout(300);
     await snap(page, `cp2-${o}-phone-390`, P);
+    // hard case: a commenter, at 1512
+    await relog(page, COMMENTER, `/simple?${q}`, W);
+    await key(page);
+    await type(page, s.hardQ);
+    await snap(page, `cp2-${o}-commenter-1512`, W);
+    // a viewer, at 1512
+    await relog(page, VIEWER, `/simple?${q}`, W);
+    await key(page);
+    await snap(page, `cp2-${o}-viewer-1512`, W);
   });
 }
 
@@ -182,23 +208,24 @@ for (const o of ['a', 'b', 'c']) {
   test(`cp3-${o}`, async ({ page }) => {
     test.skip(!!ONLY && !`cp3-${o}`.startsWith(ONLY));
     const q = `cp1=a&cp2=b&cp3=${o}&many=0`;
+    const today = ' · today: no way in without a keyboard; open the page and look by eye';
     const cost =
-      o === 'a'
-        ? '1 tap on Find in the rail, then the same box · no room taken on the page'
+      (o === 'a'
+        ? '1 tap on Find in the rail, then the same box; no room taken on the page'
         : o === 'b'
-          ? '1 tap on the field above every page · it takes a 48px strip on every page'
-          : '1 tap on the round button · it sits over the page corner';
+          ? '1 tap on the field above every page; a slim bar on every page'
+          : '1 tap on the round button; it sits over the page corner') + today;
     await start(page, ADMIN, `/simple?${q}&cost=`, D);
     await snap(page, `cp3-${o}-rest`, D);
     await page.getByTestId('mk-entry').first().click();
     await page.waitForTimeout(300);
     await snap(page, `cp3-${o}-open`, D);
-    await type(page, 'activation');
+    await type(page, 'sign-ups per rep');
     await snap(page, `cp3-${o}-mid`, D);
     await page.goto(`/simple?${q}&cost=${COST_FIND(cost)}`);
     await page.waitForTimeout(1200);
     await page.getByTestId('mk-entry').first().click();
-    await type(page, 'activation');
+    await type(page, 'sign-ups per rep');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(2000);
     await snap(page, `cp3-${o}-result`, D);
