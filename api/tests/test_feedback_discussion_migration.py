@@ -6,7 +6,7 @@ everything, no thread); one item per thread; a deleted thread leaves its item wi
 the downgrade drops the column and keeps every item; up again works; chained on
 0092_bet_flow_line_key; fails_when=an item is lost or changed either way, two items share a
 thread, deleting a thread deletes its item, or the downgrade leaves the column or its
-constraints; no_claim=the item's behaviour (test_fix4_simple_decide_review_api).
+constraints; no_claim=the item's behaviour (test_simple_meetings_api).
 
 Sync on purpose (Alembic runs its own event loop); its own scratch database."""
 

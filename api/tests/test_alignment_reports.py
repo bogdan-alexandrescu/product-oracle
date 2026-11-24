@@ -34,7 +34,7 @@ from oracle.roadmap.models import ProductTrack
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import DEFAULTS
 from oracle.ticker import router as ticker
-from tests.day_helpers import company_today
+from tests.day_helpers import company_today, hold_before_fixed_beta
 from tests.roadmap_helpers import other_company
 from tests.test_mcp import mcp_client, run_token, text_of
 from tests.test_roadmap import (  # noqa: F401 - fixtures
@@ -691,9 +691,11 @@ async def test_dates_verified_and_withdrawn_in_the_week(client, owner, runtime, 
     assert "Estimate replaced" in report.markdown
 
 
-async def test_health_a_week_ago_comes_from_monitoring(client, owner, runtime, at):
+async def test_health_a_week_ago_comes_from_monitoring(client, owner, runtime, at, monkeypatch):
     """protects='At risk, was On track'; fails_when=health_before is not the health the
     monitor recorded before the week's change; no_claim=the monitor's own rules."""
+    # #1604: On track needs Beta (Nov 30) still ahead; the report's week is that day's.
+    at(hold_before_fixed_beta(monkeypatch))
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

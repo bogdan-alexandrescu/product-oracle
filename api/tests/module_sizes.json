@@ -1,0 +1,19 @@
+{
+  "oracle/baseline/service.py": 1913,
+  "oracle/blockers/service.py": 1809,
+  "oracle/discussions/service.py": 1725,
+  "oracle/docs/service.py": 2071,
+  "oracle/export/render.py": 1633,
+  "oracle/members/service.py": 1913,
+  "oracle/requests/service.py": 1734,
+  "oracle/roadmap/doc_dates.py": 2175,
+  "oracle/runs/flows.py": 2303,
+  "oracle/runs/schemas.py": 2038,
+  "oracle/simple/additions.py": 1529,
+  "oracle/simple/changes.py": 2610,
+  "oracle/simple/drafts.py": 2125,
+  "oracle/simple/meetings.py": 1551,
+  "oracle/simple/service.py": 2172,
+  "oracle/specs/service.py": 1662,
+  "oracle/swarm/swarmcloud.py": 1604
+}

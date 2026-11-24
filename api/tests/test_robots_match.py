@@ -25,6 +25,7 @@ def _market(text: str, path: str) -> bool:
     return market_robots.parse(text).allows(path)
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("allows", [_web, _market], ids=["web", "market"])
 @pytest.mark.parametrize("path", ["/" + "a" * 99, "/" + "a" * 1999, "/" + "ab" * 1000])
 def test_the_backtracking_rule_answers_at_once(allows, path):

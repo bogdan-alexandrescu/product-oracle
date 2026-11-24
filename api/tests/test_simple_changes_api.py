@@ -49,6 +49,7 @@ Test cards (protects / fails_when / no_claim):
   no tool; no_claim=MCP scopes for runs (Simple is not for runs).
 """
 
+import typing
 import uuid
 from datetime import date, timedelta
 from typing import Any
@@ -58,10 +59,13 @@ from sqlalchemy import select, text, update
 
 from oracle import company_time
 from oracle.auth.models import User
+from oracle.decisions import capture
+from oracle.docs.models import Document
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import drafts, suggestions
+from oracle.simple import change_words, drafts, suggestions
 from oracle.simple.models import RoadmapDateSuggestion, SimpleChange
+from oracle.simple.schemas import ChangeOp
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_roadmap_api import NOW, Seed
@@ -594,3 +598,160 @@ async def test_list_filters_audit_and_tools(client):
         "accept_simple_change",
         "decline_simple_change",
     } <= names
+
+
+# Folded from test_simple_walk_fixes3_cp_api.py (#1718): the owner's production walk of
+# Simple mode, round 3 (2026-10-28), findings H2 and M1. Test cards:
+# - test_every_op_has_a_plain_sentence: protects=every op of the change engine
+#   (schemas.ChangeOp) reads as a sentence with who, what and the item's code and name, "·
+#   undone" once undone, never the op's internal name; fails_when=an op has no sentence of
+#   its own (it falls back to "changed <item>") or shows its op name, or a goal op
+#   (archive_goal, delete_goal, unarchive_goal) misses the goal's title; no_claim=the web's
+#   layout (web/e2e/simple-walk-fixes3-cp.spec.ts).
+# - test_change_list_says_an_undone_estimate_in_words: protects=GET /v1/simple/changes
+#   gives each change its plain words, as Home's "Since your last visit" shows them: "<who>
+#   changed the estimate of <code> <name> · undone" for an undone estimate_feature;
+#   fails_when=the words are missing, name the op, or miss the item or "· undone";
+#   no_claim=the estimate's write and undo (test_simple_priorities_api).
+# - test_simple_reads_product_decisions_never_run_approvals: protects=Simple's Decisions
+#   page and a meeting's open decisions (the pre-read Home's "Open pre-read" opens lists
+#   them as the Decisions page reads them) list the PRD's open product decision and never
+#   a run's approval (a checkpoint decision) on the same PRD; fails_when=the run's approval
+#   is listed in either; no_claim=Detailed's decision log and the rituals' own pre-read.
+# The meeting and priority worlds are imported inside the tests: those modules import this
+# one, so a top-level import would be circular.
+
+
+@pytest.fixture
+def no_llm(monkeypatch):
+    """The reason check asks the gateway, which fails here: no model is reached and the
+    pushback rules decide (as tests/test_simple_targets_api.py's no_llm)."""
+    from oracle.priorities import reason_check
+
+    async def refuse(*a, **kw):
+        raise RuntimeError("no model in tests")
+
+    monkeypatch.setattr(reason_check.gateway, "complete", refuse)
+
+
+ITEM = "F-08 Billing page"
+GOAL = "Grow weekly sign-ups"
+
+
+def test_every_op_has_a_plain_sentence():
+    """Every change has a plain-word phrase and sentence, with no raw op name showing."""
+    ops = typing.get_args(ChangeOp)
+    assert len(ops) >= 30
+    for op in ops:
+        target = {"item_id": str(uuid.uuid4()), "code": "F-09", "title": "Invoices"}
+        after = {"title": "Ask", "status": "done", "horizon": "next", "line": "A line",
+                 "key_date": {"name": "Launch"}, "milestone": {"name": "Beta"}}  # fmt: skip
+        what = change_words.phrase(op, target, {}, after, ITEM)
+        assert what != f"changed {ITEM}", op
+        # No internal name: a one-word op ("cut") may be its plain verb, no "_" name shows.
+        assert "_" not in what, (op, what)
+        words = change_words.sentence(op, target, {}, after, who="Ana", item=ITEM,
+                                      status="applied", undone=True)  # fmt: skip
+        assert words.startswith("Ana ") and words.endswith(" · undone"), (op, words)
+        assert "_" not in words, (op, words)
+    # A goal op names the goal by its title, not the item (change_words.phrase).
+    goal_ops = ("archive_goal", "delete_goal", "unarchive_goal")
+    assert set(goal_ops) <= set(ops)
+    for op in goal_ops:
+        assert GOAL in change_words.phrase(op, {"title": GOAL}, {}, {}, ITEM), op
+    item_ops = [op for op in ops if op not in ("edit_line", "set_section_number",
+                                                "add_feature_ask", *goal_ops)
+                and "key_date" not in op]  # fmt: skip
+    for op in item_ops:
+        assert ITEM in change_words.phrase(op, {}, {}, {}, ITEM), op
+    assert (
+        change_words.sentence(
+            "estimate_feature",
+            {},
+            {},
+            {"effort": 2},
+            who="Ana",
+            item=ITEM,
+            status="applied",
+            undone=True,
+        )  # fmt: skip
+        == "Ana changed the estimate of F-08 Billing page · undone"
+    )
+
+
+def test_a_goal_sentence_names_the_goal():
+    """fails_when=a goal moved to Trash, archived or restored reads "the goal a goal": the
+    sentence names the goal, by its title or else the item's name, as a feature's does."""
+    for op, verb in (("delete_goal", "moved"), ("archive_goal", "archived"),
+                     ("unarchive_goal", "restored")):  # fmt: skip
+        tail = " to Trash" if op == "delete_goal" else ""
+        said = change_words.phrase(op, {"title": "Faster checkout"}, {}, {}, None)
+        assert said == f"{verb} the goal “Faster checkout”{tail}", said
+        said = change_words.phrase(op, {}, {}, {}, "Faster checkout")
+        assert said == f"{verb} the goal Faster checkout{tail}", said
+        assert change_words.phrase(op, {}, {}, {}, None) == f"{verb} a goal{tail}", op
+
+
+@pytest.mark.usefixtures("no_llm")
+async def test_change_list_says_an_undone_estimate_in_words(client):
+    """An estimate change and its undo both read in plain words, not the raw op name."""
+    from tests.test_simple_priorities_api import World as PriorityWorld
+
+    ctx = await make_people()
+    w = await PriorityWorld(ctx).build()
+    r = await w.change(client, "owner", "estimate_feature", "pay-1",
+                       {"goal_value": None, "effort": 1}, {"effort": 2})  # fmt: skip
+    assert r.status_code == 201, r.text
+    change = r.json()["change"]
+    who = change["by_name"]
+    rm = (await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))).json()
+    item = next(i for i in rm["items"] if i["id"] == w.ids["pay-1"])
+    label = f"{item['code']} {item['title']}" if item["code"] else item["title"]
+    assert change["words"] == f"{who} changed the estimate of {label}"
+    r = await client.post(f"{CHANGES}/{change['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    rows = (await client.get(CHANGES, headers=ctx.as_("owner"))).json()
+    by_id = {c["id"]: c for c in rows}
+    assert by_id[change["id"]]["words"] == f"{who} changed the estimate of {label} · undone"
+    for c in rows:
+        assert c["words"] and "estimate_feature" not in c["words"], c
+
+
+async def _decision(s, title: str, origin: str, subject: str, approver) -> None:
+    d = await capture.capture(s, None, origin=origin, source_kind="test", source_id=uuid.uuid4(),
+                              title=title, options=[{"key": "yes"}, {"key": "no"}],
+                              chosen_option="yes", rationale="Seeded",
+                              approver_id=approver,
+                              subjects=[{"kind": "document", "id": subject}])  # fmt: skip
+    # Still open: proposed, nothing chosen yet.
+    d.status, d.chosen_option, d.decided_at = "proposed", None, None
+    await s.flush()
+
+
+@pytest.mark.usefixtures("no_llm")
+async def test_simple_reads_product_decisions_never_run_approvals(client):
+    """Simple's decision list shows product decisions only, not a run's own approvals."""
+    from tests.test_simple_meetings_api import PRD, start
+    from tests.test_simple_meetings_api import world as meeting_world
+
+    w = await meeting_world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        owner = w.ctx.users["owner"].id
+        for title, origin in (
+            ("Should refunds wait for the ledger?", "oracle"),
+            ("Approve the plan · Build the Ground Truth", "checkpoint"),
+        ):
+            await _decision(s, title, origin, str(prd.id), owner)
+        await s.commit()
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    titles = [d["title"] for d in r.json()["other"]]
+    assert "Should refunds wait for the ledger?" in titles
+    assert "Approve the plan · Build the Ground Truth" not in titles
+    m = await start(client, w)
+    r = await client.get(f"/v1/simple/meetings/{m['id']}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert [d["title"] for d in r.json()["open_decisions"]] == [
+        "Should refunds wait for the ledger?"
+    ]

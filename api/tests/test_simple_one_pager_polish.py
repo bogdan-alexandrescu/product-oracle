@@ -58,7 +58,7 @@ from tests.test_simple_one_pager_api import (
     get,
     world,
 )
-from tests.test_simple_roadmap_api import Seed
+from tests.test_simple_roadmap_api import NOW, Seed
 
 TABLE_PRD = """---
 title: Usage alerts
@@ -367,3 +367,146 @@ def test_every_milestone_row_has_its_name():
         ("M2 · Open to all", 1),
         ("M2 · Ship to beta", 2),
     ]
+
+
+# Folded from test_simple_walk_fixes3_ph_api.py (#1718): the owner's production walk of
+# Simple mode (P4, P11). Test cards:
+# - test_owner_is_the_documents_owner: protects=an approved PRD's one-pager names the
+#   document's owner (the person who brought it in, its first version's importer) even when
+#   a later version came from a service token, and a PRD a service token imported names the
+#   person who approved it; ``owner`` is null only with no such person; fails_when=the meta
+#   reads "No owner yet" for a PRD that has an owner; no_claim=the web's wording (spec).
+# - test_span_from_dated_milestones: protects=the header's span runs from the earliest start
+#   of the items under dated milestones to the latest milestone date (page and PDF), never
+#   out to undated items' estimated windows; fails_when=the span ends on an item's estimated
+#   end (a year out) or on an item with no milestone; no_claim=the plan strip (its tests).
+# - test_span_follows_the_dated_plan (walkb-onepager review): protects=a PRD whose plan is
+#   dated (its milestones table, or the dates its lead accepted) has the plan's span in the
+#   header, the one its timeline draws (Nov 2, 2026 - Feb 26, 2027), not the roadmap items'
+#   milestone dates; fails_when=the header and the timeline read different spans;
+#   no_claim=which dates the plan takes (test_simple_plan_walkb).
+# - test_no_dated_milestone_no_span: protects=a PRD whose items carry no dated milestone has
+#   no span (null; the PDF prints none); fails_when=the estimated windows' year shows;
+#   no_claim=the timeline items.
+
+
+async def _approve(ctx, slug: str, number: int, by=None) -> None:
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == slug))
+        v = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == doc.id, DocumentVersion.number == number
+            )
+        )
+        v.approved_at = NOW
+        v.approved_by = by
+        await s.commit()
+
+
+async def _pdf(ctx, slug: str = "guided-setup") -> str:
+    from oracle.auth.deps import Principal
+
+    async with tenant_session(ctx.tenant_id) as s:
+        p = Principal(tenant_id=ctx.tenant_id, kind="user", role="viewer",
+                      user_id=ctx.users["viewer"].id)  # fmt: skip
+        html, _ = await one_pager.pdf_html(s, p, slug)
+    return html
+
+
+async def test_owner_is_the_documents_owner(client):
+    """A document's owner is whoever approved its latest version, or none at all."""
+    ctx = await world(client)
+    # A later version pushed by a service token, approved: still the document's owner.
+    v2 = PRD.replace("A sample project created on day one", "A guided tour on day one")
+    r = await client.post("/v1/documents/guided-setup/versions", content=v2.encode(),
+                          headers=MD | ctx.as_("token"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    await _approve(ctx, "guided-setup", 2)
+    view = await get(client, ctx, "viewer")
+    assert view["version"] == 2
+    assert view["owner"] and view["owner"]["name"] == nm(ctx.users["owner"])
+    html = await _pdf(ctx)
+    assert f"owner {nm(ctx.users['owner'])}" in html and "No owner yet" not in html
+
+    # Imported by a service token and approved by a person: that person owns it.
+    r = await client.post("/v1/documents/plan-d/versions", content=PRD.encode(),
+                          headers=MD | ctx.as_("token"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    await _approve(ctx, "plan-d", 1, by=ctx.users["approver"].id)
+    assert (await get(client, ctx, "viewer", "plan-d"))["owner"]["name"] == (
+        nm(ctx.users["approver"])
+    )
+
+    # Nobody at all: no owner yet.
+    r = await client.post("/v1/documents/plan-e/versions", content=PRD.encode(),
+                          headers=MD | ctx.as_("token"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    assert (await get(client, ctx, "viewer", "plan-e"))["owner"] is None
+
+
+async def test_span_from_dated_milestones(client):
+    """The plan's span comes from its dated milestones, read month first in the PDF."""
+    ctx = await world(client)
+    await seed_slice(ctx)  # M1 (Nov 20) and M3 (Jan 29) dated; two items with none
+    view = await get(client, ctx, "viewer")
+    assert (view["span_start"], view["span_end"]) == ("2026-10-05", "2027-01-29")
+    html = await _pdf(ctx)
+    assert "Oct 5, 2026 – Jan 29, 2027" in html
+    assert "2027-03-31" not in html.split("<body", 1)[-1].split("class='plan'", 1)[0]
+
+
+PLAN_TABLES = """
+## Features by milestone {#brief-items}
+
+| Milestone | Feature | Goal | Outcome |
+|---|---|---|---|
+| [M1 Pilot](#milestone-m1) | [F-01 Setup checklist](#f-01) | Faster setup | Next step shown |
+| [M2 Rollout](#milestone-m2) | [F-02 Progress meter](#f-02) | Faster setup | Progress shown |
+
+## Milestones {#milestones}
+
+| Milestone | Name | Start | End |
+|---|---|---|---|
+| M1 | Pilot | Nov 2, 2026 | Dec 18, 2026 |
+| M2 | Rollout | Jan 4, 2027 | Feb 26, 2027 |
+"""
+
+
+async def test_span_follows_the_dated_plan(client):
+    """The plan's span matches its own dated plan tables, not just the milestones."""
+    import hashlib
+
+    from oracle.simple import plan
+
+    ctx = await world(client)
+    await seed_slice(ctx)  # the items' milestones: Nov 20 and Jan 29
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        v = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == doc.id))
+        v.markdown = (v.markdown or "") + PLAN_TABLES
+        v.content_hash = hashlib.sha256(v.markdown.encode()).hexdigest()
+        await s.commit()
+        span = (await plan.views(s, {doc.id}))[doc.id].span
+    assert (span.start.isoformat(), span.end.isoformat()) == ("2026-11-02", "2027-02-26")
+    view = await get(client, ctx, "viewer")
+    assert (view["span_start"], view["span_end"]) == ("2026-11-02", "2027-02-26")
+    assert "Nov 2, 2026 – Feb 26, 2027" in await _pdf(ctx)
+
+
+async def test_no_dated_milestone_no_span(client):
+    """With no dated milestone, the plan shows its items but no date span at all."""
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        pv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == doc.id))
+        rv = await seed.version(await seed.doc("setup-roadmap", "roadmap"))
+        await seed.item(rv, pv, "undated-now", horizon="now")
+        await seed.item(rv, pv, "undated-later", horizon="later")
+        await seed.item(rv, pv, "named", horizon="next", milestone={"name": "M2"})
+        await s.commit()
+    view = await get(client, ctx, "viewer")
+    assert view["timeline"], view  # the items are there, estimated
+    assert view["span_start"] is None and view["span_end"] is None
+    html = await _pdf(ctx)
+    assert " – 20" not in html.split("class='plan'", 1)[0]

@@ -60,10 +60,13 @@ Test cards (protects / fails_when / no_claim):
 """
 
 import datetime as dt
+import importlib.util
 import uuid
 from datetime import timedelta
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import select
 
 from oracle import company_time
@@ -76,6 +79,7 @@ from oracle.simple.models import SimpleChange, SimpleMeeting
 from oracle.simple.schemas import SimpleSlackState
 from oracle.slack.models import SlackOutbox
 from oracle.tenancy import tenant_session
+from tests.conftest import API_DIR
 from tests.test_simple_changes_api import CHANGES, World, make_people
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_drafts_api import DRAFTS, inbox, roadmap, title_in
@@ -672,3 +676,69 @@ async def test_decided_in_says_who_when_and_where_the_minutes_are(client):
     [p] = [x for x in planned["decisions"] if x["title"].startswith("Renamed")]
     assert (p["decided_by"]["name"], p["minutes_url"]) == ("Dee Cider", d["minutes_url"])
     assert p["decided_at"] == d["decided_at"]
+
+
+# Folded from test_fix4_simple_decide_review_api.py (#1718). fix4-simple-decide review: a
+# comment made in a meeting before qa-simple-decide-1 was recorded as a meeting decision
+# titled "Comment: ..."; the data migration 0093_meeting_comments_as_notes turns each into
+# the meeting's comment note. Card: protects=an old "Comment: ..." meeting decision becomes a
+# comment of its meeting (its words, who and when), is no longer one of the meeting's
+# decisions and is withdrawn; other meeting decisions stay; running it twice adds nothing;
+# the migration chains as the one head; fails_when=old comments still count as decisions in
+# old meetings, or a comment is lost or doubled; no_claim=the web's comment list
+# (e2e/fix4-simple-decide-review.spec.ts).
+
+REVISION = "0093_meeting_comments_as_notes"
+
+
+def _migration():
+    path = API_DIR / "migrations" / "versions" / f"{REVISION}.py"
+    spec = importlib.util.spec_from_file_location(REVISION, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+async def test_old_comment_decisions_become_comments(client):
+    """A feedback item created as an old-style comment decision is migrated into a real comment."""
+    w = await world()
+    m = await start(client, w)
+    mid = uuid.UUID(m["id"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        from oracle.simple.drafts import principal_for
+
+        p = await principal_for(s, w.ctx.tenant_id, w.ctx.users["approver"].id)
+        # As comment() wrote them before qa-simple-decide-1.
+        old = await meetings.record_meeting_decision(
+            s, p, mid, "Comment: Keep the beta", [{"kind": "document", "id": str(uuid.uuid4())}], []
+        )
+        kept = await meetings.record_meeting_decision(
+            s, p, mid, "Ship the beta", [{"kind": "document", "id": str(uuid.uuid4())}], []
+        )
+        await s.commit()
+    titles = [d["title"] for d in (await get(client, w, m["id"]))["meeting_decisions"]]
+    assert "Comment: Keep the beta" in titles
+    move = _migration()._comment_decisions_to_notes  # #1575: frozen in the migration
+    for _ in range(2):  # a second run adds nothing
+        async with tenant_session(w.ctx.tenant_id) as s:
+            await s.run_sync(lambda ss: move(ss.connection()))
+            await s.commit()
+    out = await get(client, w, m["id"])
+    assert [d["title"] for d in out["meeting_decisions"]] == ["Ship the beta"]
+    comments = [n for n in out["notes"] if n["kind"] == "comment"]
+    # Who commented: the approver (the world's users go by their email).
+    assert [(n["text"], n["by_name"]) for n in comments] == [
+        ("Keep the beta", "approver@example.com")
+    ]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert (await s.get(Decision, old)).status == "withdrawn"
+        assert (await s.get(Decision, kept)).status == "decided"
+        row = await s.scalar(select(SimpleMeeting).where(SimpleMeeting.id == mid))
+        assert len([n for n in row.notes if n.get("kind") == "comment"]) == 1
+
+
+def test_the_migration_is_the_one_head():
+    """This migration chains onto the one existing head, keeping the lineage single."""
+    cfg = Config(str(API_DIR / "alembic.ini"))
+    script = ScriptDirectory.from_config(cfg)
+    assert script.get_revision(REVISION).down_revision == ("0092_feedback_discussion")
