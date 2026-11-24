@@ -53,6 +53,15 @@ import { onRadioKeys, radioTabIndex } from './radio-keys';
 import { RAIL_SELECTED, TAB_BAR } from './rail';
 import { Sheet } from './Sheet';
 
+/** mk-bulk-edit mock-ups: the avatar shows the signed-in person's initials (Lena Vos, Mei Arden on BE3). */ // MOCK-HOOK
+function mkBulkInitials(name: string, fallback: string): string { // MOCK-HOOK
+  if (!fallback || typeof window === 'undefined') return fallback; // MOCK-HOOK
+  const q = new URLSearchParams(window.location.search); // MOCK-HOOK
+  if (!['be1', 'be2', 'be3'].some((k) => q.get(k))) return fallback; // MOCK-HOOK
+  if (!q.get('be3')) return initialsOf(name); // MOCK-HOOK
+  return initialsOf(q.get('role') === 'commenter' ? 'Mei Arden' : 'Lena Vos'); // MOCK-HOOK
+} // MOCK-HOOK
+
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
 /**
@@ -409,9 +418,7 @@ function UserMenu({
 
   // walk-brief review: blank while /v1/me loads, never a "?" for a member not read yet.
   const initials = me ? initialsOf(email) : '';
-  const mkQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null; // MOCK-HOOK
-  const mkBulk = !!mkQ && ['be1', 'be2', 'be3'].some((k) => mkQ.get(k)); // MOCK-HOOK
-  const mkInitials = mkBulk && me ? initialsOf(mkQ?.get('be3') ? (mkQ.get('role') === 'commenter' ? 'Mei Arden' : 'Lena Vos') : me.name || email) : initials; // MOCK-HOOK
+  const mkInitials = mkBulkInitials(me?.name || email, initials); // MOCK-HOOK
   const rail = placement === 'rail';
   const current = pathname === '/account' || pathname.startsWith('/account/');
 
