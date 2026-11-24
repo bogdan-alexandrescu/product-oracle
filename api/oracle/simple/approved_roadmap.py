@@ -366,7 +366,7 @@ def _not_added(p: PlanItem, rows: list[RoadmapItem], by_feature: dict) -> str | 
     from oracle.roadmap import codes
 
     code = codes.title_code(p.title)
-    hit = codes.clash(code, "", None, rows, by_feature) if code else None
+    hit = codes.clash(code, "", None, rows, by_feature, title=p.title) if code else None
     if hit is None:
         return None
     return f"{p.title} was not added: {codes.taken(code, codes.named(hit, by_feature))}"  # type: ignore[arg-type]

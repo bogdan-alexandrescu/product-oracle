@@ -105,7 +105,6 @@ LOOKS_LIKE = 0.6
 MAX_MATCHES = 2
 MIN_SUGGESTIONS, MAX_SUGGESTIONS = 3, 5
 TEXT_MAX = 1000
-_F_CODE = re.compile(r"F-(\d+)[a-j]?")
 
 
 # --------------------------------------------------------------------------- helpers
@@ -416,8 +415,7 @@ async def _next_code(db: AsyncSession, read_: service.Read) -> str:
     ]
     used += list((await _short_codes(db, names=False)).values())
     used += list(await db.scalars(select(Entity.key).where(Entity.type == "feature")))
-    nums = [int(m.group(1)) for u in used if u and (m := _F_CODE.fullmatch(u.split(".")[0]))]
-    return f"F-{max(nums, default=0) + 1}"
+    return codes.next_number(used)
 
 
 async def _live_track(db: AsyncSession, raw: Any) -> uuid.UUID:

@@ -67,9 +67,11 @@ VIEWS = {
 # roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
 # gt-proposed: each roadmap item's confirm_feature_id (null on this seed), after code_from; the
 # two roadmap views differ from c92397816's by that field alone, the six others not at all.
+# unique-codes: the two roadmap views gain feature_name on each item (null on this seed) and
+# nothing else (diffed against fa899682c); the six others are unchanged.
 DIGESTS = {
-    "roadmap": "2872735899420612c0758b04912382dd5934ee20cbb9e3fe7a901f287d4c41a8",
-    "roadmap-viewer": "e1ef4f3642e7cdc10f75ef5808d77ec925fd0a0dcd7fb10ef34d64ef904c3e2c",
+    "roadmap": "ea2f719630b68d9cd442cf67e5d05970f13b15c61c85baacc34c7c4e536cf173",
+    "roadmap-viewer": "1af827fee66a631cf0532bfd555b201b6c13a69bbc1cad8441da41b92c09f2f5",
     "priorities": "1471b1dcc8f5186e1e1227e91a2bde13d28d48b9ba8971869df141851d6c5277",
     "priorities-viewer": "6f5a79e3aef918833c7e6fda07988bbed353c7e59ee907b3d793b6a3c5550001",
     "decisions": "e5265b88addf7bd45293bc4041094ac5e6d46a38a00b94bbd175f6a22e6ec400",

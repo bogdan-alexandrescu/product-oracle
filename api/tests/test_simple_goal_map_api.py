@@ -678,13 +678,14 @@ async def test_a_feature_name_that_leads_with_its_code_reads_without_it(client):
     body = await read(client, ctx)
     names = {f["id"]: f["name"] for f in body["features"] + body["unplaced"]}
     assert names[ids["f1"]] == "One-tap sign-up link"
-    assert names[ids["f2"]] == "F-08 Guided first week"
+    # unique-codes (Nov 23): its title's own code before its PRD section's.
+    assert names[ids["f2"]] == "Guided first week"
     assert names[ids["f3"]] == "Rep leaderboard"
     r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     road = {i["id"]: (i["code"], i["title"]) for i in r.json()["items"]}
     assert road[ids["f1"]] == ("F-07", names[ids["f1"]])
-    assert road[ids["f2"]] == ("F-09", names[ids["f2"]])
+    assert road[ids["f2"]] == ("F-08", names[ids["f2"]])
     assert road[ids["f3"]] == ("F-37a", names[ids["f3"]])
 
 

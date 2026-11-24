@@ -44593,6 +44593,8 @@ export interface components {
             code_from?: ("feature" | "prd") | null;
             /** Confirm Feature Id */
             confirm_feature_id?: string | null;
+            /** Feature Name */
+            feature_name?: string | null;
             /** Title */
             title: string;
             /** Outcome */

@@ -75,6 +75,7 @@ import {
   prdCode,
   shownCode,
   shownName,
+  takenFrom,
   codedTitle,
   dependencyOf,
   loopOf,
@@ -2370,7 +2371,7 @@ export function restoreCodeTaken(
       : [];
   const seen = back.length ? readerDb(db, me) : null;
   for (const s of back) {
-    const own = (s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section);
+    const own = takenFrom(s, (id) => db.feature_codes?.[id]);
     const taken = own ? ownCodeTaken(seen!, s.key, own) : titleCodeTaken(db, seen!, null, s.title);
     if (taken) return `${taken}: rename it first`;
   }
@@ -2780,7 +2781,7 @@ async function create(
     } else if (body.op === 'set_code') {
       // changes._free_code: a feature code no other item or Ground Truth feature has; the title carries it.
       const s = seed(seen, key);
-      if ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section))
+      if (takenFrom(s, (id) => db.feature_codes?.[id]))
         return json(422, { detail: 'Its code comes from its Ground Truth feature or its PRD' });
       const code =
         a.code == null || !String(a.code).trim() ? null : String(a.code).trim().toUpperCase();
@@ -2788,7 +2789,7 @@ async function create(
         return json(422, { detail: 'after.code: a feature code, like F-31' });
       const taken = code ? codeTaken(db, seen, key, code) : null;
       if (taken) return json(422, { detail: taken });
-      const name = codedTitle(s.title, prdCode(s.section))[1];
+      const name = codedTitle(s.title, codedTitle(s.title, null)[0] ?? prdCode(s.section))[1];
       // changes._with_code: the name is never cut.
       const room = TITLE_MAX - (code?.length ?? 0) - 1;
       if (code && name.length > room)
@@ -3368,7 +3369,7 @@ function titleCodeTaken(
   title: string,
 ): string | null {
   const s = key ? seed(seen, key) : null;
-  if (s && ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section))) return null;
+  if (s && takenFrom(s, (id) => db.feature_codes?.[id])) return null;
   const lead = codedTitle(title, null)[0];
   if (!lead || (s && lead === codedTitle(s.title, null)[0])) return null;
   return codeTaken(db, seen, key ?? '', lead);
@@ -3380,8 +3381,6 @@ function ownCodeTaken(seen: SimpleDb, key: string, code: string): string | null 
     (x) =>
       x.key !== key &&
       !x.trashed &&
-      !(x.feature_id && seen.feature_codes?.[x.feature_id]) &&
-      !prdCode(x.section) &&
       codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase(),
   );
   return other

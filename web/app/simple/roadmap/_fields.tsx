@@ -313,12 +313,23 @@ function ConfirmIntoGt({ item }: { item: Item }) {
 
 /** gt-proposed: its own code (a title's lead) on a proposed feature is no Ground Truth one either. */
 function ownCode(item: Item): ReactNode {
-  if (!item.code || !item.confirm_feature_id) return item.code;
+  // unique-codes (Nov 23): an item's own code; the Ground Truth feature it is part of stays named.
+  const part = item.feature_name ? (
+    <InfoTip label="its feature" align="start" testId="card-code-feature">
+      Part of the Ground Truth feature {item.feature_name}.
+    </InfoTip>
+  ) : null;
+  if (!item.code || (!item.confirm_feature_id && !part)) return item.code;
   return (
     <span className="inline-flex items-center gap-1">
       {item.code}
-      <NotInGt className="h-5! px-2! text-xs!" />
-      <ConfirmIntoGt item={item} />
+      {part}
+      {item.confirm_feature_id && (
+        <>
+          <NotInGt className="h-5! px-2! text-xs!" />
+          <ConfirmIntoGt item={item} />
+        </>
+      )}
     </span>
   );
 }

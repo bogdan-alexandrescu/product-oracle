@@ -48,7 +48,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.priorities.scoring import effort_weeks
 from oracle.review.models import DocumentReviewPolicy
-from oracle.roadmap import company
+from oracle.roadmap import codes, company
 from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import (
     ProductTrack,
@@ -134,9 +134,13 @@ class Entry:
     prd_heading: str | None = None
     # The number of the PRD draft (version) the item was imported from: "(draft 5)".
     prd_draft: int | None = None
-    # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
-    # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
+    # The item's code as every reader reads it (unique-codes: its own, its title's; else its
+    # feature's code, F-12 or the PRD's F-06; else its own PRD section's): Home, the card's
+    # "Looks like" and "Merged into".
     code: str | None = None
+    # unique-codes: the Ground Truth feature it is part of, its code and name ("F-51 Alert
+    # routing"), when the item reads a code of its own; None otherwise.
+    feature_name: str | None = None
     # gt-proposed: its feature still to confirm for it (oracle.baseline.fixes.to_confirm), the
     # one Confirm into the Ground Truth confirms; None when it is in the Ground Truth or has none.
     confirm: uuid.UUID | None = None
@@ -1205,8 +1209,27 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
         if fids
         else {}
     )
+    # unique-codes: an item with a code of its own still names the feature it is part of.
+    own = {
+        e.row.feature_id
+        for e in entries
+        if e.row.feature_id and codes.title_code(getattr(e.row, "title", None))
+    }
+    titles = (
+        dict((await db.execute(select(Entity.id, Entity.title).where(Entity.id.in_(own)))).all())
+        if own
+        else {}
+    )
     for e in entries:
         e.code = codes.code_of(e.row, by_feature)
+        fid = e.row.feature_id
+        if (
+            fid is not None
+            and fid in titles
+            and codes.title_code(e.row.title)
+            and (by_feature.get(fid) or "") != e.code
+        ):
+            e.feature_name = f"{by_feature.get(fid) or ''} {titles[fid] or ''}".strip() or None
         f = to_confirm(open_.get(e.row.feature_id), e.row) if e.row.feature_id else None  # type: ignore[arg-type]
         e.confirm = f.id if f is not None else None
 
@@ -1478,8 +1501,13 @@ def item_out(
         id=row.id,
         key=row.item_key,
         code=code,
-        code_from=("feature" if e.code and e.code != prd else "prd") if e.code or prd else None,
+        code_from=None
+        if codes.title_code(row.title)
+        else ("feature" if e.code and e.code != prd else "prd")
+        if e.code or prd
+        else None,
         confirm_feature_id=e.confirm,
+        feature_name=e.feature_name,
         title=title,
         outcome=row.outcome,
         note=row.note,
