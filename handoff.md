@@ -40,7 +40,15 @@ fixed; the first round's "7 of 8" was wrong about #1753).
 ## Fix round (review NOT_YET, two majors; minors left as they were)
 - Major 1 (#1753): option (a), pad dropped, spec opens the reason by tap and by focus.
 - Major 2 (#1740): counts are InfoTip triggers; spec opens each by focus and by click and reads role=tooltip.
-- Gates: see the end of this section.
+- Gates (fix round, on 134b20e, mock build, --retries=0, --trace=off): roadmap-ux-nov24 + roadmap-tracks-sheet
+  18/18 passed. Every spec that drives the goal cards, the Tracks sheet or the health mark (36 files) plus
+  roadmap-keydates, simple-roadmap-plus, prose-guard: 342 passed, 2 failed: mock-matches-api-roadmap.spec.ts:59
+  (already failing on base, see above) and prose-guard.spec.ts:399, which cannot run in this shallow clone (no
+  merge base even with PROSE_BASE=83b3594); its page checks all passed and web/e2e/prose-ceilings.json has no
+  diff from 83b3594. tsc --noEmit: clean. npm run lint (full): exit 0. npm run format:check: clean.
+- Red check: with the three app files at 2acfd1e (title attribute, pad) and the new spec, #1740 fails
+  (locator.focus timeout: no tip trigger) and #1753 passes, as an already-fixed issue should.
+- Not run: the 248-spec roadmap sweep; no API change, so no API gates.
 
 # codes-at-write handoff (PR #1811, fix round 3)
 
