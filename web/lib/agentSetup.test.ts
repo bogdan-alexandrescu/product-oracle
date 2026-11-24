@@ -1,6 +1,9 @@
 // #1557: npm run test:unit (Vitest, #1583).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'vitest';
 import {
@@ -103,4 +106,48 @@ test('#1653: the SessionStart hook command prints nothing in a lane', () => {
     { encoding: 'utf8', env: { ...process.env, SWARM_TASK_ID: 'task-example-1' } },
   );
   assert.equal(out, '');
+});
+
+test("#1653: setup in a lane uses PATH's coderabbit: no language servers, no download", () => {
+  // A copy of the script in a throwaway git repo, so its git config lands there, not here.
+  const root = mkdtempSync(join(tmpdir(), 'agent-setup-lane-'));
+  try {
+    for (const rel of ['scripts/agent-setup.ts', 'lib/agentSetup.ts']) {
+      mkdirSync(dirname(join(root, 'web', rel)), { recursive: true });
+      copyFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), join(root, 'web', rel));
+    }
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    // npm and curl stubs record the call and fail; coderabbit is the lane's own.
+    const stubs = join(root, 'stubs');
+    mkdirSync(stubs);
+    const calls = join(root, 'calls.log');
+    for (const name of ['npm', 'curl'])
+      writeFileSync(join(stubs, name), `#!/bin/sh\necho ${name} >> "${calls}"\nexit 1\n`, {
+        mode: 0o755,
+      });
+    writeFileSync(join(stubs, 'coderabbit'), '#!/bin/sh\necho 0.9.1\n', { mode: 0o755 });
+    const out = execFileSync(
+      process.execPath,
+      ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', join(root, 'web/scripts/agent-setup.ts')],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          SWARM_TASK_ID: 'task-example-1',
+          PATH: `${stubs}:${process.env.PATH ?? ''}`,
+        },
+      },
+    );
+    assert.match(out, /coderabbit 0\.9\.1/);
+    assert.equal(existsSync(calls), false);
+    assert.equal(existsSync(join(root, '.agent-tools')), false);
+    const stat = execFileSync('git', ['config', '--local', '--get', 'merge.stat'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    assert.equal(stat.trim(), Object.fromEntries(GIT_CONFIG)['merge.stat']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
