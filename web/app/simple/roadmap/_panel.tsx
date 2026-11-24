@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toast as dsToast, type ToastAsk } from '@/components/ds';
+import { usePhone } from '@/components/ds/page-info';
 import { api, unwrap } from '@/lib/api/client';
 import {
   GOAL_OPS,
@@ -14,6 +15,8 @@ import {
   sendGoalChanged,
   sendItemChanged,
 } from '@/lib/api/simple-chat';
+import { useMe } from '@/lib/me';
+import { useSearchParams } from '@/lib/nav';
 import { useQuery } from '@/lib/use-query';
 import { invalidateWaiting, waitingChanged } from '@/lib/simple-waiting';
 
@@ -32,6 +35,7 @@ import {
   type Change,
   type Item,
 } from './_lib';
+import { featureShown, InLinked, namesFeature, onPageOpen, panelWrote } from './_link';
 
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
@@ -283,5 +287,64 @@ export function FeaturePanel({
     >
       {body}
     </aside>
+  );
+}
+
+/** ?feature= on any Simple page: its panel opens, unless the page's own panel already shows it. */
+export function LinkedFeature() {
+  const param = useSearchParams().get('feature');
+  const [open, setOpen] = useState<string | null>(null);
+  const closing = useRef<string | null>(null);
+  useEffect(() => {
+    if (closing.current !== param) closing.current = null;
+    // The address (the outside system here) names the feature; the panels shown are read once it does.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!param) return setOpen(null);
+    if (open === param || closing.current === param) return;
+    if (featureShown(param) || panelWrote(param)) return;
+    setOpen(param);
+  }, [param, open]);
+  // A page's own panel (a bar, a row) takes the link's place: one panel at a time.
+  useEffect(
+    () =>
+      onPageOpen(() => {
+        closing.current = param;
+        setOpen(null);
+      }),
+    [param],
+  );
+  if (!open) return null;
+  return (
+    <LinkedPanel
+      key={open}
+      value={open}
+      onClose={() => {
+        closing.current = open;
+        setOpen(null);
+      }}
+    />
+  );
+}
+
+function LinkedPanel({ value, onClose }: { value: string; onClose: () => void }) {
+  const phone = usePhone();
+  const { can } = useMe();
+  const roadmap = useQuery('simple-roadmap:{}', () =>
+    unwrap(api.GET('/v1/simple/roadmap', {})).then((d) => {
+      setRoadmapToday(d.today);
+      return d;
+    }),
+  );
+  if (!roadmap.data) return null;
+  const item = roadmap.data.items.find((i) => namesFeature(value, i));
+  return (
+    <InLinked.Provider value>
+      <FeaturePanel
+        feature={{ id: item?.id ?? null, code: item?.code ?? value, name: item?.title ?? value }}
+        phone={phone}
+        canChange={can('create_simple_change')}
+        onClose={onClose}
+      />
+    </InLinked.Provider>
   );
 }

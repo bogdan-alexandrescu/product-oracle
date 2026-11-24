@@ -656,7 +656,14 @@ export function goalMilestoneWords(m: GoalMilestone, all: readonly GoalMilestone
   const prds = new Set(
     all.filter((x) => x.roadmap_id === m.roadmap_id && x.prd).map((x) => x.prd!.id),
   );
-  return `${milestoneWords(`${m.roadmap_code ?? m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ''}`;
+  return `${codedMilestone(m.roadmap_code ?? m.code, m.name)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ''}`;
+}
+
+/** panel-ux #1756: one code, then the name: "M25 Measured and mapped", never "M25 M1 Measured and mapped"
+ * (a name that starts with a code of its own drops it for the code given). */
+export function codedMilestone(code: string | null | undefined, name: string): string {
+  const own = name.replace(/^M\d+\s*(?:·\s*)?(?=\S)/, '');
+  return milestoneWords(code ? `${code} ${own}` : name);
 }
 
 /** A milestone's colour, by its code (M1, M2, M3, then round again). */
