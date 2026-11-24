@@ -412,6 +412,16 @@ export function seedBaseline(uuid: () => string): BaselineState {
   // Activation a count of 0 against at most 0 that was never read (no day for its current value).
   if (scenario === PLAN_GOAL_RISK_SCENARIO) {
     paid.attrs = { ...paid.attrs, current: 5 };
+    // Churn under 75% too, but typed with no day it was read: the Goal map's Not measured.
+    churn.attrs = {
+      ...churn.attrs,
+      target_text: undefined,
+      unit: '%',
+      comparison: 'at_least',
+      target: 20,
+      start: 0,
+      current: 5,
+    };
     activation.attrs = {
       ...activation.attrs,
       current_as_of: undefined,
