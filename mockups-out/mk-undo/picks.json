@@ -1,0 +1,463 @@
+{
+ "title": "An Undo toast for changes that are easy to make by mistake",
+ "subtitle": "Mock-ups for #1804 on Simple's Roadmap with the real feature panel; every Undo in the frames really takes the change back in the mock app",
+ "decisions": [
+  {
+   "code": "UT1",
+   "name": "The toast",
+   "question": "Where does the Undo toast sit, how long does it stay, and what happens when several changes come fast?",
+   "common": "Every proposal says the change in a few words with an Undo button, is read out politely by a screen reader (it never takes the focus), holds while hovered or focused, and is fed by the real changes: the frames remove a real dependency and move a real feature on Simple's Roadmap, and Undo really puts them back. Today one toast shows for 10 seconds and a new change replaces it, so an earlier Undo is lost.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Newest wins",
+     "recommended": false,
+     "what": "Today's single toast in the bottom-right corner, shortened to 8 seconds with a thin bar that shows the time left, and Ctrl Z beside Undo. A new change replaces the toast; Ctrl Z still undoes the newest change while its toast is up.",
+     "plus": "Smallest change from today; never covers more than one line of the page.",
+     "cost": "Undo the newest change: 1 click or Ctrl Z (today 1 click). Undo a change made one step earlier: not here; redo it by hand, 2 to 5 steps (today the same).",
+     "frames": [
+      {
+       "file": "ut1-a-rest.html",
+       "caption": "One real change: the dependency of Welcome video on In-app tour is removed; the toast shows it with Undo and Ctrl Z, the bar shows time left"
+      },
+      {
+       "file": "ut1-a-open.html",
+       "caption": "Two more changes come fast: the newest replaces the toast; the first change can no longer be undone here"
+      },
+      {
+       "file": "ut1-a-mid.html",
+       "caption": "Undo has the keyboard focus; Ctrl Z would do the same"
+      },
+      {
+       "file": "ut1-a-result.html",
+       "caption": "Undo pressed: the newest change is taken back and the toast says Undone. Cost: 1 click; the earlier ones are gone"
+      },
+      {
+       "file": "ut1-a-hard.html",
+       "caption": "Six changes with long feature names in a row: only the last one shows"
+      },
+      {
+       "file": "ut1-a-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut1-a-phone-390.html",
+       "caption": "Phone 390: the toast sits above the tab bar, full width, without the Ctrl Z hint"
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Stack of three",
+     "recommended": false,
+     "what": "Each change gets its own toast in the bottom-right corner, newest at the bottom, each with its own Undo and its own 8-second bar. At most three show; older ones fold into a '2 more' button that opens them.",
+     "plus": "Every recent change is one click away without opening anything.",
+     "cost": "Undo any of the last three: 1 click. Undo a fourth or older: 2 clicks (N more, Undo). Covers up to three toasts' height of the page's corner.",
+     "frames": [
+      {
+       "file": "ut1-b-rest.html",
+       "caption": "One real change: a single toast with Undo"
+      },
+      {
+       "file": "ut1-b-open.html",
+       "caption": "Three fast changes: three toasts stacked in the corner, each with its own Undo"
+      },
+      {
+       "file": "ut1-b-mid.html",
+       "caption": "The keyboard is on the Undo of the oldest change, the removed dependency"
+      },
+      {
+       "file": "ut1-b-result.html",
+       "caption": "Undo pressed: the dependency is back in the broken links list; its toast closes and Undone joins the stack. Cost: 1 click"
+      },
+      {
+       "file": "ut1-b-hard.html",
+       "caption": "Six fast changes with long names: three show, the rest open from '2 more'; the stack covers the corner of the timeline"
+      },
+      {
+       "file": "ut1-b-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut1-b-phone-390.html",
+       "caption": "Phone 390: three full-width toasts take most of the lower screen"
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "One toast that counts",
+     "recommended": true,
+     "what": "One toast in the bottom-right corner shows the newest change with Undo and Ctrl Z. Changes made while it is up fold into a line under it, '2 earlier changes', that opens a list with an Undo for each. 8 seconds, restarted by each new change.",
+     "why": "It keeps today's single toast and place, so the page is never covered by a stack, yet no change made in a fast run is lost: each stays one or two clicks away until the toast closes, and the item's history after that (UT3).",
+     "plus": "Ctrl Z and the screen reader both reach the newest change first; one line of height at rest.",
+     "cost": "Undo the newest: 1 click or Ctrl Z. Undo an earlier one: 2 clicks (earlier changes, Undo). Today: an earlier one is lost.",
+     "frames": [
+      {
+       "file": "ut1-c-rest.html",
+       "caption": "One real change: the dependency of Welcome video on In-app tour is removed; one toast with Undo and Ctrl Z"
+      },
+      {
+       "file": "ut1-c-open.html",
+       "caption": "Two more changes come fast: the toast shows the newest, and '2 earlier changes' is opened to list them, each with Undo"
+      },
+      {
+       "file": "ut1-c-open-dark.html",
+       "caption": "The same open toast in dark"
+      },
+      {
+       "file": "ut1-c-mid.html",
+       "caption": "The keyboard is on the Undo of the removed dependency, the oldest of the three"
+      },
+      {
+       "file": "ut1-c-result.html",
+       "caption": "Undo pressed: the dependency is back (its Bring it back and Remove the dependency buttons return), the toast says Undone. Cost: 2 clicks"
+      },
+      {
+       "file": "ut1-c-hard.html",
+       "caption": "Six fast changes with long feature names: the list grows upward and wraps; the newest stays at the top"
+      },
+      {
+       "file": "ut1-c-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut1-c-phone-390.html",
+       "caption": "Phone 390: one full-width toast above the tab bar, '2 earlier changes' under it"
+      }
+     ]
+    },
+    {
+     "letter": "d",
+     "name": "Strip under the title",
+     "recommended": false,
+     "what": "No floating toast: a strip at the top of the page shows the newest change, how many changes were made on this page, and Undo. It has no timer and stays until the person leaves the page or closes it.",
+     "plus": "Never runs out while a person reads; never covers the chart's lower edge.",
+     "cost": "Undo the newest: 1 click, any time while on the page. Undo an earlier one: not here; the item's history. Covers the top of the page while it stays.",
+     "frames": [
+      {
+       "file": "ut1-d-rest.html",
+       "caption": "One real change: the strip appears at the top of the page with Undo"
+      },
+      {
+       "file": "ut1-d-open.html",
+       "caption": "Three changes: the strip shows the newest and '3 changes on this page'"
+      },
+      {
+       "file": "ut1-d-mid.html",
+       "caption": "The keyboard is on Undo in the strip"
+      },
+      {
+       "file": "ut1-d-result.html",
+       "caption": "Undo pressed: the newest change is taken back and the strip says Undone, still counting 3 changes on this page. Cost: 1 click"
+      },
+      {
+       "file": "ut1-d-hard.html",
+       "caption": "Long names are cut short in the strip"
+      },
+      {
+       "file": "ut1-d-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut1-d-phone-390.html",
+       "caption": "Phone 390: the strip sits under the top bar and wraps to two lines"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "UT2",
+   "name": "Which changes get one",
+   "question": "Which changes get an Undo toast, and what does Undo mean for a commenter's proposal?",
+   "common": "Owners and approvers change Simple at once; a commenter's change becomes a proposal that waits in Needs a decision, as today. Deleting a PRD keeps its confirm in every proposal. The frames make real changes in the feature panel of F-79 Weekly alert digest: its status, then Cut from its menu, then a commenter's status change.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Every change, Withdraw",
+     "recommended": true,
+     "what": "Every direct change gets the toast with Undo: a status, dates, a drag in the priority order, removing a dependency or a link, cutting, moving to Trash and a bulk change (one toast for the whole batch). Cutting drops its confirm in favour of Undo. A commenter's proposal gets the same toast with Withdraw, which takes the proposal back before anyone decides.",
+     "why": "One rule a person can learn: whatever you just did, the toast can take it back. It removes the cut's confirm step, and a commenter gets a matching way back that says what really happens to a proposal (it is withdrawn, as Removed already does for a restore).",
+     "plus": "Matches the Withdraw that Removed already offers for a proposed restore.",
+     "cost": "Cut: 1 click (today 2: Cut, then confirm). Undo it: 1 more. A commenter takes back a proposal: 1 click (today: Needs a decision, find it, withdraw, about 3).",
+     "frames": [
+      {
+       "file": "ut2-a-rest.html",
+       "caption": "The owner sets F-79 Weekly alert digest to Done in its panel: the toast says Status changed, with Undo"
+      },
+      {
+       "file": "ut2-a-open.html",
+       "caption": "The panel's menu is open on Cut from the roadmap"
+      },
+      {
+       "file": "ut2-a-mid.html",
+       "caption": "Cut pressed: no confirm; the feature is cut at once and the toast offers Undo. Cost: 1 click (today 2)"
+      },
+      {
+       "file": "ut2-a-result.html",
+       "caption": "Undo pressed: F-79 is back on the roadmap with its status, the toast says Undone"
+      },
+      {
+       "file": "ut2-a-hard.html",
+       "caption": "A commenter sets the status: it becomes a proposal that waits for Avery Stone, and the toast offers Withdraw"
+      },
+      {
+       "file": "ut2-a-hard-dark.html",
+       "caption": "The commenter's toast in dark"
+      },
+      {
+       "file": "ut2-a-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut2-a-phone-390.html",
+       "caption": "Phone 390: the toast sits above the panel sheet"
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Only the hard to redo",
+     "recommended": false,
+     "what": "Only changes that are hard to redo get the toast: removing a dependency or a link, cutting, moving to Trash and a bulk change. A status, dates or a drag in the order show a small Saved tick beside the field instead; they are put back by changing them again or from the item's history. A commenter's proposal gets a plain toast, no button.",
+     "plus": "Fewer toasts on a busy page; quick edits stay quiet.",
+     "cost": "Undo a status change: 2 clicks (Change, pick the old one) and the person must remember it. Cut: 1 click, Undo 1.",
+     "frames": [
+      {
+       "file": "ut2-b-rest.html",
+       "caption": "The owner sets the status to Done: only a Saved tick beside the field, no toast"
+      },
+      {
+       "file": "ut2-b-open.html",
+       "caption": "The panel's menu is open on Cut from the roadmap"
+      },
+      {
+       "file": "ut2-b-mid.html",
+       "caption": "Cut pressed: no confirm; the toast offers Undo because a cut is hard to redo"
+      },
+      {
+       "file": "ut2-b-result.html",
+       "caption": "Undo pressed: F-79 is back on the roadmap"
+      },
+      {
+       "file": "ut2-b-hard.html",
+       "caption": "A commenter sets the status: a plain toast says it waits for Avery Stone; no way back from the toast"
+      },
+      {
+       "file": "ut2-b-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut2-b-phone-390.html",
+       "caption": "Phone 390: the Saved tick beside the status in the panel sheet"
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "One word: Undo",
+     "recommended": false,
+     "what": "As a, but a commenter's toast says Undo too; it removes the proposal as if it had never been made.",
+     "plus": "The same word for everyone.",
+     "cost": "As a: cut 1 click, Undo 1, a commenter's take-back 1.",
+     "frames": [
+      {
+       "file": "ut2-c-rest.html",
+       "caption": "The owner sets the status to Done: the toast offers Undo"
+      },
+      {
+       "file": "ut2-c-open.html",
+       "caption": "The panel's menu is open on Cut from the roadmap"
+      },
+      {
+       "file": "ut2-c-mid.html",
+       "caption": "Cut pressed: no confirm; the toast offers Undo"
+      },
+      {
+       "file": "ut2-c-result.html",
+       "caption": "Undo pressed: F-79 is back on the roadmap"
+      },
+      {
+       "file": "ut2-c-hard.html",
+       "caption": "A commenter's proposal: the toast offers Undo, though nothing changed on the roadmap yet"
+      },
+      {
+       "file": "ut2-c-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut2-c-phone-390.html",
+       "caption": "Phone 390: the toast above the panel sheet"
+      }
+     ]
+    },
+    {
+     "letter": "d",
+     "name": "Confirm the big ones",
+     "recommended": false,
+     "what": "Small changes (status, dates, order) get the toast with Undo; cutting, moving to Trash and bulk changes keep a confirm step and get no Undo. A commenter's proposal gets a plain toast.",
+     "plus": "A person reads what a big change will do before it happens.",
+     "cost": "Cut: 2 clicks, as today, and no Undo; taking it back: Removed, Restore (2 clicks).",
+     "frames": [
+      {
+       "file": "ut2-d-rest.html",
+       "caption": "The owner sets the status to Done: the toast offers Undo"
+      },
+      {
+       "file": "ut2-d-open.html",
+       "caption": "The panel's menu is open on Cut from the roadmap"
+      },
+      {
+       "file": "ut2-d-mid.html",
+       "caption": "Cut pressed: the confirm asks first, as today"
+      },
+      {
+       "file": "ut2-d-result.html",
+       "caption": "Cut confirmed: the toast says it is cut, with no Undo. Cost: 2 clicks"
+      },
+      {
+       "file": "ut2-d-hard.html",
+       "caption": "A commenter's proposal: a plain toast"
+      },
+      {
+       "file": "ut2-d-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut2-d-phone-390.html",
+       "caption": "Phone 390: the toast above the panel sheet"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "UT3",
+   "name": "After the toast",
+   "question": "Once the toast is gone, where does a person still undo a change?",
+   "common": "Each Undo puts the old state back through the API and writes one history line. The frames cut F-79 Weekly alert digest from its panel, let the toast run out, then take the cut back. Today the only way back after the toast is Removed (for a cut) and Trash (for a delete); the working draft's Undo takes back the whole draft.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "History in the panel",
+     "recommended": true,
+     "what": "The feature panel, the one every page opens, gets a History section near its foot: each change to the feature, newest first, who made it and when, with Undo on each. A commenter sees Propose undo instead. On a phone it sits in the panel sheet as a closed section.",
+     "why": "It lives where the feature already is on every page (Roadmap, Goal map, Priorities, Home), covers changes by anyone and not only this visit, and needs no new page or button in the app's frame.",
+     "plus": "Shows who changed what, so a person can see why something moved before taking it back.",
+     "cost": "Open the feature (1), History (1), Undo (1): 3 clicks, any time. Today: redo by hand, or Removed for a cut (2).",
+     "frames": [
+      {
+       "file": "ut3-a-rest.html",
+       "caption": "The toast has run out after the cut; the panel shows F-79 as cut, History closed at its foot"
+      },
+      {
+       "file": "ut3-a-open.html",
+       "caption": "History opened: the cut just now, then earlier changes by Jordan Park, Mina Okafor and Avery Stone, each with Undo"
+      },
+      {
+       "file": "ut3-a-open-dark.html",
+       "caption": "Dark: the cut feature’s panel with Restore at its top; History sits further down the panel"
+      },
+      {
+       "file": "ut3-a-mid.html",
+       "caption": "The keyboard is on the Undo of the cut"
+      },
+      {
+       "file": "ut3-a-result.html",
+       "caption": "Undo pressed: F-79 is back on the timeline and the toast says Undone. Cost: 3 clicks"
+      },
+      {
+       "file": "ut3-a-hard.html",
+       "caption": "A commenter's view of the same History: Propose undo on each line"
+      },
+      {
+       "file": "ut3-a-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut3-a-phone-390.html",
+       "caption": "Phone 390 with the panel open: History is a section of the panel sheet"
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Your changes list",
+     "recommended": false,
+     "what": "A 'Your changes' button under the rail's pages opens today's changes made by this person on any page, newest first, each with Undo. On a phone it is a round clock button above the tab bar.",
+     "plus": "One place for everything a person did today, across pages.",
+     "cost": "Your changes (1), Undo (1): 2 clicks, today only and only one's own changes.",
+     "frames": [
+      {
+       "file": "ut3-b-rest.html",
+       "caption": "The toast has run out; 'Your changes · 5' waits under the rail's pages"
+      },
+      {
+       "file": "ut3-b-open.html",
+       "caption": "The list is open: the cut just now and four earlier changes from other pages, each with Undo"
+      },
+      {
+       "file": "ut3-b-mid.html",
+       "caption": "The keyboard is on the Undo of the cut"
+      },
+      {
+       "file": "ut3-b-result.html",
+       "caption": "Undo pressed: F-79 is back on the timeline, its line struck out as undone. Cost: 2 clicks"
+      },
+      {
+       "file": "ut3-b-hard.html",
+       "caption": "A commenter opens Your changes: the same list; for a commenter, each Undo would withdraw a proposal"
+      },
+      {
+       "file": "ut3-b-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut3-b-phone-390.html",
+       "caption": "Phone 390 with the panel open: the list opens over the panel sheet"
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Removed and Trash only",
+     "recommended": false,
+     "what": "Nothing new after the toast: a cut comes back from Removed, a delete from Trash, as today; a status, dates or a link are changed back by hand.",
+     "plus": "No new control at all.",
+     "cost": "A cut: Removed (1), Restore (1) = 2 clicks. A status or dates change: redo by hand and remember the old value.",
+     "frames": [
+      {
+       "file": "ut3-c-rest.html",
+       "caption": "The toast has run out; Removed now counts 7"
+      },
+      {
+       "file": "ut3-c-open.html",
+       "caption": "Removed is open: F-79 Weekly alert digest at the top with Restore"
+      },
+      {
+       "file": "ut3-c-mid.html",
+       "caption": "The keyboard is on Restore"
+      },
+      {
+       "file": "ut3-c-result.html",
+       "caption": "Restore pressed: F-79 is back and the toast says Restored. Cost: 2 clicks"
+      },
+      {
+       "file": "ut3-c-hard.html",
+       "caption": "A commenter: Removed offers only a proposal to restore"
+      },
+      {
+       "file": "ut3-c-hard-1512.html",
+       "caption": "The same at 1512 wide"
+      },
+      {
+       "file": "ut3-c-phone-390.html",
+       "caption": "Phone 390: the panel is closed to reach Removed; the list opens under the roadmap's buttons"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
