@@ -1,3 +1,41 @@
+# roadmap-ux handoff (issues #1740 #1746 #1749 #1750 #1751 #1752 #1753 #1757)
+
+Base 83b3594. Spec: web/e2e/roadmap-ux-nov24.spec.ts (8 tests, one per issue). Red-first commit 3eaaa9b
+(7 of 8 red on the base build; #1752 green on base, see below).
+
+## What changed (web/app/simple/roadmap only)
+- #1746 `_keydates.tsx`: Key dates closes on a pointerdown outside it (its own button and the toast stack excepted), as on Escape.
+- #1750 `_keydates.tsx`: when a roadmap has PRD milestones, its list splits into "Events" and "PRD milestones" (headings; testids key-dates-events / key-dates-milestones).
+- #1751 `_keydates.tsx` + new `_dayfield.tsx`: DayField: the day in words, month first ("Dec 3, 2026"), the native date input laid over it unseen (opacity 0), as the milestone card's DateField. Add and Edit both.
+- #1749 `_zoom.tsx` (Timeline) and `_timeline.tsx` (Gantt): the open feature's label gets an accent ring, a 4 px accent edge and bold; its bar a 3 px accent outline plus a soft halo (Timeline) or an accent ring rect (Gantt, testid bar-open-ring); the open row's tint is full accent-soft.
+- #1753 `_trackbands.tsx`: the health mark gets an invisible pad (about 26x28 px) so a tap a few px off the glyph opens its reason; InfoTip already opened on click (touch) and focus. Row height unchanged.
+- #1757 `_tracks.tsx`: the owner shows in the Tracks sheet only once some track has an owner; then "No owner" is a button (for those who may change) opening the row with Owner focused.
+- #1740 `_roadmap.tsx`, `_tracks.tsx`, `_lib.ts`: the goal card count and the track count each say what they cover in a title tooltip (no new visible prose). Finding: the audit compared tracks (drawer, by track, every feature incl. done, filters ignored) with goal cards (by goal, filters applied, PM-owned excluded); the Timeline itself shows no per-lane count now (bands are tracks). Counts were not changed.
+- #1752 already fixed: every cut label on the Timeline (row names: title=; milestone chips and band labels: aria-label plus a role=tooltip tip on hover and focus). The spec proves it by hovering each cut label (10 in the roadmap-milestones scenario) and focusing one. No code change.
+
+## Specs updated for the intended change
+- e2e/roadmap-tracks-sheet.spec.ts: two asserts of "No owner · 5 features" with no owners in use -> "5 features", no "No owner".
+- Key dates: a toast's Undo (the toasts stack) does not count as an outside click (simple-roadmap-plus phone test).
+
+## Gates run (on the final code unless noted)
+- npx tsc --noEmit -p .: clean. npm run lint (full): exit 0. npm run format:check: clean.
+- Playwright, --retries=0, mock build: roadmap-ux-nov24 (8/8), roadmap-tracks-sheet, roadmap-keydates,
+  simple-roadmap-plus, qa4-simple-roadmap, ah-prd-milestones-once, priorities-keydates, prose-guard:
+  107 passed. The only failure was prose-guard's "no ceiling above the merge base", because this clone
+  has no origin/main. With PROSE_BASE=83b3594 it passes. Ceilings were not touched.
+- Every spec that drives /simple/roadmap (248 files), run in chunks before the last lint-only commit
+  (fa60642: DayField moved to its own file, the ds Button for No owner): all passed except
+  mock-matches-api-roadmap.spec.ts:59 (goal counters order) and qa4r-timeline.spec.ts:163 (rows by start
+  date). Both also fail on a base 83b3594 build, so they were already failing and are left as they are.
+  de-r1-grab.spec.ts:85 failed once under load and passed alone and on the base. Not checked: the last
+  ~90 tests of chunk rest-00, which timed out at 471/560 with no failures.
+- No API change, so no pytest, pyright or migration checks were needed.
+
+## Left
+- #1740: the counts are labelled, not changed. If the owner wants one number everywhere, the Tracks sheet
+  count is the API's (api/oracle/simple/removed.py:191-225) and would need an API change.
+- The two pre-existing failures above belong to the timeline-order and goal-order lanes.
+
 # codes-at-write handoff (PR #1811, fix round 3)
 
 ## Write paths that number an item at write (file:line, at this branch)
