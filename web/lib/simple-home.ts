@@ -13,7 +13,8 @@ type Entity = Schemas['EntityOut'];
 type Roadmap = Schemas['SimpleRoadmapOut'];
 type Item = Schemas['SimpleRoadmapItem'];
 
-export type GoalStatus = 'At risk' | 'Not measured yet' | 'Not counted yet' | 'Planned';
+/** #1759: one vocabulary on every card: at risk, on track (measured, nothing at risk), or not measured yet. */
+export type GoalStatus = 'At risk' | 'On track' | 'Not measured yet';
 
 export type GoalTile = {
   id: string;
@@ -24,6 +25,8 @@ export type GoalTile = {
   weight: number | null;
   /** The metric's target path: start, current (when measured), target ("50 -> 100 -> 200"). */
   path: string | null;
+  /** #1759: the card's one progress pattern, "Now 100 teams · target 200 teams" ("Now – · …" unmeasured). */
+  progress: string | null;
   status: GoalStatus;
   /** Why it is at risk, in one line (the first broken link or missed milestone). */
   why: string | null;
@@ -32,7 +35,6 @@ export type GoalTile = {
   needYou: number;
 };
 
-const COUNTED = /^[a-z][a-z -]{0,23}$/;
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /** A number with the reader's locale grouping ("50,000"). */
@@ -56,6 +58,30 @@ export function figure(value: number, unit: string, locale?: string): string {
  * unit's target when it starts with that unit; with no unit, each figure reads with the metric).
  */
 export function targetPath(attrs: Record<string, unknown>): string | null {
+  const f = goalFigures(attrs);
+  if (!f) return null;
+  if (typeof f === 'string') return f;
+  const steps = [
+    f.start != null ? `from ${f.start}` : null,
+    f.current != null ? `now ${f.current}` : null,
+    `target ${f.target}`,
+  ].filter((x): x is string => !!x);
+  const words = steps.join(' · ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** #1759: one progress pattern on every goal card: "Now 100 teams · target 200 teams", "Now – · target 50 threads". */
+export function progressLine(attrs: Record<string, unknown>): string | null {
+  const f = goalFigures(attrs);
+  if (!f) return null;
+  if (typeof f === 'string') return f;
+  return `Now ${f.current ?? '–'} · target ${f.target}`;
+}
+
+/** The goal's figures in words, each with its unit; the target's own words when it has no number. */
+function goalFigures(
+  attrs: Record<string, unknown>,
+): { start: string | null; current: string | null; target: string } | string | null {
   const unit = typeof attrs.unit === 'string' ? attrs.unit : '';
   const target = num(attrs.target);
   if (target == null) return typeof attrs.target_text === 'string' ? attrs.target_text : null;
@@ -73,13 +99,11 @@ export function targetPath(attrs: Record<string, unknown>): string | null {
       : plain(target);
   const start = num(attrs.start);
   const current = num(attrs.current);
-  const steps = [
-    start != null ? `from ${plain(start)}` : null,
-    current != null ? `now ${plain(current)}` : null,
-    `target ${goal}`,
-  ].filter((x): x is string => !!x);
-  const words = steps.join(' · ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  return {
+    start: start != null ? plain(start) : null,
+    current: current != null ? plain(current) : null,
+    target: goal,
+  };
 }
 
 /** A broken dependency (red, not accepted as a risk) or a milestone past its date and not done. */
@@ -111,18 +135,7 @@ export function goalTiles(
       );
       const why = items.map((i) => itemAtRisk(i, today)).find(Boolean) ?? null;
       const measured = num(a.current) != null;
-      const unit = typeof a.unit === 'string' ? a.unit : '';
-      const counted =
-        !!unit && COUNTED.test(unit) && !['ms', 's', 'min', 'h', 'days'].includes(unit);
-      const status: GoalStatus = why
-        ? 'At risk'
-        : measured
-          ? 'Planned'
-          : counted
-            ? 'Not counted yet'
-            : a.metric || a.target != null
-              ? 'Not measured yet'
-              : 'Planned';
+      const status: GoalStatus = why ? 'At risk' : measured ? 'On track' : 'Not measured yet';
       return {
         id: v.id,
         key: byId.get(v.id)?.key ?? v.id,
@@ -130,6 +143,7 @@ export function goalTiles(
         name: v.name,
         weight: num(a.weight),
         path: targetPath(a),
+        progress: progressLine(a),
         status,
         why,
         guardrail: a.guardrail === true || a.kind === 'guardrail',
