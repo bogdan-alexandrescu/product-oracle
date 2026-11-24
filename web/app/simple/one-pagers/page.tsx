@@ -98,18 +98,12 @@ function OnePagers() {
         title="PRDs"
         testId="simple-one-pagers"
         action={
-          // NP1: New PRD beside "Company order", opening the guided sheet.
+          // NP1: New PRD, opening the guided sheet.
           <span className="flex flex-wrap items-center gap-3">
             {/* qa4-simple-prd-25: what a person can do here, behind an (i), not on the page. */}
             <InfoTip label="One-pagers" align="start" side="bottom">
               {lead}
             </InfoTip>
-            {/* prd-order: the list says its order, the one company PRD order. */}
-            {rows && rows.length + mine.length > 1 ? (
-              <span className="simple-small" data-testid="one-pagers-order">
-                Company order
-              </span>
-            ) : null}
             {canStartPrd && <NewPrdButton primary onOpen={() => setNewPrd(true)} />}
           </span>
         }
@@ -157,43 +151,56 @@ function OnePagers() {
           // qa-simple-prd-42: the status sits beside its title, rows are ruled, each says when it changed.
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
-          <ul className="simple-calm-list flex flex-col">
-            {moveError && (
-              <li role="alert" className="simple-small py-2 text-warn">
-                {moveError}
-              </li>
-            )}
-            <StartedRows started={mine} />
-            {rows.map((d, n) => (
-              <li
-                key={d.id}
-                data-testid="one-pager-row"
-                className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50"
+          <>
+            {/* prd-order: the list says its order, the one company PRD order; #1768: a caption over
+                the list, not a word beside New PRD that reads as a button. */}
+            {rows.length + mine.length > 1 && (
+              <p
+                id="one-pagers-order"
+                data-testid="one-pagers-order"
+                className="simple-small italic"
               >
-                <Link
-                  href={`/simple/one-pagers/${d.slug}`}
-                  className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline"
+                Company order
+              </p>
+            )}
+            <ul className="simple-calm-list flex flex-col">
+              {moveError && (
+                <li role="alert" className="simple-small py-2 text-warn">
+                  {moveError}
+                </li>
+              )}
+              <StartedRows started={mine} />
+              {rows.map((d, n) => (
+                <li
+                  key={d.id}
+                  data-testid="one-pager-row"
+                  className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-surface2"
                 >
-                  {d.title}
-                </Link>
-                <PrdStatus d={d} />
-                <span className="simple-small ml-auto">
-                  Updated {dmy(dayIn(d.updated_at, zone))}
-                </span>
-                {/* delete-prd-simple: one ⋯ per row, Move up and Move down (owners of the order) and Delete PRD. */}
-                <PrdMenu
-                  doc={d}
-                  busy={moving}
-                  onUp={canMove && n > 0 ? () => void move(d, 'up') : undefined}
-                  onDown={canMove && n < rows.length - 1 ? () => void move(d, 'down') : undefined}
-                  onDeleted={(entry) => {
-                    setNote({ text: deletedText(d.title), entry });
-                    void reload();
-                  }}
-                />
-              </li>
-            ))}
-          </ul>
+                  <Link
+                    href={`/simple/one-pagers/${d.slug}`}
+                    className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline"
+                  >
+                    {d.title}
+                  </Link>
+                  <PrdStatus d={d} />
+                  <span className="simple-small ml-auto">
+                    Updated {dmy(dayIn(d.updated_at, zone))}
+                  </span>
+                  {/* delete-prd-simple: one ⋯ per row, Move up and Move down (owners of the order) and Delete PRD. */}
+                  <PrdMenu
+                    doc={d}
+                    busy={moving}
+                    onUp={canMove && n > 0 ? () => void move(d, 'up') : undefined}
+                    onDown={canMove && n < rows.length - 1 ? () => void move(d, 'down') : undefined}
+                    onDeleted={(entry) => {
+                      setNote({ text: deletedText(d.title), entry });
+                      void reload();
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </SimpleSection>
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}

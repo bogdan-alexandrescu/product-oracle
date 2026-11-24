@@ -89,8 +89,9 @@ function Meetings() {
         // qa-simple-decide-34: one verb, "Start review".
         <span className="flex flex-wrap items-center gap-3">
           {mayStart ? (
-            <Button variant="primary" onClick={() => setSheet({})}>
-              Start review
+            // #1778: the page's own Start says it starts a review of a PRD picked in the sheet.
+            <Button variant="primary" data-testid="meetings-start-any" onClick={() => setSheet({})}>
+              Start review of any PRD
             </Button>
           ) : (
             <span className="simple-small" data-testid="meetings-start-why">
@@ -143,9 +144,10 @@ function Meetings() {
                 <li
                   key={o.occurrence_id ?? `${o.ritual_id}|${o.due_at}`}
                   data-testid="meetings-upcoming-row"
-                  className="flex flex-wrap items-center justify-between gap-2"
+                  // #1778: the row's action keeps one place, at the right, however its text wraps.
+                  className="flex items-center gap-2"
                 >
-                  <span>
+                  <span className="min-w-0 flex-1">
                     {/* qa4-simple-decide-34: a time and "Pre-read" never break across lines on a phone. */}
                     <strong>{o.ritual_title}</strong> ·{' '}
                     <span className="inline-block whitespace-nowrap">{when(o.due_at)}</span> ·{' '}
@@ -171,7 +173,7 @@ function Meetings() {
                   </span>
                   {o.meeting_id ? (
                     <Link
-                      className="font-semibold text-accent-ink hover:underline"
+                      className="flex-none font-semibold text-accent-ink hover:underline"
                       href={`/simple/meetings/${o.meeting_id}`}
                     >
                       Open
@@ -179,6 +181,7 @@ function Meetings() {
                   ) : o.can_start ? (
                     // qa4-simple-decide-39: each row's Start review names its review for a screen reader.
                     <Button
+                      className="flex-none"
                       aria-label={`Start review: ${o.ritual_title}`}
                       onClick={() =>
                         setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o })

@@ -8523,7 +8523,13 @@ export function seedRunDecisions(
         created_at: '2026-10-26T16:00:00Z',
         stops: [
           o('feature_set', 2, '2026-10-27T17:00:00Z'),
-          a('eng_review', 3, '2026-10-28T17:00:00Z', 'Host it ourselves, behind the same sign-in.'),
+          // #1780: a long note, folded behind Show more.
+          a(
+            'eng_review',
+            3,
+            '2026-10-28T17:00:00Z',
+            'Host it ourselves, behind the same sign-in, so the plan keeps its pace; the billing page waits for the invoice service and the tax rules we still have to check.',
+          ),
           o('priority_order', 4, '2026-10-29T17:00:00Z'),
           a('prd_review', 5, '2026-10-30T17:00:00Z'),
         ],
