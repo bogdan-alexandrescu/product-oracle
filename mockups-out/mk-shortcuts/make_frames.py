@@ -66,10 +66,14 @@ for o in 'abc':
     f(f'ks3-{o}-rest', P + f'?ks3={o}&row=2', [['key', 'Enter']])
     f(f'ks3-{o}-open', P + f'?ks3={o}&row=2', [['key', 'Enter'], NOTES])
     f(f'ks3-{o}-mid', P + f'?ks3={o}&row=2', [['key', 'Enter'], NOTES, TYPE, ['type', ' jk']])
-    last = ['press', 'Control+j'] if o == 'b' else ['press', 'Escape']
+    last = ['press', 'Control+Enter'] if o == 'b' else ['press', 'Escape']
     f(f'ks3-{o}-result', P + f'?ks3={o}&row=2', [['key', 'Enter'], NOTES, TYPE, ['type', ' jk'], last])
-    hard = {'a': ['press', 'j'], 'b': ['press', 'Control+j'], 'c': ['press', '?']}[o]
-    f(f'ks3-{o}-hard-1512', P + f'?ks3={o}&row=0', [MENU, DEL, hard], width=1512, theme='dark')
+    hard = {
+        'a': [['key', 'Shift+J'], ['type', 'jk']],
+        'b': [['key', 'Shift+J'], ['type', 'Ready sooner'], ['press', 'Control+Enter']],
+        'c': [['key', 'Shift+J'], ['type', 'Ready sooner'], ['press', 'Tab'], ['press', '?']],
+    }[o]
+    f(f'ks3-{o}-hard-1512', P + f'?ks3={o}&row=3', hard, width=1512, theme='dark')
 for o in 'abc':
     f(f'ks3-{o}-phone-390', P + f'?ks3={o}' + ('&swipe=1' if o == 'c' else ''), [['click', '[data-testid=prio-title]']], width=390)
 

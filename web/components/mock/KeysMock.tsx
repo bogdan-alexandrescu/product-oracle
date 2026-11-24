@@ -221,15 +221,22 @@ export function KeysMock() {
       const inField = !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable);
       const inDialog = !!a?.closest('[role=dialog],[role=alertdialog]') && !a?.closest('[data-keys-sheet]');
       const list = [...document.querySelectorAll('[data-testid=prio-row]')];
-      if (ks3 === 'b' && inField && (e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'k')) {
+      if (ks3 === 'b' && inField && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        // KS3 b: Ctrl+Enter saves the field (as forms do today) and goes on to the next feature.
+        const box = a!.closest('[data-testid=item-panel],[role=dialog]');
+        const save = [...(box?.querySelectorAll('button') ?? [])].find((x) => /^(Save|Move|Propose|Send)/.test((x.textContent || '').trim()));
+        if (!save) return;
         e.preventDefault();
-        (a as HTMLElement).blur();
-        setTrail(['Ctrl', e.key.toUpperCase()]);
-        setRow((r) => {
-          const n = Math.max(0, Math.min(list.length - 1, r + (e.key === 'j' ? 1 : -1)));
-          (list[n]?.querySelector('[data-testid=prio-title]') as HTMLElement | null)?.click();
-          return n;
-        });
+        save.click();
+        setTrail((t) => [...t, 'Ctrl', 'Enter'].slice(-8));
+        if (box?.getAttribute('data-testid') === 'item-panel')
+          window.setTimeout(() => {
+            setRow((r) => {
+              const n = Math.min(list.length - 1, r + 1);
+              (list[n]?.querySelector('[data-testid=prio-title]') as HTMLElement | null)?.click();
+              return n;
+            });
+          }, 400);
         return;
       }
       const mod = ks1 === 'c';
@@ -272,8 +279,8 @@ export function KeysMock() {
         setPending(true);
         return;
       }
-      const next = mod ? e.altKey && e.key === 'ArrowDown' : e.key === 'j' || e.key === 'ArrowDown';
-      const prev = mod ? e.altKey && e.key === 'ArrowUp' : e.key === 'k' || e.key === 'ArrowUp';
+      const next = mod ? !e.shiftKey && e.altKey && e.key === 'ArrowDown' : e.key === 'j' || e.key === 'ArrowDown';
+      const prev = mod ? !e.shiftKey && e.altKey && e.key === 'ArrowUp' : e.key === 'k' || e.key === 'ArrowUp';
       if (next || prev) {
         if (!list.length) return;
         e.preventDefault();
@@ -284,6 +291,18 @@ export function KeysMock() {
           list[n]?.scrollIntoView({ block: 'nearest' });
           return n;
         });
+        return;
+      }
+      if (e.shiftKey && (mod ? e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') : e.key === 'J' || e.key === 'K')) {
+        const r = list.find((x) => x.hasAttribute('data-kfocus'));
+        const grip = r?.querySelector('[aria-label^="Drag"]') as HTMLElement | null;
+        if (!grip) return;
+        e.preventDefault();
+        setTrail((t) => [...t, 'Shift', mod ? (e.key === 'ArrowDown' ? '↓' : '↑') : e.key].slice(-8));
+        const down = e.key === 'J' || e.key === 'ArrowDown';
+        grip.focus();
+        grip.dispatchEvent(new KeyboardEvent('keydown', { key: down ? 'ArrowDown' : 'ArrowUp', bubbles: true }));
+        window.setTimeout(() => grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })), 150);
         return;
       }
       if (e.key === 'Enter' && (!mod || e.altKey)) {

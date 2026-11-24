@@ -70,6 +70,8 @@ def main():
             theme = f.get('theme', 'light')
             role = f.get('role', '')
             page.goto(BASE + '/home')
+            page.evaluate('() => localStorage.removeItem("po-mock-db-v2")')  # fresh mock data per frame
+            login(page)
             page.evaluate(
                 '([t, r]) => { localStorage.setItem("oracle-theme", t); if (r) localStorage.setItem("po-mock-role", r); else localStorage.removeItem("po-mock-role"); }',
                 [theme, role],

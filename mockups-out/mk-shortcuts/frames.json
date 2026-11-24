@@ -593,19 +593,15 @@
  },
  {
   "file": "ks3-a-hard-1512",
-  "path": "/simple/priorities?ks3=a&row=0",
+  "path": "/simple/priorities?ks3=a&row=3",
   "steps": [
    [
-    "eval",
-    "() => { const b = document.querySelectorAll('[data-testid=prio-row]')[0].querySelectorAll('button'); b[b.length - 1].click(); }"
+    "key",
+    "Shift+J"
    ],
    [
-    "click",
-    "text=Delete feature"
-   ],
-   [
-    "press",
-    "j"
+    "type",
+    "jk"
    ]
   ],
   "width": 1512,
@@ -689,7 +685,7 @@
    ],
    [
     "press",
-    "Control+j"
+    "Control+Enter"
    ]
   ],
   "width": 1440,
@@ -698,19 +694,19 @@
  },
  {
   "file": "ks3-b-hard-1512",
-  "path": "/simple/priorities?ks3=b&row=0",
+  "path": "/simple/priorities?ks3=b&row=3",
   "steps": [
    [
-    "eval",
-    "() => { const b = document.querySelectorAll('[data-testid=prio-row]')[0].querySelectorAll('button'); b[b.length - 1].click(); }"
+    "key",
+    "Shift+J"
    ],
    [
-    "click",
-    "text=Delete feature"
+    "type",
+    "Ready sooner"
    ],
    [
     "press",
-    "Control+j"
+    "Control+Enter"
    ]
   ],
   "width": 1512,
@@ -803,15 +799,19 @@
  },
  {
   "file": "ks3-c-hard-1512",
-  "path": "/simple/priorities?ks3=c&row=0",
+  "path": "/simple/priorities?ks3=c&row=3",
   "steps": [
    [
-    "eval",
-    "() => { const b = document.querySelectorAll('[data-testid=prio-row]')[0].querySelectorAll('button'); b[b.length - 1].click(); }"
+    "key",
+    "Shift+J"
    ],
    [
-    "click",
-    "text=Delete feature"
+    "type",
+    "Ready sooner"
+   ],
+   [
+    "press",
+    "Tab"
    ],
    [
     "press",
