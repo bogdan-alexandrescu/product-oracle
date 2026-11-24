@@ -89,7 +89,7 @@
      "letter": "C",
      "name": "Alt and Ctrl keys",
      "recommended": false,
-     "what": "Every key is held with Alt or Ctrl: Alt and the arrows step through rows, Alt Enter opens, Alt Shift and the arrows move a row, Ctrl Alt and a number opens a page, Ctrl / opens the sheet, Ctrl K searches (Ctrl F stays the browser's own find). The sheet is a large table with every page's keys open at once.",
+     "what": "Every key is held with Alt or Ctrl: Alt and the arrows step through rows, Alt Enter opens, Alt Shift and the arrows move a row, Ctrl Alt and a number opens a page, Ctrl / opens the sheet, Ctrl K searches (Ctrl F stays the browser's own find; Oracle takes Ctrl K only on its own pages, as Chrome also uses it for the address bar), Alt V switches Simple and Detailed. The sheet is a large table with every page's keys open at once.",
      "plus": "A stray letter never fires anything, so it is the safest for people who type a lot or use a screen reader.",
      "cost": "Open the third feature: 6 keys (Alt ↓, Alt ↓, Alt Enter, held in pairs) against 1 click. Go to Roadmap: 3 keys (Ctrl Alt 3, held together).",
      "frames": [
@@ -111,11 +111,11 @@
       },
       {
        "file": "ks1-c-hard-1512.html",
-       "caption": "The hard case, Detailed at 1512 in dark: the Keys line above Settings shows Ctrl /, which wraps in the narrow rail; the table needs most of the screen, and Ctrl Alt with a number is AltGr on many European keyboards."
+       "caption": "The hard case, Detailed at 1512 in dark: the Keys line above Settings stacks the icon, Keys and Ctrl / on one line, like the other rail items, and costs a rail slot; the table needs most of the screen, and Ctrl Alt with a number is AltGr on many European keyboards."
       },
       {
        "file": "ks1-c-phone-390.html",
-       "caption": "Phone 390 with a keyboard: the three columns stack into one long list; search is Ctrl K, so Ctrl F stays the browser's own find."
+       "caption": "Phone 390 with a keyboard: the three columns stack into one long list; search is Ctrl K, so Ctrl F stays the browser's own find; Oracle takes Ctrl K only on its own pages."
       }
      ]
     },
@@ -176,11 +176,11 @@
       },
       {
        "file": "ks2-a-open.html",
-       "caption": "Hovering Roadmap in the rail: its tooltip, beside it, shows g then r."
+       "caption": "Hovering Roadmap in the rail: its tooltip, inside the rail after the name, shows g then r over the count until the pointer leaves."
       },
       {
        "file": "ks2-a-mid.html",
-       "caption": "After j j the focus is on Weekly alert digest; hovering its name shows Open Enter."
+       "caption": "After j j the focus is on Weekly alert digest; hovering its name shows Open Enter beside the name line."
       },
       {
        "file": "ks2-a-result.html",
@@ -188,7 +188,7 @@
       },
       {
        "file": "ks2-a-hard-1512.html",
-       "caption": "The hard case, a commenter at 1512 in dark: the grip's tooltip reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal. The rail's counts are what waits on this person, so they are smaller than the owner's."
+       "caption": "The hard case, a commenter at 1512 in dark: hovering Weekly alert digest's grip, the tooltip at the free end of its second line reads Suggest a move, Shift J or Shift K, since a commenter's move becomes a proposal. The rail's counts are what waits on this person, so they are smaller than the owner's."
       },
       {
        "file": "ks2-a-viewer.html",
@@ -397,7 +397,7 @@
       },
       {
        "file": "ks3-c-open.html",
-       "caption": "Change on Notes opens the field; a tag after its Save and Cancel shows the keys are off while typing."
+       "caption": "Change on Notes opens the field; a tag on the Save and Cancel line, level with the field's right edge, shows the keys are off while typing."
       },
       {
        "file": "ks3-c-mid.html",

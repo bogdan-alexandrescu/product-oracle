@@ -20,16 +20,17 @@ const K = ({ children, on }: { children: ReactNode; on?: boolean }) => (
   </kbd>
 );
 
-function Keys({ k, on }: { k: Key; on?: boolean }) {
+function Keys({ k, on, tip }: { k: Key; on?: boolean; tip?: boolean }) {
+  const join = tip ? 'text-xs text-tip-text' : 'text-xs text-text-faint'; // MOCK-HOOK: 'then' readable on the dark tip
   return (
     <span className="inline-flex items-center gap-1">
       {k.keys.map((x, i) => (
         <span key={i} className="inline-flex items-center gap-1">
-          {i > 0 && <span className="text-xs text-text-faint">{k.then ? 'then' : '+'}</span>}
+          {i > 0 && <span className={join}>{k.then ? 'then' : '+'}</span>}
           <K on={on}>{x}</K>
         </span>
       ))}
-      {k.alt && <span className="text-xs text-text-faint">or</span>}
+      {k.alt && <span className={join}>or</span>}
       {k.alt?.map((x) => <K key={x}>{x}</K>)}
     </span>
   );
@@ -102,7 +103,7 @@ function grammar(ks1: string, pages: { name: string; href: string }[], detailed:
     { keys: mod ? ['Ctrl', 'K'] : ['/'], label: 'Search or filter' }, // MOCK-HOOK: Ctrl K, so the browser keeps Ctrl F
     { keys: ['Esc'], label: 'Close the top panel' },
     { keys: mod ? ['Alt', 'N'] : ['c'], label: 'Add on this page' },
-    { keys: mod ? ['Alt', 'D'] : ['s'], label: detailed ? 'Switch to Simple' : 'Switch to Detailed' },
+    { keys: mod ? ['Alt', 'V'] : ['s'], label: detailed ? 'Switch to Simple' : 'Switch to Detailed' },
   ];
   const others: Group[] = [
     {
@@ -110,7 +111,7 @@ function grammar(ks1: string, pages: { name: string; href: string }[], detailed:
       keys: mod
         ? [
             { keys: ['Alt', '→'], label: 'Next item on the timeline' },
-            { keys: ['Alt', 'N'], label: 'Add an item' },
+            { keys: ['Alt', 'T'], label: 'Back to today' }, // MOCK-HOOK: Alt N is listed once, under Everywhere
           ]
         : [
             { keys: ['j'], label: 'Next item on the timeline' },
@@ -367,6 +368,23 @@ export function KeysMock() {
     return new DOMRect(right, t.top, 0, t.height);
   };
 
+  // MOCK-HOOK: the end of a row's second line (its dependency line), when it has one: free space, covers nothing.
+  const lineTwoEnd = (row: Element) => {
+    const t = rectOf(row.querySelector('[data-testid=prio-title]'));
+    if (!t) return null;
+    const rr = row.getBoundingClientRect();
+    let best: DOMRect | null = null;
+    row.querySelectorAll('*').forEach((el) => {
+      if (el.children.length || !(el.textContent || '').trim()) return;
+      const rg = document.createRange(); // MOCK-HOOK: the text's own extent, not its full-width box
+      rg.selectNodeContents(el);
+      const b = rg.getBoundingClientRect();
+      if (b.width && b.top >= t.bottom + 4 && b.right < rr.left + rr.width * 0.6 && (!best || b.right > best.right)) best = b;
+    });
+    const r = best as DOMRect | null;
+    return r ? new DOMRect(r.right, r.top, 0, r.height) : null;
+  };
+
   // ---------- the tooltip with its key (KS2 a, and the rail tip every proposal of KS1 shares)
   let tipEl: ReactNode = null;
   const tipAt = (r: DOMRect | null, label: string, k: Key | null, side: 'right' | 'below' | 'left' | 'belowRight' = 'right') => {
@@ -382,26 +400,30 @@ export function KeysMock() {
     return (
       <div
         role="tooltip"
-        className="pointer-events-none fixed z-[70] flex items-center gap-2 rounded-lg bg-tip px-2.5 py-1 text-sm text-tip-text shadow-tip"
+        className="pointer-events-none fixed z-[70] flex items-center gap-2 whitespace-nowrap rounded-lg bg-tip px-2.5 py-1 text-sm text-tip-text shadow-tip"
         style={style}
       >
-        <span>{label}</span>
-        {k && <Keys k={k} />}
+        {label && <span>{label}</span>}
+        {k && <Keys k={k} tip />}
       </div>
     );
   };
   if (!phone && (ks2 === 'a' || p('tip'))) {
     if (tip === 'rail') {
-      tipEl = tipAt(rectOf(navLink('Roadmap')), 'Roadmap', goKey('Roadmap'), 'right'); // MOCK-HOOK: beside the rail item
+      const a = navLink('Roadmap'); // MOCK-HOOK: inside the rail item, after its name, so it never reaches the list
+      const nm = a ? [...a.querySelectorAll('span')].find((x) => (x.textContent || '').trim() === 'Roadmap') : null;
+      const ar = rectOf(a);
+      const nr = rectOf(nm) || ar;
+      tipEl = ar && nr ? tipAt(new DOMRect(nr.right, ar.top, 0, ar.height), '', goKey('Roadmap'), 'right') : null; // MOCK-HOOK
     } else if (tip === 'row' && rows[hover]) {
-      tipEl = tipAt(rectOf(rows[hover].querySelector('[data-testid=prio-title]')), 'Open', { keys: ['Enter'], label: '' }, 'below');
+      tipEl = tipAt(nameLineEnd(rows[hover]), 'Open', { keys: ['Enter'], label: '' }, 'right'); // MOCK-HOOK: beside the name line, inside the row
     } else if (tip === 'close') {
       tipEl = tipAt(rectOf(document.querySelector('[data-testid=item-panel] button[aria-label=Close]')), 'Close', { keys: ['Esc'], label: '' }, 'belowRight');
     } else if (tip === 'grip' && rows[hover]) {
       tipEl =
         role === 'viewer'
           ? tipAt(nameLineEnd(rows[hover]), 'View only: no moving', null, 'right') // MOCK-HOOK: beside the name, inside its own row
-          : tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), role === 'commenter' ? 'Suggest a move' : 'Move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'below');
+          : tipAt(lineTwoEnd(rows[hover]) || nameLineEnd(rows[hover]), role === 'commenter' ? 'Suggest a move' : 'Move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'right'); // MOCK-HOOK: beside the name line, inside row
     }
   }
 
@@ -479,7 +501,8 @@ export function KeysMock() {
     const box = field.closest('[data-testid=item-panel],[role=dialog]');
     const cancel = [...(box?.querySelectorAll('button') ?? [])].find((x) => (x.textContent || '').trim() === 'Cancel' && x.getBoundingClientRect().top >= r.bottom - 2);
     const cr = rectOf(cancel);
-    const at = cr ? { left: cr.right + 12, top: cr.top + cr.height / 2 - 11 } : { right: window.innerWidth - r.right, top: r.bottom + 6 };
+    const at = cr ? { right: window.innerWidth - r.right, top: cr.top + cr.height / 2 - 11 } // MOCK-HOOK: ends at the field's right edge
+      : { right: window.innerWidth - r.right, top: r.bottom + 6 };
     typingEl = (
       <div role="status" className="pointer-events-none fixed z-[70] inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface2 px-1.5 py-0.5 text-xs text-text2" style={at}>
         <span aria-hidden>⌨</span>Keys off while typing
@@ -671,9 +694,11 @@ export function KeysMock() {
   const sr = rectOf(set);
   const railKey =
     detailed && sr && ks1 && !phone && ks2 !== 'd' ? (
-      <button type="button" onClick={() => setOpen(true)} className="fixed z-[46] flex flex-col items-center gap-0.5 rounded-button py-1 text-sm text-rail-text" style={{ left: sr.left, top: sr.top - 64, width: sr.width }}>
+      <button type="button" onClick={() => setOpen(true)} className="fixed z-[46] flex flex-col items-center gap-0.5 rounded-button py-1 text-sm text-rail-text" style={{ left: sr.left, top: sr.top - 78, width: sr.width }}>
+        {/* MOCK-HOOK: icon, Keys under it like every rail item, the key on one line below */}
         <span aria-hidden>⌨</span>
-        <span className="inline-flex items-center gap-1">Keys <K>{ks1 === 'c' ? 'Ctrl /' : '?'}</K></span>
+        <span>Keys</span>
+        <span className="whitespace-nowrap"><K>{ks1 === 'c' ? 'Ctrl /' : '?'}</K></span>
       </button>
     ) : ks1 && ar && !phone && ks2 !== 'd' ? (
       <button type="button" onClick={() => setOpen(true)} className="fixed z-[46] flex items-center gap-2 rounded-button px-3 py-1 text-sm text-text2 hover:bg-surface2" style={{ left: ar.left, top: ar.top - 40, width: ar.width }}>
