@@ -72,9 +72,9 @@ function SaveForm({ name, sv2, onDone }: { name: string; sv2: string; onDone?: (
   return ( // MOCK-HOOK
     <form className="flex flex-col gap-3 p-3" data-testid="sv-save-form" onSubmit={(e) => (e.preventDefault(), onDone?.())}> {/* MOCK-HOOK */}
       <label className="flex flex-col gap-1 text-xs font-semibold text-text2">Name<input autoFocus={!!name} defaultValue={name} placeholder="Name this view" className="h-9 rounded-lg border border-accent bg-surface px-2 text-sm font-normal text-text outline-2 outline-accent/30" /></label> {/* MOCK-HOOK */}
-      {(sv2 === 'a' || sv2 === 'c' || sv2 === '') && seg([['me', 'Only me'], ['all', 'Everyone']], share, 'Who sees it')} {/* MOCK-HOOK */}
+      {(sv2 === 'a' || sv2 === 'c') && (q().get('as') ?? 'owner') !== 'viewer' && seg([['me', 'Only me'], ['all', 'Everyone']], share, 'Who sees it')} {/* MOCK-HOOK */}
       {sv2 === 'c' && seg([['me', 'Just me'], ['oa', 'Owners and approvers'], ['ed', 'Anyone who can edit']], p.get('rights') ?? 'me', 'Who can change it')} {/* MOCK-HOOK */}
-      {sv2 === 'd' && <label className="flex items-center gap-2 text-sm text-text"><input type="checkbox" defaultChecked={share === 'all'} className="size-4" />Make it a team view<span className="text-xs text-text2">(i)</span></label>} {/* MOCK-HOOK */}
+      {sv2 === 'd' && (q().get('as') ?? 'owner') === 'owner' && <label className="flex items-center gap-2 text-sm text-text"><input type="checkbox" defaultChecked={share === 'all'} className="size-4" />Make it a team view<span className="text-xs text-text2">(i)</span></label>} {/* MOCK-HOOK */}
       <div className="flex gap-2"><button type="submit" className={solid}>Save view</button><button type="button" className={ghost}>Cancel</button></div> {/* MOCK-HOOK */}
     </form> // MOCK-HOOK
   ); // MOCK-HOOK
@@ -114,6 +114,8 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
       <span className="flex flex-wrap items-center gap-2 text-sm text-text2"><Dot />Only owners and approvers can change {curName} <button className={btn}>Save as my view</button><button className={ghost}>Undo changes</button></span> // MOCK-HOOK
     ) : cur.kind === 'shared' && as !== 'owner' ? ( // MOCK-HOOK
       <span className="flex flex-wrap items-center gap-2 text-sm text-text2"><Dot />Edited <button className={btn} data-testid="sv-suggest">Suggest this change</button><button className={btn}>Save as my view</button><button className={ghost}>Undo changes</button></span> // MOCK-HOOK
+    ) : cur.kind === 'built' ? ( // MOCK-HOOK
+      <span className="flex flex-wrap items-center gap-2 text-sm text-text2"><Dot />Edited <button className={solid}>Save as a view</button><button className={ghost}>Undo changes</button></span> // MOCK-HOOK
     ) : ( // MOCK-HOOK
       <span className="flex flex-wrap items-center gap-2 text-sm text-text2"><Dot />Edited <button className={solid}>Save</button><button className={btn}>Save as new</button><button className={ghost}>Undo changes</button></span> // MOCK-HOOK
     ) // MOCK-HOOK
