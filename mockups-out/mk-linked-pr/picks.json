@@ -208,6 +208,10 @@
       {
        "file": "frames/lp2-a-phone-390.html",
        "caption": "Phone: the bottom sheet with the suggestion under Status."
+      },
+      {
+       "file": "frames/lp2-a-detailed.html",
+       "caption": "Detailed: the same Status row in Detailed's Inbox (the one Inbox), here at rest before any accept."
       }
      ],
      "why": "The rule says Oracle suggests and a person confirms; this puts the suggestion where people already work (the row, the panel, the Inbox) with the same Accept and Dismiss as Oracle's date suggestions, so nothing new to learn."
@@ -247,6 +251,10 @@
       {
        "file": "frames/lp2-b-phone-390.html",
        "caption": "Phone: each Status row stacks, actions under it."
+      },
+      {
+       "file": "frames/lp2-b-detailed.html",
+       "caption": "Detailed: the 4 suggestions and Accept all 4 in Detailed's Inbox, the same list."
       }
      ]
     },
@@ -370,6 +378,10 @@
       {
        "file": "frames/lp3-c-phone-390.html",
        "caption": "Phone: the Link broken row stacked, actions under it."
+      },
+      {
+       "file": "frames/lp3-c-detailed.html",
+       "caption": "Detailed: the same Link broken row in Detailed's Inbox."
       }
      ]
     },

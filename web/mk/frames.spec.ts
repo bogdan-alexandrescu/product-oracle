@@ -42,6 +42,8 @@ type Story = {
   run: (p: Page, s: (state: string, note?: string) => Promise<void>) => Promise<void>;
   hard: { url: string; role?: string; prep: (p: Page) => Promise<void> };
   phone: { url: string; prep: (p: Page) => Promise<void> };
+  /** Detailed's Inbox (the same component) where the proposal reaches it. */
+  detailed?: string;
 };
 
 const STORIES: Story[] = [
@@ -144,6 +146,7 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp2-a',
+    detailed: '/inbox?lp2=a',
     url: `${PRIO}?lp2=a`,
     run: async (p, s) => {
       await rowInView(p);
@@ -186,6 +189,7 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp2-b',
+    detailed: '/inbox?lp2=b&data=many',
     url: `${INBOX}?lp2=b&data=many`,
     run: async (p, s) => {
       await s('rest');
@@ -251,6 +255,7 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp3-c',
+    detailed: '/inbox?lp3=c&link=gone',
     url: `${INBOX}?lp3=c&link=gone`,
     run: async (p, s) => {
       await s('rest');
@@ -292,6 +297,11 @@ for (const st of STORIES.filter((x) => !ONLY || ONLY.includes(x.id))) {
       await st.hard.prep(h);
       await snap(h, `${st.id}-hard${size === W ? '-1512' : ''}`);
       await h.context().close();
+    }
+    if (st.detailed) {
+      const d = await start(browser, st.detailed);
+      await snap(d, `${st.id}-detailed`);
+      await d.context().close();
     }
     const ph = await start(browser, st.phone.url, P);
     await st.phone.prep(ph);

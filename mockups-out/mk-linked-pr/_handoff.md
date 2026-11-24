@@ -16,7 +16,8 @@
 - **GitHub**: a connection on Settings › Connections (`web/app/settings/connections`), sources sync; issues link to a
   plan from `LinkIssueDialog` (Detailed plan page). No pull request links and no status from code today.
 - **Detailed**: the feature panel and the item Status field live in Simple only (FeaturePanel is used only under
-  `app/simple` and `components/simple`); Detailed has no roadmap-item status editor, so no Detailed frames.
+  `app/simple` and `components/simple`); Detailed has no roadmap-item status editor. Detailed's Inbox is the same
+  Inbox component, so the Inbox proposals (LP2 A, LP2 B, LP3 C) have a `-detailed` frame.
 
 ## Not drawn / limits
 - Inbox and rail counts are not redrawn when a mock row is acted on (mock rows are drawn by the MOCK-HOOK only).
