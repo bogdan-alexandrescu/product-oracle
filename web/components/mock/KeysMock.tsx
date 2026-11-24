@@ -356,7 +356,7 @@ export function KeysMock() {
     } else if (tip === 'close') {
       tipEl = tipAt(rectOf(document.querySelector('[data-testid=item-panel] button[aria-label=Close]')), 'Close', { keys: ['Esc'], label: '' }, 'left');
     } else if (tip === 'grip' && rows[hover]) {
-      tipEl = tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), 'Suggest a move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] });
+      tipEl = tipAt(rectOf(rows[hover].querySelector('button, [draggable]')), 'Suggest a move', { keys: ['Shift', 'J'], label: '', alt: ['Shift K'] }, 'below');
     }
   }
 
