@@ -54,7 +54,7 @@ import {
   type PlanDb,
 } from './simple-plan';
 import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
-import { featureKeyOf, startEffort } from './simple-priorities';
+import { featureKeyOf, startEffort, withOrder } from './simple-priorities';
 import { byPrdRank, prdRanker } from './prd-rank';
 
 export { codedTitle, prdCode, shownCode, shownName, takenFrom } from './item-code';
@@ -608,9 +608,12 @@ export function knowGoalParents(
     ),
   );
 }
-/** A goal's place in the one goal order (by key). */
+/**
+ * A goal's place in the one goal order (by key; timeline-order: or by id, as an item that names its goal by id
+ * groups it, the API's goal entity being one).
+ */
 export function goalRank(key: string): number {
-  const n = companyGoals.findIndex((g) => g.key === key);
+  const n = companyGoals.findIndex((g) => g.key === key || g.id === key);
   return n < 0 ? Number.MAX_SAFE_INTEGER : n;
 }
 /** goal-order: how goal groups sort: the one goal order, then by key (the goal-suggestions list sorts so too). */
@@ -4093,14 +4096,14 @@ function readRoadmap(
   q: URLSearchParams,
   me: Who,
 ): Schemas['SimpleRoadmapOut'] | null {
-  if (!readsOn) return roadmapOut(db, role, q, me);
+  if (!readsOn) return withOrder(db, roadmapOut(db, role, q, me));
   const stored = JSON.stringify(db);
   if (stored !== reads.stored) reads = { stored, out: new Map() };
   const key = new URLSearchParams(q);
   if (!key.get('group')) key.set('group', 'goal');
   key.sort();
   const at = `${role}|${me.id}|${companyToday()}|${key}`;
-  if (!reads.out.has(at)) reads.out.set(at, roadmapOut(db, role, q, me));
+  if (!reads.out.has(at)) reads.out.set(at, withOrder(db, roadmapOut(db, role, q, me)));
   return reads.out.get(at) ?? null;
 }
 

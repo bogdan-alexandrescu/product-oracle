@@ -34,6 +34,7 @@ import {
   type Roadmap,
 } from './_lib';
 import { MsBoardRow } from './_milestones';
+import { inOrder } from './_order';
 
 export type Horizon = Item['horizon'];
 
@@ -189,9 +190,12 @@ export function boardColumns(data: Roadmap): BoardColumn[] {
       .map((g) => ({
         key: g.key,
         title: g.title,
-        items: g.item_ids
-          .map((id) => byId.get(id))
-          .filter((i): i is Item => !!i && i.horizon === h.key && !closedItem(i)),
+        // timeline-order: within its column and group, the one feature order.
+        items: inOrder(
+          g.item_ids
+            .map((id) => byId.get(id))
+            .filter((i): i is Item => !!i && i.horizon === h.key && !closedItem(i)),
+        ),
       }))
       .filter((g) => g.items.length);
     // feature-parts: each group's parts under their parents in the column, as a tree; a part

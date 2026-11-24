@@ -132429,6 +132429,29 @@
             "title": "Suggested Depends",
             "default": []
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "before_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Override"
+          },
           "can_decide": {
             "type": "boolean",
             "title": "Can Decide",

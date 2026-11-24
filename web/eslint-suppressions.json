@@ -2420,9 +2420,6 @@
     "design-system/no-raw-button": {
       "count": 15
     },
-    "import-x/order": {
-      "count": 1
-    },
     "max-lines": {
       "count": 1
     },

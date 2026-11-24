@@ -91,8 +91,9 @@ from typing import Annotated, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import ORMExecuteState, Session
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
@@ -105,6 +106,7 @@ from oracle.errors import exception_text
 from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.routing import APIRouter
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
+from oracle.tenancy import TENANT_KEY, UNSCOPED_KEY
 from oracle.tenant_settings import TenantSetting
 
 DEFAULTS: dict[str, Any] = {
@@ -194,12 +196,59 @@ class InvalidSetting(ValueError):
     pass
 
 
+# timeline-order: the company's stored settings, read once per session (a roadmap read asks
+# for five) until the session writes or ends, as oracle.simple.goal_reads keeps its goals.
+_CACHE = "tenant_settings"
+
+
+@event.listens_for(Session, "after_flush")
+@event.listens_for(Session, "after_commit")
+@event.listens_for(Session, "after_rollback")
+@event.listens_for(Session, "after_soft_rollback")
+def _forget(session: Session, *_: Any) -> None:
+    session.info.pop(_CACHE, None)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _forget_on_write(state: ORMExecuteState) -> None:
+    """A write, or a lock taken with a SELECT (FOR UPDATE, pg_advisory_*lock), forgets the
+    settings: what others committed before the lock is read again."""
+    stmt = state.statement
+    if not state.is_select or getattr(stmt, "_for_update_arg", None) is not None:
+        state.session.info.pop(_CACHE, None)
+        return
+    for column in getattr(stmt, "selected_columns", ()):
+        if str(getattr(column, "name", "")).startswith("pg_advisory"):
+            state.session.info.pop(_CACHE, None)
+            return
+
+
+async def _stored(session: AsyncSession) -> dict[str, Any]:
+    """Every stored setting of the session's company, by key. Read again while the session
+    holds changes not yet written or reads across companies."""
+    sync = session.sync_session
+    tenant = sync.info.get(TENANT_KEY)
+    cached = sync.info.get(_CACHE)
+    unscoped = bool(sync.info.get(UNSCOPED_KEY))
+    if (
+        cached is not None
+        and not unscoped
+        and cached[0] == tenant
+        and not (sync.new or sync.dirty or sync.deleted)
+    ):
+        return cached[1]
+    rows = (await session.execute(select(TenantSetting.key, TenantSetting.value))).all()
+    stored = {key: value for key, value in rows}
+    if not unscoped:
+        sync.info[_CACHE] = (tenant, stored)
+    return stored
+
+
 async def get_setting(session: AsyncSession, key: str) -> Any:
     """The stored value of a known key, or its default."""
     if key not in DEFAULTS:
         raise KeyError(key)
-    row = await session.scalar(select(TenantSetting).where(TenantSetting.key == key))
-    return DEFAULTS[key] if row is None else row.value
+    return (await _stored(session)).get(key, DEFAULTS[key])
 
 
 async def clear_setting(session: AsyncSession, key: str) -> None:
