@@ -43,3 +43,18 @@
   the "M6 Beta" chip covers the start of "Board meeting".
 - Gates: tsc passed; eslint on the two touched files shows 2 old import-order errors on `_roadmap.tsx` line 3 (from round 1's
   MOCK-HOOK import), none new. Playwright and the prose guard not run (mock-ups only).
+
+# Status (review round 3 fixes, Nov 24, 2026)
+- SV3 C phone: the picked saved view (Everything the onboarding team still owes…, Goal: Grow retention) is now applied:
+  the page shows Showing Grow retention only: 4 of 22 and only Grow retention rows; the tab counts 4. On Simple Priorities
+  a view's count is the page's own (All items 22 there, as the Show chip says; 19 on the roadmap and Detailed).
+  `gen.py` puts the goal on every Priorities frame whose picked view is one of the long-named ones (SV3 A, B, C phone).
+- Phone tab strip: no scrollbar drawn (`scrollbar-width: none`); the right-edge fade stays.
+- SV1 A: when the filters were changed on a built-in view, an Edited mark sits after Drafts only (desktop and phone).
+- `_roadmap.tsx` line 2047 (`let items`) now carries its MOCK-HOOK marker.
+- Re-snapped light and dark: every phone frame, sv1-a-rest, -open, -mid, -detailed.
+- Tools now point at this workspace and $TMPDIR (`/cache/<attempt>/tmp/cap`).
+- Gates: tsc passed; eslint 2 old import-order errors on `_roadmap.tsx` line 3, none new. Playwright and the prose guard
+  not run (mock-ups only).
+- Not changed (built page, for the owner): "Not in GT" overdrawn by a dependency line; "M6 Beta" covers the start of
+  "Board meeting" at the side-list width. Seen but not in the findings: sv2-b-phone's link banner wraps so a line starts with "·".

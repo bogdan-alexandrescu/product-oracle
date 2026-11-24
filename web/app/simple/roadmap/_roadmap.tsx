@@ -2044,7 +2044,7 @@ export function SimpleRoadmap() {
   }, [roadmap.data, moving, trashing]);
   const data = useMemo(() => {
     if (!all) return undefined;
-    let items = all.items.filter((i) => i.status !== 'done');
+    let items = all.items.filter((i) => i.status !== 'done'); // MOCK-HOOK: let, so the saved view below can narrow the rows
     const mockQ = new URLSearchParams(window.location.search); // MOCK-HOOK
     if (mockQ.get('cur') === 'new' && mockQ.get('added') && f.goal) { // MOCK-HOOK: the saved view's Drafts only, applied
       const onGoal = items.filter((i) => i.goal && (krs.parentOf(i.goal.id)?.key ?? i.goal.key) === f.goal).slice(2).map((i) => i.id); // MOCK-HOOK

@@ -1,7 +1,7 @@
 import json, sys
 from swarm_browser import live
 frames=json.load(open('frames.json')); BASE=sys.argv[1]
-OUT='/workspace/att_ac3bd35d49af4f9081a8/work/repo/mockups-out/mk-saved-views/frames'
+OUT='/workspace/att_36167c71daa8465ca3e1/work/repo/mockups-out/mk-saved-views/frames'
 pw,b,ctx=live(); p=ctx.new_page(); p.goto(BASE+'frames/'+frames[0]['file']+'.html')
 for fr in frames:
     w,h=fr['w'],fr['h']; sc=1

@@ -1,6 +1,6 @@
 import json, sys, os, urllib.request, urllib.parse
 from swarm_browser import live
-OUT = '/workspace/att_ac3bd35d49af4f9081a8/work/repo/mockups-out/mk-saved-views'
+OUT = '/workspace/att_36167c71daa8465ca3e1/work/repo/mockups-out/mk-saved-views'
 BASE = 'http://127.0.0.1:3100'
 SNAP = open(os.path.join(os.path.dirname(__file__), 'snap.js')).read()
 frames = json.load(open(sys.argv[1]))

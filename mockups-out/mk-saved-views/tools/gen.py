@@ -9,7 +9,7 @@ def F(code, letter, state, path, q, caption, w=1440, h=900, role='', scroll=None
     if role: q['as']=role
     c=q.get('cur','all')
     if c=='alerts': q['prd']='usage-alerts'
-    if c in ('q1','new') or q.get('edited')=='1': q['goal']='grow-retention'; q['name']='Grow retention'
+    if c in ('q1','new') or q.get('edited')=='1' or (path==P and c.startswith('l')): q['goal']='grow-retention'; q['name']='Grow retention'
     fr={'file':name,'path':path,'q':q,'w':w,'h':h,'role':role}
     if scroll: fr['scroll']=scroll
     frames.append(fr); props.setdefault((code,letter),[]).append({'file':f'frames/{name}.html','caption':caption})
@@ -78,6 +78,6 @@ for fr in frames:
     elif fr['path']=='/simple/roadmap' and fr['q'].get('open') and fr['q'].get('open')!='manage': fr['scroll']=SC; fr['off']=-200
 for fr in frames:
     if fr['file']=='sv3-c-phone-390': fr['pre']=["() => { const t=document.querySelector('[data-testid=sv-tabs] [role=tab][aria-selected=true]'); const l=t && t.parentElement; if (l) l.scrollLeft = t.offsetLeft - l.offsetLeft - 8; }"]
-json.dump(frames,open('/cache/att_ac3bd35d49af4f9081a8/tmp/cap/frames.json','w'),indent=1)
-json.dump({f'{k[0]}-{k[1]}':v for k,v in props.items()},open('/cache/att_ac3bd35d49af4f9081a8/tmp/cap/props.json','w'),indent=1)
+json.dump(frames,open('/cache/att_36167c71daa8465ca3e1/tmp/cap/frames.json','w'),indent=1)
+json.dump({f'{k[0]}-{k[1]}':v for k,v in props.items()},open('/cache/att_36167c71daa8465ca3e1/tmp/cap/props.json','w'),indent=1)
 print(len(frames))

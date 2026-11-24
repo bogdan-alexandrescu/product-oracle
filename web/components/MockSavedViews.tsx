@@ -101,8 +101,10 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
   if (p.get('added')) saved = [...saved, { id: 'new', name: p.get('added')!, kind: (p.get('share') === 'all' ? 'shared' : 'mine') as Kind, by: 'Avery Stone', filters: ['Goal: Grow retention', ...(mode === 'a' ? ['Confidence: below 50%'] : []), 'Draft'], count: 2, team: p.get('share') === 'all', rights: p.get('rights') === 'oa' ? 'Owners and approvers' : undefined }]; // MOCK-HOOK
   if (many) saved = [...saved, ...LONG]; // MOCK-HOOK
   if (mode === 'b') saved = saved.map((v) => ({ ...v, kind: 'mine' as Kind, by: undefined })); // MOCK-HOOK
-  const all = [...BUILT, ...saved]; // MOCK-HOOK
-  const cur = all.find((v) => v.id === (p.get('cur') ?? 'all')) ?? BUILT[0]; // MOCK-HOOK
+  const built = BUILT.map((v) => (v.id === 'all' && page === 'priorities' ? { ...v, count: 22 } : v)); // MOCK-HOOK: Simple Priorities holds 22 items, as its Show chip says
+  saved = saved.map((v) => (v.id === 'l0' && page === 'priorities' ? { ...v, count: 4 } : v)); // MOCK-HOOK: 4 of them are Grow retention
+  const all = [...built, ...saved]; // MOCK-HOOK
+  const cur = all.find((v) => v.id === (p.get('cur') ?? 'all')) ?? built[0]; // MOCK-HOOK
   const curName = cur.name; // MOCK-HOOK
   const canChangeShared = cur.kind !== 'shared' || (as === 'owner' && mode !== 'd') || (mode === 'd' && as === 'owner'); // MOCK-HOOK
   const filters = [...cur.filters, ...(edited ? ['Draft'] : [])]; // MOCK-HOOK
@@ -146,7 +148,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
     return ( // MOCK-HOOK
       <> {/* MOCK-HOOK */}
         {mode === 'd' && <><div className={head}>Team views · set by owners</div>{list(shared)}</>} {/* MOCK-HOOK */}
-        <div className={head}>Built in</div>{list(BUILT)} {/* MOCK-HOOK */}
+        <div className={head}>Built in</div>{list(built)} {/* MOCK-HOOK */}
         {mode === 'd' ? <><div className={head}>Mine</div>{list(mine)}</> : sv2 && mode !== 'b' ? <><div className={head}>Mine · only you see these</div>{list(mine)}<div className={head}>Shared with everyone</div>{list(shared)}</> : <><div className={head}>Saved</div>{list(saved)}</>} {/* MOCK-HOOK */}
       </> // MOCK-HOOK
     ); // MOCK-HOOK
@@ -169,7 +171,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
     <div className={`fixed z-40 flex flex-col border-line-strong bg-surface shadow-2xl ${phone ? 'inset-0' : 'inset-y-0 right-0 w-[30rem] border-l'}`} data-testid="sv-manage-sheet"> {/* MOCK-HOOK */}
       <div className="flex items-center justify-between border-b border-line px-4 py-3"><span className="text-base font-semibold text-text">Manage views</span><button className={ghost} aria-label="Close">✕</button></div> {/* MOCK-HOOK */}
       <div className="flex-1 overflow-y-auto p-2"> {/* MOCK-HOOK */}
-        {[...BUILT, ...saved].map((v, i) => removed === v.id ? null : ( // MOCK-HOOK
+        {[...built, ...saved].map((v, i) => removed === v.id ? null : ( // MOCK-HOOK
           <div key={v.id} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 ${p.get('drag') === v.id ? 'border-accent bg-accent-soft shadow-lg' : 'border-transparent'} hover:bg-surface2`}> {/* MOCK-HOOK */}
             <span className="cursor-grab text-text2" aria-label="Drag to reorder">⠿</span> {/* MOCK-HOOK */}
             {phase === 'mid' && v.id === 'alerts' ? <input defaultValue={typed} autoFocus className="h-8 min-w-0 flex-1 rounded-lg border border-accent bg-surface px-2 text-sm" /> : <button className="flex min-w-0 flex-1 flex-col items-start text-left text-sm text-text break-words" title="Rename"><span>{v.name}</span>{renamed && v.id === 'alerts' && <Tick>Renamed</Tick>}</button>} {/* MOCK-HOOK */}
@@ -199,7 +201,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
     const rest = all.length - shown.length; // MOCK-HOOK
     control = ( // MOCK-HOOK
       <div className="relative flex w-full items-end gap-1 border-b border-line" data-testid="sv-tabs"> {/* MOCK-HOOK */}
-        <div className={`flex min-w-0 items-end gap-1 ${phone ? 'flex-1 overflow-x-auto pr-6 [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)]' : ''}`} role="tablist"> {/* MOCK-HOOK */}
+        <div className={`flex min-w-0 items-end gap-1 ${phone ? 'flex-1 overflow-x-auto pr-6 [scrollbar-width:none] [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)]' : ''}`} role="tablist"> {/* MOCK-HOOK */}
           {shown.map((v) => removed === v.id ? null : ( // MOCK-HOOK
             <div key={v.id} role="tab" aria-selected={v.id === cur.id} className={`group relative flex h-9 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm ${v.id === cur.id ? 'border-accent font-semibold text-accent-ink' : 'border-transparent text-text2 hover:text-text'} ${p.get('drag') === v.id ? 'rounded-t-lg bg-accent-soft shadow-lg -translate-y-0.5' : ''}`}> {/* MOCK-HOOK */}
               {sv3 === 'c' && phase === 'mid' && v.id === cur.id ? <input defaultValue={typed} autoFocus className="h-7 w-56 rounded-md border border-accent bg-surface px-2 text-sm font-normal text-text" /> : <span className={`${phone ? 'max-w-[8rem]' : 'max-w-[12rem]'} truncate`} title={v.name}>{v.name}</span>} {/* MOCK-HOOK */}
@@ -255,7 +257,7 @@ export function MockSavedViews({ page }: { page: 'roadmap' | 'priorities' | 'det
   return ( // MOCK-HOOK
     <div className="flex w-full basis-full flex-col gap-2" data-testid="mock-saved-views" data-page={page}> {/* MOCK-HOOK */}
       {shareBanner} {/* MOCK-HOOK */}
-      {place === 'a' ? <>{control}<div className="flex flex-wrap items-center gap-x-4 gap-y-2"><NewFilters on={filters} />{doneTick}</div></> : <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{control}<NewFilters on={filters} /></div>} {/* MOCK-HOOK */}
+      {place === 'a' ? <>{control}<div className="flex flex-wrap items-center gap-x-4 gap-y-2"><NewFilters on={filters} />{edited && cur.kind === 'built' && <span className="flex items-center gap-2 text-sm text-text2" data-testid="sv-edited"><Dot />Edited</span>}{doneTick}</div></> : <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{control}<NewFilters on={filters} /></div>} {/* MOCK-HOOK */}
       {manage} {/* MOCK-HOOK */}
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-text px-4 py-2.5 text-sm text-bg shadow-lg">{toast}<button className="font-semibold underline">Undo</button></div>} {/* MOCK-HOOK */}
       {cost && <div className="fixed bottom-3 right-3 z-50 max-w-[26rem] rounded-lg border-2 border-dashed border-accent bg-surface px-3 py-2 text-xs text-text shadow" data-testid="sv-cost">{cost}</div>} {/* MOCK-HOOK */}
