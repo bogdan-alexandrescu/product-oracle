@@ -91,7 +91,7 @@
      "recommended": false,
      "what": "Each row gets a tick box. j and k move, x ticks the focused row; a bar opens above the list with the number ticked and Accept a, Decline d, Snooze s, Clear Esc, which act on every ticked row at once.",
      "plus": "Fast for a pile of the same kind (many date suggestions); one action and one Undo for all.",
-     "cost": "13 keys for 3 items (j five times to the first, then j x j j x j x, then a), against 3 clicks that each wait for their banner.",
+     "cost": "13 keys for 3 items (j six times to the first, then x, j j x, j x, then a), against 3 clicks that each wait for their banner.",
      "frames": [
       {
        "file": "frames/ik1-d-rest.html",
@@ -111,11 +111,11 @@
       },
       {
        "file": "frames/ik1-d-hard-1512.html",
-       "caption": "1512 with 47 items: 14 ticked down the list; the bar stays at the top of the list as it scrolls."
+       "caption": "1512 with 47 items: 14 ticked down the list; the \"14 ticked\" bar stays at the top on a solid strip and the rows scroll under it whole."
       },
       {
        "file": "frames/ik1-d-phone-390.html",
-       "caption": "Phone 390: tick boxes by touch; the \"3 ticked\" bar sits above the tab bar with Accept, Decline, Snooze and Clear, no key caps."
+       "caption": "Phone 390: tick boxes by touch; the \"3 ticked\" bar sits on a solid strip above the tab bar with Accept, Decline, Snooze and Clear, no key caps; the list ends above it."
       }
      ]
     }
@@ -184,7 +184,7 @@
       },
       {
        "file": "frames/ik2-b-mid.html",
-       "caption": "d, e, then w on the next rows: \"4 marked: 1 to accept or approve, 1 decline, 1 done, 1 to Seen\"."
+       "caption": "d, e, then w on the next rows: \"4 marked: 1 to approve, 1 decline, 1 done, 1 to seen\"."
       },
       {
        "file": "frames/ik2-b-result.html",
@@ -192,7 +192,7 @@
       },
       {
        "file": "frames/ik2-b-hard-1512.html",
-       "caption": "A commenter at 1512: feedback can be marked Propose or Done; owner-only items sit under For your information and cannot be marked."
+       "caption": "A commenter at 1512: F-47 Checkout totals feedback marked Propose and a question marked Done; the bar says \"1 to propose · 1 done\". Owner-only items sit under For your information and cannot be marked."
       },
       {
        "file": "frames/ik2-b-phone-390.html",
@@ -230,7 +230,7 @@
       },
       {
        "file": "frames/ik2-c-phone-390.html",
-       "caption": "Phone 390: tapping Approve shows the same banner above the rows."
+       "caption": "Phone 390: each row keeps its main button and a ••• button; tapping ••• on Start run opens the same actions menu as Space: Approve, Decline, Move to Seen, Done, Snooze."
       }
      ]
     }
@@ -265,19 +265,19 @@
       },
       {
        "file": "frames/ik3-a-result.html",
-       "caption": "1 (Wed Nov 25): F-47 leaves New, every count drops by one, Snoozed is 3; the Snoozed tab shows each item with when it comes back."
+       "caption": "1 (Wed Nov 25): F-47 Checkout totals leaves New, every count drops by one, Snoozed is 3; the Snoozed tab shows each item with when it comes back."
       },
       {
        "file": "frames/ik3-a-hard-1512.html",
-       "caption": "The next morning (Nov 25) at 1512 with long names: F-47 Checkout totals and F-35 Weekly menu email are back at the top of New with \"Back from snooze\"; Snoozed is 1."
+       "caption": "The next morning (Nov 25) at 1512 with long names: F-47 Checkout totals and F-35 Weekly menu email are back at the top of New with \"Back from snooze · Nov 25\"; Snoozed is 1."
       },
       {
        "file": "frames/ik3-a-phone-390.html",
-       "caption": "Phone 390: the moon on F-47 Checkout totals opens the same four choices as a sheet."
+       "caption": "Phone 390: the moon on F-47 Checkout totals opens a sheet named for it with the same four choices."
       },
       {
        "file": "frames/ik3-a-phone-result-390.html",
-       "caption": "Phone 390: Tomorrow tapped: \"Snoozed: Back Nov 25, 9:00 AM\" with Undo above the rows; New and Needs you drop by one, Snoozed is 3."
+       "caption": "Phone 390: Tomorrow tapped: \"F-47 Checkout totals snoozed: back Nov 25, 9:00 AM\" with Undo; the tabs wrap so Snoozed 3 shows; New and Needs you drop by one."
       },
       {
        "file": "frames/ik3-a-commenter-1512.html",
@@ -307,7 +307,7 @@
       },
       {
        "file": "frames/ik3-b-mid.html",
-       "caption": "Esc, then s: \"Snoozed: Back Nov 25, 9:00 AM\" with Undo; the row is gone, Needs you and New drop by one, the fold says 3."
+       "caption": "Esc, then s: \"F-47 Checkout totals snoozed: back Nov 25, 9:00 AM\" with Undo; the row is gone, Needs you and New drop by one, the fold says 3."
       },
       {
        "file": "frames/ik3-b-result.html",
@@ -315,7 +315,7 @@
       },
       {
        "file": "frames/ik3-b-hard-1512.html",
-       "caption": "The next morning (Nov 25) at 1512: F-47 Checkout totals and F-35 are back at the top with \"Back from snooze\"; the fold above them says 1."
+       "caption": "The next morning (Nov 25) at 1512: F-47 Checkout totals and F-35 Weekly menu email are back at the top with \"Back from snooze · Nov 25\"; the fold above them says 1."
       },
       {
        "file": "frames/ik3-b-phone-390.html",
@@ -323,7 +323,7 @@
       },
       {
        "file": "frames/ik3-b-phone-result-390.html",
-       "caption": "Phone 390: Tomorrow tapped: \"Snoozed: Back Nov 25, 9:00 AM\" with Undo above the rows; New and Needs you drop by one, the fold says 3."
+       "caption": "Phone 390: Tomorrow tapped: \"F-47 Checkout totals snoozed: back Nov 25, 9:00 AM\" with Undo above the rows; New and Needs you drop by one, the fold says 3."
       }
      ]
     },
@@ -349,7 +349,7 @@
       },
       {
        "file": "frames/ik3-c-result.html",
-       "caption": "Enter, then Seen: \"Snoozed: Back after Product sync, Nov 26\"; under Coming back, each item with its return label."
+       "caption": "Enter, then Seen: \"F-47 Checkout totals snoozed: back after Product sync, Nov 26\"; under Coming back, each item with its kind, when it comes back and Bring back now."
       },
       {
        "file": "frames/ik3-c-hard-1512.html",
@@ -357,7 +357,7 @@
       },
       {
        "file": "frames/ik3-c-back-1512.html",
-       "caption": "After Product sync (Nov 26) at 1512: F-47 Checkout totals and the other snoozed items are back at the top of New with \"Back from snooze\"."
+       "caption": "After Product sync (Nov 26) at 1512: the snoozed items are back at the top of New, each chip saying why: F-47 Checkout totals and F-33 Printable lists after Product sync, F-35 Weekly menu email since Nov 25."
       },
       {
        "file": "frames/ik3-c-phone-390.html",
@@ -365,7 +365,7 @@
       },
       {
        "file": "frames/ik3-c-phone-result-390.html",
-       "caption": "Phone 390: Until Product sync tapped: \"Snoozed: Back after Product sync, Nov 26\" with Undo above the rows; the counts drop by one."
+       "caption": "Phone 390: Until Product sync tapped: \"F-47 Checkout totals snoozed: back after Product sync, Nov 26\" with Undo and a \"Seen › Coming back 3\" link to where it waits; the counts drop by one."
       }
      ]
     }
