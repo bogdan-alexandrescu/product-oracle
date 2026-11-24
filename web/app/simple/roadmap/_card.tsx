@@ -40,6 +40,7 @@ import { NameEdit, PanelFields } from './_fields';
 import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
+import { mkParam } from '@/components/ds/UndoMock'; // MOCK-HOOK
 import {
   closedItem,
   milestoneInk,
@@ -1119,7 +1120,8 @@ export function FloatingCard({
     const ask = item.can_decide
       ? { action: 'Cut', title: `Cut ${item.title}?` }
       : { action: 'Propose', title: `Propose cutting ${item.title}?` };
-    if (!(await confirmInPage({ ...ask, message: parts, rows, cancel: 'Cancel' }))) return;
+    const mkSkip = ['a', 'b', 'c'].includes(mkParam('ut2') ?? ''); // MOCK-HOOK: Undo instead of the confirm
+    if (!mkSkip && !(await confirmInPage({ ...ask, message: parts, rows, cancel: 'Cancel' }))) return; // MOCK-HOOK
     await act(
       {
         applied: `Cut ${item.title} from the roadmap`,

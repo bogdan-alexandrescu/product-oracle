@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Icon } from './Icon';
+import { MkToastHost, mkOn, mkPush } from './UndoMock'; // MOCK-HOOK
 
 export type ToastAsk = {
   message: string;
@@ -124,6 +125,7 @@ const LIFETIME_MS = 10_000;
 
 /** A message at the bottom of the screen for ten seconds (paused while hovered or focused); a new one replaces it (#482). */
 export function toast(ask: ToastAsk) {
+  if (mkOn()) return mkPush(ask); // MOCK-HOOK
   show?.(ask);
 }
 
@@ -134,6 +136,10 @@ export function clearToast(message: string) {
 
 /** Draws what `toast` says (one per app: the shell mounts it). */
 export function ToastHost() {
+  if (mkOn()) return <MkToastHost />; // MOCK-HOOK
+  return <RealToastHost />; // MOCK-HOOK
+}
+function RealToastHost() { // MOCK-HOOK
   const [shown, setShown] = useState<Shown | null>(null);
   const next = useRef(0);
   // Hovered or focused, the toast holds: its time left waits until the pointer and focus leave.
