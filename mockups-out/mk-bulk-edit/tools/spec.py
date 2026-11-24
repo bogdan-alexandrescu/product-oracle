@@ -53,8 +53,8 @@ if True:
 for v in 'abc':
     pk='2,3,4' if v=='b' else '2,3,4,7'
     u=f'?be3={v}&pick={pk}'
-    st=[('click','[data-testid="bulk-field-status"]')]
-    dn=st+[('click','[data-testid="bulk-opt-Exists"]')]
+    st=[('click','[data-testid="bulk-field-owner"]')]
+    dn=st+[('click','[data-testid="bulk-opt-Rosa Lind"]')]
     sc=[('scroll','260')] if v=='b' else []
     add(f'be3-{v}-rest',u,[('hover','h1')]+sc)
     add(f'be3-{v}-open',u,sc+st)
@@ -65,7 +65,7 @@ for v in 'abc':
 # dark
 add('be2-a-mid-dark',B%'a',[('click','[data-testid="bulk-field-status"]'),('click','[data-testid="bulk-opt-Exists"]')],theme='dark')
 add('be1-a-result-dark','?be1=a',[('click',box(2)),('click',box(6),['Shift'])],theme='dark')
-add('be3-a-result-dark','?be3=a&pick=2,3,4,7',[('click','[data-testid="bulk-field-status"]'),('click','[data-testid="bulk-opt-Exists"]'),('click','[data-testid="bulk-apply"]')],theme='dark')
+add('be3-a-result-dark','?be3=a&pick=2,3,4,7',[('click','[data-testid="bulk-field-owner"]'),('click','[data-testid="bulk-opt-Rosa Lind"]'),('click','[data-testid="bulk-apply"]')],theme='dark')
 json.dump(F,open('spec.json','w'),indent=0)
 print(len(F))
 # BE1 a on the Roadmap board

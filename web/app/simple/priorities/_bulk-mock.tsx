@@ -276,7 +276,7 @@ export function BulkChips({ r }: { r: R }) {
     const owner = ownerOf(r);
     out.push(
       <span key="o" className="text-[length:var(--simple-small)] text-text2">
-        {d?.owner ? (
+        {d?.owner && !got?.proposed ? (
           <>
             {owner && <s className="mr-1">{owner}</s>}
             <b className="text-text">{d.owner}</b>

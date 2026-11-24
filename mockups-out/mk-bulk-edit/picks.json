@@ -262,7 +262,7 @@
           "letter": "A",
           "name": "Sorted preview",
           "recommended": true,
-          "what": "Picked rows carry a small \"Proposal\" or \"Cannot change\" tag. The preview splits into \"Changes now\", \"Sent to Avery Stone to approve\" and \"Not changed\" (with an (i) saying why), and the button says \"Change 2, propose 1\". After applying, a strip reads \"Status Exists: 2 changed \u00b7 1 sent to Avery Stone \u00b7 1 not changed\"; each count highlights its rows, with Undo.",
+          "what": "Picked rows carry a small \"Proposal\" or \"Cannot change\" tag. The preview splits into \"Changes now\", \"Sent to Avery Stone to approve\" and \"Not changed\" (with an (i) saying why), and the button says \"Change 2, propose 1\". After applying, a strip reads \"Owner Rosa Lind: 2 changed \u00b7 1 sent to Avery Stone \u00b7 1 not changed\"; each count highlights its rows, with Undo.",
           "why": "Nothing surprises the person: they see the split before pressing and can find every item after, while all four stay pickable.",
           "plus": "One apply for the whole mix; the counts lead to the rows they count.",
           "cost": "The same 5 clicks as BE2 A; 1 more to see which rows were not changed.",
@@ -273,15 +273,15 @@
             },
             {
               "file": "frames/be3-a-open.html",
-              "caption": "Status opened."
+              "caption": "Owner opened: the five people."
             },
             {
               "file": "frames/be3-a-mid.html",
-              "caption": "Exists picked: the preview splits into Changes now 2, Sent to Avery Stone 1, Not changed 1; the button says \"Change 2, propose 1\"."
+              "caption": "Rosa Lind picked: the preview splits into Changes now 2, Sent to Avery Stone 1, Not changed 1; the button says \"Change 2, propose 1\"."
             },
             {
               "file": "frames/be3-a-result.html",
-              "caption": "Applied: two rows show Exists, Weekly alert digest reads \"Exists, waiting for Avery Stone\", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. Cost: 5 clicks."
+              "caption": "Applied: two rows show Rosa Lind, Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\", and the strip counts 2 changed, 1 sent, 1 not changed, each a button. Cost: 5 clicks."
             },
             {
               "file": "frames/be3-a-result-dark.html",
@@ -311,15 +311,15 @@
             },
             {
               "file": "frames/be3-b-open.html",
-              "caption": "Status opened."
+              "caption": "Owner opened: the five people."
             },
             {
               "file": "frames/be3-b-mid.html",
-              "caption": "Exists picked: a plain preview of the 3, and \"Change 2, propose 1\"."
+              "caption": "Rosa Lind picked: a plain preview of the 3, and \"Change 2, propose 1\"."
             },
             {
               "file": "frames/be3-b-result.html",
-              "caption": "Applied: a toast \"2 changed, 1 sent to Avery Stone to approve\" with Undo; Weekly alert digest reads \"Exists, waiting for Avery Stone\". Cost: 5 clicks."
+              "caption": "Applied: a toast \"2 changed, 1 sent to Avery Stone to approve\" with Undo; Weekly alert digest reads \"Rosa Lind, waiting for Avery Stone\". Cost: 5 clicks."
             },
             {
               "file": "frames/be3-b-hard-1512.html",
@@ -345,11 +345,11 @@
             },
             {
               "file": "frames/be3-c-open.html",
-              "caption": "Status opened."
+              "caption": "Owner opened: the five people."
             },
             {
               "file": "frames/be3-c-mid.html",
-              "caption": "Exists picked: a plain preview, \"Change 4\", nothing said about rights."
+              "caption": "Rosa Lind picked: a plain preview, \"Change 4\", nothing said about rights."
             },
             {
               "file": "frames/be3-c-result.html",
