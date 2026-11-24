@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { AppShell } from '@/components/ds/AppShell';
 import { ScrollbarRoom } from '@/components/ds/ScrollbarRoom';
+import { CommandPalette, PaletteEntry } from '@/components/mockup/Palette'; // MOCK-HOOK
 import { MeProvider, MeSync } from '@/lib/me';
 import { resolveRedirect } from '@/lib/redirects';
 
@@ -21,6 +22,8 @@ function RootLayout() {
         </Suspense>
         <AppShell>
           <Outlet />
+          <CommandPalette /> {/* MOCK-HOOK */}
+          <PaletteEntry where="float" /> {/* MOCK-HOOK */}
         </AppShell>
       </MeProvider>
     </>

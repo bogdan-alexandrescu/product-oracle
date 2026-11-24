@@ -16,6 +16,7 @@ import { Icon, type IconName } from '@/components/ds/Icon';
 import { ModeSwitch, SEGMENTED } from '@/components/ds/ModeSwitch';
 import { TAB_BAR } from '@/components/ds/rail';
 import { Sheet } from '@/components/ds/Sheet';
+import { PaletteEntry } from '@/components/mockup/Palette'; // MOCK-HOOK
 import { setPanelOpen, usePanelOpen } from '@/components/hop/open-state';
 import { SIMPLE_HOME, switchTarget } from '@/lib/experience';
 import { useMe } from '@/lib/me';
@@ -504,6 +505,7 @@ export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet')
           </span>
         </Link>
         <ModeSwitch placement="wide" />
+        <PaletteEntry where="simple-rail" /> {/* MOCK-HOOK */}
         {SIMPLE_DESTINATIONS.map((d) => {
           const n = counts?.[d.label] ?? 0;
           const failed = failedOf(d.label);

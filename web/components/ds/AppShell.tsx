@@ -48,6 +48,7 @@ import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
 import { Notice } from './Layout';
 import { ModeRoot, ModeSwitch, SEGMENTED } from './ModeSwitch';
+import { PaletteEntry } from '@/components/mockup/Palette'; // MOCK-HOOK
 import { usePageInfo } from './page-info';
 import { onRadioKeys, radioTabIndex } from './radio-keys';
 import { RAIL_SELECTED, TAB_BAR } from './rail';
@@ -752,6 +753,7 @@ function Navs() {
           <Mark size={44} tone="sky" className="block" />
         </Link>
         <ModeSwitch placement="rail" documentHome={home} />
+        <PaletteEntry where="detailed-rail" /> {/* MOCK-HOOK */}
         {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
         {DESTINATIONS.map((d) => (
           <RailLink
@@ -1028,6 +1030,7 @@ function PhoneHeader() {
             </span>
           )}
         </span>
+        {me && <PaletteEntry where="phone-header" />} {/* MOCK-HOOK */}
         {me && !panelHidden(pathname) && askButton}
         {me && <UserMenu placement="header" />}
       </header>
@@ -1299,6 +1302,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <main id="main" tabIndex={-1} className="col-start-2 row-start-1 min-w-0 outline-none">
           <CapsError />
+          <PaletteEntry where="top" /> {/* MOCK-HOOK */}
           {children}
         </main>
         {/* qa-shell-31: the phone's tab bar (Navs). */}
