@@ -11,7 +11,7 @@
 - Cut asks first: an in-page confirm in the feature panel's menu (`_card.tsx`, `confirmInPage`); the menu also
   holds Restore to the roadmap (`_card.tsx:1227`); a cut feature's panel shows the "Cut on … by …" bar with Restore.
 - Removed and Trash: the Roadmap's "Removed · N" list with Restore; Trash for deleted items.
-- Working draft banner: its own Undo takes back the whole draft, not one change.
+- Working draft banner: its own Undo (`_roadmap.tsx`, `onUndo(last.id)`) takes back your newest change in the draft, not the whole draft.
 - The panel's "Decided" and "Proposals on it" sections list what was decided and proposed on a feature.
 
 ## Frames redone in this round (runner: `web/mk-snap/`, Playwright via swarm-test-browsers, mock build on :4317)
@@ -52,3 +52,15 @@ commenter hard and 1512; phone). `snap.ts` pins the clock (every banner: 4:15 AM
 panel's 'Cut on … · Restore' bar waits (`useMkCutToast`). Proposal toasts read 'Proposed a status change'; marks name the new value.
 Still open: 'In-app tour' uncoded in built text; 'Not in GT' over the end dot; UT2 phone toasts over b's banner spot. UT3 a in
 Detailed: stated in its cost, owner asked.
+
+## Round 5
+- Draft banner button: 'Undo my last change' (what the built button does: your newest change); enabled while the banner counts
+  a change (the mock-ups' quick changes included, `mkUndoLast`). The proposals say how it differs from a toast's Undo.
+- Toast placement: stays at the bottom unless a real button is under it (chart chips do not move it); on a phone it keeps the
+  bottom. UT1 b drops an undone toast from the stack and is wide enough for one line per change; UT1 c's open list closes on
+  Undo and its earlier lines are tighter, so it clears 'Accept as risk'. Codes never break across lines in a toast.
+- UT3 a: History sits right under the panel's status/cut line; for a cut its Undo replaces the bar's Restore (one Undo per cut);
+  History line on Alert rules engine carries no code (it is Not in the Ground Truth).
+- `web/mk-snap/r5.spec.ts`: static frames get the new banner label, the 4:15 AM clock, no 'in your working draft', F-79 coded.
+- Still open: 'Not in GT' chip struck by the end dot on the timeline; 'In-app tour' uncoded in the built broken-links row;
+  MOCK-HOOK code carries lint errors (import order, React purity) from earlier rounds; never merged.
