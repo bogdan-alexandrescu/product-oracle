@@ -1620,7 +1620,9 @@ export function FloatingCard({
                       />
                     )}
                     <span className="min-w-0 flex-1">
-                      {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
+                      {opWords(c.op)}
+                      {mkParam('ut2') && c.op === 'set_status' && (c.after?.shipped || c.after?.cut) ? ` to ${c.after.shipped ? 'Done' : 'Cut'}` : ''}{' '}{/* MOCK-HOOK: the proposal names its new value */}
+                      · <span className="text-text2">{c.by_name}</span>
                       {c.from_meeting && (
                         <span
                           className="block text-sm text-text2"

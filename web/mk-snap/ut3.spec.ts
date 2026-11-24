@@ -54,6 +54,6 @@ test('ut1-c-detailed', async ({ page }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 test('ut2-a-detailed', async ({ page }) => { // MOCK-HOOK
   await detailed(page, 'ut2=a', 'commenter@example.com'); // MOCK-HOOK
-  await push(page, [['Status change proposed: it waits for Avery Stone', 'Withdraw']]); // MOCK-HOOK
+  await push(page, [['Proposed a status change: it waits for Avery Stone', 'Withdraw']]); // MOCK-HOOK
   await snap(page, 'ut2-a-detailed'); // MOCK-HOOK
 }); // MOCK-HOOK
