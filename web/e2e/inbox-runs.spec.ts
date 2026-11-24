@@ -1,6 +1,5 @@
-import { expect, test } from './test';
-
 import { login, seedStuckRuns } from './helpers';
+import { expect, test } from './test';
 
 test('stuck runs and failed imports are rows of the Inbox, counted alike by the badge, Home and /inbox', async ({
   page,
@@ -35,7 +34,7 @@ test('stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await expect(page.getByTestId('inbox-searches')).toContainText(
     'still looks for submission seg-1-a1',
   );
-  await expect(tabs.getByRole('tab', { name: /^Seen/ })).toHaveText('Seen');
+  await expect(tabs.getByRole('tab', { name: /^Seen/ })).toHaveText('Seen0');
 
   // Home draws the same rows and the same count; its chips add up to it.
   await page.goto('/home');

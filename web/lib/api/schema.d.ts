@@ -48666,6 +48666,8 @@ export interface components {
             item_key: string | null;
             /** Item Title */
             item_title: string | null;
+            /** Item Code */
+            item_code?: string | null;
             /**
              * Kind
              * @enum {string}

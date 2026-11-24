@@ -181,7 +181,7 @@ test('Inbox: tabs by state with counts, New by default, and the badge counts onl
   await expect(tab('New')).toHaveAttribute('aria-selected', 'true');
   // The seed's 10 and the pending access request (A5, #203 part 3).
   await expect(tab('New')).toHaveText('New11');
-  await expect(tab('Seen')).toHaveText('Seen');
+  await expect(tab('Seen')).toHaveText('Seen0');
   await expect(tab('Staged')).toHaveText('Staged2');
   await expect(tab('Declined')).toHaveText('Declined1');
   await expect(tab('Done')).toHaveText('Done5');
@@ -248,7 +248,7 @@ test('Inbox: arriving marks items seen; they stay New for this visit, Open on th
   await page.goto('/documents');
   await page.goto('/inbox');
   await page.reload();
-  await expect(tabs.getByRole('tab', { name: /^New/ })).toHaveText('New');
+  await expect(tabs.getByRole('tab', { name: /^New/ })).toHaveText('New0');
   await expect(tabs.getByRole('tab', { name: /^Seen/ })).toHaveText('Seen11');
   // Nothing is new: the Inbox opens on Seen, where the items wait (qa-company-2); the badge
   // still counts them.

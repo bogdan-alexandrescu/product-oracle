@@ -1,3 +1,22 @@
+# inbox-ux handoff (issues #1741, #1782-#1786, review fix round 1)
+
+## This round (verdict NOT_YET, four blockers, all fixed in ea38784)
+- format:check: prettier on inbox-ux, inbox-runs, track-alerts, inbox-track-alerts-walk specs.
+- lint: `npm run lint -- --prune-suppressions` dropped the stale import-x/order entries (only those).
+- Age cell (web/app/inbox/_needs.tsx, shared with Home): the text is the age only again; the label is the
+  clock wrapped in role="img" aria-label="Age". dod-meet-minutes.spec.ts unchanged and passes;
+  inbox-ux.spec.ts checks the named clock and the exact age text.
+- Tab counts: next-draft.spec.ts:184 and :251, runs-sent-back.spec.ts:75 now expect 'Seen0' / 'New0'.
+- Already fixed at base (no code change): #1783's first point, the Inbox opens on New, or on Seen when New is
+  empty (qa-company-2 rule in web/app/inbox/_inbox.tsx); inbox-ux.spec.ts proves it.
+- Minors left as is: on a phone a 0 tab count stays hidden (qa-company-47); the Simple Roadmap still counts
+  tracks while the Plan chip counts items, each now named.
+
+## Gates this round
+- Playwright --retries=0: dod-meet-minutes, next-draft, runs-sent-back, inbox-ux, inbox-runs, track-alerts,
+  inbox-track-alerts-walk: 40 passed. format:check exit 0. Full `npm run lint` exit 0. tsc exit 0.
+- No API change this round, so the API suite, timing tests, pyright and frozen migrations were not rerun.
+
 # codes-at-write handoff (PR #1811, fix round 3)
 
 ## Write paths that number an item at write (file:line, at this branch)

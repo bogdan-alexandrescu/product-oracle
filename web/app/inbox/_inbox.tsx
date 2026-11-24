@@ -1,12 +1,14 @@
 'use client';
 
-import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from '@/components/ds';
 import { TabBar } from '@/components/review/parts';
+import { usePhone } from '@/components/simple/FlowViews';
+import { SimplePage } from '@/components/simple/SimplePage';
 import { ErrorNote, LoadError, Loading } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { errorMessage, useQuery } from '@/lib/use-query';
 import {
   asNeedKind,
@@ -21,6 +23,8 @@ import {
 
 import { useAccessRequestRows } from './_access';
 import { useActed } from './_actions';
+import { BrokenLinks } from './_broken';
+import { minutesRows } from './_minutes';
 import {
   allNeeds,
   NeedTable,
@@ -34,9 +38,6 @@ import {
   type InboxState,
   type NeedGroup,
 } from './_needs';
-import { useQuestionRows } from './_questions';
-import { BrokenLinks } from './_broken';
-import { minutesRows } from './_minutes';
 import {
   approvalRows,
   dateSuggestionRows,
@@ -44,6 +45,7 @@ import {
   proposalRows,
   trackSuggestionRows,
 } from './_proposals';
+import { useQuestionRows } from './_questions';
 import { useReminderRows } from './_reminders';
 import { useWebhookRows } from './_webhooks';
 
@@ -181,21 +183,25 @@ function Inbox() {
   // Under ?kind= the header counts that kind only, as Home's chip did.
   const waiting = kindRows && counted ? waitingNeeds(kindRows).length : undefined;
 
+  // inbox-ux (#1782): Simple's Inbox is a Simple page, its centred column and heading.
+  const simple = path.startsWith('/simple');
+  const Frame = simple ? SimpleFrame : Page;
   return (
-    <Page>
-      <PageHeader
-        title="Inbox"
-        status={
-          // simple-home-qa-nov12 #18: Simple's Inbox says its count once, in Needs you.
-          !path.startsWith('/simple') &&
-          waiting != null &&
-          waiting > 0 && (
-            <Chip kind="acc">
-              <Partial words={`${waiting} waiting`} partial={partial} />
-            </Chip>
-          )
-        }
-      />
+    <Frame>
+      {!simple && (
+        <PageHeader
+          title="Inbox"
+          status={
+            // simple-home-qa-nov12 #18: Simple's Inbox says its count once, in Needs you.
+            waiting != null &&
+            waiting > 0 && (
+              <Chip kind="acc">
+                <Partial words={`${waiting} waiting`} partial={partial} />
+              </Chip>
+            )
+          }
+        />
+      )}
       {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
       {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
       {webhooks.error && (
@@ -249,9 +255,16 @@ function Inbox() {
       {!kind && sourcesQ.data && perms.ready && (
         <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can('update_source')} />
       )}
-    </Page>
+    </Frame>
   );
 }
+
+/** inbox-ux (#1782): the shared Simple page, titled Inbox; its parts keep their own spacing. */
+const SimpleFrame = ({ children }: { children: ReactNode }) => (
+  <SimplePage title="Inbox">
+    <div>{children}</div>
+  </SimplePage>
+);
 
 /**
  * My sources that need an edit before they sync again: their own panel, outside "Needs you",
@@ -383,6 +396,7 @@ function InboxTabs({
     setTab(t);
     onTabChange();
   };
+  const phone = usePhone();
   const shown = rows.filter((r) => r.state === tab);
   const label = STATE_TABS.find((t) => t.id === tab)!.label;
   // qa-company-16: the heading and its count follow the tab: New and Seen are what needs me
@@ -404,7 +418,8 @@ function InboxTabs({
           label="Inbox by state"
           size="sm"
           tabs={STATE_TABS.map((t) => {
-            const n = (counted && count(t.id)) || null;
+            // inbox-ux (#1783): every tab shows its count, 0 too; on a phone a 0 stays off (qa-company-47).
+            const n = !counted ? null : phone ? count(t.id) || null : count(t.id);
             // counts-failed-part: a partial count carries the mark in its name and tooltip.
             return {
               id: t.id,
