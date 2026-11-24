@@ -1452,7 +1452,7 @@ export function MsLayer(props: MsLayerProps) {
           <div
             key={`g-${m.id}-${id}`}
             aria-hidden
-            className="pointer-events-none absolute z-[12]"
+            className={`pointer-events-none absolute ${typeof window !== 'undefined' && /[?&]pc[123]=/.test(window.location.search) ? 'z-[10]' : 'z-[12]'}`} // MOCK-HOOK: the dotted tie under the rows, so the names and pills cover it"
             style={{
               left: ex + 2,
               top: cy - 1,

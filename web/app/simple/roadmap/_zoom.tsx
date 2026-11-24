@@ -1797,7 +1797,7 @@ const TimelineRow = memo(function TimelineRow({
       // rows in sight and not the chart's 500. Its containment stacks the row on its own, so
       // the row sits over the chart's today line and draws its own piece of it (below). Only its
       // name and bar take the pointer: a milestone's line under the row takes the rest.
-      className="pointer-events-none relative z-[11]"
+      className={`pointer-events-none relative ${sel && mkShort ? 'z-[13]' : 'z-[11]'}`} // MOCK-HOOK: the open row over the milestone line, so its bar's dates read whole
       style={
         live
           ? undefined
@@ -1931,7 +1931,7 @@ const TimelineRow = memo(function TimelineRow({
           )}
           {onBar && (
             <span
-              className={`pointer-events-none absolute top-[9px] ${mkShort ? 'z-[30]' : 'z-[11]'} flex px-1.5`} // MOCK-HOOK: the bar's dates over the month line
+              className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5"
               style={{
                 left: Math.max(bx, sl),
                 width: bx + bw - Math.max(bx, sl),

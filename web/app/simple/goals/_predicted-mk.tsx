@@ -149,7 +149,7 @@ function Pop({ onClose, children, title }: { onClose: () => void; children: Reac
 function Why({ p, label }: { p: PmGoal; label: string }) {
   const undated = p.total - p.dated;
   return (
-    <InfoTip label={`${label}'s predicted date`} testId="pm-why" side="top" align="end">
+    <InfoTip label={`${label}'s predicted date`} testId="pm-why" side="bottom" align="end">
       <span className="flex flex-col gap-1">
         {mkParam('pc2') === 'b' ? (
           <b>Latest end date, widened by past slips (avg +{p.slipRate} days){undated ? ` and ${undated} undated ${undated === 1 ? 'feature' : 'features'}` : ''}</b>
@@ -290,7 +290,6 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
         <Pop title={`${goal}: dates`} onClose={() => setOpen(false)}>
           <span className="flex items-center justify-between gap-2">
             <Legend />
-            <Why p={p} label={goal} />
           </span>
           <span className="flex flex-col gap-0.5 border-b border-line pb-2">
             <span className="flex items-baseline gap-1.5"><b>Goal</b><span className="flex-1" /><Chip v={v} /></span>
@@ -299,9 +298,12 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
             <span className="text-xs"><Driver p={p} name={p.driver} onOpen={go} /></span>
           </span>
           {pc3 === 'c' ? <Ranked p={p} onOpen={go} /> : <MilestoneLines p={p} onOpen={go} lo={lo} hi={hi} ticks={pc3 === 'b'} />}
-          {p.dated < p.total && (
-            <span className="text-xs text-na" data-testid="pm-undated">{p.total - p.dated} of {p.total} {p.total - p.dated === 1 ? 'feature has' : 'features have'} no end date</span>
-          )}
+          <span className="flex items-center justify-between gap-2">
+            {p.dated < p.total ? (
+              <span className="text-xs text-na" data-testid="pm-undated">{p.total - p.dated} of {p.total} features {p.total - p.dated === 1 ? 'has' : 'have'} no end date</span>
+            ) : <span />}
+            <Why p={p} label={goal} />
+          </span>
         </Pop>
       )}
     </span>
