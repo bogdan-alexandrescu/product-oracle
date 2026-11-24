@@ -170,7 +170,15 @@ function ClientSteps({ tab, url }: { tab: Tab; url: string }) {
         >
           <CopyChip text={`claude mcp add --transport http oracle ${url}`} testId="mcp-command" />
         </Step>
-        <Step n={2} title="In Claude Code, run /mcp and choose oracle">
+        <Step
+          n={2}
+          title={
+            <>
+              In Claude Code, run <code className="font-mono">/mcp</code> and choose{' '}
+              <code className="font-mono">oracle</code>
+            </>
+          }
+        >
           <span className="w-fit">
             <CopyChip text="/mcp" />
           </span>
