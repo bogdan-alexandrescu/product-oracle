@@ -160,3 +160,28 @@ for (const [where, path] of [
     await expect(panel(page)).toHaveCount(0);
     await expect(page).not.toHaveURL(/feature=/);
   });
+
+test('#1796 a phone panel that switches to its parent stays one panel, with the parent in the address', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(([k]) => localStorage.setItem(k, 'parts-tree'), [
+    MOCK_SCENARIO_KEY,
+  ] as const);
+  await login(page, 'avery.lane@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await openRoadmapItem(page, 'alert-export');
+  await expect(panel(page)).toHaveCount(1);
+  await expect(page).toHaveURL(/[?&]feature=/);
+  const before = new URL(page.url()).searchParams.get('feature');
+  await panel(page)
+    .getByTestId('card-part-of')
+    .getByRole('button', { name: 'Alert rules engine' })
+    .click();
+  await expect(panel(page).getByTestId('card-name')).toContainText('Alert rules engine');
+  await expect(page).not.toHaveURL(new RegExp(`feature=${before}(&|$)`));
+  await expect(page).toHaveURL(/[?&]feature=/);
+  await expect(panel(page)).toHaveCount(1);
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+});
