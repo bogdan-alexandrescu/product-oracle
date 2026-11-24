@@ -28,7 +28,6 @@ export function myWorkCount(): number {
   return c === 'none' ? 0 : c === 'forty' ? 40 : c === 'one' ? 1 : MW_ITEMS.length; // MOCK-HOOK
 }
 
-
 // MOCK-HOOK: late items decided on My work this visit, so the rail's count drops at once.
 let decidedLate = 0; // MOCK-HOOK
 const subs = new Set<() => void>(); // MOCK-HOOK

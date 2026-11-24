@@ -63,7 +63,9 @@ function Row({
 }) {
   const open = useOpenFeature(); // MOCK-HOOK
   const [another, setAnother] = useState(act === 'open' || act === 'mid'); // MOCK-HOOK
-  const [chosen, setChosen] = useState<string | null>(act === 'mid' ? (item.options?.[0] ?? null) : null); // MOCK-HOOK
+  const [chosen, setChosen] = useState<string | null>(
+    act === 'mid' ? (item.options?.[0] ?? null) : null,
+  ); // MOCK-HOOK
   const hot = mw('hot') === item.id; // MOCK-HOOK
   const late = item.when === 0; // MOCK-HOOK
   const title = (
@@ -94,10 +96,14 @@ function Row({
             {title}
           </button>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-base font-[650] max-[600px]:whitespace-normal">{title}</span>
+          <span className="min-w-0 flex-1 truncate text-base font-[650] max-[600px]:whitespace-normal">
+            {title}
+          </span>
         )}
         {status}
-        <span className="simple-meta tnum w-20 text-right max-[600px]:w-14">{item.due ?? 'No date'}</span>
+        <span className="simple-meta tnum w-20 text-right max-[600px]:w-14">
+          {item.due ?? 'No date'}
+        </span>
       </li>
     ); // MOCK-HOOK
   return (
@@ -209,7 +215,17 @@ function Row({
   );
 }
 
-function Group({ title, n, children, id }: { title: string; n: number; children: ReactNode; id: string }) {
+function Group({
+  title,
+  n,
+  children,
+  id,
+}: {
+  title: string;
+  n: number;
+  children: ReactNode;
+  id: string;
+}) {
   return (
     <section className="flex flex-col gap-3" aria-label={title} data-testid={`mw-group-${id}`}>
       <h3 className="text-lg font-semibold">
@@ -359,12 +375,15 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
   const [decided, setDecided] = useState<Record<string, string>>(
     act === 'done' ? { d1: '8:00 for everyone' } : {},
   ); // MOCK-HOOK
-  const [tile, setTile] = useState<MwKind | null>((mw('tile') as MwKind) ?? (act ? 'decision' : null)); // MOCK-HOOK
+  const [tile, setTile] = useState<MwKind | null>(
+    (mw('tile') as MwKind) ?? (act ? 'decision' : null),
+  ); // MOCK-HOOK
   const [more, setMore] = useState(mw('more') === '1'); // MOCK-HOOK
   const [page, setPage] = useState(Number(mw('page') ?? 1)); // MOCK-HOOK
   const [q, setQ] = useState(mw('q') ?? ''); // MOCK-HOOK
   let items = taken ?? base; // MOCK-HOOK
-  if (place === 'roadmap') items = items.filter((i) => i.kind === 'feature' || i.kind === 'milestone'); // MOCK-HOOK
+  if (place === 'roadmap')
+    items = items.filter((i) => i.kind === 'feature' || i.kind === 'milestone'); // MOCK-HOOK
   if (place === 'home') items = items.filter((i) => i.kind !== 'decision'); // MOCK-HOOK
   const open = items; // MOCK-HOOK: a decided row stays, with Undo
   const left = items.filter((i) => !decided[i.id]); // MOCK-HOOK
@@ -398,10 +417,10 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
   const summary = (
     <p className="simple-meta tnum" data-testid="mw-summary">
       {left.length} {left.length === 1 ? 'item' : 'items'} ·{' '}
-      {left.filter((i) => i.when === 0).length} late ·{' '}
-      {left.filter((i) => i.risk).length} at risk{' '}
+      {left.filter((i) => i.when === 0).length} late · {left.filter((i) => i.risk).length} at risk{' '}
       <InfoTip label="What is here" align="start">
-        Features and milestones you own, decisions you make and proposals you made. Late and at risk first.
+        Features and milestones you own, decisions you make and proposals you made. Late and at risk
+        first.
       </InfoTip>
     </p>
   ); // MOCK-HOOK
@@ -420,7 +439,12 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
       <span className="simple-meta tnum">
         {(page - 1) * 10 + 1}–{Math.min(page * 10, found.length)} of {found.length}
       </span>
-      <button type="button" className="simple-button" disabled={page === 1} onClick={() => setPage(page - 1)}>
+      <button
+        type="button"
+        className="simple-button"
+        disabled={page === 1}
+        onClick={() => setPage(page - 1)}
+      >
         Back
       </button>
       <button
@@ -477,7 +501,11 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
           ))}
         </ul>
         {tile && (
-          <Group id={tile} title={TILE_WORDS[tile][0].toUpperCase() + TILE_WORDS[tile].slice(1)} n={xs.filter((i) => !decided[i.id]).length}>
+          <Group
+            id={tile}
+            title={TILE_WORDS[tile][0].toUpperCase() + TILE_WORDS[tile].slice(1)}
+            n={xs.filter((i) => !decided[i.id]).length}
+          >
             <ul>{cap(xs).map(row)}</ul>
             {moreLine(xs)}
           </Group>
@@ -489,7 +517,12 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
       const xs = sorted(found.filter((i) => rank(i) === w)); // MOCK-HOOK
       if (!xs.length) return null; // MOCK-HOOK
       return (
-        <Group key={w} id={`when-${w}`} title={WHEN_WORDS[w]} n={xs.filter((i) => !decided[i.id]).length}>
+        <Group
+          key={w}
+          id={`when-${w}`}
+          title={WHEN_WORDS[w]}
+          n={xs.filter((i) => !decided[i.id]).length}
+        >
           <ul>{cap(xs).map(row)}</ul>
           {moreLine(xs)}
         </Group>
@@ -507,7 +540,12 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
         </div>
         <ul className="mt-3">{top.map(row)}</ul>
         {!more && open.length > 4 && (
-          <button type="button" className="simple-more" data-testid="mw-home-more" onClick={() => setMore(true)}>
+          <button
+            type="button"
+            className="simple-more"
+            data-testid="mw-home-more"
+            onClick={() => setMore(true)}
+          >
             Show {open.length - 4} more
           </button>
         )}
@@ -515,7 +553,10 @@ export function MyWorkBody({ place = 'page' }: { place?: 'page' | 'home' | 'road
     ); // MOCK-HOOK
   }
   return (
-    <div className={`flex flex-col gap-6 ${place === 'roadmap' ? '' : 'simple-card'}`} data-testid="mw-body">
+    <div
+      className={`flex flex-col gap-6 ${place === 'roadmap' ? '' : 'simple-card'}`}
+      data-testid="mw-body"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         {summary}
         {pager}
@@ -553,14 +594,12 @@ export function MyWorkPage({ detailed }: { detailed?: boolean }) {
     return (
       <Page>
         <PageHeader title="My work" />
-        <div data-mode="simple" className="simple-mode">{inner}</div>
+        <div data-mode="simple" className="simple-mode">
+          {inner}
+        </div>
       </Page>
     ); // MOCK-HOOK
-  return (
-    <SimplePage title="My work">
-      {inner}
-    </SimplePage>
-  ); // MOCK-HOOK
+  return <SimplePage title="My work">{inner}</SimplePage>; // MOCK-HOOK
 }
 
 /** MOCK-HOOK: Home's "Yours" section (MW1 b) with the one feature panel. */
