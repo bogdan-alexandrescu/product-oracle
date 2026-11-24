@@ -1,7 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+// It reads the whole tree: a census, not a 5-second unit test.
+vi.setConfig({ testTimeout: 120_000 });
 
 /*
  * #370 fixes 4: what the signed-in role may do comes from GET /v1/me/capabilities only (the
