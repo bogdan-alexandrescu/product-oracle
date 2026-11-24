@@ -86,6 +86,7 @@ export function useFeatureOrder({
     const at = next.indexOf(onto) + (shown.indexOf(code) < shown.indexOf(onto) ? 1 : 0);
     next.splice(at, 0, code);
     if (r.applies) setLocal({ key, codes: next });
+    // The API's rank is written; the note names the place the list shows (prio-ux #1738: its numbers never skip).
     const position = pinOf(t);
     const target = r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id };
     try {
@@ -107,7 +108,7 @@ export function useFeatureOrder({
       await reload();
       setNote({
         id: noteId(),
-        text: `${r.applies ? 'Moved' : 'Proposed moving'} ${r.title} to rank ${position}`,
+        text: `${r.applies ? 'Moved' : 'Proposed moving'} ${r.title} to rank ${t.rank}`,
         changes: r.applies ? [out.change.id] : undefined,
       });
     } catch (e) {

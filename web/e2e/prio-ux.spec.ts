@@ -163,3 +163,32 @@ test('#1776 Value / effort: no mark covers another, and the side list says why i
   await side.getByTestId('side-ranks-help').click();
   await expect(page.getByRole('tooltip')).toContainText('rank in the Ranked list');
 });
+
+test('#1738 a move on Goal buckets names the place the Ranked list shows, with a Done feature left out', async ({
+  page,
+}) => {
+  await open(page, '', 'goal-buckets-undated');
+  // The first feature is Done: every API rank after it is one more than its place in the list.
+  const first = page.getByTestId('prio-row').first();
+  const done = (await first.getByTestId('prio-title').innerText()).trim();
+  await first.getByTestId('prio-title').click();
+  const panel = page.getByTestId('floating-card');
+  await panel.getByRole('button', { name: 'Change the status' }).click();
+  await panel.getByTestId('card-status-edit').getByLabel('Status').selectOption('done');
+  await expect(panel.getByTestId('card-status')).toHaveText('Done');
+  await page.keyboard.press('Escape');
+  await expect(rowByTitle(page, done)).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Goal buckets' }).click();
+  const bucket = page
+    .getByTestId('goal-bucket')
+    .filter({ has: page.getByRole('heading', { name: 'Reliability', exact: true }) });
+  const moved = bucket.getByTestId('plan-feature').first();
+  const name = (await moved.getByTestId('plan-feature-name').innerText()).trim();
+  await moved.getByTestId('plan-feature-open').focus();
+  await page.keyboard.press('Alt+ArrowDown');
+  const note = page.getByTestId('bucket-note');
+  await expect(note).toContainText(`Moved ${name} to rank `);
+  const place = Number((await note.innerText()).match(/to rank (\d+)/)![1]);
+  await page.getByRole('tab', { name: 'Ranked list' }).click();
+  await expect(rowByTitle(page, name).getByTestId('prio-rank')).toHaveText(String(place));
+});

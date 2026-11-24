@@ -57,10 +57,17 @@ test.describe('fix2-simple-plan review: moves on a dated plan stay in rank order
     const list = await listed(page);
     const split = list.findIndex((r) => !r.above);
     expect(split).toBeGreaterThan(0);
-    // prio-ux (#1739): the plan's span decides the line, so the last row above it may hold the last rank (no next
-    // rank); the last one above the line with a rank after it.
-    const at = list.findLastIndex((r) => r.above && r.rank < list.length);
+    // The plan regroups the list: a row above the line whose next rank is not the row under it (the last such).
+    const at = list.findLastIndex(
+      (r, n) =>
+        r.above &&
+        n + 1 < list.length &&
+        list[n + 1].rank !== r.rank + 1 &&
+        list.some((x) => x.rank === r.rank + 1),
+    );
+    expect(at).toBeGreaterThanOrEqual(0);
     const last = list[at];
+    expect(list[at + 1].rank).not.toBe(last.rank + 1);
     await rows(page)
       .nth(at)
       .getByRole('button', { name: /^Drag / })
