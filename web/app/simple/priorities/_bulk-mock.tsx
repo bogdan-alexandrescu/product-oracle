@@ -10,6 +10,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 
 import { useSearchParams } from '@/lib/nav';
 import { InfoTip, toast } from '@/components/ds';
+import { FeatureMarks } from '@/components/current-state/CurrentState';
 import {
   BULK_APPROVER,
   BULK_LONG,
@@ -68,8 +69,9 @@ function day(iso: string | null | undefined, shiftWeeks = 0): string {
   const d = new Date(new Date(iso + 'T12:00:00Z').getTime() + shiftWeeks * 7 * MS_DAY);
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
-const statusOf = (r: R) =>
-  r.rank <= 4 ? 'In progress' : r.rank % 3 === 0 ? 'Done' : 'Not started';
+const MARK_WORD: Record<string, string> = { new: 'New', in_progress: 'In progress', exists: 'Exists', exists_old: 'Exists' };
+let marksNow: Map<string, { mark: string }> | null = null;
+const statusOf = (r: R) => MARK_WORD[marksNow?.get(r.feature_id)?.mark ?? ''] ?? 'New';
 const ownerOf = (r: R) => BULK_OWNER[r.title] ?? '';
 
 export const BulkCtx = Ctx;
@@ -99,6 +101,7 @@ export function useBulkState(rows: R[]): Bulk | null {
   const [applied, setApplied] = useState<Record<string, Draft & { proposed?: boolean }>>({});
   const [result, setResult] = useState<Result | null>(null);
   const [shown, setShown] = useState<string | null>(null);
+  marksNow = useContext(FeatureMarks) as Map<string, { mark: string }> | null;
   if (!on) return null;
   const be3 = p.get('be3') ?? 'a';
   const mixed = !!p.get('be3');
@@ -282,7 +285,7 @@ export function BulkChips({ r }: { r: R }) {
   }
   if (d?.status)
     out.push(
-      <span key="s" className={`${chip} bg-[var(--simple-edited)] text-text`}>
+      <span key="s" className={`${chip} bg-[var(--simple-edited)] uppercase text-text`}>
         {!got && <s className="mr-1 text-text2">{statusOf(r)}</s>}
         {d.status}
       </span>,
@@ -652,7 +655,7 @@ export function BulkBar() {
           {FIELDS.map(([f, label]) => (
             <details
               key={f}
-              open={!!(b.draft as Record<string, unknown>)[f === 'dates' ? 'shift' : f] || f === 'owner'}
+              open={f === 'dates' ? b.draft.shift !== undefined || !!b.draft.owner : f === 'owner' && !b.draft.owner}
               className="rounded-md border border-line p-3"
             >
               <summary className="cursor-pointer font-semibold">

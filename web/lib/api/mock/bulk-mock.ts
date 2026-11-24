@@ -7,7 +7,7 @@ export const BULK_PEOPLE = ['Rosa Lind', 'Theo Marsh', 'Priya Nand', 'Jonah Pike
 /** Tracks a feature can move to (invented, matching the mock roadmap's tracks). */ // MOCK-HOOK
 export const BULK_TRACKS = ['Usage alerts track', 'Guided setup track', 'Welcome media track']; // MOCK-HOOK
 
-export const BULK_STATUSES = ['Not started', 'In progress', 'Done', 'Cut']; // MOCK-HOOK
+export const BULK_STATUSES = ['New', 'In progress', 'Exists']; // MOCK-HOOK
 
 /** Today's owner of each mock feature, by title (the mock rows carry none). */ // MOCK-HOOK
 export const BULK_OWNER: Record<string, string> = {
