@@ -1,0 +1,411 @@
+{
+ "title": "Saved and shared views for roadmap and priority filters",
+ "subtitle": "Mock-ups for the owner to pick from (issue #1797). Invented company and people; Simple Roadmap, Simple Priorities and Detailed Priorities; 1440, 1512 and phone 390; open any frame with ?theme=dark for the dark look.",
+ "decisions": [
+  {
+   "code": "SV1",
+   "name": "Where views live",
+   "question": "Where do views live on Roadmap and Priorities, and how is one saved from the current filters?",
+   "common": "Every proposal adds the same three new filters (Status, with past end date and not done; Confidence; Drafts only) beside the page’s own, keeps every filter in the link, ships four built-in views (Past end date, Low confidence, Unowned drafts, Mine), shows a count per view, marks a changed view as Edited, and confirms a save with a tick. The same control sits on Simple Roadmap, Simple Priorities and Detailed Priorities.",
+   "proposals": [
+    {
+     "letter": "A",
+     "name": "Tabs above filters",
+     "recommended": false,
+     "what": "Each view is a tab in a row above the filters, with its count. Save view sits at the row’s end and lights up when the filters change; it asks only for a name. When tabs run out of room, the rest go under +N more; on a phone the row scrolls sideways.",
+     "plus": "Every view is one click away and in sight; saving is the fewest steps.",
+     "cost": "Save: 2 steps. Reopen: 1 click. Today: 2 to 6 picks every visit.",
+     "frames": [
+      {
+       "file": "frames/sv1-a-rest.html",
+       "caption": "At rest: views are tabs above the filters; Goal and Owner were just picked, so Save view lights up."
+      },
+      {
+       "file": "frames/sv1-a-open.html",
+       "caption": "Save view opened: a small box asks for a name."
+      },
+      {
+       "file": "frames/sv1-a-mid.html",
+       "caption": "Mid-way: the name is typed."
+      },
+      {
+       "file": "frames/sv1-a-result.html",
+       "caption": "Result: the new view is a tab, picked, with a Saved tick. Cost: Save: 2 steps (Save view, then type a name and press Enter). Reopen: 1 click. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+      },
+      {
+       "file": "frames/sv1-a-hard-1512.html",
+       "caption": "Hard case at 1512: twelve saved views with long names; six tabs fit, the rest go under +11 more."
+      },
+      {
+       "file": "frames/sv1-a-detailed.html",
+       "caption": "Detailed Priorities: the same tabs above its counts."
+      },
+      {
+       "file": "frames/sv1-a-phone-390.html",
+       "caption": "Phone 390, Simple Priorities: the tabs scroll sideways; Save view stays at the end."
+      }
+     ]
+    },
+    {
+     "letter": "B",
+     "name": "One View menu",
+     "recommended": true,
+     "what": "A View button starts the filter row and names the view in use. It opens a menu: built-in views, then saved ones, then Save these filters as a view and Manage views. A changed view shows Edited with Save as a view right beside the button. On a phone the menu is a sheet from the bottom.",
+     "why": "Roadmap and Priorities already carry a row of view tabs (Timeline, Gantt; Ranked list, Value / effort); a second tab row would compete with them. One button scales from 2 views to 20 and from 1512 to 390 without changing shape, and the Edited mark sits right where the filters are.",
+     "plus": "Takes one button of room on every page and width; long names wrap in the menu instead of being cut; it fits the filter row people already use.",
+     "cost": "Save: 3 steps. Reopen: 2 clicks. Today: 2 to 6 picks every visit.",
+     "frames": [
+      {
+       "file": "frames/sv1-b-rest.html",
+       "caption": "At rest: one View button starts the filter row; Goal and Owner were just picked, so it shows Edited and Save as a view."
+      },
+      {
+       "file": "frames/sv1-b-open.html",
+       "caption": "The View menu opened: built-in views, saved views, and Save these filters as a view at the foot."
+      },
+      {
+       "file": "frames/sv1-b-mid.html",
+       "caption": "Mid-way: Save these filters was picked; the name is typed in the menu."
+      },
+      {
+       "file": "frames/sv1-b-result.html",
+       "caption": "Result: the View button reads the new name, with a Saved tick. Cost: Save: 3 steps (View, Save these filters, then a name and Enter). Reopen: 2 clicks. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+      },
+      {
+       "file": "frames/sv1-b-hard-1512.html",
+       "caption": "Hard case at 1512: twelve saved views with long names; the menu wraps each name on two lines and scrolls."
+      },
+      {
+       "file": "frames/sv1-b-detailed.html",
+       "caption": "Detailed Priorities: the same View menu above its counts."
+      },
+      {
+       "file": "frames/sv1-b-phone-390.html",
+       "caption": "Phone 390, Simple Priorities: the View menu opens as a sheet from the bottom."
+      }
+     ]
+    },
+    {
+     "letter": "C",
+     "name": "Side list",
+     "recommended": false,
+     "what": "A Views column on the right of the page lists every view, with Save these filters at its top. It can be hidden. On a phone it becomes a Views button that opens the list full screen.",
+     "plus": "All views and their counts are always in sight; good for someone who switches all day.",
+     "cost": "Save: 2 steps. Reopen: 1 click. Costs a column of the page (about 260 px) at all times.",
+     "frames": [
+      {
+       "file": "frames/sv1-c-rest.html",
+       "caption": "At rest: views are a list on the right of the page; the filters were just changed, so Save these filters lights up."
+      },
+      {
+       "file": "frames/sv1-c-open.html",
+       "caption": "Save these filters opened in the side list: a name box above the views."
+      },
+      {
+       "file": "frames/sv1-c-mid.html",
+       "caption": "Mid-way: the name is typed in the side list."
+      },
+      {
+       "file": "frames/sv1-c-result.html",
+       "caption": "Result: the new view sits in the side list, picked, with a Saved tick. Cost: Save: 2 steps (Save these filters, then a name and Enter). Reopen: 1 click. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+      },
+      {
+       "file": "frames/sv1-c-hard-1512.html",
+       "caption": "Hard case at 1512: twelve saved views with long names; the side list wraps them and takes a column of the page all the time."
+      },
+      {
+       "file": "frames/sv1-c-detailed.html",
+       "caption": "Detailed Priorities: the same side list beside the ranked table."
+      },
+      {
+       "file": "frames/sv1-c-phone-390.html",
+       "caption": "Phone 390, Simple Priorities: the side list does not fit, so a Views button opens it full screen."
+      }
+     ]
+    },
+    {
+     "letter": "D",
+     "name": "A View picker",
+     "recommended": false,
+     "what": "View is one more dropdown in the filter row, like PRD and Goal. Its last choice, Save these filters…, turns it into a name box. On a phone it opens the phone’s own list.",
+     "plus": "Cheapest to build and to learn: nothing new to look at.",
+     "cost": "Save: 3 steps. Reopen: 2 picks. Cannot group, wrap long names, or mark who shares a view.",
+     "frames": [
+      {
+       "file": "frames/sv1-d-rest.html",
+       "caption": "At rest: View is one more picker in the filter row, like PRD and Goal; it reads All items (edited)."
+      },
+      {
+       "file": "frames/sv1-d-open.html",
+       "caption": "The View picker opened: every view in one list, Save these filters… last."
+      },
+      {
+       "file": "frames/sv1-d-mid.html",
+       "caption": "Mid-way: the picker turned into a name box with Save and Cancel."
+      },
+      {
+       "file": "frames/sv1-d-result.html",
+       "caption": "Result: the picker reads the new name, with a Saved tick. Cost: Save: 3 steps (open View, pick Save these filters, then a name and Save). Reopen: 2 picks. Today: 2 to 6 picks on every visit, and status, confidence and drafts cannot be picked at all."
+      },
+      {
+       "file": "frames/sv1-d-hard-1512.html",
+       "caption": "Hard case at 1512: twelve saved views; the plain picker cuts long names short and cannot group or wrap them."
+      },
+      {
+       "file": "frames/sv1-d-detailed.html",
+       "caption": "Detailed Priorities: the same View picker above its counts."
+      },
+      {
+       "file": "frames/sv1-d-phone-390.html",
+       "caption": "Phone 390, Simple Priorities: the View picker opens the phone’s own list."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "SV2",
+   "name": "Sharing views",
+   "question": "Who can see a saved view, who may change a shared one, and what does a changed but unsaved view show?",
+   "common": "All four build on the View menu (SV1 B). Every view can be opened from a link with its filters. A view picked and then changed shows Edited with a way to undo. Viewers can always save views for themselves. A commenter’s change to something shared becomes a proposal, as elsewhere in Simple, unless the proposal says otherwise.",
+   "proposals": [
+    {
+     "letter": "A",
+     "name": "Only me or everyone",
+     "recommended": true,
+     "what": "When saving, Who sees it: Only me or Everyone. The menu splits Mine from Shared with everyone, each shared view naming its maker. Its maker, owners and approvers can change a shared view (Save, Save as new, Undo changes); a commenter gets Suggest this change, which sends the maker a proposal, and Save as my view.",
+     "why": "It keeps the one rule people already know in Simple (direct for owners and approvers, a proposal for commenters) instead of a new rights setting, and it costs one tap.",
+     "plus": "One tap to share; the rule for changing matches how Simple already treats owners, approvers and commenters.",
+     "cost": "1 more tap to share. Changing a shared view: 1 click; a commenter’s: 1 click to suggest.",
+     "frames": [
+      {
+       "file": "frames/sv2-a-rest.html",
+       "caption": "At rest: Rosa Lind’s shared view is picked; the button says Everyone sees it."
+      },
+      {
+       "file": "frames/sv2-a-open.html",
+       "caption": "Owner was added, so the view shows Edited with Save, Save as new and Undo changes; the menu splits Mine from Shared with everyone."
+      },
+      {
+       "file": "frames/sv2-a-mid.html",
+       "caption": "Mid-way: Save as new, named, Who sees it set to Everyone."
+      },
+      {
+       "file": "frames/sv2-a-result.html",
+       "caption": "Result: the view is under Shared with everyone with its maker’s name; tick: Saved, everyone sees it. Cost: Share: 1 more tap (Everyone) when saving. Change a shared view: 1 click (Save)."
+      },
+      {
+       "file": "frames/sv2-a-hard-1512.html",
+       "caption": "Hard case, a commenter at 1512: they cannot change Rosa Lind’s view, so Suggest this change sends her a proposal; Save as my view keeps a private copy."
+      },
+      {
+       "file": "frames/sv2-a-phone-390.html",
+       "caption": "Phone 390: the save sheet with Who sees it."
+      }
+     ]
+    },
+    {
+     "letter": "B",
+     "name": "Links only",
+     "recommended": false,
+     "what": "Views are always private. Sharing is Copy link: whoever opens it sees the same filters, with a banner naming whose link it is and Save as my view.",
+     "plus": "Nothing to manage or keep in step; nobody can change someone else’s view.",
+     "cost": "2 clicks to share. A team must each save their own; a change reaches nobody.",
+     "frames": [
+      {
+       "file": "frames/sv2-b-rest.html",
+       "caption": "At rest: every view is private; Copy link sits beside the View button."
+      },
+      {
+       "file": "frames/sv2-b-open.html",
+       "caption": "The menu opened: one Saved list, no sharing, Copy link to these filters at the foot."
+      },
+      {
+       "file": "frames/sv2-b-mid.html",
+       "caption": "Mid-way: Copy link pressed; tick: Link copied. The link carries every filter."
+      },
+      {
+       "file": "frames/sv2-b-result.html",
+       "caption": "Result: a viewer opens the link; the page shows the filters from Rosa Lind’s link, with Save as my view. Cost: Share: 2 clicks (Copy link, then paste it). Nothing to keep in step: a link is a copy."
+      },
+      {
+       "file": "frames/sv2-b-hard-1512.html",
+       "caption": "Hard case at 1512: a team that reviews from the same views must each save their own; a change to one reaches nobody else."
+      },
+      {
+       "file": "frames/sv2-b-phone-390.html",
+       "caption": "Phone 390: a link opened on a phone, with Save as my view."
+      }
+     ]
+    },
+    {
+     "letter": "C",
+     "name": "Per-view rights",
+     "recommended": false,
+     "what": "When saving, Who sees it and Who can change it (Just me; Owners and approvers; Anyone who can edit). A lock marks limited views. People who may not change a view get only Save as my view; there is no proposal path.",
+     "plus": "Fine control for teams that want a view to stay fixed.",
+     "cost": "2 more taps to share. A new setting to learn, and commenters lose the proposal path they have elsewhere.",
+     "frames": [
+      {
+       "file": "frames/sv2-c-rest.html",
+       "caption": "At rest, menu open: a lock marks views only some people may change."
+      },
+      {
+       "file": "frames/sv2-c-open.html",
+       "caption": "Save these filters opened: Who sees it, and Who can change it."
+      },
+      {
+       "file": "frames/sv2-c-mid.html",
+       "caption": "Mid-way: named, shared with everyone, changeable by owners and approvers."
+      },
+      {
+       "file": "frames/sv2-c-result.html",
+       "caption": "Result: the view is shared, with a lock. Cost: Share: 2 more taps (Everyone, then who can change it) when saving."
+      },
+      {
+       "file": "frames/sv2-c-hard-1512.html",
+       "caption": "Hard case, a commenter at 1512: the view is locked to owners and approvers, so only Save as my view is offered; no proposal path."
+      },
+      {
+       "file": "frames/sv2-c-phone-390.html",
+       "caption": "Phone 390: the save sheet with both choices stacked."
+      }
+     ]
+    },
+    {
+     "letter": "D",
+     "name": "Team views by owners",
+     "recommended": false,
+     "what": "Only owners and approvers can make Team views; they sit at the top of everyone’s menu. Everyone else saves for themselves only.",
+     "plus": "A short, curated list everyone shares; no clutter from personal views.",
+     "cost": "1 more tap, owners only. Others cannot share a useful view except by link.",
+     "frames": [
+      {
+       "file": "frames/sv2-d-rest.html",
+       "caption": "At rest: a team view is picked; the button says Team."
+      },
+      {
+       "file": "frames/sv2-d-open.html",
+       "caption": "The menu opened: Team views, set by owners, come first for everyone; then built-in, then Mine."
+      },
+      {
+       "file": "frames/sv2-d-mid.html",
+       "caption": "Mid-way: an owner saves with Make it a team view ticked."
+      },
+      {
+       "file": "frames/sv2-d-result.html",
+       "caption": "Result: the view is a team view for everyone; tick: Saved as a team view. Cost: Share: 1 more tap (Make it a team view), owners only."
+      },
+      {
+       "file": "frames/sv2-d-hard-1512.html",
+       "caption": "Hard case, a viewer at 1512: they can save for themselves only; no team choice is offered."
+      },
+      {
+       "file": "frames/sv2-d-phone-390.html",
+       "caption": "Phone 390: the sheet with Team views on top."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "SV3",
+   "name": "Managing views",
+   "question": "Where are views renamed, reordered, made the default and removed, and how do ten views with long names fit at 1512 and 390?",
+   "common": "Every proposal can rename, reorder, set a default and remove a view; removing is never asked twice and always offers Undo. Built-in views can be hidden but not removed. Ten long names are tested at 1512 and 390. Shared views follow SV2 (only those who may change one can rename or remove it).",
+   "proposals": [
+    {
+     "letter": "A",
+     "name": "A Manage views sheet",
+     "recommended": true,
+     "what": "Manage views, at the foot of the View menu, opens a side sheet listing every view: a handle to drag, the name to click and rename, a Default choice, and Remove (Hide for built-in views). A removal shows Undo in a toast. On a phone the sheet fills the screen.",
+     "why": "With ten long names a full-height list is the only place every name stays readable and every action stays one tap; the View menu stays a plain picker.",
+     "plus": "All four jobs in one place, with room for long names to wrap; drag works well with many views.",
+     "cost": "Rename: 4 steps. Reorder: one drag. Default: 1 tap in the sheet. Remove: 1 tap, Undo in the toast.",
+     "frames": [
+      {
+       "file": "frames/sv3-a-open.html",
+       "caption": "Manage views opened from the View menu: a sheet with every view, a handle to drag, Default, and Remove (built-in views can be hidden)."
+      },
+      {
+       "file": "frames/sv3-a-mid.html",
+       "caption": "Mid-way: the name of Alerts launch review was clicked and is being typed over."
+      },
+      {
+       "file": "frames/sv3-a-result.html",
+       "caption": "Result: renamed in place, tick: Renamed. Cost: Rename: 4 steps (View, Manage views, the name, type and Enter). Reorder: drag. Default: 1 tap in the sheet. Remove: 1 tap, Undo in the toast."
+      },
+      {
+       "file": "frames/sv3-a-hard-1512.html",
+       "caption": "Hard case at 1512: twelve saved views with long names wrap on two lines in the sheet; one was removed and the toast offers Undo."
+      },
+      {
+       "file": "frames/sv3-a-phone-390.html",
+       "caption": "Phone 390: the sheet fills the screen; handles stay on the left."
+      }
+     ]
+    },
+    {
+     "letter": "B",
+     "name": "In the menu",
+     "recommended": false,
+     "what": "Each saved row in the View menu has ⋯: Rename, Move up, Move down, Make it the default, Copy link, Remove. Rename turns the row into a name box; a removed view leaves an Undo line in its place.",
+     "plus": "Nothing new to open; each action sits on the view it changes.",
+     "cost": "Rename: 4 steps. Reorder: one place per click. Remove: 3 clicks, Undo in place.",
+     "frames": [
+      {
+       "file": "frames/sv3-b-open.html",
+       "caption": "The View menu opened, then ⋯ on Alerts launch review: Rename, Move up, Move down, Make it the default, Copy link, Remove."
+      },
+      {
+       "file": "frames/sv3-b-mid.html",
+       "caption": "Mid-way: Rename turned the row into a name box inside the menu."
+      },
+      {
+       "file": "frames/sv3-b-result.html",
+       "caption": "Result: the row and the View button carry the new name. Cost: Rename: 4 steps (View, ⋯, Rename, type and Enter). Reorder: Move up or down, one place per click. Remove: 3 clicks, Undo in place."
+      },
+      {
+       "file": "frames/sv3-b-hard-1512.html",
+       "caption": "Hard case at 1512: twelve long names in one scrolling menu; a removed view leaves an Undo line in its place."
+      },
+      {
+       "file": "frames/sv3-b-phone-390.html",
+       "caption": "Phone 390: the same menu as a bottom sheet; ⋯ on each saved row."
+      }
+     ]
+    },
+    {
+     "letter": "C",
+     "name": "On the tabs",
+     "recommended": false,
+     "what": "With views as tabs (SV1 A), ⋯ on the picked tab offers Rename, Make it the default, Copy link and Remove; tabs reorder by drag; the +N more list has drag handles. Removal shows Undo in a toast.",
+     "plus": "Direct: change the tab you see. Only fits if SV1 picks tabs.",
+     "cost": "Rename: 3 steps. Reorder: drag. Remove: 2 clicks, Undo in the toast. Long names are cut short in tabs.",
+     "frames": [
+      {
+       "file": "frames/sv3-c-open.html",
+       "caption": "Views as tabs: ⋯ on the picked tab opens Rename, Make it the default, Copy link, Remove."
+      },
+      {
+       "file": "frames/sv3-c-mid.html",
+       "caption": "Mid-way: the tab became a name box."
+      },
+      {
+       "file": "frames/sv3-c-result.html",
+       "caption": "Result: the tab carries the new name. Cost: Rename: 3 steps (⋯ on the tab, Rename, type and Enter). Reorder: drag a tab. Remove: 2 clicks, Undo in the toast."
+      },
+      {
+       "file": "frames/sv3-c-hard-1512.html",
+       "caption": "Hard case at 1512: six tabs fit; the rest sit under +N more with drag handles; a removed tab shows Undo in a toast."
+      },
+      {
+       "file": "frames/sv3-c-phone-390.html",
+       "caption": "Phone 390: the tabs scroll sideways; long names are cut short."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
