@@ -43653,6 +43653,22 @@ export interface components {
             reason: string;
         };
         /**
+         * SimpleNoteCode
+         * @description #1866: a goal, feature or milestone whose code a note writes, with its name, so the
+         *     page shows the code with its name ("F-104 Quiet hours"); the company's own only.
+         */
+        SimpleNoteCode: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "feature" | "milestone";
+        };
+        /**
          * SimpleOldMilestone
          * @description old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap
          *     (history) that is not on the company roadmap yet. ``items``: the titles of the items
@@ -44998,6 +45014,11 @@ export interface components {
             day?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Codes
+             * @default []
+             */
+            codes: components["schemas"]["SimpleNoteCode"][];
         };
         /**
          * SimpleRunStopOut
@@ -45032,6 +45053,11 @@ export interface components {
             day?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Codes
+             * @default []
+             */
+            codes: components["schemas"]["SimpleNoteCode"][];
             /**
              * Trail
              * @default []

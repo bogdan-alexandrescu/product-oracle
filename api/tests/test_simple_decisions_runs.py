@@ -32,8 +32,8 @@ from sqlalchemy import event, select
 
 from oracle.baseline.models import Entity
 from oracle.db import get_engine
-from oracle.roadmap.models import TrackMilestone
 from oracle.docs.models import Document
+from oracle.roadmap.models import TrackMilestone
 from oracle.runs.models import Checkpoint, Run
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx

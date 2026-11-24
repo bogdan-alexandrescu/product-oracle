@@ -14,6 +14,7 @@ from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.docs.prd_order import sort_prds
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple import note_codes
 from oracle.simple.meetings_common import (
     INBOX_DAYS,
     PRODUCT,
@@ -255,6 +256,8 @@ async def _run_groups(
     def on(at: datetime | None) -> date | None:
         return company_time.day(at, zone) if at else None
 
+    # #1866: the codes every note writes, named in one read for all of them.
+    named = await note_codes.names(db, (d.note for ds in decisions.values() for d in ds))
     out: list[SimpleRunGroup] = []
     for run in runs:
         # A stop turned off when the run started was not a person's decision.
@@ -276,8 +279,10 @@ async def _run_groups(
                 who=last.decided_by_name,
                 role=(last.decided_by_role or "").replace("_", " ") or None,
                 day=on(last.decided_at), note=last.note,
+                codes=note_codes.of(last.note, named),
                 trail=[SimpleRunStepOut(what=what(s),
-                                        who=s.decided_by_name, day=on(s.decided_at), note=s.note)
+                                        who=s.decided_by_name, day=on(s.decided_at), note=s.note,
+                                        codes=note_codes.of(s.note, named))
                        for s in steps] if len(steps) > 1 else [],
             ))  # fmt: skip
         if not stops:

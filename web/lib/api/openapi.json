@@ -129854,6 +129854,35 @@
         "title": "SimpleNotApproved",
         "description": "A roadmap a meeting's session worked on that the caller does not approve."
       },
+      "SimpleNoteCode": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "feature",
+              "milestone"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "kind"
+        ],
+        "title": "SimpleNoteCode",
+        "description": "#1866: a goal, feature or milestone whose code a note writes, with its name, so the\npage shows the code with its name (\"F-104 Quiet hours\"); the company's own only."
+      },
       "SimpleOldMilestone": {
         "properties": {
           "id": {
@@ -133097,6 +133126,14 @@
               }
             ],
             "title": "Note"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleNoteCode"
+            },
+            "type": "array",
+            "title": "Codes",
+            "default": []
           }
         },
         "type": "object",
@@ -133174,6 +133211,14 @@
               }
             ],
             "title": "Note"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleNoteCode"
+            },
+            "type": "array",
+            "title": "Codes",
+            "default": []
           },
           "trail": {
             "items": {
