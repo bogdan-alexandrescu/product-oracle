@@ -132,27 +132,39 @@ export function mockSettingValue(key: string): unknown {
   return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
+/** draw-time (#1870): one formatter per zone, built once. Building an Intl.DateTimeFormat is
+ * slow, and the mock answers a 500-item page by asking the company's day hundreds of times on
+ * the page's own thread, which held the Roadmap's first draw back by most of a second. */
+const zoneFormats = new Map<string, Intl.DateTimeFormat | null>();
+function zoneFormat(zone: string): Intl.DateTimeFormat | null {
+  if (!zoneFormats.has(zone)) {
+    let f: Intl.DateTimeFormat | null = null;
+    try {
+      f = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+        timeZoneName: 'short',
+      });
+    } catch {
+      f = null;
+    }
+    zoneFormats.set(zone, f);
+  }
+  return zoneFormats.get(zone) ?? null;
+}
+
 export function companyZone(): string {
   const zone = String(mockSettingValue('company_timezone') ?? 'America/Los_Angeles');
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
-    return zone;
-  } catch {
-    return 'America/Los_Angeles';
-  }
+  return zoneFormat(zone) ? zone : 'America/Los_Angeles';
 }
 
 function companyParts(at: string | Date): Record<string, string> {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: companyZone(),
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-    timeZoneName: 'short',
-  }).formatToParts(new Date(at));
+  const parts = zoneFormat(companyZone())!.formatToParts(new Date(at));
   return Object.fromEntries(parts.map((p) => [p.type, p.value]));
 }
 
