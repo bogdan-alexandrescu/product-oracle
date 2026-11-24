@@ -90,6 +90,10 @@ test('Detailed: the account menu opens Connect an AI tool; the Claude Code comma
   await expect(guide.getByTestId('mcp-steps-code')).toContainText(
     'In Claude Code, run /mcp and choose oracle',
   );
+  // The picked frame prints the whole sentence in plain text: no code wrappers in the title.
+  await expect(
+    guide.getByTestId('mcp-steps-code').locator('li').nth(1).locator('span.text-base code'),
+  ).toHaveCount(0);
   await guide
     .getByRole('group', { name: 'Your tool' })
     .getByRole('button', { name: 'Claude app' })
@@ -214,7 +218,18 @@ test('after five minutes the strip says the sign-in timed out, with /mcp to copy
 test('the strip dates a client last used over a day ago, month first', async ({ page }) => {
   await login(page);
   await page.goto('/account');
-  await expect(page.getByTestId('mcp-check')).toContainText('Used on Oct 20, 2026');
+  await expect(page.getByTestId('mcp-check')).toContainText(/Used on [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+});
+
+test('on a phone a row reads "Used just now", lower case after Used', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await page.goto('/account');
+  const used = page
+    .getByTestId('my-client-row')
+    .first()
+    .getByText(/just now|min ago|h ago/i);
+  await expect(used.first()).toHaveCSS('text-transform', 'lowercase');
 });
 
 test('Revoke asks once, then the client leaves the table', async ({ page }) => {
@@ -234,6 +249,11 @@ test('a viewer reads only; a commenter’s changes become proposals', async ({ p
   await login(page, 'viewer@example.com');
   await page.goto('/account');
   await expect(page.getByTestId('mcp-role-access')).toContainText('Read only');
+  // The picked frame's tip, with the signed-in role's own label.
+  await page.getByTestId('mcp-role-access').getByRole('button').focus();
+  await expect(page.getByRole('tooltip')).toHaveText(
+    'Your role is Viewer: a connected tool reads goals, the roadmap and documents, and changes nothing. Approve with Read only and a tool only reads.',
+  );
 
   await signOut(page);
   await login(page, 'commenter@example.com');

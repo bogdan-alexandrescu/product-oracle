@@ -6,6 +6,7 @@ import { tokenState, when } from '@/components/ApiTokensSettings';
 import { Button, Chip, Icon, InfoTip, Panel, SegmentedControl } from '@/components/ds';
 import type { McpClient } from '@/lib/api/client';
 import { formatDate, formatDateTime } from '@/lib/format';
+import { ROLE_LABEL } from '@/components/MembersSettings';
 import { useMe } from '@/lib/me';
 import type { useQuery } from '@/lib/use-query';
 
@@ -34,7 +35,11 @@ export function ago(iso: string) {
 export const usedCell = (iso: string) => {
   const a = ago(iso);
   return a ? (
-    <span className="whitespace-nowrap text-text2" title={formatDateTime(iso)}>
+    // On the phone the row reads "Used just now": lower case after its label.
+    <span
+      className="whitespace-nowrap text-text2 max-[600px]:lowercase"
+      title={formatDateTime(iso)}
+    >
       {a}
     </span>
   ) : (
@@ -81,7 +86,7 @@ function CopyChip({ text, testId }: { text: string; testId?: string }) {
 
 /** What the person's tools will be able to do: read from what their role may call. */
 function RoleAccess() {
-  const { can, capsReady } = useMe();
+  const { can, capsReady, role } = useMe();
   const [kind, label, tip] = can('create_bucket_goal')
     ? ([
         'pass',
@@ -97,7 +102,7 @@ function RoleAccess() {
       : ([
           'na',
           'Read only',
-          'A connected tool reads goals, the roadmap and documents, and changes nothing.',
+          `Your role is ${role ? ROLE_LABEL[role] : 'not known'}: a connected tool reads goals, the roadmap and documents, and changes nothing.`,
         ] as const);
   // Until the capabilities load, no status (never a wrong one).
   if (!capsReady) return null;
@@ -174,15 +179,7 @@ function ClientSteps({ tab, url }: { tab: Tab; url: string }) {
         >
           <CopyChip text={`claude mcp add --transport http oracle ${url}`} testId="mcp-command" />
         </Step>
-        <Step
-          n={2}
-          title={
-            <>
-              In Claude Code, run <code className="font-mono">/mcp</code> and choose{' '}
-              <code className="font-mono">oracle</code>
-            </>
-          }
-        >
+        <Step n={2} title={'In Claude Code, run /mcp and choose oracle'}>
           <span className="w-fit">
             <CopyChip text="/mcp" />
           </span>
