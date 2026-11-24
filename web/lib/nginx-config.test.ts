@@ -35,7 +35,12 @@ test('a control character in the path is refused before any redirect copies it',
 
 test('no redirect sends a person to another host', () => {
   const locations = nginxLocations(conf);
-  for (const path of ['/\\evil.com/', '/\\\\evil.com/', '/simple/prds/\\evil.com', '/baseline/\\x']) {
+  for (const path of [
+    '/\\evil.com/',
+    '/\\\\evil.com/',
+    '/simple/prds/\\evil.com',
+    '/baseline/\\x',
+  ]) {
     for (const query of ['', 'a=1']) {
       const to = nginxAnswer(locations, path, query)?.to;
       if (to) expect(to, path).not.toMatch(/^(\/[/\\]|[a-z]+:)/i);
@@ -73,7 +78,7 @@ function renderProxy(apiUrl: string | undefined): string {
   const envsubst = join(dir, 'bin', 'envsubst');
   writeFileSync(
     envsubst,
-    '#!/bin/sh\nexec perl -pe \'s/\\$\\{(API_INTERNAL_URL|ORACLE_GIT_SHA)\\}/$ENV{$1}/g\'\n',
+    "#!/bin/sh\nexec perl -pe 's/\\$\\{(API_INTERNAL_URL|ORACLE_GIT_SHA)\\}/$ENV{$1}/g'\n",
   );
   chmodSync(envsubst, 0o755);
   const env: Record<string, string> = {
