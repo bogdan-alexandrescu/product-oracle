@@ -92,7 +92,9 @@ test("an owner's Inbox shows the Track row with the slip and Accept new date; th
     slipRow(page).getByRole('button', { name: `Accept new date for ${ITEM}` }),
   ).toBeVisible();
   // inbox-ux (#1784): one primary action; Keep watching and Open in Plan in the row's menu.
-  await slipRow(page).getByRole('button', { name: `More actions for ${ITEM}` }).click();
+  await slipRow(page)
+    .getByRole('button', { name: `More actions for ${ITEM}` })
+    .click();
   await expect(slipRow(page).getByRole('menuitem')).toHaveText(['Keep watching', 'Open in Plan']);
 });
 

@@ -36,7 +36,9 @@ test('the rail badge, Home and the Inbox count the same with a checkpoint of man
   await openSeeded(page, seedRoadmapReview, '/inbox');
   const rows = page.locator('tr[data-row]').filter({ visible: true });
   await expect(rows.filter({ hasText: 'Roadmap items · 10 need you' })).toHaveCount(1);
-  await expect(rows.filter({ hasText: 'Usage alerts PRD · Needs a look · 3 need you' })).toHaveCount(1);
+  await expect(
+    rows.filter({ hasText: 'Usage alerts PRD · Needs a look · 3 need you' }),
+  ).toHaveCount(1);
   await expect(waiting(page)).toBeVisible();
   const inbox = await number(waiting(page));
   expect(inbox).toBeGreaterThan(1);
