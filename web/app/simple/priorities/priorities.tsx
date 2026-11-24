@@ -38,6 +38,7 @@ import {
   type ShowKind,
 } from '@/components/current-state/CurrentState';
 import { useSetParams } from '@/lib/use-set-params';
+import { MkPageStrip, MkRowChip } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import { topGoalSuggestions } from '@/lib/key-results';
 import { LoadError, Loading } from '@/components/ui';
 import { errorMessage, useQuery } from '@/lib/use-query';
@@ -561,6 +562,7 @@ export function Priorities() {
             )}
           </p>
         )}
+        {data && !blank && tab === 'ranked' && <MkPageStrip />} {/* MOCK-HOOK */}
         {data && !blank && tab === 'ranked' && marks && (
           <div className="mb-3" data-testid="cs-prio-bar">
             <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
@@ -1089,6 +1091,7 @@ function YourList({
                     <span className="flex flex-none items-center">
                       <MarkFor featureId={r.feature_id} checked />
                     </span>
+                    <MkRowChip title={r.title} onOpen={open ? () => open(r) : undefined} /> {/* MOCK-HOOK */}
                   </span>
                   {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
                   {!r.own_key && <NotInGt />}

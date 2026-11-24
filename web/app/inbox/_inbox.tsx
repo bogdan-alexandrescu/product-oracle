@@ -1,5 +1,6 @@
 'use client';
 
+import { MkInboxRows } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
@@ -424,6 +425,7 @@ function InboxTabs({
       )}
       {notice}
       <div role="tabpanel" aria-label={label} data-testid={`inbox-tab-${tab}`}>
+        {tab === 'new' && <MkInboxRows />} {/* MOCK-HOOK */}
         {shown.length === 0 ? (
           <Empty testId="inbox-tab-empty">
             {/* qa-company-43: New empties once seen; say where the waiting items went. */}

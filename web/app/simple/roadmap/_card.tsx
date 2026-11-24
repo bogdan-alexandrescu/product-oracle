@@ -37,6 +37,7 @@ import { errorMessage } from '@/lib/use-query';
 
 import { HORIZONS, type Horizon } from './_board';
 import { NameEdit, PanelFields } from './_fields';
+import { MkPanelSection } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
@@ -1412,6 +1413,7 @@ export function FloatingCard({
             served={served}
             noHorizon={!!onHorizon}
           />
+          <MkPanelSection title={item.title} canChange={canChange} /> {/* MOCK-HOOK */}
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
             {item.slices.length > 0 && (
               <>
