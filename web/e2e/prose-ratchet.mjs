@@ -39,7 +39,7 @@ const PAGES = path.join(OUT, 'pages.json');
 const pages = fs.existsSync(PAGES) ? new Set(JSON.parse(fs.readFileSync(PAGES, 'utf8'))) : null;
 const counts = fs
   .readdirSync(OUT)
-  .filter((f) => f.endsWith('.json') && f !== 'routes.json')
+  .filter((f) => f.endsWith('.json') && f !== 'routes.json' && f !== 'pages.json')
   .map((f) => JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8')))
   .filter((c) => !c.missing && (!routes || routes.has(c.route)));
 const changes = [];
