@@ -28,7 +28,7 @@ and `web/lib/csp.test.ts` now keep `web/nginx/` in step with the app.
 |---|---|---|---|
 | `/roadmap` | `/plan` | 308 | `location = /roadmap { return 308 /plan$is_args$args; }` |
 | `/baseline/:path*` | `/ground-truth/:path*` | 308 | `location ~ ^/baseline(/.*)?$ { return 308 /ground-truth$1$is_args$args; }` |
-| `/simple/prds/:doc` | `/simple/one-pagers/:doc` | 307 | `location ~ ^/simple/prds/([^/]+)$ { return 307 /simple/one-pagers/$1$is_args$args; }` |
+| `/simple/prds/:doc` | `/simple/one-pagers/:doc` | 307 | `location ~ ^/simple/prds/([^/\x5c]+)/?$ { return 307 /simple/one-pagers/$1$is_args$args; }` |
 | `/requests/new` | `/requests/to-decide` (no query: `/requests?compose=request`) | 307 | `location = /requests/new { if ($args = "") { return 307 /requests?compose=request; } return 307 /requests/to-decide$is_args$args; }` |
 
 | Next `rewrites()` source | Upstream today | nginx |
@@ -63,7 +63,7 @@ Notes on the rows:
 - `^~` matters: nginx tries regex locations before plain prefixes, so without it the
   trailing-slash and redirect regexes below could catch an API path.
 - Next also 308s a trailing slash away (`/plan/` → `/plan`); nginx keeps that with one regex
-  location (in the draft) so old links behave the same.
+  location so old links behave the same.
 - The redirects stay in the client router too (a `beforeLoad` redirect per row), so in-app
   links, `vite dev` and `vite preview` (the Playwright server, which has no nginx) agree
   with production. nginx answers first for a full page load.
@@ -90,9 +90,14 @@ Notes on the rows:
   (`POST /v1/sources/{id}/uploads`: several files, up to 20 MiB each,
   `api/oracle/sources/uploads.py`). Set `client_max_body_size 100m` on `/v1/`; the API
   keeps its own per-file and per-body limits (`ORACLE_MAX_BODY_BYTES`, 413).
-- **Headers to the API.** `Host $host`, `X-Forwarded-For $proxy_add_x_forwarded_for`,
-  `X-Forwarded-Proto $scheme`. The API reads none of them today; they keep logs and any
-  later absolute URL right.
+- **Headers to the API.** `Host $http_host`, `X-Forwarded-Host $http_host`,
+  `X-Forwarded-For $proxy_add_x_forwarded_for`, `X-Forwarded-Proto $scheme`. The same-origin
+  check of signed-in writes (`api/oracle/auth/deps.py`) reads `Host` and `X-Forwarded-Host`,
+  port included, as Next sent them; `$host` drops the port, so `http://127.0.0.1:3000` would get
+  a 403 on every write (#1609).
+- **No API behind the image** (production, where the load balancer sends `/v1/*`,
+  `/uploads/*` and `/healthz` to the API): `40-oracle-config.sh` answers `/v1/` and
+  `/uploads/` with a 404, so a path the URL map misses is a loud 404, not `index.html` (#1708).
 - **/uploads/** (company logos, served by the API to members): proxied with buffering on;
   the API sets its own cache headers.
 - **/healthz**: proxied, so the container's health check proves nginx *and* the API answer.
@@ -173,84 +178,25 @@ config for dev, build and preview. For Oracle it holds:
   drift;
 - `build.outDir` from the mode (`dist`, `dist-mock`, `dist-e2e`), `build.assetsDir: "assets"`.
 
-## Draft nginx config
+## The nginx config
 
-A draft for phase 1, not yet run through `nginx -t`. Files:
-`web/nginx/default.conf.template` (rendered to `/etc/nginx/conf.d/default.conf`) and
-`web/nginx/security-headers.conf`.
+Built in `web/nginx/`: `default.conf.template` (rendered to `/etc/nginx/conf.d/default.conf`
+by `40-oracle-config.sh` at container start), `api-proxy.conf.template` and
+`security-headers.conf`. Read those files; `lib/nginx-config.test.ts` and
+`lib/redirects.test.ts` check them. What they fix from the first draft (#1609):
 
-```nginx
-# security-headers.conf: included wherever a location sets its own headers.
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com/gsi/; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https://notion.so https://*.notion.so https://notion.site https://*.notion.site https://notion-static.com https://*.notion-static.com https://prod-files-secure.s3.us-west-2.amazonaws.com; font-src 'self' data:; frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/; connect-src 'self' https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
-```
-
-```nginx
-# default.conf.template
-server {
-    listen 3000;
-    server_tokens off;
-    root /usr/share/nginx/html;
-    include /etc/nginx/security-headers.conf;
-
-    gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
-
-    # API, same origin (session cookie, no CORS).
-    location ^~ /v1/ {
-        proxy_pass ${API_INTERNAL_URL};
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;          # lib/stream.ts: server-sent events
-        proxy_read_timeout 120s;      # was experimental.proxyTimeout
-        proxy_send_timeout 120s;
-        client_max_body_size 100m;    # Sources uploads; the API keeps its own limits
-        gzip off;
-    }
-    location ^~ /uploads/ {
-        proxy_pass ${API_INTERNAL_URL};
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location = /healthz {
-        proxy_pass ${API_INTERNAL_URL};
-        proxy_set_header Host $host;
-    }
-
-    # Redirects: the generated table above, row for row.
-    location = /roadmap { return 308 /plan$is_args$args; }
-    location = /baseline { return 308 /ground-truth$is_args$args; }
-    location ~ ^/baseline(/.*)?$ { return 308 /ground-truth$1$is_args$args; }
-    location ~ ^/simple/prds/([^/]+)$ { return 307 /simple/one-pagers/$1$is_args$args; }
-    # Next drops a trailing slash with a 308; keep old links working the same way.
-    location ~ ^(.+)/$ { return 308 $1$is_args$args; }
-
-    # Hashed build output: immutable; a missing chunk is a 404 nobody caches.
-    location ^~ /assets/ {
-        include /etc/nginx/security-headers.conf;
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
-        try_files $uri =404;
-        error_page 404 = @missing_asset;
-    }
-    location @missing_asset {
-        include /etc/nginx/security-headers.conf;
-        add_header Cache-Control "no-store" always;
-        return 404;
-    }
-
-    # Everything else: a real file, or the app shell.
-    location / {
-        try_files $uri /index.html;
-    }
-    location = /index.html {
-        include /etc/nginx/security-headers.conf;
-        add_header Cache-Control "no-cache" always;
-    }
-}
-```
+- `absolute_redirect off`: a redirect's `Location` is the path alone. Without it nginx adds
+  the scheme and its listen port, sending people behind the TLS load balancer to
+  `http://<host>:3000/...`.
+- `if ($uri ~ "[\x00-\x1f\x7f]") { return 400; }` before any location: the regex redirects
+  copy part of the decoded path into `Location`, and nginx refuses only `%00`, so
+  `%0D%0A` would split the response.
+- A captured segment excludes `\` (`[^/\x5c]`), and the trailing-slash rule needs a second
+  character that is neither `/` nor `\`: once redirects are relative, `/%5Cevil.com/` would
+  answer `Location: /\evil.com`, which browsers read as `//evil.com`.
+- `/i/<token>` and `/s/<token>` (interview and share pages) get `Referrer-Policy: no-referrer`
+  and `X-Robots-Tag: noindex, nofollow` with the app shell, before any script runs.
+- `X-Forwarded-Host $http_host` to the API (Headers to the API, above).
 
 `root` + `try_files` only, never `alias` (two 2026 nginx advisories, CVE-2026-125283 and
 CVE-2026-15176, are about `alias` with `try_files`/`rewrite`). No HTTP/2, HTTP/3, `resolver`,
