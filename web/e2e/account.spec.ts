@@ -244,17 +244,18 @@ test("my account: a token's expiry is chosen at creation; an expired one shows a
 test('my account: revoke an MCP client', async ({ page }) => {
   await login(page);
   await page.goto('/account');
+  // Owner's pick (Nov 23): Connected clients lists the live ones; a revoked one leaves it.
   const row = page.getByTestId('my-client-row').filter({ hasText: 'Claude Desktop' });
-  await expect(row).toContainText('Active');
+  await expect(row).toBeVisible();
   await expect(
     page.getByTestId('my-client-row').filter({ hasText: 'Old notebook agent' }),
-  ).toContainText('Revoked');
+  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Revoke Claude Desktop' }).click();
   await page
-    .getByRole('dialog', { name: 'Revoke this MCP client?' })
+    .getByRole('dialog', { name: 'Revoke this client?' })
     .getByRole('button', { name: 'Revoke' })
     .click();
-  await expect(row).toContainText('Revoked');
+  await expect(row).toHaveCount(0);
 });
 
 test('my account: change password', async ({ page }) => {
@@ -321,9 +322,7 @@ test('my account: sign out everywhere ends the session, personal tokens, MCP cli
 
   await login(page);
   await page.goto('/account');
-  await expect(
-    page.getByTestId('my-client-row').filter({ hasText: 'Claude Desktop' }),
-  ).toContainText('Revoked');
+  await expect(page.getByTestId('my-client-row')).toHaveCount(0);
   await expect(page.getByTestId('my-token-row').filter({ hasText: 'agent-track' })).toContainText(
     'Revoked',
   );

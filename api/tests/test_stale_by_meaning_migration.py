@@ -55,10 +55,10 @@ async def _run(tenant_id) -> None:
 
 
 def test_chains_on_the_single_head():
-    """The migration chains directly onto its prior revision, and it is the one head."""
+    """It chains onto its prior revision; a later one (OAuth last-used) is the one head."""
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0138_oauth_token_used_at"]
 
 
 async def _item(tenant_id, key: str, goal_id) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:

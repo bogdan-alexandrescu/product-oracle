@@ -7,9 +7,10 @@ Functions flush, never commit; the router commits once per request.
 
 import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,10 +69,20 @@ class Grant:
     user_id: uuid.UUID
     scope: str
     authorized_at: datetime
-    # The newest row: issued at the last refresh (access tokens record no use).
+    # The newest of the last refresh and the last use of an access token on /mcp.
     last_used_at: datetime
     expires_at: datetime
     revoked_at: datetime | None
+    redirect_uris: list[str] = field(default_factory=list)
+
+    @property
+    def runs_on(self) -> str:
+        """Where the client runs: a loopback redirect is the person's own computer,
+        otherwise the site's host."""
+        host = urlsplit(self.redirect_uris[0]).hostname if self.redirect_uris else None
+        if not host or host in ("localhost", "127.0.0.1", "::1") or host.startswith("127."):
+            return "Your computer"
+        return host
 
     @property
     def live(self) -> bool:
@@ -105,13 +116,15 @@ async def grants(
                 user_id=row.user_id,
                 scope=row.scope,
                 authorized_at=row.created_at,
-                last_used_at=row.created_at,
+                last_used_at=max(row.created_at, row.used_at or row.created_at),
                 expires_at=row.refresh_expires_at,
                 revoked_at=row.revoked_at,
+                redirect_uris=list(client.redirect_uris),
             )
             continue
         # Rows come oldest first: the newest decides scope and expiry.
-        g.scope, g.last_used_at, g.expires_at = row.scope, row.created_at, row.refresh_expires_at
+        g.scope, g.expires_at = row.scope, row.refresh_expires_at
+        g.last_used_at = max(g.last_used_at, row.created_at, row.used_at or row.created_at)
         g.revoked_at = row.revoked_at
     return list(out.values())
 

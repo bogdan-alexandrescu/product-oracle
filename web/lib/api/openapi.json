@@ -8786,6 +8786,37 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/mcp-people": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Mcp People",
+        "description": "MCP across the company, for owners: each active member, their role, how many MCP\nclients they have connected (live grants) and the newest last-used time, and how\nmany of them have one connected.",
+        "operationId": "list_mcp_people",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpPeopleOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
     "/v1/members/{user_id}": {
       "patch": {
         "tags": [
@@ -96927,6 +96958,10 @@
             "format": "date-time",
             "title": "Last Used At"
           },
+          "runs_on": {
+            "type": "string",
+            "title": "Runs On"
+          },
           "expires_at": {
             "type": "string",
             "format": "date-time",
@@ -96953,10 +96988,97 @@
           "scopes",
           "authorized_at",
           "last_used_at",
+          "runs_on",
           "expires_at"
         ],
         "title": "McpClientOut",
         "description": "An MCP client you authorized: one OAuth grant (its access and refresh tokens)."
+      },
+      "McpPeopleOut": {
+        "properties": {
+          "connected": {
+            "type": "integer",
+            "title": "Connected"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/McpPersonOut"
+            },
+            "type": "array",
+            "title": "People"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "total",
+          "people"
+        ],
+        "title": "McpPeopleOut",
+        "description": "MCP across the company: ``connected`` of ``total`` active members have a live\nclient; one row per active member."
+      },
+      "McpPersonOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "clients": {
+            "type": "integer",
+            "title": "Clients"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "role",
+          "clients"
+        ],
+        "title": "McpPersonOut",
+        "description": "One member and the MCP clients they have connected (live grants only)."
       },
       "McpServerRegistration": {
         "properties": {
@@ -99329,6 +99451,10 @@
             "type": "boolean",
             "title": "Read Only",
             "default": false
+          },
+          "mcp_url": {
+            "type": "string",
+            "title": "Mcp Url"
           }
         },
         "type": "object",
@@ -99338,7 +99464,8 @@
           "role",
           "created_at",
           "sign_in_methods",
-          "signed_in_via"
+          "signed_in_via",
+          "mcp_url"
         ],
         "title": "MyAccountOut",
         "description": "The signed-in member: who they are, their role and how they sign in."

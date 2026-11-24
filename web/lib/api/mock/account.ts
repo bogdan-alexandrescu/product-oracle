@@ -4,6 +4,7 @@
  * everywhere). Checks and answers mirror oracle/members/tokens.py and oracle/account.
  */
 import type { Schemas } from '@/lib/api/client';
+
 import { reply } from './typed';
 
 type Role = Schemas['MemberOut']['role'];
@@ -188,6 +189,11 @@ export function passwordOk(
   return password === (db.passwords[email] ?? fallback);
 }
 
+/** The MCP address the API serves (its public address + /mcp). */
+export const MOCK_MCP_URL = 'https://oracle.example.com/mcp';
+/** Where each seeded client runs (the API derives it from the client's redirect address). */
+const RUNS_ON: Record<string, string> = { pocl_cursor: 'cursor.example.com' };
+
 function grantOut(t: TokenRow): Schemas['McpClientOut'] {
   return {
     id: t.id,
@@ -198,6 +204,32 @@ function grantOut(t: TokenRow): Schemas['McpClientOut'] {
     last_used_at: t.last_used_at ?? t.created_at,
     expires_at: t.expires_at ?? t.created_at,
     revoked_at: t.revoked_at,
+    runs_on: RUNS_ON[t.client_id ?? ''] ?? 'Your computer',
+  };
+}
+
+/** GET /v1/mcp-people (owners): each active member and their live MCP clients. */
+function mcpPeople(ctx: AccountContext): Schemas['McpPeopleOut'] {
+  const people = ctx.members
+    .filter((u) => !u.disabled_at)
+    .map((u) => {
+      const grants = ctx.db.tokens.filter(
+        (t) => t.kind === 'mcp_client' && t.user_id === u.id && live(t),
+      );
+      const used = grants.map((t) => t.last_used_at ?? t.created_at).sort();
+      return {
+        user_id: u.id,
+        email: u.email,
+        name: u.name ?? null,
+        role: u.role,
+        clients: grants.length,
+        last_used_at: used.at(-1) ?? null,
+      };
+    });
+  return {
+    connected: people.filter((x) => x.clients > 0).length,
+    total: people.length,
+    people,
   };
 }
 
@@ -212,6 +244,10 @@ export async function accountRoute(
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
 
+  if (p[1] === 'mcp-people' && !p[2] && m === 'GET') {
+    if (!atLeast(me.role, 'owner')) return json(403, { detail: 'Requires the owner role' });
+    return reply('/v1/mcp-people', 'get', mcpPeople(ctx));
+  }
   if (p[1] === 'api-tokens') {
     if (!atLeast(me.role, 'owner')) return json(403, { detail: 'Requires the owner role' });
     if (!p[2] && m === 'GET') {
@@ -289,6 +325,7 @@ export async function accountRoute(
       password_min_length: MIN_LENGTH,
       signed_in_via: ctx.readOnly ? 'api_token' : 'browser',
       read_only: !!ctx.readOnly,
+      mcp_url: MOCK_MCP_URL,
     };
     if (m === 'PATCH') return reply('/v1/me/account', 'patch', out);
     return reply('/v1/me/account', 'get', out);

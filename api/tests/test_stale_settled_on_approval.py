@@ -169,12 +169,13 @@ async def _run_migration(tenant_id) -> None:
 
 def test_chains_on_the_single_head():
     """The migration chains directly onto its prior revision; the branch has one head, which a
-    later migration (unique item codes, after feature comments) now holds."""
+    later migration (unique item codes, stale by meaning, OAuth last-used) now holds."""
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision("0135_feature_comments").down_revision == REVISION
     assert script.get_revision("0137_stale_by_meaning").down_revision == "0136_unique_item_codes"
-    assert script.get_heads() == ["0137_stale_by_meaning"]
+    assert script.get_revision("0138_oauth_token_used_at").down_revision == "0137_stale_by_meaning"
+    assert script.get_heads() == ["0138_oauth_token_used_at"]
 
 
 async def test_the_migration_settles_todays_flags(client, owner, runtime):  # noqa: F811

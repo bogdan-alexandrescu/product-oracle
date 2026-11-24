@@ -27,6 +27,7 @@ from oracle.auth.service import make_session_cookie
 from oracle.authz import not_for_runs
 from oracle.config import get_settings
 from oracle.errors import exception_text
+from oracle.mcp.oauth.service import issuer
 from oracle.members import service as members
 from oracle.members import tokens
 from oracle.members.schemas import ApiTokenOut, NamePatch
@@ -69,7 +70,7 @@ async def _call[T](op: Awaitable[T]) -> T:
         ) from e
 
 
-def _account_out(principal: Principal, user: User) -> MyAccountOut:
+def _account_out(principal: Principal, user: User, request: Request) -> MyAccountOut:
     methods = ["password"] if user.password_sign_in else []
     if get_settings().iap_audiences:
         methods.append("google")
@@ -84,14 +85,15 @@ def _account_out(principal: Principal, user: User) -> MyAccountOut:
         sign_in_methods=methods,
         signed_in_via=via,
         read_only=principal.read_only,
+        mcp_url=f"{issuer(str(request.base_url))}/mcp",
     )
 
 
 @router.get("/account", response_model=MyAccountOut)
-async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
+async def get_my_account(principal: Member, db: TenantDB, request: Request) -> MyAccountOut:
     """Your email, name, role, when you last signed in and how you sign in: with a
     password, with Google (when this deployment signs in through Google), or both."""
-    return _account_out(principal, await db.get(User, principal.user_id))
+    return _account_out(principal, await db.get(User, principal.user_id), request)
 
 
 @router.patch(
@@ -99,12 +101,14 @@ async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
     response_model=MyAccountOut,
     responses={403: {"description": "A read-only credential"}},
 )
-async def update_my_account(body: NamePatch, principal: Member, db: TenantDB) -> MyAccountOut:
+async def update_my_account(
+    body: NamePatch, principal: Member, db: TenantDB, request: Request
+) -> MyAccountOut:
     """Set your name (A5), shown to your teammates instead of your email; null clears
     it. Any role; a read-only token or MCP client cannot change it. Audited."""
     user = await _call(members.set_name(db, principal, principal.user_id, body.name, own=True))
     await db.commit()
-    return _account_out(principal, user)
+    return _account_out(principal, user, request)
 
 
 @router.post(
@@ -234,6 +238,7 @@ async def list_my_oauth_clients(principal: Member, db: TenantDB) -> list[McpClie
             scopes=tokens.scopes_of(g.scope),
             authorized_at=g.authorized_at,
             last_used_at=g.last_used_at,
+            runs_on=g.runs_on,
             expires_at=g.expires_at,
             revoked_at=g.revoked_at,
         )

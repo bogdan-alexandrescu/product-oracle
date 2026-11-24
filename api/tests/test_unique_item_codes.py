@@ -131,7 +131,7 @@ def test_the_migration_chains_on_the_single_head():
 
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision("0136_unique_item_codes").down_revision == "0135_feature_comments"
-    assert script.get_heads() == ["0137_stale_by_meaning"]
+    assert script.get_heads() == ["0138_oauth_token_used_at"]
 
 
 def _at(day: int) -> datetime:

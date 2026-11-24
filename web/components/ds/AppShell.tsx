@@ -1,6 +1,5 @@
 'use client';
 
-import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 import {
   Suspense,
   useCallback,
@@ -14,7 +13,6 @@ import {
 import { createPortal } from 'react-dom';
 
 import { HopPanel } from '@/components/hop/HopPanel';
-import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
 import {
   closeTransientPanel,
   setPanelOpen,
@@ -22,13 +20,17 @@ import {
   useAskDraft,
   usePanelOpen,
 } from '@/components/hop/open-state';
+import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
 import { api, MOCK_MODE } from '@/lib/api/client';
-import { homeOf, modeOf } from '@/lib/experience';
 import { resetMockData } from '@/lib/api/mock/server';
+import { onReadChanged, onReadFailed } from '@/lib/api/shared-reads';
+import { homeOf, modeOf } from '@/lib/experience';
 import { leave } from '@/lib/leave-guard';
 import { useMe } from '@/lib/me';
+import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
+import { ScreenSubjectProvider } from '@/lib/screen-subject';
 import { useSettingsTabs } from '@/lib/settings-tabs';
-import { onReadChanged, onReadFailed } from '@/lib/api/shared-reads';
+import { useTheme, type ThemeChoice } from '@/lib/theme';
 import {
   onWaitingChanged,
   railInbox,
@@ -37,14 +39,11 @@ import {
   retryWait,
   waitingCount,
 } from '@/lib/waiting';
-import { ScreenSubjectProvider } from '@/lib/screen-subject';
-import { useTheme, type ThemeChoice } from '@/lib/theme';
 
 import { Mark } from './Brand';
-import { ConfirmHost, confirmInPage } from './ConfirmDialog';
-import { ToastHost } from './Toast';
-import { initialsOf } from './Figures';
 import { Button } from './Button';
+import { ConfirmHost, confirmInPage } from './ConfirmDialog';
+import { initialsOf } from './Figures';
 import { Icon, type IconName } from './Icon';
 import { Notice } from './Layout';
 import { ModeRoot, ModeSwitch, SEGMENTED } from './ModeSwitch';
@@ -52,6 +51,7 @@ import { usePageInfo } from './page-info';
 import { onRadioKeys, radioTabIndex } from './radio-keys';
 import { RAIL_SELECTED, TAB_BAR } from './rail';
 import { Sheet } from './Sheet';
+import { ToastHost } from './Toast';
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
@@ -470,6 +470,18 @@ function UserMenu({
         >
           <Icon name="user" size={16} />
           My account
+        </Link>
+      )}
+      {me?.kind === 'user' && (
+        // The MCP connect guide, at the top of My account.
+        <Link
+          href="/account#connect"
+          data-testid="nav-connect-mcp"
+          onClick={() => setOpen(false)}
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
+        >
+          <Icon name="link" size={16} />
+          Connect an AI tool
         </Link>
       )}
       {MOCK_MODE && (

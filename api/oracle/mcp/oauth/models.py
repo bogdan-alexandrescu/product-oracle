@@ -74,3 +74,5 @@ class OAuthToken(TenantScoped, Base):
     code_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("oauth_codes.id", ondelete="SET NULL"), index=True
     )
+    # When the access token was last used on /mcp (written at most once a minute).
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
