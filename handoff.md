@@ -262,3 +262,47 @@ No API, mock or migration change. Files outside the merged lanes' own files: non
   tsc 0; Playwright --retries=0 on a mock build: timeline-comment-count, timeline-order,
   simple-roadmap-lanes, feature-comments 15 passed; prose guard passed; format:check on the
   touched files ok; full npm run lint: exit 0 (at 701f40ce, after the import-order fix).
+
+# task-push (#1816) handoff
+
+## Built (branch head: see git log; subjects start "task-push: ")
+- API: `oracle.roadmap.tracker.push_task` is the one gate. It refuses through `refuse_push`, as `push_track_to_tracker`
+  does, because no connector is verified. `oracle/simple/task_push.py` has push() and retry(). push() runs at the end
+  of `targets._apply` for every task op except an undone add. It runs in a savepoint and never fails the change. A
+  failure goes into `roadmap_item_tasks.tracker_push_error` (migration 0139_task_tracker_push_error, the only head).
+  The read (`SimpleItemTask`) has new fields tracker_ref, tracker_url and tracker_error. The Retry route is
+  `POST /v1/simple/tasks/{task_id}/tracker-push`: per item (can_decide), denied as an Ask Oracle action (outward).
+- Web: `web/app/simple/roadmap/_tasks.tsx` TrackerMark shows the record link, the failure behind an (i), and Retry
+  (a failed Retry shows a toast). Mock: `web/lib/api/mock/task-push.ts` ("task-tracker" scenario), wired in
+  simple-changes.ts, simple-roadmap.ts (taskOut) and server.ts (route, seed).
+
+## What today's behaviour means
+- Two-way sync off (default) means no tracker is connected: nothing is pushed and nothing shows.
+- Sync on: every push is refused, honestly, with the "no connector verified" reason and Retry on the task. A real
+  connector (Linear or Jira) is a new client and so needs the owner's go. The pytest stubs one to prove create,
+  link, status-follows and Retry.
+
+## Gates
+- pytest tests/test_simple_task_push.py: red first (a78011a), then green.
+- All 19 files touching tasks or trackers, plus test_frozen_migrations, test_ask_oracle_actions and
+  test_capabilities: green.
+- ruff check and format: green. pyright: 1269 errors, baseline 1269 (OK). alembic: one head.
+- Web: tsc 0, full npm run lint 0, format:check 0, test:unit 49 files / 308 tests green.
+- Playwright (--retries=0): task-push 3/3 (2 fail without the _tasks.tsx change); feature-panel-gaps,
+  walkc-roadmap-tasks, simple-home, goal-buckets-accept and prose-guard green (prose-guard with
+  PROSE_BASE=4ecbc56, because no origin/main is fetched here).
+- goal-buckets-tasks: 2 of the first run failed. "heading clears its feature count" then passed 6/6 with
+  --repeat-each=3. The drag test passed on the next run. Both pass at base. Read as flaky.
+- Postgres needs max_locks_per_transaction=1024 for -n 6. With 256, DROP SCHEMA runs out of shared memory and the
+  run stalls or errors.
+- Whole API suite: run in 8 chunks of $TMPDIR/files.txt (see below for how far it got).
+  - Green: chunk 00 (test_accept... to test_connections_browse_slack, 1815 passed), chunk 01 (1282 passed) and
+    chunk 05 (test_run_frozen_reads to test_simple_goal_map_scoreboard_api, 1149 passed).
+  - NOT RUN, out of time: chunks 02, 03, 04, 06 and 07. Their task and tracker files did run in the targeted group
+    above. Command: `split -n l/8 -d <(ls tests/test_*.py) c8_`, then `uv run pytest -q -n 6 -m "not timing" $(cat c8_0N)`.
+- Timing tests (`-m timing`): NOT finished. 28 passed with 0 failures before the 400 s foreground limit cut the run.
+  Next step: run them in parts.
+
+## Left
+- The rest of the whole-suite chunks and the timing tests, as above.
+- The owner's call: a real tracker connector (Linear or Jira) is a new client and so needs the owner's go.
