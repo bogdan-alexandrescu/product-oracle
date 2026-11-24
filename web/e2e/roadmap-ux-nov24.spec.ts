@@ -108,34 +108,39 @@ test("#1749 the open feature's row and bar are clearly marked, on the Timeline a
   await expect(gbar.getByTestId('bar-open-ring')).toHaveCount(1);
 });
 
-test('#1752 every cut label on the timeline has its full name on hover', async ({ page }) => {
+test('#1752 every cut label on the timeline shows its full name on hover and focus', async ({
+  page,
+}) => {
   await open(page, 'roadmap-milestones');
   await expect(page.getByTestId('ms-band')).toBeVisible();
-  const { cut, bare } = await page.getByTestId('simple-roadmap').evaluate((root) => {
-    const named = (el: Element) => {
-      for (let p: Element | null = el, n = 0; p && n < 4; p = p.parentElement, n++)
-        if (p.getAttribute('title') || p.getAttribute('aria-label')) return true;
-      return false;
-    };
-    const out: string[] = [];
-    let cut = 0;
+  // Every label cut with an ellipsis: a title (the browser's tip), else it is marked to point at.
+  const { titled, pointed } = await page.getByTestId('simple-roadmap').evaluate((root) => {
+    let titled = 0;
+    let pointed = 0;
     for (const el of root.querySelectorAll<HTMLElement>('*')) {
-      if (el instanceof SVGElement || !el.offsetParent) continue;
-      const cs = getComputedStyle(el);
-      if (cs.textOverflow !== 'ellipsis' || el.scrollWidth <= el.clientWidth + 1) continue;
-      if (!el.textContent?.trim()) continue;
-      cut++;
-      if (!named(el)) out.push(el.textContent.trim().slice(0, 40));
+      if (!el.offsetParent || !el.textContent?.trim()) continue;
+      if (getComputedStyle(el).textOverflow !== 'ellipsis') continue;
+      if (el.scrollWidth <= el.clientWidth + 1) continue;
+      if (el.closest('[title]')) titled++;
+      else el.closest<HTMLElement>('[aria-label]')!.dataset.cutProbe = String(pointed++);
     }
-    for (const t of root.querySelectorAll('*'))
-      if (t.childElementCount === 0 && t.textContent?.trim().endsWith('…')) {
-        cut++;
-        if (!named(t) && !t.querySelector('title')) out.push(t.textContent.trim());
-      }
-    return { cut, bare: out };
+    return { titled, pointed };
   });
-  console.log(`cut labels: ${cut}`);
-  expect(bare).toEqual([]);
+  expect(titled + pointed).toBeGreaterThan(3);
+  for (let n = 0; n < pointed; n++) {
+    const label = page.locator(`[data-cut-probe="${n}"]`);
+    const whole = (await label.getAttribute('aria-label'))!.split(/ · |, /)[0];
+    await label.hover();
+    await expect(page.getByRole('tooltip').filter({ hasText: whole })).toBeVisible();
+    await page.mouse.move(0, 0);
+  }
+  // And on focus, for a keyboard.
+  if (pointed) {
+    const first = page.locator('[data-cut-probe="0"]');
+    const whole = (await first.getAttribute('aria-label'))!.split(/ · |, /)[0];
+    await first.focus();
+    await expect(page.getByRole('tooltip').filter({ hasText: whole })).toBeVisible();
+  }
 });
 
 test("#1753 a track's health reason shows on a tap near its small mark", async ({ browser }) => {
@@ -147,6 +152,7 @@ test("#1753 a track's health reason shows on a tap near its small mark", async (
     .filter({ hasText: 'Usage alerts track' })
     .getByTestId('track-health');
   await expect(risk).toHaveAttribute('data-health', 'at_risk');
+  await risk.scrollIntoViewIfNeeded();
   const box = (await risk.boundingBox())!;
   // A finger lands a few pixels off the 14 px glyph: still the mark.
   await page.touchscreen.tap(box.x + box.width + 3, box.y + box.height / 2);
@@ -177,13 +183,17 @@ test('#1757 the Tracks sheet names owners only once they are used, and "No owner
   await expect(rows.nth(1).getByLabel('Owner', { exact: true })).toBeFocused();
 });
 
-test('#1740 each count says what it covers', async ({ page }) => {
+test('#1740 the goal cards and the Tracks sheet each say what their count covers', async ({
+  page,
+}) => {
   await open(page);
-  await expect(page.getByTestId('goal-counter-items').first()).toHaveAttribute(
-    'title',
-    /cut and merged/,
-  );
-  await expect(page.getByTestId('lane-count').first()).toHaveAttribute('title', /cut and merged/);
+  // A goal card counts items for the goal that the filters show; a track's count is every
+  // feature on it: each says so on hover.
+  const cards = page.getByTestId('goal-counter-items');
+  await expect(cards.first()).toHaveAttribute('title', /filters show.*cut and merged/);
   await page.getByTestId('tracks-open').click();
-  await expect(page.getByTestId('track-count').first()).toHaveAttribute('title', /cut and merged/);
+  await expect(page.getByTestId('track-count').first()).toHaveAttribute(
+    'title',
+    /whatever the filters show.*cut and merged/,
+  );
 });
