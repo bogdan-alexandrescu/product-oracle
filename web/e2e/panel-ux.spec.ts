@@ -1,8 +1,8 @@
-import { expect, test, type Page } from './test';
-
-import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
 import { HOME_MILESTONE_FOLD_SCENARIO } from '../lib/api/mock/home-milestones';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
+
 import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * panel-ux (#1747, #1754, #1755, #1756, #1796), on the mock's invented roadmap, in the audit's

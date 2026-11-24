@@ -38,7 +38,6 @@ import { errorMessage } from '@/lib/use-query';
 import { HORIZONS, type Horizon } from './_board';
 import { NameEdit, PanelFields } from './_fields';
 import { itemName } from './_gtflag';
-import { featureHref, useFeatureUrl, useOutsideClose } from './_link';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
 import {
@@ -55,6 +54,7 @@ import {
   yearSpan,
   codedFlag,
 } from './_lib';
+import { featureHref, useFeatureUrl, useOutsideClose } from './_link';
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (

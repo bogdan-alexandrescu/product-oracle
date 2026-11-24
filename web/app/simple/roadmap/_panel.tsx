@@ -21,7 +21,6 @@ import { useQuery } from '@/lib/use-query';
 import { invalidateWaiting, waitingChanged } from '@/lib/simple-waiting';
 
 import { FloatingCard, type Act } from './_card';
-import { featureShown, InLinked, namesFeature, onPageOpen } from './_link';
 import { DraftDetails, type DraftItem, type DraftPrd } from './_drafts';
 import {
   ChangeFailed,
@@ -36,6 +35,7 @@ import {
   type Change,
   type Item,
 } from './_lib';
+import { featureShown, InLinked, namesFeature, onPageOpen } from './_link';
 
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
@@ -297,6 +297,8 @@ export function LinkedFeature() {
   const closing = useRef<string | null>(null);
   useEffect(() => {
     if (closing.current !== param) closing.current = null;
+    // The address (the outside system here) names the feature; the panels shown are read once it does.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!param) return setOpen(null);
     if (open === param || closing.current === param) return;
     if (featureShown(param)) return;
