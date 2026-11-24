@@ -157,3 +157,36 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+// #1761 "collapse zero counts": once every broken link is settled from the Roadmap, Home draws no
+// "0 broken links" tile, while the Summary still shows its Ground Truth flags and other tiles.
+test('a count that drops to 0 leaves the Summary, the flags stay (1761)', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await scenario(page, GROUND_TRUTH_FLAGS_SCENARIO);
+  await login(page);
+  await page.goto('/simple');
+  const summary = page.getByTestId('home-summary');
+  await expect(summary.getByTestId('home-summary-broken-links')).toBeVisible();
+  await page.goto('/simple/roadmap');
+  const conflicts = page.getByTestId('conflicts');
+  await expect(conflicts.getByTestId('conflict').first()).toBeVisible();
+  for (let left = await conflicts.getByTestId('conflict').count(); left > 0; left--) {
+    await conflicts
+      .getByTestId('conflict')
+      .first()
+      .getByRole('button', { name: 'Accept as risk' })
+      .click();
+    await conflicts
+      .getByRole('textbox', { name: 'Why it is an accepted risk' })
+      .fill('An example reason');
+    await conflicts.getByRole('button', { name: 'Save the risk' }).click();
+    await expect(conflicts.getByTestId('conflict')).toHaveCount(left - 1);
+  }
+  await expect(conflicts).toContainText('No broken links');
+  await page.goto('/simple');
+  await expect(summary.getByTestId('gtf-line')).toBeVisible();
+  await expect(summary.getByTestId('home-summary-decisions')).toBeVisible();
+  await expect(summary.getByTestId('home-summary-broken-links')).toHaveCount(0);
+  for (const n of await summary.locator('.simple-number').allTextContents())
+    expect(n.trim()).not.toBe('0');
+});
