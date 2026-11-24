@@ -3,7 +3,7 @@ alignment (E1) and track monitoring through oracle.changes. Against Postgres wit
 FakeRuntime."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select, update
 
@@ -15,6 +15,7 @@ from oracle.roadmap.views import _headline
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
 from tests.day_helpers import company_today
+from tests.launch_helpers import ENG_412
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
@@ -180,7 +181,10 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     """A schedule basis linked to a tracker record must agree with its target date."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
-    day = (TODAY + timedelta(days=10)).isoformat()
+    # #1604: after both today and ENG-412's fixed day, so the list's order (by date, then
+    # reference) never turns on what day the suite runs.
+    eng_412 = date.fromisoformat(ENG_412[0]["supports_date"])
+    day = (max(TODAY, eng_412) + timedelta(days=10)).isoformat()
     body = {"kind": "commitment", "reference": "Q1 launch", "supports_date": day, "prd": PRD}
     viewer = await as_user(tenant_id, "viewer")
     assert (await client.post("/v1/schedule-bases", json=body, headers=viewer)).status_code == 403
