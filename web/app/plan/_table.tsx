@@ -2,6 +2,7 @@ import { Link } from '@/lib/nav';
 
 import { MarkFor, WithFeatureMarks } from '@/components/current-state/CurrentState';
 import { Button, Chip, CodeChip, DataTable, type Column } from '@/components/ds';
+import { BoardBar, useBoardPick } from '../simple/roadmap/_bulk-board-mock'; // MOCK-HOOK
 import { namedText } from '@/lib/codes';
 
 import type { GoalView } from '../home/_goals';
@@ -230,7 +231,25 @@ export function PlanTable({
 }) {
   const { rows, group, counts } = grouped(items ?? [], by, tags, prdOrder);
   const repeats = repeatedReviews(rows, group);
+  const bp = useBoardPick(); // MOCK-HOOK
+  const pickOrder = rows.map((i) => i.id); // MOCK-HOOK
+  const pickCol: Column<PlanItem>[] = bp // MOCK-HOOK
+    ? [ // MOCK-HOOK
+        { // MOCK-HOOK
+          key: 'pick', // MOCK-HOOK
+          header: ( // MOCK-HOOK
+            <input type="checkbox" aria-label="Pick all shown" className="h-4 w-4 accent-[var(--color-accent)]" checked={bp.picked.size === rows.length && rows.length > 0} onChange={() => (bp.picked.size === rows.length ? bp.clear() : bp.setAll(pickOrder))} /> // MOCK-HOOK
+          ), // MOCK-HOOK
+          width: '40px', // MOCK-HOOK
+          phone: 'action', // MOCK-HOOK
+          cell: (i) => ( // MOCK-HOOK
+            <input type="checkbox" data-testid="plan-box" aria-label={`Pick ${i.title}`} className="h-4 w-4 cursor-pointer accent-[var(--color-accent)]" checked={bp.picked.has(i.id)} onChange={() => undefined} onClick={(e) => { e.stopPropagation(); bp.pick(i.id, pickOrder, e.shiftKey); }} /> // MOCK-HOOK
+          ), // MOCK-HOOK
+        }, // MOCK-HOOK
+      ] // MOCK-HOOK
+    : []; // MOCK-HOOK
   const columns: Column<PlanItem>[] = [
+    ...pickCol, // MOCK-HOOK
     {
       key: 'item',
       header: 'Item',
@@ -373,9 +392,11 @@ export function PlanTable({
           'data-origin': i.origin,
           'data-item': i.key,
           'data-id': i.id,
+          'data-bulk-picked': bp?.picked.has(i.id) ? 'true' : undefined, // MOCK-HOOK
         })}
         empty={failed ? null : 'No roadmap items yet'}
       />
+      <BoardBar bp={bp} /* MOCK-HOOK */ />
     </WithFeatureMarks>
   );
 }

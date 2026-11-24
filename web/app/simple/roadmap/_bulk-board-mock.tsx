@@ -12,6 +12,7 @@ export type BoardPick = {
   setHover: (id: string | null) => void;
   pick: (id: string, order: string[], shift: boolean) => void;
   clear: () => void;
+  setAll: (ids: string[]) => void;
 };
 
 export function useBoardPick(): BoardPick | null {
@@ -25,6 +26,7 @@ export function useBoardPick(): BoardPick | null {
     hover,
     setHover,
     clear: () => setPicked(new Set()),
+    setAll: (ids) => setPicked(new Set(ids)),
     pick: (id, order, shift) => {
       const next = new Set(picked);
       if (shift && anchor) {
@@ -65,6 +67,8 @@ export function BoardBar({ bp }: { bp: BoardPick | null }) {
   const btn =
     'rounded-md border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface2 max-sm:w-full max-sm:px-1';
   return (
+    <>
+    <style>{'tr[data-bulk-picked="true"] > td { background: var(--color-accent-soft); }'}</style>
     <div
       data-testid="bulk-bar"
       className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center gap-2 whitespace-nowrap rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-3 text-sm shadow-lg max-sm:grid max-sm:grid-cols-4 max-sm:px-3 md:left-[calc(240px+1rem)]"
@@ -80,5 +84,6 @@ export function BoardBar({ bp }: { bp: BoardPick | null }) {
         </button>
       ))}
     </div>
+    </>
   );
 }

@@ -6,7 +6,7 @@
       "code": "BE1",
       "name": "Picking several features",
       "question": "How does a person pick several features on a list without losing drag to reorder or click to open the panel?",
-      "common": "Shown on Priorities, ranked list (Simple), at 1440 and 1512 and on a phone. Picked rows get the accent ring; the bulk bar (BE2) shows once one row is picked; Clear and Esc drop the picks. The same picking goes on Roadmap Now / Next / Later cards, Goal buckets and the Detailed plan list. Today: no picking at all; fixing 4 features means 4 panel opens (about 16 steps).",
+      "common": "Shown on Priorities, ranked list (Simple), at 1440 and 1512 and on a phone. Picked rows get the accent ring; the bulk bar (BE2) shows once one row is picked; Clear and Esc drop the picks. Proposal A is also drawn on the Roadmap Now / Next / Later board and the Detailed plan table; Goal buckets and Inbox take the same picking. Today: no picking at all; fixing 4 features means 4 panel opens (about 16 steps).",
       "proposals": [
         {
           "letter": "A",
@@ -64,6 +64,22 @@
             {
               "file": "frames/be1-a-board-phone.html",
               "caption": "Board on a phone 390: boxes always show; 2 cards picked by tapping."
+            },
+            {
+              "file": "frames/be1-a-detailed-rest.html",
+              "caption": "Detailed, the plan table: a box column first, as tables do; boxes always show here, the header box picks all shown."
+            },
+            {
+              "file": "frames/be1-a-detailed-result.html",
+              "caption": "Detailed: box on row 2, Shift-click on row 6 picks the run across the Now and Next groups; picked rows tint and the same bar shows. A row click still opens the item on the right. Cost: 2 clicks."
+            },
+            {
+              "file": "frames/be1-a-detailed-result-1512.html",
+              "caption": "Detailed at 1512 wide: two rows picked one by one, the run is not needed."
+            },
+            {
+              "file": "frames/be1-a-detailed-phone.html",
+              "caption": "Detailed on a phone 390: the box sits right of each item's name; 2 picked."
             }
           ]
         },

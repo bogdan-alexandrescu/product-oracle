@@ -81,3 +81,14 @@ addb('be1-a-board-result-1512',[('click',bb(2)),('click',bb(5),['Shift']),('clic
 addb('be1-a-board-phone',[('click',bb(1)),('click',bb(2))],**PH)
 json.dump(F+G,open('spec.json','w'),indent=0)
 json.dump(G,open('spec-board.json','w'),indent=0)
+# BE1 a in Detailed (plan table)
+pb=lambda n: f':nth-match([data-testid="plan-box"], {n})'
+H=[]
+def addd(file, do, w=1440, h=900):
+    H.append(dict(file=file, url='/plan?be1=a', wait='[data-testid="plan-row"]', do=list(do), w=w, h=h, theme='light'))
+addd('be1-a-detailed-rest',[])
+addd('be1-a-detailed-result',[('click',pb(2)),('click',pb(6),['Shift'])])
+addd('be1-a-detailed-result-1512',[('click',pb(1)),('click',pb(7))],w=1512,h=982)
+addd('be1-a-detailed-phone',[('click',pb(1)),('click',pb(3))],**PH)
+json.dump(F+G+H,open('spec.json','w'),indent=0)
+json.dump(H,open('spec-detailed.json','w'),indent=0)

@@ -13,7 +13,7 @@ D = []
 D.append({
   'code': 'BE1', 'name': 'Picking several features',
   'question': 'How does a person pick several features on a list without losing drag to reorder or click to open the panel?',
-  'common': 'Shown on Priorities, ranked list (Simple), at 1440 and 1512 and on a phone. Picked rows get the accent ring; the bulk bar (BE2) shows once one row is picked; Clear and Esc drop the picks. The same picking goes on Roadmap Now / Next / Later cards, Goal buckets and the Detailed plan list. Today: no picking at all; fixing 4 features means 4 panel opens (about 16 steps).',
+  'common': 'Shown on Priorities, ranked list (Simple), at 1440 and 1512 and on a phone. Picked rows get the accent ring; the bulk bar (BE2) shows once one row is picked; Clear and Esc drop the picks. Proposal A is also drawn on the Roadmap Now / Next / Later board and the Detailed plan table; Goal buckets and Inbox take the same picking. Today: no picking at all; fixing 4 features means 4 panel opens (about 16 steps).',
   'proposals': [
     {'letter': 'A', 'name': 'Boxes on hover', 'recommended': True,
      'what': 'A checkbox fades in left of the drag handle when the pointer is over a row, and stays on every row once one is picked. Shift-click on a second box picks every row between. "Pick all N shown" sits over the list while picking. The handle still drags, the name still opens the feature panel. On a phone the boxes always show.',
@@ -33,6 +33,10 @@ D.append({
         ('board-result', 'Shift-click on a later card picks the run down the column: 4 picked, the same bar. Cost: 2 clicks.'),
         ('board-result-1512', 'Board at 1512 wide: a card in Later added with one more click; picks can span columns.'),
         ('board-phone', 'Board on a phone 390: boxes always show; 2 cards picked by tapping.'),
+        ('detailed-rest', 'Detailed, the plan table: a box column first, as tables do; boxes always show here, the header box picks all shown.'),
+        ('detailed-result', 'Detailed: box on row 2, Shift-click on row 6 picks the run across the Now and Next groups; picked rows tint and the same bar shows. A row click still opens the item on the right. Cost: 2 clicks.'),
+        ('detailed-result-1512', 'Detailed at 1512 wide: two rows picked one by one, the run is not needed.'),
+        ('detailed-phone', 'Detailed on a phone 390: the box sits right of each item\'s name; 2 picked.'),
      ])},
     {'letter': 'B', 'name': 'A pick mode', 'recommended': False,
      'what': 'A "Pick several" button over the list turns on a pick mode: drag handles give way to checkboxes and a click anywhere on a row picks it (Shift-click picks a run). "Done picking" turns it off.',
