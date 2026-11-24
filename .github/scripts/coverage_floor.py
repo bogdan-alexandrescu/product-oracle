@@ -9,7 +9,7 @@ coverage.json is `coverage json` over the combined data of every api shard. The 
 (api/coverage-floor.json, a percentage with one decimal) ratchets: `update` raises it to the
 measured total rounded down to 0.1 and never lowers it. `check` fails when the total is more
 than STALE points above the floor (#1711): the floor follows the total, so a drop cannot hide
-in the gap. CI uploads coverage.json, so `update` can run on the downloaded copy.
+in the gap. Once CI uploads coverage.json (api-coverage-json), `update` runs on that copy.
 """
 
 from __future__ import annotations
