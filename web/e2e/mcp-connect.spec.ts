@@ -140,6 +140,7 @@ for (const viewport of [
       });
     await page.getByTestId('mcp-tokens-link').click();
     await expectPanelHeadShown(page, 'tokens-panel', 'Personal API tokens');
+    await expect(page.getByRole('form', { name: 'Create a token' })).toBeInViewport({ ratio: 1 });
     // A link straight to the guide lands the same way.
     await page.goto('/account#connect');
     await page.reload();
