@@ -18,7 +18,7 @@
           "frames": [
             {
               "file": "ut1-a-rest.html",
-              "caption": "One real change: the dependency of Welcome video on In-app tour is removed; the toast shows it with Undo and Ctrl Z, the draft counts 1 change"
+              "caption": "One real change: the dependency of F-63 Welcome video on F-64 In-app tour is removed; the toast shows it with Undo and Ctrl Z"
             },
             {
               "file": "ut1-a-open.html",
@@ -34,7 +34,7 @@
             },
             {
               "file": "ut1-a-result.html",
-              "caption": "Undo pressed: the move of F-131 is taken back, the draft now counts 2 changes and the toast says Undone. Cost: 1 click; the earlier ones are gone"
+              "caption": "Undo pressed: the move of F-79 Weekly alert digest is taken back, its bar is at Oct 31 – Dec 10 on the timeline, the draft counts 2 and the toast says Undone. The cost note sits in the rail"
             },
             {
               "file": "ut1-a-hard.html",
@@ -80,7 +80,7 @@
             },
             {
               "file": "ut1-b-hard.html",
-              "caption": "Six fast changes with long names: three show, '3 more' opens the rest; the stack covers the corner of the timeline"
+              "caption": "Six fast changes: three toasts and '3 more' inside the oldest, all clear of the broken links' buttons"
             },
             {
               "file": "ut1-b-hard-1512.html",
@@ -123,15 +123,19 @@
             },
             {
               "file": "ut1-c-hard.html",
-              "caption": "Six fast changes with long feature names: the newest at the top, the five earlier ones listed under it, each with Undo"
+              "caption": "Six fast changes, the list of earlier ones open: scrolled to the timeline, the toast sits over the chart, clear of the broken links' buttons"
             },
             {
               "file": "ut1-c-hard-1512.html",
-              "caption": "The same six changes in a 1512-wide window"
+              "caption": "The same open list in a 1512-wide window"
             },
             {
               "file": "ut1-c-phone-390.html",
               "caption": "Phone 390: one full-width toast above the tab bar, '2 earlier changes' under it"
+            },
+            {
+              "file": "ut1-c-detailed.html",
+              "caption": "Detailed: the same toast on the Plan page, three changes, earlier ones open"
             }
           ]
         },
@@ -212,7 +216,7 @@
             },
             {
               "file": "ut2-a-hard.html",
-              "caption": "A commenter sets the status: it becomes a proposal that waits for Avery Stone, and the toast offers Withdraw"
+              "caption": "A commenter, Theo Brandt, sets the status to Done: it becomes a proposal for Avery Stone, and the toast offers Withdraw"
             },
             {
               "file": "ut2-a-hard-dark.html",
@@ -224,7 +228,11 @@
             },
             {
               "file": "ut2-a-phone-390.html",
-              "caption": "Phone 390: the toast sits above the panel sheet"
+              "caption": "Phone 390, the commenter: the toast with Withdraw sits above the panel sheet"
+            },
+            {
+              "file": "ut2-a-detailed.html",
+              "caption": "Detailed: a commenter's proposal gets the same toast with Withdraw"
             }
           ]
         },
@@ -232,7 +240,7 @@
           "letter": "b",
           "name": "Only the hard to redo",
           "recommended": false,
-          "what": "Only changes that are hard to redo get the toast: removing a dependency or a link, cutting, moving to Trash and a bulk change. A status, dates or a drag in the order show a small Saved tick beside the field instead; they are put back by changing them again or from the item's history. A commenter's proposal gets a plain toast, no button.",
+          "what": "Only changes that are hard to redo get the toast: removing a dependency or a link, cutting, moving to Trash and a bulk change. A status, dates or a drag in the order show a small Saved tick beside the field instead; they are put back by changing them again or from the item's history. A commenter's change gets the same mark, 'Proposed', with Withdraw in it.",
           "plus": "Fewer toasts on a busy page; quick edits stay quiet.",
           "cost": "Undo a status change: 2 clicks (Change, pick the old one) and the person must remember it. Cut: 1 click, Undo 1.",
           "frames": [
@@ -254,15 +262,19 @@
             },
             {
               "file": "ut2-b-hard.html",
-              "caption": "A commenter sets the status: a plain toast says it waits for Avery Stone and to withdraw it in Needs a decision; no button on the toast"
+              "caption": "The commenter sets the status: no toast; a 'Proposed' mark beside the status carries Withdraw"
             },
             {
               "file": "ut2-b-hard-1512.html",
-              "caption": "The same in a 1512-wide window"
+              "caption": "The same mark in a 1512-wide window"
             },
             {
               "file": "ut2-b-phone-390.html",
-              "caption": "Phone 390: the Saved tick beside the status in the panel sheet"
+              "caption": "Phone 390, the commenter: the 'Proposed · Withdraw' mark fits the status row of the panel sheet"
+            },
+            {
+              "file": "ut2-b-hard-dark.html",
+              "caption": "Dark: the commenter's 'Proposed · Withdraw' mark"
             }
           ]
         },
@@ -292,7 +304,7 @@
             },
             {
               "file": "ut2-c-hard.html",
-              "caption": "A commenter's proposal: the toast offers Undo, which withdraws the proposal; the panel still reads Planned, as nothing changed yet"
+              "caption": "The commenter's proposal: the toast offers Undo, which withdraws it; the panel still reads Planned"
             },
             {
               "file": "ut2-c-hard-1512.html",
@@ -300,7 +312,11 @@
             },
             {
               "file": "ut2-c-phone-390.html",
-              "caption": "Phone 390: the toast above the panel sheet"
+              "caption": "Phone 390, the commenter: the toast with Undo above the panel sheet"
+            },
+            {
+              "file": "ut2-c-hard-dark.html",
+              "caption": "Dark: the commenter's toast with Undo"
             }
           ]
         },
@@ -308,7 +324,7 @@
           "letter": "d",
           "name": "Confirm the big ones",
           "recommended": false,
-          "what": "Small changes (status, dates, order) get the toast with Undo; cutting, moving to Trash and bulk changes keep a confirm step and get no Undo. A commenter's proposal gets a plain toast.",
+          "what": "Small changes (status, dates, order) get the toast with Undo; cutting, moving to Trash and bulk changes keep a confirm step and get no Undo. A commenter's proposal gets a plain toast that names Proposals on it, where Withdraw is.",
           "plus": "A person reads what a big change will do before it happens.",
           "cost": "Cut: 2 clicks, as today, and no Undo; taking it back: Removed, Restore (2 clicks).",
           "frames": [
@@ -330,7 +346,7 @@
             },
             {
               "file": "ut2-d-hard.html",
-              "caption": "A commenter's proposal: a plain toast says it waits for Avery Stone and to withdraw it in Needs a decision"
+              "caption": "The commenter's proposal: a plain toast, left of the panel, names Proposals on it; the panel shows it there with Withdraw"
             },
             {
               "file": "ut2-d-hard-1512.html",
@@ -338,7 +354,11 @@
             },
             {
               "file": "ut2-d-phone-390.html",
-              "caption": "Phone 390: the toast above the panel sheet"
+              "caption": "Phone 390, the commenter: the plain toast above the panel sheet"
+            },
+            {
+              "file": "ut2-d-hard-dark.html",
+              "caption": "Dark: the commenter's plain toast and Withdraw in Proposals on it"
             }
           ]
         }
@@ -427,7 +447,11 @@
             },
             {
               "file": "ut3-b-phone-390.html",
-              "caption": "Phone 390: a commenter's list with Withdraw opens over the roadmap"
+              "caption": "Phone 390 with the panel open: Your changes is a clock button with its count in the page header"
+            },
+            {
+              "file": "ut3-b-hard-dark.html",
+              "caption": "Dark: the commenter's list with Withdraw on each"
             }
           ]
         },
@@ -465,7 +489,11 @@
             },
             {
               "file": "ut3-c-phone-390.html",
-              "caption": "Phone 390: the panel is closed to reach Removed; the list opens under the roadmap's buttons"
+              "caption": "Phone 390 with the panel open: nothing new; a cut comes back from Removed"
+            },
+            {
+              "file": "ut3-c-open-dark.html",
+              "caption": "Dark: Removed open, each with Restore"
             }
           ]
         }

@@ -59,10 +59,12 @@ for (const n of [...new Set([...Object.keys(SHOW), ...Object.keys(TEXT), ...Obje
         t.setAttribute('data-mk-note', '');
         t.textContent = cost;
         t.style.cssText = 'position:fixed;left:16px;top:630px;width:200px;z-index:99;padding:4px 10px;border:1px dashed #b45309;border-radius:12px;background:#fffbeb;color:#92400e;font:600 13px/20px "Inter Tight",sans-serif'; // a margin note in the rail's empty middle, over no control
+        if (document.querySelector('[aria-label="Your changes today"]')) Object.assign(t.style, { top: '18px', left: 'auto', right: '40px', width: 'auto' }); // the open list fills the rail: the empty top right instead
         document.body.append(t);
       }
       if (focus) {
-        const b = [...document.querySelectorAll<HTMLElement>(focus)].find((e) => /Undo|Restore/.test(e.textContent ?? ''));
+        document.querySelectorAll<HTMLElement>('button').forEach((e) => { e.style.outline = ''; e.style.outlineOffset = ''; });
+        const b = [...document.querySelectorAll<HTMLElement>(focus)].find((e) => /^(Undo|Restore|Withdraw)(?! whole)/.test(e.textContent?.trim() ?? ''));
         if (!b) return false;
         b.style.outline = '2px solid #1d6fb8';
         b.style.outlineOffset = '2px';
