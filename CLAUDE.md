@@ -71,7 +71,9 @@ SwarmCloud lanes follow docs/agents/lane-rules.md and .claude/rules/oracle-produ
 - Nothing merges red. The gates and their exact commands are in `docs/agents/lane-rules.md`
   (Building a lane, Browser lanes): ruff, the touched pytest files, one alembic head,
   `make openapi` when a schema changes, web tsc and lint, the touched Playwright specs, the
-  prose guard.
+  prose guard, and the three that only main's CI ran before (#1712): the pyright baseline
+  when `api/oracle` changes, `docs/contracts/check.py` when a YAML file or a contract
+  changes, web `format:check` for any web change.
 - Every user-facing change has a mock-backed Playwright spec in `web/e2e` that fails without
   it; every API change has a pytest test that fails without it, red test committed first
   (`.claude/rules/oracle-product.md`).

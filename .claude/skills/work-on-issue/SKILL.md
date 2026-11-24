@@ -49,7 +49,10 @@ reads the changed files:
 - the Playwright specs that visit the changed pages or read the changed mock routes, plus the
   prose guard when visible text changed;
 - ruff, `make openapi` if a schema changed, web tsc and lint if the web changed, one alembic
-  head if a migration was added.
+  head if a migration was added;
+- the checks only main's CI ran before (#1712): the pyright baseline if `api/oracle` changed,
+  `docs/contracts/check.py` if a YAML file or a contract changed, `npm run format:check` if the
+  web changed. Their commands and verdict lines are in the lane rules.
 
 Keep one verdict line per gate (the runner's own summary line, e.g. `12 passed in 40s`). A
 gate you could not run is named with the reason.

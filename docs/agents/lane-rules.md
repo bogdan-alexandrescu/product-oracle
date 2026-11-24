@@ -15,6 +15,18 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
   - The touched pytest files, at most `-n 2`, in groups of files; never the whole suite
     at once.
   - `make openapi` (from the repo root) if a schema changes; commit both generated files.
+- Checks that only main's CI ran before (#1712), from the repo root:
+  - `api/oracle` changed: the pyright baseline, as CI's pyright job runs it:
+    `(cd api && uv sync --frozen)`, `web/node_modules/.bin/pyright --outputjson >
+    "$TMPDIR/pyright.json"` (exit 1 is normal: the baseline decides), then
+    `python3 .github/scripts/pyright_baseline.py check "$TMPDIR/pyright.json"`. Verdict:
+    `pyright: N errors, baseline N` and exit 0; "new pyright errors" is red, and "baseline
+    errors are gone" asks for its `update` command and a commit.
+  - A YAML file (anywhere outside `api/`, front matter, a yaml block in a doc) or a
+    `docs/contracts` file changed: `python3 docs/contracts/check.py`. Verdict: no output and
+    exit 0; each drift is one line (`--write` refreshes the copies, then commit them).
+  - Any web change: `npm run format:check` (below). Verdict: `All matched files use Prettier
+    code style!`.
 - Test database: Postgres 16, data directory outside the repository, on the cache disk:
 
   ```sh
@@ -28,6 +40,10 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
   Set `ORACLE_TEST_DATABASE_URL`: without it, tests that cannot reach a database are
   skipped, not failed. Each xdist worker makes its own database (`oracle_test_gw0`, ...).
   Stop it with `pg_ctl -D "$XDG_CACHE_HOME/pgdata" stop` before tsc or a build.
+  A run killed mid-way (a timeout) leaves its `oracle_test_gw*` databases half set up, and
+  the next run errors at setup: drop them first (`dropdb -h localhost -U oracle --force
+  <name>` for each in `psql -h localhost -U oracle -d postgres -Atc "select datname from
+  pg_database where datname like 'oracle_test_gw%'"`).
 - Never put the data directory, logs or other scratch under a literal /tmp (3 GiB) or in
   the workspace (5 GiB, checkpointed). Use `$TMPDIR`. Why: `docs/lessons/README.md`.
 - A migration, if one is needed, chains after the branch's own head, so
@@ -51,6 +67,10 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
 - Roles in the web go through `can()` or an item's own `can_*` field only.
 - No company or customer data in code, tests or the PR.
 - Never use pkill, killall or kill on a pattern; kill by PID.
+- Code navigation in a lane comes from the `swarm-graph` and `swarm-search` tool servers.
+  `make agent-setup` and the `code-intel` plugin are for local sessions: with `SWARM_TASK_ID`
+  set (#1653) the SessionStart hook prints nothing, `make agent-setup` only sets the git config
+  and uses the lane's own `coderabbit`, and `code-intel` stays idle (no language servers).
 - The container has 8 GiB. `free -m` shows the host, not the container: watch
   `cat /sys/fs/cgroup/memory.current` between stages and stop a stage that passes 6 GiB. Run
   one heavy command at a time. Why: `docs/lessons/README.md`.

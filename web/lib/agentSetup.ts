@@ -102,3 +102,17 @@ export function checkMessage(missing: string[]): string | null {
   if (missing.length === 0) return null;
   return `Agent tools need setup (${missing.join(', ')}): run \`make agent-setup\` from the repository root.`;
 }
+
+/**
+ * #1653: a SwarmCloud lane. Its worker passes SWARM_TASK_ID to the agent; the lane image ships
+ * its own coderabbit on PATH, and code navigation comes from the swarm-graph and swarm-search
+ * tool servers, so a lane installs no language servers and downloads nothing.
+ */
+export function inSwarmLane(env: Record<string, string | undefined>): boolean {
+  return Boolean(env.SWARM_TASK_ID?.trim());
+}
+
+/** The SessionStart hook's line: never in a lane, where nothing it names is wanted. */
+export function hookMessage(state: SetupState, lane: boolean): string | null {
+  return lane ? null : checkMessage(missingItems(state));
+}
