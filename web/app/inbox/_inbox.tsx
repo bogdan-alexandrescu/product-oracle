@@ -1,6 +1,6 @@
 'use client';
 
-import { MkInboxRows, useMkInboxExtra } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
+import { MkInboxRows, mkInboxExtra, useMkInboxExtra } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
@@ -192,7 +192,7 @@ function Inbox() {
           waiting != null &&
           waiting > 0 && (
             <Chip kind="acc">
-              <Partial words={`${waiting} waiting`} partial={partial} />
+              <Partial words={`${waiting + mkInboxExtra()} waiting`} partial={partial} /> {/* MOCK-HOOK */}
             </Chip>
           )
         }

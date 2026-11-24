@@ -243,7 +243,7 @@
             },
             {
               "file": "frames/lp2-a-detailed.html",
-              "caption": "Detailed: the same Status row in Detailed's Inbox (the one Inbox), here at rest before any accept."
+              "caption": "Detailed: the same Status row in Detailed's Inbox (the one Inbox), here at rest before any accept. Its count is lower than Simple's because Detailed's Inbox has no Dates rows."
             }
           ],
           "why": "The rule says Oracle suggests and a person confirms; this puts the suggestion where people already work (the row, the panel, the Inbox) with the same Accept and Dismiss as Oracle's date suggestions, so nothing new to learn."
@@ -286,7 +286,7 @@
             },
             {
               "file": "frames/lp2-b-detailed.html",
-              "caption": "Detailed: the 4 suggestions and Accept all 4 in Detailed's Inbox, the same list."
+              "caption": "Detailed: the 4 suggestions and Accept all 4 in Detailed's Inbox, the same list. Its count is lower than Simple's because Detailed's Inbox has no Dates rows."
             }
           ]
         },
@@ -421,7 +421,7 @@
             },
             {
               "file": "frames/lp3-c-detailed.html",
-              "caption": "Detailed: the same Link broken row in Detailed's Inbox."
+              "caption": "Detailed: the same Link broken row in Detailed's Inbox. Its count is lower than Simple's because Detailed's Inbox has no Dates rows."
             },
             {
               "file": "frames/lp3-c-commenter.html",
