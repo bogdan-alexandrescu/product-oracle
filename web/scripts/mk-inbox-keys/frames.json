@@ -681,7 +681,8 @@
    "k:j",
    "k:Escape",
    "k:s",
-   "c:[data-testid=ik-snoozed-fold] button"
+   "c:[data-testid=ik-snoozed-fold] button",
+   "s:"
   ],
   "w": 1440,
   "h": 900,
@@ -690,9 +691,7 @@
  {
   "file": "ik3-b-hard-1512",
   "url": "/simple/inbox?ik3=b&now=nov25&long=1",
-  "steps": [
-   "c:[data-testid=ik-snoozed-fold] button"
-  ],
+  "steps": [],
   "w": 1512,
   "h": 900,
   "as": "owner"
@@ -700,7 +699,9 @@
  {
   "file": "ik3-b-phone-390",
   "url": "/simple/inbox?ik3=b&snoozed=1&swipe=i8",
-  "steps": [],
+  "steps": [
+   "v:[data-ik-row=i8]"
+  ],
   "w": 390,
   "h": 844,
   "as": "owner"

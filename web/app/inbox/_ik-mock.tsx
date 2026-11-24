@@ -20,6 +20,7 @@ export function ikParams(sp: URLSearchParams) { // MOCK-HOOK
     v1: sp.get('ik1') ?? 'a',
     v2: sp.get('ik2') ?? 'a',
     v3: sp.get('ik3') ?? 'a',
+    has3: sp.has('ik3'),
     role: sp.get('role') ?? 'owner',
     long: sp.get('long') === '1',
     many: sp.get('many') === '1',
@@ -97,7 +98,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
   const [swiped, setSwiped] = useState<string | null>(p.swipe);
   const commenter = p.role === 'commenter';
   const ids = Object.keys(m.st);
-  const shown = ids.filter((id) => m.st[id] === tab).map((id) => byId[id]);
+  const shown = ids.filter((id) => m.st[id] === tab).sort((a, b) => Number(!!m.back[b]) - Number(!!m.back[a])).map((id) => byId[id]);
   const count = (s: St) => ids.filter((id) => m.st[id] === s).length;
   const waiting = count('new') + count('open');
   const focused = focus ?? (shown[p.focus]?.id ?? null);
@@ -105,12 +106,20 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
   const cur = fi >= 0 ? shown[fi] : null;
   const may = (i: IkItem) => !(commenter && i.ownerOnly);
 
+  const orig = useRef<string | null>(null);
   // Every count at once: the rail's Inbox badge follows the panel's (the mock-up reads it from the page). MOCK-HOOK
   useEffect(() => {
     const put = () => {
+    for (const c of Array.from(document.querySelectorAll<HTMLElement>('.simple-count'))) {
+      if (c.dataset.ik === '1' || (orig.current && c.textContent === orig.current && !c.closest('a[href*="decisions"], a[href*="roadmap"]'))) {
+        c.dataset.ik = '1';
+        if (c.textContent !== String(waiting)) c.textContent = String(waiting);
+      }
+    }
     for (const a of Array.from(document.querySelectorAll('a'))) {
       if (!/^Inbox\s*\d*$/.test((a.textContent ?? '').trim())) continue;
       const n = Array.from(a.querySelectorAll('*')).find((s) => s.children.length === 0 && /^\d+$/.test(s.textContent ?? ''));
+      if (n && orig.current === null) orig.current = n.textContent;
       if (n && n.textContent !== String(waiting)) n.textContent = String(waiting);
     }
     };
@@ -319,7 +328,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
     document.querySelector(`[data-ik-row="${focused}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [focused, kbd]);
 
-  const tabs: St[] = ['new', 'open', 'staged', 'declined', 'done', ...(p.v3 === 'a' ? (['snoozed'] as St[]) : [])];
+  const tabs: St[] = ['new', 'open', 'staged', 'declined', 'done', ...(p.v3 === 'a' && p.has3 ? (['snoozed'] as St[]) : [])];
   const snoozedList = ids.filter((id) => m.st[id] === 'snoozed');
   const showHints = kbd || p.v1 !== 'a';
 
@@ -461,7 +470,7 @@ export function IkInbox({ p }: { p: P }) { // MOCK-HOOK
         </Sheet>
       )}
       {p.cost && COST[p.cost] && (
-        <div className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 rounded-full bg-text px-4 py-1.5 text-sm font-semibold text-surface shadow-panel max-[600px]:bottom-20 max-[600px]:w-[92%] max-[600px]:rounded-goal" data-mockup-note>
+        <div className="fixed top-3 left-1/2 z-50 -translate-x-1/2 rounded-full bg-text px-4 py-1.5 text-sm font-semibold text-surface shadow-panel max-[600px]:w-[92%] max-[600px]:rounded-goal" data-mockup-note>
           {COST[p.cost]}
         </div>
       )}
@@ -622,7 +631,7 @@ function Row(props: { // MOCK-HOOK
       data-ik-row={i.id}
       data-focused={focused || undefined}
       onClick={props.onFocus}
-      className={`relative border-t border-line first:border-t-0 ${focused ? 'bg-accent-soft/40 shadow-[inset_3px_0_0_var(--color-accent)]' : ''} ${props.mark ? 'opacity-70' : ''}`}
+      className={`relative border-t border-line first:border-t-0 ${props.swiped ? 'overflow-x-clip' : ''} ${focused} ? 'bg-accent-soft/40 shadow-[inset_3px_0_0_var(--color-accent)]' : ''} ${props.mark ? 'opacity-70' : ''}`}
     >
       {p.v3 === 'b' && props.swiped && (
         <div className="absolute inset-y-0 right-0 hidden w-[180px] items-stretch max-[600px]:flex">
@@ -636,16 +645,16 @@ function Row(props: { // MOCK-HOOK
           </button>
         </div>
       )}
-      <div className={`relative flex items-center gap-3 bg-inherit px-4 py-2.5 transition-transform max-[600px]:flex-wrap max-[600px]:px-3 ${swipeOffset} ${props.swiped ? 'bg-surface' : ''}`}>
+      <div className={`relative z-10 flex items-center gap-3 px-4 py-2.5 transition-transform max-[600px]:flex-wrap max-[600px]:px-3 ${swipeOffset} ${props.swiped ? 'bg-surface shadow-panel' : ''}`}>
         {p.v1 === 'd' && (
           <input type="checkbox" aria-label={`Tick ${i.title}`} checked={props.ticked} readOnly className="size-4 flex-none accent-[var(--color-accent)]" />
         )}
         <span className="flex w-[170px] flex-none items-center gap-2 text-base max-[1099px]:w-[15%] max-[600px]:w-full max-[600px]:text-sm max-[600px]:text-text2">
           <Icon name={i.icon} />
           {i.kind}
-          {props.back && <Chip kind="acc">Back from snooze</Chip>}
         </span>
         <span className="min-w-0 flex-1 text-base">
+          {props.back && <span className="mb-0.5 block"><Chip kind="acc">Back from snooze</Chip></span>}
           <ItemName i={i} />
         </span>
         <span className="w-[24%] min-w-0 text-base text-text2 max-[1099px]:w-[20%] max-[600px]:hidden">

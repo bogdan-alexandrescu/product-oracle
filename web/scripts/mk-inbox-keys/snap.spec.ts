@@ -90,6 +90,8 @@ async function run(page: Page, f: Frame) {
       await page.getByRole(role as 'button', { name, exact: true }).first().click();
     } else if (kind === 't') await page.keyboard.type(arg, { delay: 10 });
     else if (kind === 'w') await page.waitForTimeout(Number(arg));
+    else if (kind === 'v') await page.locator(arg).first().evaluate((e) => e.scrollIntoView({ block: 'center' }));
+    else if (kind === 's') await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await page.waitForTimeout(120);
   }
   await save(page, f.file, w, h);

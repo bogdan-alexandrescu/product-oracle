@@ -60,9 +60,9 @@ fr('ik3-a-phone-390',S+'ik3=a&snoozed=1',['c:[data-ik-row=i8] button[aria-label=
 fr('ik3-b-rest',S+'ik3=b&snoozed=1',F3)
 fr('ik3-b-open',S+'ik3=b&snoozed=1',F3+['k:Shift+S'])
 fr('ik3-b-mid',S+'ik3=b&snoozed=1&cost=ik3-b',F3+['k:Escape','k:s'])
-fr('ik3-b-result',S+'ik3=b&snoozed=1',F3+['k:Escape','k:s','c:[data-testid=ik-snoozed-fold] button'])
-fr('ik3-b-hard-1512',S+'ik3=b&now=nov25&long=1',['c:[data-testid=ik-snoozed-fold] button'],w=1512)
-fr('ik3-b-phone-390',S+'ik3=b&snoozed=1&swipe=i8',**P)
+fr('ik3-b-result',S+'ik3=b&snoozed=1',F3+['k:Escape','k:s','c:[data-testid=ik-snoozed-fold] button','s:'])
+fr('ik3-b-hard-1512',S+'ik3=b&now=nov25&long=1',[],w=1512)
+fr('ik3-b-phone-390',S+'ik3=b&snoozed=1&swipe=i8',['v:[data-ik-row=i8]'],**P)
 # IK3 c: until a time or until something happens
 fr('ik3-c-rest',S+'ik3=c&snoozed=1',F3)
 fr('ik3-c-open',S+'ik3=c&snoozed=1',F3+['k:s'])
