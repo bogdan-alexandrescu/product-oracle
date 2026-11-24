@@ -104,8 +104,8 @@ H=[]
 def addd(file, do, w=1440, h=900):
     H.append(dict(file=file, url='/plan?be1=a', wait='[data-testid="plan-row"]', do=list(do), w=w, h=h, theme='light'))
 addd('be1-a-detailed-rest',[('scrollto','[data-testid="plan-row"]')])
-addd('be1-a-detailed-result',[('click',pb(2)),('click',pb(6),['Shift'])])
-addd('be1-a-detailed-result-1512',[('click',pb(1)),('click',pb(7))],w=1512,h=982)
+addd('be1-a-detailed-result',[('click',pb(2)),('click',pb(6),['Shift']),('align',':nth-match([data-testid="plan-row"], 7)',['16'])])
+addd('be1-a-detailed-result-1512',[('click',pb(1)),('click',pb(7)),('align',':nth-match([data-testid="plan-row"], 7)',['16'])],w=1512,h=982)
 addd('be1-a-detailed-phone',[('click',pb(1)),('click',pb(3)),('align',':nth-match([data-testid="plan-row"], 3)')],**PH)
 json.dump(F+G+H,open('spec.json','w'),indent=0)
 json.dump(H,open('spec-detailed.json','w'),indent=0)

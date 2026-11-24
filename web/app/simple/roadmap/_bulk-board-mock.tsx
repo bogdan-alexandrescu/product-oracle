@@ -68,6 +68,8 @@ export function BoardBar({ bp, dock }: { bp: BoardPick | null; dock?: boolean })
     'rounded-md border border-line bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface2 max-sm:w-full max-sm:px-1';
   return (
     <>
+    {/* Room under the list, so its last row can end above the bar. */}
+    {!dock && <div aria-hidden className="h-28" />}
     {/* The whole row is tinted, not its cells: on a phone the cells are separate blocks. */}
     <style>{'tr[data-bulk-picked="true"], li[data-bulk-picked="true"] { background: var(--color-accent-soft); } tr[data-bulk-picked="true"] > td { background: transparent; }'}</style>
     <div
