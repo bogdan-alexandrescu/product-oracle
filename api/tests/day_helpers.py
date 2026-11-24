@@ -10,3 +10,14 @@ def company_today(zone: str = company_time.DEFAULT_ZONE, at: datetime | None = N
     """The company's day in ``zone`` (the default Company time zone unless a test sets
     another) now, or at ``at``."""
     return company_time.day(at or datetime.now(UTC), zone)
+
+
+# #1604: the roadmap fixtures date Beta and ENG-412 on a fixed day (Nov 30, 2026); a test that
+# needs that day still ahead (no "overdue" alert, an On track health) holds the clock here.
+BEFORE_FIXED_BETA = datetime(2026, 11, 20, 20, tzinfo=UTC)
+
+
+def hold_before_fixed_beta(monkeypatch) -> datetime:
+    """The company's clock (company_time.now) held on Nov 20, 2026, before the fixed Beta."""
+    monkeypatch.setattr(company_time, "now", lambda: BEFORE_FIXED_BETA)
+    return BEFORE_FIXED_BETA
