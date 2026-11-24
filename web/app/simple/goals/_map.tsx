@@ -35,7 +35,8 @@ import { PendingMark, useFeatureOrder } from '../priorities/feature-order';
 import { ChangeFailed, propose, resultWords, undo, type ChangeResult } from '../roadmap/_lib';
 import { Editor, type Edit, type EditSave } from './_editors';
 import { FeaturePanel, type Placement } from './_panel';
-import { GoalPredicted, MilestoneSlip, MkCost } from './_predicted-mk'; // MOCK-HOOK
+import { GoalPredicted, MilestoneSlip, MkCost, mkParam } from './_predicted-mk'; // MOCK-HOOK
+import { MK_BIG_M9 } from '@/lib/api/mock/goal-map'; // MOCK-HOOK
 
 const toast = (ask: ToastAsk) => dsToast({ place: 'corner', ...ask });
 
@@ -1209,7 +1210,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     key={m.id}
                     data-milestone={m.id}
                     data-testid="gm-strip-milestone"
-                    className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-xs"
+                    className={`group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-xs ${mkParam('pc1') === 'c' ? 'flex-wrap' : ''}`} // MOCK-HOOK
                   >
                     <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
                     {c.renaming === m.id ? (
@@ -1672,9 +1673,9 @@ export function GoalMapPage() {
       new Map(
         (roadmap.data?.goal_milestones ?? []).flatMap((m) =>
           m.roadmap_code ? [[m.id, m.roadmap_code] as [string, string]] : [],
-        ),
+        ).concat((map?.milestones ?? []).filter((m) => m.name === MK_BIG_M9).map((m) => [m.id, 'M9'] as [string, string])), // MOCK-HOOK
       ),
-    [roadmap.data],
+    [roadmap.data, map], // MOCK-HOOK
   );
   const trackOf = useMemo(
     () => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.track?.id ?? null])),

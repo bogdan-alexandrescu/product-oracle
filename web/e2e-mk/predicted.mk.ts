@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { test, type Page } from '@playwright/test';
+import { test, type Browser, type Page } from '@playwright/test';
 
 import { login } from '../e2e/helpers';
 
@@ -90,15 +90,15 @@ const RM = '[data-testid="goal-counter"]:has-text("Paid conversions")';
 const POPD = '[data-testid="pm-pop"] [data-testid="pm-driver"]';
 
 const STORIES: Story[] = [
-  { id: 'pc1-a', path: '/simple/goals?pc1=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, cost: '1 click opens the dates, 1 more opens the feature that sets them. Today: not shown anywhere.' },
-  { id: 'pc1-b', path: '/simple/roadmap?pc1=b', card: RM, opener: `${RM} [data-testid="pm-goal-open"]`, cost: '1 click opens the weeks, 1 more opens the feature. Today: not shown anywhere.' },
-  { id: 'pc1-c', path: '/simple/goals?pc1=c', card: '[data-testid="gm-strip"]', opener: '[data-testid="pm-slip"]:has-text("+9")', cost: '1 click per milestone, 1 more opens the feature; the goal itself has no line. Today: not shown.' },
-  { id: 'pc2-a', path: '/simple/goals?pc2=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, pre: async (p) => { await p.locator('[data-testid="pm-pop"] [data-testid="pm-why"]').click(); }, cost: '1 click, then the (i) for why: 2 clicks. Today: the word "at risk" only.' },
-  { id: 'pc2-b', path: '/simple/goals?pc2=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, pre: async (p) => { await p.locator('[data-testid="pm-pop"] [data-testid="pm-why"]').click(); }, cost: '0 clicks to read the range on the card; 2 clicks for why. Today: the word "at risk" only.' },
-  { id: 'pc2-c', path: '/simple/goals?pc2=c', card: GM, opener: `${GM} [data-testid="pm-goal"] button`, cost: '1 click on the tick to read any date at all, 1 more for the feature. Today: the word "at risk" only.' },
-  { id: 'pc3-a', path: '/simple/goals?pc3=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, drv: '[data-testid="pm-pop"] [data-testid="pm-milestone"]:has-text("M4") [data-testid="pm-driver"]', cost: '1 click shows all four milestones, 1 more opens the feature. No scrolling at 1512 or 390.' },
-  { id: 'pc3-b', path: '/simple/goals?pc3=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, drv: '[data-testid="pm-pop"] [data-testid="pm-milestone"]:has-text("M4") [data-testid="pm-driver"]', cost: '1 click; each of the 20 features is a tick, the one that sets the date is thick and named.' },
-  { id: 'pc3-c', path: '/simple/goals?pc3=c', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, mid: async (p) => { await p.locator('[data-testid="pm-all"]').click(); await mark(p, '[data-testid="pm-ranked"] [data-testid="pm-driver"]:has-text("Partner referral")'); }, drv: '[data-testid="pm-ranked"] [data-testid="pm-driver"]:has-text("Partner referral")', cost: '1 click, 1 to show all 20, 1 to open the feature: 3 clicks.' },
+  { id: 'pc1-a', path: '/simple/goals?pc1=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, cost: '1 click opens the dates, 1 more opens the feature that sets them. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc1-b', path: '/simple/roadmap?pc1=b', card: RM, opener: `${RM} [data-testid="pm-goal-open"]`, cost: '1 click opens the weeks, 1 more opens the feature; milestones only in their own Roadmap card. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc1-c', path: '/simple/goals?pc1=c', card: '[data-testid="gm-strip"]', opener: '[data-testid="pm-slip"]:has-text("9 days late")', cost: '1 click per milestone, 1 more opens the feature; the goal itself has no line. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc2-a', path: '/simple/goals?pc2=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, pre: async (p) => { await p.locator('[data-testid="pm-pop"] [data-testid="pm-why"]').click(); }, cost: '1 click, then the (i) for why: 2 clicks. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc2-b', path: '/simple/goals?pc2=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, pre: async (p) => { await p.locator('[data-testid="pm-pop"] [data-testid="pm-why"]').click(); }, cost: '0 clicks to read the range on the card; 2 clicks for why. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc2-c', path: '/simple/goals?pc2=c', card: GM, opener: `${GM} [data-testid="pm-goal"] button`, cost: '1 click on the mark to read any date, 1 more for the feature. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc3-a', path: '/simple/goals?pc3=a', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, drv: '[data-testid="pm-pop"] [data-testid="pm-milestone"]:has-text("M4") [data-testid="pm-driver"]', cost: '1 click shows all four milestones, 1 more opens the feature; scrolls inside the sheet on a phone. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc3-b', path: '/simple/goals?pc3=b', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, drv: '[data-testid="pm-pop"] [data-testid="pm-milestone"]:has-text("M4") [data-testid="pm-driver"]', cost: '1 click; each of the 20 features is a tick, the one that sets the date is thick. Today: no predicted date anywhere, only the goal’s At risk pill.' },
+  { id: 'pc3-c', path: '/simple/goals?pc3=c', card: GM, opener: `${GM} [data-testid="pm-goal-open"]`, mid: async (p) => { await p.locator('[data-testid="pm-all"]').click(); await mark(p, '[data-testid="pm-ranked"] [data-testid="pm-driver"]:has-text("Partner referral")'); }, drv: '[data-testid="pm-ranked"] [data-testid="pm-driver"]:has-text("Partner referral")', cost: '1 click, 1 to show all 20, 1 to open the feature: 3 clicks. Today: no predicted date anywhere, only the goal’s At risk pill.' },
 ];
 
 async function go(page: Page, url: string, size: { width: number; height: number }, card: string) {
@@ -108,12 +108,18 @@ async function go(page: Page, url: string, size: { width: number; height: number
   await page.waitForTimeout(1200);
 }
 
-test('mk-predicted frames', async ({ page }) => {
-  await page.setViewportSize(D);
-  await login(page);
+// The mock seeds its Goal map once per session from the first page's switches, so each data set gets a fresh session.
+async function fresh(browser: Browser, email?: string) {
+  const ctx = await browser.newContext({ viewport: D });
+  const page = await ctx.newPage();
+  await login(page, email);
+  return { ctx, page };
+}
+test('mk-predicted frames', async ({ browser }) => {
   for (const s of STORIES) {
     if (ONLY && !s.id.startsWith(ONLY)) continue;
     const big = s.id.startsWith('pc3') ? '&mkdata=big' : '';
+    let { ctx, page } = await fresh(browser);
     // at rest
     await go(page, s.path + big, D, s.card);
     if (s.path.includes('roadmap')) await page.evaluate(() => window.scrollTo(0, 0));
@@ -127,6 +133,13 @@ test('mk-predicted frames', async ({ page }) => {
     if (s.mid) await s.mid(page);
     else await mark(page, s.drv ?? POPD);
     await snap(page, `${s.id}-mid`);
+    // PC1 b: the same dates inside the Roadmap's own milestone card (M7, opened from its chip)
+    if (s.id === 'pc1-b') {
+      await page.keyboard.press('Escape');
+      await page.locator('[data-testid="ms-label"]:has-text("10 paid conversions")').first().click();
+      await page.locator('[data-testid="pm-ms-card"]').waitFor();
+      await snap(page, `${s.id}-card`);
+    }
     // the result: that feature's own panel
     await page.goto(s.path + big + `&mkcost=${encodeURIComponent(s.cost)}`);
     await page.locator(s.card).first().waitFor();
@@ -136,16 +149,39 @@ test('mk-predicted frames', async ({ page }) => {
     await page.locator(s.drv ?? POPD).first().click();
     await page.waitForTimeout(1500);
     await snap(page, `${s.id}-result`);
-    // the hard case at the owner's window: twenty features, four milestones, light and dark
-    await go(page, `${s.path}&mkdata=big`, W, s.card);
-    await page.locator(s.opener).first().click();
-    await page.waitForTimeout(300);
-    await snap(page, `${s.id}-hard-1512`, { dark: true });
     // the phone
     await go(page, `${s.path}${big}`, P, s.card);
+    // the strip snaps to the card, so the card behind the sheet reads whole
+    await page.locator(s.card).first().evaluate((el) => el.scrollIntoView({ inline: 'center', block: 'center' }));
     await page.locator(s.opener).first().scrollIntoViewIfNeeded();
     await page.locator(s.opener).first().click();
     await page.waitForTimeout(300);
-    await snap(page, `${s.id}-open-390`, { dark: s.id.startsWith('pc3') });
+    await snap(page, `${s.id}-open-390`, { dark: true });
+    // the hard case at the owner's window: twenty features, four milestones, light and dark
+    await ctx.close();
+    ({ ctx, page } = await fresh(browser));
+    await go(page, `${s.path}&mkdata=big`, W, s.card);
+    if (!s.id.startsWith('pc3')) await snap(page, `${s.id}-hard-rest-1512`);
+    await page.locator(s.opener).first().click();
+    await page.waitForTimeout(300);
+    await snap(page, `${s.id}-hard-1512`, { dark: true });
+    await ctx.close();
   }
+});
+
+// A commenter's frames, one story per decision (its recommended proposal): the dates panel, then the feature panel.
+async function commenter(browser: Browser, s: Story) {
+  const { ctx, page } = await fresh(browser, 'commenter@example.com');
+  const big = s.id.startsWith('pc3') ? '&mkdata=big' : '';
+  await go(page, `${s.path}${big}&as=commenter`, D, s.card);
+  await page.locator(s.opener).first().click();
+  await page.locator('[data-testid="pm-pop"]').waitFor();
+  await snap(page, `${s.id}-commenter-open`);
+  await page.locator(s.drv ?? POPD).first().click();
+  await page.waitForTimeout(1500);
+  await snap(page, `${s.id}-commenter-result`);
+  await ctx.close();
+}
+test('mk-predicted commenter frames', async ({ browser }) => {
+  for (const s of STORIES) if (['pc1-a', 'pc2-a', 'pc3-a'].includes(s.id) && (!ONLY || s.id.startsWith(ONLY))) await commenter(browser, s);
 });

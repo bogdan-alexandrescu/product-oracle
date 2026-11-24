@@ -941,9 +941,29 @@ export function seedGoalMap(scenario: string | null): GoalMap {
                       : isTracksScenario(scenario)
                         ? tracksMap(scenario === GM_TRACKS_HARD_SCENARIO, scenario)
                         : plain();
+  if (!scenario && mkBigMap()) mkBigSeed(map); // MOCK-HOOK
+  if (!scenario && typeof window !== 'undefined' && /[?&]pc[123]=/.test(window.location.search)) { // MOCK-HOOK
+    const f7 = map.features.find((f) => f.id === 'f7'); // MOCK-HOOK: F-107 sets M7 (10 paid conversions), so M7 is its first milestone
+    if (f7) (f7.milestones = ['m6', 'm4']), (f7.links = [...f7.links].reverse()); // MOCK-HOOK
+  } // MOCK-HOOK
   seedReadings(map);
   return withIds(map);
 }
+
+// MOCK-HOOK: mk-predicted's hard case (&mkdata=big or ?pc3=) on the Goal map too: M9 and fifteen more features.
+const mkBigMap = () => typeof window !== 'undefined' && /[?&](mkdata=big|pc3=)/.test(window.location.search); // MOCK-HOOK
+function mkBigSeed(map: GoalMap): void { // MOCK-HOOK
+  map.milestones.push(ms('m9', MK_BIG_M9, 'conversions', 12, 5.6, 'at_risk', ['conv'], ['m6'], 'Feb')); // MOCK-HOOK
+  MK_BIG_EXTRA.forEach(([code, name, m]) => map.features.push({ ...ft(`mk${code}`, name, 'conv', [m], 'Conversion rate', '+1 point', 'Medium', 'not_measured', null, false), code })); // MOCK-HOOK
+} // MOCK-HOOK
+export const MK_BIG_M9 = '12 paid conversions per rep in every region and on every plan'; // MOCK-HOOK
+const MK_BIG_EXTRA: [string, string, string][] = [ // MOCK-HOOK
+  ['F-120', 'Checkout that remembers a half-filled card and the plan picked before', 'm9'], ['F-121', 'Annual plan nudge', 'm6'], // MOCK-HOOK
+  ['F-122', 'Seat count picker', 'm4'], ['F-123', 'Invoice in the buyer’s own currency', 'm6'], ['F-124', 'Cancel survey', 'm4'], // MOCK-HOOK
+  ['F-125', 'Upgrade prompt after the third alert', 'm9'], ['F-126', 'Win-back email series', 'm6'], ['F-127', 'Plan compare table', 'm4'], // MOCK-HOOK
+  ['F-128', 'Coupon at checkout', 'm6'], ['F-129', 'Sales-assisted trial for teams over fifty seats', 'm9'], ['F-130', 'Usage receipt', 'm9'], // MOCK-HOOK
+  ['F-131', 'Card retry schedule', 'm6'], ['F-132', 'Self-serve plan change', 'm9'], ['F-133', 'Quote builder', 'm9'], ['F-134', 'Paid trial extension', 'm6'], // MOCK-HOOK
+]; // MOCK-HOOK
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

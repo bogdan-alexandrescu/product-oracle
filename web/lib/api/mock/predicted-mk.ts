@@ -100,13 +100,13 @@ const big: PmGoal = {
   driver: 'Sales-assisted trial for teams over fifty seats',
   dated: 18,
   total: 20,
-  history: hist(['2027-02-26', '2027-02-26', '2027-03-02', '2027-03-02', '2027-03-04', '2027-03-06', '2027-03-09', '2027-03-09']),
-  planned: '2027-02-26',
+  history: hist(['2027-02-28', '2027-02-28', '2027-03-02', '2027-03-02', '2027-03-04', '2027-03-06', '2027-03-09', '2027-03-09']),
+  planned: '2027-02-28',
   milestones: [
     { code: 'M2', name: '3 paid conversions per rep', planned: '2026-10-31', predicted: '2026-10-30', driver: 'Trial reminder texts' },
     { code: 'M4', name: '6 paid conversions per rep', planned: '2026-11-30', predicted: '2026-12-09', driver: 'Pricing page test' },
     { code: 'M7', name: '10 paid conversions per rep', planned: '2026-12-31', predicted: '2027-01-20', driver: 'Invoice in the buyer’s own currency' },
-    { code: 'M9', name: '12 paid conversions per rep in every region and on every plan', planned: '2027-02-26', predicted: '2027-03-09', driver: 'Sales-assisted trial for teams over fifty seats' },
+    { code: 'M9', name: '12 paid conversions per rep in every region and on every plan', planned: '2027-02-28', predicted: '2027-03-09', driver: 'Sales-assisted trial for teams over fifty seats' },
   ],
   features: BIG_NAMES.map((name, i) => ({ code: ['F-108', 'F-107', 'F-104', 'F-105', 'F-106'][i] ?? `F-${115 + i}`, name, end: BIG_ENDS[i], ms: BIG_MS[i] })),
 };

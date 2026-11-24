@@ -8,7 +8,7 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
-import { mkEnd } from './predicted-mk'; // MOCK-HOOK
+import { mkEnd, predictedFor } from './predicted-mk'; // MOCK-HOOK
 import type { Schemas } from '@/lib/api/client';
 import { goalFigure } from '@/lib/goal-figure';
 import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
@@ -4109,15 +4109,19 @@ function readRoadmap(
 }
 
 // MOCK-HOOK: with an mk-predicted switch on, a feature's dates are the end dates its goal's predicted line reads.
-function mkDated(items: { title: string; start: { date: string }; end: { date: string }; estimated: boolean }[]) { // MOCK-HOOK
+function mkDated(items: { title: string; start: { date: string; source?: string }; end: { date: string; source?: string }; estimated: boolean; suggestion?: unknown; goal?: { title?: string; due?: string | null } | null }[]) { // MOCK-HOOK
   const s = typeof window === 'undefined' ? '' : window.location.search; // MOCK-HOOK
   if (!/[?&](pc1|pc2|pc3)=/.test(s)) return; // MOCK-HOOK
+  const big = /mkdata=big|pc3=/.test(s); // MOCK-HOOK
   for (const i of items) { // MOCK-HOOK
-    const end = mkEnd(i.title, /mkdata=big|pc3=/.test(s)); // MOCK-HOOK
+    const g = i.goal?.title ? predictedFor(i.goal.title, big) : null; // MOCK-HOOK
+    if (i.goal && g && !i.goal.due) i.goal = { ...i.goal, due: g.planned }; // MOCK-HOOK: the goal's date the card shows as "Due"
+    const end = mkEnd(i.title, big); // MOCK-HOOK
     if (!end) continue; // MOCK-HOOK
-    i.start = { ...i.start, date: new Date(Date.parse(`${end}T12:00:00Z`) - 27 * 86_400_000).toISOString().slice(0, 10) }; // MOCK-HOOK
-    i.end = { ...i.end, date: end }; // MOCK-HOOK
+    i.start = { ...i.start, date: new Date(Date.parse(`${end}T12:00:00Z`) - 27 * 86_400_000).toISOString().slice(0, 10), source: 'engineering' }; // MOCK-HOOK
+    i.end = { ...i.end, date: end, source: 'engineering' }; // MOCK-HOOK
     i.estimated = false; // MOCK-HOOK
+    i.suggestion = null; // MOCK-HOOK: its end date is set, so no Oracle suggestion beside it
   } // MOCK-HOOK
 } // MOCK-HOOK
 

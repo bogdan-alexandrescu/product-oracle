@@ -28,6 +28,25 @@ export function verdict(planned: string, predicted: string | null) {
   if (d < 0) return { word: `${-d} ${d === -1 ? 'day' : 'days'} early`, short: `${d}d`, tone: 'pass' as const, d };
   return { word: 'On time', short: 'On time', tone: 'pass' as const, d };
 }
+/** PC2 b: late as a range, read from the same spread the band draws ("5–19 days late"). */
+export function verdictRange(planned: string, predicted: string | null, r: number) {
+  const v = verdict(planned, predicted);
+  if (!predicted || mkParam('pc2') !== 'b') return v;
+  const lo = v.d - r;
+  const hi = v.d + r;
+  if (lo > 0) return { ...v, word: `${lo}–${hi} days late` };
+  if (hi > 0) return { ...v, tone: 'warn' as const, word: `Up to ${hi} days late` };
+  return { ...v, word: v.d === 0 ? 'On time' : `${-hi}–${-lo} days early` };
+}
+/** PC1 (any): the Roadmap milestone chip's own mark follows the predicted date, so a chip never shows a check beside "9 days late". */
+export function mkMsStatus(code: string): 'on_track' | 'at_risk' | null {
+  if (!mkParam('pc1') && !mkParam('pc2') && !mkParam('pc3')) return null;
+  for (const g of ['Sign-ups per rep per day', 'Paid conversions per rep per day', 'Revenue per day']) {
+    const m = predictedFor(g, mkBig())?.milestones.find((x) => x.code === code);
+    if (m) return verdict(m.planned, m.predicted).d > 0 ? 'at_risk' : 'on_track';
+  }
+  return null;
+}
 const TONE = {
   crit: 'bg-crit-bg text-crit',
   warn: 'bg-warn-bg text-warn',
@@ -55,7 +74,7 @@ function Driver({ p, name, onOpen, label = 'Set by' }: { p: PmGoal; name: string
   return (
     <span className="min-w-0">
       <span className="text-text2">{label} </span>
-      <button type="button" data-testid="pm-driver" onClick={() => onOpen(name)} className="text-left font-semibold text-accent-ink hover:underline focus-visible:underline">
+      <button type="button" data-testid="pm-driver" onClick={() => onOpen(name)} className="inline text-left font-semibold text-accent-ink hover:underline focus-visible:underline">
         <span className="tnum">{codeOf(p, name)}</span> {name}
       </button>
     </span>
@@ -128,10 +147,15 @@ function Pop({ onClose, children, title }: { onClose: () => void; children: Reac
 
 /** The confidence and reason, behind an (i) (PC2 a and the default). */
 function Why({ p, label }: { p: PmGoal; label: string }) {
+  const undated = p.total - p.dated;
   return (
-    <InfoTip label={`${label}'s predicted date`} testId="pm-why">
+    <InfoTip label={`${label}'s predicted date`} testId="pm-why" side="bottom" align="end">
       <span className="flex flex-col gap-1">
-        <b>Read from the latest feature end date</b>
+        {mkParam('pc2') === 'b' ? (
+          <b>Latest end date, widened by past slips (avg +{p.slipRate} days){undated ? ` and ${undated} undated ${undated === 1 ? 'feature' : 'features'}` : ''}</b>
+        ) : (
+          <b>Read from the latest feature end date</b>
+        )}
         {p.driver && <span>{codeOf(p, p.driver)} {p.driver} ends {md(p.predicted)}</span>}
         <span>{p.dated} of {p.total} features have an end date</span>
       </span>
@@ -146,13 +170,13 @@ function MilestoneLines({ p, onOpen, lo, hi, ticks }: { p: PmGoal; onOpen: Open;
         <li key={m.code} className="flex flex-col gap-0.5" data-testid="pm-milestone">
           <span className="flex items-baseline gap-1.5">
             <b className="text-accent-ink">{m.code}</b>
-            <span className="min-w-0 flex-1 truncate" title={m.name}>{m.name}</span>
-            <Chip v={verdict(m.planned, m.predicted)} />
+            <span className="min-w-0 flex-1" title={m.name}>{m.name}</span>
+            <Chip v={verdictRange(m.planned, m.predicted, range(p))} />
           </span>
-          <DateLine planned={m.planned} predicted={m.predicted} lo={lo} hi={hi} ticks={ticks ? p.features.filter((f) => f.ms === m.code && f.end).map((f) => ({ at: f.end!, strong: f.name === m.driver })) : undefined} />
-          <span className="flex justify-between gap-2 text-xs">
+          {mkParam('pc2') === 'b' && m.predicted ? <Band p={{ ...p, planned: m.planned, predicted: m.predicted }} lo={lo} hi={hi} /> : <DateLine planned={m.planned} predicted={m.predicted} lo={lo} hi={hi} ticks={ticks ? p.features.filter((f) => f.ms === m.code && f.end).map((f) => ({ at: f.end!, strong: f.name === m.driver })) : undefined} />}
+          <span className="flex flex-col gap-0.5 text-xs">
+            <span className="tnum text-text2">Due {md(m.planned)}{m.predicted ? ` · predicted ${mkParam('pc2') === 'b' ? `${md(shift(m.predicted, -range(p)))} – ${md(shift(m.predicted, range(p)))}` : md(m.predicted)}` : ''}</span>
             <Driver p={p} name={m.driver} onOpen={onOpen} />
-            <span className="tnum shrink-0 text-text2">Due {md(m.planned)}{m.predicted ? ` · ${md(m.predicted)}` : ''}</span>
           </span>
         </li>
       ))}
@@ -170,7 +194,7 @@ function Ranked({ p, onOpen }: { p: PmGoal; onOpen: Open }) {
   const shown = all ? rows : rows.slice(0, 6);
   return (
     <div className="flex flex-col gap-1" data-testid="pm-ranked">
-      <span className="text-xs font-semibold text-text2">Features that push the date</span>
+      <span className="text-xs font-semibold text-text2">Features by days past their milestone's date</span>
       <ul className={`flex flex-col gap-1 ${all ? 'max-h-[280px] overflow-y-auto' : ''}`}>
         {shown.map(({ f, late }) => (
           <li key={f.code} className="grid grid-cols-[minmax(0,1fr)_88px_64px] items-center gap-2 text-xs">
@@ -181,7 +205,7 @@ function Ranked({ p, onOpen }: { p: PmGoal; onOpen: Open }) {
               {late != null && late > 0 && <span className="block h-full rounded-full" style={{ width: `${(late / max) * 100}%`, background: INK[late > 7 ? 'crit' : 'warn'] }} />}
             </span>
             <span className={`tnum text-right ${late == null ? 'text-na' : late > 0 ? 'font-semibold text-crit' : 'text-pass'}`}>
-              {late == null ? 'No date' : late > 0 ? `+${late} days` : 'In time'}
+              {late == null ? 'No date' : late > 0 ? `+${late} days` : 'On time'}
             </span>
           </li>
         ))}
@@ -198,11 +222,11 @@ function Ranked({ p, onOpen }: { p: PmGoal; onOpen: Open }) {
 /** PC1 b: the predicted date week by week against the flat planned date. */
 function Drift({ p, w, h, labels }: { p: PmGoal; w: number; h: number; labels?: boolean }) {
   const pts = p.history.filter((x) => x.predicted);
-  if (!pts.length) return <span className="text-xs text-na">No date yet</span>;
+  if (!pts.length) return <span className="mt-3 block w-full border-t border-dashed border-line" />;
   const ys = [p.planned, ...pts.map((x) => x.predicted!)].map(t);
   const lo = Math.min(...ys) - 86_400_000 * 2;
   const hi = Math.max(...ys) + 86_400_000 * 2;
-  const pad = labels ? 34 : 2;
+  const pad = labels ? 46 : 2;
   const X = (i: number) => pad + (i / (p.history.length - 1)) * (w - pad - 4);
   const Y = (iso: string) => h - 4 - ((t(iso) - lo) / (hi - lo)) * (h - 8);
   const v = verdict(p.planned, p.predicted);
@@ -215,7 +239,7 @@ function Drift({ p, w, h, labels }: { p: PmGoal; w: number; h: number; labels?: 
         <>
           <text x={0} y={Y(p.planned) + 4} fontSize="11" fill="var(--text2)">{md(p.planned)}</text>
           <text x={0} y={Y(p.predicted!) + 4} fontSize="11" fill={INK[v.tone]} fontWeight="600">{md(p.predicted)}</text>
-          {p.history.map((x, i) => i % 2 === 1 && <text key={i} x={X(i)} y={h + 12} fontSize="11" fill="var(--text2)" textAnchor="middle">{md(x.week)}</text>)}
+          {p.history.map((x, i) => i % 2 === 1 && <text key={i} x={X(i)} y={h + 12} fontSize="11" fill="var(--text2)" textAnchor={i === p.history.length - 1 ? 'end' : 'middle'}>{md(x.week)}</text>)}
         </>
       )}
     </svg>
@@ -230,10 +254,9 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
   const [open, setOpen] = useState(mkParam('open') === '1');
   const p = predictedFor(goal, mkBig());
   if (!p || pc1 === 'b' || pc1 === 'c' || (!pc1 && !pc2 && !pc3)) return null;
-  const v = verdict(p.planned, p.predicted);
+  const v = verdictRange(p.planned, p.predicted, range(p));
   const [lo, hi] = pc2 === 'b' ? span(p, p.milestones, [shift(p.predicted, -range(p)), shift(p.predicted, range(p))].filter(Boolean) as string[]) : span(p);
   const go: Open = (n) => (setOpen(false), onOpen(n));
-  void canEdit;
   // PC2 c: a status tick only, everything else in its tooltip.
   if (pc2 === 'c')
     return (
@@ -241,7 +264,7 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
         <button type="button" onClick={() => setOpen(!open)} className={`inline-flex size-5 items-center justify-center rounded-full font-bold ${TONE[v.tone]}`} title={`${v.word}: due ${md(p.planned)}, predicted ${p.predicted ? md(p.predicted) : 'not yet'}`} aria-label={`Predicted date: ${v.word}`}>
           {MARK[v.tone]}
         </button>
-        <span className="text-text2">Due {md(p.planned)}</span>
+        <span className="text-text2 whitespace-nowrap">Due {md(p.planned)} · <b className={v.tone === 'pass' ? 'text-pass' : v.tone === 'na' ? 'text-na' : 'text-crit'}>{v.word}</b></span>
         {open && (
           <Pop title={v.word} onClose={() => setOpen(false)}>
             <span className="tnum">Due {md(p.planned)} · predicted {p.predicted ? md(p.predicted) : 'not yet'}</span>
@@ -258,8 +281,8 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
         ) : (
           <DateLine planned={p.planned} predicted={p.predicted} lo={lo} hi={hi} ticks={pc3 === 'b' ? p.features.filter((f) => f.end).map((f) => ({ at: f.end!, strong: f.name === p.driver })) : undefined} />
         )}
-        <span className="tnum flex items-center justify-between gap-1 text-xs text-text2">
-          <span>Due {md(p.planned)}{p.predicted ? ` · ${pc2 === 'b' ? `${md(shift(p.predicted, -range(p)))} – ${md(shift(p.predicted, range(p)))}` : md(p.predicted)}` : ''}</span>
+        <span className="tnum flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5 text-xs text-text2">
+          <span className="whitespace-nowrap">Due {md(p.planned)}{p.predicted ? ` · predicted ${pc2 === 'b' ? `${md(shift(p.predicted, -range(p)))} – ${md(shift(p.predicted, range(p)))}` : md(p.predicted)}` : ''}</span>
           <Chip v={v} testId="pm-chip" />
         </span>
       </button>
@@ -271,7 +294,8 @@ export function GoalPredicted({ goal, onOpen, canEdit = true }: { goal: string; 
           </span>
           <span className="flex flex-col gap-0.5 border-b border-line pb-2">
             <span className="flex items-baseline gap-1.5"><b>Goal</b><span className="flex-1" /><Chip v={v} /></span>
-            <DateLine planned={p.planned} predicted={p.predicted} lo={lo} hi={hi} />
+            {pc2 === 'b' && p.predicted ? <Band p={p} lo={lo} hi={hi} /> : <DateLine planned={p.planned} predicted={p.predicted} lo={lo} hi={hi} />}
+            <MkAsk />
             <span className="text-xs"><Driver p={p} name={p.driver} onOpen={go} /></span>
           </span>
           {pc3 === 'c' ? <Ranked p={p} onOpen={go} /> : <MilestoneLines p={p} onOpen={go} lo={lo} hi={hi} ticks={pc3 === 'b'} />}
@@ -314,11 +338,11 @@ export function MilestoneSlip({ goal, code, onOpen }: { goal: string; code: stri
   const v = verdict(m.planned, m.predicted);
   const w = Math.min(48, Math.abs(v.d) * 3);
   return (
-    <span className="relative inline-flex" data-pm-keep>
+    <span className="relative inline-flex basis-full pl-6" data-pm-keep>
       <button type="button" data-testid="pm-slip" onClick={() => setOpen(!open)} aria-label={`${m.code}: ${v.word}`} className={`inline-flex items-center gap-1 rounded-md px-1 text-xs font-semibold ${TONE[v.tone]}`}>
         {v.d > 0 && <span className="inline-block h-1.5 rounded-full" style={{ width: w, background: INK[v.tone] }} />}
         <span aria-hidden>{MARK[v.tone]}</span>
-        <span className="tnum">{v.tone === 'na' ? 'No date' : v.d === 0 ? 'On time' : v.d > 0 ? `+${v.d} days` : `${-v.d} days early`}</span>
+        <span className="tnum whitespace-nowrap">{v.word}</span>
       </button>
       {open && (
         <Pop title={`${m.code} ${m.name}`} onClose={() => setOpen(false)}>
@@ -362,12 +386,39 @@ export function RoadmapDrift({ goal, onOpen }: { goal: string; onOpen: Open }) {
   );
 }
 
+/** A commenter's line in the dates panel (&as=commenter): the dates come from features, whose change is a suggestion. */
+function MkAsk() {
+  if (mkParam('as') !== 'commenter') return null;
+  return <span className="text-xs text-text2" data-testid="pm-ask">You can suggest dates; Dana Whitlock approves</span>;
+}
+
+/** PC1 b: the Roadmap's own milestone card shows the milestone's due and predicted dates. */
+export function MsPredicted({ code }: { code: string }) {
+  if (mkParam('pc1') !== 'b') return null;
+  for (const g of ['Sign-ups per rep per day', 'Paid conversions per rep per day', 'Revenue per day']) {
+    const p = predictedFor(g, mkBig());
+    const m = p?.milestones.find((x) => x.code === code);
+    if (!p || !m) continue;
+    const v = verdict(m.planned, m.predicted);
+    const [lo, hi] = span(p, [m]);
+    return (
+      <span className="flex flex-col gap-1 rounded-lg border border-line p-2 text-sm" data-testid="pm-ms-card">
+        <span className="flex items-center justify-between gap-2"><Legend /><Chip v={v} /></span>
+        <DateLine planned={m.planned} predicted={m.predicted} lo={lo} hi={hi} h={18} />
+        <span className="tnum flex justify-between text-xs text-text2"><span>Due {md(m.planned)}</span><span>{m.predicted ? `Predicted ${md(m.predicted)}` : 'No date yet'}</span></span>
+        {m.driver && <span className="text-xs"><span className="text-text2">Set by </span><b>{codeOf(p, m.driver)}</b> {m.driver}</span>}
+      </span>
+    );
+  }
+  return null;
+}
+
 /** A frame's cost, shown in the corner when the URL asks for it. */
 export function MkCost() {
   const c = mkParam('mkcost');
   if (!c) return null;
   return (
-    <div data-testid="mk-cost" className="pointer-events-none fixed bottom-3 left-3 z-50 max-w-[210px] rounded-lg border-2 border-accent bg-surface px-3 py-2 text-sm shadow-lg">
+    <div data-testid="mk-cost" className="pointer-events-none fixed bottom-3 left-1/2 -translate-x-1/2 z-50 max-[600px]:top-14 max-[600px]:bottom-auto max-w-[210px] rounded-lg border-2 border-accent bg-surface px-3 py-2 text-sm shadow-lg">
       <b className="text-accent-ink">Cost</b> · {c}
     </div>
   );

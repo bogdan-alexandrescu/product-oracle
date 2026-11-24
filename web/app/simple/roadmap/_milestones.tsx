@@ -46,6 +46,7 @@ import {
   type MkStatus,
 } from './_mk';
 import { msEdge, msFill, msInk } from './_timeline';
+import { MsPredicted, mkMsStatus } from '../goals/_predicted-mk'; // MOCK-HOOK
 
 export type GoalMilestone = Schemas['SimpleGoalMilestone'];
 
@@ -1928,7 +1929,7 @@ export function MsLayer(props: MsLayerProps) {
           <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
           <span className="min-w-0 overflow-hidden text-ellipsis">{bandWords(m)}</span>
           <span data-testid="ms-status" data-status={m.status} className="flex-none">
-            <MkStatusMark status={m.status ?? 'on_track'} size={11} />
+            <MkStatusMark status={mkMsStatus(msCode(m)) ?? m.status ?? 'on_track'} size={11} />{/* MOCK-HOOK */}
           </span>
         </span>,
       );
@@ -2652,6 +2653,7 @@ export function MsCard() {
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
       </div>
       {also}
+      <MsPredicted code={d.code} />{/* MOCK-HOOK */}
       <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
         <Field label="Name">
           <span className="font-semibold" style={{ color: msInk(d.code) }}>
