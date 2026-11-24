@@ -763,9 +763,7 @@ def pick_line(
     return next((x for x in offered if x.key == key), NOW_LINE)
 
 
-def above(
-    e: service.Entry | None, line: SimpleLine, inside: set[uuid.UUID] | None = None
-) -> bool:
+def above(e: service.Entry | None, line: SimpleLine, inside: set[uuid.UUID] | None = None) -> bool:
     """Whether ``e`` makes ``line``. The Now line is "this quarter" as the goal buckets count
     it (prio-ux #1739: one rule for the three tabs): the plan's items in its span
     (``inside``), else the Now horizon's."""
