@@ -128,6 +128,10 @@
           "cost": "3 steps (⌘K, “f-79”, Enter); adding an item still takes 4 steps on Roadmap.",
           "frames": [
             {
+              "file": "frames/cp1-a-rest.html",
+              "caption": "At rest: Home with Find in the rail, the start every CP2 story shares (same frame as CP1 a)."
+            },
+            {
               "file": "frames/cp2-a-open.html",
               "caption": "⌘K on Home: recent items and pages, nothing else."
             },
@@ -158,6 +162,10 @@
           "plus": "One box for going and doing; no dead end on no match.",
           "cost": "Add an item: 3 steps (⌘K, “new …”, Enter) against 4 today; open a feature: 3 steps.",
           "frames": [
+            {
+              "file": "frames/cp1-a-rest.html",
+              "caption": "At rest: Home with Find in the rail, the start every CP2 story shares (same frame as CP1 a)."
+            },
             {
               "file": "frames/cp2-b-open.html",
               "caption": "⌘K on Home: recent items, then Do (New item, New PRD, Ask Oracle), then pages."
@@ -192,6 +200,10 @@
           "plus": "You always see the item in its place, next to its neighbours.",
           "cost": "3 steps, but you leave the page you were on; going back is one more step.",
           "frames": [
+            {
+              "file": "frames/cp1-a-rest.html",
+              "caption": "At rest: Home with Find in the rail, the start every CP2 story shares (same frame as CP1 a)."
+            },
             {
               "file": "frames/cp2-c-open.html",
               "caption": "⌘K on Home: pages only, no recent items or actions."
