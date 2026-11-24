@@ -2,10 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Page } from '@playwright/test';
 
 import { login } from './helpers';
 import { test } from './test';
+
+import type { Page } from '@playwright/test';
 
 const OUT = path.resolve(__dirname, '../.mk-watch-out'); // MOCK-HOOK
 const FR = path.join(OUT, 'frames'); // MOCK-HOOK

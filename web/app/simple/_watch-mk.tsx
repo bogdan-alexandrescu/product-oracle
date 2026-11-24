@@ -283,12 +283,12 @@ function Toggle({ on, label, dis, onClick, mkId }: { on: boolean; label: string;
 export function DigestSettingsMk({ place = 'account' }: { place?: 'account' | 'company' }) { // MOCK-HOOK
   const v = mk.wd3(); // MOCK-HOOK
   const st = q('state'); // MOCK-HOOK
-  if (place === 'company') return v && st === 'owner' ? <CompanyDefaultsMk v={v} /> : null; // MOCK-HOOK
   const noSlack = st === 'noslack' || st === 'asked'; // MOCK-HOOK
   const [email, setEmail] = useState(st !== 'stopped'); // MOCK-HOOK
   const [slack, setSlack] = useState(!noSlack && st !== 'stopped'); // MOCK-HOOK
   const [asked, setAsked] = useState(st === 'asked'); // MOCK-HOOK
   const [stopped, setStopped] = useState(st === 'stopped'); // MOCK-HOOK
+  if (place === 'company') return v && st === 'owner' ? <CompanyDefaultsMk v={v} /> : null; // MOCK-HOOK
   if (!v) return null; // MOCK-HOOK
   const stoppedBar = stopped && ( // MOCK-HOOK
     <div role="status" data-mk="stopped" className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm"> {/* MOCK-HOOK */}
