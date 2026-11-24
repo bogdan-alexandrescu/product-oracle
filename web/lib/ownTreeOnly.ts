@@ -1,7 +1,8 @@
 // #1570: the web's tests read only their own tree. A value that crosses trees is published by
 // its owner as JSON in docs/contracts and read in that form (contract(name)); ownTreeOnly()
 // makes node's fs throw ForeignRead on any other file of the checkout outside web/.
-// e2e/test.ts arms it for every Playwright spec (e2e/own-tree-only.spec.ts proves it).
+// e2e/test.ts arms it for every Playwright spec and vitest.own-tree.ts for every Vitest test
+// (guards/own-tree-only.test.ts proves both).
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';

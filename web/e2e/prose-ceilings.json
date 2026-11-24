@@ -1,7 +1,6 @@
 {
   "owner": {
     "/account": 8,
-    "/baseline": 0,
     "/briefs/[id]": 8,
     "/company/decisions": 44,
     "/company/market": 0,
@@ -25,6 +24,7 @@
     "/documents/[doc]/v/[n]/quality": 200,
     "/documents/[doc]/v/[n]/roadmap": 18,
     "/documents/new": 83,
+    "/ground-truth": 0,
     "/home": 10,
     "/i/[token]": 26,
     "/impact/changes/[id]": 27,
@@ -69,6 +69,7 @@
     "/simple": 71,
     "/simple/decisions": 29,
     "/simple/goals": 0,
+    "/simple/inbox": 348,
     "/simple/meetings": 36,
     "/simple/meetings/[id]": 23,
     "/simple/meetings/[id]/chat": 9,
@@ -81,7 +82,6 @@
   },
   "viewer": {
     "/account": 8,
-    "/baseline": 0,
     "/briefs/[id]": 8,
     "/company/decisions": 44,
     "/company/market": 0,
@@ -105,6 +105,7 @@
     "/documents/[doc]/v/[n]/quality": 191,
     "/documents/[doc]/v/[n]/roadmap": 8,
     "/documents/new": 0,
+    "/ground-truth": 0,
     "/home": 10,
     "/i/[token]": 26,
     "/impact/changes/[id]": 27,
@@ -149,6 +150,7 @@
     "/simple": 53,
     "/simple/decisions": 37,
     "/simple/goals": 0,
+    "/simple/inbox": 0,
     "/simple/meetings": 50,
     "/simple/meetings/[id]": 23,
     "/simple/meetings/[id]/chat": 10,

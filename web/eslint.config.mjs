@@ -369,7 +369,7 @@ const ALL_RULES = defineConfig([
 // `npm run lint` ran out of a 4 GB heap, and alone over the whole tree they needed more than 3 GB.
 // So scripts/lint.mjs lints in three processes over the same files: LINT_PASS=untyped (every rule
 // but these), then these alone in two halves, typed-app (all but e2e/) and typed-e2e (e2e/ only).
-// Without LINT_PASS (an editor, the ESLint API in lib/type-scale.test.ts and e2e/date-lint.spec.ts)
+// Without LINT_PASS (an editor, the ESLint API in lib/type-scale.test.ts and guards/date-lint.test.ts)
 // the untyped rules run: a file linted from text, not on disk, has no TypeScript program.
 export const TYPED_RULES = {
   '@typescript-eslint/await-thenable': 'error',

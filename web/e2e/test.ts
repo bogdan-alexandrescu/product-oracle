@@ -6,8 +6,8 @@ import { ownTreeOnly } from '../lib/ownTreeOnly';
 export { expect } from '@playwright/test';
 export type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
 
-// #1570: a spec reads only web/ and docs/contracts; the old-names census reads every tree.
-ownTreeOnly(['e2e/ground-truth-words-source.spec.ts']);
+// #1570: a spec reads only web/ and docs/contracts (Vitest: vitest.own-tree.ts, #1716).
+ownTreeOnly();
 
 /**
  * E2E_TEXT_SPACING (a CSS length, "0.4px" or "-0.3px") sets letter-spacing on every page's

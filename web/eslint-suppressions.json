@@ -4318,11 +4318,6 @@
       "count": 2
     }
   },
-  "e2e/contracts-published.spec.ts": {
-    "import-x/order": {
-      "count": 1
-    }
-  },
   "e2e/cost-prominence.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -5491,11 +5486,6 @@
       "count": 2
     }
   },
-  "e2e/ground-truth-words-source.spec.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
   "e2e/ground-truth-words.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -6038,11 +6028,6 @@
       "count": 2
     }
   },
-  "e2e/own-tree-only.spec.ts": {
-    "import-x/order": {
-      "count": 1
-    }
-  },
   "e2e/page-header.spec.ts": {
     "import-x/order": {
       "count": 2
@@ -6319,11 +6304,6 @@
   "e2e/priority-run.spec.ts": {
     "import-x/order": {
       "count": 3
-    }
-  },
-  "e2e/prose-guard.spec.ts": {
-    "import-x/order": {
-      "count": 6
     }
   },
   "e2e/prose-tips.spec.ts": {

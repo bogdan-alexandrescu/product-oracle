@@ -23,7 +23,7 @@ import {
   Sheet,
   Split,
 } from '@/components/ds';
-import { ErrorNote, INPUT } from '@/components/ui';
+import { ErrorNote, INPUT, LoadError } from '@/components/ui';
 import { api, unwrap, type Schemas } from '@/lib/api/client';
 import type { paths } from '@/lib/api/schema';
 import { useMe } from '@/lib/me';
@@ -389,6 +389,9 @@ function Decisions() {
       onChanged={changed}
       autoDecide={params.get('act') === 'decide'}
     />
+  ) : selectedKey && detailQ.error ? (
+    // #1713: a failed read of the picked decision says so, never looks like nothing picked.
+    <LoadError what="the decision" error={detailQ.error} onRetry={() => void detailQ.reload()} />
   ) : null;
   // qa4-company-15: beside the list the inspector's column stays while nothing is open, so the
   // filter chips keep their place when a kind with no decisions is picked. At 1100 px and
@@ -574,13 +577,14 @@ function Decisions() {
             >
               {state === 'needs_me' && !from && !q ? (
                 <p data-testid="decisions-needs-me-empty">
-                  Nothing waits on you here. Needs me lists the proposals you are the approver of
-                  and your decisions whose review date has come. Run stops and document approvals
-                  wait in the{' '}
+                  Nothing waits on you here.{' '}
+                  <InfoTip label="Needs me">
+                    Needs me lists the proposals you are the approver of and your decisions whose
+                    review date has come. Run stops and document approvals wait in the Inbox.
+                  </InfoTip>{' '}
                   <Link href="/inbox" className="font-medium text-accent-ink hover:underline">
                     Inbox
                   </Link>
-                  .
                 </p>
               ) : (
                 <p>
@@ -649,7 +653,7 @@ function Decisions() {
       </Split>
       {phone && (
         <Sheet
-          open={sheetOpen && !!detail}
+          open={sheetOpen && !!inspector}
           title="Decision"
           onClose={() => setSheetOpen(false)}
           testId="decision-sheet"

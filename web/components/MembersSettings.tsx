@@ -1573,7 +1573,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </InspectorSection>
       )}
       {manage && (
-        <RevokeFailuresSection failures={revokeFailures} onChanged={() => void revokeQ.reload()} />
+        <RevokeFailuresSection
+          failures={revokeFailures}
+          loadError={revokeQ.error}
+          onChanged={() => void revokeQ.reload()}
+        />
       )}
       <RolesSection members={manage ? members : undefined} />
     </Inspector>

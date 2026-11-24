@@ -2,8 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as ts from 'typescript';
-
-import { expect, test } from './test';
+import { expect, test, vi } from 'vitest';
 
 /**
  * Owner's decision (Nov 5), the source side of ground-truth-words.spec.ts: no string a page
@@ -39,6 +38,8 @@ import { expect, test } from './test';
  */
 
 const WEB = path.resolve(__dirname, '..');
+// It parses every source file of web/ and api/oracle: a census, not a 5-second unit test.
+vi.setConfig({ testTimeout: 120_000 });
 
 /** The old names as words of their own (an id joined to "_ / . : -" is not one; a full stop ends a sentence unless a word follows it). */
 const OLD = /desired state|current state|(?<![\w/.:\-])baseline(?![\w/:\-]|\.\w)/i;

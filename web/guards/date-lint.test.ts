@@ -1,6 +1,9 @@
 import path from 'node:path';
 
-import { expect, test } from './test';
+import { expect, test, vi } from 'vitest';
+
+// It runs ESLint on six snippets: a census, not a 5-second unit test.
+vi.setConfig({ testTimeout: 120_000 });
 
 /**
  * #447: `npm run lint` refuses a date shown outside lib/dates.ts (toLocaleString and its

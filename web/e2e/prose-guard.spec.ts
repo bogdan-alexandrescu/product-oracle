@@ -6,7 +6,9 @@
  * above its ceiling in e2e/prose-ceilings.json. Ceilings only go down, and never by hand:
  * `npm run prose:ratchet` reruns this spec and lowers every ceiling to today's count, and the
  * spec fails when a ceiling is above the merge base's (origin/main; PROSE_BASE names another
- * ref) or, for a page the merge base has no ceiling for, above the page's count.
+ * ref). A page the merge base has no ceiling for starts at 0 (#1724): its explanations go behind
+ * a tip, or copy that must stay as written is marked [data-owner-copy]. Every route file of app/
+ * is visited or named in NOT_VISITED with why.
  *
  * The rule, as counted here:
  * - Text is what the page renders and a person can see: text nodes whose element passes
@@ -27,8 +29,10 @@
  *   is two words, "Oct" and "PM").
  * - A page's count is the number of words in its prose sentences. The guard fails when that
  *   is above the page's ceiling for the role; a page with no ceiling yet fails until
- *   `npm run prose:ratchet` records it. A page that opened "not found" fails, and its count is
- *   written as missing, which the ratchet ignores.
+ *   `npm run prose:ratchet` records it, at 0. A page that opened "not found" fails, and its count
+ *   is written as missing, which the ratchet ignores.
+ * - Nothing is clicked here, so text that shows only once opened is held at the source:
+ *   guards/jsx-prose.test.ts.
  *
  * A lane that adds prose hides it (an InfoTip, a tick whose tooltip says why, a link) or this
  * spec fails (docs/agents/lane-rules.md).
@@ -37,13 +41,11 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, test, type Page } from './test';
-import { login, seedRoadmapReview } from './helpers';
-import { MOCK_INTERVIEW_TOKEN } from '../lib/api/mock/interviews';
-import { BEFORE_DRAFTING } from '../lib/api/mock/intake';
-import { CHAT_MEETING_ID } from '../lib/api/mock/simple-chat';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
-import { ROADMAP_REVIEW_RUN } from '../lib/api/mock/runs';
+
+import { login } from './helpers';
+import { DETAILED, NOT_VISITED, pageRoutes, SIMPLE, type Visit } from './prose-routes';
+import { expect, test, type Page } from './test';
 
 const MIN_WORDS = 8;
 const MISSING =
@@ -89,137 +91,6 @@ const USER_CONTENT = [
 type Role = 'owner' | 'viewer';
 const ROLES: Record<Role, string> = { owner: 'admin@example.com', viewer: 'viewer@example.com' };
 
-/**
- * A page: its route (the ceilings' key) and how to reach it. `go` is a path, or a path then
- * patterns of the links to follow from it (the first link whose path matches, in turn), for a page whose id only the mock knows;
- * `scenario` the mock scenario that has its data, or `seed` adds it after signing in (as
- * e2e/helpers.ts's seeds do for other specs). Not visited: the signed-out pages (/login,
- * /access, /oauth/consent, a shared link /s/<token>) and the routes that only redirect
- * (/, /company, /settings, /requests/new, /simple/prds/<doc>).
- */
-type Visit = {
-  route: string;
-  go: string | string[];
-  scenario?: string;
-  seed?: (page: Page) => Promise<unknown>;
-};
-
-const SIMPLE: Visit[] = [
-  { route: '/simple', go: '/simple' },
-  { route: '/simple/decisions', go: '/simple/decisions' },
-  { route: '/simple/goals', go: '/simple/goals' },
-  { route: '/simple/meetings', go: '/simple/meetings' },
-  { route: '/simple/meetings/[id]', go: ['/simple/meetings', '/simple/meetings/[^/]+'] },
-  { route: '/simple/meetings/[id]/chat', go: `/simple/meetings/${CHAT_MEETING_ID}/chat` },
-  { route: '/simple/one-pagers', go: '/simple/one-pagers' },
-  { route: '/simple/one-pagers/[doc]', go: '/simple/one-pagers/guided-setup' },
-  { route: '/simple/priorities', go: '/simple/priorities' },
-  { route: '/simple/roadmap', go: '/simple/roadmap' },
-];
-
-const DETAILED: Visit[] = [
-  { route: '/home', go: '/home' },
-  { route: '/inbox', go: '/inbox' },
-  { route: '/documents', go: '/documents' },
-  { route: '/documents/new', go: '/documents/new' },
-  { route: '/documents/[doc]', go: '/documents/annual-billing' },
-  { route: '/documents/[doc]/composition', go: '/documents/annual-billing/composition' },
-  { route: '/documents/[doc]/diff', go: '/documents/annual-billing/diff' },
-  { route: '/documents/[doc]/public', go: '/documents/annual-billing/public' },
-  { route: '/documents/[doc]/publish', go: '/documents/referral-link/publish' },
-  { route: '/documents/[doc]/v/[n]', go: '/documents/annual-billing/v/2' },
-  { route: '/documents/[doc]/v/[n]/evidence', go: '/documents/annual-billing/v/2/evidence' },
-  { route: '/documents/[doc]/v/[n]/impact', go: '/documents/annual-billing/v/2/impact' },
-  { route: '/documents/[doc]/v/[n]/items', go: '/documents/annual-billing/v/2/items' },
-  { route: '/documents/[doc]/v/[n]/present', go: '/documents/referral-link/v/2/present' },
-  { route: '/documents/[doc]/v/[n]/quality', go: '/documents/referral-link/v/2/quality' },
-  { route: '/documents/[doc]/v/[n]/roadmap', go: '/documents/usage-alerts/v/1/roadmap' },
-  { route: '/briefs/[id]', go: ['/documents/annual-billing', '/briefs/[^/]+'] },
-  // The mock's ids are stable for a scenario (its seed is seeded): Guided setup's entity and R-90's deletion.
-  {
-    route: '/impact/entities/[id]',
-    scenario: 'impact',
-    go: '/impact/entities/959a57aa-38ad-4d78-8178-3342688ce78c',
-  },
-  {
-    route: '/impact/changes/[id]',
-    scenario: 'impact',
-    go: '/impact/changes/b7dce326-2a47-4000-8b74-562e8ac05a9c',
-  },
-  { route: '/baseline', go: '/baseline' },
-  { route: '/priorities', go: '/priorities' },
-  { route: '/plan', go: '/plan' },
-  { route: '/plan/dates', go: '/plan/dates' },
-  { route: '/plan/documents', go: '/plan/documents' },
-  { route: '/plan/outcomes', go: '/plan/outcomes' },
-  { route: '/plan/reports', go: '/plan/reports' },
-  { route: '/plan/reports/latest', go: '/plan/reports/latest' },
-  {
-    route: '/plan/reports/[id]',
-    scenario: 'alignment-report',
-    go: ['/plan/reports', '/plan/reports/(?!latest)[^/]+'],
-  },
-  { route: '/roadmap/changelog', go: '/roadmap/changelog' },
-  { route: '/roadmap/launches', go: '/roadmap/launches' },
-  { route: '/requests', go: '/requests' },
-  { route: '/requests/themes', go: '/requests/themes' },
-  { route: '/requests/to-decide', go: '/requests/to-decide' },
-  { route: '/requests/interviews', go: '/requests/interviews' },
-  {
-    route: '/requests/interviews/[id]',
-    go: '/requests/interviews/66952c66-1c80-4e84-84a4-838e1243af88',
-  },
-  {
-    route: '/intakes/[id]',
-    scenario: 'before-drafting',
-    go: `/intakes/${BEFORE_DRAFTING.intakeId}`,
-  },
-  { route: '/runs', go: '/runs' },
-  { route: '/runs/[id]', go: ['/runs', '/runs/[^/]+'] },
-  {
-    route: '/runs/[id]/review/[checkpoint]',
-    seed: seedRoadmapReview,
-    go: `/runs/${ROADMAP_REVIEW_RUN.run.id}/review/${ROADMAP_REVIEW_RUN.run.checkpoints[0].id}`,
-  },
-  { route: '/sources', go: '/sources' },
-  { route: '/company/decisions', go: '/company/decisions' },
-  { route: '/company/market', go: '/company/market' },
-  { route: '/company/metrics', go: '/company/metrics' },
-  { route: '/company/rituals', go: '/company/rituals' },
-  // The market scenario's competitive digest (MARKET_DIGEST_ID in lib/api/mock/server.ts).
-  {
-    route: '/company/rituals/[occurrence]',
-    scenario: 'market',
-    go: '/company/rituals/6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b',
-  },
-  { route: '/company/strategy', go: '/company/strategy' },
-  { route: '/company/updates', go: '/company/updates' },
-  {
-    route: '/specs/[id]/design/[versionId]',
-    go: '/specs/c3000000-0000-4000-8000-000000000001/design/c3000000-0000-4000-8000-000000000013',
-  },
-  { route: '/design', go: '/design' },
-  { route: '/account', go: '/account' },
-  { route: '/i/[token]', go: `/i/${MOCK_INTERVIEW_TOKEN}` },
-  { route: '/settings/analytics', go: '/settings/analytics' },
-  { route: '/settings/api-tokens', go: '/settings/api-tokens' },
-  { route: '/settings/autonomy', go: '/settings/autonomy' },
-  { route: '/settings/claude-accounts', go: '/settings/claude-accounts' },
-  { route: '/settings/company', go: '/settings/company' },
-  { route: '/settings/connections', go: '/settings/connections' },
-  { route: '/settings/members', go: '/settings/members' },
-  { route: '/settings/notifications', go: '/settings/notifications' },
-  { route: '/settings/sources', go: '/settings/sources' },
-  { route: '/settings/templates', go: '/settings/templates' },
-  { route: '/settings/templates/new', go: '/settings/templates/new' },
-  { route: '/settings/templates/[key]', go: '/settings/templates/one-pager' },
-  { route: '/settings/themes', go: '/settings/themes' },
-  { route: '/settings/themes/new', go: '/settings/themes/new' },
-  { route: '/settings/themes/[key]', go: '/settings/themes/clean-document' },
-  { route: '/settings/trash', go: '/settings/trash' },
-  { route: '/settings/webhooks', go: '/settings/webhooks' },
-];
-
 type Ceilings = Record<Role, Record<string, number>>;
 const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE)
   ? JSON.parse(fs.readFileSync(CEILINGS_FILE, 'utf8'))
@@ -231,29 +102,44 @@ const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE)
  * reads the repository, never fetches: CI's mock shards check out with main's history
  * (.github/workflows/ci.yml), and run locally it uses the ref that is there.
  */
+const git = (...args: string[]) =>
+  execFileSync('git', args, {
+    cwd: __dirname,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+const BASE_REF = process.env.PROSE_BASE || 'origin/main';
+let baseSha: string | null = null;
+try {
+  baseSha = git('merge-base', 'HEAD', BASE_REF);
+} catch {
+  // No such ref, or a shallow checkout without the history: baseCeilings says what to run.
+}
+
 function baseCeilings(): Ceilings | string {
-  const git = (...args: string[]) =>
-    execFileSync('git', args, {
-      cwd: __dirname,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim();
-  const ref = process.env.PROSE_BASE || 'origin/main';
-  let base: string | null = null;
+  if (!baseSha)
+    return `no merge base with ${BASE_REF}: run git fetch origin main (with --unshallow in a shallow clone), or set PROSE_BASE to the branch the PR goes into`;
   try {
-    base = git('merge-base', 'HEAD', ref);
-  } catch {
-    // No such ref, or a shallow checkout without the history: the error below says what to run.
-  }
-  if (!base)
-    return `no merge base with ${ref}: run git fetch origin main (with --unshallow in a shallow clone), or set PROSE_BASE to the branch the PR goes into`;
-  try {
-    return JSON.parse(git('show', `${base}:web/e2e/prose-ceilings.json`));
+    return JSON.parse(git('show', `${baseSha}:web/e2e/prose-ceilings.json`));
   } catch {
     return { owner: {}, viewer: {} };
   }
 }
 const base = baseCeilings();
+
+/**
+ * #1724: whether the route's page.tsx is new since the merge base. A new page starts at 0; a page
+ * that was there but not yet visited starts at its count (it was missed, not added).
+ */
+function newPage(route: string): boolean {
+  const dir = route === '/' ? '' : route.replace(/\[(\w+)\]/g, '$$$1');
+  try {
+    git('cat-file', '-e', `${baseSha}:web/app${dir}/page.tsx`);
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 /** Every route the guard visits, for the ratchet to drop the ceilings of routes gone since. */
 fs.mkdirSync(OUT, { recursive: true });
@@ -261,6 +147,8 @@ fs.writeFileSync(
   path.join(OUT, 'routes.json'),
   JSON.stringify([...SIMPLE, ...DETAILED].map((v) => v.route)),
 );
+/** Every page the app has: the ratchet keeps a page's ceiling while its route file is there. */
+fs.writeFileSync(path.join(OUT, 'pages.json'), JSON.stringify(pageRoutes()));
 
 /** Waits until the page's text stops changing (the mock answers in the browser). */
 async function settle(page: Page) {
@@ -365,9 +253,17 @@ async function check(page: Page, role: Role, mode: string, v: Visit) {
   const missing = MISSING.test(body);
   expect.soft(body, `${v.route} opened a missing page (${opened})`).not.toMatch(MISSING);
   const { words, sentences } = await countProse(page);
+  const unseen = typeof base !== 'string' && base[role]?.[v.route] === undefined;
+  const isNew = unseen && newPage(v.route);
+  // Where the ratchet records a page with no ceiling yet.
+  const start = isNew ? 0 : words;
   fs.writeFileSync(
     path.join(OUT, fileName(role, v.route)),
-    JSON.stringify({ role, mode, route: v.route, url: opened, missing, words, sentences }, null, 2),
+    JSON.stringify(
+      { role, mode, route: v.route, url: opened, missing, words, start, sentences },
+      null,
+      2,
+    ),
   );
   const ceiling = ceilings[role]?.[v.route];
   expect
@@ -377,12 +273,19 @@ async function check(page: Page, role: Role, mode: string, v: Visit) {
     )
     .toBeDefined();
   if (ceiling === undefined) return;
-  // A page new since the merge base starts at its count, never above it.
-  if (typeof base !== 'string' && base[role]?.[v.route] === undefined && !missing)
+  // #1724: a page new since the merge base starts at 0; one the guard missed, at its count.
+  if (isNew)
     expect
       .soft(
         ceiling,
-        `${v.route} as ${role} is new since the merge base: its ceiling starts at its count, ${words} (npm run prose:ratchet), never above it`,
+        `${v.route} as ${role} is new since the merge base: its ceiling starts at 0. Hide its explanations behind an InfoTip, a tick or a link; copy the owner picked to stay as written is marked data-owner-copy`,
+      )
+      .toBe(0);
+  else if (unseen && !missing)
+    expect
+      .soft(
+        ceiling,
+        `${v.route} as ${role} was not visited at the merge base: its ceiling starts at its count, ${words}, never above it`,
       )
       .toBeLessThanOrEqual(words);
   expect
@@ -407,6 +310,35 @@ test.describe('prose guard', () => {
     expect(
       raised,
       'Ceilings in e2e/prose-ceilings.json only go down (npm run prose:ratchet); hide the new prose instead',
+    ).toEqual([]);
+    // #1724: a ceiling goes only with its page, so a visit removed and added again keeps it.
+    const pages = pageRoutes();
+    const dropped = (Object.keys(ROLES) as Role[]).flatMap((role) =>
+      Object.keys(base[role] ?? {})
+        .filter((route) => pages.includes(route) && ceilings[role]?.[route] === undefined)
+        .map((route) => `${role} ${route}`),
+    );
+    expect(dropped, 'Ceilings dropped while their page is still there').toEqual([]);
+  });
+
+  test('a page whose route file is new since the merge base starts at 0', () => {
+    expect(baseSha, 'the merge base').not.toBeNull();
+    expect(newPage('/simple/inbox')).toBe(false);
+    expect(newPage('/documents/[doc]/v/[n]/quality')).toBe(false);
+    expect(newPage('/')).toBe(false);
+    expect(newPage('/no-such-page/[id]')).toBe(true);
+  });
+
+  test('every route file is visited or named in NOT_VISITED', () => {
+    const visited = [...SIMPLE, ...DETAILED].map((v) => v.route);
+    const named = [...visited, ...Object.keys(NOT_VISITED)];
+    const pages = pageRoutes();
+    expect(pages.length).toBeGreaterThan(80);
+    expect(pages.filter((r) => !named.includes(r)).sort(), 'route files not visited').toEqual([]);
+    expect(named.filter((r) => !pages.includes(r)).sort(), 'no such route file').toEqual([]);
+    expect(
+      visited.filter((r) => r in NOT_VISITED),
+      'both visited and not',
     ).toEqual([]);
   });
 

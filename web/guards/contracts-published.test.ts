@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { expect, test, vi } from 'vitest';
+
 import { codeLeftOut } from '../lib/api/mock/code-left-out';
 import { CONTRACTS, contract } from '../lib/ownTreeOnly';
-import { expect, test } from './test';
+
+// It reads the whole tree: a census, not a 5-second unit test.
+vi.setConfig({ testTimeout: 120_000 });
 
 /**
  * #1570: the values the API's tests check against the web are published by the web as JSON
