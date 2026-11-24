@@ -297,4 +297,10 @@ No API, mock or migration change. Files outside the merged lanes' own files: non
 - Playwright: every spec that drives /simple/priorities (99 files, `grep -l "simple/priorities"`), mock build,
   4 workers, --retries=0: 1064 passed, 0 failed. prose-guard green with PROSE_BASE=83b3594.
 - web: tsc 0, full `npm run lint` 0, format:check 0.
-- api: see the PR body for the whole-suite, timing, pyright and frozen-migration verdicts.
+- api: every pytest file that reads priorities, the plan or the goal buckets (37 files, `grep -l
+  "simple/priorities|plan_quarter|goal_buckets|/v1/simple/plan"`) plus tests/test_frozen_migrations.py: 408 passed,
+  1 skipped. ruff clean. pyright vs baseline: 1269 = 1269.
+- NOT RUN (time): the WHOLE API suite and the timing tests. A quarter of the suite takes over 10 minutes; its first
+  run (-n 4, timed out at 64%) showed one F at 57% whose name the timeout did not print; a second run (-n 5, more
+  Postgres locks) passed that range to 62% with no failure (a load flake likely, unproven). A -n 6 run hit Postgres
+  "out of shared memory" on DROP SCHEMA (max_locks_per_transaction=256): use 1024. Next step: run the whole suite.
