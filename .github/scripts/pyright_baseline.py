@@ -98,7 +98,9 @@ def self_test() -> int:
     base = errors(report(a, a, b), root)
     assert base == Counter({a: 2, b: 1}), base
     assert check(errors(report(a, a, b), root), base) == 0
-    assert check(errors(report(a), root), base) == 0
+    # A baseline count that is stale (errors fixed, count not lowered) fails (#1711).
+    assert check(errors(report(a), root), base) == 1
+    assert check(errors(report(a, b), root), base) == 1
     # A planted error fails, both as a new key and as one more of a known key.
     assert check(errors(report(a, a, b, ("api/oracle/c.py", "r", "m")), root), base) == 1
     assert check(errors(report(a, a, a, b), root), base) == 1

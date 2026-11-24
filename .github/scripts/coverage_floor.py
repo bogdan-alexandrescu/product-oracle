@@ -63,6 +63,10 @@ def self_test() -> int:
     assert check(71.2, 71.2) == 0
     # A planted drop fails.
     assert check(71.19, 71.2) == 1
+    # A floor more than 1 point under the total is stale and fails (#1711).
+    assert check(72.2, 71.2) == 0
+    assert check(72.21, 71.2) == 1
+    assert check(79.22, 46.9) == 1
     # The floor never goes down.
     assert raised(71.2, 60.0) == 71.2
     assert raised(71.2, 75.55) == 75.5
