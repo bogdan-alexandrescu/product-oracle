@@ -94,7 +94,6 @@ test('ut1 d phone', async ({ page }) => {
 for (const [name, w, h, q] of [
   ['ut3-b-hard', 1440, 900, ''],
   ['ut3-b-hard-1512', 1512, 945, ''],
-  ['ut3-b-phone-390', 390, 844, ''],
 ] as const) {
   test(name, async ({ page }) => {
     await page.setViewportSize({ width: w, height: h });

@@ -281,12 +281,12 @@ function MkMine() { // MOCK-HOOK
   const asks = mkParam('who') === 'commenter'; // MOCK-HOOK: state switch: a commenter's own list holds proposals
   const all = [...mine.map((e) => ({ what: e.message, when: 'Just now', e })), ...(asks ? MK_ASKED : MK_MINE).map((l) => ({ what: l.what, when: l.when, e: null as Entry | null }))]; // MOCK-HOOK
   return ( // MOCK-HOOK
-    <div className="fixed left-4 top-[568px] z-[59] w-[200px] max-[600px]:bottom-[84px] max-[600px]:left-auto max-[600px]:right-3 max-[600px]:top-auto max-[600px]:w-auto"> {/* MOCK-HOOK */}
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-base font-semibold text-text shadow-sm"> {/* MOCK-HOOK */}
+    <div className="fixed left-4 top-[568px] z-[59] w-[200px] max-[600px]:left-auto max-[600px]:right-[116px] max-[600px]:top-[6px] max-[600px]:w-auto"> {/* MOCK-HOOK */}
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-base font-semibold text-text shadow-sm max-[600px]:py-1 max-[600px]:shadow-none"> {/* MOCK-HOOK */}
         <Icon name="clock" size={18} /> <span className="max-[600px]:sr-only">Your changes</span> <span className="ml-auto rounded-full bg-surface2 px-1.5 text-sm">{all.length - gone.length}</span> {/* MOCK-HOOK */}
       </button> {/* MOCK-HOOK */}
       {open && ( // MOCK-HOOK
-        <div role="dialog" aria-label="Your changes today" className="absolute left-0 top-12 w-[420px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-2 shadow-tip max-[600px]:bottom-12 max-[600px]:left-auto max-[600px]:right-0 max-[600px]:top-auto max-[600px]:w-[calc(100vw-24px)]"> {/* MOCK-HOOK */}
+        <div role="dialog" aria-label="Your changes today" className="absolute left-0 top-12 w-[420px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-2 shadow-tip max-[600px]:left-auto max-[600px]:-right-[104px] max-[600px]:w-[calc(100vw-24px)]"> {/* MOCK-HOOK */}
           <p className="px-2 py-1 text-sm font-semibold text-text2">{asks ? 'Your proposals today · they wait for Avery Stone' : 'Today'}</p> {/* MOCK-HOOK */}
           {all.map((l) => { const done = gone.includes(l.what) || !!l.e?.done; return ( // MOCK-HOOK
             <div key={l.what} className="flex items-start gap-2 rounded-lg px-2 py-2 hover:bg-surface2"> {/* MOCK-HOOK */}
