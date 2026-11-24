@@ -6,7 +6,9 @@
  * above its ceiling in e2e/prose-ceilings.json. Ceilings only go down, and never by hand:
  * `npm run prose:ratchet` reruns this spec and lowers every ceiling to today's count, and the
  * spec fails when a ceiling is above the merge base's (origin/main; PROSE_BASE names another
- * ref) or, for a page the merge base has no ceiling for, above the page's count.
+ * ref). A page the merge base has no ceiling for starts at 0 (#1724): its explanations go behind
+ * a tip, or copy that must stay as written is marked [data-owner-copy]. Every route file of app/
+ * is visited or named in NOT_VISITED with why.
  *
  * The rule, as counted here:
  * - Text is what the page renders and a person can see: text nodes whose element passes
@@ -27,8 +29,10 @@
  *   is two words, "Oct" and "PM").
  * - A page's count is the number of words in its prose sentences. The guard fails when that
  *   is above the page's ceiling for the role; a page with no ceiling yet fails until
- *   `npm run prose:ratchet` records it. A page that opened "not found" fails, and its count is
- *   written as missing, which the ratchet ignores.
+ *   `npm run prose:ratchet` records it, at 0. A page that opened "not found" fails, and its count
+ *   is written as missing, which the ratchet ignores.
+ * - Nothing is clicked here, so text that shows only once opened is held at the source:
+ *   guards/jsx-prose.test.ts.
  *
  * A lane that adds prose hides it (an InfoTip, a tick whose tooltip says why, a link) or this
  * spec fails (docs/agents/lane-rules.md).
@@ -108,6 +112,7 @@ const SIMPLE: Visit[] = [
   { route: '/simple', go: '/simple' },
   { route: '/simple/decisions', go: '/simple/decisions' },
   { route: '/simple/goals', go: '/simple/goals' },
+  { route: '/simple/inbox', go: '/simple/inbox' },
   { route: '/simple/meetings', go: '/simple/meetings' },
   { route: '/simple/meetings/[id]', go: ['/simple/meetings', '/simple/meetings/[^/]+'] },
   { route: '/simple/meetings/[id]/chat', go: `/simple/meetings/${CHAT_MEETING_ID}/chat` },
@@ -146,7 +151,7 @@ const DETAILED: Visit[] = [
     scenario: 'impact',
     go: '/impact/changes/b7dce326-2a47-4000-8b74-562e8ac05a9c',
   },
-  { route: '/baseline', go: '/baseline' },
+  { route: '/ground-truth', go: '/ground-truth' },
   { route: '/priorities', go: '/priorities' },
   { route: '/plan', go: '/plan' },
   { route: '/plan/dates', go: '/plan/dates' },
@@ -220,6 +225,31 @@ const DETAILED: Visit[] = [
   { route: '/settings/webhooks', go: '/settings/webhooks' },
 ];
 
+/** Route files the guard does not visit, and why: every other one is in SIMPLE or DETAILED. */
+const NOT_VISITED: Record<string, string> = {
+  '/': 'redirects',
+  '/company': 'redirects',
+  '/settings': 'redirects',
+  '/login': 'signed out',
+  '/access': 'signed out',
+  '/oauth/consent': 'signed out',
+  '/s/[token]': 'signed out: a shared link',
+};
+
+/** The route of each page.tsx under app/: a `$name` folder is `[name]`, a `_` folder is not a route. */
+function pageRoutes(dir = path.join(__dirname, '..', 'app'), at = ''): string[] {
+  const here = fs.existsSync(path.join(dir, 'page.tsx')) ? [at || '/'] : [];
+  return [
+    ...here,
+    ...fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('_'))
+      .flatMap((e) =>
+        pageRoutes(path.join(dir, e.name), `${at}/${e.name.replace(/^\$(\w+)$/, '[$1]')}`),
+      ),
+  ];
+}
+
 type Ceilings = Record<Role, Record<string, number>>;
 const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE)
   ? JSON.parse(fs.readFileSync(CEILINGS_FILE, 'utf8'))
@@ -261,6 +291,8 @@ fs.writeFileSync(
   path.join(OUT, 'routes.json'),
   JSON.stringify([...SIMPLE, ...DETAILED].map((v) => v.route)),
 );
+/** Every page the app has: the ratchet keeps a page's ceiling while its route file is there. */
+fs.writeFileSync(path.join(OUT, 'pages.json'), JSON.stringify(pageRoutes()));
 
 /** Waits until the page's text stops changing (the mock answers in the browser). */
 async function settle(page: Page) {
@@ -377,14 +409,14 @@ async function check(page: Page, role: Role, mode: string, v: Visit) {
     )
     .toBeDefined();
   if (ceiling === undefined) return;
-  // A page new since the merge base starts at its count, never above it.
-  if (typeof base !== 'string' && base[role]?.[v.route] === undefined && !missing)
+  // #1724: a page new since the merge base starts at 0.
+  if (typeof base !== 'string' && base[role]?.[v.route] === undefined)
     expect
       .soft(
         ceiling,
-        `${v.route} as ${role} is new since the merge base: its ceiling starts at its count, ${words} (npm run prose:ratchet), never above it`,
+        `${v.route} as ${role} is new since the merge base: its ceiling starts at 0. Hide its explanations behind an InfoTip, a tick or a link; copy the owner picked to stay as written is marked data-owner-copy`,
       )
-      .toBeLessThanOrEqual(words);
+      .toBe(0);
   expect
     .soft(
       words,
@@ -407,6 +439,19 @@ test.describe('prose guard', () => {
     expect(
       raised,
       'Ceilings in e2e/prose-ceilings.json only go down (npm run prose:ratchet); hide the new prose instead',
+    ).toEqual([]);
+  });
+
+  test('every route file is visited or named in NOT_VISITED', () => {
+    const visited = [...SIMPLE, ...DETAILED].map((v) => v.route);
+    const named = [...visited, ...Object.keys(NOT_VISITED)];
+    const pages = pageRoutes();
+    expect(pages.length).toBeGreaterThan(80);
+    expect(pages.filter((r) => !named.includes(r)).sort(), 'route files not visited').toEqual([]);
+    expect(named.filter((r) => !pages.includes(r)).sort(), 'no such route file').toEqual([]);
+    expect(
+      visited.filter((r) => r in NOT_VISITED),
+      'both visited and not',
     ).toEqual([]);
   });
 

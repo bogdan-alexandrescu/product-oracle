@@ -730,8 +730,11 @@ function MilestoneForm({
                 </fieldset>
               ) : (
                 <p data-testid="milestone-no-basis" className="text-sm text-warn">
-                  No verified estimate, capacity or commitment supports this date. Oracle never
-                  invents dates.
+                  No verified basis for this date.{' '}
+                  <InfoTip label="the date's basis" align="start">
+                    No verified estimate, capacity or commitment supports this date. Oracle never
+                    invents dates.
+                  </InfoTip>
                 </p>
               ))}
             {m && (

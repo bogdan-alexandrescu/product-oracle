@@ -158,9 +158,10 @@ test('the Links table: View log, New passcode and Revoke, and the ended page', a
   await expect(row.getByTestId('share-views')).toHaveText('1');
   await row.getByRole('button', { name: 'View log' }).click();
   const log = page.getByRole('dialog', { name: 'View log: Board, October meeting' });
-  await expect(
-    log.getByText('Counts browsers, not people. Oracle never records who opened a link.'),
-  ).toBeVisible();
+  await expect(log.getByText('Counts browsers, not people.')).toBeVisible();
+  // #1724: the how-to sits behind the (i).
+  await expect(log.getByRole('button', { name: 'About who opened it' })).toBeVisible();
+  await expect(log.getByText('Oracle never records who opened a link.')).toBeHidden();
   await expect(log.getByTestId('view-entry')).toHaveCount(1);
   await expect(log.getByTestId('view-entry').first()).toContainText('Page');
   await expect(log.getByTestId('distinct-browsers')).toHaveText('1 browser');

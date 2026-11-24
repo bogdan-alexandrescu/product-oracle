@@ -577,13 +577,14 @@ function Decisions() {
             >
               {state === 'needs_me' && !from && !q ? (
                 <p data-testid="decisions-needs-me-empty">
-                  Nothing waits on you here. Needs me lists the proposals you are the approver of
-                  and your decisions whose review date has come. Run stops and document approvals
-                  wait in the{' '}
+                  Nothing waits on you here.{' '}
+                  <InfoTip label="Needs me">
+                    Needs me lists the proposals you are the approver of and your decisions whose
+                    review date has come. Run stops and document approvals wait in the Inbox.
+                  </InfoTip>{' '}
                   <Link href="/inbox" className="font-medium text-accent-ink hover:underline">
                     Inbox
                   </Link>
-                  .
                 </p>
               ) : (
                 <p>

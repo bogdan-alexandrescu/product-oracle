@@ -1,8 +1,10 @@
 // Lowers the prose guard's ceilings (e2e/prose-ceilings.json) to today's counts: `npm run prose:ratchet`.
 // Runs e2e/prose-guard.spec.ts (skip with --no-run to use the last run's test-results/prose),
 // then for each page and role sets the ceiling to the count when that is lower, and records a
-// page that has no ceiling yet at its count. It never raises a ceiling, ignores the count of a
-// page that opened "not found", and drops the ceilings of routes the spec no longer visits.
+// page that has no ceiling yet at 0 (#1724: a new page has no visible prose; the spec fails until
+// it is hidden). It never raises a ceiling, ignores the count of a page that opened "not found",
+// and drops a ceiling only when its page's route file is gone (a visit removed and added again
+// keeps its ceiling).
 // Prints the ten pages with the most prose. Ceilings are never edited by hand: the spec fails
 // when one is above the merge base's.
 import { spawnSync } from 'node:child_process';
@@ -33,16 +35,18 @@ if (!fs.existsSync(OUT)) {
 const ceilings = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {};
 const ROUTES = path.join(OUT, 'routes.json');
 const routes = fs.existsSync(ROUTES) ? new Set(JSON.parse(fs.readFileSync(ROUTES, 'utf8'))) : null;
+const PAGES = path.join(OUT, 'pages.json');
+const pages = fs.existsSync(PAGES) ? new Set(JSON.parse(fs.readFileSync(PAGES, 'utf8'))) : null;
 const counts = fs
   .readdirSync(OUT)
   .filter((f) => f.endsWith('.json') && f !== 'routes.json')
   .map((f) => JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8')))
   .filter((c) => !c.missing && (!routes || routes.has(c.route)));
 const changes = [];
-if (routes) {
+if (pages) {
   for (const role of Object.keys(ceilings)) {
     for (const route of Object.keys(ceilings[role])) {
-      if (routes.has(route)) continue;
+      if (pages.has(route)) continue;
       changes.push(`${role} ${route}: ${ceilings[role][route]} -> dropped (no such page)`);
       delete ceilings[role][route];
     }
@@ -51,9 +55,14 @@ if (routes) {
 for (const { role, route, words } of counts) {
   const byRole = (ceilings[role] ??= {});
   const was = byRole[route];
-  if (was === undefined || words < was) {
+  if (was === undefined) {
+    byRole[route] = 0;
+    changes.push(
+      `${role} ${route}: new -> 0${words ? ` (it shows ${words} words: hide them)` : ''}`,
+    );
+  } else if (words < was) {
     byRole[route] = words;
-    changes.push(`${role} ${route}: ${was ?? 'new'} -> ${words}`);
+    changes.push(`${role} ${route}: ${was} -> ${words}`);
   }
 }
 const sorted = Object.fromEntries(

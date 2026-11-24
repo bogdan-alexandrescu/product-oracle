@@ -3,7 +3,7 @@
 import { useId, useState, type FormEvent } from 'react';
 
 import { ConfirmDialog } from '@/components/account/ConfirmDialog';
-import { Button, Chip, Icon, LinkButton, Panel, Sheet } from '@/components/ds';
+import { Button, Chip, Icon, InfoTip, LinkButton, Panel, Sheet } from '@/components/ds';
 import { peopleByIds, PersonPicker, type Person } from '@/components/PersonPicker';
 import { FIELD_LABEL, InlineError, TEXTAREA } from '@/components/review/parts';
 import { ErrorNote, Loading } from '@/components/ui';
@@ -884,9 +884,12 @@ function CampaignForm({
       noValidate
       className="flex min-w-0 flex-col gap-3 border-b border-line bg-surface2 p-4"
     >
-      <p className="text-sm text-text2">
-        Everyone who can comment is asked to comment on the latest version. Approval stays with the
-        decider.
+      <p className="inline-flex items-center gap-1.5 text-sm text-text2">
+        Who is asked
+        <InfoTip label="who is asked" align="start">
+          Everyone who can comment is asked to comment on the latest version. Approval stays with
+          the decider.
+        </InfoTip>
       </p>
       <label className={FIELD_LABEL}>
         Title

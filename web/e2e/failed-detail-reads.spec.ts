@@ -1,7 +1,8 @@
-import { expect, test, type Locator, type Page } from './test';
 
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+
 import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * #1713: a read that failed never looks like nothing. A metric's or a decision's detail that
