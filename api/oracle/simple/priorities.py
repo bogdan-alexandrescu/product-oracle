@@ -977,6 +977,9 @@ async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> Simp
         if r.item_id is not None and (own := title_code(by_id[r.item_id].row.title)):
             r.short_code = own
         r.own_key = r.short_code if FEATURE_CODE.fullmatch(r.short_code) else None
+        # prio-ux (#1775): the name alone beside its own code, as the roadmap read names it.
+        if r.own_key:
+            r.title = service.coded_title(r.title, r.own_key)[1]
     _after(rows, deps)
     _, plan_out = await plan_in_play(db, read_)
     if plan_out is not None:
