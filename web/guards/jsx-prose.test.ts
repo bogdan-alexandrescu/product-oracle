@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as ts from 'typescript';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 /**
  * #1724: the prose guard (e2e/prose-guard.spec.ts) counts each page's first render only, so
@@ -16,6 +16,8 @@ import { expect, test } from 'vitest';
  */
 
 const WEB = path.resolve(__dirname, '..');
+// It parses every .tsx of app/ and components/: a census, not a 5-second unit test.
+vi.setConfig({ testTimeout: 120_000 });
 const BASELINE = path.join(__dirname, 'jsx-prose-baseline.json');
 export const MIN_WORDS = 9;
 const TIPS = new Set(['InfoTip']);
