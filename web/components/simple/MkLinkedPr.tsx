@@ -93,6 +93,19 @@ const STATE_KIND: Record<MkPr['state'], ChipKind> = {
   gone: 'crit',
 };
 const LINK = 'text-sm font-semibold text-accent-ink hover:underline';
+const DECIDER = 'Avery Stone';
+/** A commenter's proposal goes to the feature's decider; the tip says to whom. */
+function GoesTo() {
+  return (
+    <InfoTip label="Who decides" align="start">
+      Goes to {DECIDER}.
+    </InfoTip>
+  );
+}
+/** What a viewer reads where an owner would act. */
+function OwnerCan({ what }: { what: string }) {
+  return <span className="text-sm text-text2">An owner can {what}</span>;
+}
 
 /** The pull requests a feature shows, as the active switches draw them. */
 function prsFor(title: string, s: St): MkPr[] {
@@ -111,6 +124,12 @@ function prsFor(title: string, s: St): MkPr[] {
         via: 'code',
       },
     ];
+  if (mkParam('lp1') === 'b' && title === DIGEST)
+    base = base.map((p) => ({
+      ...p,
+      title: p.title.startsWith('F-79') ? p.title : `F-79 ${p.title}`,
+      via: 'code' as const,
+    }));
   if (mkParam('lp3') && mkParam('link') === 'gone' && title === DIGEST) base = [MK_GONE, ...base];
   const added = title === DIGEST ? MK_CANDIDATES.filter((c) => s.linked.includes(c.n)) : [];
   return [...base, ...added].filter((p) => !s.removed.includes(p.n));
@@ -142,13 +161,15 @@ function summary(prs: MkPr[]): { kind: ChipKind; words: string } | null {
   if (prs.some((p) => p.state === 'gone') && !live.length)
     return { kind: 'crit', words: "Can't be found" };
   if (!live.length) return { kind: 'na', words: 'Closed' };
+  const closed = prs.length - live.length - prs.filter((p) => p.state === 'gone').length;
+  const tail = closed ? ` · ${closed} closed` : '';
   if (merged === live.length)
     return {
       kind: 'pass',
-      words: live.length === 1 ? 'Merged' : `${merged} of ${live.length} merged`,
+      words: (live.length === 1 ? 'Merged' : `${merged} of ${live.length} merged`) + tail,
     };
   if (live.length === 1) return { kind: 'acc', words: 'Open' };
-  return { kind: 'acc', words: `${merged} of ${live.length} merged` };
+  return { kind: 'acc', words: `${merged} of ${live.length} merged${tail}` };
 }
 
 function PrLine({ pr, menu }: { pr: MkPr; menu?: ReactNode }) {
@@ -207,6 +228,7 @@ function openSuggestion(title: string, s: St): MkSuggest | undefined {
 
 function Picker({ title }: { title: string }) {
   const s = useSt();
+  const rights = useRights();
   const shown = MK_CANDIDATES.filter(
     (c) =>
       !s.linked.includes(c.n) && `#${c.n} ${c.title}`.toLowerCase().includes(s.query.toLowerCase()),
@@ -245,7 +267,7 @@ function Picker({ title }: { title: string }) {
                 }))
               }
             >
-              Link
+              {rights.decide ? 'Link' : 'Propose'}
             </Button>
           </li>
         ))}
@@ -282,10 +304,12 @@ export function MkPanelRows({
         <Chip kind="na" className="!h-5 !px-1.5 !text-xs">
           GitHub not connected
         </Chip>
-        {rights.decide && (
+        {rights.decide ? (
           <Button onClick={() => set(() => ({ step: 'mid' }))} disabled={s.step === 'mid'}>
             {s.step === 'mid' ? 'Connecting…' : 'Connect GitHub'}
           </Button>
+        ) : (
+          <OwnerCan what="connect it" />
         )}
       </span>
     );
@@ -350,9 +374,7 @@ export function MkPanelRows({
   if (!off && canChange && (lp1 === 'a' || lp2 || lp3)) {
     control =
       s.step === 'open' || s.step === 'mid' ? (
-        lp1 === 'a' ? (
-          <Picker title={title} />
-        ) : null
+        null
       ) : (
         <button type="button" className={LINK} onClick={() => set(() => ({ step: 'open' }))}>
           {rights.decide ? 'Link a pull request' : 'Propose a link'}
@@ -361,7 +383,7 @@ export function MkPanelRows({
     if (lp3 && s.step !== 'rest') control = null;
   }
   if (lp1 === 'b') {
-    control = code ? (
+    control = !canChange ? null : code ? (
       <span className="flex flex-wrap items-center gap-2">
         <Button onClick={() => set(() => ({ step: 'mid', copied: true }))}>
           {s.copied || s.step === 'mid' ? `✓ Copied ${code}` : `Copy ${code}`}
@@ -402,7 +424,7 @@ export function MkPanelRows({
           className="h-8 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-2 text-sm text-text"
         />
         <Button type="submit" disabled={!s.query}>
-          Link
+          {rights.decide ? 'Link' : 'Propose'}
         </Button>
       </form>
     );
@@ -415,7 +437,20 @@ export function MkPanelRows({
       <dd className="min-w-0" data-testid="mk-panel-prs">
         {list}
         {control}
+        {lp1 === 'c' && s.step === 'mid' && s.query && (
+          <span className="mt-1 flex items-center gap-1.5 text-sm" data-testid="mk-paste-preview">
+            <Chip kind="acc" className="!h-5 !px-1.5 !text-xs">
+              Open
+            </Chip>
+            <span className="font-semibold text-accent-ink">#503</span> Unsubscribe link in the digest footer
+          </span>
+        )}
       </dd>
+      {lp1 === 'a' && canChange && (s.step === 'open' || s.step === 'mid') && (
+        <dd className="col-span-full" data-testid="mk-picker-row">
+          <Picker title={title} />
+        </dd>
+      )}
       {sug && (rights.decide || rights.propose) && (
         <>
           <dt className="sr-only">Oracle&apos;s status</dt>
@@ -435,6 +470,7 @@ export function MkPanelRows({
               >
                 {rights.decide ? 'Accept' : `Propose ${sug.to}`}
               </Button>
+              {!rights.decide && <GoesTo />}
               {rights.decide && (
                 <Button
                   variant="ghost"
@@ -454,6 +490,7 @@ export function MkPanelRows({
 /** LP1 D: the panel's own "Pull requests" section, and a dialog to link several at once. */
 export function MkPanelSection({ title, canChange }: { title: string; canChange: boolean }) {
   const s = useSt();
+  const rights = useRights();
   const [picked, setPicked] = useState<number[]>(mkParam('phase') === 'mid' ? [503, 502] : []);
   if (mkParam('lp1') !== 'd') return null;
   const prs = prsFor(title, s);
@@ -484,7 +521,7 @@ export function MkPanelSection({ title, canChange }: { title: string; canChange:
           className={`${LINK} mt-1`}
           onClick={() => set(() => ({ step: 'open' }))}
         >
-          + Link pull requests
+          {rights.decide ? '+ Link pull requests' : '+ Propose links'}
         </button>
       )}
       {(s.step === 'open' || s.step === 'mid') && (
@@ -533,7 +570,7 @@ export function MkPanelSection({ title, canChange }: { title: string; canChange:
                 disabled={!picked.length}
                 onClick={() => set((x) => ({ linked: [...x.linked, ...picked], step: 'done' }))}
               >
-                Link {picked.length || ''}
+                {rights.decide ? 'Link' : 'Propose'} {picked.length || ''}
               </Button>
             </div>
           </div>
@@ -544,7 +581,15 @@ export function MkPanelSection({ title, canChange }: { title: string; canChange:
 }
 
 /** The mark on a Priorities row, beside the feature's name. */
-export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => void }) {
+export function MkRowChip({
+  title,
+  code,
+  onOpen,
+}: {
+  title: string;
+  code?: string | null;
+  onOpen?: () => void;
+}) {
   const s = useSt();
   const rights = useRights();
   const lp1 = mkParam('lp1');
@@ -552,6 +597,8 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
   const lp3 = mkParam('lp3');
   if (!lp1 && !lp2 && !lp3) return null;
   if (lp1 === 'd') return null;
+  // LP1 B links by code only: a feature with no code has no pull requests.
+  if (lp1 === 'b' && !code) return null;
   if (lp3 && !s.connected) return null;
   const prs = prsFor(title, s);
   const sum = summary(prs);
@@ -582,7 +629,7 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
         ))}
         {prs.length > 2 && (
           <Chip kind="line" className="!h-6 !px-2 !text-xs">
-            +{prs.length - 2}
+            +{prs.length - 2} more
           </Chip>
         )}
       </span>
@@ -594,12 +641,12 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
       {chip}
       {gone && (
         <Chip kind="crit" className="!h-6 !px-2 !text-xs">
-          ⚠ 1 link
+          ⚠ 1 link broken
         </Chip>
       )}
       {accepted && (
-        <Chip kind="pass" className="!h-6 !px-2 !text-xs" data-testid="mk-row-done">
-          ✓ Done
+        <Chip kind="line" className="!h-6 !px-2 !text-xs" data-testid="mk-row-done">
+          Status: Done
         </Chip>
       )}
       {lp2 === 'a' && sug && (
@@ -624,10 +671,18 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
             <span
               role="dialog"
               aria-label="Oracle's status suggestion"
-              className="absolute top-8 left-0 z-30 block w-[300px] max-sm:fixed max-sm:top-1/3 max-sm:right-3 max-sm:left-3 max-sm:w-auto rounded-xl border border-line bg-surface p-3 text-left shadow-tip"
+              className="absolute top-8 left-0 z-30 block w-[320px] rounded-xl border border-line bg-surface p-3 text-left shadow-tip max-sm:fixed max-sm:top-auto max-sm:right-0 max-sm:bottom-0 max-sm:left-0 max-sm:w-auto max-sm:rounded-b-none max-sm:pb-6"
             >
+              <span
+                aria-hidden
+                className="absolute -top-1.5 left-4 size-3 rotate-45 border-t border-l border-line bg-surface max-sm:hidden"
+              />
               <span className="block text-sm font-semibold">
-                Oracle suggests {sug.to} <span className="font-normal text-text2">· {sug.why}</span>
+                {sug.code ? `${sug.code} ` : ''}
+                {sug.title}
+              </span>
+              <span className="block text-sm">
+                Oracle suggests {sug.to} <span className="text-text2">· {sug.why}</span>
               </span>
               {(rights.decide || rights.propose) && (
                 <span className="mt-2 flex flex-wrap gap-1.5">
@@ -639,6 +694,7 @@ export function MkRowChip({ title, onOpen }: { title: string; onOpen?: () => voi
                   >
                     {rights.decide ? 'Accept' : `Propose ${sug.to}`}
                   </Button>
+                  {!rights.decide && <GoesTo />}
                   {rights.decide && (
                     <Button
                       variant="ghost"
@@ -674,8 +730,10 @@ export function MkPageStrip() {
         {!s.connected && (
           <>
             <span className="font-semibold">GitHub not connected</span>
-            {rights.decide && (
+            {rights.decide ? (
               <Button onClick={() => set(() => ({ connected: true }))}>Connect GitHub</Button>
+            ) : (
+              <OwnerCan what="connect it" />
             )}
           </>
         )}
@@ -806,6 +864,7 @@ export function MkInboxRows() {
               >
                 {rights.decide ? 'Accept' : `Propose ${g.to}`}
               </Button>
+              {!rights.decide && <GoesTo />}
               {rights.decide && (
                 <button
                   type="button"
@@ -853,7 +912,9 @@ export function MkInboxRows() {
             <Button onClick={() => set(() => ({ connected: true, step: 'done' }))}>
               Connect GitHub
             </Button>
-          ) : null,
+          ) : (
+            <OwnerCan what="connect it" />
+          ),
         ),
       );
     if (s.connected && mkParam('link') === 'gone' && !s.removed.includes(MK_GONE.n))
@@ -883,7 +944,9 @@ export function MkInboxRows() {
                 </span>
               ) : (
                 <>
-                  <Button onClick={() => set(() => ({ step: 'open' }))}>Relink</Button>
+                  <Button onClick={() => set(() => ({ step: 'open' }))}>
+                    {rights.decide ? 'Relink' : 'Propose a relink'}
+                  </Button>
                   <button
                     type="button"
                     className="text-sm font-semibold text-text2 hover:underline"
@@ -891,15 +954,38 @@ export function MkInboxRows() {
                       set((x) => ({ removed: [...x.removed, MK_GONE.n], step: 'done' }))
                     }
                   >
-                    Remove
+                    {rights.decide ? 'Remove' : 'Propose removing it'}
                   </button>
+                  {!rights.decide && <GoesTo />}
                 </>
               )}
             </>
-          ) : null,
+          ) : (
+            <OwnerCan what="fix it" />
+          ),
         ),
       );
   }
   if (!rows.length) return null;
   return <div data-testid="mk-inbox">{rows}</div>;
+}
+
+/** The mock Inbox rows that still wait, so every Inbox count (rail, Needs you, New) moves when one is acted on. */
+export function mkInboxExtra(s: St = get()): number {
+  const lp2 = mkParam('lp2');
+  const lp3 = mkParam('lp3');
+  let n = 0;
+  if (lp2 === 'a' || lp2 === 'b')
+    n +=
+      (mkParam('data') === 'many' ? MK_SUGGESTS_MANY : MK_SUGGESTS).filter(
+        (g) => !s.accepted.includes(g.title) && !s.dismissed.includes(g.title),
+      ).length + 1;
+  if (lp3 === 'c') {
+    if (!s.connected) n += 1;
+    if (s.connected && mkParam('link') === 'gone' && !s.removed.includes(MK_GONE.n)) n += 1;
+  }
+  return n;
+}
+export function useMkInboxExtra(): number {
+  return mkInboxExtra(useSt());
 }

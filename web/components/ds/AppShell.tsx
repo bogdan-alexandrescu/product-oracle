@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 
 import { HopPanel } from '@/components/hop/HopPanel';
 import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
+import { useMkInboxExtra } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import {
   closeTransientPanel,
   setPanelOpen,
@@ -268,7 +269,8 @@ function useInboxCount(enabled: boolean): number | null {
     };
   }, [enabled, failed, settled, read]);
   // Either list failing shows no number, never the last one nor a part of it.
-  return got.inbox && got.questions ? waitingCount(got.inbox, got.questions) : null;
+  const mkExtra = useMkInboxExtra(); // MOCK-HOOK
+  return got.inbox && got.questions ? waitingCount(got.inbox, got.questions) + mkExtra : null; // MOCK-HOOK
 }
 
 const INBOX_READS = { inbox: railInbox, questions: railQuestions };

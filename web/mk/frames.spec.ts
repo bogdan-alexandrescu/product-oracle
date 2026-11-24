@@ -42,6 +42,8 @@ type Story = {
   run: (p: Page, s: (state: string, note?: string) => Promise<void>) => Promise<void>;
   hard: { url: string; role?: string; prep: (p: Page) => Promise<void> };
   phone: { url: string; prep: (p: Page) => Promise<void> };
+  /** What a commenter and a viewer get (role frames: -commenter, -viewer). */
+  roles?: { url: string; commenter: (p: Page) => Promise<void>; viewer: (p: Page) => Promise<void> };
   /** Detailed's Inbox (the same component) where the proposal reaches it. */
   detailed?: string;
 };
@@ -49,6 +51,18 @@ type Story = {
 const STORIES: Story[] = [
   {
     id: 'lp1-a',
+    roles: {
+      url: `${PRIO}?lp1=a`,
+      commenter: async (p) => {
+        await panel(p);
+        await p.getByRole('button', { name: 'Propose a link' }).click();
+        await p.getByLabel('Find a pull request').pressSequentially('unsub', { delay: 30 });
+      },
+      viewer: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      },
+    },
     url: `${PRIO}?lp1=a`,
     run: async (p, s) => {
       await rowInView(p);
@@ -69,6 +83,17 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp1-b',
+    roles: {
+      url: `${PRIO}?lp1=b`,
+      commenter: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      },
+      viewer: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      },
+    },
     url: `${PRIO}?lp1=b`,
     run: async (p, s) => {
       await rowInView(p);
@@ -93,6 +118,17 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp1-c',
+    roles: {
+      url: `${PRIO}?lp1=c`,
+      commenter: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      },
+      viewer: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      },
+    },
     url: `${PRIO}?lp1=c`,
     run: async (p, s) => {
       await rowInView(p);
@@ -115,6 +151,17 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp1-d',
+    roles: {
+      url: `${PRIO}?lp1=d`,
+      commenter: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-section');
+      },
+      viewer: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-section');
+      },
+    },
     url: `${PRIO}?lp1=d`,
     run: async (p, s) => {
       await panel(p);
@@ -199,7 +246,7 @@ const STORIES: Story[] = [
       await p.getByRole('button', { name: 'Accept all 4' }).hover();
       await s('mid');
       await p.getByRole('button', { name: 'Accept all 4' }).click();
-      await s('done', 'Cost: 1 click for all 4 · today: 4 clicks per feature, 16');
+      await s('done', 'Cost: 1 click for all 4 · today: 16 clicks (4 per feature)');
     },
     hard: { url: `${INBOX}?lp2=b&data=many`, role: 'commenter', prep: async () => {} },
     phone: { url: `${INBOX}?lp2=b&data=many`, prep: async () => {} },
@@ -235,6 +282,17 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp3-a',
+    roles: {
+      url: `${PRIO}?lp3=a&link=gone`,
+      commenter: async (p) => {
+        await panel(p);
+        await p.getByRole('button', { name: 'Fix' }).click();
+      },
+      viewer: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      },
+    },
     url: `${PRIO}?lp3=a&link=gone`,
     run: async (p, s) => {
       await rowInView(p);
@@ -255,6 +313,11 @@ const STORIES: Story[] = [
   },
   {
     id: 'lp3-c',
+    roles: {
+      url: `${INBOX}?lp3=c&link=gone`,
+      commenter: async () => {},
+      viewer: async () => {},
+    },
     detailed: '/inbox?lp3=c&link=gone',
     url: `${INBOX}?lp3=c&link=gone`,
     run: async (p, s) => {
@@ -303,6 +366,13 @@ for (const st of STORIES.filter((x) => !ONLY || ONLY.includes(x.id))) {
       await snap(d, `${st.id}-detailed`);
       await d.context().close();
     }
+    if (st.roles)
+      for (const role of ['commenter', 'viewer'] as const) {
+        const r = await start(browser, st.roles.url, D, role);
+        await st.roles[role](r);
+        await snap(r, `${st.id}-${role}`);
+        await r.context().close();
+      }
     const ph = await start(browser, st.phone.url, P);
     await st.phone.prep(ph);
     await snap(ph, `${st.id}-phone-390`);

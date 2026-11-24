@@ -1091,7 +1091,7 @@ function YourList({
                     <span className="flex flex-none items-center">
                       <MarkFor featureId={r.feature_id} checked />
                     </span>
-                    <MkRowChip title={r.title} onOpen={open ? () => open(r) : undefined} /> {/* MOCK-HOOK */}
+                    <MkRowChip title={r.title} code={r.code ?? null} onOpen={open ? () => open(r) : undefined} /> {/* MOCK-HOOK */}
                   </span>
                   {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
                   {!r.own_key && <NotInGt />}

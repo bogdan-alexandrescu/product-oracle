@@ -1,6 +1,6 @@
 'use client';
 
-import { MkInboxRows } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
+import { MkInboxRows, useMkInboxExtra } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import { Link, usePathname, useSearchParams } from '@/lib/nav';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
@@ -367,8 +367,10 @@ function InboxTabs({
   /** The tab changed: what was settled in place moves on. */
   onTabChange: () => void;
 }) {
+  const mkExtra = useMkInboxExtra(); // MOCK-HOOK
   const count = (st: InboxState) =>
-    rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0);
+    rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0) +
+    (st === 'new' ? mkExtra : 0); // MOCK-HOOK
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [chosen, setTab] = useState<InboxState>(() =>
@@ -389,7 +391,7 @@ function InboxTabs({
   // qa-company-16: the heading and its count follow the tab: New and Seen are what needs me
   // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
   const live = tab === 'new' || tab === 'open';
-  const total = live ? waitingCount(rows) : count(tab);
+  const total = live ? waitingCount(rows) + mkExtra : count(tab); // MOCK-HOOK
   return (
     <Panel
       title={live ? 'Needs you' : label}

@@ -23,6 +23,7 @@ import { LINK_KINDS } from '@/lib/roadmap-links';
 import { api, unwrap } from '@/lib/api/client';
 import { onReadChanged, onReadFailed, STALE_OK } from '@/lib/api/shared-reads';
 import { inboxCounts } from '@/lib/inbox-counts';
+import { useMkInboxExtra } from '@/components/simple/MkLinkedPr'; // MOCK-HOOK
 import {
   onWaitingChanged,
   railInbox,
@@ -80,6 +81,7 @@ function isActive(pathname: string, d: Dest): boolean {
 function useSimpleCounts(
   enabled: boolean,
 ): { counts: Record<string, number>; failed: Set<string> } | null {
+  const mkExtra = useMkInboxExtra(); // MOCK-HOOK
   const pathname = usePathname();
   // Each part's last answer, or that its last read failed (counts-wait review).
   const [got, setGot] = useState<Got>({});
@@ -213,7 +215,7 @@ function useSimpleCounts(
       i.kind === 'draft' ||
       (i.kind === 'date' && i.key.startsWith('proposal:')),
   ).length;
-  const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
+  const all = inbox ? waitingCount(inbox, questions ?? []) + mkExtra : 0; // MOCK-HOOK
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
   // counts-failed-part: a failed meetings read shows no number, never the last one it read.
   const live = meetings?.live.length ?? 0;

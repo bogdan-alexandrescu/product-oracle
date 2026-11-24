@@ -153,7 +153,7 @@ export const MK_MANY: MkPr[] = [
   {
     n: 491,
     title: "Send the digest at 8 AM in each reader's time zone",
-    state: 'merged',
+    state: 'open',
     by: 'Lena Ortiz',
     when: 'Nov 18',
     via: 'link',

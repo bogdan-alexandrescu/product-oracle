@@ -9,20 +9,33 @@ export const OUT = path.resolve(__dirname, '../../mockups-out/mk-linked-pr');
 const FRAMES = path.join(OUT, 'frames');
 const ASSETS = path.join(OUT, 'assets');
 const PUBLIC = path.resolve(__dirname, '../public');
+const BAND = 40;
 
 export async function snap(page: Page, name: string, note?: string) {
   fs.mkdirSync(FRAMES, { recursive: true });
   fs.mkdirSync(ASSETS, { recursive: true });
   await page.waitForTimeout(400);
-  if (note)
-    await page.evaluate((n) => {
-      const d = document.createElement('div');
-      d.setAttribute('data-mock-note', '');
-      d.textContent = n;
-      d.style.cssText =
-        'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:9999;background:#111827;color:#fff;font:600 13px/1.3 system-ui;padding:6px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:92vw;text-align:center';
-      document.body.appendChild(d);
-    }, note);
+  // The cost goes in a band of its own under the frame, so it covers no row: the window grows by
+  // the band's height and the app keeps its own height above it.
+  const base = page.viewportSize()!;
+  if (note) {
+    await page.setViewportSize({ width: base.width, height: base.height + BAND });
+    await page.evaluate(
+      ({ n, h }) => {
+        const st = document.createElement('style');
+        st.setAttribute('data-mock-note', '');
+        st.textContent = `.h-dvh{height:calc(100dvh - ${h}px)!important}.min-h-dvh{min-height:calc(100dvh - ${h}px)!important}`;
+        document.head.appendChild(st);
+        const d = document.createElement('div');
+        d.setAttribute('data-mock-note', '');
+        d.textContent = n;
+        d.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:${h}px;z-index:9999;background:#111827;color:#fff;font:600 14px/${h}px system-ui;text-align:center;border-top:1px solid #374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 12px`;
+        document.body.appendChild(d);
+      },
+      { n: note, h: BAND },
+    );
+    await page.waitForTimeout(300);
+  }
   const vp = page.viewportSize()!;
   await page.screenshot({ path: path.join(FRAMES, `${name}.png`) });
   // A dark twin of every frame's picture (the HTML switches with ?theme=dark).
@@ -93,4 +106,5 @@ export async function snap(page: Page, name: string, note?: string) {
       .replace(/(src|href)="\/(icon\.svg)"/g, '$1="../assets/$2"');
   fs.writeFileSync(path.join(FRAMES, `${name}.html`), out);
   await page.evaluate(() => document.querySelectorAll('[data-mock-note]').forEach((n) => n.remove()));
+  if (note) await page.setViewportSize(base);
 }
