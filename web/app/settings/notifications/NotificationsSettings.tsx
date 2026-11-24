@@ -19,6 +19,7 @@ import { errorMessage, useQuery } from '@/lib/use-query';
 import { ZONE_NOT_SET } from '@/lib/zone';
 
 import { Field, INPUT, SELECT_FIELD } from '../_components/fields';
+import { DigestMk, DigestSettingsMk } from '@/app/simple/_watch-mk'; // MOCK-HOOK
 
 type ReportSetting = {
   enabled: boolean;
@@ -51,6 +52,8 @@ export function NotificationsSettings() {
   return (
     <>
       <PageHeader title="Notifications" />
+      <DigestSettingsMk /> {/* MOCK-HOOK */}
+      <DigestMk /> {/* MOCK-HOOK */}
       {can('list_company_integrations') && <OwnerSettings />}
     </>
   );

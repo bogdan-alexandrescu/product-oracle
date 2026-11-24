@@ -62,6 +62,7 @@ import { inOrder, useRowOrder, type RowOrder } from './_order';
 import { OwnerPick, useOwners, type Person } from './_owner';
 import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from './_timeline';
 import { TrackHead } from './_trackbands';
+import { WatchRowMk } from '../_watch-mk'; // MOCK-HOOK
 
 type Zoom = '3m' | '6m' | '1y' | 'all';
 /** Days in sight at each zoom (All fits the whole plan). */
@@ -1873,6 +1874,7 @@ const TimelineRow = memo(function TimelineRow({
             {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
             <NotInGt item={i} short className="h-[18px]! px-1.5! text-xs!" />
             {order?.pending(i) && <PendingMark />}
+            <WatchRowMk itemKey={i.key} /> {/* MOCK-HOOK */}
           </button>
         )}
         <div className="relative" style={{ width: trackW }}>

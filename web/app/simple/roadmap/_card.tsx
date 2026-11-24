@@ -40,6 +40,7 @@ import { NameEdit, PanelFields } from './_fields';
 import { itemName } from './_gtflag';
 import { CutBy } from './_removed';
 import { TasksPart } from './_tasks';
+import { WatchHeadMk, WatchLineMk } from '../_watch-mk'; // MOCK-HOOK
 import {
   closedItem,
   milestoneInk,
@@ -1161,6 +1162,7 @@ export function FloatingCard({
     </button>
   );
   const head = (
+    <> {/* MOCK-HOOK */}
     <div className="flex items-start gap-2">
       {/* BGD (Nov 4): the code chip before the name; the heading itself is the name. */}
       <div
@@ -1199,6 +1201,7 @@ export function FloatingCard({
           Hide the talk
         </button>
       )}
+      <WatchHeadMk itemKey={item.key} title={item.title} code={item.code} /> {/* MOCK-HOOK */}
       {canChange && (
         <div className="relative flex-none">
           <button
@@ -1259,6 +1262,8 @@ export function FloatingCard({
         <Icon d={ICONS.close} size={18} width={1.7} />
       </button>
     </div>
+    <WatchLineMk itemKey={item.key} canChange={canChange} /> {/* MOCK-HOOK */}
+    </> // MOCK-HOOK
   );
 
   // A draft's own flow (S7): its draft_item visual, opened in the widened card as a proposal's is.

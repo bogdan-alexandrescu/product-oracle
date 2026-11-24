@@ -46,6 +46,7 @@ import {
 } from './_proposals';
 import { useReminderRows } from './_reminders';
 import { useWebhookRows } from './_webhooks';
+import { WatchInboxMk } from '@/app/simple/_watch-mk'; // MOCK-HOOK
 
 type Source = Schemas['SourceOut'];
 
@@ -196,6 +197,7 @@ function Inbox() {
           )
         }
       />
+      <WatchInboxMk /> {/* MOCK-HOOK */}
       {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
       {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
       {webhooks.error && (
