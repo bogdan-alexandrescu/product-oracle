@@ -49,8 +49,10 @@ function Avatar({ name, size = 24 }: { name: string; size?: number }) {
 
 /** A comment body: @[Name] tokens read per MA2's pick. */
 function Body({ text, ma2 }: { text: string; ma2: string }) {
-  const parts = text.split(/@\[([^\]]+)\]/g);
-  const named = parts.filter((_, i) => i % 2);
+  const raw = text.split(/@\[([^\]]+)\]/g);
+  const named = raw.filter((_, i) => i % 2);
+  // b: names move to the To line; the text keeps the rest.
+  const parts = ma2 === 'b' ? [text.replace(/@\[[^\]]+\]\s*/g, '').replace(/\s+/g, ' ').trim()] : raw;
   return (
     <span data-user-content className="whitespace-pre-wrap break-words">
       {ma2 === 'b' && named.length > 0 && (
@@ -547,7 +549,7 @@ export function MkActivity({ phone }: { phone: boolean }) {
     );
   }
   return (
-    <section data-testid="mk-activity" className="mt-4 border-t border-line pt-3">
+    <section data-testid="mk-activity" className="mt-4 min-h-[85dvh] border-t border-line pt-3">
       {inner}
     </section>
   );
