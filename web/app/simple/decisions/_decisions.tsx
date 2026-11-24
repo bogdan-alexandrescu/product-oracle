@@ -45,6 +45,8 @@ import { foldWaiting, useWaitingList, WaitingRow } from '@/components/simple/Wai
 import { DeliveryLine, emailWords, slackWords } from '../meetings/_delivery';
 import { DecidedItem, LINK, momentWords } from '../meetings/_flow';
 
+import { RunNote, WaitingSkeleton } from './_run-note';
+
 type Row = Schemas['SimpleDecisionRow'];
 type Group = Schemas['SimpleMeetingGroup'];
 type RunGroup = Schemas['SimpleRunGroup'];
@@ -565,9 +567,8 @@ function QuestionList({
         )}
         {mine.length === 0 && extra.length === 0 ? (
           failed ? null : !filtered && !waiting.data ? (
-            <p className="simple-meta" role="status">
-              Loading what waits on you…
-            </p>
+            // #1779: a skeleton while the one list is read, never a line of text.
+            <WaitingSkeleton />
           ) : (
             <p className="simple-meta">
               Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
@@ -969,7 +970,7 @@ function RunsGroup({ runs }: { runs: RunGroup[] }) {
     <section className="simple-card" aria-label="Runs" data-testid="decisions-runs">
       <header className="flex flex-wrap items-baseline gap-x-3">
         <h2 className="simple-h2 flex-1">Runs</h2>
-        <span className="simple-meta">Stops people approved while Oracle drafted a plan</span>
+        <span className="simple-meta">Steps people approved while Oracle drafted a plan</span>
       </header>
       {runs.map((r) => (
         <div
@@ -1016,7 +1017,11 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup['stops'][number] }) {
           </b>
         </span>
         <span className="simple-meta">
-          {[s.note, who, s.day ? stopDay(s.day) : null].filter(Boolean).join(' · ')}
+          {/* #1780: a long note shows its start, with Show more. */}
+          {s.note && <RunNote note={s.note} />}
+          {[s.note ? '' : null, who, s.day ? stopDay(s.day) : null]
+            .filter((x) => x !== null)
+            .join(' · ')}
         </span>
         {trail.length > 1 && !shown && (
           <button
@@ -1037,7 +1042,11 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup['stops'][number] }) {
                 <b className="font-[650]">{t.what}</b>
                 {t.who ? ` by ${t.who}` : ''}
                 {t.day ? ` · ${stopDay(t.day)}` : ''}
-                {t.note && <span className="block text-text2">“{t.note}”</span>}
+                {t.note && (
+                  <span className="block text-text2">
+                    “<RunNote note={t.note} />”
+                  </span>
+                )}
               </li>
             ))}
             <li className="flex flex-wrap gap-x-4">
