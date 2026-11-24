@@ -97,7 +97,7 @@ export function MkToastHost() { // MOCK-HOOK
     if (!r) return null; // MOCK-HOOK
     return ( // MOCK-HOOK
       <span key={t.id} role="status" className="fixed z-[61] inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-pass shadow-sm" style={{ left: r.right + 6, top: r.top + r.height / 2 - 11 }}> {/* MOCK-HOOK */}
-        <Icon name="check" size={14} /> Saved {/* MOCK-HOOK */}
+        <Icon name="check" size={16} /> Saved {/* MOCK-HOOK */}
       </span> // MOCK-HOOK
     ); // MOCK-HOOK
   }); // MOCK-HOOK
