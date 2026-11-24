@@ -1212,31 +1212,28 @@ export function FloatingCard({
           Hide the talk
         </button>
       )}
-      <div className="relative flex-none">
-        <button
-          type="button"
-          aria-label="More actions"
-          aria-expanded={menu}
-          onClick={() => setMenu(!menu)}
-          className="grid h-7 w-7 place-items-center rounded-md text-text2 hover:bg-surface2"
-        >
-          ⋯
-        </button>
-        {menu && (
-          <div
-            role="menu"
-            className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip"
+      {canChange && (
+        <div className="relative flex-none">
+          <button
+            type="button"
+            aria-label="More actions"
+            aria-expanded={menu}
+            onClick={() => setMenu(!menu)}
+            className="grid h-7 w-7 place-items-center rounded-md text-text2 hover:bg-surface2"
           >
-            {/* panel-ux #1796: the address that opens this panel, for anyone who reads it. */}
-            {menuItem('Copy link', () => void copyLink())}
-            {canChange && menuItem('Rename', () => setRenaming(true))}
-            {/* A cut feature stays a part, and can still be taken out (or put under another). */}
-            {canChange && item.status !== 'merged' && menuItem('Part of…', () => setPick('parent'))}
-            {canChange && !closedItem(item) && menuItem('Merge into…', () => setPick('merge'))}
-            {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
-            {!canChange
-              ? null
-              : item.status === 'cut'
+            ⋯
+          </button>
+          {menu && (
+            <div
+              role="menu"
+              className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip"
+            >
+              {menuItem('Rename', () => setRenaming(true))}
+              {/* A cut feature stays a part, and can still be taken out (or put under another). */}
+              {item.status !== 'merged' && menuItem('Part of…', () => setPick('parent'))}
+              {!closedItem(item) && menuItem('Merge into…', () => setPick('merge'))}
+              {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
+              {item.status === 'cut'
                 ? menuItem(
                     item.can_decide ? 'Restore to the roadmap' : 'Propose: restore',
                     () => void restore(),
@@ -1246,10 +1243,11 @@ export function FloatingCard({
                     item.can_decide ? 'Cut from the roadmap' : 'Propose: cut',
                     () => void cutIt(),
                   )}
-            {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
-            {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
-            {canChange &&
-              menuItem(
+              {/* panel-ux #1796: the address that opens this panel (a reader has it in the address bar). */}
+              {menuItem('Copy link', () => void copyLink())}
+              {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
+              {/* roadmap-add: who decides moves it at once, with Undo in the note (no dialog). */}
+              {menuItem(
                 item.can_decide ? 'Move to Trash' : 'Propose: move to Trash…',
                 () =>
                   void remove({
@@ -1263,9 +1261,10 @@ export function FloatingCard({
                   }),
                 true,
               )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
       <button
         type="button"
         aria-label="Close"
