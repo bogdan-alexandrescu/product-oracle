@@ -1,7 +1,8 @@
+import { GROUND_TRUTH_FLAGS_SCENARIO } from '../lib/api/mock/ground-truth';
 import { HOME_MILESTONES_SCENARIO } from '../lib/api/mock/home-milestones';
 import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
 import { MOCK_EMPTY_FEEDBACK_KEY } from '../lib/api/mock/server';
-import { GROUND_TRUTH_FLAGS_SCENARIO } from '../lib/api/mock/ground-truth';
+
 import { ADMIN, login } from './helpers';
 import { expect, test, type Page } from './test';
 
