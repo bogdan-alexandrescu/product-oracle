@@ -10,7 +10,7 @@ import textwrap
 
 import pytest
 
-from tests.timing_check import asserts_wall_clock
+from tests.timing_check import asserts_wall_clock, helper_positions
 
 TIMED = {
     "direct": """
@@ -70,3 +70,42 @@ def test_a_wall_clock_assert_is_seen(body):
 def test_a_deadline_or_wall_date_is_not_a_timing_assert(body):
     """A deadline handed to code, a wall date or an unasserted duration is not flagged."""
     assert not asserts_wall_clock(_tree(body))
+
+
+HELPER_MODULE = """
+async def read(client, url):
+    start = time.perf_counter()
+    resp = await client.get(url)
+    seconds = time.perf_counter() - start
+    return [1, 2], seconds, resp.json()
+
+def count(client):
+    return len(client.rows), client.body
+
+async def test_timed(client):
+    statements, seconds, body = await read(client, "/x")
+    assert seconds < 1.0
+
+async def test_counted_only(client):
+    statements, seconds, body = await read(client, "/x")
+    assert len(statements) < 5
+    rows, other = count(client)
+    assert rows < 3
+"""
+
+
+def _test(name: str) -> bool:
+    module = ast.parse(HELPER_MODULE)
+    fn = next(n for n in ast.walk(module) if getattr(n, "name", "") == name)
+    return asserts_wall_clock(fn, helper_positions(module))
+
+
+def test_a_clock_difference_unpacked_from_a_same_module_helper_is_seen():
+    """``statements, seconds, body = await read(...)`` then ``assert seconds < N`` is a timing
+    assert, though the clock reads sit inside the helper."""
+    assert _test("test_timed")
+
+
+def test_other_names_unpacked_from_the_helper_are_not_timing():
+    """Asserting on the helper's statements, not its seconds, is not a timing assert."""
+    assert not _test("test_counted_only")
