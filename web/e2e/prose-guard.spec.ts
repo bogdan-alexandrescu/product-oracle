@@ -321,6 +321,14 @@ test.describe('prose guard', () => {
     expect(dropped, 'Ceilings dropped while their page is still there').toEqual([]);
   });
 
+  test('a page whose route file is new since the merge base starts at 0', () => {
+    expect(baseSha, 'the merge base').not.toBeNull();
+    expect(newPage('/simple/inbox')).toBe(false);
+    expect(newPage('/documents/[doc]/v/[n]/quality')).toBe(false);
+    expect(newPage('/')).toBe(false);
+    expect(newPage('/no-such-page/[id]')).toBe(true);
+  });
+
   test('every route file is visited or named in NOT_VISITED', () => {
     const visited = [...SIMPLE, ...DETAILED].map((v) => v.route);
     const named = [...visited, ...Object.keys(NOT_VISITED)];
