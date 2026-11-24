@@ -60,7 +60,10 @@ const STORIES: Story[] = [
       await s('done', 'Cost: 3 clicks + 5 keys · today: no way to link one');
     },
     hard: { url: `${PRIO}?lp1=a&data=many`, prep: (p) => panel(p) },
-    phone: { url: `${PRIO}?lp1=a`, prep: (p) => panel(p) },
+    phone: { url: `${PRIO}?lp1=a`, prep: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      } },
   },
   {
     id: 'lp1-b',
@@ -81,7 +84,10 @@ const STORIES: Story[] = [
       await s('done', 'Cost: 1 click in Oracle + 4 keys in the title · today: no way to link one');
     },
     hard: { url: `${PRIO}?lp1=b`, prep: (p) => panel(p, 'Mobile alert push') },
-    phone: { url: `${PRIO}?lp1=b`, prep: (p) => panel(p) },
+    phone: { url: `${PRIO}?lp1=b`, prep: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      } },
   },
   {
     id: 'lp1-c',
@@ -153,7 +159,10 @@ const STORIES: Story[] = [
         'done',
         'Cost: 2 clicks · today: open the panel, Change status, pick Done, Save (4 clicks), only if someone notices',
       );
-      await p.goto(`${INBOX}?lp2=a`);
+      // In the app (no reload), so the accept carries over: the Inbox row is gone too.
+      await p.keyboard.press('Escape');
+      await p.getByRole('link', { name: /^Inbox/ }).first().click();
+      await p.waitForURL(/inbox/);
       await p.waitForLoadState('networkidle');
       await p.waitForTimeout(600);
       await s('inbox');
@@ -235,7 +244,10 @@ const STORIES: Story[] = [
       await s('done', 'Cost: 2 clicks, where the link shows · today: no links to break');
     },
     hard: { url: `${PRIO}?lp3=a&host=off`, prep: (p) => panel(p) },
-    phone: { url: `${PRIO}?lp3=a&link=gone`, prep: (p) => panel(p) },
+    phone: { url: `${PRIO}?lp3=a&link=gone`, prep: async (p) => {
+        await panel(p);
+        await reveal(p, 'mk-panel-prs');
+      } },
   },
   {
     id: 'lp3-c',

@@ -32,7 +32,10 @@ type St = {
   menu: number | null;
 };
 
-const qs = () => new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+// The switches are read once per page load, so they hold across in-app navigation.
+let firstQs: URLSearchParams | null = null;
+const qs = () =>
+  (firstQs ??= new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
 export const mkParam = (k: string) => qs().get(k);
 export const mkOn = () => !!(mkParam('lp1') || mkParam('lp2') || mkParam('lp3'));
 
@@ -819,7 +822,7 @@ export function MkInboxRows() {
           <Glyph className="size-4 text-warn" /> Status
         </>,
         <>
-          {code('F-02', 'Sample data import')}
+          {code(null, 'Sample data import')}
           <br />
           <span className="text-sm text-warn">Past its end date · no pull request</span>
         </>,

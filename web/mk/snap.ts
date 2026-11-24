@@ -92,4 +92,5 @@ export async function snap(page: Page, name: string, note?: string) {
       .replace(/<head>/, `<head>${head}`)
       .replace(/(src|href)="\/(icon\.svg)"/g, '$1="../assets/$2"');
   fs.writeFileSync(path.join(FRAMES, `${name}.html`), out);
+  await page.evaluate(() => document.querySelectorAll('[data-mock-note]').forEach((n) => n.remove()));
 }
