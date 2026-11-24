@@ -37,6 +37,12 @@ type ProposalRow = Omit<
 >;
 type Attrs = Record<string, unknown>;
 
+/** #1742: a goal at risk, and a typed goal never read (MOCK_SCENARIO_KEY). */
+export const PLAN_GOAL_RISK_SCENARIO = 'plan-goal-risk';
+/** #1788: a key result's name longer than its line on a goal card. */
+export const PLAN_LONG_KR =
+  'Every example trial account that books a demo hears back from a named person within one working day';
+
 export interface BaselineState {
   entities: EntityRow[];
   edges: EdgeRow[];
@@ -402,6 +408,39 @@ export function seedBaseline(uuid: () => string): BaselineState {
     [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
   const scenario =
     typeof localStorage !== 'undefined' ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
+  // #1742: Growth under 75% of its target (the Goal map's at risk), and
+  // Activation a count of 0 against at most 0 that was never read (no day for its current value).
+  if (scenario === PLAN_GOAL_RISK_SCENARIO) {
+    paid.attrs = { ...paid.attrs, current: 5 };
+    // Churn under 75% too, but its current kept as text with no day it was read, as the API
+    // stores an undated reading: the Goal map's Not measured.
+    churn.attrs = {
+      ...churn.attrs,
+      target_text: undefined,
+      unit: 'trials',
+      comparison: 'at_least',
+      target: 20,
+      start: 0,
+      current_text: '5 trials',
+    };
+    activation.attrs = {
+      ...activation.attrs,
+      current: undefined,
+      current_as_of: undefined,
+      unit: 'events',
+      comparison: 'at_most',
+      target: 0,
+      start: 0,
+      current_text: '0',
+    };
+    // #1788: a key result whose name is longer than its line on the goal card.
+    const kr = entity('goal', 'kr-growth-long', PLAN_LONG_KR, {
+      body: 'Example key result under Growth.',
+      attrs: { target_text: '40 trials a week' },
+      confidence: null,
+    });
+    kr.parent_id = paid.id;
+  }
   if (scenario === OKR_IMPORT_SCENARIO || scenario === GOAL_ATTRS_SCENARIO) {
     const shapes =
       scenario === GOAL_ATTRS_SCENARIO

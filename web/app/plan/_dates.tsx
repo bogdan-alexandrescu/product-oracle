@@ -186,7 +186,7 @@ export function DatesTab() {
       // qa4-plan-32: plain headers: the date the source supports, and what it applies to.
       header: 'Date',
       phone: 'meta',
-      cell: (b) => formatDay(b.supports_date),
+      cell: (b) => <span data-day={b.supports_date}>{formatDay(b.supports_date)}</span>,
     },
     { key: 'for', header: 'Applies to', phone: 'meta', wrap: true, cell: (b) => forLabel(b) },
     {

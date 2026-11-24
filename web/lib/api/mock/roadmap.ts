@@ -1800,12 +1800,20 @@ export async function routeRoadmap(
       return reply(
         '/v1/schedule-bases',
         'get',
-        db.bases.filter(
-          (b) =>
-            (!prd || b.prd_document_id === prd.id) &&
-            (!q.get('status') || b.status === q.get('status')) &&
-            (!item || b.item_key === item),
-        ),
+        db.bases
+          .filter(
+            (b) =>
+              (!prd || b.prd_document_id === prd.id) &&
+              (!q.get('status') || b.status === q.get('status')) &&
+              (!item || b.item_key === item),
+          )
+          // #1717: as the API, in date order: the day it supports, then reference, then id.
+          .sort(
+            (a, b) =>
+              a.supports_date.localeCompare(b.supports_date) ||
+              a.reference.localeCompare(b.reference) ||
+              a.id.localeCompare(b.id),
+          ),
       );
     }
     if (p[2] === 'rights' && m === 'GET')

@@ -25,6 +25,7 @@ from tests.test_draft_roadmaps import (
 )
 from tests.test_draft_roadmaps import tick as tick_ok
 from tests.test_roadmap import (
+    ENG_412_DAY,
     ROADMAP_MD,
     built_roadmap,
     create,
@@ -149,7 +150,7 @@ async def test_starting_opens_the_items_stop_on_the_draft_items(client, owner, r
     prompt = spec.steps[-1].prompt
     assert "--- roadmap_items.yaml ---" in prompt
     assert "id: payment-step" in prompt and "id: shipping-step" in prompt
-    assert "date: '2026-11-30'" in prompt or "date: 2026-11-30" in prompt
+    assert f"date: '{ENG_412_DAY}'" in prompt or f"date: {ENG_412_DAY}" in prompt
 
 
 async def test_derive_again_or_no_ready_draft_runs_the_items_step(client, owner, runtime):

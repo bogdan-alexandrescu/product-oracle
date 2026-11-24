@@ -7,11 +7,12 @@ item the items file does not have, or gives another date is refused with a clear
 Postgres with the FakeRuntime. Invented data only.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import select
 
+from oracle.company_time import calendar_day_with_year
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs import plan_tables
@@ -21,6 +22,9 @@ from oracle.swarm import Outcome
 from oracle.templates.builtins import BUILTIN_TEMPLATES, builtin_body
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
+    ENG_412_WORDS,
     ITEMS,
     PLAN_TABLES,
     ROADMAP,
@@ -36,9 +40,15 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 )
 
 OFF = {"roadmap_items": False, "roadmap_review": False}
+# The team plan's day for shipping-step: after ENG-412's, wherever the clock puts it (#1717).
+SHIP_ON = ENG_412_ON + timedelta(days=46)
+SHIP_WORDS = calendar_day_with_year(SHIP_ON)
+# Days the tests move Payment step or Beta to, off ENG-412's.
+MOVED_WORDS = calendar_day_with_year(ENG_412_ON + timedelta(days=4))
+LATER_WORDS = calendar_day_with_year(ENG_412_ON + timedelta(days=11))
 BASES = [
-    {"kind": "estimate", "reference": "ENG-412", "supports_date": "2026-11-30"},
-    {"kind": "capacity", "reference": "Team plan", "supports_date": "2027-01-15",
+    {"kind": "estimate", "reference": "ENG-412", "supports_date": ENG_412_DAY},
+    {"kind": "capacity", "reference": "Team plan", "supports_date": SHIP_ON.isoformat(),
      "item_key": "shipping-step"},
 ]  # fmt: skip
 
@@ -67,11 +77,11 @@ def test_the_engineering_plan_reads_the_items_file_and_the_verified_bases():
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES)
     pay, ship = plan.items
     assert (pay.key, pay.start, pay.end, pay.basis) == ("payment-step", None,
-                                                        date(2026, 11, 30), "estimate")  # fmt: skip
+                                                        ENG_412_ON, "estimate")  # fmt: skip
     # A capacity plan scoped to the item: its place in the team's queue.
-    assert (ship.key, ship.end, ship.basis) == ("shipping-step", date(2027, 1, 15), "team queue")
+    assert (ship.key, ship.end, ship.basis) == ("shipping-step", SHIP_ON, "team queue")
     beta, up_front = plan.milestones
-    assert (beta.name, beta.date, beta.gates) == ("Beta", date(2026, 11, 30), ["Payment step"])
+    assert (beta.name, beta.date, beta.gates) == ("Beta", ENG_412_ON, ["Payment step"])
     assert (up_front.date, up_front.gates) == (None, ["Shipping step"])
 
 
@@ -85,10 +95,10 @@ def test_without_a_verified_basis_an_item_has_no_date():
 def test_the_tables_read_month_first():
     """The plan and milestones tables show every date month first, never ISO."""
     lines = plan_tables.table_lines(plan_tables.engineering_plan(check_items(ITEMS).items, BASES))
-    assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in lines
-    assert "| shipping-step | Shipping step |  | Jan 15, 2027 | team queue | planned |" in lines
-    assert "| Beta | Nov 30, 2026 | Payment step |  |" in lines
-    assert not any("2026-11-30" in line for line in lines)
+    assert f"| payment-step | Payment step |  | {ENG_412_WORDS} | estimate | planned |" in lines
+    assert f"| shipping-step | Shipping step |  | {SHIP_WORDS} | team queue | planned |" in lines
+    assert f"| Beta | {ENG_412_WORDS} | Payment step |  |" in lines
+    assert not any(ENG_412_DAY in line for line in lines)
 
 
 def test_the_check_finds_each_problem():
@@ -104,11 +114,13 @@ def test_the_check_finds_each_problem():
         "| shipping-step |")  # fmt: skip
     (p,) = plan_tables.check(extra, plan, today)
     assert p.code == "unknown_plan_item" and p.message.startswith("Gift cards is in the Plan")
-    moved = ROADMAP_MD.replace("|  | Nov 30, 2026 | estimate", "|  | Dec 4, 2026 | estimate")
+    old = f"|  | {ENG_412_WORDS} | estimate"
+    assert old in ROADMAP_MD
+    moved = ROADMAP_MD.replace(old, f"|  | {MOVED_WORDS} | estimate")
     (p,) = plan_tables.check(moved, plan, today)
     assert p.code == "plan_date_differs"
     assert p.message == (
-        "Payment step's end is Nov 30, 2026 in the engineering dates, not Dec 4, 2026"
+        f"Payment step's end is {ENG_412_WORDS} in the engineering dates, not {MOVED_WORDS}"
     )
 
 
@@ -126,7 +138,9 @@ def test_the_check_reads_the_dates_from_words():
     """The plan check reads a basis word like Estimate from the table, case-blind."""
     plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     today = date(2026, 11, 4)
-    said = ROADMAP_MD.replace("| Nov 30, 2026 | estimate |", "| Nov 30, 2026 | commitment |")
+    old = f"| {ENG_412_WORDS} | estimate |"
+    assert old in ROADMAP_MD
+    said = ROADMAP_MD.replace(old, f"| {ENG_412_WORDS} | commitment |")
     (p,) = plan_tables.check(said, plan, today)
     assert p.code == "plan_basis_differs" and p.refs == {"item": "payment-step"}
     assert p.message == (
@@ -171,11 +185,11 @@ async def test_the_writer_and_the_critic_are_given_the_tables(client, owner, run
     tenant_id, auth = owner
     await _run(client, auth, tenant_id, runtime, ROADMAP_MD)
     writer, critic = runtime.submitted[1].steps
-    row = "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |"
+    row = f"| payment-step | Payment step |  | {ENG_412_WORDS} | estimate | planned |"
     for step in (writer, critic):
         assert "--- plan tables ---" in step.prompt
         assert row in step.prompt
-        assert "| Beta | Nov 30, 2026 | Payment step |  |" in step.prompt
+        assert f"| Beta | {ENG_412_WORDS} | Payment step |  |" in step.prompt
     assert "not a warning" in critic.prompt and "not a warning" not in writer.prompt
 
 
@@ -195,10 +209,12 @@ async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):  #
 async def test_a_date_other_than_the_engineering_date_is_refused(client, owner, runtime):  # noqa: F811
     """A milestone date that disagrees with the engineering plan's date is refused."""
     tenant_id, auth = owner
-    moved = ROADMAP_MD.replace("| Beta | Nov 30, 2026 |", "| Beta | Dec 11, 2026 |")
+    old = f"| Beta | {ENG_412_WORDS} |"
+    assert old in ROADMAP_MD
+    moved = ROADMAP_MD.replace(old, f"| Beta | {LATER_WORDS} |")
     run = await _run(client, auth, tenant_id, runtime, moved)
     assert _codes(run) == ["plan_date_differs"]
-    assert ("Milestone Beta is Nov 30, 2026 in the engineering dates, not Dec 11, 2026"
+    assert (f"Milestone Beta is {ENG_412_WORDS} in the engineering dates, not {LATER_WORDS}"
             in run["segments"][1]["draft_import"]["error"])  # fmt: skip
 
 
@@ -216,7 +232,7 @@ async def test_a_draft_with_the_tables_imports_and_applies(client, owner, runtim
             select(RoadmapItem).where(RoadmapItem.roadmap_document_id == doc.id))}  # fmt: skip
     pay = rows["payment-step"]
     # The table's dates are the run's engineering dates, and approval applies them.
-    assert (pay.end_date, pay.date_source, pay.date_basis) == (date(2026, 11, 30), "accepted",
+    assert (pay.end_date, pay.date_source, pay.date_basis) == (ENG_412_ON, "accepted",
                                                                "estimate")  # fmt: skip
-    assert pay.applied["end"] == "2026-11-30"
+    assert pay.applied["end"] == ENG_412_DAY
     assert rows["shipping-step"].applied["end"] is None

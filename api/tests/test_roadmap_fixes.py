@@ -32,6 +32,8 @@ from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.fixtures import import_draft
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
+    ENG_412_ON,
     ITEMS,
     PRD,
     ROADMAP_MD,
@@ -619,7 +621,7 @@ async def test_a_runs_prd_md_probe_fails_the_import_not_the_tick(client, owner, 
 # --------------------------------------------------------------------------- M1
 
 # Each a way to write 2026-12-15 (no basis of the PRD supports it) that a reader sees as
-# that date. ENG-412 supports 2026-11-30 only.
+# that date. ENG-412 supports ENG_412_DAY only.
 DATE_PROBES = [
     "GA 15/12/2026.",
     "GA 12/15/2026 (US).",
@@ -667,7 +669,8 @@ async def test_every_probe_is_refused_on_a_person_s_import(client, owner, runtim
         assert resp.status_code == 422, (probe, resp.text)
         assert {e["code"] for e in resp.json()["errors"]} == {"unverified_date"}, probe
     # The control: the verified date, and month or quarter phrases, import.
-    ok = _with_paragraph("Beta 30 Nov 2026, GA in Q4 2026 or December 2026.")
+    beta = f"{ENG_412_ON.day} {ENG_412_ON:%b} {ENG_412_ON.year}"  # e.g. 30 Nov 2026
+    ok = _with_paragraph(f"Beta {beta}, GA in Q4 2026 or December 2026.")
     assert (await import_draft(client, auth, ok, ROADMAP)).status_code == 201
 
 
@@ -699,7 +702,7 @@ async def test_every_probe_is_a_warning_and_a_marker_on_a_run_s_import(client, o
     assert len(warnings) == len(days) < len(DATE_PROBES), [w["message"] for w in warnings]
     assert all(m["label"] == "unverified" for m in flagged)
     # The verified Beta date stays unmarked.
-    assert ("2026-11-30", "verified") in {(m["text"], m["status"]) for m in version["date_marks"]}
+    assert (ENG_412_DAY, "verified") in {(m["text"], m["status"]) for m in version["date_marks"]}
     # Each probe's marker is in the markdown, right after the date.
     md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
     assert md.count("<!-- oracle: date unverified -->") == len(DATE_PROBES)
@@ -1084,7 +1087,7 @@ async def test_a_refinement_checks_only_the_section_it_changes(client, owner, ru
         resp = await refine("summary", "Payment first, then shipping.")
         assert resp.status_code == 201, resp.text
         # A revision of the payment step that keeps the unverified date is refused.
-        resp = await refine("now-payment-step", "GA 2026-12-15. Beta by 2026-11-30.")
+        resp = await refine("now-payment-step", f"GA 2026-12-15. Beta by {ENG_412_DAY}.")
         assert resp.status_code == 422, resp.text
     finally:
         gateway.set_transports(previous)

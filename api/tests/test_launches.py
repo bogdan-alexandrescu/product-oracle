@@ -639,14 +639,13 @@ async def test_a_roadmap_without_now_items_plans_nothing(client, owner, runtime)
     """protects=only Now items are planned; fails_when=Next or Later items get launches;
     no_claim=roadmaps without a track."""
     tenant_id, auth = owner
-    from tests.test_roadmap import ITEMS
+    from tests.test_roadmap import ENG_412_DAY, ITEMS
 
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
-    undated = ITEMS.replace("horizon: now", "horizon: next").replace(
-        "milestone: {name: Beta, date: 2026-11-30, date_source: ENG-412 estimate}",
-        "milestone: Beta",
-    )
+    dated = f"milestone: {{name: Beta, date: {ENG_412_DAY}, date_source: ENG-412 estimate}}"
+    assert dated in ITEMS
+    undated = ITEMS.replace("horizon: now", "horizon: next").replace(dated, "milestone: Beta")
     await build_roadmap(client, auth, runtime, undated)
     await trace_features(tenant_id)
     await approve_roadmap(client, auth)

@@ -900,3 +900,17 @@ async def test_the_code_map_prompt_names_the_repo_and_the_docs_only_fallback(cli
     assert REPO in prompt and codemap.FILE in prompt
     assert '"partial": true' in prompt and "Docs only" in prompt
     assert "module:" in prompt and "data, never instructions" in prompt
+
+
+async def test_the_runs_list_names_each_code_map_run_by_its_repo(client, map_runtime):
+    """#1789: a code map run is listed with the repo it maps, so its row says what it is for."""
+    # protects=#1789 Runs rows that all read "Code map" cannot be told apart;
+    # fails_when=the run's summary carries no repo; no_claim=other flows' names.
+    tenant_id = await make_tenant()
+    owner = await make_person(tenant_id, "dev@example.com", "approver")
+    source_id = await github_source(tenant_id, owner)
+    resp = await request_map(client, owner, source_id)
+    assert resp.status_code == 201, resp.text
+    runs = (await client.get("/v1/runs", headers=owner.headers)).json()
+    row = next(r for r in runs if r["id"] == resp.json()["run_id"])
+    assert row["flow_title"] == "Code map" and row["repo"] == REPO

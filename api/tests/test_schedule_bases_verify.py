@@ -28,7 +28,9 @@ from tests.review_v2_helpers import person
 from tests.roadmap_helpers import other_company
 from tests.test_mcp import mcp_client
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ENG_412_DAY,
     ITEMS,
+    OTHER_DAY,
     PRD,
     ROADMAP,
     ROADMAP_MD,
@@ -44,7 +46,7 @@ from tests.test_roadmap_doc_dates import with_line
 
 ITEMS_URL = f"/v1/roadmaps/{ROADMAP}/items"
 VERSION_URL = f"/v1/documents/{ROADMAP}/versions/1"
-GA = "GA on 2026-12-15."
+GA = f"GA on {OTHER_DAY}."
 
 # --- date_rights: the §1 table ----------------------------------------------------------------
 
@@ -138,8 +140,8 @@ async def _eng_412(client, auth) -> dict:
 
 
 async def _roadmap(client, auth, runtime) -> None:  # noqa: F811
-    """An approved PRD (ENG-412 verified for 2026-11-30, the Beta date of payment-step) and
-    a roadmap built by a run whose text also says GA on 2026-12-15, a date no basis
+    """An approved PRD (ENG-412 verified for ENG_412_DAY, the Beta date of payment-step) and
+    a roadmap built by a run whose text also says GA on OTHER_DAY, a date no basis
     supports (marked unverified)."""
     await approved_prd(client, auth)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
@@ -206,7 +208,7 @@ async def test_a_proposed_basis_supports_nothing_until_the_lead_verifies(client,
     # unverified; no_claim=the UI.
     tenant_id, auth = owner
     await _roadmap(client, auth, runtime)
-    assert await _marks(client, auth) == {"2026-11-30": "verified", "2026-12-15": "unverified"}
+    assert await _marks(client, auth) == {ENG_412_DAY: "verified", OTHER_DAY: "unverified"}
     assert (await _withdraw(client, auth, (await _eng_412(client, auth))["id"])).status_code == 200
     lead = await person(tenant_id, "commenter", "lead")
     approver = await person(tenant_id, "approver")
@@ -216,15 +218,15 @@ async def test_a_proposed_basis_supports_nothing_until_the_lead_verifies(client,
     assert resp.json() == {"rights": "propose", "lead_named": True}
     resp = await client.get("/v1/schedule-bases/rights", headers=lead.headers)
     assert resp.json() == {"rights": "verify", "lead_named": True}
-    beta = await _record(client, approver.headers, "ENG-412", "2026-11-30")
-    ga = await _record(client, approver.headers, "ENG-500", "2026-12-15")
+    beta = await _record(client, approver.headers, "ENG-412", ENG_412_DAY)
+    ga = await _record(client, approver.headers, "ENG-500", OTHER_DAY)
     for b in (beta, ga):
         assert b["status"] == "proposed", b
         assert b["proposed_by"] == str(approver.user_id) and b["proposed_at"]
         assert b["verified_by"] is None and b["verified_at"] is None
     milestone = await _payment(client, auth)
-    assert milestone["date"] is None and milestone["refused_date"] == "2026-11-30"
-    assert await _marks(client, auth) == {"2026-11-30": "withdrawn", "2026-12-15": "unverified"}
+    assert milestone["date"] is None and milestone["refused_date"] == ENG_412_DAY
+    assert await _marks(client, auth) == {ENG_412_DAY: "withdrawn", OTHER_DAY: "unverified"}
     listed = (await client.get("/v1/schedule-bases?status=proposed", headers=auth)).json()
     assert sorted(b["reference"] for b in listed) == ["ENG-412", "ENG-500"]
 
@@ -235,8 +237,8 @@ async def test_a_proposed_basis_supports_nothing_until_the_lead_verifies(client,
         assert out["status"] == "verified" and out["verified_by"] == str(lead.user_id)
         assert out["verified_at"] and out["note"] == "Checked with the team"
     milestone = await _payment(client, auth)
-    assert milestone["date"] == "2026-11-30" and milestone["basis_ids"] == [beta["id"]]
-    assert await _marks(client, auth) == {"2026-11-30": "verified", "2026-12-15": "verified"}
+    assert milestone["date"] == ENG_412_DAY and milestone["basis_ids"] == [beta["id"]]
+    assert await _marks(client, auth) == {ENG_412_DAY: "verified", OTHER_DAY: "verified"}
     assert await _actions(tenant_id, beta["id"]) == [
         "schedule_basis.proposed",
         "schedule_basis.verified",
@@ -256,7 +258,7 @@ async def test_reject_and_a_second_decision_is_409(client, owner):  # noqa: F811
     lead = await person(tenant_id, "approver", "lead")
     approver = await person(tenant_id, "approver")
     await _flag(client, auth, lead.user_id)
-    b = await _record(client, approver.headers, "ENG-7", "2026-11-30")
+    b = await _record(client, approver.headers, "ENG-7", ENG_412_DAY)
     resp = await _reject(client, lead.headers, b["id"], "Not our estimate")
     assert resp.status_code == 200, resp.text
     out = resp.json()
@@ -269,7 +271,7 @@ async def test_reject_and_a_second_decision_is_409(client, owner):  # noqa: F811
     assert (await _verify(client, auth, eng["id"])).status_code == 409
     assert (await _reject(client, auth, eng["id"])).status_code == 409
     # Reject needs a reason.
-    c = await _record(client, approver.headers, "ENG-8", "2026-11-30")
+    c = await _record(client, approver.headers, "ENG-8", ENG_412_DAY)
     resp = await client.post(
         f"/v1/schedule-bases/{c['id']}/reject", json={"reason": ""}, headers=lead.headers
     )
@@ -292,18 +294,18 @@ async def test_with_a_lead_named_approvers_neither_verify_nor_withdraw(client, o
     approver = await person(tenant_id, "approver")
     commenter = await person(tenant_id, "commenter")
     await _flag(client, auth, lead.user_id)
-    proposed = await _record(client, approver.headers, "ENG-9", "2026-11-30")
+    proposed = await _record(client, approver.headers, "ENG-9", ENG_412_DAY)
     eng = await _eng_412(client, auth)
 
     assert (await _verify(client, approver.headers, proposed["id"])).status_code == 403
     assert (await _reject(client, approver.headers, proposed["id"])).status_code == 403
     assert (await _withdraw(client, approver.headers, eng["id"])).status_code == 403
-    assert (await _post(client, commenter.headers, "ENG-10", "2026-11-30")).status_code == 403
+    assert (await _post(client, commenter.headers, "ENG-10", ENG_412_DAY)).status_code == 403
     assert (await _verify(client, auth, proposed["id"])).status_code == 200
     assert (await _withdraw(client, auth, eng["id"])).status_code == 200
     # The owner's and the lead's own bases are verified at once.
-    assert (await _record(client, auth, "ENG-11", "2026-11-30"))["status"] == "verified"
-    mine = await _record(client, lead.headers, "ENG-12", "2026-11-30")
+    assert (await _record(client, auth, "ENG-11", ENG_412_DAY))["status"] == "verified"
+    mine = await _record(client, lead.headers, "ENG-12", ENG_412_DAY)
     assert mine["status"] == "verified" and mine["verified_by"] == str(lead.user_id)
     assert (await _withdraw(client, lead.headers, mine["id"])).status_code == 200
 
@@ -315,7 +317,7 @@ async def test_with_no_lead_named_approvers_keep_todays_rights(client, owner):  
     tenant_id, auth = owner
     await approved_prd(client, auth, approve=False)
     approver = await person(tenant_id, "approver")
-    b = await _record(client, approver.headers, "ENG-13", "2026-11-30")
+    b = await _record(client, approver.headers, "ENG-13", ENG_412_DAY)
     assert b["status"] == "verified" and b["verified_by"] == str(approver.user_id)
     assert (await _withdraw(client, approver.headers, b["id"])).status_code == 200
 
@@ -351,7 +353,7 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
     track = (await client.get("/v1/tracks", headers=auth)).json()[0]
     resp = await client.post(
         f"/v1/tracks/{track['id']}/milestones",
-        json={"name": "Beta launch", "horizon": "now", "target_date": "2026-11-30",
+        json={"name": "Beta launch", "horizon": "now", "target_date": ENG_412_DAY,
               "basis_ids": [eng["id"]]},
         headers=auth,
     )  # fmt: skip
@@ -365,7 +367,7 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
     assert impact["basis_id"] == eng["id"]
     assert [
         (m["id"], m["name"], m["target_date"], m["keeps_date"]) for m in impact["milestones"]
-    ] == [(milestone_id, "Beta launch", "2026-11-30", False)]
+    ] == [(milestone_id, "Beta launch", ENG_412_DAY, False)]
     assert [(i["roadmap"], i["version"], i["item_key"]) for i in impact["items"]] == [
         (ROADMAP, 1, "payment-step")
     ]
@@ -373,7 +375,7 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
     assert impact["documents"] == [{"slug": ROADMAP, "version": 1, "marks": 3}]
     # Nothing written.
     assert (await _eng_412(client, auth))["status"] == "verified"
-    assert await _marks(client, auth) == {"2026-11-30": "verified", "2026-12-15": "unverified"}
+    assert await _marks(client, auth) == {ENG_412_DAY: "verified", OTHER_DAY: "unverified"}
 
     resp = await _withdraw(client, auth, eng["id"])
     assert resp.status_code == 200, resp.text
@@ -399,8 +401,8 @@ async def test_the_lead_s_inbox_lists_proposed_bases(client, owner):  # noqa: F8
     lead = await person(tenant_id, "commenter", "lead")
     approver = await person(tenant_id, "approver")
     await _flag(client, auth, lead.user_id)
-    a = await _record(client, approver.headers, "ENG-20", "2026-11-30")
-    b = await _record(client, approver.headers, "ENG-21", "2026-12-15")
+    a = await _record(client, approver.headers, "ENG-20", ENG_412_DAY)
+    b = await _record(client, approver.headers, "ENG-21", OTHER_DAY)
 
     inbox = (await client.get("/v1/inbox", headers=lead.headers)).json()
     assert sorted(d["id"] for d in inbox["dates"]) == sorted([a["id"], b["id"]])
@@ -429,7 +431,7 @@ async def test_another_company_gets_404_and_run_tokens_are_refused(client, owner
     approver = await person(tenant_id, "approver")
     lead = await person(tenant_id, "commenter", "lead")
     await _flag(client, auth, lead.user_id)
-    proposed = await _record(client, approver.headers, "ENG-30", "2026-11-30")
+    proposed = await _record(client, approver.headers, "ENG-30", ENG_412_DAY)
     eng = await _eng_412(client, auth)
     other = await other_company()
     for basis_id in (proposed["id"], eng["id"]):

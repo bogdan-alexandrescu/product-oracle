@@ -1,5 +1,5 @@
 """qa4-docs-4: the Roadmap tab's check problems read as people's words: no item key and no
-ISO date ("the Nov 30, 2026 date has no confirmed schedule behind it yet"). The stored
+ISO date ("the <day in words> date has no confirmed schedule behind it yet"). The stored
 check keeps the engine's wording (the agents read it); only the view rewrites it."""
 
 from oracle.roadmap.draft_items import readable_check
@@ -13,6 +13,7 @@ from tests.test_draft_roadmaps import (  # noqa: F401  (fixtures)
     runtime,
     tick,
 )
+from tests.test_roadmap import ENG_412_DAY, ENG_412_WORDS
 
 
 async def test_the_tab_reads_problems_without_keys_or_iso_dates(client, owner, runtime):  # noqa: F811
@@ -27,10 +28,12 @@ async def test_the_tab_reads_problems_without_keys_or_iso_dates(client, owner, r
     problems = {p["code"]: p for p in body["check"]["problems"]}
     unverified = problems["unverified_date"]
     assert unverified["item"] == "payment-step"
-    assert unverified["message"] == "the Nov 30, 2026 date has no confirmed schedule behind it yet"
+    assert unverified["message"] == (
+        f"the {ENG_412_WORDS} date has no confirmed schedule behind it yet"
+    )
     for p in body["check"]["problems"]:
         assert "item " + str(p.get("item")) + ":" not in p["message"], p
-        assert "2026-11-30" not in p["message"], p
+        assert ENG_412_DAY not in p["message"], p
 
 
 def test_readable_check_words():
